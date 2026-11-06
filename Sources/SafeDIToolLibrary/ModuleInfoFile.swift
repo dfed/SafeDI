@@ -32,7 +32,7 @@ import SafeDICore
 /// name, package, dependencies and mock condition of every module in the closure, and the declarations – without
 /// positions – of each module in it that declares a seam or a public mock and of the modules those depend on
 /// directly.
-struct ModuleInfoFile: Codable {
+public struct ModuleInfoFile: Codable, Sendable {
 	init(
 		moduleName: String,
 		packageName: String?,
@@ -62,7 +62,7 @@ struct ModuleInfoFile: Codable {
 	}
 
 	/// The file of `module`, named `moduleName`, which a run that writes a module info file always knows.
-	init(module: ModuleInfo, moduleName: String, view: ModuleInfoView) {
+	public init(module: ModuleInfo, moduleName: String, view: ModuleInfoView) {
 		self.init(
 			moduleName: moduleName,
 			packageName: module.packageName,
@@ -105,7 +105,7 @@ struct ModuleInfoFile: Codable {
 	let view: ModuleInfoView
 
 	/// The module's own declarations.
-	var module: ModuleInfo {
+	public var module: ModuleInfo {
 		ModuleInfo(
 			imports: imports,
 			mockImports: mockImports,
@@ -152,7 +152,7 @@ struct ModuleInfoFile: Codable {
 
 /// What a `.safedi` file carries of the modules its module depends on, directly or not, each section sorted by module
 /// name, compared by the bytes of its UTF-8 spelling.
-struct ModuleInfoView: Codable {
+public struct ModuleInfoView: Codable, Sendable {
 	/// The modules of the closure, without their declarations: names only, so this changes when a module is added,
 	/// renamed or depends on others, never on an edit.
 	let moduleGraph: [ViewedModuleIdentity]
@@ -161,7 +161,7 @@ struct ModuleInfoView: Codable {
 	let declarations: [ViewedModule]
 
 	/// The view of a module that depends on nothing.
-	static let empty = ModuleInfoView(moduleGraph: [], declarations: [])
+	public static let empty = ModuleInfoView(moduleGraph: [], declarations: [])
 }
 
 /// A module in a view's module graph.
@@ -201,12 +201,12 @@ extension Instantiable {
 
 extension ModuleInfoFile {
 	/// Reads the module info file `data` holds.
-	init(moduleInfoData data: Data) throws(BinaryFileReadError) {
+	public init(moduleInfoData data: Data) throws(BinaryFileReadError) {
 		self = try BinaryFile.value(.moduleInfo, from: data)
 	}
 
 	/// This module as a module info file.
-	var moduleInfoData: Data {
+	public var moduleInfoData: Data {
 		get throws(BinaryFileWriteError) {
 			try BinaryFile.data(.moduleInfo, holding: self)
 		}

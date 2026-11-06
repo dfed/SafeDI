@@ -20,8 +20,8 @@
 
 import Foundation
 import SafeDICore
+import SafeDIToolLibrary
 import Testing
-@testable import SafeDIToolLibrary
 
 /// A module of a multi-module test: its name, the package it belongs to, its Swift files, and the modules it
 /// depends on. Its files are written to `<fixture root>/<packageName>/Sources/<name>/` (or under

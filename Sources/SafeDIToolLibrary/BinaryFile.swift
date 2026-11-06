@@ -249,7 +249,7 @@ enum BinaryFile {
 }
 
 /// Why a file could not be read as a ``BinaryFile`` of the kind expected.
-struct BinaryFileReadError: Error, Equatable, CustomStringConvertible {
+public struct BinaryFileReadError: Error, Equatable, CustomStringConvertible {
 	enum Reason: Error, Equatable {
 		case shorterThanHeader(byteCount: Int)
 		case wrongKind
@@ -263,7 +263,7 @@ struct BinaryFileReadError: Error, Equatable, CustomStringConvertible {
 	let kind: BinaryFile.Kind
 	let reason: Reason
 
-	var description: String {
+	public var description: String {
 		let name = kind.name
 		return switch reason {
 		case let .shorterThanHeader(byteCount):
@@ -314,7 +314,7 @@ struct BinaryFileWriteError: Error, CustomStringConvertible {
 
 extension CachedScannedModuleInfo {
 	/// Reads the scan cache `data` holds.
-	init(scanCacheData data: Data) throws(BinaryFileReadError) {
+	public init(scanCacheData data: Data) throws(BinaryFileReadError) {
 		self = try BinaryFile.value(.scanCache, from: data)
 	}
 

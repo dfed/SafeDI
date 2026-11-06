@@ -33,7 +33,7 @@ import SwiftSyntax
 /// What a module's files declare. Every list is ordered by what the files declare, never by the order in
 /// which parallel parsing finished the files or by how `generate` assembled the module, so the module info
 /// `generate` writes for the same files is the same bytes every time.
-struct ModuleInfo: Codable {
+public struct ModuleInfo: Codable, Sendable {
 	/// A module with `imports`, `mockImports`, `filesWithUnexpectedNodes`, `conditionalCompilationDecisions`,
 	/// `instantiableTypeNamesInAnyClause`, and `dependencyModuleNames` sorted, whatever order they are given in, and all
 	/// but `filesWithUnexpectedNodes` without duplicates.
@@ -75,7 +75,7 @@ struct ModuleInfo: Codable {
 	/// `#SafeDIConfiguration(additionalDirectoriesToInclude:)` follow those of the module's own files.
 	let instantiables: [Instantiable]
 	/// Ordered by file path and, within each file, by declaration order.
-	let configurations: [SafeDIConfiguration]
+	public let configurations: [SafeDIConfiguration]
 	/// The files with syntax errors, sorted.
 	let filesWithUnexpectedNodes: [String]?
 	/// How each `#if` condition guarding SafeDI declarations, or a plain type declaration the module keeps, was evaluated,
@@ -104,8 +104,8 @@ struct ModuleInfo: Codable {
 }
 
 /// A module's parsed input files together with the configuration that governed the parse.
-struct ParsedModule {
-	let moduleInfo: ModuleInfo
+public struct ParsedModule: Sendable {
+	public let moduleInfo: ModuleInfo
 	/// The module's `#SafeDIConfiguration`, found among the configuration file paths it was parsed with.
 	let configuration: SafeDIConfiguration?
 	/// The evaluator the files were scanned with. Files parsed later for the same module, such as
@@ -306,7 +306,7 @@ func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<Nor
 ///     decision about another module's is that module's to assert.
 /// - Returns: The module, and what each file contributed to it.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-func parseModule(
+public func parseModule(
 	filePaths: Set<String>,
 	configurationFilePaths: Set<String>,
 	activeCompilationConditions: Set<String>,
@@ -457,12 +457,12 @@ func importedModuleNames(ofFileAt filePath: String, conditionalCompilation evalu
 }
 
 /// What one file contributed to the module.
-struct FileScan: Codable, Sendable {
+public struct FileScan: Codable, Sendable {
 	let path: String
 	let imports: [ImportStatement]
 	let mockImports: [ImportStatement]
 	let instantiables: [Instantiable]
-	let configurations: [SafeDIConfiguration]
+	public let configurations: [SafeDIConfiguration]
 	let encounteredUnexpectedNodes: Bool
 	let conditionalCompilationDecisions: [ConditionalCompilationDecision]
 	/// Every bare condition whose value decided what this file contributed, except the imports and mock

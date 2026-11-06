@@ -23,8 +23,10 @@ import Foundation
 import SafeDICore
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-struct Generate: AsyncParsableCommand {
-	static let configuration = CommandConfiguration(
+public struct Generate: AsyncParsableCommand {
+	public init() {}
+
+	public static let configuration = CommandConfiguration(
 		abstract: "Generate SafeDI dependency tree and mock code.",
 	)
 
@@ -66,7 +68,7 @@ struct Generate: AsyncParsableCommand {
 
 	// MARK: Internal
 
-	func run() async throws {
+	public func run() async throws {
 		let buildLog = BuildLog()
 		do {
 			let warnings = try await generate(buildLog: buildLog).warnings
@@ -83,7 +85,9 @@ struct Generate: AsyncParsableCommand {
 	}
 
 	/// How `run()` prints diagnostics, which `generate` tells it as soon as it knows how the build system spells its files.
-	final class BuildLog {
+	public final class BuildLog {
+		public init() {}
+
 		/// `diagnostics` formatted for the build log, each file named as the build system spells it, so an IDE maps
 		/// the diagnostic to the file it has open and a reader finds it wherever the log is read. The compiler prints
 		/// each path as it was handed, so when the build system hands the compiler every path unchanged, so does this.
@@ -134,11 +138,11 @@ struct Generate: AsyncParsableCommand {
 	}
 
 	/// What a run of `generate` read and reported.
-	struct Output {
+	public struct Output: Sendable {
 		/// Warnings about the module, which do not stop generation. `run()` prints them.
-		let warnings: [SourceDiagnostic]
+		public let warnings: [SourceDiagnostic]
 		/// The module this run generated code for, with the module that declares each of its declarations.
-		let module: ModuleInfo
+		public let module: ModuleInfo
 		/// The dependent modules' info, in the order this run combined their declarations.
 		let dependentModules: [ModuleInfo]
 	}
@@ -148,7 +152,7 @@ struct Generate: AsyncParsableCommand {
 	/// - Parameter buildLog: Learns how the project spells its files, which decides how `run()` prints diagnostics.
 	/// - Returns: Warnings about the module, which do not stop generation, and the modules this run read.
 	@discardableResult
-	func generate(buildLog: BuildLog = BuildLog()) async throws -> Output {
+	public func generate(buildLog: BuildLog = BuildLog()) async throws -> Output {
 		if swiftSourcesFilePath == nil, include.isEmpty {
 			throw ValidationError("Must provide 'swift-sources-file-path' or '--include'.")
 		}

@@ -26,17 +26,22 @@ import Foundation
 /// The targets whose Swift files the SafeDIGenerator plugin lists in its input CSV, as the plugin writes them beside
 /// that CSV, in a file named after it with `fileNameSuffix` appended, for `generate` to read the module and package
 /// that declare each file. The Xcode project plugin knows no targets and writes none.
-struct PluginTargetGraph: Codable {
+public struct PluginTargetGraph: Codable, Sendable {
 	/// The target the plugin generates code for.
 	let target: Target
 	/// Every other target whose Swift files the input CSV lists: the target's first-party dependencies, directly or
 	/// through another target, by the rule that decides which files the CSV lists. Sorted by module name and package.
 	let dependencyTargets: [Target]
 
+	public init(target: Target, dependencyTargets: [Target]) {
+		self.target = target
+		self.dependencyTargets = dependencyTargets
+	}
+
 	/// A target of a Swift package.
-	struct Target: Codable {
+	public struct Target: Codable, Sendable {
 		/// The name of the module the target compiles.
-		let moduleName: String
+		public let moduleName: String
 		/// SwiftPM's identity of the package that declares the target, from which SwiftPM derives the
 		/// `-package-name` it hands the compiler, or `nil` when the plugin found the target in no package.
 		let packageID: String?
@@ -46,8 +51,15 @@ struct PluginTargetGraph: Codable {
 		let sourceFilePaths: [String]
 		/// The modules the target depends on directly, through a target or a product, sorted.
 		let dependencyModuleNames: [String]
+
+		public init(moduleName: String, packageID: String?, sourceFilePaths: [String], dependencyModuleNames: [String]) {
+			self.moduleName = moduleName
+			self.packageID = packageID
+			self.sourceFilePaths = sourceFilePaths
+			self.dependencyModuleNames = dependencyModuleNames
+		}
 	}
 
 	/// What the plugin appends to the input CSV's path to name the file it writes the target graph to.
-	static let fileNameSuffix = ".targets.json"
+	public static let fileNameSuffix = ".targets.json"
 }

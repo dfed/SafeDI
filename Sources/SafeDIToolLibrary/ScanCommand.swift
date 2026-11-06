@@ -58,7 +58,7 @@ struct Scan: AsyncParsableCommand {
 /// - Returns: What the scan cache holds.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 @discardableResult
-func performScan(
+public func performScan(
 	inputSourcesFile: String,
 	projectFilePaths: ProjectFilePaths,
 	outputDirectory: String,
@@ -364,12 +364,12 @@ extension SafeDIToolManifest {
 /// the exact file set `scan` observed (including
 /// `additionalDirectoriesToInclude` files, which don't appear in the
 /// `generate` CSV).
-struct CachedScannedModuleInfo: Codable {
+public struct CachedScannedModuleInfo: Codable, Sendable {
 	/// What the input files whose scans consulted no compilation condition contributed, which is
 	/// what they contribute whatever conditions `generate` uses.
-	let moduleInfo: ModuleInfo
+	public let moduleInfo: ModuleInfo
 	/// What each input file whose scan consulted a compilation condition contributed.
-	let conditionSensitiveFileScans: [CachedFileScan]
+	public let conditionSensitiveFileScans: [CachedFileScan]
 	/// What the files reached through `additionalDirectoriesToInclude` and absent from the input files
 	/// contributed, kept the same way. Merged after the input files' module as a fresh parse merges them.
 	let additionalModuleInfo: ModuleInfo
@@ -417,14 +417,14 @@ struct ScannedInput: Codable {
 }
 
 /// What one file contributed to the module that `scan` cached.
-struct CachedFileScan: Codable {
+public struct CachedFileScan: Codable, Sendable {
 	init(scannedPath: String, fileScan: FileScan) {
 		self.fileScan = fileScan
 		differingScannedPath = scannedPath == fileScan.path ? nil : scannedPath
 	}
 
 	/// What the file contributed, with the file named relative to the project root as the manifest names files.
-	let fileScan: FileScan
+	public let fileScan: FileScan
 
 	/// The path `scan` parsed the file under, which the locations recorded in `fileScan` cite.
 	var scannedPath: String {
@@ -471,7 +471,7 @@ extension CachedFileScan: BinarySchemaMember {
 /// describes. Derived from the manifest path so concurrent runs writing to
 /// different manifests don't collide.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-func scannedModuleInfoURL(forManifestPath manifestPath: String) -> URL {
+public func scannedModuleInfoURL(forManifestPath manifestPath: String) -> URL {
 	let manifestURL = manifestPath.asFileURL
 	let base = manifestURL.deletingPathExtension().lastPathComponent
 	return manifestURL

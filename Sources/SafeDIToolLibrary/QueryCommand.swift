@@ -35,8 +35,10 @@ struct Query: AsyncParsableCommand {
 /// Reports what `@Instantiable` types need, so that a project can be assembled from exactly the modules one type
 /// needs: a focused app that builds the type, or its mock, with mock data.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-struct QueryNeeds: AsyncParsableCommand {
-	static let configuration = CommandConfiguration(
+public struct QueryNeeds: AsyncParsableCommand {
+	public init() {}
+
+	public static let configuration = CommandConfiguration(
 		commandName: "needs",
 		abstract: "Report what types need: the modules whose declarations build each and its dependencies, the `@Forwarded` parameters it takes, the dependencies no `@Instantiable` declaration fulfills, and what its mock needs.",
 		discussion: "Reads the modules named with `--include` and `--module-info` once, builds each type with every dependency it receives provided by an `@Instantiable` declaration, as its mock does, and reports the modules those declarations are in. It then reports the same for the type's mock: the `mock()` the project generates, the hand-written mock that stands in when the project generates none, or the `mock()` a `#SafeDIConfiguration` listing the type in `additionalMocksToGenerate` would generate. A project that depends on the reported modules alone builds the type, or its mock, from them. With `--json`, the report and any error are printed as JSON, in the format SafeDI's Documentation/QueryNeeds.md documents. This command is in beta: its options, text, and JSON may change in any release, which the JSON's `formatVersion` of 0 says; 1 will be the first stable format.",
@@ -52,7 +54,7 @@ struct QueryNeeds: AsyncParsableCommand {
 
 	@Flag(help: "Print the report, or the error, as JSON rather than as text.") var json = false
 
-	func run() async throws {
+	public func run() async throws {
 		do {
 			let report = try await query()
 			if json {
@@ -73,7 +75,7 @@ struct QueryNeeds: AsyncParsableCommand {
 
 	/// Reads the modules and reports what each type needs.
 	/// Throws errors as-is so tests can inspect them; `run()` formats them.
-	func query() async throws -> QueryReport {
+	public func query() async throws -> QueryReport {
 		let parsedModules = try await readIncludedModules()
 
 		// Every declaration the query reports was read from one of these files, under this spelling.
@@ -507,25 +509,25 @@ enum QueryError: Error, CustomStringConvertible, Equatable {
 }
 
 /// What `QueryNeeds` reports: one report per type named, in the order named.
-struct QueryReport: Encodable, Equatable {
+public struct QueryReport: Encodable, Equatable, Sendable {
 	/// The version of the JSON format, so that a script can refuse a shape it does not know. `0` while the command
 	/// is in beta: the shape may change in any release without raising it. `1` is the first stable format, from which
 	/// it is raised when a key is renamed, removed, or changes meaning, and not when a key is added.
 	static let formatVersion = 0
 
-	let types: [TypeReport]
+	public let types: [TypeReport]
 
 	/// The report as text: each type's report, in the order named.
-	var formatted: String {
+	public var formatted: String {
 		types.map(\.formatted).joined(separator: "\n\n")
 	}
 
 	/// The report as JSON, with its keys sorted. The format is documented in `Documentation/QueryNeeds.md`.
-	func json() throws -> String {
+	public func json() throws -> String {
 		try Self.json(of: self)
 	}
 
-	func encode(to encoder: any Encoder) throws {
+	public func encode(to encoder: any Encoder) throws {
 		var container = encoder.container(keyedBy: CodingKeys.self)
 		try container.encode(Self.formatVersion, forKey: .formatVersion)
 		try container.encode(types, forKey: .types)
@@ -546,18 +548,18 @@ struct QueryReport: Encodable, Equatable {
 
 /// An error `QueryNeeds` prints as JSON, with the same version as a report, a `kind` a script can match, and what
 /// the text report would have said.
-struct QueryErrorReport: Encodable {
-	init(_ error: any Error) {
+public struct QueryErrorReport: Encodable, Sendable {
+	public init(_ error: any Error) {
 		self.error = error
 	}
 
 	let error: any Error
 
-	func json() throws -> String {
+	public func json() throws -> String {
 		try QueryReport.json(of: self)
 	}
 
-	func encode(to encoder: any Encoder) throws {
+	public func encode(to encoder: any Encoder) throws {
 		var container = encoder.container(keyedBy: CodingKeys.self)
 		try container.encode(QueryReport.formatVersion, forKey: .formatVersion)
 		var errorContainer = container.nestedContainer(keyedBy: ErrorCodingKeys.self, forKey: .error)
@@ -629,7 +631,7 @@ struct QueryErrorReport: Encodable {
 }
 
 /// What one type needs, with each declaration attributed to the module that holds it, and what its mock needs.
-struct TypeReport: Encodable, Equatable {
+public struct TypeReport: Encodable, Equatable, Sendable {
 	// MARK: Initialization
 
 	/// - Parameters:
@@ -659,10 +661,10 @@ struct TypeReport: Encodable, Equatable {
 	/// declaration fulfills, which the project provides by hand.
 	let unfulfilledDependencies: [UnfulfilledDependency]
 	/// What the type's mock needs, or why it has none.
-	let mockReport: MockReport
+	public let mockReport: MockReport
 
 	/// What a type's mock needs, or why SafeDI can build no mock for it.
-	enum MockReport: Equatable {
+	public enum MockReport: Equatable, Sendable {
 		/// What the mock needs: the `mock()` the project generates, the hand-written mock when the project
 		/// generates none, or the `mock()` a `#SafeDIConfiguration` listing the type would generate.
 		case mock(Mock)
@@ -671,7 +673,7 @@ struct TypeReport: Encodable, Equatable {
 	}
 
 	/// What a type's mock needs.
-	struct Mock: Encodable, Equatable {
+	public struct Mock: Encodable, Equatable, Sendable {
 		init(kind: Kind, methodName: String, generatedIn: [String]?, requirements: TypeRequirements, attributionsByFilePath: [String: FileAttribution]) {
 			self.kind = kind
 			self.methodName = methodName
@@ -709,7 +711,7 @@ struct TypeReport: Encodable, Equatable {
 	}
 
 	/// Why SafeDI can build no mock for a type.
-	struct NoMock: Encodable, Equatable {
+	public struct NoMock: Encodable, Equatable, Sendable {
 		let reasonKind: ReasonKind
 		/// The reason as the text report states it.
 		let reason: String
@@ -721,11 +723,17 @@ struct TypeReport: Encodable, Equatable {
 		}
 	}
 
-	struct Module: Encodable, Equatable {
+	public struct Module: Encodable, Equatable, Sendable {
 		let name: String
 		/// The `--include` or `--module-info` arguments that name the module, as given.
 		let paths: [String]
 		let declarations: [Declaration]
+
+		public init(name: String, paths: [String], declarations: [Declaration]) {
+			self.name = name
+			self.paths = paths
+			self.declarations = declarations
+		}
 
 		/// The modules `requirements`' declarations are in, by name, each with its declarations.
 		fileprivate static func modules(holding requirements: TypeRequirements, attributionsByFilePath: [String: FileAttribution]) -> [Module] {
@@ -773,7 +781,7 @@ struct TypeReport: Encodable, Equatable {
 		}
 	}
 
-	struct Declaration: Encodable, Equatable {
+	public struct Declaration: Encodable, Equatable, Sendable {
 		let kind: Kind
 		/// The type declared: the `@Instantiable` type, the type of the hand-written mock, or the type that
 		/// declares the erasing property.
@@ -785,7 +793,15 @@ struct TypeReport: Encodable, Equatable {
 		let methodName: String?
 		let erasure: Erasure?
 
-		enum Kind: String, Encodable {
+		public init(kind: Kind, typeName: String, filePath: String?, methodName: String?, erasure: Erasure?) {
+			self.kind = kind
+			self.typeName = typeName
+			self.filePath = filePath
+			self.methodName = methodName
+			self.erasure = erasure
+		}
+
+		public enum Kind: String, Encodable, Sendable {
 			case instantiable
 			case handWrittenMock
 			case erasure
@@ -803,7 +819,7 @@ struct TypeReport: Encodable, Equatable {
 			}
 		}
 
-		struct Erasure: Encodable, Equatable {
+		public struct Erasure: Encodable, Equatable, Sendable {
 			/// The `@Instantiated(erasedToConcreteExistential: true)` property, as declared.
 			let property: String
 			/// The received type built by erasure.
@@ -812,6 +828,13 @@ struct TypeReport: Encodable, Equatable {
 			let concreteTypeName: String
 			/// The other modules that declare the same erasure, any of which would do instead, sorted.
 			let alsoDeclaredInModules: [String]
+
+			public init(property: String, erasedTypeName: String, concreteTypeName: String, alsoDeclaredInModules: [String]) {
+				self.property = property
+				self.erasedTypeName = erasedTypeName
+				self.concreteTypeName = concreteTypeName
+				self.alsoDeclaredInModules = alsoDeclaredInModules
+			}
 		}
 	}
 
@@ -898,7 +921,7 @@ struct TypeReport: Encodable, Equatable {
 		return lines.joined(separator: "\n")
 	}
 
-	func encode(to encoder: any Encoder) throws {
+	public func encode(to encoder: any Encoder) throws {
 		var container = encoder.container(keyedBy: CodingKeys.self)
 		try container.encode(typeName, forKey: .typeName)
 		try container.encode(modules, forKey: .modules)

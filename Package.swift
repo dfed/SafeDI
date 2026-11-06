@@ -180,9 +180,13 @@ let package = Package(
 		// test target that depends on another test target. No product lists it, so a
 		// package that depends on SafeDI never builds it, and Xcode's `SafeDI-Package`
 		// scheme, which builds products, leaves it alone; a plain `swift build` of this
-		// package builds it. SwiftPM compiles a regular target for the package's
-		// `platforms` rather than for the host, as it does a test target, so the
-		// helpers mark what uses macOS 13 API `@available`.
+		// package builds it, in release without `-enable-testing`, so the helpers
+		// import `SafeDIToolLibrary` without `@testable`, through the declarations the
+		// library makes `public` for them. (`package` would need a package name, which
+		// the `SafeDIGenerator` plugin, compiling `PluginTargetGraph.swift` through a
+		// symbolic link, does not have.) SwiftPM compiles a regular target for the
+		// package's `platforms` rather than for the host, as it does a test target, so
+		// the helpers mark what uses macOS 13 API `@available`.
 		.target(
 			name: "SafeDIToolTestSupport",
 			dependencies: [

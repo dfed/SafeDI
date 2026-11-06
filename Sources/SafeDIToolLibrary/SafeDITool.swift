@@ -32,8 +32,10 @@ public enum SafeDIToolCommandLine {
 }
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-struct SafeDITool: AsyncParsableCommand {
-	static let configuration = CommandConfiguration(
+public struct SafeDITool: AsyncParsableCommand {
+	public init() {}
+
+	public static let configuration = CommandConfiguration(
 		commandName: "safeditool",
 		version: currentVersion,
 		subcommands: [Generate.self, Scan.self, Query.self, Dump.self],
@@ -44,7 +46,7 @@ struct SafeDITool: AsyncParsableCommand {
 		"0.0.0-development"
 	}
 
-	@TaskLocal static var fileFinder: FileFinder = FileManager.default
+	@TaskLocal public static var fileFinder: FileFinder = FileManager.default
 }
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -89,7 +91,7 @@ extension String {
 	}
 }
 
-protocol FileFinder: Sendable {
+public protocol FileFinder: Sendable {
 	func enumerator(
 		at url: URL,
 		includingPropertiesForKeys keys: [URLResourceKey]?,

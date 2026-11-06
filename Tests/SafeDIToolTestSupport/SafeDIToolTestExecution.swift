@@ -20,8 +20,8 @@
 
 import Foundation
 import SafeDICore
+import SafeDIToolLibrary
 import Testing
-@testable import SafeDIToolLibrary
 
 /// What every generated file starts with, ending with the blank line that precedes its imports or code.
 let generatedFileHeader = """
