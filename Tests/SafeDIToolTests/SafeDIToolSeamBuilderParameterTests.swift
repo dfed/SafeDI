@@ -2987,10 +2987,18 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Service {
 		    public struct SafeDIScope_Profile_userService {
-		        package let theme: Theme?
+		        package var theme: Theme? { __safeDI_theme.instance }
 		        package let session: Session
 		        public let badge: Badge
 		        public let banner: Banner
+		        let __safeDI_theme: LazilyInstantiated<Theme?>
+
+		        init(theme: LazilyInstantiated<Theme?>, session: Session, badge: Badge, banner: Banner) {
+		            __safeDI_theme = theme
+		            self.session = session
+		            self.badge = badge
+		            self.banner = banner
+		        }
 		    }
 
 		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
@@ -3003,7 +3011,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        let badge = Badge()
 		        let banner = Banner(theme: theme.instance)
 		        func __safeDI_profile() -> Profile {
-		            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(theme: theme.instance, session: session, badge: badge, banner: banner))
+		            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(theme: theme, session: session, badge: badge, banner: banner))
 		            return Profile(userService: userService)
 		        }
 		        let profile: Profile = __safeDI_profile()
@@ -4126,7 +4134,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	/// The path the comparator builds from `output`, the run of `modules`: each module's files as the harness wrote
 	/// them, and the files the tool generated for it.
-	private static func differentialValuePath(of output: MultiModuleTestOutput, modules: [ModuleFixture]) throws -> DifferentialValuePath {
+	static func differentialValuePath(of output: MultiModuleTestOutput, modules: [ModuleFixture]) throws -> DifferentialValuePath {
 		try DifferentialValuePath(modules: modules.map { module in
 			let sourceDirectory = output.fixtureRoot.appendingPathComponent(module.packageName).appendingPathComponent("Sources").appendingPathComponent(module.name)
 			var fixtureFiles = [String: String]()

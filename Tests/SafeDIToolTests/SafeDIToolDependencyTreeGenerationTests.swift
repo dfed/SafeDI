@@ -8705,8 +8705,10 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			.components(separatedBy: "\n#").first ?? ""
 		let codeBlocks = section.components(separatedBy: "```swift\n").dropFirst().map { $0.components(separatedBy: "\n```").first ?? "" }
 		// The fourth block illustrates the access a parameter is taken at, and is not generated from these fixtures; the
-		// two after it show a seam's builder for a hole, which `SafeDIToolSeamBuilderParameterTests` reads.
-		#expect(codeBlocks.count == 6)
+		// two after it show a seam's builder for a hole, which `SafeDIToolSeamBuilderParameterTests` reads, and the last
+		// illustrates the struct a hand-written implementation reads a deferred value from, which
+		// `SafeDIToolSeamHoleLazyInputTests` generates.
+		#expect(codeBlocks.count == 7)
 		let fixture = try #require(codeBlocks.first).replacingOccurrences(of: "// In module Feature.\n", with: "")
 		let generated = try #require(codeBlocks.dropFirst().first)
 		let callerBlock = try #require(codeBlocks.dropFirst(2).first)

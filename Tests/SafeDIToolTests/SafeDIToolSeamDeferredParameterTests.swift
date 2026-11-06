@@ -1028,11 +1028,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_bindsHolesStructFieldFromMemosInstance_whenGeneratedAndHandWrittenFillsReadIt(integration: MultiModuleIntegration) async throws {
-		// Cells 16 and 17: `Service` defers `token`, but hands the hole's struct the memo's instance where it builds the
-		// struct, when `Profile` is built – the read the Manual lists under "Where a seam differs from building its tree
-		// inline", so the values are not compared with the inline build. `Root`'s generated fill reads the struct's field,
-		// and so does `makeService(token:)`'s hand-written fill, which compiles against the same struct.
+	mutating func generate_handsHolesStructMemo_whenGeneratedAndHandWrittenFillsReadIt(integration: MultiModuleIntegration) async throws {
+		// Cells 16 and 17: `Service` defers `token`, and hands the hole's struct the memo, whose field reads its instance.
+		// `Root`'s generated fill reads `Root`'s own `token`, as inline, and `makeService(token:)`'s hand-written fill reads
+		// the struct's field, which compiles as it did when the field held the value. `SafeDIToolSeamHoleLazyInputTests`
+		// compares the values with the inline build's.
 		let modules = SafeDIToolSeamBuilderParameterTests.modules(
 			feature: [
 				"public protocol UserService {}",
@@ -1055,13 +1055,18 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			"Service": """
 			extension Service {
 			    public struct SafeDIScope_Profile_userService {
-			        public let token: Token
+			        public var token: Token { __safeDI_token.instance }
+			        let __safeDI_token: LazilyInstantiated<Token>
+
+			        init(token: LazilyInstantiated<Token>) {
+			            __safeDI_token = token
+			        }
 			    }
 
 			    public init(token __safeDI_token: @autoclosure @escaping () -> Token, userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        func __safeDI_profileBuilder() -> Profile {
-			            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(token: token.instance))
+			            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(token: token))
 			            return Profile(token: token.instance, userService: userService)
 			        }
 			        let profileBuilder = Instantiator<Profile>(__safeDI_profileBuilder)
@@ -1085,8 +1090,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        func __safeDI_service() -> Service {
 			            _ = Service.__safeDI_Service_908534A678B3C5CD.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
 			            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
-			                let token = scope.token
-			                let userService: any UserService = DefaultUserService(token: token)
+			                let userService: any UserService = DefaultUserService(token: token.instance)
 			                return userService
 			            }
 			            return Service(token: token.instance, userServiceBuilder: __safeDI_userServiceBuilder)
