@@ -1251,17 +1251,14 @@ extension [String: NearestDeclaration] {
 		self[property.label] = nearestDeclaration
 	}
 
-	/// Makes `properties`, the declarations of one scope, the nearest declarations of their labels, each hiding every
-	/// declaration of its label above the scope. A label declared more than once – a mock root's forms of one label –
-	/// binds each form to the first property, in `properties`' order, that provides it.
+	/// Makes `properties`, the declarations of one scope that is no root, the nearest declarations of their labels, each
+	/// hiding every declaration of its label above the scope. Their labels are distinct: they are the dependencies of the
+	/// scope's type, which `DependencyTreeGenerator.validateDependencyLabelsAreDistinct` rejects before a tree that builds
+	/// it is created when two share a label. A root's declarations, among which a mock root's forms of one label repeat
+	/// it, join the bindings the tree is given instead (`join(_:providing:)`).
 	mutating func replaceLabels(of properties: [Property]) {
-		var replacedLabels = Set<String>()
 		for property in properties {
-			if replacedLabels.insert(property.label).inserted {
-				replace(property, providing: CycleParameter.forms(providedBy: property))
-			} else {
-				join(property, providing: CycleParameter.forms(providedBy: property))
-			}
+			replace(property, providing: CycleParameter.forms(providedBy: property))
 		}
 	}
 
