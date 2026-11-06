@@ -22,6 +22,7 @@ import Foundation
 import SafeDICore
 import Testing
 @testable import SafeDITool
+@testable import SafeDIToolTestSupport
 
 /// The `.safedi` module info `generate --module-info-output` writes. Build systems such as Bazel and Tuist
 /// hand it to downstream modules and cache on its bytes, so the same input files must always produce the

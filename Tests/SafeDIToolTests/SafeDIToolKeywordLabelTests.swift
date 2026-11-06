@@ -22,6 +22,7 @@ import Foundation
 import SafeDICore
 import Testing
 @testable import SafeDITool
+@testable import SafeDIToolTestSupport
 
 /// Labels that Swift requires in backticks where they declare or name a value: keywords such as `default`, and raw
 /// identifiers such as `my leaf`. Generated code escapes such a label only where Swift requires it, so it neither

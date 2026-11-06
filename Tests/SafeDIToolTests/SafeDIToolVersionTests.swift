@@ -20,6 +20,7 @@
 
 import Testing
 @testable import SafeDITool
+@testable import SafeDIToolTestSupport
 
 struct SafeDIToolVersionTests {
 	@Test

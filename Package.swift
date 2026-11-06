@@ -149,11 +149,74 @@ let package = Package(
 				.swiftLanguageMode(.v6),
 			],
 		),
+
+		// The `SafeDITool` tests are split across five test targets, so that a release
+		// whole-module build compiles them in parallel: a whole-module compile grows
+		// faster than its line count, and one module of every test was the longest
+		// step of CI's build. Their shared helpers (`executeSafeDIToolTest`, the
+		// compile verifier, the graph fuzzer, the differential value comparator) live
+		// in `SafeDIToolTestSupport`, which declares no tests and which each test
+		// target reaches through `@testable import`, as it reaches `SafeDITool`. It is
+		// a test target rather than a regular target so that it compiles with the test
+		// targets' deployment target, whose API the helpers use, and so that a plain
+		// `swift build` leaves it alone.
+		.testTarget(
+			name: "SafeDIToolTestSupport",
+			dependencies: [
+				"SafeDITool",
+				"SafeDICore",
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
 		.testTarget(
 			name: "SafeDIToolTests",
 			dependencies: [
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
 				"SafeDITool",
+				"SafeDIToolTestSupport",
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.testTarget(
+			name: "SafeDIToolDependencyTreeTests",
+			dependencies: [
+				.product(name: "ArgumentParser", package: "swift-argument-parser"),
+				"SafeDITool",
+				"SafeDIToolTestSupport",
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.testTarget(
+			name: "SafeDIToolMockTests",
+			dependencies: [
+				"SafeDITool",
+				"SafeDIToolTestSupport",
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.testTarget(
+			name: "SafeDIToolSeamTests",
+			dependencies: [
+				"SafeDITool",
+				"SafeDIToolTestSupport",
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.testTarget(
+			name: "SafeDIToolFuzzerTests",
+			dependencies: [
+				"SafeDITool",
+				"SafeDIToolTestSupport",
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),

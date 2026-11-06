@@ -22,6 +22,7 @@ import Foundation
 import SafeDICore
 import Testing
 @testable import SafeDITool
+@testable import SafeDIToolTestSupport
 
 /// A type an `@Instantiable` declaration spells by the name of a type nested in a type enclosing it – a namespace
 /// `enum`, or the namespace an extension extends – or nested in the declaration's own type. The code SafeDI generates

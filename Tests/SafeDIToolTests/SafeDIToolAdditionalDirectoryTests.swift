@@ -22,6 +22,7 @@ import Foundation
 import SafeDICore
 import Testing
 @testable import SafeDITool
+@testable import SafeDIToolTestSupport
 
 /// Files reached through `#SafeDIConfiguration(additionalDirectoriesToInclude:)` in a project laid out as a
 /// build tool plugin hands it to the tool: the project root is the working directory, the input CSV lists

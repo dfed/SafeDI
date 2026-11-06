@@ -22,6 +22,7 @@ import Foundation
 import SafeDICore
 import Testing
 @testable import SafeDITool
+@testable import SafeDIToolTestSupport
 
 /// A module generates the `init()` of a root only when one of its own files declares the root. A module whose build
 /// reads another module's files – the `SafeDIGenerator` package plugin reads those of every module a module depends on,

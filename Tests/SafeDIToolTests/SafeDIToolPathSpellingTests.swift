@@ -22,6 +22,7 @@ import Foundation
 import SafeDICore
 import Testing
 @testable import SafeDITool
+@testable import SafeDIToolTestSupport
 
 /// How `scan` and `generate` spell the paths of a project whose root a build system may report through a symbolic
 /// link this test creates, while the tool's working directory, which `getcwd(3)` reports resolved, reaches the same

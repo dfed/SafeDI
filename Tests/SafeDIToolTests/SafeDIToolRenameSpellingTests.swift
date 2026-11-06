@@ -22,6 +22,7 @@ import Foundation
 import SafeDICore
 import Testing
 @testable import SafeDITool
+@testable import SafeDIToolTestSupport
 
 /// The two rename spellings the `@Instantiable` macro rejects – a rename of another rename of the same declaration,
 /// and a rename of a dependency to itself – as SafeDITool meets them: every build runs it before the compiler expands

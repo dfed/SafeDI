@@ -21,6 +21,7 @@
 import Foundation
 import Testing
 @testable import SafeDITool
+@testable import SafeDIToolTestSupport
 
 /// SafeDITool keys a declaration's dependencies by label where it generates code for a production root's tree or a
 /// mock root's tree. Every build runs it before the compiler expands the `@Instantiable` macro, which rejects the ways

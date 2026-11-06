@@ -20,6 +20,7 @@
 
 import Foundation
 import Testing
+@testable import SafeDIToolTestSupport
 
 /// Which warnings the compile verifier, and the graph fuzzer through it, counts as drawn by generated code.
 struct SafeDIToolCompileVerifierTests: ~Copyable {

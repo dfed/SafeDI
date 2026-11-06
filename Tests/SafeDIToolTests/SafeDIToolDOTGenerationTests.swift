@@ -22,6 +22,7 @@ import Foundation
 import SafeDICore
 import Testing
 @testable import SafeDITool
+@testable import SafeDIToolTestSupport
 
 struct SafeDIToolDOTGenerationTests: ~Copyable {
 	// MARK: Initialization

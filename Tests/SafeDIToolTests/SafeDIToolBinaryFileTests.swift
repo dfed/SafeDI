@@ -22,6 +22,7 @@ import Foundation
 import SafeDICore
 import Testing
 @testable import SafeDITool
+@testable import SafeDIToolTestSupport
 
 /// How SafeDITool writes its scan cache and `.safedi` module info files and reads them back, verified on files written for real sources.
 struct SafeDIToolBinaryFileTests: ~Copyable {

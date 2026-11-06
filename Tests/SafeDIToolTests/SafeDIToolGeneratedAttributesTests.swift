@@ -22,6 +22,7 @@ import Foundation
 import SafeDICore
 import Testing
 @testable import SafeDITool
+@testable import SafeDIToolTestSupport
 
 /// The attributes `@Instantiable` puts on the declarations SafeDI generates: `generatedInitializerAttributes` on a
 /// root's generated `init()` and on each initializer generated for a type with `generateDependencyTree: true`,

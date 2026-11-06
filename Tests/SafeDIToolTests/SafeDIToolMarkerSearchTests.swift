@@ -22,6 +22,7 @@ import Foundation
 import SafeDICore
 import Testing
 @testable import SafeDITool
+@testable import SafeDIToolTestSupport
 
 /// How SafeDITool decides from a file's text whether to parse it: only a file whose bytes contain `@Instantiable`
 /// or `#SafeDIConfiguration` can declare SafeDI content.

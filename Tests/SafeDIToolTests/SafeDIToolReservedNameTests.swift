@@ -22,6 +22,7 @@ import Foundation
 import SafeDICore
 import Testing
 @testable import SafeDITool
+@testable import SafeDIToolTestSupport
 
 /// Names generated code introduces beside user names that `ReservedName` deliberately does not reserve, because a
 /// user name spelled the same does not collide with them. The reserved names are rejected by the `@Instantiable`
