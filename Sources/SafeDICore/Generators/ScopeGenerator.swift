@@ -752,16 +752,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// The hole a site's generator binds, or `nil` for every generator that is no site, and for a site of a tree built
-	/// only to compute the seam's signature.
-	nonisolated var siteHole: SeamSignature.Hole? {
-		if case let .hole(_, _, site) = scopeData {
-			site
-		} else {
-			nil
-		}
-	}
-
 	/// For a hole's generator, the property stack its owner's scope was built with, innermost first: the stack a fill
 	/// of the hole builds the property with. Empty for every other generator.
 	let ownerPropertyStack: [Property]
