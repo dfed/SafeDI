@@ -6093,6 +6093,60 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfSecondOnlyIfAvailableAliasOfSiblingInstantiatorThatReceivesTheReceiversInstantiator_throwsError() async {
+		// Grand requires `maybe`, Child's second `onlyIfAvailable` alias of `xBuilder` after `other`, which nothing
+		// requires, so `xBuilder` must be built before `childBuilder`, which captures what its tree receives when it is
+		// created. But X requires `childBuilder`. No received walk follows an instantiator, so the siblings are found
+		// requiring each other.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Grand.swift"]):4:5: error: Dependency cycle: @Instantiated `xBuilder: Instantiator<X>` -> @Received `childBuilder: Instantiator<Child>` -> @Received `xBuilder: Instantiator<X>`. `xBuilder: Instantiator<X>` is received while it is still being instantiated. `maybe: Instantiator<X>?` renames `xBuilder: Instantiator<X>` only if available, so a type that receives `maybe` without `onlyIfAvailable` must be built after `xBuilder: Instantiator<X>`. Receive `maybe` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `xBuilder: Instantiator<X>` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(xBuilder: Instantiator<X>, childBuilder: Instantiator<Child>) { self.xBuilder = xBuilder; self.childBuilder = childBuilder }
+					    @Instantiated let xBuilder: Instantiator<X>
+					    @Instantiated let childBuilder: Instantiator<Child>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(childBuilder: Instantiator<Child>) { self.childBuilder = childBuilder }
+					    @Received let childBuilder: Instantiator<Child>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(other: Instantiator<X>?, maybe: Instantiator<X>?, grand: Grand) { self.other = other; self.maybe = maybe; self.grand = grand }
+					    @Received(fulfilledByDependencyNamed: "xBuilder", ofType: Instantiator<X>.self, onlyIfAvailable: true) let other: Instantiator<X>?
+					    @Received(fulfilledByDependencyNamed: "xBuilder", ofType: Instantiator<X>.self, onlyIfAvailable: true) let maybe: Instantiator<X>?
+					    @Instantiated let grand: Grand
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Grand: Instantiable {
+					    public init(maybe: Instantiator<X>?) { self.maybe = maybe }
+					    @Received let maybe: Instantiator<X>?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasInsideItsFulfillingProperty_throwsError() async {
 		// DefaultGreeter requires `maybe`, which Child can create only once `missing`,
 		// the DefaultGreeter being built, exists.
