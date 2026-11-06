@@ -5399,7 +5399,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		}
 	}
 
-
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorNamingDeclarationCallersCannotSee_whenCallersComputationFindsTwoReceivesOfOneLabelUnderTargetGraph() async {
@@ -5544,6 +5543,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			)
 		}
 	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenDependentModuleInfoWasWrittenAgainstOtherDeclarationsOfItsDependency() async throws {
