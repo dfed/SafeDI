@@ -438,9 +438,9 @@ A `@Received` property can also receive a dependency only when it is available, 
 
 ## Delayed instantiation
 
-When you want to instantiate a dependency after `init(…)`, you need to declare an `Instantiator<Dependency>`-typed property as `@Instantiated` or `@Received`. Deferred instantiation is useful in situations where a dependency is expensive to create or only required under certain conditions (e.g., creating a detailed view for a selected item in a list).
+To instantiate a dependency after `init(…)`, declare an `Instantiator<Dependency>`-typed property as `@Instantiated` or `@Received`. Deferred instantiation helps where a dependency is expensive to create or only required under certain conditions (e.g., a detail view for an item selected in a list).
 
-An `Instantiator` creates a new instance each time it is asked for one. When you instead want a single, shared instance that is created only once something needs it, declare a [`LazilyInstantiated<Dependency>`](#lazilyinstantiated)-typed property. The two differ from each other, and from a plain `@Instantiated` property, as follows:
+An `Instantiator` creates a new instance each time it is asked for one. For a single, shared instance that is created only once something needs it, declare a [`LazilyInstantiated<Dependency>`](#lazilyinstantiated)-typed property instead. The two differ from each other, and from a plain `@Instantiated` property, as follows:
 
 | | `@Instantiated let dependency: Dependency` | `Instantiator<Dependency>` | `LazilyInstantiated<Dependency>` |
 | --- | --- | --- | --- |
@@ -471,7 +471,7 @@ public struct NotesApp: App, Instantiable {
 
 SafeDI generates a `ForwardedProperties` typealias for every `@Instantiable` type. This typealias is a tuple containing all properties decorated with `@Forwarded`. `Instantiator.instantiate(_:)` takes a `ForwardedProperties` argument, ensuring that you provide all required runtime dependencies when instantiating the type.
 
-An `Instantiator` is also how types create one another: SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an `@Instantiated` `Instantiator` or `ErasedInstantiator`, or a `Sendable` twin, which builds its type each time it is called, whichever dependency closes the cycle; each time that dependency builds its type, every other type on the cycle is built again too, as a new instance (a lazily instantiated one when its wrapper is first read). A type built again this way receives each `@Received` property from the nearest declaration above it, as any other type does: a flow whose step instantiates its own `session` and a builder for the screen that built it hands the screen built again the step's `session`. A dependency that receives a type still being built closes no cycle: receive it with `onlyIfAvailable: true` instead. A `@Sendable` builder function may return a type that is not `Sendable`, but what it reads from above it must be `Sendable`: a value the types a `SendableInstantiator` builds again receive from outside its builder is captured by that builder.
+An `Instantiator` is also how types create one another. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an `@Instantiated` `Instantiator` or `ErasedInstantiator`, or a `Sendable` twin, whichever dependency closes the cycle: each time it builds its type, every other type on the cycle is built again too, as a new instance (a lazily instantiated one when its wrapper is first read). A dependency that receives a type still being built closes no cycle: receive it with `onlyIfAvailable: true` instead. [`Sendable` wrappers](#sendable-wrappers) says what a `SendableInstantiator` on a cycle may read from outside its builder.
 
 An `Instantiator` is not `Sendable`. To share one across concurrency domains, use its [`Sendable` twin](#sendable-wrappers), `SendableInstantiator`.
 
@@ -502,7 +502,7 @@ public struct ParentView: View, Instantiable {
 }
 ```
 
-An `@Instantiated` erased instantiator must name the type it builds with `fulfilledByType`. An `@Received` one is handed in rather than built, so it names no type (as is a `@Forwarded` one, which is [deprecated](#forwarded)): a type below `ParentView` can declare `@Received let childViewBuilder: ErasedInstantiator<(), AnyView>` to receive the instantiator `ParentView` creates. As with any received dependency, the label and the full type must match.
+An `@Instantiated` erased instantiator must name the type it builds with `fulfilledByType`. A `@Received` one is handed in rather than built, so it names no type (nor does a `@Forwarded` one, which is [deprecated](#forwarded)): a type below `ParentView` can declare `@Received let childViewBuilder: ErasedInstantiator<(), AnyView>` to receive the instantiator `ParentView` creates. As with any received dependency, the label and the full type must match.
 
 An `ErasedInstantiator` is not `Sendable`. To share one across concurrency domains, use its [`Sendable` twin](#sendable-wrappers), `SendableErasedInstantiator`.
 
@@ -561,15 +561,15 @@ A `LazilyInstantiated` is not `Sendable`, and reads of `instance` are not synchr
 
 SafeDI validates the dependency tree, not what an initializer does. Do not read `instance` from the initializer of the type that declares the `LazilyInstantiated` or `SendableLazilyInstantiated` property, or from any initializer that runs while that instance is being created, whether directly or through a callback: doing so produces undefined behavior. The guarantees each type provides are stated in the documentation of [`LazilyInstantiated`](../Sources/SafeDI/DelayedInstantiation/LazilyInstantiated.swift) and [`SendableLazilyInstantiated`](../Sources/SafeDI/DelayedInstantiation/SendableLazilyInstantiated.swift).
 
-In a [generated mock](#mock-generation), a lazily instantiated dependency is overridden like any other `@Instantiated` dependency: its `SafeDIOverrides` entry is a closure that returns the instance, and the mock calls that closure the first time the instance is read. A type’s generated mock therefore has the same parameters whether the dependencies it receives are lazily instantiated or not.
+[Dependency kinds in the generated mock](#dependency-kinds-in-the-generated-mock) says how a mock overrides a lazily instantiated dependency.
 
 ### Sendable wrappers
 
 `Instantiator`, `ErasedInstantiator`, and `LazilyInstantiated` are not `Sendable`. To share one across concurrency domains, declare its `Sendable` twin: [`SendableInstantiator`](../Sources/SafeDI/DelayedInstantiation/SendableInstantiator.swift), [`SendableErasedInstantiator`](../Sources/SafeDI/DelayedInstantiation/SendableErasedInstantiator.swift), or [`SendableLazilyInstantiated`](../Sources/SafeDI/DelayedInstantiation/SendableLazilyInstantiated.swift). A `SendableLazilyInstantiated` creates its instance exactly once while holding a lock and requires the instance to be `Sendable`. It is available on macOS 15, iOS 18, tvOS 18, watchOS 11, and visionOS 2 and later; the generated code is not marked `@available`, so use it only in a module whose deployment targets are at least those versions.
 
-A `Sendable` wrapper builds its dependency in a `@Sendable` function, which places two requirements on the dependency’s subtree:
+A `Sendable` wrapper builds its dependency in a `@Sendable` function, which may return a type that is not `Sendable` but places two requirements on the dependency’s subtree:
 
-- **What the subtree receives from outside it must be `Sendable`**, even when the receiving type is itself `Sendable`. Declare a wrapper the subtree receives from outside, or whose instance it receives, as its `Sendable` twin; SafeDI reports an error at the property that receives one that is not. Wrappers instantiated inside the same `Sendable` wrapper are fine. Anything else the subtree receives that is not `Sendable` is rejected by the compiler in the generated code.
+- **What the subtree receives from outside it must be `Sendable`**, even when the receiving type is itself `Sendable`, since the function captures it – on a [dependency cycle](#instantiator), each value the types a `SendableInstantiator` builds again receive from outside its builder. Declare a wrapper the subtree receives from outside, or whose instance it receives, as its `Sendable` twin; SafeDI reports an error at the property that receives one that is not. Wrappers instantiated inside the same `Sendable` wrapper are fine. Anything else the subtree receives that is not `Sendable` is rejected by the compiler in the generated code.
 - **Every initializer the function calls must be callable synchronously outside any actor**, and so must an extension’s `instantiate(…)` and a hand-written mock method that a generated mock calls there. The initializer’s isolation counts, not the type’s: a `@MainActor` class with a `nonisolated init` is fine when its stored properties are `Sendable`. SafeDI does not check this, and the generated code fails to compile otherwise; declare such an initializer `nonisolated`. The function is not isolated to any actor, whatever the isolation of the generated `init()` or `mock()` around it, so [attributes for generated declarations](#attributes-for-generated-declarations) do not help.
 
 To call a `@MainActor` initializer in the dependency’s subtree, declare the wrapper as its non-`Sendable` twin – `Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated` – instead. SafeDI builds a non-`Sendable` wrapper’s dependency in a plain nested function, which takes the isolation of the generated `init()` or `mock()` around it. That `init()` or `mock()` must be isolated to `@MainActor`, which it is when the root or mocked type is, or when [attributes for generated declarations](#attributes-for-generated-declarations) say so. No `Sendable` wrapper’s subtree may contain the twin either, since the twin would then be built inside that wrapper’s `@Sendable` function.
@@ -588,7 +588,7 @@ public struct FeedView: Instantiable {
 }
 ```
 
-A dependency counts as available only if it can be built before the receiver. Receiving still follows the usual rule: a type receives what a type above it instantiates or forwards. Availability depends on the order in which one parent builds the properties it instantiates.
+A dependency counts as available only if it can be built before the receiver, which still receives it from the [nearest declaration](#received) above it. Availability therefore depends on the order in which one parent builds the properties it instantiates:
 
 ```swift
 @Instantiable
@@ -598,12 +598,7 @@ public struct Parent: Instantiable {
 }
 ```
 
-A type under `B` that receives `a` is receiving a property of `Parent`, which is above it, so `Parent` builds `a` before `b`. Nothing reaches into the types under `A`. The receiver gets `nil` in the cases where `a` cannot be built first:
-
-- **The receiver is built inside the dependency, or is the dependency.** A type built inside `a`, or built by `a` when `a` is an `Instantiator`, that receives `a` only if available gets `nil`, because `a` is still being built.
-- **Two of a parent’s properties receive each other.** If a type under `B` receives `a` only if available and `A` receives `b`, then `b` is built first and that receiver gets `nil`. If anything under `B` receives `a` without `onlyIfAvailable`, `a` is built first instead, and `A` gets `nil` for `b` when it receives `b` only if available.
-- **Both receive each other only if available.** The property declared later is built first and receives `nil`.
-- **Nothing is provided below a `nil`.** A property received only if available that is `nil` provides nothing to the types below the receiver, so a type further down that requires the same property needs a type above it to provide it.
+A type under `B` that receives `a` is receiving a property of `Parent`, which is above it, so `Parent` builds `a` before `b`. Nothing reaches into the types under `A`. The receiver gets `nil` where `a` cannot be built first: when the receiver is built inside `a`, or by `a` when `a` is an `Instantiator`, or is `a` itself, since `a` is still being built; and when two of a parent’s properties receive each other. There a required receive wins: if `A` requires `b`, `b` is built first and the receiver under `B` gets `nil`, and if anything under `B` requires `a`, `a` is built first and `A` gets `nil` for a `b` it receives only if available. When both receive each other only if available, the property declared later is built first and receives `nil`.
 
 A renamed dependency follows the same rules; see [Renaming and retyping dependencies](#renaming-and-retyping-dependencies).
 
@@ -630,9 +625,9 @@ public struct ProfileView: Instantiable {
 }
 ```
 
-To receive the renamed dependency inside a type-erasing wrapper, add `erasedToConcreteExistential: true`, which wraps it as [`@Instantiated` erasure](#making-protocols-instantiable) does: a property `userVendor: AnyUserVendor` is assigned `AnyUserVendor(userManager)`. With `onlyIfAvailable: true` the property is optional, and the type it wraps does the wrapping: a property `userVendor: AnyUserVendor?` is assigned `AnyUserVendor(userManager)` too. When the renamed dependency is itself optional (`ofType: UserManager?.self`), the property must be optional too, `onlyIfAvailable` or not: it is `nil` where the dependency is, and wraps it otherwise, `(userManager as UserManager?).map { AnyUserVendor($0) }`. The `@Received` macro reports a property that is not optional there, with a fix-it that adds `?`.
+To receive the renamed dependency inside a type-erasing wrapper, add `erasedToConcreteExistential: true`, which wraps it as [`@Instantiated` erasure](#making-protocols-instantiable) does: a property `userVendor: AnyUserVendor` is assigned `AnyUserVendor(userManager)`. With `onlyIfAvailable: true` the property is optional and is still assigned `AnyUserVendor(userManager)`. When the renamed dependency is itself optional (`ofType: UserManager?.self`), the property must be optional too, `onlyIfAvailable` or not: it is `nil` where the dependency is, and wraps it otherwise, `(userManager as UserManager?).map { AnyUserVendor($0) }`. The `@Received` macro reports a property that is not optional there, with a fix-it that adds `?`.
 
-A renamed property declared with `onlyIfAvailable: true` reads its dependency, or the dependency’s optional form, from the nearest declaration of the dependency’s name. It is `nil`, for the declaring type and for every type below it, when its dependency cannot be built first – also when only the optional form of its dependency is available and that is `nil`; see [Conditionally receiving dependencies](#conditionally-receiving-dependencies). The renamed property is always the nearest declaration of its own name for the types below it, `nil` included, so a property of that name further up never reaches them. A type that requires it is built after the dependency where a parent builds both, and two of a parent’s properties that need each other that way are an error; where the dependency is an ancestor still being built, or nothing holds it, the type gets `nil`.
+A rename declared with `onlyIfAvailable: true` reads its dependency, or the dependency’s optional form, from the nearest declaration of the dependency’s name. It is `nil`, for the declaring type and every type below it, where its dependency cannot be built first, as [Conditionally receiving dependencies](#conditionally-receiving-dependencies) describes, or where only the dependency’s optional form is available and is `nil`. For the types below it, the rename is the nearest declaration of its own name, `nil` included, so a property of that name further up never reaches them. A type below that requires the rename is built after the dependency where a parent builds both; two of a parent’s properties that need each other that way are an error, and where the dependency is an ancestor still being built, or nothing holds it, the type gets `nil`.
 
 A rename is never fulfilled by another rename that the same type declares: rename the property the first rename starts from instead. SafeDI also reports such a pair where `#if` blocks that are active together hold the two renames, or where clauses of a condition only the compiler decides, such as `#if os(iOS)`, hold them, since it reads those clauses together; there, give the first rename another label.
 
