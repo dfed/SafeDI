@@ -530,6 +530,98 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_holdsOptionalMemo_whenSeamTakesImplicitlyUnwrappedPassThrough(integration: MultiModuleIntegration) async throws {
+		// Every receiver takes `logger: Logger!`, which no generic argument can spell: the struct's field keeps the
+		// implicitly unwrapped type and reads a `LazilyInstantiated<Logger?>`, as the seam's tree holds the value.
+		let feature = Self.feature(
+			screenDeclarations: ["@Received let exportService: ExportService", "@Received let logger: Logger!"],
+			additionalTypes: [seamFixtureType(named: "Logger", isFinalClass: true, declarations: [])],
+		)
+		let app = Self.app(
+			declarations: Self.uploaderBuildingJobs,
+			jobDeclarations: ["@Received let exportService: ExportService", "@Received let logger: Logger!"],
+			rootDeclarations: [
+				"@Instantiated let exportService: LazilyInstantiated<ExportService>",
+				"@Instantiated let currentLogger: Logger",
+				#"@Received(fulfilledByDependencyNamed: "currentLogger", ofType: Logger.self) let logger: Logger!"#,
+			],
+			handWrittenFill: nil,
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app), integration: integration, filesToDelete: &filesToDelete)
+		let rootPath = try #require(output.modules["App"]).fixtures.compilerPath(of: "Root.swift")
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
+			"ExportFeature": """
+			extension ExportFeature {
+			    public struct SafeDIScope_ExportFeature_uploader {
+			        public var exportService: ExportService { __safeDI_exportService.instance }
+			        public var logger: Logger! { __safeDI_logger.instance }
+			        public let screenBuilder: Instantiator<ExportScreen>
+			        let __safeDI_exportService: LazilyInstantiated<ExportService>
+			        let __safeDI_logger: LazilyInstantiated<Logger?>
+
+			        init(exportService: LazilyInstantiated<ExportService>, logger: LazilyInstantiated<Logger?>, screenBuilder: Instantiator<ExportScreen>) {
+			            __safeDI_exportService = exportService
+			            __safeDI_logger = logger
+			            self.screenBuilder = screenBuilder
+			        }
+			    }
+
+			    public init(exportService __safeDI_exportService: @autoclosure @escaping () -> ExportService, logger __safeDI_logger: @autoclosure @escaping () -> Logger?, uploaderBuilder __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+			        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
+			        func __safeDI_screenBuilder() -> ExportScreen {
+			            ExportScreen(exportService: exportService.instance, logger: logger.instance)
+			        }
+			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
+			        let uploader: any Uploader = __safeDI_uploaderBuilder(SafeDIScope_ExportFeature_uploader(exportService: exportService, logger: logger, screenBuilder: screenBuilder))
+			        self.init(screenBuilder: screenBuilder, uploader: uploader)
+			    }
+			}
+
+			extension ExportFeature {
+			    public enum __safeDI_ExportFeature_691076270A7D9C95 {}
+			}
+			""",
+		]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
+			"Root": """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_exportService() -> ExportService {
+			            ExportService()
+			        }
+			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+			        let currentLogger = Logger()
+			        #sourceLocation(file: "\(rootPath)", line: 16)
+			        let logger: Logger! = currentLogger
+			        #sourceLocation()
+			        func __safeDI_exportFeature() -> ExportFeature {
+			            _ = ExportFeature.__safeDI_ExportFeature_691076270A7D9C95.self\(Self.pluginComment(integration))
+			            func __safeDI_uploaderBuilder(_ scope: ExportFeature.SafeDIScope_ExportFeature_uploader) -> any Uploader {
+			                func __safeDI_uploader() -> DefaultUploader {
+			                    func __safeDI_jobBuilder() -> UploadJob {
+			                        UploadJob(exportService: exportService.instance, logger: logger)
+			                    }
+			                    let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+			                    return DefaultUploader(jobBuilder: jobBuilder)
+			                }
+			                let uploader: any Uploader = __safeDI_uploader()
+			                return uploader
+			            }
+			            return ExportFeature(exportService: exportService.instance, logger: logger, uploaderBuilder: __safeDI_uploaderBuilder)
+			        }
+			        let exportFeature: ExportFeature = __safeDI_exportFeature()
+			        self.init(exportService: exportService, currentLogger: currentLogger, logger: logger, exportFeature: exportFeature)
+			    }
+			}
+			""",
+		]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_holdsInstantiatorPassThroughByValue_whenSeamTakesItAsItself(integration: MultiModuleIntegration) async throws {
 		// `ExportFeature` takes `reportBuilder` by value, as the tree receives it as itself: its field stays a stored
 		// property, which the fill binds from the struct, beside the deferred `exportService`'s memo.
