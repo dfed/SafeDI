@@ -175,18 +175,21 @@ let package = Package(
 		// step of CI's build. Their shared helpers (`executeSafeDIToolTest`, the
 		// compile verifier, the graph fuzzer, the differential value comparator) live
 		// in `SafeDIToolTestSupport`, which declares no tests and which each test
-		// target reaches through `@testable import`, as it reaches `SafeDIToolLibrary`. It is
-		// a test target rather than a regular target so that a plain `swift build`
-		// leaves it alone. The Swift Build backend (Xcode, `--build-system swiftbuild`)
-		// compiles a test target that others depend on for the package's deployment
-		// target rather than the host's, so the helpers mark what uses macOS 13 API
-		// `@available`.
-		.testTarget(
+		// target reaches through `@testable import`, as it reaches `SafeDIToolLibrary`.
+		// It is a regular target rather than a test target because Xcode 26 rejects a
+		// test target that depends on another test target. No product lists it, so a
+		// package that depends on SafeDI never builds it, and Xcode's `SafeDI-Package`
+		// scheme, which builds products, leaves it alone; a plain `swift build` of this
+		// package builds it. SwiftPM compiles a regular target for the package's
+		// `platforms` rather than for the host, as it does a test target, so the
+		// helpers mark what uses macOS 13 API `@available`.
+		.target(
 			name: "SafeDIToolTestSupport",
 			dependencies: [
 				"SafeDIToolLibrary",
 				"SafeDICore",
 			],
+			path: "Tests/SafeDIToolTestSupport",
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
 			],
