@@ -616,6 +616,82 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsImplementationCallersWrapper_whenImplementationReceivesDeferredLabelAsLazilyInstantiated(integration: MultiModuleIntegration) async throws {
+		// `UploadJob` receives `exportService` as the `LazilyInstantiated` `Root` holds, while `ExportFeature` takes the
+		// value deferred: `Root`'s fill hands `UploadJob` `Root`'s own wrapper, as inline, which the struct's by-value
+		// field could not, so the service is created when an `UploadJob` reads it.
+		let feature = Self.feature()
+		let app = Self.app(
+			declarations: Self.uploaderBuildingJobs,
+			jobDeclarations: ["@Received let exportService: LazilyInstantiated<ExportService>"],
+			handWrittenFill: nil,
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app), integration: integration, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
+			"ExportFeature": """
+			extension ExportFeature {
+			    public struct SafeDIScope_ExportFeature_uploader {
+			        public var exportService: ExportService { __safeDI_exportService.instance }
+			        public let screenBuilder: Instantiator<ExportScreen>
+			        let __safeDI_exportService: LazilyInstantiated<ExportService>
+
+			        init(exportService: LazilyInstantiated<ExportService>, screenBuilder: Instantiator<ExportScreen>) {
+			            __safeDI_exportService = exportService
+			            self.screenBuilder = screenBuilder
+			        }
+			    }
+
+			    public init(exportService __safeDI_exportService: @autoclosure @escaping () -> ExportService, uploaderBuilder __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+			        func __safeDI_screenBuilder() -> ExportScreen {
+			            ExportScreen(exportService: exportService.instance)
+			        }
+			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
+			        let uploader: any Uploader = __safeDI_uploaderBuilder(SafeDIScope_ExportFeature_uploader(exportService: exportService, screenBuilder: screenBuilder))
+			        self.init(screenBuilder: screenBuilder, uploader: uploader)
+			    }
+			}
+
+			extension ExportFeature {
+			    public enum __safeDI_ExportFeature_F057590EF9C3F726 {}
+			}
+			""",
+		]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
+			"Root": """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_exportService() -> ExportService {
+			            ExportService()
+			        }
+			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+			        func __safeDI_exportFeature() -> ExportFeature {
+			            _ = ExportFeature.__safeDI_ExportFeature_F057590EF9C3F726.self\(Self.pluginComment(integration))
+			            func __safeDI_uploaderBuilder(_ scope: ExportFeature.SafeDIScope_ExportFeature_uploader) -> any Uploader {
+			                func __safeDI_uploader() -> DefaultUploader {
+			                    func __safeDI_jobBuilder() -> UploadJob {
+			                        UploadJob(exportService: exportService)
+			                    }
+			                    let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+			                    return DefaultUploader(jobBuilder: jobBuilder)
+			                }
+			                let uploader: any Uploader = __safeDI_uploader()
+			                return uploader
+			            }
+			            return ExportFeature(exportService: exportService.instance, uploaderBuilder: __safeDI_uploaderBuilder)
+			        }
+			        let exportFeature: ExportFeature = __safeDI_exportFeature()
+			        self.init(exportService: exportService, exportFeature: exportFeature)
+			    }
+			}
+			""",
+		]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_holdsOwnAliasByValue_whenSeamRetypesDeferredLabelKeepingIt(integration: MultiModuleIntegration) async throws {
 		// `ExportFeature`'s own alias keeps `exportService`'s label and reads the autoclosure where inline reads `Root`'s
 		// memo, at the seam's construction: the struct carries the alias by value, and the fill binds it from there.
