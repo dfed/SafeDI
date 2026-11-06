@@ -42,6 +42,7 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable], 
 			typeDescription.qualifyingInstantiatedType(
 				within: unnormalizedInstantiable.concreteInstantiable,
 				amongInstantiableTypes: instantiableTypes,
+				searchingTypesEnclosingIt: !unnormalizedInstantiable.declarationType.isExtension,
 			)
 		}
 		/// `typeDescription`, which a member of the declaration spells, qualified as the compiler resolves it there.
@@ -88,21 +89,19 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable], 
 			$0.withUpdatedTypeDescription(normalized($0.typeDescription))
 		}
 		let normalizedAdditionalInstantiables = unnormalizedInstantiable.instantiableTypes.dropFirst().map {
-			if let enclosingType = unnormalizedInstantiable.concreteInstantiable.popNested {
-				// `fulfillingAdditionalTypes:` is written in the macro's attribute, outside the type: in the types
-				// enclosing it, or at file scope on an extension.
+			if let enclosingType = unnormalizedInstantiable.concreteInstantiable.popNested, !unnormalizedInstantiable.declarationType.isExtension {
+				// `fulfillingAdditionalTypes:` is written in the macro's attribute, outside the type, in the types
+				// enclosing it; on an extension, at file scope, where every name is as written.
 				let qualifiedInstantiableType = TypeDescription.nestedOptions(
 					referencedType: $0,
 					within: enclosingType,
 				).first(where: { instantiableTypes.contains($0) }) ?? $0
-				return unnormalizedInstantiable.declarationType.isExtension
-					? qualifiedInstantiableType
-					: nestedTypeQualifier.qualifyingNestedTypes(
-						in: qualifiedInstantiableType,
-						writtenWithin: enclosingType,
-						searchingTypesEnclosingIt: true,
-						mentionedFrom: mentioningModule,
-					)
+				return nestedTypeQualifier.qualifyingNestedTypes(
+					in: qualifiedInstantiableType,
+					writtenWithin: enclosingType,
+					searchingTypesEnclosingIt: true,
+					mentionedFrom: mentioningModule,
+				)
 			} else {
 				// A top-level type's attribute is written at file scope, where every name is as written.
 				return $0

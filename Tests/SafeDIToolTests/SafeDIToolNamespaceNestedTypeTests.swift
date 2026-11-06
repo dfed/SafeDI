@@ -1084,6 +1084,68 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsTopLevelType_whenInstantiateMethodOfExtensionNamesTypeOfSameNameAsInstantiableNestedInEnclosingType() async throws {
+		// An extension is written at file scope, so `instantiate(…)` names the top-level `Service`, not the
+		// `@Instantiable` `Feature.Service` nested in the extended type's enclosing type.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(service: Service, gadget: Feature.Gadget) {
+				        self.service = service
+				        self.gadget = gadget
+				    }
+
+				    @Instantiated let service: Service
+				    @Instantiated let gadget: Feature.Gadget
+				}
+
+				@Instantiable
+				public final class Service: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				public enum Feature {
+				    @Instantiable
+				    public final class Service: Instantiable {
+				        public init() {}
+				    }
+
+				    public struct Gadget {
+				        let service: Feature.Service?
+				        let topLevelService: Any
+				    }
+				}
+
+				@Instantiable
+				extension Feature.Gadget: Instantiable {
+				    public static func instantiate(service: Service) -> Feature.Gadget {
+				        Feature.Gadget(service: nil, topLevelService: service)
+				    }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        let service = Service()
+			        let gadget: Feature.Gadget = Feature.Gadget.instantiate(service: service)
+			        self.init(service: service, gadget: gadget)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_qualifiesTypeDeclaredInEnclosingEnum_whenPublicMocksReceivedPropertyNamesIt() async throws {
 		// `Child`'s public mock takes the `mode` its tree receives, and `Parent`'s builder function takes it in
 		// `Root`'s tree.
