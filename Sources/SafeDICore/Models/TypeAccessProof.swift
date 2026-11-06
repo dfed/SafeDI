@@ -1002,7 +1002,10 @@ extension TypeAccessProof {
 		/// empty when SafeDI records none that module can name. A mention spelled with a module's name before the type's
 		/// (`Core.Theme`), where the view holds a module of that name and no type of it, names that module's declarations
 		/// of the rest. Otherwise the mentioning module's own declaration is what Swift resolves the name to, and without
-		/// one, a declaration another module declares `package` or wider: the only kind another module can name. A
+		/// one, a declaration another module declares `package` or wider: the only kind another module can name, and none
+		/// when the mentioning module itself declares the nested type's outermost type, which shadows every other module's
+		/// type of that name there (a module that only extends another module's type declares no type, and so names that
+		/// type's members). A
 		/// declaration SafeDI knows no module of that is not in one of the run's own files – read from a directory a
 		/// configuration adds, or by a run of the Xcode project plugin – is taken at its level when that is `package` or
 		/// wider, whichever package it is in. Generic arguments name nothing a declaration records.
@@ -1018,12 +1021,20 @@ extension TypeAccessProof {
 			} else {
 				let declarations = declarationsByType[type.plainDeclarationKey] ?? []
 				let mentioningModuleDeclarations = declarations.filter { mentioningModule.declares($0, isOwnFile: isOwnFile) }
-				return mentioningModuleDeclarations.isEmpty
-					? declarations.filter { declaration in
-						(declaration.moduleName != nil || declaration.sourceFilePath.flatMap { isOwnFile?($0) } != true)
-							&& TypeAccessProof.normalized(declaration.levelBeforeExtendedTypeCap) >= .package
-					}
-					: mentioningModuleDeclarations
+				guard mentioningModuleDeclarations.isEmpty else { return mentioningModuleDeclarations }
+				// The mentioning module's own declaration of a nested type's outermost type shadows every other module's
+				// type of that name there, so a declaration another module nests in its own is not what the mention names;
+				// an extension declares no type, so a module that only extends another's type names that type's members.
+				// Own is by module name alone, nameless to nameless: a run that knows no module name counts a named
+				// module's declaration as its own above, and must not shadow that module's nested types with it.
+				let outermostTypeDeclarations = type.droppingOutermostType == nil
+					? []
+					: type.outermostTypeName.flatMap { declarationsByType[TypeDescription.simple(name: $0).plainDeclarationKey] } ?? []
+				guard !outermostTypeDeclarations.contains(where: { $0.moduleName == mentioningModule.moduleName }) else { return [] }
+				return declarations.filter { declaration in
+					(declaration.moduleName != nil || declaration.sourceFilePath.flatMap { isOwnFile?($0) } != true)
+						&& TypeAccessProof.normalized(declaration.levelBeforeExtendedTypeCap) >= .package
+				}
 			}
 		}
 

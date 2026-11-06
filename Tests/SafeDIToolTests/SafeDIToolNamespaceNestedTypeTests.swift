@@ -1374,7 +1374,193 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 		])
 	}
 
+	// MARK: Tests – across modules
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsTopLevelType_whenModulesOwnNamespaceShadowsDependencysNamespaceThatNestsTypeOfSameName(integration: MultiModuleIntegration) async throws {
+		// `App` declares its own `Constants`, which shadows `Core`'s throughout `App`, so `Mode` inside `App`'s
+		// `Constants.Child` is `App`'s top-level `Mode`, not `Core`'s `Constants.Mode`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.coreDeclaringConstantsWithNestedMode,
+				ModuleFixture(
+					name: "App",
+					packageName: "pkg",
+					swiftFileContentByFilePath: [
+						"Constants.swift": """
+						import Core
+						import SafeDI
+
+						public enum Mode {
+						    case fromApp
+						}
+
+						public enum Constants {
+						    @Instantiable(generateMock: true)
+						    public final class Child: Instantiable {
+						        public init(mode: Mode = .fromApp) {
+						            self.mode = mode
+						        }
+
+						        let mode: Mode
+						    }
+						}
+						""",
+						"Root.swift": Self.rootInstantiatingConstantsChild,
+					],
+					dependencies: ["Core"],
+				),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		Self.expectAppGeneratedFiles(of: output, under: integration, childMock: """
+		#if DEBUG
+		extension Constants.Child {
+		    static func mock(
+		        mode: Mode = .fromApp
+		    ) -> Constants.Child {
+		        return Constants.Child(mode: mode)
+		    }
+		}
+		#endif
+		""")
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_qualifiesTypeNestedInDependencysNamespace_whenModuleExtendsThatNamespace(integration: MultiModuleIntegration) async throws {
+		// `App` extends `Core`'s `Constants` rather than declaring its own, so `Mode` inside `Constants.Child` is
+		// `Core`'s `Constants.Mode`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.coreDeclaringConstantsWithNestedMode,
+				ModuleFixture(
+					name: "App",
+					packageName: "pkg",
+					swiftFileContentByFilePath: [
+						"Constants.swift": """
+						import Core
+						import SafeDI
+
+						extension Constants {
+						    @Instantiable(generateMock: true)
+						    public final class Child: Instantiable {
+						        public init(mode: Mode = .fromCore) {
+						            self.mode = mode
+						        }
+
+						        let mode: Mode
+						    }
+						}
+						""",
+						"Root.swift": Self.rootInstantiatingConstantsChild,
+					],
+					dependencies: ["Core"],
+				),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		Self.expectAppGeneratedFiles(of: output, under: integration, childMock: """
+		#if DEBUG
+		extension Constants.Child {
+		    static func mock(
+		        mode: Constants.Mode = .fromCore
+		    ) -> Constants.Child {
+		        return Constants.Child(mode: mode)
+		    }
+		}
+		#endif
+		""")
+		try expectEveryModuleCompiled(output)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// A `Core` module declaring a namespace `Constants` with a nested `Mode`, and an `@Instantiable` nested in it, so
+	/// that a `.safedi` of `Core` keeps the declaration of `Constants.Mode`.
+	private static let coreDeclaringConstantsWithNestedMode = ModuleFixture(
+		name: "Core",
+		packageName: "pkg",
+		swiftFileContentByFilePath: [
+			"Constants.swift": """
+			import SafeDI
+
+			public enum Constants {
+			    public enum Mode {
+			        case fromCore
+			    }
+			}
+
+			extension Constants {
+			    @Instantiable
+			    public final class Service: Instantiable {
+			        public init() {}
+			    }
+			}
+			""",
+		],
+	)
+
+	/// A root of `App` that instantiates `Constants.Child`.
+	private static let rootInstantiatingConstantsChild = """
+	import Core
+	import SafeDI
+
+	@Instantiable(isRoot: true)
+	public final class Root: Instantiable {
+	    public init(child: Constants.Child) {
+	        self.child = child
+	    }
+
+	    @Instantiated let child: Constants.Child
+	}
+	"""
+
+	/// Expects `App` to have generated `Root`'s tree and `childMock`, the mock of `Constants.Child`, under `integration`.
+	private static func expectAppGeneratedFiles(of output: MultiModuleTestOutput, under integration: MultiModuleIntegration, childMock: String, sourceLocation: SourceLocation = #_sourceLocation) {
+		let imports = """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+
+		"""
+		let rootTree = """
+		extension Root {
+		    public convenience init() {
+		        let child = Constants.Child()
+		        self.init(child: child)
+		    }
+		}
+		"""
+		switch integration {
+		case .moduleInfo:
+			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + imports + rootTree + "\n\n" + childMock], sourceLocation: sourceLocation)
+		case .swiftPackagePlugin:
+			#expect(output.modules["App"]?.generatedFiles == [
+				"Constants+SafeDIMock.swift": generatedFileHeader + imports + childMock,
+				"Root+SafeDI.swift": generatedFileHeader + imports + rootTree,
+				"SafeDIMockConfiguration.swift": generatedFileHeader + imports,
+			], sourceLocation: sourceLocation)
+		}
+	}
+
+	/// Expects every module to have compiled, when compile verification runs.
+	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
+		guard compileVerificationIsEnabled else { return }
+		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
+		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
+		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
+	}
 }
