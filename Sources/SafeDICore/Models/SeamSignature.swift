@@ -219,9 +219,9 @@ public struct SeamSignature: Sendable {
 	public struct Hole: Sendable {
 		/// A value in scope at the site, which the scope struct the builder is handed carries.
 		public struct Field: Sendable {
-			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, isDeferredParameter: Bool = false) {
+			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, deferral: Parameter.Deferral = .none) {
 				self.property = property
-				self.isDeferredParameter = isDeferredParameter
+				self.deferral = deferral
 				self.access = access
 				self.accessCause = accessCause
 				self.declaringType = declaringType
@@ -244,14 +244,34 @@ public struct SeamSignature: Sendable {
 			/// Whether the field passes through a parameter the seam's tree receives only if available, so a caller
 			/// may pass `nil` for it.
 			public let isReceivedOnlyIfAvailable: Bool
-			/// Whether the field is bound from a deferred parameter (`SeamSignature.Parameter.isDeferred`), which the
-			/// seam's tree holds in a `LazilyInstantiated`: the struct is handed its instance.
-			public let isDeferredParameter: Bool
+			/// How the seam takes the parameter the field is bound from (`SeamSignature.Parameter.deferral`): `.none` for a
+			/// field bound from a declaration inside the seam's tree, or from a parameter taken by value. The seam's tree
+			/// holds a deferred parameter in a `LazilyInstantiated` (`SendableLazilyInstantiated` when `@Sendable`), which
+			/// it hands the struct, so the value is created when a fill first reads the field, as inline.
+			public let deferral: Parameter.Deferral
 
-			/// The value the seam's tree hands the struct for the field: the declaration of its label, or the instance of a
-			/// deferred parameter's `LazilyInstantiated`.
-			var boundValue: String {
-				isDeferredParameter ? "\(property.label).\(Dependency.lazilyInstantiatedInstancePropertyName)" : property.label
+			/// Whether the field is bound from a deferred parameter (`SeamSignature.Parameter.isDeferred`).
+			public var isDeferredParameter: Bool {
+				deferral != .none
+			}
+
+			/// The type of the `LazilyInstantiated` (or `SendableLazilyInstantiated`) a deferred parameter's field holds,
+			/// or `nil` for a field held by value: the parameter's type, an implicitly unwrapped optional spelled as its
+			/// optional form, as the seam's tree holds it (`SeamSignature.Parameter.deferredValueType`).
+			public var memoType: TypeDescription? {
+				guard case let .deferred(isSendable) = deferral else { return nil }
+				let valueType: TypeDescription = if case let .implicitlyUnwrappedOptional(wrappedType) = property.typeDescription {
+					.optional(wrappedType)
+				} else {
+					property.typeDescription
+				}
+				return .simple(name: isSendable ? Dependency.sendableLazilyInstantiatedType : Dependency.lazilyInstantiatedType, generics: [valueType])
+			}
+
+			/// The name of the stored property that holds a deferred parameter's memo inside the struct, beside the field's
+			/// own name, which the struct reads the memo's instance through.
+			var memoName: String {
+				ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
 			}
 		}
 

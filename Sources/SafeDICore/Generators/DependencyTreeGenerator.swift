@@ -1716,6 +1716,8 @@ public actor DependencyTreeGenerator {
 			// the `@Sendable` builder function inside the seam's tree that reads it would built inline.
 			let capturingFunction = if let seamType = capture.capturingSeamType {
 				"`\(seamType.asSource)`'s generated initializer takes `\(capture.receivedProperty.label)` as a `@Sendable` closure, because a `@Sendable` function inside `\(seamType.asSource)`'s tree reads it, and that closure"
+			} else if let fillSeamType = capture.capturingFillSeamType {
+				"`\(fillSeamType.asSource)`'s tree builds `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` inside a `@Sendable` function, so the function SafeDI generates to fill its builder is `@Sendable` too, and it"
 			} else {
 				"SafeDI builds `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` in a `@Sendable` function\(sendableBuilderReason), which"
 			}
@@ -4914,8 +4916,8 @@ public actor DependencyTreeGenerator {
 					)
 				} ?? false
 				// A fill binds the fields of the hole's struct its tree reads, which hide every declaration of their labels
-				// above it.
-				let fillFieldLabels = child.fillHole.map { Set($0.stages.joined().map(\.property.label)) } ?? []
+				// above it, but for those bound from a deferred parameter, which it reads from the caller's scope.
+				let fillFieldLabels = child.fillStructBoundLabels
 				generatorsToVisit.append(Frame(
 					generator: child,
 					providedProperties: childProvidedProperties,
@@ -6928,7 +6930,8 @@ public actor DependencyTreeGenerator {
 			var fills = [(scope: Scope, fieldForms: Set<Property>)]()
 			if scope.publicMockCall != nil {
 				for case let .fill(hole, fillScope) in scope.holeArguments {
-					fills.append((fillScope, ScopeGenerator.fieldForms(of: hole)))
+					// A public mock takes no deferred parameter, so its fill binds every field.
+					fills.append((fillScope, ScopeGenerator.fieldForms(of: hole, boundLabels: Set(hole.stages.joined().map(\.property.label)))))
 				}
 			}
 			self.fills = fills
