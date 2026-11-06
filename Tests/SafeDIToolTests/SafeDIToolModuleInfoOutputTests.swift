@@ -334,6 +334,38 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesNestedDeclarationsEveryModuleCanName_whenNonBreakingSpaceSeparatesTheirWords() async throws {
+		// The compiler reads a non-breaking space, U+00A0, as whitespace (with a warning), so a file that mentions no SafeDI
+		// marker and spells one between a declaration's words is parsed, and its nested declarations are kept.
+		let directory = try temporaryDirectory()
+		let fileContents = [
+			"Alpha.swift": "public enum Alpha {\n    public\u{A0}struct Token {}\n}\n",
+			"Bravo.swift": "public enum Bravo {\n    public /* */\u{A0}struct\u{A0}Token {}\n}\n",
+			"Charlie.swift": "public enum Charlie {}\n\npublic\u{A0}extension\u{A0}Charlie {\n    struct Token {}\n}\n",
+		]
+		var filePaths = [String]()
+		for (fileName, content) in fileContents.sorted(by: { $0.key < $1.key }) {
+			let file = directory.appendingPathComponent(fileName)
+			try content.write(to: file, atomically: true, encoding: .utf8)
+			filePaths.append(file.path)
+		}
+		let swiftFileCSV = directory.appendingPathComponent("Sources.csv")
+		try filePaths.joined(separator: ",").write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+
+		let moduleInfoOutput = directory.appendingPathComponent("Core.safedi")
+		try await Generate.parse([
+			swiftFileCSV.path,
+			"--combined-output", directory.appendingPathComponent("Core.swift").path,
+			"--module-info-output", moduleInfoOutput.path,
+			"--module-name", "Core",
+		]).generate()
+		let moduleInfo = try ModuleInfoFile(moduleInfoData: Data(contentsOf: moduleInfoOutput))
+
+		#expect(moduleInfo.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Alpha.Token", "Bravo.Token", "Charlie.Token"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesEachImportOnce_whenFilesShareAnImport() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [

@@ -1092,6 +1092,9 @@ private let backtickByte: UInt8 = 0x60
 /// The bytes of a byte order mark, U+FEFF, in UTF-8.
 private let byteOrderMark: [UInt8] = [0xEF, 0xBB, 0xBF]
 
+/// The bytes of a non-breaking space, U+00A0, in UTF-8, which the compiler reads as whitespace, with a warning.
+private let nonBreakingSpace: (leadingByte: UInt8, trailingByte: UInt8) = (0xC2, 0xA0)
+
 /// The access modifiers with which every module can name a declaration: `public` and `open`.
 private let accessModifiersEveryModuleCanName = ["public", "open"].map { Array($0.utf8) }
 
@@ -1150,8 +1153,8 @@ private let safeDIMarkers = [
 
 extension UnsafeBufferPointer<UInt8> {
 	/// The words of these bytes, Swift source, that type declarations may begin with (`TypeDeclarationWords`): a word is
-	/// a run of ASCII letters, digits, and underscores, and bytes of non-ASCII characters, the bytes an identifier is
-	/// spelled with, and a name in backticks is what a backtick and the closing backtick on its line enclose, a space of a
+	/// a run of ASCII letters, digits, and underscores, and bytes of non-ASCII characters other than a non-breaking space,
+	/// the bytes an identifier is spelled with, and a name in backticks is what a backtick and the closing backtick on its line enclose, a space of a
 	/// raw identifier included. A name in backticks is never a keyword: `` `class` `` introduces nothing. A backtick
 	/// without a closing one on its line is an ordinary byte, so the words after it on its line are still read.
 	var typeDeclarationWords: TypeDeclarationWords {
@@ -1162,11 +1165,9 @@ extension UnsafeBufferPointer<UInt8> {
 		// Whether the last word introduces a type declaration, and only whitespace followed it since.
 		var followsTypeKeyword = false
 		while index < endIndex {
-			if self[index].isIdentifierByte {
+			if isWordByte(at: index) {
 				let wordStart = index
-				repeat {
-					index += 1
-				} while index < endIndex && self[index].isIdentifierByte
+				index = endOfWord(startingAt: index)
 				let word = UnsafeBufferPointer(rebasing: self[wordStart..<index])
 				if followsTypeKeyword {
 					found.namesFollowingKeywords.insert(String(decoding: word, as: UTF8.self))
@@ -1183,7 +1184,7 @@ extension UnsafeBufferPointer<UInt8> {
 				followsTypeKeyword = false
 				index = nameEnd + 1
 			} else {
-				followsTypeKeyword = followsTypeKeyword && self[index].isWhitespaceByte
+				followsTypeKeyword = followsTypeKeyword && (self[index].isWhitespaceByte || isNonBreakingSpaceByte(at: index))
 				index += 1
 			}
 		}
@@ -1265,7 +1266,7 @@ extension UnsafeBufferPointer<UInt8> {
 			let byte = self[index]
 			switch context {
 			case .code:
-				if byte.isIdentifierByte {
+				if isWordByte(at: index) {
 					let wordEnd = endOfWord(startingAt: index)
 					guard !mayIntroduceNestedTypeEveryModuleCanName(nestedTypeSearchWord(from: index, to: wordEnd), isCertainlyCode: true) else {
 						return true
@@ -1322,7 +1323,7 @@ extension UnsafeBufferPointer<UInt8> {
 					index = closingBacktickIndexOnLine(ofBacktickAt: index).map { $0 + 1 } ?? index + 1
 				} else {
 					// Only whitespace, and the parentheses of a modifier's argument, can be between two modifiers.
-					if !byte.separatesTokens, byte != UInt8(ascii: "("), byte != UInt8(ascii: ")") {
+					if !byte.separatesTokens, !isNonBreakingSpaceByte(at: index), byte != UInt8(ascii: "("), byte != UInt8(ascii: ")") {
 						followsAccessModifierEveryModuleCanName = false
 					}
 					index += 1
@@ -1386,7 +1387,7 @@ extension UnsafeBufferPointer<UInt8> {
 				if byte.isLineBreakByte {
 					context = mayContinuePastLine ? .unknownToEndOfText : .code
 					index += 1
-				} else if byte.isIdentifierByte {
+				} else if isWordByte(at: index) {
 					let wordEnd = endOfWord(startingAt: index)
 					guard !mayIntroduceNestedTypeEveryModuleCanName(nestedTypeSearchWord(from: index, to: wordEnd), isCertainlyCode: false) else {
 						return true
@@ -1400,7 +1401,7 @@ extension UnsafeBufferPointer<UInt8> {
 					index += 1
 				}
 			case .unknownToEndOfText:
-				if byte.isIdentifierByte {
+				if isWordByte(at: index) {
 					let wordEnd = endOfWord(startingAt: index)
 					guard !mayIntroduceNestedTypeEveryModuleCanName(nestedTypeSearchWord(from: index, to: wordEnd), isCertainlyCode: false) else {
 						return true
@@ -1415,13 +1416,31 @@ extension UnsafeBufferPointer<UInt8> {
 		return false
 	}
 
-	/// The index after the word that starts at `wordStart`: the run of identifier bytes there.
+	/// The index after the word that starts at `wordStart`: the run of bytes there that `isWordByte(at:)`.
 	private func endOfWord(startingAt wordStart: Int) -> Int {
 		var wordEnd = wordStart
-		while wordEnd < endIndex, self[wordEnd].isIdentifierByte {
+		while wordEnd < endIndex, isWordByte(at: wordEnd) {
 			wordEnd += 1
 		}
 		return wordEnd
+	}
+
+	/// Whether the byte at `index` can be part of a word: an identifier byte (`isIdentifierByte`) that is no byte of a
+	/// non-breaking space, which separates words as whitespace does.
+	private func isWordByte(at index: Int) -> Bool {
+		self[index].isIdentifierByte && !isNonBreakingSpaceByte(at: index)
+	}
+
+	/// Whether the byte at `index` is either byte of a non-breaking space, U+00A0, which the compiler reads as whitespace.
+	/// Its leading byte, 0xC2, only ever begins a character, so the pair is that character wherever it is.
+	private func isNonBreakingSpaceByte(at index: Int) -> Bool {
+		if self[index] == nonBreakingSpace.leadingByte {
+			index + 1 < endIndex && self[index + 1] == nonBreakingSpace.trailingByte
+		} else if self[index] == nonBreakingSpace.trailingByte {
+			index > startIndex && self[index - 1] == nonBreakingSpace.leadingByte
+		} else {
+			false
+		}
 	}
 
 	/// What the word from `wordStart` to `wordEnd` is to `mayDeclareNestedTypeEveryModuleCanName`. `class` before `func`,
@@ -1447,7 +1466,7 @@ extension UnsafeBufferPointer<UInt8> {
 	/// Whether the word after `index` and the whitespace there is one `class` modifies (`membersClassModifies`).
 	private func isMemberClassModifies(followingWhitespaceAfter index: Int) -> Bool {
 		var wordStart = index
-		while wordStart < endIndex, self[wordStart].isWhitespaceByte {
+		while wordStart < endIndex, self[wordStart].isWhitespaceByte || isNonBreakingSpaceByte(at: wordStart) {
 			wordStart += 1
 		}
 		let word = UnsafeBufferPointer(rebasing: self[wordStart..<endOfWord(startingAt: wordStart)])

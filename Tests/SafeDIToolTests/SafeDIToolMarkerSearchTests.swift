@@ -193,6 +193,20 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 	}
 
 	@Test(arguments: [
+		// Between the modifier and the keyword, between the keyword and the name, and after the name.
+		(text: "package\u{A0}struct Token {}", names: ["Token"], findsPackage: true),
+		(text: "struct\u{A0}Token {}", names: ["Token"], findsPackage: false),
+		(text: "enum Token\u{A0}{}", names: ["Token"], findsPackage: false),
+		(text: "package\u{A0}typealias\u{A0}Token\u{A0}= Int", names: ["Token"], findsPackage: true),
+	] as [(text: String, names: Set<String>, findsPackage: Bool)])
+	func typeDeclarationWords_findsPackageModifierAndName_whenNonBreakingSpaceSeparatesWords(text: String, names: Set<String>, findsPackage: Bool) {
+		// The compiler reads a non-breaking space, U+00A0, as whitespace (with a warning), so it is no part of a word.
+		let words = Self.typeDeclarationWords(of: text)
+		#expect(words.namesFollowingKeywords == names)
+		#expect(words.holdsPackageAccessModifier == findsPackage)
+	}
+
+	@Test(arguments: [
 		"package struct Token {}",
 		"package enum Space {}",
 		"public enum Space {\n    package enum Token {}\n}",
@@ -221,6 +235,8 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 		"public struct Label {\n    var text: String { \"\\(count) of \\(items.count)\" }\n}\n\npublic struct Token {}",
 		// `public` in backticks is a name.
 		"let `public` = 1\nenum Space {\n    struct Token {}\n}",
+		// `class` and a non-breaking space modifying a member introduce no type.
+		"public class Model {\n    public class\u{A0}func make() -> Model { Model() }\n}",
 		// A type keyword the search cannot place, outside every brace.
 		"let half = 4/2; public struct Token {}",
 		// Text that ends after a slash, inside a slash the search cannot place, or inside an interpolation.
@@ -249,6 +265,25 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 	])
 	func mayDeclareTypeModulesReadingModuleInfoNeed_isTrue_whenTextMayDeclareNestedTypeEveryModuleCanName(text: String) {
 		// A type nested in another that is `public` or `open` by its own modifier, or by the extension it is directly inside.
+		#expect(Self.mayDeclareTypeModulesReadingModuleInfoNeed(text))
+	}
+
+	@Test(arguments: [
+		// Between the modifier and the keyword, directly and after a comment.
+		"public enum Space {\n    public\u{A0}struct Token {}\n}",
+		"public enum Space {\n    public /* */\u{A0}struct Token {}\n}",
+		"public enum Space {\n    open\u{A0}class\u{A0}Token {}\n}",
+		// Between the modifier and `extension`, and between `extension` and the extended type's name.
+		"public\u{A0}extension Space {\n    struct Token {}\n}",
+		"public extension\u{A0}Space {\n    struct Token {}\n}",
+		// After `#if`, whose clause holds a `}` the compiler does not parse.
+		"public enum Space {\n#if\u{A0}compiler(>=99)\n}\n#endif\n    public struct Token {}\n}",
+		// In bytes the search cannot place, to the end of the line and to the end of the text.
+		"public enum Space {\n    static let d = /a/; public\u{A0}struct Token {}\n}",
+		"let broken = \"text\npublic enum Space {\n    public\u{A0}struct Token {}\n}",
+	])
+	func mayDeclareTypeModulesReadingModuleInfoNeed_isTrue_whenNonBreakingSpaceSeparatesWords(text: String) {
+		// The compiler reads a non-breaking space, U+00A0, as whitespace (with a warning), so it is no part of a word.
 		#expect(Self.mayDeclareTypeModulesReadingModuleInfoNeed(text))
 	}
 
