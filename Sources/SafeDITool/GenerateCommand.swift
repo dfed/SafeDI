@@ -307,7 +307,10 @@ struct Generate: AsyncParsableCommand {
 
 		// Each module's instantiables are already ordered by `parseSwiftFiles`, so the
 		// combined order depends only on the caller's dependent-module list.
-		let normalizedInstantiables = normalizingInstantiableTypes(of: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables)
+		let normalizedInstantiables = normalizingInstantiableTypes(
+			of: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables,
+			plainTypeDeclarations: dependentModuleInfo.flatMap(\.plainTypeDeclarations) + module.plainTypeDeclarations,
+		)
 		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
 		let typeDescriptionToFulfillingInstantiableMap = try resolveSafeDIFulfilledTypes(instantiables: normalizedInstantiables)
 		// Generated code never imports the module it compiles in, which the compiler warns at: a file read from a module
@@ -1006,7 +1009,7 @@ struct Generate: AsyncParsableCommand {
 				}
 				// A module info holds the module's declarations as the module read them, and the condition it read them under.
 				visible = try VisibleDeclarations(
-					instantiables: resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables)),
+					instantiables: resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables, plainTypeDeclarations: visiblePlainTypeDeclarations)),
 					plainTypeDeclarations: visiblePlainTypeDeclarations,
 					readFromModuleInfo: true,
 					mockCondition: MockCondition(identity.mockConditionalCompilation),
@@ -1022,9 +1025,10 @@ struct Generate: AsyncParsableCommand {
 				let moduleConfiguration = module.configurations.first { configuration in
 					configuration.sourceFilePath.flatMap { membership?.declaringModule(ofFileAt: $0)?.moduleName } == moduleName
 				}
+				let visiblePlainTypeDeclarations = plainTypeDeclarations.filter { $0.moduleName.map(visibleModuleNames.contains) == true }
 				visible = try VisibleDeclarations(
-					instantiables: resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables)),
-					plainTypeDeclarations: plainTypeDeclarations.filter { $0.moduleName.map(visibleModuleNames.contains) == true },
+					instantiables: resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables, plainTypeDeclarations: visiblePlainTypeDeclarations)),
+					plainTypeDeclarations: visiblePlainTypeDeclarations,
 					readFromModuleInfo: false,
 					mockCondition: Self.mockCondition(of: moduleConfiguration),
 				)
@@ -1078,8 +1082,11 @@ struct Generate: AsyncParsableCommand {
 		   unnormalizedInstantiables.contains(where: { $0.moduleName == nil }) || plainTypeDeclarations.contains(where: { $0.moduleName == nil })
 		{
 			let callersVisibleModuleNames = Self.visibleModuleNames(from: moduleName, in: membership)
-			callersVisibleInstantiables = try resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: unnormalizedInstantiables.filter { $0.moduleName.map(callersVisibleModuleNames.contains) == true }))
 			callersVisiblePlainTypeDeclarations = plainTypeDeclarations.filter { $0.moduleName.map(callersVisibleModuleNames.contains) == true }
+			callersVisibleInstantiables = try resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(
+				of: unnormalizedInstantiables.filter { $0.moduleName.map(callersVisibleModuleNames.contains) == true },
+				plainTypeDeclarations: callersVisiblePlainTypeDeclarations,
+			))
 		} else {
 			callersVisibleInstantiables = nil
 		}

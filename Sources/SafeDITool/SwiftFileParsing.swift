@@ -776,8 +776,8 @@ struct KeptPlainTypeNames: Codable, Equatable, Sendable {
 	/// The outermost names of the types whose plain declarations the module keeps, with the types nested in them: each
 	/// type an extension that is or holds an `@Instantiable` extends and the outermost type enclosing each `@Instantiable`
 	/// type, in any clause, and each type its declarations mention. A member of an `@Instantiable` type can name a type
-	/// nested in it, or in a type enclosing it, by the nested type's own name, which a public mock's configuration
-	/// qualifies from that type's declaration (`TypeAccessProof.qualifyingNestedTypes(in:writtenWithin:)`). A file without
+	/// nested in it, or in a type enclosing it, by the nested type's own name, which normalization qualifies from that
+	/// type's declaration (`TypeAccessProof.NestedTypeQualifier`). A file without
 	/// a SafeDI marker is parsed when it may declare a type of one of these names (`parseModule`), so they also hold each
 	/// name between the outermost and each `@Instantiable` type: a namespace an extension declaring the type extends can
 	/// be declared inside another extension, in a file that names only the namespace, and bounds the type
