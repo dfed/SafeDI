@@ -1554,6 +1554,7 @@ struct GraphFuzzerPublicMockDraw {
 
 // MARK: - Oracles
 
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension GraphFuzzerToolRuns {
 	/// The failure of a `generateMockPublic` graph whose two paths disagree about accepting it, or `nil`: the tool rejects
 	/// the graph as drawn with an error that is not a public mock's own (`GraphFuzzerOracle.isPublicMockOnlyRejection`)
@@ -1976,6 +1977,7 @@ extension GraphFuzzerOracle {
 
 // MARK: - Reading a graph
 
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension GraphFuzzerPublicMockDraw {
 	/// The shapes drawn in `fixture`, read from its source: the module each file names, the `@Instantiable` declarations
 	/// and their properties and initializers, and the lines of the files that declare no `@Instantiable` type.

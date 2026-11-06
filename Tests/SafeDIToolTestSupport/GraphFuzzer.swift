@@ -678,6 +678,7 @@ struct GraphFuzzerReadTwin {
 	/// (`keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesPackageCanName:)`), and every module that
 	/// depends on it reads them there. The SwiftPM plugin writes no comment, so there the twin's files are the graph's
 	/// byte for byte.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func difference(between outcome: GraphFuzzerToolOutcome, and twinOutcome: GraphFuzzerToolOutcome) -> String? {
 		guard case let .accepted(generatedFiles, warnings) = outcome, case let .accepted(twinGeneratedFiles, twinWarnings) = twinOutcome else {
 			return GraphFuzzerToolOutcome.difference(between: outcome, and: twinOutcome)
@@ -701,6 +702,7 @@ struct GraphFuzzerReadTwin {
 
 	/// The types the comments of `generatedFiles` name, by the name of the module of each file: what precedes the file's
 	/// own name, or the empty name for a graph in one module, whose files name no module.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private static func commentedTypeNamesByModule(in generatedFiles: [String: String]) -> [String: Set<String>] {
 		var typeNamesByModule = [String: Set<String>]()
 		for (fileName, contents) in generatedFiles {
@@ -717,6 +719,7 @@ struct GraphFuzzerReadTwin {
 	}
 
 	/// `code` without the lines of the comment a run without a target graph writes.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private static func removingUnreadTypeComments(from code: String) -> String {
 		code.split(separator: "\n", omittingEmptySubsequences: false)
 			.filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix(GraphFuzzerOracle.unreadTypeCommentPrefix) }
@@ -6501,6 +6504,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// generator which stops drawing a shape cannot hide it: `generatedFiles` is an accepted graph's output and
 	/// `fixture` the graph, whose declarations tell a parameter received only if available from a required one
 	/// (`GraphFuzzerSeamParameterKinds`), which the generated initializer spells alike.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	static func seamOutputFeatures(of fixture: GraphFuzzerFixture, generatedFiles: [String: String]) -> Set<GraphFuzzerSeamOutputFeature> {
 		let parameterKinds = GraphFuzzerSeamParameterKinds(fixture: fixture)
 		var features = Set<GraphFuzzerSeamOutputFeature>()
@@ -6707,6 +6711,7 @@ private struct GraphFuzzerInstantiationEdge {
 /// `instantiate(…)` parameter, which is required. A label the tree receives both ways is neither, as far as the
 /// declarations tell: the receive of the other kind may sit beneath a declaration of the label inside the tree.
 struct GraphFuzzerSeamParameterKinds {
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	init(fixture: GraphFuzzerFixture) {
 		var ownLabelsBySeam = [String: Set<String>]()
 		var ownOnlyIfAvailableLabelsBySeam = [String: Set<String>]()
@@ -6889,6 +6894,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// or warnings in any order, the names of their generated files, or one file's code, byte for byte. Paths to
 	/// fixture files are compared by file name, and the suggestions a diagnostic lists ("Did you mean one of …"), and
 	/// the declarations it lists as proving a type's access, in any order: the order inside a message is presentation and changes nothing a user does.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	static func difference(between outcome: GraphFuzzerToolOutcome, and otherOutcome: GraphFuzzerToolOutcome) -> String? {
 		// A seam's guard enum is named after a hash of its signature, which names its parameters' types, so a
 		// renaming changes it as it changes the types: a hash restored textually cannot match, and is reduced away.
@@ -7134,6 +7140,7 @@ struct GraphFuzzerFailure: Equatable {
 }
 
 /// The oracle's verdict on one graph.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct GraphFuzzerResult {
 	init(
 		fixture: GraphFuzzerFixture,
@@ -7482,6 +7489,7 @@ struct GraphFuzzerHash {
 }
 
 /// A graph with what two runs of the tool produced for it.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct GraphFuzzerToolRuns {
 	/// - Parameters:
 	///   - renamedOutcomes: The outcome of the graph renamed by each renaming, with the renaming undone.

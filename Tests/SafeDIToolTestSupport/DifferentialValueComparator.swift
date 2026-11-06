@@ -1452,6 +1452,7 @@ private struct DescribedLine {
 	/// The value without its identity, `(seen)`, and what the describer writes about when an instance was built: the
 	/// `already instantiated, ` of a lazily instantiated wrapper whose instance was read before it was described, and
 	/// the `(built before the probe's value)` of an instance read last.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	var restWithoutWhenBuilt: String {
 		String(rest)
 			.replacing(" (already instantiated, instance ", with: " (instance ")
@@ -1580,6 +1581,7 @@ private struct ProbeComparison {
 	/// beneath a difference is not compared, so one there is part of that difference.
 	private(set) var spentTraversals = [SpentTraversal]()
 
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func compare() {
 		compareTrees(from: .both(feature.topLevel[0], knownRight.topLevel[0]))
 		// An instance read last pairs with the other path's instance of the wrapper its wrapper paired with. One whose
@@ -1609,6 +1611,7 @@ private struct ProbeComparison {
 
 	/// Compares the trees beneath `root` in the order the describer printed them, so that each identity is paired at
 	/// its first visit before a reference to it is compared.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func compareTrees(from root: NodePair) {
 		var pairs = [root]
 		while let pair = pairs.popLast() {
@@ -1650,6 +1653,7 @@ private struct ProbeComparison {
 
 	/// How two lines agree, pairing their identities when both are first visits that agree, or that differ only in
 	/// when an instance was built.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func agreement(_ featureIndex: Int, _ knownRightIndex: Int) -> Agreement {
 		let featureLine = feature.lines[featureIndex]
 		let knownRightLine = knownRight.lines[knownRightIndex]

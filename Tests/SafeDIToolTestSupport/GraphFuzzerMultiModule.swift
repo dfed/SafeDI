@@ -428,6 +428,7 @@ struct GraphFuzzerGeneratedModule: Equatable, Sendable {
 
 /// What one multi-module integration did with a partitioned graph: each module's verdict, in dependency order, up to
 /// and including the first module whose `generate` failed, where the harness stops, as a build would.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct GraphFuzzerMultiModuleOutcome: Equatable, Sendable {
 	struct ModuleVerdict: Equatable, Sendable {
 		enum Kind: Equatable, Sendable {
@@ -589,6 +590,7 @@ struct GraphFuzzerMultiModuleOutcome: Equatable, Sendable {
 // MARK: - Property
 
 /// A partitioned graph with what each multi-module integration produced for it.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct GraphFuzzerMultiModuleRuns: Sendable {
 	let seed: UInt64
 	let partition: GraphFuzzerPartition

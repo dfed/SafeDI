@@ -53,6 +53,7 @@ func inlineFixture(_ files: [String]) -> [String] {
 
 /// Expects the seam build of `files`, `seamOutput`, to construct the values its inline build, `inlineOutput`, constructs
 /// for `Root()`. Each file is named after the type it declares first.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func expectSeamBuildsInlineValues(
 	of files: [String],
 	seamOutput: TestOutput,

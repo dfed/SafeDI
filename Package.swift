@@ -157,9 +157,11 @@ let package = Package(
 		// compile verifier, the graph fuzzer, the differential value comparator) live
 		// in `SafeDIToolTestSupport`, which declares no tests and which each test
 		// target reaches through `@testable import`, as it reaches `SafeDITool`. It is
-		// a test target rather than a regular target so that it compiles with the test
-		// targets' deployment target, whose API the helpers use, and so that a plain
-		// `swift build` leaves it alone.
+		// a test target rather than a regular target so that a plain `swift build`
+		// leaves it alone. The Swift Build backend (Xcode, `--build-system swiftbuild`)
+		// compiles a test target that others depend on for the package's deployment
+		// target rather than the host's, so the helpers mark what uses macOS 13 API
+		// `@available`.
 		.testTarget(
 			name: "SafeDIToolTestSupport",
 			dependencies: [

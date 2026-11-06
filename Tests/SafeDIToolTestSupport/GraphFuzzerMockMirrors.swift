@@ -171,6 +171,7 @@ enum GraphFuzzerMirrorTypes {
 /// changes this model in the same pull request: the oracle cross-checks the model against every generated mock it
 /// compares (`mirrorModelDisagreesWithMock`), so a model left behind fails at once.
 struct GraphFuzzerMockMirrorModel {
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	init(fixture: GraphFuzzerFixture) {
 		var types = [String: TypeDeclaration]()
 		var typeOrder = [String]()
@@ -1236,6 +1237,7 @@ struct GraphFuzzerValueOraclePlan {
 	/// Plans the comparison of `fixture`, a base corpus graph the tool accepted, from the files the tool generated for it.
 	/// - Parameter storingFixture: The same graph storing every parameter, which the comparator compiles, or `nil` for
 	///   the corpus graph of `fixture`'s seed drawn so (`GraphFuzzerGenerator.fixture(forSeed:storingEveryParameter:)`).
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	init(fixture: GraphFuzzerFixture, generatedFiles: [String: String], storingFixture: GraphFuzzerFixture? = nil) {
 		let model = GraphFuzzerMockMirrorModel(fixture: fixture)
 		self.fixture = fixture

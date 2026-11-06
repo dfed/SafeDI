@@ -212,6 +212,7 @@ enum MultiModuleCompileVerification {
 }
 
 /// What one module's run produced.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct ModuleTestOutput {
 	/// Whether `generate` ran: always under `.moduleInfo`, and under `.swiftPackagePlugin` only when `scan`
 	/// planned an output, as the plugin adds a build command only then.
@@ -242,6 +243,7 @@ struct ModuleTestOutput {
 
 /// What `executeSafeDIToolMultiModuleTest` produced: each module's output and, when the modules were compiled,
 /// how that went.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct MultiModuleTestOutput {
 	/// Each module's output, by module name.
 	let modules: [String: ModuleTestOutput]
@@ -257,6 +259,7 @@ struct MultiModuleTestOutput {
 /// An error thrown by `executeSafeDIToolMultiModuleTest` when a module's `generate` fails. Carries the fixture
 /// paths of every module the tool ran for, the failing one included, so diagnostics that cite those paths can
 /// be asserted in full, and the output of every module processed before the failing one.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct SafeDIToolMultiModuleTestError: Error, CustomStringConvertible {
 	let underlyingError: any Error
 	/// The module whose `generate` failed.
@@ -276,6 +279,7 @@ struct SafeDIToolMultiModuleTestError: Error, CustomStringConvertible {
 /// whose description – the compiler-formatted diagnostics for a `SourceLocatedError` – exactly matches
 /// `expectedDiagnostics`, which is given every module's fixture files so it can cite their paths, and hands the
 /// outputs of the modules processed before the failing one to `inspectingOutputs`.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func assertThrowsMultiModuleError(
 	inModule expectedModuleName: String,
 	diagnostics expectedDiagnostics: (_ fixtures: [String: FixturePaths]) -> String,
