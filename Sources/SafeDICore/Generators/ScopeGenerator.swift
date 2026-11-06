@@ -1645,11 +1645,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		for child in orderedChildren {
-			if case let .alias(property, fulfillingProperty, _, _, _) = child.generator.scopeData {
+			if case let .alias(property, fulfillingProperty, _, onlyIfAvailable, _) = child.generator.scopeData {
 				// The alias is bound in this scope's code, where its fulfilling property is read. An alias that keeps
 				// its fulfilling property's label is not in scope where that property is read.
 				guard sendableBuilderDepth > 0,
-				      !child.generator.isBoundToNil(unavailableProperties: child.unavailableProperties)
+				      !Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: child.unavailableProperties)
 				else { continue }
 				var fulfillingDeclarationsByLabel = childDeclarationsByLabel
 				if fulfillingProperty.label == property.label {
@@ -2471,15 +2471,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			: unavailableOptionalPropertiesNotGeneratedBefore.union(onlyIfAvailableDependencies(fulfilledByPropertiesGeneratedLater: propertiesGeneratedLater))
 	}
 
-	/// Whether this scope is an `onlyIfAvailable` alias bound to `nil`, because its fulfilling
-	/// property is among `unavailableProperties`.
-	nonisolated func isBoundToNil(unavailableProperties: Set<Property>) -> Bool {
-		switch scopeData {
-		case let .alias(_, fulfillingProperty, _, onlyIfAvailable, _):
-			onlyIfAvailable && unavailableProperties.contains(fulfillingProperty)
-		case .root, .property, .hole, .fill:
-			false
-		}
+	/// Whether an alias – `onlyIfAvailable` or not, bound from `fulfillingProperty` – is bound to `nil`: an
+	/// `onlyIfAvailable` alias is when its fulfilling property is among `unavailableProperties`. Asked of an alias's
+	/// scope data alone, which each caller has matched.
+	static func aliasIsBoundToNil(onlyIfAvailable: Bool, fulfillingProperty: Property, unavailableProperties: Set<Property>) -> Bool {
+		onlyIfAvailable && unavailableProperties.contains(fulfillingProperty)
 	}
 
 	/// The first receive of each of `labels` – labels the body of the builder function of the scope that builds
@@ -3167,8 +3163,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				propertiesGeneratedLater: propertiesGeneratedLater,
 				enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 			)
-		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, _, declarationReference):
-			if isBoundToNil(unavailableProperties: unavailableProperties) {
+		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
+			if Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) {
 				// An `onlyIfAvailable` alias whose fulfilling property is unavailable is still declared, so that its declaring
 				// type and everything beneath it read it, `nil` included, rather than a declaration of its label further up.
 				return Self.referencingDeclaration(of: "let \(property.asSource) = nil", by: declarationReference)
@@ -5386,7 +5382,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					fulfillingPropertyIsLazilyInstantiatedInstance: childGenerator.fulfillingPropertyIsLazilyInstantiatedInstance,
 					declarationReference: declarationReference,
 					// An alias whose fulfilling property is unavailable is declared `nil`, as production declares it.
-					isBoundToNil: childGenerator.isBoundToNil(unavailableProperties: childUnavailableProperties),
+					isBoundToNil: Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: childUnavailableProperties),
 				)))
 			} else if case let .property(childInstantiable, childProperty, _, erasedToConcreteExistential, isPropertyCycle, _) = childGenerator.scopeData {
 				let isInstantiator = !childProperty.propertyType.isConstant
