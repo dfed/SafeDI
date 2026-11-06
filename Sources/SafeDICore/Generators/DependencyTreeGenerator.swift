@@ -2614,7 +2614,7 @@ public actor DependencyTreeGenerator {
 			let declarationLocation: Dependency.DeclarationLocation?
 			let declaringType: TypeDescription
 			/// Whether `declaringType` is forwarded `property`, which the tree is then handed rather than builds.
-			var isForwarded = false
+			let isForwarded: Bool
 		}
 
 		/// A received dependency the generated code cannot pass, because a closer ancestor declares another property
