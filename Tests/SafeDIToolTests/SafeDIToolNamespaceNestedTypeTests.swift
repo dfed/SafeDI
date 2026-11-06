@@ -1289,6 +1289,91 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fulfillsQualifiedReceive_whenNestedTypeFulfillsProtocolDeclaredBesideItAndSpelledUnqualified() async throws {
+		// `Service` lists `ServiceProtocol`, declared beside it in `Feature`, unqualified: `Root` receives it as
+		// `Feature.ServiceProtocol` and `Consumer` as `ServiceProtocol`, one type, which SafeDI used to report as
+		// unfulfillable.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public final class Root: Instantiable {
+				    public init(service: Feature.ServiceProtocol, consumer: Feature.Consumer) {
+				        self.service = service
+				        self.consumer = consumer
+				    }
+
+				    @Instantiated let service: Feature.ServiceProtocol
+				    @Instantiated let consumer: Feature.Consumer
+				}
+				""",
+				"""
+				public enum Feature {
+				    public protocol ServiceProtocol {}
+
+				    @Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+				    public final class Service: Instantiable, ServiceProtocol {
+				        public init() {}
+				    }
+
+				    @Instantiable
+				    public final class Consumer: Instantiable {
+				        public init(service: ServiceProtocol) {
+				            self.service = service
+				        }
+
+				        @Received let service: ServiceProtocol
+				    }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        let service: Feature.ServiceProtocol = Feature.Service()
+			        let consumer = Feature.Consumer(service: service)
+			        self.init(service: service, consumer: consumer)
+			    }
+			}
+			""",
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            service: (() -> Feature.ServiceProtocol)? = nil,
+			            consumer: ((Feature.ServiceProtocol) -> Feature.Consumer)? = nil
+			        ) {
+			            self.service = service
+			            self.consumer = consumer
+			        }
+
+			        let service: (() -> Feature.ServiceProtocol)?
+			        let consumer: ((Feature.ServiceProtocol) -> Feature.Consumer)?
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        let service: Feature.ServiceProtocol = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Feature.Service() }
+			        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(service) } else { Feature.Consumer(service: service) }
+			        return Root(service: service, consumer: consumer)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader,
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
