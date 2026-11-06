@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// A receive inside a seam's tree whose label a declaration on its path declares with a property that does not

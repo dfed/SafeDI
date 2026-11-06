@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// A type an `@Instantiable` declaration spells by the name of a type nested in a type enclosing it – a namespace

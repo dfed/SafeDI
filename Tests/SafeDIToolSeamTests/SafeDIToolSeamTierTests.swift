@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// How a seam's tiers are formed from its parameters' access levels and what a caller that reaches none is told. A tier

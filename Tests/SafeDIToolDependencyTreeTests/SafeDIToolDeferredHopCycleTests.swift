@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// A dependency cycle is accepted when any dependency that instantiates along it is an instantiator, wherever a tree

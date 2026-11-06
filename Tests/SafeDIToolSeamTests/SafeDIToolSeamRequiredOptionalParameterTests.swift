@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// An `onlyIfAvailable` alias inside a seam of a parameter of optional type – a pass-through received only if

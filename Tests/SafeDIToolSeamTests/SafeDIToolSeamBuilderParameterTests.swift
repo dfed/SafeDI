@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// A seam's tree that instantiates a type no `@Instantiable` declaration the seam's module can see fulfills: the

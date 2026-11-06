@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// Files reached through `#SafeDIConfiguration(additionalDirectoriesToInclude:)` in a project laid out as a

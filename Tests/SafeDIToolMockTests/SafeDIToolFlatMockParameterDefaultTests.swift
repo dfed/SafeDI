@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// A flat `mock()` parameter – a `@Forwarded` property of the mocked type, or a received dependency the mock cannot

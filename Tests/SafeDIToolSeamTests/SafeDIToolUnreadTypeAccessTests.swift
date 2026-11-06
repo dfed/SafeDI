@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// A type no declaration SafeDI reads declares counts as `public` (decision 54): a framework's, a fetched package's, or

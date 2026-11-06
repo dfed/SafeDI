@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// What a hole's implementation is handed for a value the seam takes as an `@autoclosure`: the seam hands the hole's

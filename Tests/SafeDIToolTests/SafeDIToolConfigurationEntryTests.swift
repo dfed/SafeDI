@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// Covers the `#SafeDIConfiguration` entries SafeDI can tell are mistakes: an `additionalDirectoriesToInclude` entry

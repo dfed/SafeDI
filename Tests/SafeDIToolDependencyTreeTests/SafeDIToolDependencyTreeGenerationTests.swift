@@ -21,7 +21,7 @@
 import Foundation
 import Testing
 @testable import SafeDICore
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// A type declared with `generateDependencyTree: true` – a seam – gets its dependency tree generated in the module

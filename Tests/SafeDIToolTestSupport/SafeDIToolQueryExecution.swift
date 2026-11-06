@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 
 /// A module of a `query` test: the name of its directory and the Swift files it holds. A name with `/` in it
 /// nests the directory, for a test of how directories are named.

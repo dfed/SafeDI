@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// The declaration `resolveSafeDIFulfilledTypes` keeps for each type once a `mockOnly` declaration's mock is merged

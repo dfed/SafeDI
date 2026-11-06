@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// How the imports of generated files spell access levels (SE-0409). Without `InternalImportsByDefault`, the compiler

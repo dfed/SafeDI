@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// Shapes of a seam the `@Instantiable` macro rejects, which `generate` – run before the compiler expands the macro –

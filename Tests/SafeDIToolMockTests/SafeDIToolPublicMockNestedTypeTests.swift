@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// A public mock's module-level configuration of a type in its tree (`__safeDI_<Type>_MockConfiguration`) spells the

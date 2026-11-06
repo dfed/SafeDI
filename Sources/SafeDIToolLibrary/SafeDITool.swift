@@ -21,7 +21,16 @@
 import ArgumentParser
 import Foundation
 
-@main
+/// What the `SafeDITool` executable runs. The tool's commands live in this library rather than in the executable target, so
+/// that the targets that test them depend on a library, which every SwiftPM build system builds before what imports it.
+public enum SafeDIToolCommandLine {
+	/// The command the `SafeDITool` executable parses its arguments into and runs.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	public static var rootCommand: any AsyncParsableCommand.Type {
+		SafeDITool.self
+	}
+}
+
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct SafeDITool: AsyncParsableCommand {
 	static let configuration = CommandConfiguration(

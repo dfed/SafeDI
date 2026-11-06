@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// An `onlyIfAvailable` alias inside a seam's tree whose fulfilling property may be unavailable – a parameter of the

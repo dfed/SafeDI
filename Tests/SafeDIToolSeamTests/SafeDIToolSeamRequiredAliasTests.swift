@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// A type inside a seam's tree that requires an `onlyIfAvailable` alias of a pass-through: inline, the caller builds the

@@ -138,8 +138,27 @@ let package = Package(
 			url: "https://github.com/dfed/SafeDI/releases/download/2.3.0-alpha-1/SafeDITool.artifactbundle.zip",
 			checksum: "75faa788ff5158bee649ac19e5b7789555def41a0bfc413ef00a3fc7de2f0348",
 		),
+		// The tool's commands live in a library, and the executable only runs them, so that
+		// what tests the commands depends on a library, which every build system builds
+		// before the targets that import it. In the graph SwiftPM hands the Swift Build
+		// backend (Xcode, `--build-system swiftbuild`, the default from Swift 6.4), only a
+		// test target that nothing depends on is ordered after an executable target's module
+		// it imports, so `SafeDIToolTestSupport` would compile alongside that module rather
+		// than after it. The executable target keeps the name `SafeDITool`, which names the
+		// tool the plugin asks for and the binary the release ships, so the library's module
+		// is `SafeDIToolLibrary`.
 		.executableTarget(
 			name: "SafeDITool",
+			dependencies: [
+				.product(name: "ArgumentParser", package: "swift-argument-parser"),
+				"SafeDIToolLibrary",
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.target(
+			name: "SafeDIToolLibrary",
 			dependencies: [
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
 				.product(name: "SwiftParser", package: "swift-syntax"),
@@ -156,7 +175,7 @@ let package = Package(
 		// step of CI's build. Their shared helpers (`executeSafeDIToolTest`, the
 		// compile verifier, the graph fuzzer, the differential value comparator) live
 		// in `SafeDIToolTestSupport`, which declares no tests and which each test
-		// target reaches through `@testable import`, as it reaches `SafeDITool`. It is
+		// target reaches through `@testable import`, as it reaches `SafeDIToolLibrary`. It is
 		// a test target rather than a regular target so that a plain `swift build`
 		// leaves it alone. The Swift Build backend (Xcode, `--build-system swiftbuild`)
 		// compiles a test target that others depend on for the package's deployment
@@ -165,7 +184,7 @@ let package = Package(
 		.testTarget(
 			name: "SafeDIToolTestSupport",
 			dependencies: [
-				"SafeDITool",
+				"SafeDIToolLibrary",
 				"SafeDICore",
 			],
 			swiftSettings: [
@@ -176,7 +195,7 @@ let package = Package(
 			name: "SafeDIToolTests",
 			dependencies: [
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
-				"SafeDITool",
+				"SafeDIToolLibrary",
 				"SafeDIToolTestSupport",
 			],
 			swiftSettings: [
@@ -187,7 +206,7 @@ let package = Package(
 			name: "SafeDIToolDependencyTreeTests",
 			dependencies: [
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
-				"SafeDITool",
+				"SafeDIToolLibrary",
 				"SafeDIToolTestSupport",
 			],
 			swiftSettings: [
@@ -197,7 +216,7 @@ let package = Package(
 		.testTarget(
 			name: "SafeDIToolMockTests",
 			dependencies: [
-				"SafeDITool",
+				"SafeDIToolLibrary",
 				"SafeDIToolTestSupport",
 			],
 			swiftSettings: [
@@ -207,7 +226,7 @@ let package = Package(
 		.testTarget(
 			name: "SafeDIToolSeamTests",
 			dependencies: [
-				"SafeDITool",
+				"SafeDIToolLibrary",
 				"SafeDIToolTestSupport",
 			],
 			swiftSettings: [
@@ -217,7 +236,7 @@ let package = Package(
 		.testTarget(
 			name: "SafeDIToolFuzzerTests",
 			dependencies: [
-				"SafeDITool",
+				"SafeDIToolLibrary",
 				"SafeDIToolTestSupport",
 			],
 			swiftSettings: [

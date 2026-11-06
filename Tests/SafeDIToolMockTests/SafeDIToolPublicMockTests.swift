@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// Public mocks (`@Instantiable(generateMock: .public)`): how the macro's argument reaches the tool, and the mock the

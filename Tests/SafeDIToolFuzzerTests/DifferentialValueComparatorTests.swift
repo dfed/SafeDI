@@ -27,7 +27,7 @@
 #endif
 import Foundation
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// The differential value comparator judges two paths that build one graph by the values they build, not only by

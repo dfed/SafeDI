@@ -22,7 +22,7 @@ import ArgumentParser
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// The `query` subcommand, which reports what a type needs: the modules whose declarations build it and its

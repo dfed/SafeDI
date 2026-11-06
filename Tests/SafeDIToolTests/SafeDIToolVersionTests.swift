@@ -19,7 +19,7 @@
 // SOFTWARE.
 
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 struct SafeDIToolVersionTests {
@@ -36,5 +36,10 @@ struct SafeDIToolVersionTests {
 	@Test
 	func configuration_hasGenerateAsDefaultSubcommand() {
 		#expect(SafeDITool.configuration.defaultSubcommand == Generate.self)
+	}
+
+	@Test
+	func rootCommand_isSafeDITool_whenTheExecutableRunsIt() {
+		#expect(ObjectIdentifier(SafeDIToolCommandLine.rootCommand) == ObjectIdentifier(SafeDITool.self))
 	}
 }

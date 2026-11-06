@@ -39,7 +39,7 @@ extension ErrorReportingSite {
 		// roots inside the mock-root loop, which it escapes, discarding the errors of the mock roots validated before it.
 		// Nothing joins it, and `generate` prints it.
 		"ErasedInstantiatorForwardedPropertiesMismatchError": ErrorReportingSite(
-			path: "Sources/SafeDITool/GenerateCommand.swift",
+			path: "Sources/SafeDIToolLibrary/GenerateCommand.swift",
 			code: "catch let error as any SourceLocatedError",
 		),
 		// The macros attach them to the declaration as diagnostics; neither is thrown.

@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
 /// Covers where a module's `#SafeDIConfiguration` lives. A configuration in `SafeDIConfiguration.swift` is
