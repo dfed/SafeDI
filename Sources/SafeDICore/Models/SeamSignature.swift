@@ -167,16 +167,6 @@ public struct SeamSignature: Sendable {
 			/// the label; `@Sendable`, held in a `SendableLazilyInstantiated<T>`, when a `@Sendable` function inside the
 			/// seam's tree reads it, or a nested seam takes it `@Sendable`.
 			case deferred(isSendable: Bool)
-
-			/// What the guard hashes for the deferral.
-			var hashToken: String {
-				switch self {
-				case .none:
-					""
-				case let .deferred(isSendable):
-					isSendable ? "deferred @Sendable" : "deferred"
-				}
-			}
 		}
 
 		/// Whether the generated initializer takes the parameter as an `@autoclosure`.
@@ -642,8 +632,8 @@ public struct SeamSignature: Sendable {
 			hash.combine(parameter.isOnlyIfAvailable ? "= nil" : "")
 			// The deferral only where the parameter is deferred, so a seam that takes every parameter by value hashes what it
 			// always hashed.
-			if parameter.deferral != .none {
-				hash.combine(parameter.deferral.hashToken)
+			if case let .deferred(isSendable) = parameter.deferral {
+				hash.combine(isSendable ? "deferred @Sendable" : "deferred")
 			}
 			// Only where it is set, so a seam without it hashes what it always hashed, and a caller that computed the
 			// signature without it names an enum the seam's module did not generate.
