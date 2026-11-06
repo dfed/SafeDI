@@ -177,10 +177,37 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 		#expect(Self.typeDeclarationWords(of: text).namesFollowingKeywords.isEmpty)
 	}
 
-	@Test
-	func typeDeclarationWords_findsNoPackageModifier_whenPackageIsInBackticks() {
-		// `package` in backticks is a name, never the access modifier.
-		#expect(!Self.typeDeclarationWords(of: "let `package` = Package()").mayDeclareTypeOtherModulesCanName)
+	@Test(arguments: [
+		"let `package` = Package()",
+		"let `public` = Visibility.everywhere",
+		"func `open`() {}",
+	])
+	func typeDeclarationWords_findsNoAccessModifierOtherModulesCanName_whenModifierIsInBackticks(text: String) {
+		// `package`, `public` or `open` in backticks is a name, never the access modifier.
+		#expect(!Self.typeDeclarationWords(of: text).mayDeclareTypeOtherModulesCanName)
+	}
+
+	@Test(arguments: [
+		"package struct Token {}",
+		"public enum Token {}",
+		"open class Token {}",
+		"public extension Space {\n    enum Token {}\n}",
+	])
+	func typeDeclarationWords_findsAccessModifierOtherModulesCanName_whenTextHoldsPackagePublicOrOpen(text: String) {
+		// Another module can name a declaration that is `package`, `public` or `open`.
+		#expect(Self.typeDeclarationWords(of: text).mayDeclareTypeOtherModulesCanName)
+	}
+
+	@Test(arguments: [
+		"struct Token {}",
+		"internal enum Token {}",
+		"fileprivate struct Token {}",
+		"private enum Token {}",
+		"enum Token { case opened, publicly, packages }",
+	])
+	func typeDeclarationWords_findsNoAccessModifierOtherModulesCanName_whenTextHoldsNoPackagePublicOrOpenWord(text: String) {
+		// Only the whole words `package`, `public` and `open` are modifiers another module can name a declaration by.
+		#expect(!Self.typeDeclarationWords(of: text).mayDeclareTypeOtherModulesCanName)
 	}
 
 	// MARK: Private

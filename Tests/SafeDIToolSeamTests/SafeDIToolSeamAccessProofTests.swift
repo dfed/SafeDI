@@ -3535,9 +3535,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesReceivedTypeOnPublicTier_whenAnotherModuleDeclaresItsProtocolPublicInFileWithoutSafeDIMarker(integration: MultiModuleIntegration) async throws {
 		// F4: `Core` declares `Theme` alone, which none of its own declarations mentions: under the plugin the run reads
-		// `Core`'s file because `Badge` mentions `Theme`, while a `.safedi` records only the declarations of `Core`'s that
-		// only its package can name, so under `.moduleInfo` SafeDI reads no declaration of the `public` `Theme`, counts it
-		// as `public` all the same, and names it in the comment.
+		// `Core`'s file because `Badge` mentions `Theme`, and a `.safedi` records every declaration of `Core`'s that another
+		// module can name, so under `.moduleInfo` SafeDI reads the `public` `Theme` too, and the comment names nothing.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Core", packageName: "Kit", swiftFileContentByFilePath: ["Theme.swift": "public protocol Theme {}"]),
@@ -3551,7 +3550,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + Self.importLines("Core") + """
 		extension Service {
-		\(Self.unreadTypeComment(["Theme"], integration))    public init(theme __safeDI_theme: @autoclosure @escaping () -> any Theme) {
+		    public init(theme __safeDI_theme: @autoclosure @escaping () -> any Theme) {
 		        let theme = LazilyInstantiated<any Theme>(__safeDI_theme)
 		        let badge = Badge(theme: theme.instance)
 		        self.init(badge: badge)
@@ -3569,16 +3568,10 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorNamingBothModules_whenTwoModulesTheSeamSeesDeclareTypeAtDifferentLevels(integration: MultiModuleIntegration) async {
 		// F4: `Core` declares `Theme` `package` and `Other` `public`; SafeDI cannot tell which one a mention names, and takes
-		// the narrower. Under the plugin it reads both; a `.safedi` records only the declarations only the module's package
-		// can name, so under `.moduleInfo` it reads `Core`'s alone, and has no `Other.Theme` to suggest.
+		// the narrower. Both integrations read both: the plugin from the modules' files, `.moduleInfo` from their `.safedi`.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let corePath = Self.path(of: "Theme.swift", in: "Core", fixtures, integration)
-			let declarationsAndRemedies = switch integration {
-			case .moduleInfo:
-				"`Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`;"
-			case .swiftPackagePlugin:
-				"`Theme` is declared `package` in module `Core` and `public` in module `Other`, and SafeDI takes the narrower. Declare `Theme` `public` in module `Core`; spell the type with its module where it is mentioned (`Other.Theme`), so that it names that module's declaration;"
-			}
+			let declarationsAndRemedies = "`Theme` is declared `package` in module `Core` and `public` in module `Other`, and SafeDI takes the narrower. Declare `Theme` `public` in module `Core`; spell the type with its module where it is mentioned (`Other.Theme`), so that it names that module's declaration;"
 			return """
 			\(Self.path(of: "Service.swift", in: "Feature", fixtures, integration)):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `theme: any Theme`, which `Badge` receives, and cannot pass `nil` for it, since it is required. \(declarationsAndRemedies) declare `Service` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
 			\(corePath):1:1: note: `Theme` is declared `package` here.
@@ -3599,7 +3592,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		let expectedFeatureFileName = integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift"
 		let expectedFeatureFile: String = [generatedFileHeader, String(Self.importLines("Core").dropLast()), Self.importLines("Other"), """
 		extension Service {
-		\(Self.unreadTypeComment(["Other.Theme"], integration))    public init(theme __safeDI_theme: @autoclosure @escaping () -> any Other.Theme) {
+		    public init(theme __safeDI_theme: @autoclosure @escaping () -> any Other.Theme) {
 		        let theme = LazilyInstantiated<any Other.Theme>(__safeDI_theme)
 		        let badge = Badge(theme: theme.instance)
 		        self.init(badge: badge)
@@ -3632,7 +3625,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + Self.importLines("Core") + """
 		extension Service {
-		\(Self.unreadTypeComment(["Theme"], integration))    public init(theme __safeDI_theme: @autoclosure @escaping () -> any Theme) {
+		    public init(theme __safeDI_theme: @autoclosure @escaping () -> any Theme) {
 		        let theme = LazilyInstantiated<any Theme>(__safeDI_theme)
 		        let badge = Badge(theme: theme.instance)
 		        self.init(badge: badge)
@@ -5003,16 +4996,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	    public enum __safeDI_Service_5CF188DE6A83E906 {}
 	}
 	"""
-
-	/// The comment line a `.moduleInfo` run's generated file carries above the first `public` declaration that names one
-	/// of `names`, types SafeDI reads no declaration of; none under the plugin, which reads every first-party module.
-	private static func unreadTypeComment(_ names: [String], _ integration: MultiModuleIntegration) -> String {
-		guard integration == .moduleInfo else { return "" }
-		let list = names.map { "`\($0)`" }.joined(separator: " and ")
-		return names.count == 1
-			? "    // SafeDI counts \(list) as `public`: no module it reads declares it narrower. If \(list) is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
-			: "    // SafeDI counts \(list) as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
-	}
 
 	/// The path a diagnostic names `file` of `module` by under `integration`.
 	private static func path(of file: String, in module: String, _ fixtures: [String: FixturePaths], _ integration: MultiModuleIntegration) -> String {

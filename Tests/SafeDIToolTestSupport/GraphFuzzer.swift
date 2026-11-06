@@ -673,11 +673,11 @@ struct GraphFuzzerReadTwin {
 	/// order, the generated files' names and code byte for byte, the warnings – but for the comment a run without a target
 	/// graph writes (`GraphFuzzerOracle.unreadTypeCommentPrefix`), which is compared by the types it names in each module:
 	/// none of the twinned types, and every other type the graph's names there. The module declaring the twins reads
-	/// their declarations, and names them in a declaration – the receive the twin was declared for – so its `.safedi`
-	/// file keeps them even when it is written without a target graph, which keeps no other `public` declaration
-	/// (`keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesPackageCanName:)`), and every module that
-	/// depends on it reads them there. The SwiftPM plugin writes no comment, so there the twin's files are the graph's
-	/// byte for byte.
+	/// their declarations, and its `.safedi` file keeps them – by the receive the twin was declared for, and, when it is
+	/// written without a target graph, as every `public` declaration
+	/// (`keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesCanName:isInReadingModule:)`) – and every
+	/// module that depends on it reads them there. The SwiftPM plugin writes no comment, so there the twin's files are
+	/// the graph's byte for byte.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func difference(between outcome: GraphFuzzerToolOutcome, and twinOutcome: GraphFuzzerToolOutcome) -> String? {
 		guard case let .accepted(generatedFiles, warnings) = outcome, case let .accepted(twinGeneratedFiles, twinWarnings) = twinOutcome else {

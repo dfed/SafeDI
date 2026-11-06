@@ -1528,9 +1528,9 @@ public struct Generate: AsyncParsableCommand {
 	/// type of that name: a mention of it decides whether that block's decisions are asserted.
 	///
 	/// A file walked again keeps the plain type declarations, and asserts the decisions about them, of the types scan
-	/// kept (`keptTypeNames`), and, when `keepsTypeDeclarationsOtherModulesCanName`, the `package` ones, as a fresh parse
-	/// keeps them. A file that mentions no SafeDI marker but declares such a type is parsed again too: the conditions of
-	/// its blocks select which of its declarations are read.
+	/// kept (`keptTypeNames`), and, when `keepsTypeDeclarationsOtherModulesCanName`, those another module can name, as a
+	/// fresh parse keeps them. A file that mentions no SafeDI marker but declares such a type is parsed again too: the
+	/// conditions of its blocks select which of its declarations are read.
 	/// - Parameter isReadingModuleFile: Whether the file a cached scan names, as the manifest names it, is one of the
 	///   module's own files (see `parseModule`).
 	private func refreshed(

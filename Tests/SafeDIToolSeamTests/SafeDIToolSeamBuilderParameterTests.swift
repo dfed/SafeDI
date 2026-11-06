@@ -1310,7 +1310,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public let analytics: Analytics
 		    }
 
-		    // SafeDI counts `Logger` as `public`: no module it reads declares it narrower. If `Logger` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
 		    public init(loggerBuilder __safeDI_loggerBuilder: @escaping (SafeDIScope_DefaultUserService_logger) -> any Logger) {
 		        let theme = Theme()
 		        func __safeDI_service() -> Service {
@@ -1786,7 +1785,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public let cache: Cache
 		    }
 
-		    // SafeDI counts `Logger` as `public`: no module it reads declares it narrower. If `Logger` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
 		    public convenience init(loggerBuilder __safeDI_loggerBuilder: @escaping (SafeDIScope_DefaultUserService_logger) -> any Logger) {
 		        let theme = Theme()
 		        func __safeDI_service() -> Service {

@@ -980,12 +980,12 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorNamingEnclosingInstantiable_whenParameterNamesTypeNestedInItThatNoModuleInfoRecords() async {
-		// N4: `Base`'s `.safedi` records no declaration of `Shelf.Label`, whose file holds no SafeDI marker and no `package`:
-		// it counts as the `package` `@Instantiable` `Shelf` that encloses it does.
+	mutating func generate_throwsErrorNamingExtendedInstantiable_whenParameterNamesPublicTypeDeclaredInExtensionOfDependencysPackageInstantiable() async {
+		// N4: `Base`'s `.safedi` records `Shelf.Label`, `public` in an extension of `Shelf` in a file without a SafeDI marker:
+		// it is as visible as the `package` `@Instantiable` `Shelf` it is declared inside.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `label: Shelf.Label`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Shelf.Label` is nested in `Shelf`, whose own `@Instantiable` declaration is `package`. Declare `Shelf` `public`; declare `Screen` `package`; receive `label` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `label: Shelf.Label`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Shelf.Label` is `package`: it is declared inside an extension of `Shelf`, whose own `@Instantiable` declaration is `package`. Declare `Shelf` `public`; declare `Screen` `package`; receive `label` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `label: Shelf.Label` here.
 			"""
 		}) {
@@ -1126,14 +1126,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenOneDependencyDeclaresTypePublicAndAnotherPackageInsideConditionalBlock(integration: MultiModuleIntegration) async {
 		// S2: `Shades`'s `package` `Theme` inside the clause `DEBUG` selects, which both runs report, is narrower than
-		// `Paints`'s `public` one. `Paints`'s `.safedi` keeps no `public` declaration nothing in it mentions, so only the
-		// plugin, which reads `Paints`'s files, names both.
-		let cause = switch integration {
-		case .moduleInfo:
-			"`Theme` is declared `package` in module `Shades`. Declare `Theme` `public` in module `Shades`;"
-		case .swiftPackagePlugin:
-			"`Theme` is declared `public` in module `Paints` and `package` in module `Shades`, and SafeDI takes the narrower. Declare `Theme` `public` in module `Shades`; spell the type with its module where it is mentioned (`Paints.Theme`), so that it names that module's declaration;"
-		}
+		// `Paints`'s `public` one. Both integrations name both: the plugin reads `Paints`'s files, and `Paints`'s `.safedi`
+		// keeps its `public` declaration.
+		let cause = "`Theme` is declared `public` in module `Paints` and `package` in module `Shades`, and SafeDI takes the narrower. Declare `Theme` `public` in module `Shades`; spell the type with its module where it is mentioned (`Paints.Theme`), so that it names that module's declaration;"
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
 			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):4:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. \(cause) declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
@@ -1160,8 +1155,8 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesTypeOnPublicTier_whenPlatformBlockDeclaresItPublicInOneClause(integration: MultiModuleIntegration) async throws {
 		// IF8: `Paints` declares `Theme` `public` inside a platform block, every clause of which SafeDI reads: the plugin
-		// reads the `public` record, and `Paints`'s `.safedi` keeps no `public` one, so `.moduleInfo` reads no declaration of
-		// `Theme`, which counts as `public` too. Both put `theme` on the public tier.
+		// reads the `public` record, and so does `.moduleInfo`, from `Paints`'s `.safedi`. Both put `theme` on the public
+		// tier.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Paints", packageName: "Shop", swiftFileContentByFilePath: ["Theme.swift": platformConditionedDeclaration("public struct Theme {}")]),
@@ -1172,7 +1167,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Paints"], tiers: """
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Paints"], tiers: """
 		    public init(theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
@@ -1231,7 +1226,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		try expectEveryModuleCompiled(output)
 	}
 
-	// MARK: W: a run that writes a `.safedi` without a target graph keeps only `package` declarations
+	// MARK: W: a run that writes a `.safedi` without a target graph keeps every declaration another module can name
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -1263,7 +1258,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsPackageTypeNestedInPublicType_whenDependencyWritesModuleInfo() async throws {
-		// W2: `Core`'s `package struct Inner` inside its `public enum Outer` is kept, and `Outer`, `public`, is not.
+		// W2: `Core`'s `package struct Inner` inside its `public enum Outer` is kept, and so is `Outer`.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: ["Outer.swift": "public enum Outer {\n    package struct Inner {}\n}"]),
@@ -1274,7 +1269,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Outer.Inner"])
+		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Outer", "Outer.Inner"])
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: ["Core"], tiers: """
 		    public init() {
 		        self.init(inner: nil)
@@ -1290,9 +1285,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_writesNoPublicDeclarationItsDeclarationsDoNotMention_whenDependencyWritesModuleInfo() async throws {
-		// W3: `Core`'s `public struct Palette`, in a file without a SafeDI marker, is not recorded: its dependents count it as
-		// `public` anyway, and the comment names it.
+	mutating func generate_writesPublicDeclarationItsDeclarationsDoNotMention_whenDependencyWritesModuleInfo() async throws {
+		// W3: `Core`'s `public struct Palette`, in a file without a SafeDI marker, is recorded, though nothing in `Core`
+		// mentions it, so the comment does not name it.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: ["Palette.swift": "public struct Palette {\n    public init() {}\n}"]),
@@ -1303,8 +1298,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.isEmpty == true)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Palette"], imports: ["Core"], tiers: """
+		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Palette"])
+		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.level) == [.public])
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: ["Core"], tiers: """
 		    public init(palette: Palette) {
 		        let cache = Cache()
 		        self.init(palette: palette, cache: cache)
@@ -1460,15 +1456,15 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesTypeInComment_whenSeamsModuleDeclaresItAfterCommentFollowingKeywordInMarkerFreeFile() async throws {
-		// D3.3: a stated limit: the text search does not find `Token` behind a comment, so SafeDI reads no declaration of
-		// it, counts it `public`, and names it in the comment.
+	mutating func generate_namesNoTypeInComment_whenSeamsModuleDeclaresPublicTypeAfterCommentFollowingKeywordInMarkerFreeFile() async throws {
+		// D3.3: the text search does not find `Token` behind a comment, but the file holds the word `public`, so a run that
+		// writes the module's `.safedi` parses it and reads `Token`'s declaration, and the comment names nothing.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [Self.featureDeclaringToken("public struct /* note */ Token {}")],
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Token"], imports: [], tiers: """
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: [], tiers: """
 		    public init(token: Token) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
@@ -2175,17 +2171,10 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	mutating func generate_takesNarrowestDeclaration_whenSixModulesDeclareTypeAtDifferentLevels(integration: MultiModuleIntegration) async {
 		// F6: of six modules that declare `Theme`, declared in an order neither their names nor their levels give, one
 		// declares it `package`: SafeDI takes it, and notes it.
-		// A `.safedi` records only the declarations only its package can name, so under `.moduleInfo` SafeDI reads `Cedar`'s
-		// alone.
 		let levels = ["Ash": "public", "Birch": "public", "Cedar": "package", "Dogwood": "public", "Elm": "public", "Fir": "public"]
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let cedarPath = Self.path(of: "Theme.swift", in: "Cedar", fixtures, integration)
-			let declarationsAndRemedies = switch integration {
-			case .moduleInfo:
-				"`Theme` is declared `package` in module `Cedar`. Declare `Theme` `public` in module `Cedar`;"
-			case .swiftPackagePlugin:
-				"`Theme` is declared `public` in module `Ash`, `public` in module `Birch`, `package` in module `Cedar`, `public` in module `Dogwood`, `public` in module `Elm`, and `public` in module `Fir`, and SafeDI takes the narrowest. Declare `Theme` `public` in module `Cedar`; spell the type with its module where it is mentioned (`Ash.Theme`), so that it names that module's declaration;"
-			}
+			let declarationsAndRemedies = "`Theme` is declared `public` in module `Ash`, `public` in module `Birch`, `package` in module `Cedar`, `public` in module `Dogwood`, `public` in module `Elm`, and `public` in module `Fir`, and SafeDI takes the narrowest. Declare `Theme` `public` in module `Cedar`; spell the type with its module where it is mentioned (`Ash.Theme`), so that it names that module's declaration;"
 			return """
 			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):8:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. \(declarationsAndRemedies) declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(cedarPath):1:1: note: `Theme` is declared `package` here.
@@ -2256,22 +2245,22 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesElseClause_whenFlagIsNotReported(integration: MultiModuleIntegration) async throws {
-		// IF3: without `FLAG`, the `#else` clause declares `Theme` `public`. A run that writes `Core`'s `.safedi` keeps no
-		// `public` record, so under `.moduleInfo` `Feature` reads no declaration of `Theme`, which counts as `public` too.
+		// IF3: without `FLAG`, the `#else` clause declares `Theme` `public`, which `Core`'s `.safedi` records, and `Feature`
+		// takes on its `public` tier.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.coreAndFeatureModules(coreTheme: Self.themeInEachClauseOfFlag, receives: ["@Received(onlyIfAvailable: true) let theme: Theme?"], conditions: []),
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
 		let assertions = integration == .swiftPackagePlugin ? Self.inactiveAssertion("FLAG") : ""
-		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Core"], assertions: assertions, tiers: """
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], assertions: assertions, tiers: """
 		    public init(theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
 		""", guardHash: "717280493A095F31"))
 		if integration == .moduleInfo {
-			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.isEmpty == true)
+			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.level) == [.public])
 		}
 		try expectEveryModuleCompiled(output)
 	}
@@ -2467,18 +2456,18 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 	}
 
-	@Test
+	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesModuleOnce_whenTwoModulesDeclareTypeAcrossPlatformClauses() async {
+	mutating func generate_namesModuleOnce_whenTwoModulesDeclareTypeAcrossPlatformClauses(integration: MultiModuleIntegration) async {
 		// IF10: `Core` declares `Theme` in both clauses of a platform block, and `Paints` declares it `public`: each module
-		// is named once, at its narrowest. The plugin reads every record, while a `.safedi` keeps no `public` one.
+		// is named once, at its narrowest. Both integrations read every record.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			let themePath = Self.path(of: "Theme.swift", in: "Core", fixtures, .swiftPackagePlugin)
+			let themePath = Self.path(of: "Theme.swift", in: "Core", fixtures, integration)
 			return """
-			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, .swiftPackagePlugin)):4:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core` and `public` in module `Paints`, and SafeDI takes the narrower. Declare `Theme` `public` in module `Core`; spell the type with its module where it is mentioned (`Paints.Theme`), so that it names that module's declaration; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):4:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core` and `public` in module `Paints`, and SafeDI takes the narrower. Declare `Theme` `public` in module `Core`; spell the type with its module where it is mentioned (`Paints.Theme`), so that it names that module's declaration; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(themePath):2:1: note: `Theme` is declared `package` here.
 			\(themePath):2:1-2:8: fixit: public
-			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, .swiftPackagePlugin)):11:5: note: `Screen` receives `theme: Theme` here.
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):11:5: note: `Screen` receives `theme: Theme` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2489,7 +2478,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 						"Screen.swift": Self.screenSource(receives: ["@Received let theme: Theme"], imports: ["Core", "Paints"]),
 					], dependencies: ["Core", "Paints"]),
 				],
-				integration: .swiftPackagePlugin,
+				integration: integration,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -2592,7 +2581,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				integration: integration,
 				filesToDelete: &filesToDelete,
 			)
-			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Endpoint"], imports: ["Core"], assertions: Self.releaseEndpointAssertion(integration, isReleaseConfiguration: isReleaseConfiguration), tiers: """
+			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], assertions: Self.releaseEndpointAssertion(integration, isReleaseConfiguration: isReleaseConfiguration), tiers: """
 			    public init(endpoint: Endpoint) {
 			        let cache = Cache()
 			        self.init(endpoint: endpoint, cache: cache)
@@ -2615,7 +2604,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				integration: integration,
 				filesToDelete: &filesToDelete,
 			)
-			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Endpoint"], imports: ["Core"], assertions: Self.releaseEndpointAssertion(integration, isReleaseConfiguration: isReleaseConfiguration), tiers: """
+			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], assertions: Self.releaseEndpointAssertion(integration, isReleaseConfiguration: isReleaseConfiguration), tiers: """
 			    public init(endpoint: Endpoint?) {
 			        let cache = Cache()
 			        self.init(endpoint: endpoint, cache: cache)
@@ -2662,7 +2651,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				integration: integration,
 				filesToDelete: &filesToDelete,
 			)
-			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Core"], tiers: """
+			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], tiers: """
 			    public init(theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
@@ -2752,7 +2741,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				)
 				// The plugin reads `Core`'s file and asserts the decision a mention of `Theme` resolves by.
 				let assertions = integration == .swiftPackagePlugin ? (conditions.isEmpty ? Self.inactiveAssertion("FLAG") : Self.activeAssertion("FLAG")) : ""
-				let expectedFiles = conditions.isEmpty ? Self.packageThemeTiers(integration, assertions: assertions) : Self.screenFiles(integration, comment: ["Theme"], imports: ["Core"], assertions: assertions, tiers: """
+				let expectedFiles = conditions.isEmpty ? Self.packageThemeTiers(integration, assertions: assertions) : Self.screenFiles(integration, comment: [], imports: ["Core"], assertions: assertions, tiers: """
 				    public init(theme: Theme?) {
 				        let cache = Cache()
 				        self.init(theme: theme, cache: cache)
@@ -2893,7 +2882,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				compileVerification: .returningOutcomeOnly,
 				filesToDelete: &filesToDelete,
 			)
-			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Theme"], imports: ["Core"], tiers: """
+			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: ["Core"], tiers: """
 			    public init(theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
@@ -3033,7 +3022,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				integration: integration,
 				filesToDelete: &filesToDelete,
 			)
-			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Core"], tiers: """
+			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], tiers: """
 			    public init(theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
@@ -3294,8 +3283,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesDependencysPublicTypeInFlagClause_underEveryIntegration(integration: MultiModuleIntegration) async throws {
 		// IF21 (Q4): `Paints` declares `Theme` `public` under `DEBUG`, which both runs report: the public tier takes it under
-		// either integration. The plugin reads the record; a `.safedi` keeps no `public` one, so `.moduleInfo` reads no
-		// declaration and counts `Theme` as `public` too.
+		// either integration, which both read the record: the plugin from `Paints`'s file, `.moduleInfo` from its `.safedi`.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Paints", packageName: "Shop", swiftFileContentByFilePath: ["Theme.swift": "#if DEBUG\npublic struct Theme {\n    public init() {}\n}\n#endif"], activeCompilationConditions: ["DEBUG"]),
@@ -3307,7 +3295,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		let assertions = integration == .swiftPackagePlugin ? Self.activeAssertion("DEBUG") : ""
-		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Paints"], assertions: assertions, tiers: """
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Paints"], assertions: assertions, tiers: """
 		    public init(theme: Theme) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)

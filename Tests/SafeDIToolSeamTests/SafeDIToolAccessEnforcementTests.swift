@@ -3661,7 +3661,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	mutating func generate_keepsNoDeclarationNamedLikeNestedInstantiable_whenMarkerFreeFileDeclaresTypeOfItsOwnName() async throws {
 		// The names that keep plain declarations hold those bounding `Outer.Namespace.Helper`, `Outer` and `Namespace`, and
 		// not `Helper`'s own: the check reads no other declaration of that name, so `Core` neither parses nor carries the
-		// unrelated internal `Helper`, in a file without a marker and without the word `package`.
+		// unrelated internal `Helper`, in a file without a marker and without the words `package`, `public` and `open`.
+		// `Core` carries the `public` `Helping`, which another module can name.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.modulesConstructingHelper(
 				declaredInsideExtensionOf: "Outer.Namespace",
@@ -3671,7 +3672,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Outer.Namespace", "Outer"])
+		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Helping", "Outer.Namespace", "Outer"])
 		#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(under: .moduleInfo, constructing: "Outer.Namespace.Helper"))
 		try expectEveryModuleCompiled(output)
 	}

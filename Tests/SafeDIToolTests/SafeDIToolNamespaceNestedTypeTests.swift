@@ -1543,9 +1543,274 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 		try expectEveryModuleCompiled(output)
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_qualifiesTypeNestedInDependencysNamespace_whenDependencyDeclaresNoSafeDIContent(integration: MultiModuleIntegration) async throws {
+		// `Core` declares no SafeDI content, so its run writes its `.safedi` without mentioning `Constants`, and keeps its
+		// `public` declarations all the same: `Mode` inside `App`'s `Constants.Child` is `Core`'s `Constants.Mode`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.core(declaring: """
+				public enum Constants {
+				    public enum Mode {
+				        case fromCore
+				    }
+				}
+				"""),
+				Self.appExtendingConstants(childDefault: ".fromCore"),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		Self.expectAppGeneratedFiles(of: output, under: integration, childMock: """
+		#if DEBUG
+		extension Constants.Child {
+		    static func mock(
+		        mode: Constants.Mode = .fromCore
+		    ) -> Constants.Child {
+		        return Constants.Child(mode: mode)
+		    }
+		}
+		#endif
+		""")
+		if integration == .moduleInfo {
+			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Constants", "Constants.Mode"])
+		}
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_qualifiesTypeNestedInDependencysNamespace_whenDependencyDeclaresItInPublicExtensionOfNamespace(integration: MultiModuleIntegration) async throws {
+		// `Core` declares `Mode` without a modifier in a `public` extension of `Constants`, in a file of its own: the
+		// extension's default makes it `public`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.core(declaring: "public enum Constants {}", besides: ["Mode.swift": """
+				public extension Constants {
+				    enum Mode {
+				        case fromCore
+				    }
+				}
+				"""]),
+				Self.appExtendingConstants(childDefault: ".fromCore"),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		Self.expectAppGeneratedFiles(of: output, under: integration, childMock: """
+		#if DEBUG
+		extension Constants.Child {
+		    static func mock(
+		        mode: Constants.Mode = .fromCore
+		    ) -> Constants.Child {
+		        return Constants.Child(mode: mode)
+		    }
+		}
+		#endif
+		""")
+		if integration == .moduleInfo {
+			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Constants", "Constants.Mode"])
+		}
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases, ["", "fileprivate ", "private "])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsTopLevelType_whenDependencysNamespaceNestsTypeOfSameNameNoOtherModuleCanName(integration: MultiModuleIntegration, nestedTypeModifier: String) async throws {
+		// `Core`'s `Constants.Mode` is `internal`, `fileprivate` or `private`, so `App` cannot name it: `Mode` inside
+		// `App`'s extension of `Constants` is `App`'s top-level `Mode`, and `Core`'s `.safedi` keeps `Constants` alone.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.core(declaring: """
+				public enum Constants {
+				    \(nestedTypeModifier)enum Mode {
+				        case fromCore
+				    }
+				}
+				"""),
+				Self.appExtendingConstants(childDefault: ".fromApp", besides: ["Mode.swift": """
+				public enum Mode {
+				    case fromApp
+				}
+				"""]),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		Self.expectAppGeneratedFiles(of: output, under: integration, childMock: """
+		#if DEBUG
+		extension Constants.Child {
+		    static func mock(
+		        mode: Mode = .fromApp
+		    ) -> Constants.Child {
+		        return Constants.Child(mode: mode)
+		    }
+		}
+		#endif
+		""")
+		if integration == .moduleInfo {
+			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Constants"])
+		}
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesNoDeclarationOfPublicType_whenTypeEnclosingItIsInternal() async throws {
+		// `Core`'s `public enum Mode` is inside its `internal` `Constants`, so no other module can name it, and its
+		// `.safedi` keeps no declaration.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.core(declaring: """
+				enum Constants {
+				    public enum Mode {
+				        case fromCore
+				    }
+				}
+				"""),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.isEmpty == true)
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesDeclarationOfOpenClass_whenItsFileHoldsNoOtherAccessModifier() async throws {
+		// The text search that decides which files without a SafeDI marker to parse finds `open` as it finds `public` and
+		// `package`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.core(declaring: "open class Constants {}"),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Constants"])
+		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.level) == [.open])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases, [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_qualifiesTypeNestedInDependencysNamespace_onlyWhenFlagSelectsItsDeclaration(integration: MultiModuleIntegration, isFlagActive: Bool) async throws {
+		// `Core` declares `Constants.Mode` under `FLAG`, and `App` a top-level `Mode` with the same case: with `FLAG`, `Mode`
+		// inside `App`'s extension of `Constants` is `Core`'s `Constants.Mode`, and otherwise `App`'s `Mode`. The run that
+		// reads `Core`'s declaration asserts the flag's value: `Core`'s own under `.moduleInfo`, `App`'s under the plugin.
+		let conditions = isFlagActive ? ["FLAG"] : []
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.core(declaring: """
+				public enum Constants {}
+
+				#if FLAG
+				extension Constants {
+				    public enum Mode {
+				        case fromCore
+				    }
+				}
+				#endif
+				""", activeCompilationConditions: conditions),
+				Self.appExtendingConstants(childDefault: ".fromCore", besides: ["Mode.swift": """
+				public enum Mode {
+				    case fromCore
+				}
+				"""], activeCompilationConditions: conditions),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let assertion = isFlagActive ? Self.activeAssertion("FLAG") : Self.inactiveAssertion("FLAG")
+		Self.expectAppGeneratedFiles(of: output, under: integration, assertions: integration == .swiftPackagePlugin ? assertion : "", childMock: """
+		#if DEBUG
+		extension Constants.Child {
+		    static func mock(
+		        mode: \(isFlagActive ? "Constants.Mode" : "Mode") = .fromCore
+		    ) -> Constants.Child {
+		        return Constants.Child(mode: mode)
+		    }
+		}
+		#endif
+		""")
+		if integration == .moduleInfo {
+			#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + assertion])
+		}
+		try expectEveryModuleCompiled(output)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// A `Core` module that declares no SafeDI content: `constants`, in `Constants.swift`, and `otherFiles`.
+	private static func core(declaring constants: String, besides otherFiles: [String: String] = [:], activeCompilationConditions: [String] = []) -> ModuleFixture {
+		ModuleFixture(
+			name: "Core",
+			packageName: "pkg",
+			swiftFileContentByFilePath: otherFiles.merging(["Constants.swift": constants]) { _, constants in constants },
+			activeCompilationConditions: activeCompilationConditions,
+		)
+	}
+
+	/// An `App` module that extends `Core`'s `Constants` with `Child`, whose initializer takes a `Mode` that defaults to
+	/// `childDefault`, and whose root instantiates it, with `otherFiles`.
+	private static func appExtendingConstants(childDefault: String, besides otherFiles: [String: String] = [:], activeCompilationConditions: [String] = []) -> ModuleFixture {
+		ModuleFixture(
+			name: "App",
+			packageName: "pkg",
+			swiftFileContentByFilePath: otherFiles.merging([
+				"Constants.swift": """
+				import Core
+				import SafeDI
+
+				extension Constants {
+				    @Instantiable(generateMock: true)
+				    public final class Child: Instantiable {
+				        public init(mode: Mode = \(childDefault)) {
+				            self.mode = mode
+				        }
+
+				        let mode: Mode
+				    }
+				}
+				""",
+				"Root.swift": rootInstantiatingConstantsChild,
+			]) { _, appFile in appFile },
+			dependencies: ["Core"],
+			activeCompilationConditions: activeCompilationConditions,
+		)
+	}
+
+	/// The compile-time assertion a generated file carries for a `#if <condition>` the tool evaluated as active, ending
+	/// with the blank line that precedes what follows.
+	private static func activeAssertion(_ condition: String) -> String {
+		"""
+		#if !(\(condition))
+		#error("SafeDI scanned this module assuming `#if \(condition)` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+		#endif
+
+		""" + "\n"
+	}
+
+	/// The compile-time assertion a generated file carries for a `#if <condition>` the tool evaluated as inactive, ending
+	/// with the blank line that precedes what follows.
+	private static func inactiveAssertion(_ condition: String) -> String {
+		"""
+		#if \(condition)
+		#error("SafeDI scanned this module assuming `#if \(condition)` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+		#endif
+
+		""" + "\n"
+	}
 
 	/// A `Core` module declaring a namespace `Constants` with a nested `Mode`, and an `@Instantiable` nested in it, so
 	/// that a `.safedi` of `Core` keeps the declaration of `Constants.Mode`.
@@ -1587,8 +1852,9 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 	}
 	"""
 
-	/// Expects `App` to have generated `Root`'s tree and `childMock`, the mock of `Constants.Child`, under `integration`.
-	private static func expectAppGeneratedFiles(of output: MultiModuleTestOutput, under integration: MultiModuleIntegration, childMock: String, sourceLocation: SourceLocation = #_sourceLocation) {
+	/// Expects `App` to have generated `Root`'s tree and `childMock`, the mock of `Constants.Child`, under `integration`,
+	/// each file with `assertions` after its imports.
+	private static func expectAppGeneratedFiles(of output: MultiModuleTestOutput, under integration: MultiModuleIntegration, assertions: String = "", childMock: String, sourceLocation: SourceLocation = #_sourceLocation) {
 		let imports = """
 		#if canImport(Core)
 		import Core
@@ -1609,12 +1875,12 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 		"""
 		switch integration {
 		case .moduleInfo:
-			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + imports + rootTree + "\n\n" + childMock], sourceLocation: sourceLocation)
+			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + imports + assertions + rootTree + "\n\n" + childMock], sourceLocation: sourceLocation)
 		case .swiftPackagePlugin:
 			#expect(output.modules["App"]?.generatedFiles == [
-				"Constants+SafeDIMock.swift": generatedFileHeader + imports + childMock,
-				"Root+SafeDI.swift": generatedFileHeader + imports + rootTree,
-				"SafeDIMockConfiguration.swift": generatedFileHeader + imports,
+				"Constants+SafeDIMock.swift": generatedFileHeader + imports + assertions + childMock,
+				"Root+SafeDI.swift": generatedFileHeader + imports + assertions + rootTree,
+				"SafeDIMockConfiguration.swift": generatedFileHeader + imports + assertions,
 			], sourceLocation: sourceLocation)
 		}
 	}
