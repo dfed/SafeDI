@@ -3234,12 +3234,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					"\(memberIndent)\(standardIndent)self.\(field.property.label) = \(field.property.label)"
 				}
 			}
-			return (["\(indent)public struct \(name) {"]
-				+ fieldDeclarations
-				+ memoDeclarations
-				+ ["", "\(memberIndent)init(\(initializerParameters.joined(separator: ", "))) {"]
-				+ initializerAssignments
-				+ ["\(memberIndent)}", "\(indent)}"]).joined(separator: "\n")
+			// Appended part by part, for Swift 6.2: it cannot type-check one `+` chain of these arrays in reasonable time.
+			var lines = ["\(indent)public struct \(name) {"]
+			lines += fieldDeclarations
+			lines += memoDeclarations
+			lines.append("")
+			lines.append("\(memberIndent)init(\(initializerParameters.joined(separator: ", "))) {")
+			lines += initializerAssignments
+			lines.append("\(memberIndent)}")
+			lines.append("\(indent)}")
+			return lines.joined(separator: "\n")
 		}
 		guard hole.stages.count > 1 else {
 			return structDeclaration(named: hole.scopeTypeName, fields: hole.stages.first ?? [], indent: standardIndent)
