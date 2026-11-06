@@ -319,7 +319,7 @@ public final class MyPresenter: Instantiable {
 }
 ```
 
-When a `generateDependencyTree: true` type’s initializers carry `@MainActor`, the root or other such type whose tree reaches it needs `@MainActor` too. SafeDI does not check this; the call fails to compile.
+When a `generateDependencyTree: true` type’s initializers carry `@MainActor`, the root or other such type whose tree reaches it needs `@MainActor` too. SafeDI does not check this; its generated call of the initializer fails to compile.
 
 `generatedAttributes` is the shorthand for giving both the same text, and cannot be combined with either of the other two.
 
