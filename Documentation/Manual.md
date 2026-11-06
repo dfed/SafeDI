@@ -89,13 +89,13 @@ SafeDI constructs each `@Instantiable` type in code it generates in a file of it
 - From another module of the same package, they must be `package`, `public`, or `open`.
 - From a module of another package, they must be `public` or `open`.
 
-A member that spells no access modifier is `internal`, even in a `public` type, and an extension’s member takes the extension’s access. A type’s own initializer can be no wider than the narrowest type its dependencies name and must be as wide as its caller needs, so a type another module builds has its `@Instantiated` children at that access too. A root’s `public init(…)` that takes a `package` dependency must become `package` or `internal`; `internal` is enough, since the generated `init()` is in the root’s module.
+A member that spells no access modifier is `internal`, even in a `public` type, and an extension’s member takes the extension’s access. A type’s own initializer can be no wider than the narrowest type its dependencies name and must be as wide as its caller needs, so a type another module builds has its `@Instantiated` children at that access too. A root’s `public init(…)` that takes a `package` dependency must become `package` or `internal`; `internal` is enough.
 
-The `@Instantiable` macro reports a `private` or `fileprivate` type, initializer, `instantiate(…)` method, or hand-written mock method as you type, with a fix-it that removes the modifier. Only `SafeDITool generate` knows which modules construct a type, so it checks every construction it generates – the type, each type enclosing it, and the type an extension declaring it extends – and reports each that will not compile as an error at the declaration that must change, with a fix-it that gives it the access needed. Where declaring an outer type of another module with `generateDependencyTree: true` would let that module build the type, the error offers that too.
+The `@Instantiable` macro reports a `private` or `fileprivate` type, initializer, `instantiate(…)` method, or hand-written mock method as you type, with a fix-it that removes the modifier. `SafeDITool generate` checks every construction it generates – the type, each type enclosing it, and the type an extension declaring it extends – and reports each that will not compile as an error at the declaration that must change, with a fix-it that gives it the access needed. Where declaring an outer type of another module with `generateDependencyTree: true` would let that module build the type, the error offers that too.
 
 When `SafeDITool` cannot read the file that declares the type, it reports the error without a fix-it, in the constructing module at the line that leads to the construction, such as an `@Instantiated` property, naming the declaration to change and its module:
 
-- Under Bazel, every error about another module’s declaration lands this way, since the sandboxed action holds no other module’s sources. An action run unsandboxed, for example with `--strategy=SafeDI=local`, reports it at the declaration, with a fix-it.
+- Under Bazel, every error about another module’s declaration lands this way. An action run unsandboxed, for example with `--strategy=SafeDI=local`, reports it at the declaration, with a fix-it.
 - Under Tuist, an error lands this way when the declaring target is in another project of the workspace, and at the declaration, with a fix-it, when both targets are in one project.
 
 An initializer, `instantiate(…)` method, or mock method that a macro fix-it adds takes the type’s access as far as the macro can see it – in an extension, that of its `instantiate(…)` method or of the extension’s members – capped by each type it is nested in and by each type declared inside the decorated declaration that a parameter names. It spells no modifier where the members beside it have that level without one. The macro cannot see the access of a type declared anywhere else, so where a parameter names a narrower one, the compiler rejects the added declaration: narrow its access, or widen that type’s.
@@ -319,7 +319,7 @@ public final class MyPresenter: Instantiable {
 }
 ```
 
-A tree calls a `generateDependencyTree: true` type’s generated initializer from its own generated initializer, so when that type’s initializers carry `@MainActor`, the root or other such type whose tree reaches it needs `@MainActor` too. SafeDI does not check this; the call fails to compile, as any call of an initializer bound to the main actor does.
+When a `generateDependencyTree: true` type’s initializers carry `@MainActor`, the root or other such type whose tree reaches it needs `@MainActor` too. SafeDI does not check this; the call fails to compile.
 
 `generatedAttributes` is the shorthand for giving both the same text, and cannot be combined with either of the other two.
 
@@ -418,7 +418,7 @@ A `@Received` property can also receive a dependency only when it is available, 
 
 ### #SafeDIConfiguration
 
-[`#SafeDIConfiguration`](../Sources/SafeDI/Decorators/SafeDIConfiguration.swift) is a freestanding declaration macro that provides build-time configuration for SafeDI’s code generation plugin. A module may have at most one `#SafeDIConfiguration` in any one compilation (the clauses of an `#if` block may each declare a different one), at the top level of a Swift file, with literal arguments; every parameter has a default, so the simplest valid invocation is `#SafeDIConfiguration()`. Declare it in a file named `SafeDIConfiguration.swift`, which SafeDI reads before the rest of the module. A configuration in any other file still works, but when it sets a non-default `mockConditionalCompilation`, SafeDI scans the module twice and warns at the `#SafeDIConfiguration`.
+[`#SafeDIConfiguration`](../Sources/SafeDI/Decorators/SafeDIConfiguration.swift) is a freestanding declaration macro that provides build-time configuration for SafeDI’s code generation plugin. A module may have at most one `#SafeDIConfiguration` in any one compilation (the clauses of an `#if` block may each declare a different one), at the top level of a Swift file, with literal arguments; every parameter has a default, so the simplest valid invocation is `#SafeDIConfiguration()`. Declare it in a file named `SafeDIConfiguration.swift`. A configuration in any other file still works, but when it sets a non-default `mockConditionalCompilation`, SafeDI scans the module twice and warns at the `#SafeDIConfiguration`.
 
 ```swift
 #SafeDIConfiguration(
