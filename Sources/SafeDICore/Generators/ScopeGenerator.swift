@@ -372,7 +372,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			declaredLabels.insert(declaredProperty.label)
 		}
 		// A call of a seam whose tree requires one of its pass-throughs through an `onlyIfAvailable` alias requires it too
-		// (`SeamSignature.Parameter.requiredThroughAlias`): the seam's alias is bound from that parameter.
+		// (`SeamSignature.Parameter.requiredThroughAlias`): the seam's alias is bound from that parameter. Validation reads
+		// the same requirement from the seam's tree, which it walks inline, so `collectReceivedProperties` meets no seam call.
 		requiredAliasFulfillingProperties = Set(propertiesToGenerate.flatMap(\.requiredAliasFulfillingProperties))
 			.union(requiredOnlyIfAvailableAliasFulfillingProperties)
 			.union(isPropertyCycle ? cycleParameters.flatMap(\.requiredAliasFulfillingForms) : [])

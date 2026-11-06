@@ -6498,15 +6498,6 @@ public actor DependencyTreeGenerator {
 				}
 			}) {
 				receiver = RequiredReceiver(dependency: dependency, requiredOnlyIfAvailableAliases: requiredOnlyIfAvailableAliases)
-			} else if let seamCall = scope.seamCall,
-			          let dependency = scope.instantiable.dependencies.first(where: { dependency in
-			          	// A call of a seam whose tree requires a pass-through through an `onlyIfAvailable` alias requires it, at the
-			          	// seam's declaration.
-			          	dependency.property.asUnwrappedProperty == property.asUnwrappedProperty
-			          		&& seamCall.requiredThroughAliasProperties.contains(dependency.property)
-			          })
-			{
-				receiver = RequiredReceiver(dependency: dependency, requiredOnlyIfAvailableAliases: requiredOnlyIfAvailableAliases)
 			} else if let requiredAlias = declarations.onlyIfAvailableAliases.first(where: { alias in
 				// An alias bound from a property the scope declares or forwards is bound from that declaration.
 				alias.fulfillingProperty.label == property.label
@@ -7091,12 +7082,12 @@ public actor DependencyTreeGenerator {
 				}
 			}
 			// What this scope's tree requires through `onlyIfAvailable` aliases of the scopes enclosing it, through any chain
-			// of aliases, given what the children's trees require.
-			// A seam call requires what the seam's tree requires through an `onlyIfAvailable` alias of a pass-through, as
-			// `ScopeGenerator` has it.
+			// of aliases, given what the children's trees require. No scope this walk meets calls a seam: only
+			// `createSeamScopeMapping` creates a `seamCall`, and validation walks every seam's tree inline, whose receivers
+			// require what `ScopeGenerator` has a seam call require through `SeamCall.requiredThroughAliasProperties`.
 			let requiredAliasFulfillingProperties = declarations.requiredAliasFulfillingProperties(
 				childRequiredReceived: childRequiredReceived,
-				childRequiredAliasFulfillingProperties: childRequiredAliasFulfillingProperties.union(scope.seamCall?.requiredThroughAliasProperties ?? []),
+				childRequiredAliasFulfillingProperties: childRequiredAliasFulfillingProperties,
 			)
 
 			let id = ObjectIdentifier(scope)
