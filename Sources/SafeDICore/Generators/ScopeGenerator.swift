@@ -2029,6 +2029,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		guard let hole = fillHole else { return [] }
 		return hole.stages.joined().filter { fillStructBoundLabels.contains($0.property.label) }
 	}
+
 	/// The fills of enclosing calls that calls in this subtree refer to by name, each by its key with its function's
 	/// name, which no builder function declared between such a call and the fill may share (see `builderFunctionNames`).
 	let referencedFillNamesByKey: [String: String]
