@@ -766,7 +766,7 @@ extension Service {
 
 A seam reached through another seam passes the inner seam’s parameters on, each as visible as the types it names prove in the outer seam’s module; a parameter the outer seam’s module cannot pass on is taken by none of its initializers, and a caller holding a value for it is told so. Each tree calls the narrowest initializer it can reach under the rules of [Access levels](#access-levels), which SafeDI checks for the seam’s tree as for a root’s; a caller whose tree holds a value for a parameter that initializer omits is an error, so no receiver loses a value silently. A seam with no `@Instantiated` or renamed dependency and nothing to pass through gets no generated initializer, and its callers call its own. Mocks never call a seam’s generated initializer, as the start of this section says: a generated mock builds the whole tree beside the mocked type, as it always has.
 
-A seam’s tree may instantiate a type that no `@Instantiable` declaration its module can see fulfills, such as a protocol whose implementation lives in the app: a hole. The initializer SafeDI generates then takes a builder for it, `<label>Builder`, one for each place the tree builds it: a closure handed a struct of the values in scope there and returning the property’s type – or, where `@Sendable` builder functions lie between the seam and that place, a `@Sendable` closure for the values bound inside the first of them, and so on, the last returning the property’s type. A module that can see an implementation fills the builder in the code it generates, building the implementation from the struct’s fields and from its own tree, whose types and initializers must be visible there, as a root’s are; a seam that cannot passes the builder up through its own initializer; a root that cannot is an error, as is such a type in a seam’s tree under the [Xcode project plugin](#limits-of-the-xcode-project-plugin). A value the implementation receives must be in the struct, or come from the module that fills it. The struct holds a value the seam takes as an `@autoclosure` by value, read where the struct is built: at the place the property is built, or, for a builder split at `@Sendable` builder functions, where the first of them is declared. The builder, and each value in the struct, is as visible as the types it names, as a parameter is. A seam whose tree instantiates the seam again, directly or through another seam of its module, hands the builders it took on to that call; a value the implementation reads that such a path binds is an error, as for a builder passed up.
+A seam’s tree may instantiate a type that no `@Instantiable` declaration its module can see fulfills, such as a protocol whose implementation lives in the app: a hole. The initializer SafeDI generates then takes a builder for it, `<label>Builder`, one for each place the tree builds it: a closure handed a struct of the values in scope there and returning the property’s type – or, where `@Sendable` builder functions lie between the seam and that place, a `@Sendable` closure for the values bound inside the first of them, and so on, the last returning the property’s type. A module that can see an implementation fills the builder in the code it generates, building the implementation from the struct’s fields and from its own tree, whose types and initializers must be visible there, as a root’s are; a seam that cannot passes the builder up through its own initializer; a root that cannot is an error, as is such a type in a seam’s tree under the [Xcode project plugin](#limits-of-the-xcode-project-plugin). A value the implementation receives must be in the struct, or come from the module that fills it. For a value the seam takes as an `@autoclosure`, the struct holds the `LazilyInstantiated` the seam keeps it in, behind a property of the value’s own type that reads its instance, so the value is created when the implementation first reads it, as it would be inline: a hand-written implementation that reads `scope.exportService` inside an `Instantiator` gets the value when that instantiator builds, and one that never reads it never creates it. The implementation SafeDI generates reads the caller’s own declaration of the value instead, as the tree built inline does, so a `@Sendable` function in it – a `SendableInstantiator`, or a later stage of a builder split at `@Sendable` builder functions – that reads a `LazilyInstantiated` the caller holds is the error SafeDI reports for the inline tree: declare it `SendableLazilyInstantiated`, which needs the deployment targets [Sendable wrappers](#sendable-wrappers) states. Where the implementation’s own tree builds the seam again beneath another declaration of the value’s label, the implementation, one function shared by both calls, reads the struct’s property when it is built. The builder, and each value in the struct, is as visible as the types it names, as a parameter is. A seam whose tree instantiates the seam again, directly or through another seam of its module, hands the builders it took on to that call; a value the implementation reads that such a path binds is an error, as for a builder passed up.
 
 ```swift
 // Generated in module Feature, where `Profile` instantiates `userService: any UserService`.
@@ -800,6 +800,23 @@ func __safeDI_service() -> Service {
 }
 ```
 
+```swift
+// In module Feature, `ExportFeature` instantiates `screenBuilder: Instantiator<ExportScreen>` and `uploader: any Uploader`,
+// and `ExportScreen` receives `exportService`. SafeDI generates the hole's struct:
+public struct SafeDIScope_ExportFeature_uploader {
+    public var exportService: ExportService { __safeDI_exportService.instance }
+    public let screenBuilder: Instantiator<ExportScreen>
+    let __safeDI_exportService: LazilyInstantiated<ExportService>
+    // …and the initializer ExportFeature's generated initializer calls with its memo.
+}
+
+// In module App, which declares `DefaultUploader`, whose `UploadJob`s receive `exportService`, a hand-written call:
+let feature = ExportFeature(exportService: exportService, uploaderBuilder: { scope in
+    DefaultUploader(jobBuilder: Instantiator { UploadJob(exportService: scope.exportService) })
+})
+// The service is created when the first `UploadJob` is built, as it would be inline.
+```
+
 ### Access of generated parameters
 
 The initializers SafeDI generates for a seam, and the [public mocks](#public-mocks) it generates, take parameters that code in other modules passes. Each parameter is as visible as the narrowest type it names, as far as SafeDI can prove from the declarations it reads: a type’s own declaration – `@Instantiable` or not; a `protocol` or a `typealias` included – in the seam’s module, or declared `package` or wider in another module SafeDI reads, which a `.safedi` file records. A type declared inside an extension counts at its own access level, capped by the extended type’s. Where two modules declare a type of one name, SafeDI takes the narrower declaration, and a mention spelled with its module (`Core.Theme`) names that module’s.
@@ -826,7 +843,7 @@ An `onlyIfAvailable` alias inside the seam of one of its parameters is bound fro
 
 Two shapes differ from building the tree inline, because the seam cannot see its callers:
 
-- A value the seam passes through to a hole’s builder is read where the builder’s struct is built (see the hole paragraph above), where inline the implementation’s receiver reads the caller’s value when it is built.
+- A value the seam takes as an `@autoclosure` that a hole’s implementation reads, where the implementation’s own tree builds the seam again beneath another declaration of the value’s label, is read when the implementation is built (see the hole paragraph above), where inline the implementation’s receiver reads it when it is built.
 - A `@Sendable` builder inside the seam that reads a parameter of a non-`Sendable` wrapper type – `Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated` – is rejected, since the generated initializer declares the parameter outside every builder function, even where inline would pass `nil`: receive the label inside the seam as the `Sendable` wrapper of that kind, and declare it so where the caller declares it.
 
 ## Mock generation
