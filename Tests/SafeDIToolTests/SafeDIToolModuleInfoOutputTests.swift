@@ -277,6 +277,61 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesDeclarationsOtherModulesCanName_whenItScansForItself(isFlagActive: Bool) async throws {
+		// A run given `--output-directory` and no manifest scans for itself and reads the module from scan's cache. It
+		// writes module info without a target graph, as a run with `--combined-output` does, so it keeps the same
+		// declarations: those another module can name at every level of their chain, whatever the module mentions, with
+		// the decision of the `#if` block that holds one.
+		let directory = try temporaryDirectory()
+		let constantsFile = directory.appendingPathComponent("Constants.swift")
+		try """
+		public enum Constants {
+		    public enum Mode {}
+		}
+
+		enum Hidden {
+		    public enum Mode {}
+		}
+
+		#if FLAG
+		extension Constants {
+		    public enum Tier {}
+		}
+		#endif
+		""".write(to: constantsFile, atomically: true, encoding: .utf8)
+		let swiftFileCSV = directory.appendingPathComponent("Sources.csv")
+		try constantsFile.path.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+		let conditionArguments = isFlagActive ? ["--active-compilation-conditions", "FLAG"] : []
+
+		let outputDirectory = directory.appendingPathComponent("Output")
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let scanningModuleInfoOutput = directory.appendingPathComponent("Scanning.safedi")
+		try await Generate.parse([
+			swiftFileCSV.path,
+			"--output-directory", outputDirectory.path,
+			"--module-info-output", scanningModuleInfoOutput.path,
+			"--module-name", "Core",
+		] + conditionArguments).generate()
+		let combinedModuleInfoOutput = directory.appendingPathComponent("Combined.safedi")
+		try await Generate.parse([
+			swiftFileCSV.path,
+			"--combined-output", directory.appendingPathComponent("Core.swift").path,
+			"--module-info-output", combinedModuleInfoOutput.path,
+			"--module-name", "Core",
+		] + conditionArguments).generate()
+		let scanningModuleInfo = try ModuleInfoFile(moduleInfoData: Data(contentsOf: scanningModuleInfoOutput))
+		let combinedModuleInfo = try ModuleInfoFile(moduleInfoData: Data(contentsOf: combinedModuleInfoOutput))
+
+		let expectedDeclarations = ["Constants", "Constants.Mode"] + (isFlagActive ? ["Constants.Tier"] : [])
+		#expect(scanningModuleInfo.plainTypeDeclarations.map(\.typeDescription.asSource) == expectedDeclarations)
+		#expect(combinedModuleInfo.plainTypeDeclarations.map(\.typeDescription.asSource) == expectedDeclarations)
+		let expectedDecisions = [ConditionalCompilationDecision(condition: "FLAG", isActive: isFlagActive)]
+		#expect(scanningModuleInfo.conditionalCompilationDecisions == expectedDecisions)
+		#expect(combinedModuleInfo.conditionalCompilationDecisions == expectedDecisions)
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesEachImportOnce_whenFilesShareAnImport() async throws {

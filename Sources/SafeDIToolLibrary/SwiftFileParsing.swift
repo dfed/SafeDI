@@ -1058,6 +1058,9 @@ extension UInt8 {
 /// The byte of a backtick, which encloses a name: 0x60.
 private let backtickByte: UInt8 = 0x60
 
+/// The bytes of a byte order mark, U+FEFF, in UTF-8.
+private let byteOrderMark: [UInt8] = [0xEF, 0xBB, 0xBF]
+
 /// The text that every file declaring SafeDI content contains.
 private let safeDIMarkers = [
 	"@\(InstantiableVisitor.macroName)",
@@ -1072,7 +1075,9 @@ extension UnsafeBufferPointer<UInt8> {
 	/// without a closing one on its line is an ordinary byte, so the words after it on its line are still read.
 	var typeDeclarationWords: TypeDeclarationWords {
 		var found = TypeDeclarationWords()
-		var index = startIndex
+		// A byte order mark that starts the text is no part of the first word. Foundation removes it when reading a file
+		// on Apple platforms; skipping it here keeps the search independent of whether every platform's does.
+		var index = starts(with: byteOrderMark) ? startIndex + byteOrderMark.count : startIndex
 		// Whether the last word introduces a type declaration, and only whitespace followed it since.
 		var followsTypeKeyword = false
 		while index < endIndex {

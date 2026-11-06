@@ -210,6 +210,15 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 		#expect(!Self.typeDeclarationWords(of: text).mayDeclareTypeOtherModulesCanName)
 	}
 
+	@Test
+	func typeDeclarationWords_findsAccessModifierAndName_whenTextStartsWithByteOrderMark() {
+		// A byte order mark is no part of the word after it, whether or not the platform's Foundation removed it when
+		// reading the file.
+		let words = Self.typeDeclarationWords(of: "\u{FEFF}public enum Token {}")
+		#expect(words.mayDeclareTypeOtherModulesCanName)
+		#expect(words.namesFollowingKeywords == ["Token"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
