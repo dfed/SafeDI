@@ -5431,6 +5431,11 @@ public actor DependencyTreeGenerator {
 		// how many calls pass each the called mock builds when passed `nil`.
 		var passedByPublicMockCalls = initialReceivedProperties.passedByPublicMockCalls
 		var builtWhenNilByPublicMockCalls = initialReceivedProperties.builtWhenNilByPublicMockCalls
+		// A promoted scope is built beside the mocked type's own children, so a call in its tree is passed what the mocked
+		// type declares, as a call in the mocked type's own tree is, whose walk above leaves it out. The walk of a promoted
+		// scope's tree does not, so its results leave it out here: otherwise the mock would build a second instance of
+		// what the mocked type creates for the call, or a public mock would take it as a parameter.
+		let mockRootDeclarations = ScopeDeclarations(scope: scope)
 
 		// Worklist: promoted scopes may introduce additional transitive received properties.
 		// Only required properties are walked: a property received only if available becomes
@@ -5497,8 +5502,8 @@ public actor DependencyTreeGenerator {
 				for newProperty in scopeReceived.subtracting(scopeOnlyIfAvailable) where allRequired.insert(newProperty).inserted {
 					worklist.append(newProperty)
 				}
-				passedByPublicMockCalls.formUnion(scopeReceivedProperties.passedByPublicMockCalls)
-				builtWhenNilByPublicMockCalls.formUnion(scopeReceivedProperties.builtWhenNilByPublicMockCalls)
+				passedByPublicMockCalls.formUnion(scopeReceivedProperties.passedByPublicMockCalls.filter { !mockRootDeclarations.providesWhatPublicMockCallPasses($0) })
+				builtWhenNilByPublicMockCalls.formUnion(scopeReceivedProperties.builtWhenNilByPublicMockCalls.filter { !mockRootDeclarations.providesWhatPublicMockCallBuildsWhenNil($0) })
 			}
 			// A dependency the public mock another module generated builds when its call passes `nil` is built once here
 			// and passed to every call – each call an `Instantiator` makes included – and every receiver that receives it
@@ -6566,6 +6571,22 @@ public actor DependencyTreeGenerator {
 			property.formsReadByOnlyIfAvailableReceive.contains { propertiesToDeclare.contains($0) || forwardedProperties.contains($0) }
 		}
 
+		/// Whether the scope provides `property`, which a call of another module's public mock in a tree beneath it passes
+		/// (`ReceivedProperties.passedByPublicMockCalls`): the call is passed the scope's declaration, so nothing above
+		/// the scope binds the property for it.
+		func providesWhatPublicMockCallPasses(_ property: Property) -> Bool {
+			propertiesToDeclare.contains(property.asUnwrappedProperty) || forwardedProperties.contains(property.asUnwrappedProperty)
+		}
+
+		/// Whether the scope provides `property`, which a call of another module's public mock in a tree beneath it builds
+		/// when passed `nil` (`ReceivedProperties.builtWhenNilByPublicMockCalls`): the call is passed the scope's
+		/// declaration, so no mock builds the property for it. A wrapper a called mock builds is passed by the instance
+		/// it holds.
+		func providesWhatPublicMockCallBuildsWhenNil(_ property: Property) -> Bool {
+			let passedForm = (property.asLazilyInstantiatedInstanceProperty ?? property).asUnwrappedProperty
+			return propertiesToDeclare.contains(passedForm) || forwardedProperties.contains(passedForm)
+		}
+
 		/// The `onlyIfAvailable` aliases the scope declares that a receiver in a child's tree requires, given what the
 		/// children's trees require: `childRequiredReceived`, the properties they require, and
 		/// `childRequiredAliasFulfillingProperties`, those they require through `onlyIfAvailable` aliases, which an alias
@@ -6991,17 +7012,11 @@ public actor DependencyTreeGenerator {
 				}
 			received.formUnion(childReceivedFromAncestors)
 			required.formUnion(childReceivedFromAncestors.subtracting(childOnlyIfAvailable))
-			for property in walkedChild.receivedProperties.passedByPublicMockCalls
-				where !propertiesToDeclare.contains(property.asUnwrappedProperty) && !forwardedProperties.contains(property.asUnwrappedProperty)
-			{
+			for property in walkedChild.receivedProperties.passedByPublicMockCalls where !declarations.providesWhatPublicMockCallPasses(property) {
 				passedByPublicMockCalls.insert(property)
 			}
-			// A wrapper a called mock builds is passed by the instance it holds.
-			for property in walkedChild.receivedProperties.builtWhenNilByPublicMockCalls {
-				let passedForm = (property.asLazilyInstantiatedInstanceProperty ?? property).asUnwrappedProperty
-				if !propertiesToDeclare.contains(passedForm), !forwardedProperties.contains(passedForm) {
-					builtWhenNilByPublicMockCalls.insert(property)
-				}
+			for property in walkedChild.receivedProperties.builtWhenNilByPublicMockCalls where !declarations.providesWhatPublicMockCallBuildsWhenNil(property) {
+				builtWhenNilByPublicMockCalls.insert(property)
 			}
 			// Subtract by any form a receive only if available reads — a declared `x: X` satisfies onlyIfAvailable `x: X?`.
 			onlyIfAvailable.formUnion(
