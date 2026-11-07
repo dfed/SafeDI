@@ -896,30 +896,6 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func uncreatedAliasRejectionFailure_reportsAliasReadingItself_whenToolRejectsLabelKeepingAliasAsReadingItself() throws {
-		// An alias that keeps its fulfilling property's label is not an alias of itself, so an uncreated-alias error
-		// saying the type that declares it aliases it under its own label is an over-rejection the rejection-kind oracle
-		// would otherwise take for the uncreated alias's own error; the same words about an alias of it under another
-		// label on the same type, or about a label-keeping alias beneath it, stand.
-		let seed = try #require((0..<UInt64(Self.seamCorpusSeedCount)).first { seed in
-			GraphFuzzerFeature.seamDrawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])).contains(.uncreatedAliasLabelKeepingOptionalAlias)
-		})
-		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
-		let aliasSeam = "\(fixture.typeNamePrefix)AliasSeam"
-		let accepted = GraphFuzzerToolOutcome.accepted(generatedFiles: [:], warnings: [])
-		func runs(_ message: String) -> GraphFuzzerToolRuns {
-			let outcome = GraphFuzzerToolOutcome.rejected(diagnostics: "/F/Detail.swift:7:2: error: SafeDI cannot generate the dependency tree of `\(aliasSeam)`: \(message)")
-			return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome, inlineOutcome: accepted)
-		}
-		let readsItself = runs("`Detail` aliases `aliasToken: Value` as `aliasToken`, and `aliasToken` is an `onlyIfAvailable` alias that is not created where `aliasToken: Value` is unavailable.")
-		#expect(readsItself.uncreatedAliasRejectionFailure?.kind == .uncreatedAliasReadsItself)
-		let aliasOfAliasOnSameType = runs("`Detail` aliases `aliasToken: Value?` as `aliasBearer`, and `aliasToken` is an `onlyIfAvailable` alias that is not created where `aliasToken: Value` is unavailable.")
-		#expect(aliasOfAliasOnSameType.uncreatedAliasRejectionFailure == nil)
-		let labelKeepingAliasBeneath = runs("`Reader` aliases `aliasToken: Value?` as `aliasToken`, and `aliasToken` is an `onlyIfAvailable` alias that `Detail` declares, which is not created where `aliasToken: Value` is unavailable.")
-		#expect(labelKeepingAliasBeneath.uncreatedAliasRejectionFailure == nil)
-	}
-
-	@Test
 	func uncreatedAliasBindingReads_reportRead_whenAliasOfRequiredOptionalParameterIsReadAndThatParameterIsTracked() {
 		// The unwrapped-form alias of a required optional parameter may be uncreated as an alias of a parameter received
 		// only if available may, so its binding's reads are reported when the parameter is named; the exact-form alias
@@ -1508,9 +1484,9 @@ struct SafeDIToolGraphFuzzerTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func fixture_declaresChainOfAliasesThroughOnlyIfAvailableAliasOfSiblingsOptionalFormBeneathOtherSibling_forSeed731() async throws {
 		// `Root0` instantiates `t1: T1` and `lazyT0`, which builds `T0`. `T0` renames `t1` by its optional form only if
-		// available and renames that alias as required; `Link0`, which only `T0` instantiates, renames the second alias
-		// as required; and `Link1`, which only `Link0` instantiates, receives the third. So `t1` must be built before
-		// `lazyT0`. `S731_Ext.instantiate` receives `lazyT0`'s instance, but nothing `t1` builds receives `lazyT0`, so
+		// available; `Link0`, which only `T0` instantiates, renames that alias only if available; and `Link1`, which only
+		// `Link0` instantiates, renames the second alias as required – a chain through child scopes, since no type renames
+		// a rename it declares. So `t1` must be built before `lazyT0`. `S731_Ext.instantiate` receives `lazyT0`'s instance, but nothing `t1` builds receives `lazyT0`, so
 		// the tool accepts the graph, creates the whole chain from `t1`, and the smoke batch compiles it.
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: 731)
 
@@ -1519,15 +1495,17 @@ struct SafeDIToolGraphFuzzerTests {
 			"@Instantiated let lazyT0: SendableLazilyInstantiated<S731_T0>",
 		])
 		#expect(Self.propertyDeclarations(of: "S731_T0", in: fixture).suffix(3) == [
+			"@Received(fulfilledByDependencyNamed: \"t1\", ofType: S731_T1.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let anyT1Alias: S731_AnyT1?",
 			"@Received(fulfilledByDependencyNamed: \"t1\", ofType: S731_T1?.self, onlyIfAvailable: true) let t1Alias: S731_T1?",
-			"@Received(fulfilledByDependencyNamed: \"t1Alias\", ofType: S731_T1?.self) let t1AliasAlias: S731_T1?",
 			"@Instantiated let link0: S731_Link0",
 		])
 		#expect(Self.propertyDeclarations(of: "S731_Link0", in: fixture) == [
-			"@Received(fulfilledByDependencyNamed: \"t1AliasAlias\", ofType: S731_T1?.self) let t1AliasAliasAlias: S731_T1?",
+			"@Received(fulfilledByDependencyNamed: \"t1Alias\", ofType: S731_T1?.self, onlyIfAvailable: true) let t1AliasAlias: S731_T1?",
 			"@Instantiated let link1: S731_Link1",
 		])
-		#expect(Self.propertyDeclarations(of: "S731_Link1", in: fixture) == ["@Received let t1AliasAliasAlias: S731_T1?"])
+		#expect(Self.propertyDeclarations(of: "S731_Link1", in: fixture) == [
+			"@Received(fulfilledByDependencyNamed: \"t1AliasAlias\", ofType: S731_T1?.self) let t1AliasAliasAlias: S731_T1?",
+		])
 		#expect(Self.propertyDeclarations(of: "S731_T1", in: fixture) == [])
 		#expect(GraphFuzzerFeature.features(of: fixture).isSuperset(of: [.aliasOfOptionalFormOfProperty, .aliasOfOnlyIfAvailableAlias, .onlyIfAvailableAlias, .requiredAlias]))
 		let result = try #require(try await smokeResults.value.first { $0.fixture.seed == 731 })
@@ -1541,24 +1519,27 @@ struct SafeDIToolGraphFuzzerTests {
 		    public convenience init() {
 		        let t1 = S731_T1()
 		        @Sendable func __safeDI_lazyT0() -> S731_T0 {
-		            #sourceLocation(file: "S731_T0.swift", line: 10)
+		            #sourceLocation(file: "S731_T0.swift", line: 9)
 		            let anyT1Alias: S731_AnyT1? = S731_AnyT1(t1)
 		            #sourceLocation()
-		            #sourceLocation(file: "S731_T0.swift", line: 11)
+		            #sourceLocation(file: "S731_T0.swift", line: 10)
 		            let t1Alias: S731_T1? = t1
-		            #sourceLocation()
-		            #sourceLocation(file: "S731_T0.swift", line: 12)
-		            let t1AliasAlias: S731_T1? = t1Alias
 		            #sourceLocation()
 		            func __safeDI_link0() -> S731_Link0 {
 		                #sourceLocation(file: "S731_Link0.swift", line: 8)
-		                let t1AliasAliasAlias: S731_T1? = t1AliasAlias
+		                let t1AliasAlias: S731_T1? = t1Alias
 		                #sourceLocation()
-		                let link1 = S731_Link1(t1AliasAliasAlias: t1AliasAliasAlias)
-		                return S731_Link0(t1AliasAliasAlias: t1AliasAliasAlias, link1: link1)
+		                func __safeDI_link1() -> S731_Link1 {
+		                    #sourceLocation(file: "S731_Link1.swift", line: 7)
+		                    let t1AliasAliasAlias: S731_T1? = t1AliasAlias
+		                    #sourceLocation()
+		                    return S731_Link1(t1AliasAliasAlias: t1AliasAliasAlias)
+		                }
+		                let link1: S731_Link1 = __safeDI_link1()
+		                return S731_Link0(t1AliasAlias: t1AliasAlias, link1: link1)
 		            }
 		            let link0: S731_Link0 = __safeDI_link0()
-		            return S731_T0(anyT1Alias: anyT1Alias, t1Alias: t1Alias, t1AliasAlias: t1AliasAlias, link0: link0)
+		            return S731_T0(anyT1Alias: anyT1Alias, t1Alias: t1Alias, link0: link0)
 		        }
 		        let lazyT0 = SendableLazilyInstantiated<S731_T0>(__safeDI_lazyT0)
 		        func __safeDI_t2Builder() -> S731_T2 {
@@ -1579,11 +1560,10 @@ struct SafeDIToolGraphFuzzerTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func fixture_declaresChainOfAliasesThroughChildScopeBeneathOtherSibling_forSeed2420() async throws {
 		// `T0`, which no root reaches, so that only its mock builds it, instantiates `t6: T6` and `t2: T2`. `T2` renames
-		// `t6` only if available and renames that alias only if available; `Link0`, which only `T2` instantiates,
-		// renames the second alias only if available – a chain through a child scope – and renames the third as
-		// required, which is created whether or not anything receives it. So `t6` must be built before `t2`, and
-		// nothing stops it: the tool accepts the graph, `T0`'s mock creates the whole chain from `t6`, and the smoke
-		// batch compiles it.
+		// `t6` only if available; `Link0`, which only `T2` instantiates, renames that alias only if available; `Link1`,
+		// which only `Link0` instantiates, renames the second alias only if available; and `Link2` receives the third
+		// only if available – a chain through child scopes. The tool accepts the graph, `T0`'s mock builds `t6` before
+		// `t2`, as declared, and creates the whole chain from it, and the smoke batch compiles it.
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: 2_420)
 
 		#expect(Self.propertyDeclarations(of: "S2420_T0", in: fixture).prefix(2) == [
@@ -1591,14 +1571,19 @@ struct SafeDIToolGraphFuzzerTests {
 			"@Instantiated let t2: S2420_T2",
 		])
 		#expect(Self.propertyDeclarations(of: "S2420_T2", in: fixture).suffix(3) == [
+			"@Instantiated let t1Builder: Instantiator<S2420_T1>",
 			"@Received(fulfilledByDependencyNamed: \"t6\", ofType: S2420_T6.self, onlyIfAvailable: true) let t6Alias: S2420_T6?",
-			"@Received(fulfilledByDependencyNamed: \"t6Alias\", ofType: S2420_T6?.self, onlyIfAvailable: true) let t6AliasAlias: S2420_T6?",
 			"@Instantiated let link0: S2420_Link0",
 		])
 		#expect(Self.propertyDeclarations(of: "S2420_Link0", in: fixture) == [
-			"@Received(fulfilledByDependencyNamed: \"t6AliasAlias\", ofType: S2420_T6?.self, onlyIfAvailable: true) let t6AliasAliasAlias: S2420_T6?",
-			"@Received(fulfilledByDependencyNamed: \"t6AliasAliasAlias\", ofType: S2420_T6?.self) let t6AliasAliasAliasAlias: S2420_T6?",
+			"@Received(fulfilledByDependencyNamed: \"t6Alias\", ofType: S2420_T6?.self, onlyIfAvailable: true) let t6AliasAlias: S2420_T6?",
+			"@Instantiated let link1: S2420_Link1",
 		])
+		#expect(Self.propertyDeclarations(of: "S2420_Link1", in: fixture) == [
+			"@Received(fulfilledByDependencyNamed: \"t6AliasAlias\", ofType: S2420_T6?.self, onlyIfAvailable: true) let t6AliasAliasAlias: S2420_T6?",
+			"@Instantiated let link2: S2420_Link2",
+		])
+		#expect(Self.propertyDeclarations(of: "S2420_Link2", in: fixture) == ["@Received(onlyIfAvailable: true) let t6AliasAliasAlias: S2420_T6?"])
 		let result = try #require(try await smokeResults.value.first { $0.fixture.seed == 2_420 })
 		#expect(result.failure == nil)
 		#expect(Self.generatedFiles(of: result.outcome)["S2420_T0+SafeDIMock.swift"] == """
@@ -1637,23 +1622,25 @@ struct SafeDIToolGraphFuzzerTests {
 		                if let safeDIBuilder = safeDIOverrides.t2.t1Builder { safeDIBuilder() } else { S2420_T1() }
 		            }
 		            let t1Builder = Instantiator<S2420_T1>(__safeDI_t1Builder)
-		            #sourceLocation(file: "S2420_T2.swift", line: 11)
+		            #sourceLocation(file: "S2420_T2.swift", line: 10)
 		            let t6Alias: S2420_T6? = t6
-		            #sourceLocation()
-		            #sourceLocation(file: "S2420_T2.swift", line: 12)
-		            let t6AliasAlias: S2420_T6? = t6Alias
 		            #sourceLocation()
 		            func __safeDI_link0() -> S2420_Link0 {
 		                #sourceLocation(file: "S2420_Link0.swift", line: 8)
-		                let t6AliasAliasAlias: S2420_T6? = t6AliasAlias
+		                let t6AliasAlias: S2420_T6? = t6Alias
 		                #sourceLocation()
-		                #sourceLocation(file: "S2420_Link0.swift", line: 9)
-		                let t6AliasAliasAliasAlias: S2420_T6? = t6AliasAliasAlias
-		                #sourceLocation()
-		                return if let safeDIBuilder = safeDIOverrides.t2.link0 { safeDIBuilder(t6AliasAliasAlias, t6AliasAliasAliasAlias) } else { S2420_Link0(t6AliasAliasAlias: t6AliasAliasAlias, t6AliasAliasAliasAlias: t6AliasAliasAliasAlias) }
+		                func __safeDI_link1() -> S2420_Link1 {
+		                    #sourceLocation(file: "S2420_Link1.swift", line: 8)
+		                    let t6AliasAliasAlias: S2420_T6? = t6AliasAlias
+		                    #sourceLocation()
+		                    let link2 = if let safeDIBuilder = safeDIOverrides.t2.link0.link1.link2 { safeDIBuilder(t6AliasAliasAlias) } else { S2420_Link2(t6AliasAliasAlias: t6AliasAliasAlias) }
+		                    return if let safeDIBuilder = safeDIOverrides.t2.link0.link1.safeDIBuilder { safeDIBuilder(t6AliasAliasAlias, link2) } else { S2420_Link1(t6AliasAliasAlias: t6AliasAliasAlias, link2: link2) }
+		                }
+		                let link1: S2420_Link1 = __safeDI_link1()
+		                return if let safeDIBuilder = safeDIOverrides.t2.link0.safeDIBuilder { safeDIBuilder(t6AliasAlias, link1) } else { S2420_Link0(t6AliasAlias: t6AliasAlias, link1: link1) }
 		            }
 		            let link0: S2420_Link0 = __safeDI_link0()
-		            return if let safeDIBuilder = safeDIOverrides.t2.safeDIBuilder { safeDIBuilder(t1Builder, t6Alias, t6AliasAlias, link0) } else { S2420_T2(t1Builder: t1Builder, t6Alias: t6Alias, t6AliasAlias: t6AliasAlias, link0: link0) }
+		            return if let safeDIBuilder = safeDIOverrides.t2.safeDIBuilder { safeDIBuilder(t1Builder, t6Alias, link0) } else { S2420_T2(t1Builder: t1Builder, t6Alias: t6Alias, link0: link0) }
 		        }
 		        let t2: S2420_T2 = __safeDI_t2()
 		        let anyT1 = if let safeDIBuilder = safeDIOverrides.anyT1 { safeDIBuilder() } else { S2420_AnyT1(S2420_T1()) }
@@ -1672,10 +1659,10 @@ struct SafeDIToolGraphFuzzerTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func fixture_makesSiblingsTypeReceiveTheOtherSibling_forSeed4224() async throws {
 		// `Root0` instantiates `t1: T1` and `t2: T2`. `T1` renames `t2` by its optional form only if available;
-		// `Link0`, which only `T1` instantiates, renames that alias only if available – a chain through a child scope –
-		// renames the second alias only if available, and renames the third as required. So `t2` must be built before
-		// `t1`, and `T2` receives `t1`, so it cannot be: the tool rejects the graph with the dependency cycle at that
-		// receive.
+		// `Link0`, which only `T1` instantiates, renames that alias as required – a chain through a child scope; `Link1`,
+		// which only `Link0` instantiates, renames the second alias only if available; and `Link2` receives the third only
+		// if available. So `t2` must be built before `t1`, and `T2` renames `t1`, which it receives, so it cannot be: the
+		// tool rejects the graph with the dependency cycle at that rename.
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: 4_224)
 
 		#expect(Self.propertyDeclarations(of: "S4224_Root0", in: fixture).prefix(2) == [
@@ -1687,14 +1674,17 @@ struct SafeDIToolGraphFuzzerTests {
 			"@Instantiated let link0: S4224_Link0",
 		])
 		#expect(Self.propertyDeclarations(of: "S4224_Link0", in: fixture) == [
-			"@Received(fulfilledByDependencyNamed: \"t2Alias\", ofType: S4224_T2?.self, onlyIfAvailable: true) let t2AliasAlias: S4224_T2?",
-			"@Received(fulfilledByDependencyNamed: \"t2AliasAlias\", ofType: S4224_T2?.self, onlyIfAvailable: true) let t2AliasAliasAlias: S4224_T2?",
-			"@Received(fulfilledByDependencyNamed: \"t2AliasAliasAlias\", ofType: S4224_T2?.self) let t2AliasAliasAliasAlias: S4224_T2?",
+			"@Received(fulfilledByDependencyNamed: \"t2Alias\", ofType: S4224_T2?.self) let t2AliasAlias: S4224_T2?",
+			"@Instantiated let link1: S4224_Link1",
 		])
-		#expect(Self.propertyDeclarations(of: "S4224_T2", in: fixture).last == "@Received let t1: S4224_T1")
+		#expect(Self.propertyDeclarations(of: "S4224_Link1", in: fixture) == [
+			"@Received(fulfilledByDependencyNamed: \"t2AliasAlias\", ofType: S4224_T2?.self, onlyIfAvailable: true) let t2AliasAliasAlias: S4224_T2?",
+			"@Instantiated let link2: S4224_Link2",
+		])
+		#expect(Self.propertyDeclarations(of: "S4224_T2", in: fixture).last == "@Received(fulfilledByDependencyNamed: \"t1\", ofType: S4224_T1.self) let t1Alias: S4224_T1")
 		let result = try #require(try await smokeResults.value.first { $0.fixture.seed == 4_224 })
 		#expect(result.failure == nil)
-		#expect(Self.diagnostics(of: result.outcome) == "S4224_T2.swift:10:2: error: Dependency cycle: @Instantiated `t1: S4224_T1` -> @Received `t2: S4224_T2?` -> @Received `t1: S4224_T1`. `t1: S4224_T1` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.")
+		#expect(Self.diagnostics(of: result.outcome) == "S4224_T2.swift:9:2: error: Dependency cycle: @Instantiated `t1: S4224_T1` -> @Received `t2: S4224_T2?` -> @Received `t1: S4224_T1`. `t1: S4224_T1` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.")
 	}
 
 	/// The properties the type named `typeName` declares in `fixture`, each as `<attribute> let <label>: <type>`.
@@ -2986,71 +2976,71 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [12, 14, 25, 40, 62, 99, 304, 582, 691, 705, 731, 930, 2_420, 2_611, 3_360, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x96D40F1B1C4917B9
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xA14323B21D7E8546
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x6009E7DD49278D76
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xAB501ADC4D22F795
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0xDD638CCC778015F8
+	static let corpusFixtureHash: UInt64 = 0x3F392833D1DFCF63
 
-	static let corpusPartitionHash: UInt64 = 0x62485457537CD9EC
+	static let corpusPartitionHash: UInt64 = 0x3EF7267AA43249C0
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
-	static let corpusAcceptedSeedCount = 2_299
-	static let corpusAcceptedSeedsSum: UInt64 = 0x62F41F76B0229D38
+	static let corpusAcceptedSeedCount = 2_304
+	static let corpusAcceptedSeedsSum: UInt64 = 0x5118F669646026F5
 
 	/// How many of the corpus's graphs the tool accepts show each `GraphFuzzerFeature`, read from their source as the
 	/// smoke batch reads them, which shards of the corpus add up. Unit tests leave the siblings of a shape to the
 	/// corpus, so a generator change that stops drawing a feature, or a tool change that stops accepting the graphs that
 	/// draw it, changes these and must update them deliberately, with the hashes and the accepted-seed pins.
 	static let corpusAcceptedFeatureCounts: [GraphFuzzerFeature: Int] = [
-		.constantProperty: 2_092,
+		.constantProperty: 2_096,
 		.erasedConstantProperty: 379,
-		.instantiatorProperty: 1_842,
-		.sendableInstantiatorProperty: 776,
-		.erasedInstantiatorProperty: 940,
-		.sendableErasedInstantiatorProperty: 326,
-		.lazilyInstantiatedProperty: 334,
-		.sendableLazilyInstantiatedProperty: 126,
-		.erasedLazilyInstantiatedProperty: 180,
+		.instantiatorProperty: 1_845,
+		.sendableInstantiatorProperty: 779,
+		.erasedInstantiatorProperty: 942,
+		.sendableErasedInstantiatorProperty: 325,
+		.lazilyInstantiatedProperty: 336,
+		.sendableLazilyInstantiatedProperty: 128,
+		.erasedLazilyInstantiatedProperty: 184,
 		.forwardedLazilyInstantiatedProperty: 283,
-		.receivedLazilyInstantiatedInstance: 216,
-		.forwardedProperty: 1_150,
+		.receivedLazilyInstantiatedInstance: 219,
+		.forwardedProperty: 1_154,
 		.optionalForwardedProperty: 573,
-		.requiredReceive: 1_923,
-		.requiredOptionalReceive: 493,
-		.onlyIfAvailableReceive: 1_522,
-		.requiredAlias: 989,
-		.onlyIfAvailableAlias: 803,
-		.aliasOfOnlyIfAvailableAlias: 157,
-		.aliasOfOptionalFormOfProperty: 11,
+		.requiredReceive: 1_928,
+		.requiredOptionalReceive: 491,
+		.onlyIfAvailableReceive: 1_525,
+		.requiredAlias: 947,
+		.onlyIfAvailableAlias: 774,
+		.aliasOfOnlyIfAvailableAlias: 57,
+		.aliasOfOptionalFormOfProperty: 12,
 		.erasedAlias: 196,
 		.multipleRoots: 1_514,
-		.generateMock: 1_924,
-		.lazyCycle: 1_033,
-		.sameLabelWithDifferentTypes: 1_098,
-		.labelSpelledAsGeneratedName: 523,
-		.dependencyMockCannotBuild: 1_404,
+		.generateMock: 1_928,
+		.lazyCycle: 1_030,
+		.sameLabelWithDifferentTypes: 1_102,
+		.labelSpelledAsGeneratedName: 524,
+		.dependencyMockCannotBuild: 1_412,
 		.dependencyMockCannotBuildReceivedBeneathItsOwner: 278,
-		.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner: 67,
+		.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner: 66,
 		.dependencyMockCannotBuildLazilyInstantiatedReceivedAsOtherKindBesideItsMockedOwner: 10,
-		.sendableAndNonSendableWrappers: 472,
-		.mockedTypeOnLazyCycle: 477,
-		.typesReceivingEachOtherOnlyIfAvailable: 241,
-		.labelReceivedAsInstanceAndAsInstantiator: 126,
-		.sameLabelReceivedAsDifferentUnbuildableWrappers: 125,
+		.sendableAndNonSendableWrappers: 475,
+		.mockedTypeOnLazyCycle: 476,
+		.typesReceivingEachOtherOnlyIfAvailable: 243,
+		.labelReceivedAsInstanceAndAsInstantiator: 125,
+		.sameLabelReceivedAsDifferentUnbuildableWrappers: 126,
 		.receivedErasedInstantiator: 476,
-		.forwardedErasedInstantiator: 142,
-		.defaultValuedInstantiateParameter: 547,
-		.nonSendableValuesInsideSendableBuilder: 129,
+		.forwardedErasedInstantiator: 144,
+		.defaultValuedInstantiateParameter: 550,
+		.nonSendableValuesInsideSendableBuilder: 131,
 		.generateDependencyTree: 0,
 	]
 
@@ -3122,27 +3112,27 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the base corpus's value oracle compares and skips over the whole corpus (`GraphFuzzerValueOracleCounts`).
 	static let corpusValueOracleCounts = GraphFuzzerValueOracleCounts(
-		rootPairCount: 4_499,
-		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x56D28094AB155BF1),
-		mirroredPairCount: 2_096,
-		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0xC87FF3DE4030879),
+		rootPairCount: 4_501,
+		rootPairsSum: GraphFuzzerSeedSetSum(value: 0xFAA8291E8B3B35A5),
+		mirroredPairCount: 2_100,
+		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0xCC1B144AF7E6CCA6),
 		skipCounts: [
-			.requiredParameter: 1_877,
+			.requiredParameter: 1_885,
 			.twoFormsOfOneLabel: 23,
 			.requiredOptionalReceiveOfNonOptionalDeclaration: 8,
-			.requiredReceiveOfUncreatedAlias: 12,
+			.requiredReceiveOfUncreatedAlias: 7,
 		],
 		shapeCounts: [
-			.rootTreePropertyReceivedByTwoOrMoreTypes: 827,
-			.rootTreeLabelDeclaredAtTwoDepthsAboveReceiver: 108,
-			.promotedDependencyReceivedByTwoOrMoreTypes: 160,
-			.onlyIfAvailableAliasOfPromotedDependency: 59,
-			.requiredAliasOfPromotedDependency: 216,
+			.rootTreePropertyReceivedByTwoOrMoreTypes: 824,
+			.rootTreeLabelDeclaredAtTwoDepthsAboveReceiver: 106,
+			.promotedDependencyReceivedByTwoOrMoreTypes: 161,
+			.onlyIfAvailableAliasOfPromotedDependency: 54,
+			.requiredAliasOfPromotedDependency: 213,
 			.promotedWrapperReceivedInAnotherForm: 3,
 			.instanceOfPromotedWrapperPassedToMockedType: 1,
-			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 176,
+			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 174,
 		],
-		drawnMocksMatchingOnlyAfterNormalizationCount: 483,
+		drawnMocksMatchingOnlyAfterNormalizationCount: 486,
 	)
 
 	/// The seeds of `knownIssues` whose value-oracle fixture is known not to compile.
@@ -3187,12 +3177,12 @@ struct SafeDIToolGraphFuzzerTests {
 	)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0x2A8D19EB8A9B6DEB
-	static let seamCorpusAcceptedSeedCount = 269
-	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xA3A589A52249B034
+	static let seamCorpusFixtureHash: UInt64 = 0x3F7D7D2813AEB6E7
+	static let seamCorpusAcceptedSeedCount = 275
+	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x905562851AB6E200
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 182
+	static let seamCorpusValueOracleInspectedGraphCount = 185
 	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
 	static let seamCorpusOmittedValueGraphCount = 0
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
@@ -3216,15 +3206,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// seam tests' draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 180, 196, 277, 326, 605, 609, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x959F2514E477D6DC
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x94302B77AD603CA7
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
 	/// `seamCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool`.
 	static let seamCorpusDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
-		.collidingFormsBeneathSeam: 71,
+		.collidingFormsBeneathSeam: 67,
 		.innerSeam: 342,
-		.instanceHeldByCaller: 392,
+		.instanceHeldByCaller: 393,
 		.instanceReceiveBeneathSeam: 242,
 		.otherKindWrapperReceiveBeneathSeam: 32,
 		.renameAboveSeam: 19,
@@ -3251,32 +3241,28 @@ struct SafeDIToolGraphFuzzerTests {
 		.synthesizedHeldProvider: 350,
 		.synthesizedLazyProvider: 486,
 		.synthesizedSharedProvider: 890,
-		.uncreatedAliasAliasOfAlias: 28,
-		.uncreatedAliasDeclarationAbove: 81,
-		.uncreatedAliasFulfillingPropertyPruned: 46,
+		.uncreatedAliasDeclarationAbove: 89,
+		.uncreatedAliasFulfillingPropertyPruned: 45,
 		.uncreatedAliasLabelHeldByCaller: 131,
-		.uncreatedAliasLabelParameter: 110,
-		.uncreatedAliasOtherTypeBeside: 45,
-		.uncreatedAliasReader: 50,
-		.uncreatedAliasSamePropertyBeside: 34,
-		.uncreatedAliasWrapperBeside: 78,
+		.uncreatedAliasLabelParameter: 118,
+		.uncreatedAliasOtherTypeBeside: 52,
+		.uncreatedAliasReader: 48,
+		.uncreatedAliasSamePropertyBeside: 38,
+		.uncreatedAliasWrapperBeside: 90,
 		.spelledOptionalFormOnSibling: 226,
 		.spelledTreeMocked: 231,
-		.uncreatedAliasFulfillingPropertyHeldByCaller: 224,
-		.uncreatedAliasRequiredReader: 7,
-		.uncreatedAliasLabelKeepingAliasReader: 34,
-		.uncreatedAliasReaderInsideWrapper: 13,
-		.uncreatedAliasReaderInsideNestedSeam: 21,
-		.uncreatedAliasDeeperReader: 54,
-		.uncreatedAliasRequiredAliasOfAlias: 12,
+		.uncreatedAliasFulfillingPropertyHeldByCaller: 218,
+		.uncreatedAliasRequiredReader: 9,
+		.uncreatedAliasLabelKeepingAliasReader: 32,
+		.uncreatedAliasReaderInsideWrapper: 16,
+		.uncreatedAliasReaderInsideNestedSeam: 20,
+		.uncreatedAliasDeeperReader: 48,
 		.uncreatedAliasOnSeamItself: 30,
-		.uncreatedAliasFulfillingPropertyGeneratedAfterLabelKeepingAlias: 5,
-		.uncreatedAliasFulfillingPropertyBeingBuilt: 30,
-		.uncreatedAliasFulfillingPropertyGeneratedLater: 31,
+		.uncreatedAliasFulfillingPropertyBeingBuilt: 32,
+		.uncreatedAliasFulfillingPropertyGeneratedLater: 30,
 		.uncreatedAliasRequiredOptionalParameter: 119,
-		.uncreatedAliasExactFormAlias: 128,
-		.uncreatedAliasAcceptedTwin: 117,
-		.uncreatedAliasLabelKeepingOptionalAlias: 37,
+		.uncreatedAliasExactFormAlias: 135,
+		.uncreatedAliasAcceptedTwin: 156,
 		.wrapperReceiveBeneathSeam: 581,
 		.seamTypeNarrowerThanPublic: 255,
 		.receiverNarrowerThanType: 316,
@@ -3345,22 +3331,21 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeSecondHoleBeneathRedeclaredLabel: 2,
 		.holeSendableDiamond: 22,
 		.holeNestedSameLabelFill: 18,
-		.uncreatedAliasLabelLazilyInstantiatedBeside: 26,
-		.uncreatedAliasLabelReceivedBeside: 17,
-		.uncreatedAliasLabelOnMid: 9,
-		.uncreatedAliasSeamRequiresLabel: 7,
+		.uncreatedAliasLabelLazilyInstantiatedBeside: 29,
+		.uncreatedAliasLabelReceivedBeside: 20,
+		.uncreatedAliasLabelOnMid: 6,
+		.uncreatedAliasSeamRequiresLabel: 8,
 		.uncreatedAliasSeamReceivesLabelAsAnotherType: 6,
-		.uncreatedAliasLabelAliasesOtherParameter: 10,
-		.uncreatedAliasLabelDeclaredAfterDetail: 41,
-		.uncreatedAliasLabelDeclaredBesideAndAbove: 21,
-		.uncreatedAliasClientReceivesWrapper: 17,
-		.uncreatedAliasAliasOfAliasOnSeam: 10,
+		.uncreatedAliasLabelAliasesOtherParameter: 13,
+		.uncreatedAliasLabelDeclaredAfterDetail: 46,
+		.uncreatedAliasLabelDeclaredBesideAndAbove: 23,
+		.uncreatedAliasClientReceivesWrapper: 19,
 		.uncreatedAliasReaderOfAliasOfAlias: 10,
-		.uncreatedAliasRequiredLabelKeepingAliasReader: 12,
-		.uncreatedAliasReaderRedeclaresAlias: 8,
+		.uncreatedAliasRequiredLabelKeepingAliasReader: 13,
+		.uncreatedAliasReaderRedeclaresAlias: 9,
 		.uncreatedAliasLabelGeneratedAfterDetail: 59,
-		.uncreatedAliasSeamReceivesFulfillingPropertyOnlyIfAvailable: 31,
-		.uncreatedAliasFulfillingPropertyRequiredBeside: 32,
+		.uncreatedAliasSeamReceivesFulfillingPropertyOnlyIfAvailable: 32,
+		.uncreatedAliasFulfillingPropertyRequiredBeside: 26,
 		.uncreatedAliasAcrossModules: 111,
 		.spelledAcrossModules: 175,
 		.unreadParameterType: 153,
@@ -3731,21 +3716,21 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
 			seeds: [
 				3, 35, 36, 45, 55, 77, 107, 114, 131, 157, 168, 209, 223, 233, 241, 281,
-				311, 364, 371, 380, 381, 383, 390, 431, 448, 450, 473, 476, 515, 545, 548,
-				567, 593, 617, 630, 632, 680, 714, 728, 732, 751, 768, 774, 785, 786, 808, 833,
+				311, 364, 371, 380, 381, 383, 390, 431, 448, 450, 473, 476, 515, 541, 545, 548,
+				567, 593, 617, 630, 632, 680, 714, 728, 732, 751, 768, 774, 785, 786, 808,
 				836, 847, 886, 903, 912, 940, 948, 975, 987, 1_004, 1_029, 1_035, 1_042, 1_044, 1_061, 1_064,
-				1_072, 1_075, 1_084, 1_092, 1_139, 1_140, 1_145, 1_147, 1_215, 1_236, 1_289, 1_300, 1_322, 1_329, 1_335, 1_352,
+				1_072, 1_075, 1_084, 1_092, 1_139, 1_140, 1_145, 1_147, 1_215, 1_217, 1_236, 1_289, 1_300, 1_322, 1_329, 1_335, 1_352,
 				1_362, 1_369, 1_372, 1_432, 1_433, 1_441, 1_453, 1_464, 1_492, 1_496, 1_504, 1_524, 1_525, 1_531, 1_535, 1_563,
-				1_567, 1_602, 1_633, 1_646, 1_664, 1_675, 1_695, 1_742, 1_781, 1_784, 1_804, 1_817, 1_853, 1_857, 1_867, 1_896,
+				1_567, 1_602, 1_633, 1_646, 1_664, 1_675, 1_695, 1_742, 1_781, 1_784, 1_795, 1_804, 1_817, 1_853, 1_857, 1_867, 1_896,
 				1_938, 1_970, 1_972, 2_017, 2_051, 2_057, 2_083, 2_084, 2_123, 2_149, 2_152, 2_165, 2_211, 2_234, 2_249,
 				2_270, 2_277, 2_287, 2_296, 2_316, 2_325, 2_335, 2_337, 2_348, 2_389, 2_403, 2_430, 2_432, 2_437, 2_444, 2_456,
-				2_484, 2_518, 2_553, 2_555, 2_577, 2_630, 2_637, 2_667, 2_704, 2_731, 2_741, 2_791, 2_808, 2_835, 2_841, 2_845,
+				2_484, 2_518, 2_553, 2_555, 2_577, 2_630, 2_637, 2_667, 2_704, 2_732, 2_741, 2_742, 2_791, 2_808, 2_835, 2_841, 2_845,
 				2_874, 2_902, 2_914, 2_916, 3_004, 3_023, 3_064, 3_074, 3_075, 3_091, 3_134, 3_180, 3_183, 3_215, 3_221,
-				3_225, 3_241, 3_252, 3_298, 3_306, 3_329, 3_344, 3_361, 3_397, 3_430, 3_439, 3_470, 3_491, 3_504, 3_506, 3_513,
-				3_526, 3_533, 3_534, 3_537, 3_577, 3_582, 3_588, 3_596, 3_600, 3_602, 3_620, 3_645, 3_648, 3_661, 3_699,
+				3_225, 3_241, 3_252, 3_298, 3_306, 3_329, 3_344, 3_361, 3_397, 3_430, 3_439, 3_491, 3_504, 3_506, 3_513,
+				3_526, 3_533, 3_534, 3_537, 3_577, 3_582, 3_588, 3_589, 3_596, 3_600, 3_602, 3_620, 3_645, 3_648, 3_661, 3_699,
 				3_707, 3_715, 3_723, 3_741, 3_750, 3_775, 3_776, 3_805, 3_823, 3_843, 3_894, 3_915, 3_994, 4_044, 4_068, 4_102,
-				4_107, 4_110, 4_117, 4_122, 4_125, 4_156, 4_177, 4_191, 4_192, 4_196, 4_206, 4_213, 4_217, 4_227, 4_254, 4_260,
-				4_266, 4_281, 4_304, 4_344, 4_371, 4_378, 4_393, 4_404, 4_420, 4_424, 4_428, 4_496, 4_515, 4_534, 4_541, 4_545,
+				4_107, 4_110, 4_117, 4_122, 4_125, 4_156, 4_177, 4_191, 4_192, 4_196, 4_206, 4_213, 4_215, 4_217, 4_227, 4_254, 4_260,
+				4_266, 4_281, 4_304, 4_344, 4_371, 4_393, 4_404, 4_420, 4_424, 4_428, 4_496, 4_515, 4_534, 4_541, 4_545,
 				4_567, 4_619, 4_634, 4_637, 4_640, 4_642, 4_648, 4_664, 4_666, 4_707, 4_716, 4_717, 4_729, 4_775, 4_776, 4_781,
 				4_783, 4_786, 4_795, 4_834, 4_857, 4_859, 4_891, 4_904, 4_918, 4_922, 4_944, 4_947, 4_955, 4_963, 4_996,
 			],

@@ -406,7 +406,7 @@ import Testing
 
 				    @Instantiated private let dependency: Dependency
 				    @Received(fulfilledByDependencyNamed: "dependency", ofType: Dependency.self) private let renamedDependency: Dependency
-				    @Received(fulfilledByDependencyNamed: "renamedDependency", ofType: Dependency.self) private let renamed2Dependency: Dependency
+				    @Received(fulfilledByDependencyNamed: "dependency", ofType: Dependency.self) private let renamed2Dependency: Dependency
 				}
 				""",
 				expandedSource: """
@@ -501,36 +501,6 @@ import Testing
 				    }
 
 				    let service: SendableLazilyInstantiated<Service>
-				    let other: Service
-				}
-				""",
-				macros: instantiableTestMacros,
-			)
-		}
-
-		@Test
-		func declaration_doesNotThrow_whenRootRenamesInstanceOfRenamingOfItsOwnLazilyInstantiatedProperty() {
-			assertMacroExpansion(
-				"""
-				@Instantiable(isRoot: true)
-				public final class Root: Instantiable {
-				    public init(service: LazilyInstantiated<Service>, renamedService: LazilyInstantiated<Service>, other: Service) {
-				        fatalError("SafeDI doesn't inspect the initializer body")
-				    }
-
-				    @Instantiated let service: LazilyInstantiated<Service>
-				    @Received(fulfilledByDependencyNamed: "service", ofType: LazilyInstantiated<Service>.self) let renamedService: LazilyInstantiated<Service>
-				    @Received(fulfilledByDependencyNamed: "renamedService", ofType: Service.self) let other: Service
-				}
-				""",
-				expandedSource: """
-				public final class Root: Instantiable {
-				    public init(service: LazilyInstantiated<Service>, renamedService: LazilyInstantiated<Service>, other: Service) {
-				        fatalError("SafeDI doesn't inspect the initializer body")
-				    }
-
-				    let service: LazilyInstantiated<Service>
-				    let renamedService: LazilyInstantiated<Service>
 				    let other: Service
 				}
 				""",
