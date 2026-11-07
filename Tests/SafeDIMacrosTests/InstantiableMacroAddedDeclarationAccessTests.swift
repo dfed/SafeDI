@@ -192,14 +192,16 @@ import Testing
 				    let configuration: \(spelling)
 				}
 				""",
-				diagnostics: [
+				// SafeDI qualifies the bare name, so the macro warns only about the spelling through `Self`.
+				diagnostics: (spelling.hasPrefix("Self.") ? [
 					DiagnosticSpec(
-						message: "The generated code that builds or receives `configuration` lives in another type’s extension, where `\(spelling)`, declared in `Feature`, does not resolve. Write it as `Feature.Configuration`.",
+						message: "Generated code spells `\(spelling)` in another type’s extension, where `Self` is that type. Write it as `Feature.Configuration`.",
 						line: 5,
 						column: 34,
 						severity: .warning,
 						fixIts: [FixItSpec(message: "Replace `\(spelling)` with `Feature.Configuration`")],
 					),
+				] : []) + [
 					DiagnosticSpec(
 						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
