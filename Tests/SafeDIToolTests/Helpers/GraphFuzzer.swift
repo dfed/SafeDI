@@ -1606,6 +1606,7 @@ enum GraphFuzzerGenerator {
 			unbuildableDependencySiblingReceiverRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencySiblingReceiverRandomSeedMask)
 			aliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasChainRandomSeedMask)
 			siblingAliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.siblingAliasChainRandomSeedMask)
+			erasedOptionalRenameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.erasedOptionalRenameRandomSeedMask)
 			proofRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.proofRandomSeedMask)
 			holeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holeRandomSeedMask)
 			holePassUpRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holePassUpRandomSeedMask)
@@ -1682,9 +1683,9 @@ enum GraphFuzzerGenerator {
 			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
 			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
 			let seamDeclarations = addingSeam(
-				to: addingReceiversOfDependenciesMocksCannotBuild(
+				to: addingErasedRenamesOfOptionalDependencies(to: addingReceiversOfDependenciesMocksCannotBuild(
 					to: addingSiblingAliasChains(to: addingAliasChains(to: addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations)))),
-				),
+				)),
 			)
 			let aliasDeclarations = addingUncreatedAliasExtensions(to: addingUncreatedAliasShapes(to: addingSpelledProperties(to: seamDeclarations)))
 			var finalDeclarations = movingSelfContainedSeamsIntoSeamModule(
@@ -1864,6 +1865,8 @@ enum GraphFuzzerGenerator {
 		private var aliasChainRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingSiblingAliasChains`, as `generatedNameRandom` does for its pass.
 		private var siblingAliasChainRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only the choices of `addingErasedRenamesOfOptionalDependencies`, as `generatedNameRandom` does for its pass.
+		private var erasedOptionalRenameRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingSeam`, which draws only with the `generateDependencyTree` feature on, so
 		/// every graph without it is drawn as before.
 		private var seamRandom: GraphFuzzerRandomNumberGenerator
@@ -2449,8 +2452,9 @@ enum GraphFuzzerGenerator {
 		/// named apart where a builder function around the owner declares the constant's label. A type between the owner
 		/// and the receiver that declares the label with another type hides the constant, which the tool must reject. No
 		/// root reaches the receiver, so no production tree rejects it for receiving a property nothing above it provides.
-		/// It is drawn after every other base pass (only the `generateDependencyTree` feature's passes follow it), and
-		/// `unbuildableDependencyReceiverRandom` draws only for it, so every other graph is drawn as before.
+		/// It is drawn after every other base pass but `addingErasedRenamesOfOptionalDependencies` (and the
+		/// `generateDependencyTree` feature's passes), and `unbuildableDependencyReceiverRandom` draws only for it, so every
+		/// other graph is drawn as before.
 		///
 		/// Now and then, too, an owner with `generateMock: true` receives a type of the graph that no root reaches, that has
 		/// no forwarded properties, and that it does not instantiate, which its mock builds beside it. Mostly that type
@@ -2582,6 +2586,107 @@ enum GraphFuzzerGenerator {
 
 		private static let unbuildableDependencyReceiverRandomSeedMask: UInt64 = 0x756E627265636569
 		private static let unbuildableDependencySiblingReceiverRandomSeedMask: UInt64 = 0x756E627369626C69
+
+		/// Now and then gives a type of the graph an erased rename of an optional property provided above every path to
+		/// it, of a type of the graph: `@Received(fulfilledByDependencyNamed: "t3", ofType: T3?.self,
+		/// erasedToConcreteExistential: true) let anyT3OptionalAlias: AnyT3?`, required, or now and then `onlyIfAvailable`,
+		/// and, in about half of the graphs that draw it, a receive of it, required or `onlyIfAvailable`, on a type of the
+		/// graph the host instantiates: a host that instantiates one, when there is one, is chosen seven times in ten, and
+		/// such a host always gets a receiver; most hosts instantiate none. The rename
+		/// is `nil` where the property is and wraps it otherwise, whatever binding the property has: a forwarded optional,
+		/// an optional alias, or, in a mock, a value the mock builds, takes as a parameter, or is forwarded. `aliasProperty`
+		/// never aliases an optional property and the passes that spell `ofType: X?.self` never erase, so no other pass
+		/// draws it. It is drawn after every other base pass, and `erasedOptionalRenameRandom` draws only for it, so every
+		/// other graph is drawn as before.
+		private mutating func addingErasedRenamesOfOptionalDependencies(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard erasedOptionalRenameRandom.percentChance(25) else { return declarations }
+			var declarations = declarations
+			let graphTypeIndexByName = Dictionary(uniqueKeysWithValues: (0..<typeCount).map { (typeName($0), $0) })
+			/// The optional properties of a type of the graph, each the only type its label is provided with, that are
+			/// provided above every path to the type at `typeIndex` and that it does not declare a property under, each with
+			/// the index of its type.
+			func candidates(forHostTypeIndex typeIndex: Int, hostIndex: Int) -> [ErasedOptionalRenameSource] {
+				propertiesProvidedAboveEveryPath(to: typeIndex).compactMap { candidate -> ErasedOptionalRenameSource? in
+					guard candidate.isOptional,
+					      let sourceTypeIndex = graphTypeIndexByName[String(candidate.type.dropLast())],
+					      provided.allSatisfy({ $0.label != candidate.label || $0.type == candidate.type }),
+					      !declarations[hostIndex].properties.contains(where: { $0.label == candidate.label })
+					else { return nil }
+					return ErasedOptionalRenameSource(property: candidate, typeIndex: sourceTypeIndex)
+				}
+			}
+			/// The indices of the declarations of the types of the graph, other than itself, that the type at `hostIndex`
+			/// instantiates.
+			func receiverIndices(ofHostAt hostIndex: Int) -> [Int] {
+				declarations[hostIndex].properties
+					.filter { $0.attribute.hasPrefix("@Instantiated") }
+					.map(Self.builtTypeName(of:))
+					.filter { $0 != declarations[hostIndex].name && graphTypeIndexByName[$0] != nil }
+					.compactMap { name in declarations.firstIndex { $0.name == name } }
+			}
+			// The host: a type of the graph that has such a property, chosen at random among those that have one and whose
+			// code is generated – a type a root reaches, or a type whose mock is generated – so that the rename is built.
+			let hosts = (0..<typeCount).compactMap { typeIndex -> ErasedOptionalRenameHost? in
+				guard let index = declarations.firstIndex(where: { $0.name == typeName(typeIndex) }),
+				      reachableFromRoots.contains(typeIndex) || declarations[index].instantiableArguments.contains("generateMock: true")
+				else { return nil }
+				let sources = candidates(forHostTypeIndex: typeIndex, hostIndex: index)
+				return sources.isEmpty ? nil : ErasedOptionalRenameHost(
+					typeIndex: typeIndex,
+					index: index,
+					sources: sources,
+					receiverIndices: receiverIndices(ofHostAt: index),
+				)
+			}
+			guard !hosts.isEmpty else { return declarations }
+			// Seven times in ten, a host that instantiates a type of the graph, when one does, so that the rename is received
+			// beneath it.
+			let hostsWithReceivers = hosts.filter { !$0.receiverIndices.isEmpty }
+			let host: ErasedOptionalRenameHost = if !hostsWithReceivers.isEmpty, erasedOptionalRenameRandom.percentChance(70) {
+				erasedOptionalRenameRandom.element(of: hostsWithReceivers)
+			} else {
+				erasedOptionalRenameRandom.element(of: hosts)
+			}
+			let source = erasedOptionalRenameRandom.element(of: host.sources)
+			let label = "anyT\(source.typeIndex)OptionalAlias"
+			let isOnlyIfAvailable = erasedOptionalRenameRandom.percentChance(30)
+			let alias = PropertyDeclaration(
+				attribute: "@Received(fulfilledByDependencyNamed: \"\(source.property.label)\", ofType: \(source.property.type).self, erasedToConcreteExistential: true\(isOnlyIfAvailable ? ", onlyIfAvailable: true" : ""))",
+				label: label,
+				type: erasedTypeName(source.typeIndex) + "?",
+			)
+			declarations[host.index].properties.append(alias)
+			if !isOnlyIfAvailable {
+				recordRequirement(of: source.property, receiverIndex: host.typeIndex)
+			}
+			// A receive of the rename on a type of the graph the host instantiates, other than itself.
+			guard !host.receiverIndices.isEmpty else { return declarations }
+			// No type declares the label yet: only this pass, which runs once, spells `OptionalAlias`.
+			let receiverIndex = erasedOptionalRenameRandom.element(of: host.receiverIndices)
+			declarations[receiverIndex].properties.append(PropertyDeclaration(
+				attribute: erasedOptionalRenameRandom.percentChance(70) ? "@Received" : "@Received(onlyIfAvailable: true)",
+				label: label,
+				type: alias.type,
+			))
+			return declarations
+		}
+
+		private static let erasedOptionalRenameRandomSeedMask: UInt64 = 0x6572617365644F70
+
+		/// An optional property `addingErasedRenamesOfOptionalDependencies` can rename, with the index of its type.
+		private struct ErasedOptionalRenameSource {
+			let property: ProvidedProperty
+			let typeIndex: Int
+		}
+
+		/// A type `addingErasedRenamesOfOptionalDependencies` can give the rename: its type index, the index of its
+		/// declaration, the properties it can rename, and the declarations of the types of the graph it instantiates.
+		private struct ErasedOptionalRenameHost {
+			let typeIndex: Int
+			let index: Int
+			let sources: [ErasedOptionalRenameSource]
+			let receiverIndices: [Int]
+		}
 
 		/// Now and then adds a chain of aliases through an `onlyIfAvailable` alias to a type of the graph: a second
 		/// alias, required or `onlyIfAvailable`, of an `onlyIfAvailable` alias the type declares (or is given here, of a
@@ -5187,7 +5292,11 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// An alias whose `ofType:` is the optional form of a property declared with the label it names (`ofType: X?.self`
 	/// of `x: X`), which validation resolves to that property by its unwrapped form.
 	case aliasOfOptionalFormOfProperty
+	/// An alias with `erasedToConcreteExistential: true` whose `ofType:` is not optional.
 	case erasedAlias
+	/// An alias with `erasedToConcreteExistential: true` whose `ofType:` is optional (`ofType: X?.self`), which wraps the
+	/// property where it is present and is `nil` where it is not, whatever binding the property has.
+	case erasedRenameOfOptionalDependency
 	case multipleRoots
 	case generateMock
 	case lazyCycle
@@ -6412,7 +6521,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		} else if attribute.hasPrefix("@Received(fulfilledByDependencyNamed:") {
 			features.insert(attribute.contains("onlyIfAvailable: true") ? .onlyIfAvailableAlias : .requiredAlias)
 			if isErased {
-				features.insert(.erasedAlias)
+				// No emitted type holds a period, so only an optional `ofType:` argument ends in `?.self`.
+				features.insert(attribute.contains("?.self") ? .erasedRenameOfOptionalDependency : .erasedAlias)
 			}
 		}
 		return features

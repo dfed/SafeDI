@@ -94,28 +94,23 @@ public struct InjectableMacro: PeerMacro {
 				throw InjectableError.onlyIfAvailableInvalidType
 			}
 			if !variableDecl.bindings.compactMap(\.typeAnnotation).allSatisfy(\.type.typeDescription.isOptional) {
-				context.diagnose(Diagnostic(
-					node: variableDecl.bindings,
-					error: FixableInjectableError.onlyIfAvailableNotOptionalSpelledWithQuestionMark,
-					changes: [
-						.replace(
-							oldNode: Syntax(variableDecl.bindings),
-							newNode: Syntax(PatternBindingListSyntax(itemsBuilder: {
-								variableDecl.bindings.compactMap {
-									$0.with(\.typeAnnotation, $0.typeAnnotation.map {
-										$0.with(\.type, {
-											TypeSyntax(OptionalTypeSyntax(
-												wrappedType: $0.type,
-												questionMark: .postfixQuestionMarkToken(),
-											))
-										}($0))
-									})
-								}
-							})),
-						),
-					],
+				context.diagnose(Self.optionalTypeRequired(
+					in: variableDecl,
+					error: .onlyIfAvailableNotOptionalSpelledWithQuestionMark,
 				))
 			}
+		} else if let macroWithParameters,
+		          macroWithParameters.fulfilledByDependencyNamed != nil,
+		          macroWithParameters.erasedToConcreteExistentialValue,
+		          macroWithParameters.ofType?.typeDescription.isOptional == true,
+		          !variableDecl.bindings.compactMap(\.typeAnnotation).allSatisfy(\.type.typeDescription.isOptional)
+		{
+			// An erased rename of an optional dependency wraps the dependency where it is present and is `nil` where it is
+			// not. A rename that also sets `onlyIfAvailable` gets the check above instead, so nothing is reported twice.
+			context.diagnose(Self.optionalTypeRequired(
+				in: variableDecl,
+				error: .erasedRenameOfOptionalDependencyNotOptionalSpelledWithQuestionMark,
+			))
 		}
 
 		if variableDecl.attributes.instantiatedMacro != nil {
@@ -178,6 +173,34 @@ public struct InjectableMacro: PeerMacro {
 		// This macro purposefully does not expand.
 		// This macro serves as a decorator, nothing more.
 		return []
+	}
+
+	/// `error` at `variableDecl`'s bindings, with a fix-it that spells each binding's type optional with `?`.
+	private static func optionalTypeRequired(
+		in variableDecl: VariableDeclSyntax,
+		error: FixableInjectableError,
+	) -> Diagnostic {
+		Diagnostic(
+			node: variableDecl.bindings,
+			error: error,
+			changes: [
+				.replace(
+					oldNode: Syntax(variableDecl.bindings),
+					newNode: Syntax(PatternBindingListSyntax(itemsBuilder: {
+						variableDecl.bindings.compactMap {
+							$0.with(\.typeAnnotation, $0.typeAnnotation.map {
+								$0.with(\.type, {
+									TypeSyntax(OptionalTypeSyntax(
+										wrappedType: $0.type,
+										questionMark: .postfixQuestionMarkToken(),
+									))
+								}($0))
+							})
+						}
+					})),
+				),
+			],
+		)
 	}
 
 	/// `type`, the type of an `@Instantiated` property, without the optionality SafeDI cannot give it, or `nil` when it

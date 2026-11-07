@@ -3299,6 +3299,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The value an alias of `property` is bound to from `fulfillingExpression`: that expression, or, for an erased
 	/// alias, the existential wrapping it, mapped over an optional value where the expression may be `nil`.
+	///
+	/// An erased alias of a dependency declared optional (`ofType: Secret?.self`) is always mapped, required or
+	/// `onlyIfAvailable`, whatever binding it reads: a forwarded optional, a mock's optional parameter or override, or
+	/// the non-optional value a required `token: Secret?` resolves to. It is `nil` where the dependency is, and
+	/// `(token as Secret?).map { AnyAuth($0) }` compiles over `Secret` and `Secret?` alike, so production, mocks, and
+	/// seams bind it with one expression. Never decide the wrapping from the binding alone.
 	private static func aliasValue(
 		of property: Property,
 		fulfilledBy fulfillingExpression: String,
@@ -3309,7 +3315,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let existentialTypeSource = property.typeDescription.unwrapped.asSource
 		return if !erasedToConcreteExistential {
 			fulfillingExpression
-		} else if fulfillingValueMayBeOptional {
+		} else if fulfillingValueMayBeOptional || fulfillingTypeDescription.isOptional {
 			// The fulfilling type's optional form, spelled once: an alias of a property declared optional (`ofType:
 			// Secret?.self`) maps over `Secret?`, never `Secret??`.
 			"(\(fulfillingExpression) as \(fulfillingTypeDescription.isOptional ? fulfillingTypeDescription.asSource : TypeDescription.optional(fulfillingTypeDescription).asSource)).map { \(existentialTypeSource)($0) }"
