@@ -1600,9 +1600,11 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_aliasEmittedOnceAfterFulfillingSibling_whenDisambiguatedSiblingsShareLabel() async throws {
-		// Two descendants each declare `@Received let service: SomeType` with
-		// different concrete types, promoting two root-level siblings that share
-		// propertyLabel "service" (disambiguated by type). Root itself aliases
+		// `ChildA`, which Root builds, and `ChildB`, which Root receives, each declare
+		// `@Received let service: SomeType` with different concrete types, promoting
+		// two root-level siblings that share propertyLabel "service" (disambiguated
+		// by type). Built inside Root, `ChildB` would receive the label Root's alias
+		// receives as another type, which is rejected. Root itself aliases
 		// `serviceAlias` to `service: UserService`. The alias binding must emit
 		// exactly once — after the UserService sibling — and must NOT re-emit
 		// after the AdminService sibling (which would redeclare the alias and
@@ -1619,7 +1621,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 					}
 					@Received(fulfilledByDependencyNamed: "service", ofType: UserService.self, erasedToConcreteExistential: false) let serviceAlias: UserService
 					@Instantiated let childA: ChildA
-					@Instantiated let childB: ChildB
+					@Received let childB: ChildB
 				}
 				""",
 				"""
@@ -3299,7 +3301,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 				@Instantiable(generateMock: true)
 				public final class ProfileView: Instantiable {
 				    public init(editor: Editor, user: Draft?) { self.editor = editor; self.user = user }
-				    @Instantiated let editor: Editor
+				    @Received let editor: Editor
 				    @Received(onlyIfAvailable: true) let user: Draft?
 				}
 				""",
@@ -3370,7 +3372,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 				@Instantiable(generateMock: true)
 				public final class ProfileView: Instantiable {
 				    public init(editor: Editor, user: Draft?) { self.editor = editor; self.user = user }
-				    @Instantiated let editor: Editor
+				    @Received let editor: Editor
 				    @Received(onlyIfAvailable: true) let user: Draft?
 				}
 				""",
@@ -3445,7 +3447,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 				@Instantiable(generateMock: true)
 				public final class ProfileView: Instantiable {
 				    public init(editor: Editor, notes: Notes, user: Draft?) { self.editor = editor; self.notes = notes; self.user = user }
-				    @Instantiated let editor: Editor
+				    @Received let editor: Editor
 				    @Instantiated let notes: Notes
 				    @Received(onlyIfAvailable: true) let user: Draft?
 				}
@@ -3479,22 +3481,22 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
+		            notes: ((Note?) -> Notes)? = nil,
 		            user: (() -> User)? = nil,
 		            editor: ((User) -> Editor)? = nil,
-		            notes: ((Note?) -> Notes)? = nil,
 		            user_Draft: Draft? = nil,
 		            user_Note: Note? = nil
 		        ) {
+		            self.notes = notes
 		            self.user = user
 		            self.editor = editor
-		            self.notes = notes
 		            self.user_Draft = user_Draft
 		            self.user_Note = user_Note
 		        }
 
+		        let notes: ((Note?) -> Notes)?
 		        let user: (() -> User)?
 		        let editor: ((User) -> Editor)?
-		        let notes: ((Note?) -> Notes)?
 		        let user_Draft: Draft?
 		        let user_Note: Note?
 		    }
@@ -3504,13 +3506,13 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    ) -> ProfileView {
 		        let user_Draft: Draft? = safeDIOverrides.user_Draft
 		        let user_Note: Note? = safeDIOverrides.user_Note
-		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
-		        let editor = if let safeDIBuilder = safeDIOverrides.editor { safeDIBuilder(user) } else { Editor(user: user) }
 		        func __safeDI_notes() -> Notes {
 		            let user: Note? = user_Note
 		            return if let safeDIBuilder = safeDIOverrides.notes { safeDIBuilder(user) } else { Notes(user: user) }
 		        }
 		        let notes: Notes = __safeDI_notes()
+		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+		        let editor = if let safeDIBuilder = safeDIOverrides.editor { safeDIBuilder(user) } else { Editor(user: user) }
 		        return ProfileView(editor: editor, notes: notes, user: user_Draft)
 		    }
 		}
@@ -4382,7 +4384,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 				@Instantiable(generateMock: true)
 				public final class ProfileView: Instantiable {
 				    public init(editor: Editor, user: Draft) { self.editor = editor; self.user = user }
-				    @Instantiated let editor: Editor
+				    @Received let editor: Editor
 				    @Received let user: Draft
 				}
 				""",
@@ -4452,7 +4454,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 				@Instantiable(generateMock: true)
 				public final class ProfileView: Instantiable {
 				    public init(editor: Editor, service: ServiceProtocol) { self.editor = editor; self.service = service }
-				    @Instantiated let editor: Editor
+				    @Received let editor: Editor
 				    @Received let service: ServiceProtocol
 				}
 				""",
@@ -4520,7 +4522,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 				@Instantiable(generateMock: true)
 				public final class ProfileView: Instantiable {
 				    public init(editor: Editor, user: Draft) { self.editor = editor; self.user = user }
-				    @Instantiated let editor: Editor
+				    @Received let editor: Editor
 				    @Received let user: Draft
 				}
 				""",
@@ -4592,8 +4594,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 				@Instantiable(generateMock: true)
 				public final class ProfileView: Instantiable {
 				    public init(editor: Editor, notes: Notes, user: Draft) { self.editor = editor; self.notes = notes; self.user = user }
-				    @Instantiated let editor: Editor
-				    @Instantiated let notes: Notes
+				    @Received let editor: Editor
+				    @Received let notes: Notes
 				    @Received let user: Draft
 				}
 				""",
@@ -5196,7 +5198,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesMockedTypeItsReceivedInstantiatorByItsSiblingName_whenItBuildsADependencyCycleAndAnInstantiatedDependencyReceivesItsLabelWithAnotherType() async throws {
+	mutating func mock_passesMockedTypeItsReceivedInstantiatorByItsSiblingName_whenItBuildsADependencyCycleAndAPromotedDependencyReceivesItsLabelAsAnotherType() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -5207,7 +5209,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 				        self.other = other
 				    }
 				    @Received let nodeBuilder: Instantiator<Node>
-				    @Instantiated let other: Other
+				    @Received let other: Other
 				}
 				""",
 				"""
@@ -5252,32 +5254,23 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
+		            nodeBuilder_Node: Node.SafeDIMockConfiguration = .init(),
 		            nodeBuilder_Leaf: (() -> Leaf)? = nil,
-		            other: ((Instantiator<Leaf>) -> Other)? = nil,
-		            nodeBuilder_Node: Node.SafeDIMockConfiguration = .init()
+		            other: ((Instantiator<Leaf>) -> Other)? = nil
 		        ) {
+		            self.nodeBuilder_Node = nodeBuilder_Node
 		            self.nodeBuilder_Leaf = nodeBuilder_Leaf
 		            self.other = other
-		            self.nodeBuilder_Node = nodeBuilder_Node
 		        }
 
+		        let nodeBuilder_Node: Node.SafeDIMockConfiguration
 		        let nodeBuilder_Leaf: (() -> Leaf)?
 		        let other: ((Instantiator<Leaf>) -> Other)?
-		        let nodeBuilder_Node: Node.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Mocked {
-		        func __safeDI_nodeBuilder_Leaf() -> Leaf {
-		            if let safeDIBuilder = safeDIOverrides.nodeBuilder_Leaf { safeDIBuilder() } else { Leaf() }
-		        }
-		        let nodeBuilder_Leaf = Instantiator<Leaf>(__safeDI_nodeBuilder_Leaf)
-		        func __safeDI_other() -> Other {
-		            let nodeBuilder: Instantiator<Leaf> = nodeBuilder_Leaf
-		            return if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder(nodeBuilder) } else { Other(nodeBuilder: nodeBuilder) }
-		        }
-		        let other: Other = __safeDI_other()
 		        func __safeDI_nodeBuilder_Node() -> Node {
 		            func __safeDI_childBuilder() -> Child {
 		                let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder_Node)
@@ -5287,6 +5280,15 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            return if let safeDIBuilder = safeDIOverrides.nodeBuilder_Node.safeDIBuilder { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
 		        }
 		        let nodeBuilder_Node = Instantiator<Node>(__safeDI_nodeBuilder_Node)
+		        func __safeDI_nodeBuilder_Leaf() -> Leaf {
+		            if let safeDIBuilder = safeDIOverrides.nodeBuilder_Leaf { safeDIBuilder() } else { Leaf() }
+		        }
+		        let nodeBuilder_Leaf = Instantiator<Leaf>(__safeDI_nodeBuilder_Leaf)
+		        func __safeDI_other() -> Other {
+		            let nodeBuilder: Instantiator<Leaf> = nodeBuilder_Leaf
+		            return if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder(nodeBuilder) } else { Other(nodeBuilder: nodeBuilder) }
+		        }
+		        let other: Other = __safeDI_other()
 		        return Mocked(nodeBuilder: nodeBuilder_Node, other: other)
 		    }
 		}
@@ -5296,8 +5298,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesMockedTypeItsReceivedDependencyByItsSiblingName_whenItsLazilyInstantiatedDependencyReceivesItsLabelWithAnotherType() async throws {
-		// Reduced from graph fuzzer seed 106445.
+	mutating func mock_passesMockedTypeItsReceivedDependencyByItsSiblingName_whenPromotedLazilyInstantiatedDependencyReceivesItsLabelAsAnotherType() async throws {
+		// The sibling form of graph fuzzer seed 106445, whose chain form is rejected
+		// (`mock_throwsError_whenMockedTypeReceivesLabelAboveLazilyInstantiatedTypeItBuildsThatReceivesItAsAnotherType`).
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -5307,7 +5310,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 				        self.lazyX = lazyX
 				        self.x = x
 				    }
-				    @Instantiated let lazyX: LazilyInstantiated<A>
+				    @Received let lazyX: LazilyInstantiated<A>
 				    @Received let x: A
 				}
 				""",

@@ -6218,7 +6218,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 				    @Received let analytics: Analytics
 				    @Instantiated let home: Home
-				    @Instantiated let other: Other
+				    @Received let other: Other
 				}
 				""",
 				"""
@@ -8537,7 +8537,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_wrapsRenamedOptionalInstanceParameter_whenTreeReceivesLabelAsInstantiatorAndAsOptionalLazilyInstantiatedMockCannotBuild() async throws {
+	mutating func mock_wrapsRenamedOptionalInstanceParameter_whenMockedTypeReceivesLabelAsInstantiatorAndPromotedDependencyReceivesItAsOptionalLazilyInstantiatedMockCannotBuild() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -8548,7 +8548,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 				    }
 
 				    @Received let items: Instantiator<Value>
-				    @Instantiated let child: Child
+				    @Received let child: Child
 				}
 
 				public final class Value: Instantiable, Sendable {}

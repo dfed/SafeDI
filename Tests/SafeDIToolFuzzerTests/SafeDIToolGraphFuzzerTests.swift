@@ -2848,73 +2848,73 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [12, 14, 25, 40, 62, 99, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xDAC0A97C7F46B5F0
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xF2BF2BF130660373
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x491B75DC990157E3
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xE1B713F7CC5E755A
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0x3C127EDB1805894E
+	static let corpusFixtureHash: UInt64 = 0xD4F8982048785212
 
-	static let corpusPartitionHash: UInt64 = 0xC2302817084C4831
+	static let corpusPartitionHash: UInt64 = 0x92EF7B86DB8AF050
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
-	static let corpusAcceptedSeedCount = 2_324
-	static let corpusAcceptedSeedsSum: UInt64 = 0x5DE274ECB0495F13
+	static let corpusAcceptedSeedCount = 2_303
+	static let corpusAcceptedSeedsSum: UInt64 = 0xADFA16C562C6F43B
 
 	/// How many of the corpus's graphs the tool accepts show each `GraphFuzzerFeature`, read from their source as the
 	/// smoke batch reads them, which shards of the corpus add up. Unit tests leave the siblings of a shape to the
 	/// corpus, so a generator change that stops drawing a feature, or a tool change that stops accepting the graphs that
 	/// draw it, changes these and must update them deliberately, with the hashes and the accepted-seed pins.
 	static let corpusAcceptedFeatureCounts: [GraphFuzzerFeature: Int] = [
-		.constantProperty: 2_119,
-		.erasedConstantProperty: 390,
-		.instantiatorProperty: 1_864,
-		.sendableInstantiatorProperty: 785,
-		.erasedInstantiatorProperty: 951,
-		.sendableErasedInstantiatorProperty: 327,
-		.lazilyInstantiatedProperty: 346,
-		.sendableLazilyInstantiatedProperty: 129,
-		.erasedLazilyInstantiatedProperty: 187,
-		.forwardedLazilyInstantiatedProperty: 284,
-		.receivedLazilyInstantiatedInstance: 223,
-		.forwardedProperty: 1_160,
+		.constantProperty: 2_098,
+		.erasedConstantProperty: 387,
+		.instantiatorProperty: 1_848,
+		.sendableInstantiatorProperty: 776,
+		.erasedInstantiatorProperty: 940,
+		.sendableErasedInstantiatorProperty: 325,
+		.lazilyInstantiatedProperty: 343,
+		.sendableLazilyInstantiatedProperty: 128,
+		.erasedLazilyInstantiatedProperty: 186,
+		.forwardedLazilyInstantiatedProperty: 281,
+		.receivedLazilyInstantiatedInstance: 219,
+		.forwardedProperty: 1_148,
 		.optionalForwardedProperty: 564,
-		.requiredReceive: 1_942,
-		.requiredOptionalReceive: 489,
-		.onlyIfAvailableReceive: 1_537,
-		.requiredAlias: 959,
-		.onlyIfAvailableAlias: 791,
+		.requiredReceive: 1_921,
+		.requiredOptionalReceive: 480,
+		.onlyIfAvailableReceive: 1_515,
+		.requiredAlias: 947,
+		.onlyIfAvailableAlias: 782,
 		.aliasOfOnlyIfAvailableAlias: 67,
 		.aliasOfOptionalFormOfProperty: 12,
-		.erasedAlias: 198,
+		.erasedAlias: 192,
 		.erasedRenameOfOptionalDependency: 34,
-		.multipleRoots: 1_532,
-		.generateMock: 1_945,
-		.lazyCycle: 1_055,
+		.multipleRoots: 1_520,
+		.generateMock: 1_924,
+		.lazyCycle: 1_042,
 		.constantCycleCloser: 28,
-		.sameLabelWithDifferentTypes: 1_111,
-		.labelSpelledAsGeneratedName: 539,
-		.dependencyMockCannotBuild: 1_418,
-		.dependencyMockCannotBuildReceivedBeneathItsOwner: 279,
-		.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner: 66,
+		.sameLabelWithDifferentTypes: 1_090,
+		.labelSpelledAsGeneratedName: 531,
+		.dependencyMockCannotBuild: 1_400,
+		.dependencyMockCannotBuildReceivedBeneathItsOwner: 245,
+		.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner: 64,
 		.dependencyMockCannotBuildLazilyInstantiatedReceivedAsOtherKindBesideItsMockedOwner: 9,
-		.sendableAndNonSendableWrappers: 480,
-		.mockedTypeOnLazyCycle: 494,
-		.typesReceivingEachOtherOnlyIfAvailable: 246,
-		.labelReceivedAsInstanceAndAsInstantiator: 125,
-		.sameLabelReceivedAsDifferentUnbuildableWrappers: 125,
-		.receivedErasedInstantiator: 476,
-		.forwardedErasedInstantiator: 143,
-		.defaultValuedInstantiateParameter: 555,
-		.nonSendableValuesInsideSendableBuilder: 134,
+		.sendableAndNonSendableWrappers: 475,
+		.mockedTypeOnLazyCycle: 487,
+		.typesReceivingEachOtherOnlyIfAvailable: 244,
+		.labelReceivedAsInstanceAndAsInstantiator: 124,
+		.sameLabelReceivedAsDifferentUnbuildableWrappers: 113,
+		.receivedErasedInstantiator: 469,
+		.forwardedErasedInstantiator: 138,
+		.defaultValuedInstantiateParameter: 549,
+		.nonSendableValuesInsideSendableBuilder: 132,
 		.generateDependencyTree: 0,
 	]
 
@@ -2986,27 +2986,27 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the base corpus's value oracle compares and skips over the whole corpus (`GraphFuzzerValueOracleCounts`).
 	static let corpusValueOracleCounts = GraphFuzzerValueOracleCounts(
-		rootPairCount: 4_551,
-		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x06D5F2879A3A36B5),
-		mirroredPairCount: 2_116,
-		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0x6DCA1569CA8E9706),
+		rootPairCount: 4_520,
+		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x097611BDF9745C69),
+		mirroredPairCount: 2_107,
+		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0x4614AAD20D1C015E),
 		skipCounts: [
-			.requiredParameter: 1_895,
+			.requiredParameter: 1_855,
 			.twoFormsOfOneLabel: 22,
-			.requiredOptionalReceiveOfNonOptionalDeclaration: 9,
+			.requiredOptionalReceiveOfNonOptionalDeclaration: 8,
 			.requiredReceiveOfUncreatedAlias: 10,
 		],
 		shapeCounts: [
-			.rootTreePropertyReceivedByTwoOrMoreTypes: 850,
+			.rootTreePropertyReceivedByTwoOrMoreTypes: 847,
 			.rootTreeLabelDeclaredAtTwoDepthsAboveReceiver: 115,
-			.promotedDependencyReceivedByTwoOrMoreTypes: 163,
+			.promotedDependencyReceivedByTwoOrMoreTypes: 162,
 			.onlyIfAvailableAliasOfPromotedDependency: 56,
 			.requiredAliasOfPromotedDependency: 220,
 			.promotedWrapperReceivedInAnotherForm: 3,
 			.instanceOfPromotedWrapperPassedToMockedType: 1,
-			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 174,
+			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 173,
 		],
-		drawnMocksMatchingOnlyAfterNormalizationCount: 488,
+		drawnMocksMatchingOnlyAfterNormalizationCount: 487,
 	)
 
 	/// The seeds of `knownIssues` whose value-oracle fixture is known not to compile.
@@ -3051,12 +3051,12 @@ struct SafeDIToolGraphFuzzerTests {
 	)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0x8FB6ADD21F2A690A
-	static let seamCorpusAcceptedSeedCount = 292
-	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x770A6A3183616B15
+	static let seamCorpusFixtureHash: UInt64 = 0xA413E559BB8C972E
+	static let seamCorpusAcceptedSeedCount = 290
+	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xD6D6804D93BCEE5C
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 202
+	static let seamCorpusValueOracleInspectedGraphCount = 200
 	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
 	static let seamCorpusOmittedValueGraphCount = 0
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
@@ -3085,7 +3085,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// seam tests' draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 151, 153, 163, 180, 196, 277, 298, 326, 605, 609, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xE7975D97231645C2
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x1DE5E808D91F3FDB
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -3302,7 +3302,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// corpus's value oracle, which the seam corpus does not run, so the seam's own shape lists it; the inherited lists
 	/// leave them out. Observed, not derived: a seed here that a run finds failing its inherited shape again is a new
 	/// failure, and goes back.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 265, 309, 310, 311, 364, 371, 381, 393, 434, 471, 476, 525, 545, 632, 714, 728, 735, 768, 774, 786, 808, 840, 847, 903]
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 309, 310, 311, 364, 371, 381, 393, 434, 471, 476, 525, 545, 632, 714, 728, 735, 768, 774, 786, 808, 840, 847, 903]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
@@ -3379,11 +3379,11 @@ struct SafeDIToolGraphFuzzerTests {
 
 	static let publicMockCorpusSeedCount = 1_000
 	static let publicMockCorpusFixtureHash: UInt64 = 0xFC0CF09D51885BF9
-	static let publicMockCorpusAcceptedSeedCount = 868
-	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0xC61C35431119DB44
+	static let publicMockCorpusAcceptedSeedCount = 863
+	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x0ACCA7FED6243E41
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
 	/// value oracle compares.
-	static let publicMockCorpusValueOracleInspectedGraphCount = 868
+	static let publicMockCorpusValueOracleInspectedGraphCount = 863
 	/// How many of the public mock corpus's graphs the tool rejects because a caller provides a value the tier of the public
 	/// mock it calls omits (`leafTierOmitsProvidedValue`), which the long run counts as it counts the seam's. None since
 	/// SafeDI reads `Dock`'s declaration inside a platform-conditioned block: the draw holds no value of a type SafeDI
@@ -3416,7 +3416,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 98, 142, 151, 197, 208, 211, 215, 253, 551]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x2FE39652F28E763F
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x848065BF8D2618E0
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -3436,8 +3436,8 @@ struct SafeDIToolGraphFuzzerTests {
 				479, 482, 492, 496, 497, 498, 504, 508, 511, 515, 523, 525, 526, 527, 529, 530,
 				537, 542, 543, 545, 549, 553, 554, 555, 562, 564, 580, 581, 584, 586, 587, 592,
 				595, 597, 598, 600, 603, 607, 608, 610, 611, 613, 614, 615, 618, 619, 623, 624,
-				625, 627, 632, 635, 637, 638, 639, 642, 643, 645, 651, 652, 662, 665, 668, 671, 672,
-				673, 681, 683, 684, 690, 691, 693, 697, 699, 700, 706, 709, 714, 716, 721, 723,
+				625, 627, 632, 635, 637, 638, 639, 642, 643, 645, 651, 652, 662, 668, 671, 672,
+				673, 681, 683, 684, 691, 693, 697, 699, 700, 706, 709, 714, 716, 721, 723,
 				726, 727, 732, 735, 738, 740, 744, 745, 747, 748, 751, 753, 754, 755, 756, 759,
 				760, 762, 765, 772, 773, 774, 777, 783, 784, 790, 792, 793, 798, 805, 807, 817,
 				818, 821, 825, 827, 828, 837, 845, 846, 848, 851, 854, 857, 862, 866, 868, 872,
@@ -3457,13 +3457,6 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "A mock's API follows the order of type names or labels: which back-edge of a lazy cycle loses its override, which promoted sibling is passed nil, and the order of overrides",
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
 			seeds: [33, 832],
-		),
-		// The base corpus's shape in the mocked type's own tree, which a call of another module's public mock leaves no
-		// rebinding in, in the known-right path's inline mock: the comparator cannot compile it.
-		GraphFuzzerKnownIssue(
-			reason: "A type receives a label as one type while a type built inside it receives the label as another, and the mock rebinds the first under the label inside the receiver's builder function, where the second then reads it",
-			signatures: [.valueComparatorCouldNotDescribeGraph(containing: "cannot convert value of type")],
-			seeds: [574],
 		),
 		// A shape the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
 		// before, a consumer held a holder the public tier omitted, which the tool rejected; now `Dock`'s own declaration
@@ -3588,23 +3581,23 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "A mock's API follows the order of type names or labels: which back-edge of a lazy cycle loses its override, which promoted sibling is passed nil, and the order of overrides",
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
 			seeds: [
-				3, 6, 35, 36, 45, 55, 77, 107, 114, 131, 157, 168, 209, 223, 233, 241,
-				265, 281, 300, 311, 338, 364, 371, 380, 381, 383, 390, 431, 448, 450, 473, 476,
+				3, 6, 35, 36, 45, 55, 77, 107, 114, 131, 157, 168, 209, 223, 241,
+				281, 300, 311, 338, 364, 371, 380, 381, 383, 390, 431, 448, 450, 473, 476,
 				515, 525, 541, 545, 548, 567, 593, 617, 630, 632, 680, 714, 728, 732, 735, 751,
 				768, 774, 785, 786, 808, 836, 840, 847, 886, 903, 912, 940, 948, 975, 987, 991,
 				1_004, 1_029, 1_035, 1_042, 1_044, 1_061, 1_064, 1_072, 1_075, 1_084, 1_092, 1_139, 1_140, 1_145, 1_147, 1_215,
 				1_217, 1_236, 1_244, 1_289, 1_300, 1_322, 1_329, 1_335, 1_352, 1_362, 1_369, 1_372, 1_432, 1_433, 1_441, 1_453,
-				1_464, 1_492, 1_496, 1_504, 1_524, 1_525, 1_531, 1_535, 1_563, 1_567, 1_602, 1_633, 1_646, 1_664, 1_675, 1_695,
+				1_464, 1_492, 1_496, 1_504, 1_524, 1_531, 1_535, 1_563, 1_567, 1_602, 1_633, 1_646, 1_664, 1_675, 1_695,
 				1_708, 1_742, 1_781, 1_784, 1_795, 1_804, 1_817, 1_853, 1_857, 1_867, 1_896, 1_938, 1_970, 1_972, 2_013, 2_017,
 				2_051, 2_057, 2_083, 2_084, 2_123, 2_149, 2_152, 2_165, 2_211, 2_234, 2_249, 2_270, 2_277, 2_282, 2_287, 2_296,
 				2_316, 2_325, 2_335, 2_337, 2_348, 2_389, 2_403, 2_430, 2_432, 2_437, 2_444, 2_456, 2_484, 2_518, 2_553, 2_555,
 				2_577, 2_630, 2_637, 2_667, 2_704, 2_732, 2_741, 2_742, 2_791, 2_808, 2_835, 2_841, 2_845, 2_874, 2_914, 2_916,
-				3_004, 3_023, 3_064, 3_074, 3_075, 3_091, 3_134, 3_160, 3_180, 3_183, 3_215, 3_221, 3_225, 3_241, 3_252, 3_298,
-				3_306, 3_329, 3_344, 3_345, 3_361, 3_397, 3_430, 3_439, 3_470, 3_491, 3_504, 3_506, 3_513, 3_526, 3_533, 3_534,
+				3_023, 3_064, 3_074, 3_075, 3_091, 3_134, 3_160, 3_180, 3_183, 3_215, 3_221, 3_225, 3_241, 3_252, 3_298,
+				3_306, 3_329, 3_344, 3_345, 3_361, 3_430, 3_439, 3_470, 3_491, 3_504, 3_506, 3_513, 3_526, 3_533, 3_534,
 				3_537, 3_577, 3_582, 3_584, 3_588, 3_589, 3_596, 3_600, 3_602, 3_620, 3_645, 3_648, 3_661, 3_699, 3_707, 3_715,
 				3_723, 3_741, 3_750, 3_775, 3_776, 3_805, 3_823, 3_826, 3_843, 3_850, 3_894, 3_915, 3_994, 4_015, 4_044, 4_068,
 				4_090, 4_102, 4_107, 4_110, 4_117, 4_122, 4_125, 4_156, 4_177, 4_191, 4_192, 4_196, 4_206, 4_213, 4_215, 4_217,
-				4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_371, 4_393, 4_396, 4_404, 4_420, 4_424, 4_428, 4_496, 4_515,
+				4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_371, 4_393, 4_396, 4_404, 4_420, 4_428, 4_496, 4_515,
 				4_534, 4_541, 4_545, 4_549, 4_567, 4_619, 4_634, 4_637, 4_640, 4_642, 4_648, 4_664, 4_666, 4_707, 4_716, 4_717,
 				4_729, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_834, 4_857, 4_859, 4_891, 4_904, 4_918, 4_922, 4_944, 4_947,
 				4_955, 4_963, 4_996,
@@ -3614,8 +3607,8 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them",
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock configuration code")],
 			seeds: [
-				69, 170, 173, 310, 348, 393, 434, 497, 595, 790, 929, 1_138, 1_185, 1_202, 1_400, 1_560,
-				1_571, 1_650, 1_660, 1_691, 1_730, 1_769, 1_786, 1_790, 1_836, 1_992, 2_011, 2_054, 2_186, 2_254, 2_902, 2_937,
+				69, 170, 173, 310, 348, 393, 434, 497, 595, 790, 929, 1_185, 1_202, 1_400, 1_560,
+				1_571, 1_650, 1_660, 1_691, 1_730, 1_769, 1_786, 1_790, 1_836, 1_992, 2_011, 2_054, 2_254, 2_902, 2_937,
 				3_028, 3_482, 3_510, 3_702, 3_789, 3_847, 3_931, 3_966, 4_535, 4_602, 4_613, 4_631, 4_643, 4_865, 4_974, 4_975,
 			],
 		),
@@ -3623,8 +3616,8 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "A root with generateMock: true has its mock's tree rejected for a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree",
 			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain")],
 			seeds: [
-				47, 598, 939, 1_028, 1_116, 1_278, 1_323, 1_499, 1_614, 1_687, 1_793, 2_147, 2_775, 3_089, 3_208, 3_698,
-				3_761, 3_813, 4_311, 4_388,
+				47, 598, 939, 1_028, 1_116, 1_278, 1_499, 1_614, 1_687, 1_793, 2_147, 2_775, 3_089, 3_208, 3_698,
+				3_761, 3_813, 4_388,
 			],
 		),
 		// A known rejection masks no later failure, so a graph that also changes under a renaming documents both.
