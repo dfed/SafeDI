@@ -1071,16 +1071,14 @@ public actor DependencyTreeGenerator {
 		// Validate that this type's constant @Instantiated children have no @Forwarded properties.
 		// Use the mock scope map (not typeDescriptionToFulfillingInstantiableMap) because
 		// mockOnly types can win additional-type slots and may have different @Forwarded properties.
-		// For fulfilledByType deps, validate against the declared type (same as mock resolution).
+		// Validate the scope a mock builds each dependency with (`mockScope(instantiating:as:in:)`).
 		for dependency in scope.instantiable.dependencies {
-			guard case let .instantiated(fulfillingTypeDescription, _) = dependency.source else { continue }
-			let instantiatedType = dependency.asInstantiatedType
-			let childScope: Scope? = if fulfillingTypeDescription != nil {
-				mockScopes.typeDescriptionToScopeMap[dependency.property.typeDescription.asInstantiatedType]
-					?? mockScopes.typeDescriptionToScopeMap[instantiatedType]
-			} else {
-				mockScopes.typeDescriptionToScopeMap[instantiatedType]
-			}
+			guard case .instantiated = dependency.source else { continue }
+			let childScope = Self.mockScope(
+				instantiating: dependency.property,
+				as: dependency.asInstantiatedType,
+				in: mockScopes.typeDescriptionToScopeMap,
+			)
 			if let childScope,
 			   let error = forwardedPropertyError(
 			   	for: dependency,
@@ -7284,20 +7282,12 @@ public actor DependencyTreeGenerator {
 		for scope in Set(typeDescriptionToScopeMap.values) {
 			for dependency in scope.instantiable.dependencies {
 				switch dependency.source {
-				case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
-					// For fulfilledByType deps, prefer the declared type for mock
-					// resolution — fulfilledByType is a production-only directive.
-					// The scope map's priority rules determine the best mock for
-					// the declared type. Fall back to the fulfilling type if the
-					// declared type isn't in the scope map.
-					let instantiatedType = dependency.asInstantiatedType
-					let declaredType = dependency.property.typeDescription.asInstantiatedType
-					let instantiatedScope: Scope? = if fulfillingTypeDescription != nil {
-						typeDescriptionToScopeMap[declaredType] ?? typeDescriptionToScopeMap[instantiatedType]
-					} else {
-						typeDescriptionToScopeMap[instantiatedType]
-					}
-					if let instantiatedScope {
+				case let .instantiated(_, erasedToConcreteExistential):
+					if let instantiatedScope = Self.mockScope(
+						instantiating: dependency.property,
+						as: dependency.asInstantiatedType,
+						in: typeDescriptionToScopeMap,
+					) {
 						scope.propertiesToGenerate.append(.instantiated(
 							dependency.property,
 							instantiatedScope,
@@ -7340,11 +7330,48 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// The scope a mock builds `hole`'s property with, in `typeDescriptionToScopeMap`, a mock scope map: the one the mock's
-	/// tree built inline would build it with (`createMockTypeDescriptionToScopeMapping`, which prefers the declared type of
-	/// a property erased with `fulfilledByType:`), so a hand-written mock, or a `mockOnly` fake that alone fulfills the
-	/// hole, builds it. `nil` when no declaration the module sees fulfills the hole.
+	/// tree built inline would build it with (`mockScope(instantiating:as:in:)`), so a hand-written mock, or a `mockOnly`
+	/// fake that alone fulfills the hole, builds it. `nil` when no declaration the module sees fulfills the hole.
 	private static func fulfillingMockScope(of hole: SeamSignature.Hole, in typeDescriptionToScopeMap: [TypeDescription: Scope]) -> Scope? {
-		typeDescriptionToScopeMap[hole.property.typeDescription.asInstantiatedType] ?? typeDescriptionToScopeMap[hole.instantiatedType]
+		mockScope(instantiating: hole.property, as: hole.instantiatedType, in: typeDescriptionToScopeMap)
+	}
+
+	/// The scope in `typeDescriptionToScopeMap`, a mock scope map, that a mock builds the `@Instantiated` `property` with.
+	///
+	/// A property whose declaration names another type with `fulfilledByType:` is built as the type it names, as
+	/// production builds it, not as another type that fulfills the property's type – unless the property's type's entry
+	/// is a `mockOnly` declaration of another type, such as a fake of a protocol, which replaces whatever builds the
+	/// protocol in production. A `mockOnly` extension of a type that also has a production declaration is merged into
+	/// that declaration (`resolveSafeDIFulfilledTypes`), so it is that type's mock, and it is not used for a property the
+	/// app builds as the named type. The property's type's entry also stands when the named type itself holds it, since
+	/// that entry is built with the type's hand-written mock when the mock returns the property's type (a type whose mock
+	/// returns one of its additional types). A `mockOnly` declaration of the named type is found under the named type,
+	/// where it merges or replaces. When the module sees no declaration of the named type, which a module that inverts
+	/// the dependency cannot, the property's type's entry stands, so the mock still builds the property rather than
+	/// taking it as a parameter; with no such entry either, there is no scope: the mock takes the property as a
+	/// parameter, or a public mock a builder.
+	/// - Parameters:
+	///   - property: The property, as its owner declares it.
+	///   - instantiatedType: The type the property is built as: the dependency's `asInstantiatedType`, which is the type
+	///     `fulfilledByType:` names, or the property's own instantiated type.
+	///   - typeDescriptionToScopeMap: A mock scope map.
+	private static func mockScope(
+		instantiating property: Property,
+		as instantiatedType: TypeDescription,
+		in typeDescriptionToScopeMap: [TypeDescription: Scope],
+	) -> Scope? {
+		let propertyInstantiatedType = property.typeDescription.asInstantiatedType
+		let propertyTypeScope = typeDescriptionToScopeMap[propertyInstantiatedType]
+		guard instantiatedType != propertyInstantiatedType else {
+			return propertyTypeScope
+		}
+		if let propertyTypeScope,
+		   propertyTypeScope.instantiable.mockOnly || propertyTypeScope.instantiable.concreteInstantiable == instantiatedType
+		{
+			return propertyTypeScope
+		} else {
+			return typeDescriptionToScopeMap[instantiatedType] ?? propertyTypeScope
+		}
 	}
 
 	/// The holes of the calls in `publicMockCalls` that this module fills, by called type, decided over

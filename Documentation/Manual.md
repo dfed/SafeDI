@@ -900,11 +900,13 @@ The table below shows where each dependency kind lands in the three buckets abov
 | `@Received(onlyIfAvailable: true)` | Entry on `SafeDIOverrides`, typed as optional | `nil` |
 | Default-valued non-DI init parameter | Flat `mock()` parameter on a direct mock, or a nested `SafeDIMockConfiguration` field when reached through a parent | The parameter’s original default expression |
 
+An `@Instantiated(fulfilledByType:)` dependency is built as the type `fulfilledByType:` names, as the app builds it, even when another type fulfills the property’s type: beside a `CoreUserService` that lists `UserService` in `fulfillingAdditionalTypes`, `@Instantiated(fulfilledByType: "DefaultUserService") let userService: any UserService` is built as a `DefaultUserService`, and its `SafeDIOverrides` entry configures `DefaultUserService`. A [`mockOnly`](#the-mockonly-parameter) declaration of another type that fulfills the property’s type, such as a fake of the protocol, still replaces the named type, and a `mockOnly` declaration of the named type supplies its mock. A `mockOnly` extension of `CoreUserService` that lists `UserService` is `CoreUserService`’s own mock: the mock uses it where the tree builds `CoreUserService`, not for a property the app builds as `DefaultUserService`. When the mock’s module cannot see the named type’s declaration, the mock builds the type that fulfills the property’s type, or, if none does, takes the dependency as a parameter (below).
+
 The mock cannot build, and so takes as a flat parameter:
 
 - A type no `@Instantiable` declaration fulfills, including a type [different concrete types are erased to](#receiving-a-type-erased-dependency).
 - A type whose `@Instantiable` declaration has `@Forwarded` properties, received other than as an `Instantiator`: only an `Instantiator` handed the forwarded values can build it, so `mock()` takes the instance, and a received `Instantiator` of it is built as usual.
-- An `@Instantiated(fulfilledByType:)` dependency whose `@Instantiable` declaration the mock’s module cannot see, such as a `DefaultUserService` declared in a module only the app imports – or, under Bazel, Tuist and custom builds, one declared in a module the mock’s module does not [list](#which-modules-to-list). The parameter does not excuse a missing fulfiller: a root in the mock’s module that reaches the type still fails to generate.
+- An `@Instantiated(fulfilledByType:)` dependency whose `@Instantiable` declaration the mock’s module cannot see, when no declaration it sees fulfills the property’s type, such as a `DefaultUserService` declared in a module only the app imports – or, under Bazel, Tuist and custom builds, one declared in a module the mock’s module does not [list](#which-modules-to-list). The parameter does not excuse a missing fulfiller: a root in the mock’s module that reaches the type still fails to generate.
 
 A receive of such a dependency beneath the type that instantiates it is handed that type’s parameter. Beneath a `Sendable` wrapper, the parameter is a `@Sendable` autoclosure, as [above](#overriding-dependencies).
 
@@ -1014,7 +1016,7 @@ public final class User {
 }
 ```
 
-SafeDI’s mock generator uses a `mockOnly` declaration’s mock wherever the declaration’s concrete or fulfilled types appear in a mock dependency tree, so you don’t have to provide a mock for common types (like `User` or `NetworkClient`) every time you call `mock()` on a parent type. A `mock()` parameter for such a type, such as a `@Forwarded` dependency, defaults to the mock, as [Dependency kinds in the generated mock](#dependency-kinds-in-the-generated-mock) describes, and an `@Instantiated` one appears in `SafeDIOverrides` with `Type.mock()` as its default.
+SafeDI’s mock generator uses a `mockOnly` declaration’s mock wherever the declaration’s concrete or fulfilled types appear in a mock dependency tree – except that a `mockOnly` extension of a type with a production declaration is that type’s mock, which a property built as another type with `fulfilledByType:` does not use ([Dependency kinds in the generated mock](#dependency-kinds-in-the-generated-mock)) – so you don’t have to provide a mock for common types (like `User` or `NetworkClient`) every time you call `mock()` on a parent type. A `mock()` parameter for such a type, such as a `@Forwarded` dependency, defaults to the mock, as [Dependency kinds in the generated mock](#dependency-kinds-in-the-generated-mock) describes, and an `@Instantiated` one appears in `SafeDIOverrides` with `Type.mock()` as its default.
 
 `mockOnly` declarations are useful for:
 
