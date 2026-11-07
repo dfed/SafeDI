@@ -1105,7 +1105,8 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_mapsErasedAliasOverOptionalParameterOnce_whenAliasSpellsOptionalForm() async throws {
 		// An erased `onlyIfAvailable` alias spelled `ofType: Secret?.self` of a `= nil` pass-through maps over the parameter as
-		// `Secret?`, never `Secret??`, and compiles.
+		// `Secret?`, never `Secret??`, and compiles. Inline, the alias is declared optional, so it maps over the root's
+		// non-optional `token` too.
 		let fixture = Self.fixture(rootHolds: ["@Instantiated let token: Secret"], left: ["@Instantiated let sub: Sub"], detail: nil, reader: nil, secretConformances: ", Auth", otherTypes: [Self.authProtocol, Self.anyAuth, seamFixtureType(named: "Sub", isFinalClass: true, declarations: ["@Received(fulfilledByDependencyNamed: \"token\", ofType: Secret?.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let authToken: AnyAuth?"])])
 		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
@@ -1156,7 +1157,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			            func __safeDI_left() -> Left {
 			                func __safeDI_sub() -> Sub {
 			                    #sourceLocation(file: "\(inlineOutput.fixtures["Sub.swift"])", line: 7)
-			                    let authToken: AnyAuth? = AnyAuth(token)
+			                    let authToken: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
 			                    #sourceLocation()
 			                    return Sub(authToken: authToken)
 			                }
@@ -1249,12 +1250,11 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_wrapsErasedExactFormAliasOfRequiredOptionalParameterInExistential_whereInlineDoesToo() async throws {
-		// An erased alias of exactly a required `token: Secret?` is always created, so it is bound as `AnyAuth(token)` with `token`
-		// optional, which the compiler rejects at the alias declaration in both builds: inline's pre-existing limit for an erased
-		// alias of an optional fulfilling property, which the seam now matches. Compile verification is skipped for that reason.
+		// An erased alias of exactly a required `token: Secret?` is always created, and is declared optional, so both builds map
+		// the wrapper over the optional `token`, which compiles.
 		let fixture = Self.fixture(rootBuilds: "@Instantiated let hostBuilder: Instantiator<Host>", screen: ["@Received let token: Secret?", "@Instantiated let left: Left"], left: ["@Instantiated let sub: Sub"], detail: nil, reader: nil, secretConformances: ", Auth", otherTypes: [seamFixtureType(named: "Host", isFinalClass: true, declarations: ["@Forwarded let token: Secret?", "@Instantiated let screen: Screen"]), Self.authProtocol, Self.anyAuth, seamFixtureType(named: "Sub", isFinalClass: true, declarations: ["@Received(fulfilledByDependencyNamed: \"token\", ofType: Secret?.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let authToken: AnyAuth?"])])
-		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
-		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.dependencyTreeFiles == [
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
