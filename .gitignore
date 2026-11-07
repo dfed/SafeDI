@@ -4,7 +4,8 @@ checkout/
 .swiftpm
 .build/
 codesign/
-.claude/
+.claude/worktrees/
+**/.claude/settings.local.json
 
 # Bazel
 bazel-*
