@@ -449,6 +449,314 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresPublicTierWithEmptyParameterList_whenEveryParameterIsNarrowerThanPublic() async throws {
+		// The `public` tier takes nothing, since `token` is of the internal `Token`: it is declared `mock()`, and passes
+		// `nil` for `token` to the internal tier.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: .public)
+				public struct Service: Instantiable {
+				    init(token: Token?) {
+				        self.token = token
+				    }
+
+				    @Received(onlyIfAvailable: true) let token: Token?
+				}
+				""",
+				"struct Token {}",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+			"Service+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Service {
+			    public static func mock() -> Service {
+			        Service.mock(token: nil)
+			    }
+
+			    static func mock(
+			        token: Token? = nil
+			    ) -> Service {
+			        return Service(token: token)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_mock_47EDF6CE3DA4FFE0 {}
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_putsMockAttributesOnPublicTierWithEmptyParameterList_whenEveryParameterIsNarrowerThanPublic() async throws {
+		// The mock's attributes lead the `public` tier's declaration when it takes nothing, as they lead every tier's.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(mockAttributes: "@MainActor", generateMock: .public)
+				public struct Service: Instantiable {
+				    init(token: Token?) {
+				        self.token = token
+				    }
+
+				    @Received(onlyIfAvailable: true) let token: Token?
+				}
+				""",
+				"struct Token {}",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+			"Service+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Service {
+			    @MainActor public static func mock() -> Service {
+			        Service.mock(token: nil)
+			    }
+
+			    @MainActor static func mock(
+			        token: Token? = nil
+			    ) -> Service {
+			        return Service(token: token)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_mock_47EDF6CE3DA4FFE0 {}
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesOwnDefaultsProviderFromPublicTierWithEmptyParameterList_whenOwnDefaultIsOfNarrowerType() async throws {
+		// With no tree, `label`, of the internal `Label`, is a parameter of the internal tier that defaults to its
+		// provider; the `public` tier takes nothing and passes the provider's value, the declaration's default.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				struct Label {
+				    init() {}
+				}
+
+				@Instantiable(generateMock: .public)
+				public struct Dashboard: Instantiable {
+				    static let defaultLabel: Label? = Label()
+
+				    init(label: Label? = defaultLabel) {
+				        self.label = label
+				    }
+
+				    let label: Label?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+			"Dashboard+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Dashboard {
+			    // These providers evaluate `Dashboard`'s own defaults outside any actor, since SafeDI sees no isolation on it. If one
+			    // reads the state of an actor `Dashboard` takes from a conformance or a superclass and does not compile, give its
+			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
+			    nonisolated static func __safeDI_publicMockDefault_label() -> Label? { defaultLabel }
+
+			    public static func mock() -> Dashboard {
+			        Dashboard.mock(label: Dashboard.__safeDI_publicMockDefault_label())
+			    }
+
+			    static func mock(
+			        label: Label? = Dashboard.__safeDI_publicMockDefault_label()
+			    ) -> Dashboard {
+			        return Dashboard(label: label)
+			    }
+			}
+
+			extension Dashboard {
+			    public enum __safeDI_Dashboard_mock_91ACC954C2301BF6 {}
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsNextNarrowerTierFromPublicTierWithEmptyParameterList_whenParametersAreOfTwoNarrowerLevels() async throws {
+		// `theme` is of the `package` `Theme` and `token` of the internal `Token`: the `public` tier takes nothing and
+		// calls the `package` tier, which takes `theme` and calls the internal tier.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Feature", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
+				import SafeDI
+
+				package struct Theme {}
+
+				struct Token {}
+
+				@Instantiable(generateMock: .public)
+				public struct Service: Instantiable {
+				    init(theme: Theme?, token: Token?) {
+				        self.theme = theme
+				        self.token = token
+				    }
+
+				    @Received(onlyIfAvailable: true) let theme: Theme?
+				    @Received(onlyIfAvailable: true) let token: Token?
+				}
+				"""]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Service {
+		    public static func mock() -> Service {
+		        Service.mock(theme: nil)
+		    }
+
+		    package static func mock(
+		        theme: Theme? = nil
+		    ) -> Service {
+		        Service.mock(theme: theme, token: nil)
+		    }
+
+		    static func mock(
+		        theme: Theme? = nil,
+		        token: Token? = nil
+		    ) -> Service {
+		        return Service(theme: theme, token: token)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_mock_6FDAA95DDC48E6C6 {}
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsPublicTierWithEmptyArgumentList_whenAnotherPackagesPublicMockTreeBuildsTypeWhosePublicTierTakesNothing() async throws {
+		// `Mid` is in another package, so `Outer`'s tree calls `Screen`'s `public` tier, which takes nothing: the call
+		// passes nothing.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Screen.swift": """
+				import SafeDI
+
+				package struct Theme {}
+
+				@Instantiable(generateMock: .public)
+				public struct Screen: Instantiable {
+				    package init(theme: Theme?) {
+				        self.theme = theme
+				    }
+
+				    @Received(onlyIfAvailable: true) let theme: Theme?
+				}
+				"""]),
+				ModuleFixture(name: "Mid", packageName: "mid", swiftFileContentByFilePath: ["Outer.swift": """
+				import Core
+				import SafeDI
+
+				@Instantiable(generateMock: .public)
+				public struct Outer: Instantiable {
+				    package init(screen: Screen) {
+				        self.screen = screen
+				    }
+
+				    @Instantiated let screen: Screen
+				}
+				"""], dependencies: ["Core"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    public static func mock() -> Screen {
+		        Screen.mock(theme: nil)
+		    }
+
+		    package static func mock(
+		        theme: Theme? = nil
+		    ) -> Screen {
+		        return Screen(theme: theme)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_mock_68FAB8E0F700DD87 {}
+		}
+		#endif
+		"""])
+		#expect(output.modules["Mid"]?.generatedFiles == ["Mid.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Outer {
+		    /// Overrides for the mock dependency tree.
+		    public struct SafeDIOverrides {
+		        public init(
+		            screen: (() -> Screen)? = nil
+		        ) {
+		            self.screen = screen
+		        }
+
+		        public let screen: (() -> Screen)?
+		    }
+
+		    public static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Outer {
+		        _ = Screen.__safeDI_Screen_mock_68FAB8E0F700DD87.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let screen = if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder() } else { Screen.mock() }
+		        return Outer(screen: screen)
+		    }
+		}
+
+		extension Outer {
+		    public enum __safeDI_Outer_mock_51799E6AA5E7B634 {}
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesReceivedDependenciesAsOptionalParameters_whenPublicMockBuildsOrIsHandedThem() async throws {
 		// M5.1a, M5.3, M5.4, M2.11, M2.19, M2.20: each received dependency the mock builds is `T? = nil`, an instance
 		// winning over the override; one received only if available that nothing provides is a parameter rather than an
