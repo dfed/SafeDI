@@ -771,14 +771,14 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		""")
 	}
 
-	@Test(arguments: [nil, .xcodeProjectPlugin, .noModuleName] as [DependencyTreeGenerator.EmittingModule.UnnamedReason?])
+	@Test(arguments: [["--module-name", "App"], []])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsSeamsTreeInlineWithComment_whenSeamIsDeclaredInAdditionalDirectory(unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason?) async throws {
+	mutating func generate_buildsSeamsTreeInlineWithComment_whenSeamIsDeclaredInAdditionalDirectory(moduleMembershipArguments: [String]) async throws {
 		// A seam in a directory a `#SafeDIConfiguration` adds is in no module's own files: `scan` plans a seam's file
 		// among the module's own files only, so no module generates its initializer, and a tree that reaches it
-		// builds its tree inline, as it builds any other type's. Its construction says so, and names the Xcode project
-		// plugin when the run carries the product module name that plugin passes. A `nil` reason is a run given
-		// `--module-name`, which names the module of no file the configuration adds.
+		// builds its tree inline, as it builds any other type's. Its construction says so, in the same words whether the
+		// run is given `--module-name`, which names the module of no file the configuration adds, or names no module,
+		// as the Xcode project plugin's run does.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -829,13 +829,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			buildSettingArguments: unnamedReason == .xcodeProjectPlugin ? ["--build-setting-product-module-name=[App]"] : [],
-			moduleMembershipArguments: unnamedReason == nil ? ["--module-name", "App"] : [],
+			moduleMembershipArguments: moduleMembershipArguments,
 		)
 
-		let xcodeProjectPluginNote = unnamedReason == .xcodeProjectPlugin
-			? " (a target the Xcode project plugin builds names no module; see the Manual's \"Limits of the Xcode project plugin\")"
-			: ""
 		#expect(output.dependencyTreeFiles.keys.sorted() == ["Root+SafeDI.swift"])
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
 		extension Root {
@@ -843,7 +839,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let session = Session()
 		        func __safeDI_screen() -> Screen {
 		            let detail = Detail(session: session)
-		            return Screen(detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it\(xcodeProjectPluginNote).
+		            return Screen(detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it.
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(session: session, screen: screen)
@@ -858,7 +854,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// A mock builds every seam's tree inline, whether or not SafeDI knows which module declares the seam, so the
 		// comment that a production construction of a seam of an unknown module ends with would give the wrong cause
 		// in a mock: neither a mock that instantiates the seam nor the default of a mock's forwarded parameter, which
-		// calls the seam's hand-written mock, carries it, also under the Xcode project plugin, whose note it would add.
+		// calls the seam's hand-written mock, carries it.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -911,7 +907,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			buildSettingArguments: ["--build-setting-product-module-name=[App]"],
 		)
 
 		#expect(output.mockFiles.keys.sorted() == ["Forwarder+SafeDIMock.swift", "Holder+SafeDIMock.swift"])
