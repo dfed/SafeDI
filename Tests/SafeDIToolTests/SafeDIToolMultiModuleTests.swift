@@ -913,7 +913,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 				"""
 				return declaresInPlatformBlocks ? "#if \(condition)\n\(declaration)\n#endif" : declaration
 			}
-			try await executeSafeDIToolMultiModuleTest(
+			_ = try await executeSafeDIToolMultiModuleTest(
 				modules: [
 					ModuleFixture(
 						name: "Core",
