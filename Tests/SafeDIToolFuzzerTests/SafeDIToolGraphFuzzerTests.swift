@@ -2848,13 +2848,13 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [12, 14, 25, 40, 62, 99, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x64C42737CA11C603
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xDAC0A97C7F46B5F0
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x79FFC62FE9C55A64
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x491B75DC990157E3
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -3085,7 +3085,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// seam tests' draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 151, 153, 163, 180, 196, 277, 298, 326, 605, 609, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xC48A7DC24E1A14DB
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xE7975D97231645C2
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -3618,16 +3618,6 @@ struct SafeDIToolGraphFuzzerTests {
 				1_571, 1_650, 1_660, 1_691, 1_730, 1_769, 1_786, 1_790, 1_836, 1_992, 2_011, 2_054, 2_186, 2_254, 2_902, 2_937,
 				3_028, 3_482, 3_510, 3_702, 3_789, 3_847, 3_931, 3_966, 4_535, 4_602, 4_613, 4_631, 4_643, 4_865, 4_974, 4_975,
 			],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "A required receive in the tree of a dependency a mock promotes is handed the mocked type's onlyIfAvailable alias of that property, which is optional",
-			signatures: [.compilerError(containing: "must be unwrapped to a value of type")],
-			seeds: [4_628],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "A mock promotes the optional form of the mocked type's own alias, which a promoted dependency's tree requires, and builds a node and an override that nothing reads, since the receiver is handed the alias",
-			signatures: [.compilerWarning(containing: "was never used")],
-			seeds: [916],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A root with generateMock: true has its mock's tree rejected for a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree",

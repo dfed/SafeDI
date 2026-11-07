@@ -61,7 +61,7 @@ SafeDI is a compile-time dependency injection framework for Swift. It uses Swift
 Mock generation follows this pipeline:
 
 1. **`generateMockCode`** builds the mock scope map via `createMockTypeDescriptionToScopeMapping` (includes ALL types, not just reachable from roots)
-2. For each type with `generateMock: true`, **`createMockRootScopeGenerator`** promotes `@Received` dependencies to root-level children (except those `mockCanBuild` rejects), in the order the mock's tree first receives them (`inOrderTheMockTreeFirstReceives`), and validates for cycles
+2. For each type with `generateMock: true`, **`createMockRootScopeGenerator`** promotes `@Received` dependencies to root-level children (except those `mockCanBuild` rejects and those one of the mocked type's own aliases provides), in the order the mock's tree first receives them (`inOrderTheMockTreeFirstReceives`), and validates for cycles
 3. **`ScopeGenerator.generateMockRootCode`** builds the mock method:
    - Calls `collectMockParameterTree` to walk the dependency tree and build `MockParameterNode` trees
    - Collects flat parameters: `@Forwarded` deps, uncovered `@Instantiated` deps, `@Received` deps not in the tree

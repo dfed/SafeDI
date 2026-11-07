@@ -2742,13 +2742,12 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenAliasOfAncestorsAliasReceivesInstantiatorThatBuildsIt() async {
 		// Screen renames `nodeBuilder` to `middleBuilder`, and Node renames `middleBuilder` to
-		// `childBuilder`. The mock promotes both instantiators, and the Node that `middleBuilder` builds
-		// aliases `middleBuilder` itself.
+		// `childBuilder`. The mock promotes `nodeBuilder`, and hands the Node it builds Screen's own
+		// `middleBuilder`, which provides that receive, so the Node aliases `nodeBuilder` itself.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Node.swift"]):4:5: error: Dependency cycle: `Instantiator<Node>` -> `Instantiator<Node>`. `Node` receives `middleBuilder: Instantiator<Node>` as `childBuilder: Instantiator<Node>` inside the tree that `middleBuilder` builds. Declare `childBuilder: Instantiator<Node>` on `Node` as @Instantiated instead of @Received(fulfilledByDependencyNamed:ofType:).
-				\(fixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
+				\(fixtures["Node.swift"]):4:5: error: Dependency cycle: @Instantiated `nodeBuilder: Instantiator<Node>` -> @Received `middleBuilder: Instantiator<Node>` -> @Received `nodeBuilder: Instantiator<Node>`. `nodeBuilder: Instantiator<Node>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {

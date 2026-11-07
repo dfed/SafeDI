@@ -498,9 +498,21 @@ struct GraphFuzzerMockMirrorModel {
 		func isForwarded(_ property: GraphFuzzerMirrorProperty) -> Bool {
 			forwardedProperties.contains(property) || forwardedProperties.contains(property.unwrapped)
 		}
+		// The mocked type's own aliases, which a receive they provide reads: the alias's exact property, or the unwrapped
+		// form of an optional receive (`ScopeGenerator.provides`). Nothing is promoted for such a receive.
+		var mockedTypeAliasProperties = Set<GraphFuzzerMirrorProperty>()
+		for case let .aliased(aliasProperty, _, _) in propertiesToGenerate(ofTypeNamed: typeName) {
+			mockedTypeAliasProperties.insert(aliasProperty)
+		}
+		func isProvidedByMockedTypeAlias(_ property: GraphFuzzerMirrorProperty) -> Bool {
+			mockedTypeAliasProperties.contains(property) || (property.isOptional && mockedTypeAliasProperties.contains(property.unwrapped))
+		}
 		var scopesBuiltForRequiredProperties = [GraphFuzzerMirrorProperty: String]()
 		while let property = worklist.popLast() {
-			guard !isForwarded(property), let promotedScope = scopeToPromote(for: property)?.scopeTypeName else { continue }
+			guard !isForwarded(property),
+			      !isProvidedByMockedTypeAlias(property),
+			      let promotedScope = scopeToPromote(for: property)?.scopeTypeName
+			else { continue }
 			scopesBuiltForRequiredProperties[property] = promotedScope
 			guard visitedScopes.insert(promotedScope).inserted else { continue }
 			let scopeReceived = receivedProperties(ofTypeNamed: promotedScope, cache: &cache)
@@ -542,6 +554,7 @@ struct GraphFuzzerMockMirrorModel {
 		let propertiesToPromote = allReceived.union(lazilyInstantiatedPropertiesToPromote).filter { receivedProperty in
 			(lazilyInstantiatedPropertiesToPromote.contains(receivedProperty) || !allOnlyIfAvailable.contains(receivedProperty))
 				&& !isForwarded(receivedProperty)
+				&& !isProvidedByMockedTypeAlias(receivedProperty)
 				&& !instancesOfLazilyInstantiatedProperties.contains(receivedProperty.unwrapped)
 		}
 		var promotedChildren = [PropertyToGenerate]()
