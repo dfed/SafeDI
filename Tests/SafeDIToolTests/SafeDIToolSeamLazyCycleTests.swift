@@ -489,6 +489,167 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNearestDeclarationToSeamReenteredThroughCycleClosedByConstant_whenTypeInsideSeamDeclaresLabelSeamReceives() async throws {
+		// The test above with `T3` instantiated as a constant: the seam's own tree calls `T3`'s generated initializer again,
+		// and the inline build closes the cycle with the constant `t3` inside `T0`, which calls `Root`'s builder function with
+		// `T0`'s `t1Builder`, the nearest.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let t1Builder: Instantiator<T1>", "@Instantiated let t3: T3"]),
+			seamFixtureType(named: "T0", isFinalClass: true, declarations: ["@Instantiated let t1Builder: Instantiator<T1>", "@Instantiated let t3: T3"]),
+			Self.t1,
+			Self.t3,
+		]
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_t1Builder() -> T1 {
+			            T1()
+			        }
+			        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			        func __safeDI_t3() -> T3 {
+			            _ = T3.__safeDI_T3_637A336A650792AD.self
+			            return T3(t1Builder: t1Builder)
+			        }
+			        let t3: T3 = __safeDI_t3()
+			        self.init(t1Builder: t1Builder, t3: t3)
+			    }
+			}
+			""",
+			"T3+SafeDI.swift": generatedFileHeader + """
+			extension T3 {
+			    public convenience init(t1Builder: Instantiator<T1>) {
+			        func __safeDI_t0Builder() -> T0 {
+			            func __safeDI_t1Builder() -> T1 {
+			                T1()
+			            }
+			            let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			            func __safeDI_t3() -> T3 {
+			                _ = T3.__safeDI_T3_637A336A650792AD.self
+			                return T3(t1Builder: t1Builder)
+			            }
+			            let t3: T3 = __safeDI_t3()
+			            return T0(t1Builder: t1Builder, t3: t3)
+			        }
+			        let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
+			        self.init(t0Builder: t0Builder, t1Builder: t1Builder)
+			    }
+			}
+
+			extension T3 {
+			    public enum __safeDI_T3_637A336A650792AD {}
+			}
+			""",
+		])
+		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(inlineOutput.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_t1Builder() -> T1 {
+			            T1()
+			        }
+			        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			        func __safeDI_t3(t1Builder: Instantiator<T1>) -> T3 {
+			            func __safeDI_t0Builder() -> T0 {
+			                func __safeDI_t1Builder() -> T1 {
+			                    T1()
+			                }
+			                let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			                let t3: T3 = __safeDI_t3(t1Builder: t1Builder)
+			                return T0(t1Builder: t1Builder, t3: t3)
+			            }
+			            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
+			            return T3(t0Builder: t0Builder, t1Builder: t1Builder)
+			        }
+			        let t3: T3 = __safeDI_t3(t1Builder: t1Builder)
+			        self.init(t1Builder: t1Builder, t3: t3)
+			    }
+			}
+			""",
+		])
+		try expectDifferentialValuesAgree(
+			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.dependencyTreeFiles),
+			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(inlineFixture(fixture)), generatedFiles: inlineOutput.dependencyTreeFiles),
+			probes: [DifferentialValueProbe("Root()")],
+			filesToDelete: &filesToDelete,
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_closesCyclesInsideSeamsInitializer_whenSeamsTreeHoldsCyclesClosedByConstantAndByLazilyInstantiatedDependency() async throws {
+		// `S`'s tree holds `a -> b -> cBuilder -> a`, closed by `C`'s constant `a`, and `d -> eBuilder -> d`, closed by `E`'s
+		// lazily instantiated `d`: its generated initializer holds both, and `Root` calls it.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let s: S"]),
+			seamFixtureType(named: "S", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let a: A", "@Instantiated let d: D"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let b: B"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let cBuilder: Instantiator<C>"]),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Instantiated let a: A"]),
+			seamFixtureType(named: "D", isFinalClass: true, declarations: ["@Instantiated let eBuilder: Instantiator<E>"]),
+			seamFixtureType(named: "E", isFinalClass: true, declarations: ["@Instantiated let d: LazilyInstantiated<D>"]),
+		]
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_s() -> S {
+			            _ = S.__safeDI_S_CBF29CE484222325.self
+			            return S()
+			        }
+			        let s: S = __safeDI_s()
+			        self.init(s: s)
+			    }
+			}
+			""",
+			"S+SafeDI.swift": generatedFileHeader + """
+			extension S {
+			    public convenience init() {
+			        func __safeDI_a() -> A {
+			            func __safeDI_b() -> B {
+			                func __safeDI_cBuilder() -> C {
+			                    let a: A = __safeDI_a()
+			                    return C(a: a)
+			                }
+			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			                return B(cBuilder: cBuilder)
+			            }
+			            let b: B = __safeDI_b()
+			            return A(b: b)
+			        }
+			        let a: A = __safeDI_a()
+			        func __safeDI_d() -> D {
+			            func __safeDI_eBuilder() -> E {
+			                let d = LazilyInstantiated<D>(__safeDI_d)
+			                return E(d: d)
+			            }
+			            let eBuilder = Instantiator<E>(__safeDI_eBuilder)
+			            return D(eBuilder: eBuilder)
+			        }
+			        let d: D = __safeDI_d()
+			        self.init(a: a, d: d)
+			    }
+			}
+
+			extension S {
+			    public enum __safeDI_S_CBF29CE484222325 {}
+			}
+			""",
+		])
+		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		try expectDifferentialValuesAgree(
+			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.dependencyTreeFiles),
+			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(inlineFixture(fixture)), generatedFiles: inlineOutput.dependencyTreeFiles),
+			probes: [DifferentialValueProbe("Root()")],
+			filesToDelete: &filesToDelete,
+		)
+	}
+
 	// MARK: A lazy cycle around a call of a tier that omits a parameter
 
 	@Test
@@ -505,6 +666,23 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
 				seamFixtureType(named: "A", declarations: ["@Instantiated let service: Service", "@Instantiated let midBuilder: Instantiator<Mid>", "@Instantiated let detourBuilder: Instantiator<Detour>"]),
 				seamFixtureType(named: "Mid", declarations: ["@Forwarded let theme: [3 of Int]", "@Instantiated let aBuilder: Instantiator<A>"]),
+				seamFixtureType(named: "Detour", declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+			]), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtScopeBetween_whenConstantClosingCycleOnLazilyInstantiatedDeclarationPassesValueThatTierCalledInClosedOnFunctionOmits() async {
+		// As above, with `Root` declaring `a` lazily instantiated and `Mid`'s constant `a` closing the cycle on it: the
+		// function the cycle closes on is the wrapper's, which `Mid`'s `a` calls with its own `theme`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			Self.tierOmissionError(provider: "Mid", fixtures)
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.tierOmissionModules(appPackage: "Other", appFiles: [
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let a: LazilyInstantiated<A>"]),
+				seamFixtureType(named: "A", declarations: ["@Instantiated let service: Service", "@Instantiated let midBuilder: Instantiator<Mid>", "@Instantiated let detourBuilder: Instantiator<Detour>"]),
+				seamFixtureType(named: "Mid", declarations: ["@Forwarded let theme: [3 of Int]", "@Instantiated let a: A"]),
 				seamFixtureType(named: "Detour", declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
 			]), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
@@ -775,6 +953,52 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 							.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n"),
 						seamFixtureType(named: "A", declarations: ["@Instantiated let service: Service", "@Instantiated let midBuilder: Instantiator<Mid>"]),
 						seamFixtureType(named: "Mid", declarations: ["@Forwarded let filter: [3 of Int]", "@Instantiated let aBuilder: Instantiator<A>"]),
+					].map { "import Core\nimport SafeDI\n\n" + $0 }, dependencies: ["Core"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtScopeBetween_whenConstantClosingCycleOnLazilyInstantiatedDeclarationPassesValueThatPublicMockTierCalledInClosedOnFunctionOmits() async {
+		// As above, with `Screen` declaring `a` lazily instantiated and `Mid`'s constant `a` closing the cycle on it.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Mid.swift"]):11:5: error: `Mid` provides `filter: [3 of Int]`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
+			\(fixtures["Core"]!["Service.swift"]):9:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
+					import SafeDI
+
+					@Instantiable
+					package struct TokenCache: Instantiable {
+					    package init(filter: [3 of Int]?) {
+					        self.filter = filter
+					    }
+
+					    @Received(onlyIfAvailable: true) let filter: [3 of Int]?
+					}
+
+					@Instantiable(generateMock: .public)
+					public struct Service: Instantiable {
+					    package init(tokenCache: TokenCache) {
+					        self.tokenCache = tokenCache
+					    }
+
+					    @Instantiated let tokenCache: TokenCache
+					}
+					"""]),
+					ModuleFixture(name: "App", packageName: "app", swiftFileContent: [
+						seamFixtureType(named: "Screen", declarations: ["@Instantiated let a: LazilyInstantiated<A>"])
+							.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n"),
+						seamFixtureType(named: "A", declarations: ["@Instantiated let service: Service", "@Instantiated let midBuilder: Instantiator<Mid>"]),
+						seamFixtureType(named: "Mid", declarations: ["@Forwarded let filter: [3 of Int]", "@Instantiated let a: A"]),
 					].map { "import Core\nimport SafeDI\n\n" + $0 }, dependencies: ["Core"]),
 				],
 				integration: .moduleInfo,

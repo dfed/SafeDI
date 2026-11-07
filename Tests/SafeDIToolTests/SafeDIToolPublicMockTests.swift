@@ -1745,6 +1745,326 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_closesCycleWithConstantCallingEnclosingBuilder_whenPublicMockedTypeIsBuiltAgainThroughInstantiator() async throws {
+		// `A.mock()` builds `b`, whose instantiator builds `C`, whose `a` builds an `A` again, whose `b` closes the cycle by
+		// calling the function the mock builds `b` with.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let b: B"]).replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: .public)\n"),
+				seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let cBuilder: Instantiator<C>"]),
+				seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Instantiated let a: A"]),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"A+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension A {
+			    /// Overrides for the mock dependency tree.
+			    public struct SafeDIOverrides {
+			        public init(
+			            b: __safeDI_B_MockConfiguration = .init()
+			        ) {
+			            self.b = b
+			        }
+
+			        public let b: __safeDI_B_MockConfiguration
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> A {
+			        func __safeDI_b() -> B {
+			            func __safeDI_cBuilder() -> C {
+			                func __safeDI_a() -> A {
+			                    let b: B = __safeDI_b()
+			                    return A.__safeDI_init(b: b, safeDIBuilder: nil)
+			                }
+			                let a: A = __safeDI_a()
+			                return C.__safeDI_init(a: a, safeDIBuilder: safeDIOverrides.b.cBuilder.safeDIBuilder)
+			            }
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B.__safeDI_init(cBuilder: cBuilder, safeDIBuilder: safeDIOverrides.b.safeDIBuilder)
+			        }
+			        let b: B = __safeDI_b()
+			        return A(b: b)
+			    }
+			}
+
+			extension A {
+			    public enum __safeDI_A_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			/// Configuration for how `A` is constructed within the public mock trees of this module.
+			public struct __safeDI_A_MockConfiguration {
+			    public init(
+			        b: __safeDI_B_MockConfiguration = .init(),
+			        _ safeDIBuilder: ((B) -> A)? = nil
+			    ) {
+			        self.b = b
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    public let b: __safeDI_B_MockConfiguration
+			    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((B) -> A)?
+			}
+
+			extension A {
+			    static func __safeDI_init(b: B, safeDIBuilder: ((B) -> A)?) -> A {
+			        if let safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
+			    }
+			}
+
+			/// Configuration for how `C` is constructed within the public mock trees of this module.
+			public struct __safeDI_C_MockConfiguration {
+			    public init(
+			        _ safeDIBuilder: ((A) -> C)? = nil
+			    ) {
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    /// Overrides how `C` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((A) -> C)?
+			}
+
+			extension C {
+			    static func __safeDI_init(a: A, safeDIBuilder: ((A) -> C)?) -> C {
+			        if let safeDIBuilder { safeDIBuilder(a) } else { C(a: a) }
+			    }
+			}
+
+			/// Configuration for how `B` is constructed within the public mock trees of this module.
+			public struct __safeDI_B_MockConfiguration {
+			    public init(
+			        cBuilder: __safeDI_C_MockConfiguration = .init(),
+			        _ safeDIBuilder: ((Instantiator<C>) -> B)? = nil
+			    ) {
+			        self.cBuilder = cBuilder
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    public let cBuilder: __safeDI_C_MockConfiguration
+			    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((Instantiator<C>) -> B)?
+			}
+
+			extension B {
+			    static func __safeDI_init(cBuilder: Instantiator<C>, safeDIBuilder: ((Instantiator<C>) -> B)?) -> B {
+			        if let safeDIBuilder { safeDIBuilder(cBuilder) } else { B(cBuilder: cBuilder) }
+			    }
+			}
+			#endif
+			""" + "\n",
+		])
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesCycleParameterToFunctionItPromotes_whenPublicMockPromotesDependencyCycleClosesOnBeneathScopeDeclaringLabel(lazilyInstantiated: Bool) async throws {
+		// `A`'s public mock builds the `b` it receives, unless its caller passes one: `B` receives `session`, which `C`
+		// declares again before closing the cycle on `b`, so the function the mock builds `b` with takes `session`, and the
+		// mock passes its own.
+		let b = lazilyInstantiated ? "LazilyInstantiated<B>" : "B"
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received let b: \(b)"]).replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: .public)\n"),
+				seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received let session: Session", "@Instantiated let cBuilder: Instantiator<C>"]),
+				seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let b: \(b)"]),
+				seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == (lazilyInstantiated ? [
+			"A+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension A {
+			    /// Overrides for the mock dependency tree.
+			    public struct SafeDIOverrides {
+			        public init(
+			            session: (() -> Session)? = nil,
+			            b: __safeDI_B_MockConfiguration = .init()
+			        ) {
+			            self.session = session
+			            self.b = b
+			        }
+
+			        public let session: (() -> Session)?
+			        public let b: __safeDI_B_MockConfiguration
+			    }
+
+			    public static func mock(
+			        b: B? = nil,
+			        session: Session? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> A {
+			        let session = if let session { session } else if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+			        func __safeDI_b(session: Session) -> B {
+			            func __safeDI_cBuilder() -> C {
+			                let session = if let safeDIBuilder = safeDIOverrides.b.cBuilder.session { safeDIBuilder() } else { Session() }
+			                let b = LazilyInstantiated<B> {
+			                    __safeDI_b(session: session)
+			                }
+			                return C.__safeDI_init(session: session, b: b, safeDIBuilder: safeDIOverrides.b.cBuilder.safeDIBuilder)
+			            }
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B.__safeDI_init(session: session, cBuilder: cBuilder, safeDIBuilder: safeDIOverrides.b.safeDIBuilder)
+			        }
+			        let b = LazilyInstantiated<B> {
+			            if let b { b } else { __safeDI_b(session: session) }
+			        }
+			        return A(b: b)
+			    }
+			}
+
+			extension A {
+			    public enum __safeDI_A_mock_994335C3EC9B26A0 {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			/// Configuration for how `C` is constructed within the public mock trees of this module.
+			public struct __safeDI_C_MockConfiguration {
+			    public init(
+			        session: (() -> Session)? = nil,
+			        _ safeDIBuilder: ((Session, LazilyInstantiated<B>) -> C)? = nil
+			    ) {
+			        self.session = session
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    public let session: (() -> Session)?
+			    /// Overrides how `C` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((Session, LazilyInstantiated<B>) -> C)?
+			}
+
+			extension C {
+			    static func __safeDI_init(session: Session, b: LazilyInstantiated<B>, safeDIBuilder: ((Session, LazilyInstantiated<B>) -> C)?) -> C {
+			        if let safeDIBuilder { safeDIBuilder(session, b) } else { C(session: session, b: b) }
+			    }
+			}
+
+			/// Configuration for how `B` is constructed within the public mock trees of this module.
+			public struct __safeDI_B_MockConfiguration {
+			    public init(
+			        cBuilder: __safeDI_C_MockConfiguration = .init(),
+			        _ safeDIBuilder: ((Session, Instantiator<C>) -> B)? = nil
+			    ) {
+			        self.cBuilder = cBuilder
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    public let cBuilder: __safeDI_C_MockConfiguration
+			    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((Session, Instantiator<C>) -> B)?
+			}
+
+			extension B {
+			    static func __safeDI_init(session: Session, cBuilder: Instantiator<C>, safeDIBuilder: ((Session, Instantiator<C>) -> B)?) -> B {
+			        if let safeDIBuilder { safeDIBuilder(session, cBuilder) } else { B(session: session, cBuilder: cBuilder) }
+			    }
+			}
+			#endif
+			""" + "\n",
+		] : [
+			"A+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension A {
+			    /// Overrides for the mock dependency tree.
+			    public struct SafeDIOverrides {
+			        public init(
+			            session: (() -> Session)? = nil,
+			            b: __safeDI_B_MockConfiguration = .init()
+			        ) {
+			            self.session = session
+			            self.b = b
+			        }
+
+			        public let session: (() -> Session)?
+			        public let b: __safeDI_B_MockConfiguration
+			    }
+
+			    public static func mock(
+			        b: B? = nil,
+			        session: Session? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> A {
+			        let session = if let session { session } else if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+			        func __safeDI_b(session: Session) -> B {
+			            func __safeDI_cBuilder() -> C {
+			                let session = if let safeDIBuilder = safeDIOverrides.b.cBuilder.session { safeDIBuilder() } else { Session() }
+			                let b: B = __safeDI_b(session: session)
+			                return C.__safeDI_init(session: session, b: b, safeDIBuilder: safeDIOverrides.b.cBuilder.safeDIBuilder)
+			            }
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B.__safeDI_init(session: session, cBuilder: cBuilder, safeDIBuilder: safeDIOverrides.b.safeDIBuilder)
+			        }
+			        let b: B = if let b { b } else { __safeDI_b(session: session) }
+			        return A(b: b)
+			    }
+			}
+
+			extension A {
+			    public enum __safeDI_A_mock_994335C3EC9B26A0 {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			/// Configuration for how `C` is constructed within the public mock trees of this module.
+			public struct __safeDI_C_MockConfiguration {
+			    public init(
+			        session: (() -> Session)? = nil,
+			        _ safeDIBuilder: ((Session, B) -> C)? = nil
+			    ) {
+			        self.session = session
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    public let session: (() -> Session)?
+			    /// Overrides how `C` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((Session, B) -> C)?
+			}
+
+			extension C {
+			    static func __safeDI_init(session: Session, b: B, safeDIBuilder: ((Session, B) -> C)?) -> C {
+			        if let safeDIBuilder { safeDIBuilder(session, b) } else { C(session: session, b: b) }
+			    }
+			}
+
+			/// Configuration for how `B` is constructed within the public mock trees of this module.
+			public struct __safeDI_B_MockConfiguration {
+			    public init(
+			        cBuilder: __safeDI_C_MockConfiguration = .init(),
+			        _ safeDIBuilder: ((Session, Instantiator<C>) -> B)? = nil
+			    ) {
+			        self.cBuilder = cBuilder
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    public let cBuilder: __safeDI_C_MockConfiguration
+			    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((Session, Instantiator<C>) -> B)?
+			}
+
+			extension B {
+			    static func __safeDI_init(session: Session, cBuilder: Instantiator<C>, safeDIBuilder: ((Session, Instantiator<C>) -> B)?) -> B {
+			        if let safeDIBuilder { safeDIBuilder(session, cBuilder) } else { B(session: session, cBuilder: cBuilder) }
+			    }
+			}
+			#endif
+			""" + "\n",
+		]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesNilAndProviders_whenConfiguredTypeIsBuiltBeneathCycleEdge() async throws {
 		// M4.10: `B` -> `A` is the cycle edge, so the `A` that `A`'s public mock builds beneath `B` reads no configuration: it passes
 		// `nil` for each non-optional default, which its construction function resolves, and the provider's value for the

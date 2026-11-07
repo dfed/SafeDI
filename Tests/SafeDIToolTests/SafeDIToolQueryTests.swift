@@ -1650,11 +1650,57 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_reportsTypesOnCycle_whenConstantClosesCycleAnInstantiatorDefers() async throws {
+		// `A`'s mock builds `b`, whose instantiator builds `C`, whose `a` builds an `A` again, whose `b` closes the cycle.
+		let output = try await executeSafeDIToolQuery(
+			typeName: "A",
+			modules: [
+				QueryTestModule("CycleModule", [
+					seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let b: B"]),
+					seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let cBuilder: Instantiator<C>"]),
+					seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Instantiated let a: A"]),
+				]),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.formatted == """
+		`A` is built from declarations in 1 module:
+
+		CycleModule
+		  @Instantiable A
+		  @Instantiable B
+		  @Instantiable C
+
+		@Forwarded parameters of `A`:
+		  (none)
+
+		Dependencies of `A` no @Instantiable declaration fulfills:
+		  (none)
+
+		No module generates `A.mock()`; a #SafeDIConfiguration that lists `A` in `additionalMocksToGenerate` would generate it from the same declarations.
+
+		Required @Forwarded parameters of `A.mock()`:
+		  (none)
+
+		Defaulted @Forwarded parameters of `A.mock()`:
+		  (none)
+
+		Required parameters of `A.mock()` that no @Instantiable declaration removes:
+		  (none)
+
+		Defaulted parameters of `A.mock()` that no @Instantiable declaration removes:
+		  (none)
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func query_throwsError_whenDependencyCycleIsInvalid() async {
 		await assertThrowsQueryError(
 			diagnostics: { moduleFiles in
 				"""
-				\(moduleFiles["CycleModule"]![0].path):4:5: error: Dependency cycle: `Companion` -> `Feature` -> `Companion`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `companion: Companion` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+				\(moduleFiles["CycleModule"]![0].path):4:5: error: Dependency cycle: `Companion` -> `Feature` -> `Companion`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `companion: Companion`, `feature: Feature` to an instantiator.
 				\(moduleFiles["CycleModule"]![1].path):1:1: note: `Companion` is part of the cycle
 				\(moduleFiles["CycleModule"]![0].path):1:1: note: `Feature` is part of the cycle
 				"""
