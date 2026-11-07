@@ -1040,35 +1040,74 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsSeamsOwnCycleDiagnostic_whenFillClosesConstantCycleSeamsWalkRejects() async {
-		// C1.21, H7 (4): `Root`'s inline walk closes the cycle on its own lazy `p1Builder`, but `Service`'s walk, from its
-		// root, meets `c: C` again on a constant path through the fill. `App` walks `Service`'s tree from its root and
-		// reports `Service`'s module's diagnostic, at `A.c`.
-		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"""
-			\(fixtures["Feature"]!["A.swift"]):8:5: error: Dependency cycle: `C` -> `Instantiator<P1>` -> `A` -> `C`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `c: C` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
-			\(fixtures["Feature"]!["C.swift"]):1:1: note: `C` is part of the cycle
-			\(fixtures["Feature"]!["P1.swift"]):1:1: note: `P1` is part of the cycle
-			\(fixtures["Feature"]!["A.swift"]):1:1: note: `A` is part of the cycle
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: Self.modules(
-					feature: [
-						Self.userServiceProtocol,
-						seamFixtureType(named: "C", declarations: ["@Instantiated let p1Builder: Instantiator<P1>"]),
-						seamFixtureType(named: "P1", declarations: ["@Instantiated let a: A"]),
-						seamFixtureType(named: "A", declarations: ["@Instantiated let c: C", "@Instantiated let service: Service"]),
-						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let userService: any UserService"]),
-					],
-					app: [
-						Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Instantiated let c: C"]),
-						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let p1Builder: Instantiator<P1>"]),
-					],
-				),
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
+	mutating func generate_closesCycleInFillWithConstant_whenFillsTreeClosesCycleAnInstantiatorDefers() async throws {
+		// C1.21, H7 (4): `Root`'s inline walk closes the cycle on its own lazy `p1Builder`, and `Service`'s walk, from its root,
+		// meets `c: C` again through the fill. The cycle `c -> p1Builder -> a -> c` has an instantiator along it, so the fill
+		// `App` generates closes it with the constant `c`, which calls the fill's own function for `c`.
+		let feature = [
+			Self.userServiceProtocol,
+			seamFixtureType(named: "C", declarations: ["@Instantiated let p1Builder: Instantiator<P1>"]),
+			seamFixtureType(named: "P1", declarations: ["@Instantiated let a: A"]),
+			seamFixtureType(named: "A", declarations: ["@Instantiated let c: C", "@Instantiated let service: Service"]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let userService: any UserService"]),
+		]
+		let fulfillers = [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Instantiated let c: C"])]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let p1Builder: Instantiator<P1>"])
+		let modules = Self.modules(feature: feature, app: fulfillers + [root])
+		for integration in [MultiModuleIntegration.moduleInfo, .swiftPackagePlugin] {
+			let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: integration, filesToDelete: &filesToDelete)
+			expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: ["Root": """
+			extension Root {
+			    public init() {
+			        func __safeDI_p1Builder() -> P1 {
+			            func __safeDI_a() -> A {
+			                func __safeDI_c() -> C {
+			                    let p1Builder = Instantiator<P1>(__safeDI_p1Builder)
+			                    return C(p1Builder: p1Builder)
+			                }
+			                let c: C = __safeDI_c()
+			                func __safeDI_service() -> Service {
+			                    _ = Service.__safeDI_Service_2567811726D4AD5E.self\(Self.pluginComment(integration, seam: "Service"))
+			                    func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Service_userService) -> any UserService {
+			                        func __safeDI_userService() -> DefaultUserService {
+			                            func __safeDI_c() -> C {
+			                                func __safeDI_p1Builder() -> P1 {
+			                                    func __safeDI_a() -> A {
+			                                        let c: C = __safeDI_c()
+			                                        func __safeDI_service() -> Service {
+			                                            _ = Service.__safeDI_Service_2567811726D4AD5E.self\(Self.pluginComment(integration, seam: "Service"))
+			                                            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+			                                        }
+			                                        let service: Service = __safeDI_service()
+			                                        return A(c: c, service: service)
+			                                    }
+			                                    let a: A = __safeDI_a()
+			                                    return P1(a: a)
+			                                }
+			                                let p1Builder = Instantiator<P1>(__safeDI_p1Builder)
+			                                return C(p1Builder: p1Builder)
+			                            }
+			                            let c: C = __safeDI_c()
+			                            return DefaultUserService(c: c)
+			                        }
+			                        let userService: any UserService = __safeDI_userService()
+			                        return userService
+			                    }
+			                    return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+			                }
+			                let service: Service = __safeDI_service()
+			                return A(c: c, service: service)
+			            }
+			            let a: A = __safeDI_a()
+			            return P1(a: a)
+			        }
+			        let p1Builder = Instantiator<P1>(__safeDI_p1Builder)
+			        self.init(p1Builder: p1Builder)
+			    }
+			}
+			"""]))
+			try expectEveryModuleCompiled(output)
+			try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 		}
 	}
 
@@ -1078,7 +1117,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// C1.24: the fill of `Shell`'s passed-up builder is built with `Service`'s stack, on which `profileBuilder` is.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LoopingUserService.swift"]):10:5: error: SafeDI cannot fill the builder for `Profile`'s `userService: any UserService` in `Service`'s dependency tree: `LoopingUserService`, which fills it, instantiates `profileBuilder: Instantiator<Profile>`, which `Service`'s tree is building where it builds `userService` (Service -> profileBuilder -> Profile -> userService -> LoopingUserService -> profileBuilder). Code generated outside module `Feature` cannot refer to the function `Service`'s initializer builds `Profile` with, and building it again would hand it other values than `Service`'s tree holds. Instantiate the seam where `LoopingUserService` builds `Profile` (`@Instantiated let serviceBuilder: Instantiator<Service>`), so the cycle re-enters through the initializer SafeDI generates for `Service`; make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads.
+			\(fixtures["App"]!["LoopingUserService.swift"]):10:5: error: SafeDI cannot fill the builder for `Profile`'s `userService: any UserService` in `Service`'s dependency tree: `LoopingUserService`, which fills it, instantiates `profileBuilder: Instantiator<Profile>`, which `Service`'s tree is building where it builds `userService` (Service -> profileBuilder -> Profile -> userService -> LoopingUserService -> profileBuilder). Code generated outside module `Feature` cannot refer to the function `Service`'s initializer builds `Profile` with, and building it again would hand it other values than `Service`'s tree holds. Instantiate the seam where `LoopingUserService` builds `Profile` (`@Instantiated let serviceBuilder: Instantiator<Service>`), so the cycle re-enters through the initializer SafeDI generates for `Service`; make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads; or give `profileBuilder` on `LoopingUserService` another label, so the cycle closes at `userService` itself.
 			\(fixtures["Feature"]!["Service.swift"]):7:5: note: `Service` instantiates `profileBuilder: Instantiator<Profile>` here.
 			"""
 		}) {
@@ -2514,14 +2553,14 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 	mutating func generate_throwsFillClosesCycleInSeamTree_whenFulfillerInstantiatesPropertyOfSeamsPath(holeIsConstant: Bool) async {
 		// C1.14, C1.16: `LoopingUserService` instantiates `aBuilder: Instantiator<A>`, which `Service`'s tree is building
 		// where it builds the hole. Code generated in `App` cannot refer to `Service`'s builder function for `A`, and
-		// building `A` again would hold other values. Renaming helps only a lazy hole: a constant one is then a cycle inline.
+		// building `A` again would hold other values. Renaming helps a hole of either kind: the cycle then closes at the hole
+		// inside the fill, with `aBuilder` along it.
 		let hole = holeIsConstant
 			? #"@Instantiated(fulfilledByType: "LoopingUserService", erasedToConcreteExistential: true) let userService: AnyUserService"#
 			: #"@Instantiated(fulfilledByType: "LoopingUserService", erasedToConcreteExistential: true) let userServiceBuilder: ErasedInstantiator<(), AnyUserService>"#
-		let (property, renameRemedy) = holeIsConstant
-			? ("userService: AnyUserService", "")
-			: ("userServiceBuilder: ErasedInstantiator<(), AnyUserService>", "; or give `aBuilder` on `LoopingUserService` another label, so the cycle closes at `userServiceBuilder` itself")
+		let property = holeIsConstant ? "userService: AnyUserService" : "userServiceBuilder: ErasedInstantiator<(), AnyUserService>"
 		let label = String(property.prefix { $0 != ":" })
+		let renameRemedy = "; or give `aBuilder` on `LoopingUserService` another label, so the cycle closes at `\(label)` itself"
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LoopingUserService.swift"]):10:5: error: SafeDI cannot fill the builder for `A`'s `\(property)` in `Service`'s dependency tree: `LoopingUserService`, which fills it, instantiates `aBuilder: Instantiator<A>`, which `Service`'s tree is building where it builds `\(label)` (Service -> aBuilder -> A -> \(label) -> LoopingUserService -> aBuilder). Code generated outside module `Feature` cannot refer to the function `Service`'s initializer builds `A` with, and building it again would hand it other values than `Service`'s tree holds. Instantiate the seam where `LoopingUserService` builds `A` (`@Instantiated let serviceBuilder: Instantiator<Service>`), so the cycle re-enters through the initializer SafeDI generates for `Service`; make an @Instantiable declaration that fulfills `LoopingUserService` one module `Feature` reads\(renameRemedy).
@@ -2555,6 +2594,132 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCycleError_whenFillClosesCycleOnPropertyOfSeamsPathWithNoInstantiatorAlongIt() async {
+		// `LoopingUserService` instantiates `b: B`, which `Service`'s tree is building where it builds the constant hole, and
+		// no dependency between is an instantiator: the cycle error, not the fill's, so the fill's remedy of a rename, which
+		// would close a cycle with the same dependencies along it at the hole, is offered only for a cycle with one.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LoopingUserService.swift"]):10:5: error: Dependency cycle: `B` -> `AnyUserService` -> `B`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `b: B`, `userService: AnyUserService` to an instantiator.
+			\(fixtures["Feature"]!["B.swift"]):1:1: note: `B` is part of the cycle
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						"""
+						public protocol UserService {}
+
+						public struct AnyUserService: UserService {
+						    public init(_ base: any UserService) {
+						        self.base = base
+						    }
+
+						    let base: any UserService
+						}
+						""",
+						seamFixtureType(named: "Analytics", declarations: []),
+						seamFixtureType(named: "A", declarations: ["@Instantiated let b: B", "@Received let analytics: Analytics"]),
+						seamFixtureType(named: "B", declarations: [#"@Instantiated(fulfilledByType: "LoopingUserService", erasedToConcreteExistential: true) let userService: AnyUserService"#, "@Received let analytics: Analytics"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let aBuilder: Instantiator<A>"]),
+					],
+					app: [
+						seamFixtureType(named: "LoopingUserService", declarations: ["@Instantiated let b: B", "@Received let analytics: Analytics"], conformances: ", UserService"),
+						Self.canonicalRoot,
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_closesCycleAtHoleInsideFill_whenFulfillerInstantiatesTypeOfSeamsPathUnderAnotherLabel(holeIsConstant: Bool) async throws {
+		// The remedy above: `LoopingUserService` instantiates `A` under another label, so the cycle closes at the hole inside
+		// the fill `App` generates, which calls the fill's own function, with `otherBuilder` along the cycle.
+		let hole = holeIsConstant
+			? #"@Instantiated(fulfilledByType: "LoopingUserService", erasedToConcreteExistential: true) let userService: AnyUserService"#
+			: #"@Instantiated(fulfilledByType: "LoopingUserService", erasedToConcreteExistential: true) let userServiceBuilder: ErasedInstantiator<(), AnyUserService>"#
+		let feature = [
+			"""
+			public protocol UserService {}
+
+			public struct AnyUserService: UserService {
+			    public init(_ base: any UserService) {
+			        self.base = base
+			    }
+
+			    let base: any UserService
+			}
+			""",
+			seamFixtureType(named: "Analytics", declarations: []),
+			seamFixtureType(named: "A", declarations: [hole, "@Received let analytics: Analytics"]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let aBuilder: Instantiator<A>"]),
+		]
+		let fulfillers = [seamFixtureType(named: "LoopingUserService", declarations: ["@Instantiated let otherBuilder: Instantiator<A>", "@Received let analytics: Analytics"], conformances: ", UserService")]
+		let modules = Self.modules(feature: feature, app: fulfillers + [Self.canonicalRoot])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": holeIsConstant ? """
+		extension Root {
+		    public init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_0D9D2BA27642383C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_A_userService) -> AnyUserService {
+		                let analytics = scope.analytics
+		                func __safeDI_userService() -> LoopingUserService {
+		                    func __safeDI_otherBuilder() -> A {
+		                        let userService = AnyUserService(__safeDI_userService())
+		                        return A(userService: userService, analytics: analytics)
+		                    }
+		                    let otherBuilder = Instantiator<A>(__safeDI_otherBuilder)
+		                    return LoopingUserService(otherBuilder: otherBuilder, analytics: analytics)
+		                }
+		                let userService = AnyUserService(__safeDI_userService())
+		                return userService
+		            }
+		            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		""" : """
+		extension Root {
+		    public init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_7500534FB78C7309.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_userServiceBuilderBuilder(_ scope: Service.SafeDIScope_A_userServiceBuilder) -> ErasedInstantiator<(), AnyUserService> {
+		                let analytics = scope.analytics
+		                func __safeDI_userServiceBuilder() -> LoopingUserService {
+		                    func __safeDI_otherBuilder() -> A {
+		                        let userServiceBuilder = ErasedInstantiator<(), AnyUserService> {
+		                            AnyUserService(__safeDI_userServiceBuilder())
+		                        }
+		                        return A(userServiceBuilder: userServiceBuilder, analytics: analytics)
+		                    }
+		                    let otherBuilder = Instantiator<A>(__safeDI_otherBuilder)
+		                    return LoopingUserService(otherBuilder: otherBuilder, analytics: analytics)
+		                }
+		                let userServiceBuilder = ErasedInstantiator<(), AnyUserService> {
+		                    AnyUserService(__safeDI_userServiceBuilder())
+		                }
+		                return userServiceBuilder
+		            }
+		            return Service(userServiceBuilderBuilder: __safeDI_userServiceBuilderBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [Self.canonicalRoot]))
 	}
 
 	// MARK: Names
@@ -3641,7 +3806,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// which `Service`'s tree is building; the chain names the type that declares each property.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Middle.swift"]):10:5: error: SafeDI cannot fill the builder for `A`'s `userService: any UserService` in `Service`'s dependency tree: `Middle`, beneath `LoopingUserService`, which fills it, instantiates `aBuilder: Instantiator<A>`, which `Service`'s tree is building where it builds `userService` (Service -> aBuilder -> A -> userService -> LoopingUserService -> middle -> Middle -> aBuilder). Code generated outside module `Feature` cannot refer to the function `Service`'s initializer builds `A` with, and building it again would hand it other values than `Service`'s tree holds. Instantiate the seam where `Middle` builds `A` (`@Instantiated let serviceBuilder: Instantiator<Service>`), so the cycle re-enters through the initializer SafeDI generates for `Service`; make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads.
+			\(fixtures["App"]!["Middle.swift"]):10:5: error: SafeDI cannot fill the builder for `A`'s `userService: any UserService` in `Service`'s dependency tree: `Middle`, beneath `LoopingUserService`, which fills it, instantiates `aBuilder: Instantiator<A>`, which `Service`'s tree is building where it builds `userService` (Service -> aBuilder -> A -> userService -> LoopingUserService -> middle -> Middle -> aBuilder). Code generated outside module `Feature` cannot refer to the function `Service`'s initializer builds `A` with, and building it again would hand it other values than `Service`'s tree holds. Instantiate the seam where `Middle` builds `A` (`@Instantiated let serviceBuilder: Instantiator<Service>`), so the cycle re-enters through the initializer SafeDI generates for `Service`; make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads; or give `aBuilder` on `Middle` another label, so the cycle closes at `userService` itself.
 			\(fixtures["Feature"]!["Service.swift"]):9:5: note: `Service` instantiates `aBuilder: Instantiator<A>` here.
 			"""
 		}) {

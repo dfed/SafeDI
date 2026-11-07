@@ -50,10 +50,10 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 			await assertThrowsError(
 				diagnostics: { fixtures in
 					"""
-					\(fixtures["Module.swift"]):34:5: error: Dependency cycle: `X` -> `X2` -> `X`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `x: X` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+					\(fixtures["Module.swift"]):34:5: error: Dependency cycle: `X` -> `X2` -> `X`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `x: X`, `x2: X2` to an instantiator.
 					\(fixtures["Module.swift"]):25:1: note: `X` is part of the cycle
 					\(fixtures["Module.swift"]):31:1: note: `X2` is part of the cycle
-					\(fixtures["Module.swift"]):46:5: error: Dependency cycle: `Y` -> `Y2` -> `Y`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `y: Y` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+					\(fixtures["Module.swift"]):46:5: error: Dependency cycle: `Y` -> `Y2` -> `Y`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `y: Y`, `y2: Y2` to an instantiator.
 					\(fixtures["Module.swift"]):37:1: note: `Y` is part of the cycle
 					\(fixtures["Module.swift"]):43:1: note: `Y2` is part of the cycle
 					"""
@@ -127,10 +127,10 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 			await assertThrowsError(
 				diagnostics: { fixtures in
 					"""
-					\(fixtures["Module.swift"]):18:5: error: Dependency cycle: `One` -> `Two` -> `One`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `one: One` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+					\(fixtures["Module.swift"]):18:5: error: Dependency cycle: `One` -> `Two` -> `One`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `one: One`, `two: Two` to an instantiator.
 					\(fixtures["Module.swift"]):9:1: note: `One` is part of the cycle
 					\(fixtures["Module.swift"]):15:1: note: `Two` is part of the cycle
-					\(fixtures["Module.swift"]):36:5: error: Dependency cycle: `Three` -> `Four` -> `Three`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `three: Three` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+					\(fixtures["Module.swift"]):36:5: error: Dependency cycle: `Three` -> `Four` -> `Three`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `three: Three`, `four: Four` to an instantiator.
 					\(fixtures["Module.swift"]):27:1: note: `Three` is part of the cycle
 					\(fixtures["Module.swift"]):33:1: note: `Four` is part of the cycle
 					"""

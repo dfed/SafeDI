@@ -2007,7 +2007,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// Validation inlines every seam's tree, so a cycle through a seam is rejected as any other.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):7:5: error: Dependency cycle: `Feature` -> `Screen` -> `Feature`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `feature: Feature` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+			\(fixtures["Screen.swift"]):7:5: error: Dependency cycle: `Feature` -> `Screen` -> `Feature`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `feature: Feature`, `screen: Screen` to an instantiator.
 			\(fixtures["Feature.swift"]):1:1: note: `Feature` is part of the cycle
 			\(fixtures["Screen.swift"]):1:1: note: `Screen` is part of the cycle
 			"""

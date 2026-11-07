@@ -26,9 +26,12 @@ import SwiftSyntax
 actor ScopeGenerator: CustomStringConvertible, Sendable {
 	// MARK: Initialization
 
-	/// - Parameter propertiesToDeclare: The properties the scope declares for the scopes it builds, which its
-	///   children therefore do not receive from its ancestors (see `Scope.propertiesToDeclare`). Empty for a
-	///   scope that closes a property cycle, which builds nothing.
+	/// - Parameters:
+	///   - propertiesToDeclare: The properties the scope declares for the scopes it builds, which its children therefore
+	///     do not receive from its ancestors (see `Scope.propertiesToDeclare`). Empty for a scope that closes a property
+	///     cycle, which builds nothing.
+	///   - closedOnDeclaration: For a scope that closes a property cycle, the declaration it repeats (see
+	///     `closedOnDeclaration`).
 	init(
 		instantiable: Instantiable,
 		property: Property?,
@@ -39,6 +42,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		forwardedLazilyInstantiatedInstanceProperties: [Property],
 		erasedToConcreteExistential: Bool,
 		isPropertyCycle: Bool,
+		closedOnDeclaration: BuiltDeclaration? = nil,
 		constructionComments: Scope.ConstructionComments,
 		seamCall: SeamCall? = nil,
 		publicMockCall: PublicMockCall? = nil,
@@ -55,6 +59,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) {
 		self.constructionComments = constructionComments
 		self.constructsWithHandWrittenMock = constructsWithHandWrittenMock
+		self.closedOnDeclaration = closedOnDeclaration
 		self.cycleParameters = cycleParameters
 		self.cycleParameterUnavailableProperties = cycleParameterUnavailableProperties
 		self.callSiteLazilyInstantiatedInstanceProperties = callSiteLazilyInstantiatedInstanceProperties ?? lazilyInstantiatedInstanceProperties
@@ -87,51 +92,57 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			description = instantiable.concreteInstantiable.asSource
 		}
 		self.property = property
+		let declaration = property.map { BuiltDeclaration(property: $0, concreteType: instantiable.concreteInstantiable) }
+		self.declaration = declaration
 		self.propertiesToGenerate = propertiesToGenerate
 		containsBuildSite = propertiesToGenerate.contains(where: \.containsBuildSite)
 		fieldsCarriedBySites = containsBuildSite ? Set(propertiesToGenerate.flatMap(\.fieldsCarriedBySites)) : []
 		passesUpBuilder = !passedUpHoles.isEmpty || propertiesToGenerate.contains(where: \.passesUpBuilder)
 		// This runs at every scope of every tree, and nearly every child is outside every cycle.
-		var childCycleClosingProperties = Set<Property>()
+		var childCycleClosedOnDeclarations = Set<BuiltDeclaration>()
 		var childrenTakePartInCycle = false
-		for child in propertiesToGenerate where child.isReferencedByCycleClosingScope || !child.cycleClosingProperties.isEmpty {
-			childCycleClosingProperties.formUnion(child.cycleClosingProperties)
+		for child in propertiesToGenerate where child.isReferencedByCycleClosingScope || !child.cycleClosedOnDeclarations.isEmpty {
+			childCycleClosedOnDeclarations.formUnion(child.cycleClosedOnDeclarations)
 			childrenTakePartInCycle = true
 		}
 		self.childrenTakePartInCycle = childrenTakePartInCycle
 		declaresBuilderFunction = property != nil && !isPropertyCycle
-		if let property, isPropertyCycle {
-			cycleClosingProperties = [property]
+		if let closedOnDeclaration {
+			cycleClosedOnDeclarations = [closedOnDeclaration]
 			isReferencedByCycleClosingScope = false
-		} else if let property, childCycleClosingProperties.contains(property) {
-			cycleClosingProperties = childCycleClosingProperties.subtracting([property])
+		} else if let declaration, childCycleClosedOnDeclarations.contains(declaration) {
+			cycleClosedOnDeclarations = childCycleClosedOnDeclarations.subtracting([declaration])
 			isReferencedByCycleClosingScope = true
 		} else {
-			cycleClosingProperties = childCycleClosingProperties
+			cycleClosedOnDeclarations = childCycleClosedOnDeclarations
 			isReferencedByCycleClosingScope = false
 		}
 		// A cycle-closing scope refers to the builder function of the enclosing scope it closes on. When a
 		// `@Sendable` builder function lies between the two, it captures that function, which must then be
-		// `@Sendable` too.
-		var cycleClosingPropertiesReferencedFromSendableFunction = Set<Property>()
+		// `@Sendable` too. So must it when the cycle-closing scope hands it to a `Sendable` wrapper of its own, which
+		// takes a `@Sendable` function, whatever kind of declaration it repeats.
+		var cycleClosedOnDeclarationsReferencedFromSendableFunction = Set<BuiltDeclaration>()
 		for child in propertiesToGenerate {
-			cycleClosingPropertiesReferencedFromSendableFunction.formUnion(child.cycleClosingPropertiesReferencedFromSendableFunction)
+			cycleClosedOnDeclarationsReferencedFromSendableFunction.formUnion(child.cycleClosedOnDeclarationsReferencedFromSendableFunction)
 		}
-		let buildsInSendableFunction = if let property, !isPropertyCycle {
-			property.propertyType.isSendable || cycleClosingPropertiesReferencedFromSendableFunction.contains(property)
+		if let closedOnDeclaration, let property, property.propertyType.isSendable {
+			cycleClosedOnDeclarationsReferencedFromSendableFunction.insert(closedOnDeclaration)
+		}
+		let buildsInSendableFunction = if let property, let declaration, !isPropertyCycle {
+			property.propertyType.isSendable || cycleClosedOnDeclarationsReferencedFromSendableFunction.contains(declaration)
 		} else {
 			false
 		}
 		// A `@Sendable` builder function holds every reference its subtree makes to the builder functions
 		// enclosing it, including those that made it `@Sendable`.
 		if buildsInSendableFunction {
-			cycleClosingPropertiesReferencedFromSendableFunction.formUnion(childCycleClosingProperties)
+			cycleClosedOnDeclarationsReferencedFromSendableFunction.formUnion(childCycleClosedOnDeclarations)
 		}
-		if let property, !isPropertyCycle {
-			cycleClosingPropertiesReferencedFromSendableFunction.remove(property)
+		if let declaration, !isPropertyCycle {
+			cycleClosedOnDeclarationsReferencedFromSendableFunction.remove(declaration)
 		}
 		self.buildsInSendableFunction = buildsInSendableFunction
-		self.cycleClosingPropertiesReferencedFromSendableFunction = cycleClosingPropertiesReferencedFromSendableFunction
+		self.cycleClosedOnDeclarationsReferencedFromSendableFunction = cycleClosedOnDeclarationsReferencedFromSendableFunction
 		// A call inside a fill of its seam's call refers to every fill of the enclosing call by name. Where a `@Sendable`
 		// builder function that does not enclose a fill holds the reference – one between the call and the fill, a staged
 		// fill's later stage, or the call's own – the fill must be `@Sendable` too, and so must a fill the call passes to a
@@ -366,20 +377,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			? onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired
 			: onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.subtracting(requiredReceivedProperties.map(\.asUnwrappedProperty))
 		// The labels the scopes between each cycle-closing scope in this subtree and the scope it closes on declare, by the
-		// property the cycle closes on. A scope a cycle closes on takes those of them its tree receives from the scopes
+		// declaration the cycle closes on. A scope a cycle closes on takes those of them its tree receives from the scopes
 		// enclosing it as parameters of its builder function. Nearly every scope takes part in no cycle.
-		var cycleClosingRedeclaredLabels = [Property: Set<String>]()
-		if let property, isPropertyCycle {
-			cycleClosingRedeclaredLabels[property] = []
+		var cycleClosingRedeclaredLabels = [BuiltDeclaration: Set<String>]()
+		if let closedOnDeclaration {
+			cycleClosingRedeclaredLabels[closedOnDeclaration] = []
 		} else if childrenTakePartInCycle {
 			for child in propertiesToGenerate {
-				for (closedOnProperty, labels) in child.cycleClosingRedeclaredLabels {
-					cycleClosingRedeclaredLabels[closedOnProperty, default: []].formUnion(labels)
+				for (closedOnDeclaration, labels) in child.cycleClosingRedeclaredLabels {
+					cycleClosingRedeclaredLabels[closedOnDeclaration, default: []].formUnion(labels)
 				}
 			}
 		}
 		var foundCycleParameters = [CycleParameter]()
-		if let property, !isPropertyCycle, let labels = cycleClosingRedeclaredLabels.removeValue(forKey: property) {
+		if let property, let declaration, !isPropertyCycle, let labels = cycleClosingRedeclaredLabels.removeValue(forKey: declaration) {
 			// The property's own label is no parameter: the function's body is passed `nil` for it wherever it is called,
 			// since every call is made inside the tree that builds a declaration of the label – the property itself where
 			// the function is declared, and the cycle-closing scope's own property where it closes the cycle. Nor is a label
@@ -477,9 +488,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			: nil
 		requiredOnlyIfAvailableAliasProperties = []
 		requiredAliasFulfillingProperties = []
-		cycleClosingProperties = []
+		cycleClosedOnDeclarations = []
 		isReferencedByCycleClosingScope = false
-		cycleClosingPropertiesReferencedFromSendableFunction = []
+		closedOnDeclaration = nil
+		declaration = nil
+		cycleClosedOnDeclarationsReferencedFromSendableFunction = []
 		buildsInSendableFunction = false
 		declaresBuilderFunction = false
 		childrenTakePartInCycle = false
@@ -540,9 +553,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		onlyIfAvailableAliasPropertyProvidedByEnclosingScope = nil
 		requiredOnlyIfAvailableAliasProperties = []
 		requiredAliasFulfillingProperties = []
-		cycleClosingProperties = []
+		cycleClosedOnDeclarations = []
 		isReferencedByCycleClosingScope = false
-		cycleClosingPropertiesReferencedFromSendableFunction = []
+		closedOnDeclaration = nil
+		declaration = nil
+		cycleClosedOnDeclarationsReferencedFromSendableFunction = []
 		buildsInSendableFunction = false
 		declaresBuilderFunction = false
 		childrenTakePartInCycle = false
@@ -1017,12 +1032,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// - Parameter enclosingCycleFunctions: The builder functions enclosing this scope that lazy cycles close on and that
-	///   take parameters (see `CycleParameter`), by the property each builds.
+	///   take parameters (see `CycleParameter`), by the declaration each builds.
 	private func seamTierOmissions(
 		of instantiable: Instantiable,
 		propertiesGeneratedLater: Set<Property>,
 		declarationsByLabel: [String: [VisibleDeclaration]],
-		enclosingCycleFunctions: [Property: ObjectIdentifier],
+		enclosingCycleFunctions: [BuiltDeclaration: ObjectIdentifier],
 		referenceLocation: Dependency.DeclarationLocation?,
 		isOwnFile: @escaping @Sendable (String) -> Bool,
 	) async -> OmissionFindings<SeamTierOmission> {
@@ -1070,8 +1085,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for child in orderedChildren {
 			guard case let .property(childInstantiable, childProperty, _, _, isPropertyCycle, seamCall) = child.generator.scopeData else { continue }
 			if isPropertyCycle {
-				// A scope that closes a cycle constructs nothing: it calls the builder function it refers to.
-				findings.recordCalls(by: child, of: enclosingCycleFunctions[childProperty], among: childDeclarationsByLabel)
+				// A scope that closes a cycle constructs nothing: it calls the builder function of the declaration it repeats.
+				findings.recordCalls(by: child, of: child.generator.closedOnDeclaration.flatMap { enclosingCycleFunctions[$0] }, among: childDeclarationsByLabel)
 			} else if let seamCall {
 				let omittedParameters = seamCall.omittedParameters.map { ($0, false) } + seamCall.noTierParameters.map { ($0, true) }
 				for (parameter, isNoTierParameter) in omittedParameters {
@@ -1109,7 +1124,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					of: childInstantiable,
 					propertiesGeneratedLater: child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater),
 					declarationsByLabel: child.generator.bodyDeclarations(function: function, enclosing: childDeclarationsByLabel),
-					enclosingCycleFunctions: child.generator.bodyEnclosingCycleFunctions(function: function, property: childProperty, enclosing: enclosingCycleFunctions),
+					enclosingCycleFunctions: child.generator.bodyEnclosingCycleFunctions(function: function, enclosing: enclosingCycleFunctions),
 					referenceLocation: childReferenceLocation(of: child.generator.property),
 					isOwnFile: isOwnFile,
 				))
@@ -1146,12 +1161,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// - Parameter enclosingCycleFunctions: The builder functions enclosing this scope that lazy cycles close on and that
-	///   take parameters (see `CycleParameter`), by the property each builds.
+	///   take parameters (see `CycleParameter`), by the declaration each builds.
 	private func publicMockTierOmissions(
 		of instantiable: Instantiable,
 		propertiesGeneratedLater: Set<Property>,
 		declarationsByLabel: [String: [VisibleDeclaration]],
-		enclosingCycleFunctions: [Property: ObjectIdentifier],
+		enclosingCycleFunctions: [BuiltDeclaration: ObjectIdentifier],
 	) async -> OmissionFindings<PublicMockTierOmission> {
 		let declaringType = instantiable.concreteInstantiable
 		var declarationLocationByProperty = [Property: Dependency.DeclarationLocation?]()
@@ -1191,8 +1206,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for child in orderedChildren {
 			guard case let .property(childInstantiable, childProperty, _, _, isPropertyCycle, _) = child.generator.scopeData else { continue }
 			if isPropertyCycle {
-				// A scope that closes a cycle constructs nothing: it calls the builder function it refers to.
-				findings.recordCalls(by: child, of: enclosingCycleFunctions[childProperty], among: childDeclarationsByLabel)
+				// A scope that closes a cycle constructs nothing: it calls the builder function of the declaration it repeats.
+				findings.recordCalls(by: child, of: child.generator.closedOnDeclaration.flatMap { enclosingCycleFunctions[$0] }, among: childDeclarationsByLabel)
 			} else if let publicMockCall = child.generator.publicMockCall {
 				for parameter in publicMockCall.omittedParameters {
 					// The leaf receives the parameter only if available, as its optional form: generation would pass it
@@ -1225,7 +1240,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					of: childInstantiable,
 					propertiesGeneratedLater: child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater),
 					declarationsByLabel: child.generator.bodyDeclarations(function: function, enclosing: childDeclarationsByLabel),
-					enclosingCycleFunctions: child.generator.bodyEnclosingCycleFunctions(function: function, property: childProperty, enclosing: enclosingCycleFunctions),
+					enclosingCycleFunctions: child.generator.bodyEnclosingCycleFunctions(function: function, enclosing: enclosingCycleFunctions),
 				))
 			}
 		}
@@ -1790,7 +1805,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			} else if case let .property(_, childProperty, _, _, isPropertyCycle: true, _) = child.generator.scopeData {
 				// A scope that closes a cycle constructs nothing: it refers to an enclosing builder function, which it passes
-				// the function's parameters (see `CycleParameter`).
+				// the function's parameters (see `CycleParameter`). Where that function is `@Sendable` because the closer is
+				// built inside a `@Sendable` builder function, whatever its kind, the function captures what it reads from
+				// above it: SafeDI reports the wrappers among those, as everywhere, and the compiler any other value whose
+				// type is not `Sendable`, which SafeDI cannot tell.
 				captures.append(contentsOf: cycleParameterArgumentCaptures(of: child, property: childProperty))
 			} else if case let .property(childInstantiable, childProperty, _, _, isPropertyCycle: false, _) = child.generator.scopeData {
 				let childSendableBuilders = child.generator.buildsInSendableFunction
@@ -1966,13 +1984,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// not make a mock parameter required: a mock binds such an alias to the optional parameter. A seam's
 	/// generated initializer takes one as a required parameter, since nothing inside the tree creates it.
 	let requiredAliasFulfillingProperties: Set<Property>
-	/// The properties of the cycle-closing scopes in this subtree (see `isPropertyCycle`) whose cycle
+	/// The `closedOnDeclaration`s of the cycle-closing scopes in this subtree (see `isPropertyCycle`) whose cycle
 	/// closes on a scope enclosing this one. A cycle-closing scope declares no builder function: it
-	/// refers by name to the builder function of the enclosing scope with its property, so no builder
+	/// refers by name to the builder function of the enclosing declaration it repeats, so no builder
 	/// function declared between the two may share that name (see `builderFunctionNames`).
-	private let cycleClosingProperties: Set<Property>
+	private let cycleClosedOnDeclarations: Set<BuiltDeclaration>
 	/// Whether a cycle-closing scope in this subtree refers to this scope's builder function.
 	private let isReferencedByCycleClosingScope: Bool
+	/// For a scope that closes a property cycle, the declaration it repeats, whose builder function it calls or hands to
+	/// its wrapper: the declaration of its own property, as cycle validation sees both, built for the same concrete type
+	/// – the wrapper, where the entry it repeats is a lazily instantiated declaration's instance. A constant and a lazily
+	/// instantiated declaration of one label close on each other. Every bookkeeping of the function the cycle closes on
+	/// (`cycleClosedOnDeclarations`, `cycleClosingRedeclaredLabels`, `BuilderFunctionNames.enclosingFunctionNames`, the tier
+	/// omission passes, `Scope.createScopeGenerator`'s cycle parameter contexts) is keyed by it, and a scope claims the
+	/// reference only where its own `declaration` equals it: a declaration of the same property built for another
+	/// concrete type between the two is another function, which the closer must not call. `nil` for every other scope.
+	nonisolated let closedOnDeclaration: BuiltDeclaration?
+	/// The declaration this scope builds – its property, built for its type's concrete type – which a cycle-closing scope
+	/// beneath it names as its `closedOnDeclaration` when it repeats it. `nil` for a root, an alias or a hole, which no cycle
+	/// closes on.
+	nonisolated let declaration: BuiltDeclaration?
 	/// The parameters this scope passes the builder function a lazy cycle closes on (see `CycleParameter`): those of its
 	/// own function, which it declares, or, for a cycle-closing scope, those of the function it refers to. Empty for
 	/// nearly every scope, and for each scope of a tree created once.
@@ -1984,10 +2015,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `cycleParameters`: for a scope that declares the function, those its parameters do not hide; for any other scope,
 	/// `lazilyInstantiatedInstanceProperties`.
 	private let callSiteLazilyInstantiatedInstanceProperties: Set<Property>
-	/// For each property a cycle-closing scope in this subtree closes on above this scope, the labels the scopes between
+	/// For each declaration a cycle-closing scope in this subtree closes on above this scope, the labels the scopes between
 	/// it and this scope's parent declare – their instantiated, aliased and forwarded properties and their own builder
 	/// functions' parameters (see `CycleParameter`). Empty for nearly every scope.
-	let cycleClosingRedeclaredLabels: [Property: Set<String>]
+	let cycleClosingRedeclaredLabels: [BuiltDeclaration: Set<String>]
 	/// The parameters this scope's builder function needs, which the next pass of `Scope.createScopeGenerator` creates
 	/// the tree with: the labels its tree receives from the scopes enclosing it that a scope between it and one of its
 	/// cycle-closing scopes declares (see `CycleParameter.parameters`). Empty for nearly every scope.
@@ -1995,9 +2026,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Whether a scope in this tree found other parameters for its builder function than it was created with, so that
 	/// `Scope.createScopeGenerator` creates the tree again.
 	let cycleParametersChangedInTree: Bool
-	/// The `cycleClosingProperties` whose builder functions a cycle-closing scope in this subtree refers to
+	/// The `cycleClosedOnDeclarations` whose builder functions a cycle-closing scope in this subtree refers to
 	/// from inside a `@Sendable` builder function that does not enclose them.
-	private let cycleClosingPropertiesReferencedFromSendableFunction: Set<Property>
+	private let cycleClosedOnDeclarationsReferencedFromSendableFunction: Set<BuiltDeclaration>
 	/// Whether this scope's builder function is `@Sendable`: it builds a `SendableInstantiator`,
 	/// `SendableErasedInstantiator`, or `SendableLazilyInstantiated`, or a cycle-closing scope in its
 	/// subtree refers to it from inside a `@Sendable` builder function.
@@ -2613,11 +2644,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// `enclosingCycleFunctions`, the builder functions that take parameters a lazy cycle needs and enclose where this
-	/// scope's builder function, `function`, which builds `property`, is declared, as the function's body sees them.
-	nonisolated private func bodyEnclosingCycleFunctions(function: ObjectIdentifier, property: Property, enclosing enclosingCycleFunctions: [Property: ObjectIdentifier]) -> [Property: ObjectIdentifier] {
-		guard declaresCycleParameters else { return enclosingCycleFunctions }
+	/// scope's builder function, `function`, which builds its `declaration`, is declared, as the function's body sees them.
+	nonisolated private func bodyEnclosingCycleFunctions(function: ObjectIdentifier, enclosing enclosingCycleFunctions: [BuiltDeclaration: ObjectIdentifier]) -> [BuiltDeclaration: ObjectIdentifier] {
+		guard declaresCycleParameters, let declaration else { return enclosingCycleFunctions }
 		var bodyEnclosingCycleFunctions = enclosingCycleFunctions
-		bodyEnclosingCycleFunctions[property] = function
+		bodyEnclosingCycleFunctions[declaration] = function
 		return bodyEnclosingCycleFunctions
 	}
 
@@ -2639,6 +2670,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	nonisolated private func bodyPropertiesGeneratedLater(_ propertiesGeneratedLater: Set<Property>) -> Set<Property> {
 		guard declaresCycleParameters, !propertiesGeneratedLater.isEmpty else { return propertiesGeneratedLater }
 		return propertiesGeneratedLater.subtracting(cycleParameterProvidedForms.map(\.asUnwrappedProperty))
+	}
+
+	/// The name of the builder function this scope, which closes a property cycle on `closedOnDeclaration` and is built for
+	/// `property`, calls or hands its wrapper: the function of the declaration it repeats, as the scopes enclosing it named
+	/// it. The two properties share a label, which the function is named after unless a rename moved it.
+	nonisolated private func closedOnFunctionName(builtFor property: Property, enclosingFunctionNames: [BuiltDeclaration: String]) -> String {
+		closedOnDeclaration.flatMap { enclosingFunctionNames[$0] } ?? Self.functionName(toBuild: property)
 	}
 
 	/// The arguments this scope passes the builder function a lazy cycle closes on, labeled by parameter: the binding of
@@ -2676,7 +2714,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private func generateProperties(
 		codeGeneration: CodeGeneration = .dependencyTree,
 		propertiesGeneratedLater: Set<Property>,
-		enclosingFunctionNames: [Property: String],
+		enclosingFunctionNames: [BuiltDeclaration: String],
 		leadingMemberWhitespace: String,
 	) async throws -> [String] {
 		let orderedChildren = orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
@@ -2720,14 +2758,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		"\(ReservedName.builderFunctionNamePrefix)\(name)".spelledAsJoinedIdentifier
 	}
 
+	/// A declaration a builder function builds: its property, and the concrete type the scope declaring it builds. A
+	/// cycle repeats a declaration only when both are the same (see `closedOnDeclaration`), so two declarations of one
+	/// property that `fulfilledByType:` resolves to different types are two functions, and the nearer of the two can
+	/// hide the farther's name from a cycle-closing scope beneath both (see `builderFunctionNames`).
+	struct BuiltDeclaration: Hashable, Sendable {
+		let property: Property
+		let concreteType: TypeDescription
+	}
+
 	/// The names generated code refers to builder functions by, where they differ from `functionName(toBuild:)`.
 	private struct BuilderFunctionNames: Hashable {
 		/// The name of the scope's own builder function, or `nil` when it has the name it would have
 		/// without renaming: `functionName(toBuild:)`, or in a mock its sibling-disambiguated name.
 		var functionName: String?
 		/// The names of the builder functions of enclosing scopes that a cycle-closing scope in the
-		/// scope's subtree refers to, keyed by property, for those not named `functionName(toBuild:)`.
-		var enclosingFunctionNames = [Property: String]()
+		/// scope's subtree refers to, keyed by the declaration each builds, for those not named `functionName(toBuild:)`.
+		var enclosingFunctionNames = [BuiltDeclaration: String]()
 		/// For a fill, whether a `@Sendable` function that does not enclose it refers to it, so it is `@Sendable` too.
 		var fillIsSendable = false
 	}
@@ -2736,6 +2783,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private struct BuilderFunctionCandidate {
 		/// The property the child scope builds.
 		let property: Property
+		/// The declaration the child scope builds (see `ScopeGenerator.declaration`).
+		let declaration: BuiltDeclaration
 		/// The name of the child's builder function, unless it must be renamed, or `nil` when it is
 		/// `functionName(toBuild:)`.
 		let name: String?
@@ -2743,8 +2792,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// that is not a cycle-closing scope. Renaming a child that declares none, such as a
 		/// constant with nothing to build first, changes nothing it generates.
 		let declaresFunction: Bool
-		/// The child's `cycleClosingProperties`.
-		let cycleClosingProperties: Set<Property>
+		/// The child's `cycleClosedOnDeclarations`.
+		let cycleClosedOnDeclarations: Set<BuiltDeclaration>
 		/// The child's `isReferencedByCycleClosingScope`.
 		let isReferencedByCycleClosingScope: Bool
 		/// The names of the fills of enclosing calls that calls in the child's subtree refer to.
@@ -2773,16 +2822,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///   scope whose body holds `children`.
 	private static func builderFunctionNames(
 		for children: [BuilderFunctionCandidate],
-		enclosingFunctionNames: [Property: String],
+		enclosingFunctionNames: [BuiltDeclaration: String],
 	) -> [BuilderFunctionNames] {
-		var referencedProperties = Set<Property>()
-		for child in children where !child.cycleClosingProperties.isEmpty {
-			referencedProperties.formUnion(child.cycleClosingProperties)
+		var referencedDeclarations = Set<BuiltDeclaration>()
+		for child in children where !child.cycleClosedOnDeclarations.isEmpty {
+			referencedDeclarations.formUnion(child.cycleClosedOnDeclarations)
 		}
 		// A call inside a fill of its seam's call refers to the fill by name, as a cycle-closing scope refers to the
 		// function it closes on, so no builder function between the two may share that name either.
-		let referencedFunctionNames = Set(referencedProperties.map {
-			enclosingFunctionNames[$0, default: functionName(toBuild: $0)]
+		let referencedFunctionNames = Set(referencedDeclarations.map {
+			enclosingFunctionNames[$0, default: functionName(toBuild: $0.property)]
 		}).union(children.flatMap(\.referencedFillNames))
 		let childNames = children.map { $0.name ?? functionName(toBuild: $0.property) }
 		let renamedIndices = children.indices.filter {
@@ -2805,10 +2854,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let renamedName = renamedNameByIndex[index]
 			// A cycle-closing scope beneath the child refers to the functions enclosing it, and
 			// to the child's own function when it is the one the cycle closes on.
-			var childEnclosingFunctionNames = child.cycleClosingProperties.isEmpty ? [:] : enclosingFunctionNames
+			var childEnclosingFunctionNames = child.cycleClosedOnDeclarations.isEmpty ? [:] : enclosingFunctionNames
 			let childFunctionName = renamedName ?? childNames[index]
 			if child.isReferencedByCycleClosingScope, childFunctionName != functionName(toBuild: child.property) {
-				childEnclosingFunctionNames[child.property] = childFunctionName
+				childEnclosingFunctionNames[child.declaration] = childFunctionName
 			}
 			return BuilderFunctionNames(
 				functionName: renamedName,
@@ -2820,12 +2869,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// This scope as a child that a generated body holds, for `builderFunctionNames`, or `nil` for a
 	/// root, which no body holds.
 	nonisolated private var builderFunctionCandidate: BuilderFunctionCandidate? {
-		property.map { property in
+		declaration.map { declaration in
 			BuilderFunctionCandidate(
-				property: property,
+				property: declaration.property,
+				declaration: declaration,
 				name: nil,
 				declaresFunction: declaresBuilderFunction,
-				cycleClosingProperties: cycleClosingProperties,
+				cycleClosedOnDeclarations: cycleClosedOnDeclarations,
 				isReferencedByCycleClosingScope: isReferencedByCycleClosingScope,
 				referencedFillNames: Set(referencedFillNamesByKey.values),
 			)
@@ -2982,9 +3032,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else {
 					functionParameters.initializerFunctionParameters.map(\.description).joined()
 				}
-				// A cycle-closing scope declares no function: it refers to the enclosing one with its property.
+				// A cycle-closing scope declares no function: it refers to the enclosing one it closes on.
 				let functionName = if isPropertyCycle {
-					builderFunctionNames.enclosingFunctionNames[property, default: Self.functionName(toBuild: property)]
+					closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
 				} else {
 					builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
 				}
@@ -3044,49 +3094,88 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// The builder function is the one a constant with children declares. A constant calls it
 				// immediately; a lazily instantiated property hands it to its wrapper, which calls it the
 				// first time the instance is requested. Dependency cycle validation treats the property
-				// as a constant, so it is never the repeated property of a cycle.
-				let generatedProperties = try await seamGuardLines + generateProperties(
-					codeGeneration: codeGeneration,
-					propertiesGeneratedLater: propertiesGeneratedLater,
-					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
-					leadingMemberWhitespace: Self.standardIndent,
-				)
-				let functionName = builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
-				let functionDecorator = if propertyType.isSendable {
-					"@Sendable "
-				} else {
-					""
-				}
-				// The wrapper is always spelled with its generic argument, so the declaration needs no type
+				// as a constant, so it is never the deferred hop of a cycle. A scope that closes a cycle
+				// declares no function: it hands its wrapper the function of the declaration it repeats,
+				// with that function's cycle parameters, as an instantiator that closes a cycle does. The
+				// wrapper is always spelled with its generic argument, so the declaration needs no type
 				// annotation: an optional property receives the wrapper through optional promotion.
 				let unwrappedTypeDescription = property
 					.typeDescription
 					.unwrapped
 					.asSource
+				let cycleArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
+				let functionName = if isPropertyCycle {
+					closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
+				} else {
+					builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
+				}
 				let lazilyInstantiatedInstantiation = if erasedToConcreteExistential {
 					"""
 					\(unwrappedTypeDescription) {
-					\(Self.standardIndent)\(property.typeDescription.asInstantiatedType.asSource)(\(functionName)())
+					\(Self.standardIndent)\(property.typeDescription.asInstantiatedType.asSource)(\(functionName)(\(cycleArguments)))
 					}
 					"""
-				} else {
+				} else if cycleArguments.isEmpty {
 					"\(unwrappedTypeDescription)(\(functionName))"
+				} else {
+					"""
+					\(unwrappedTypeDescription) {
+					\(Self.standardIndent)\(functionName)(\(cycleArguments))
+					}
+					"""
 				}
+				guard !isPropertyCycle else {
+					return "\(stageCallLines)let \(property.label) = \(lazilyInstantiatedInstantiation)"
+				}
+				let generatedProperties = try await seamGuardLines + generateProperties(
+					codeGeneration: codeGeneration,
+					propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater),
+					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
+					leadingMemberWhitespace: Self.standardIndent,
+				)
+				let functionDecorator = if buildsInSendableFunction {
+					"@Sendable "
+				} else {
+					""
+				}
+				// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
+				let functionParameters = cycleParameters.map(\.property)
+				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters.map(\.description).joined()
 
 				return """
-				\(stageCallLines)\(functionDecorator)func \(functionName)() -> \(concreteTypeName) {
+				\(stageCallLines)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
 				\(generatedProperties.joined(separator: "\n"))
 				\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)\(constructionLineEnd)
 				}
 				let \(property.label) = \(lazilyInstantiatedInstantiation)
 				"""
 			case .constant:
+				let callArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
+				guard !isPropertyCycle else {
+					// A scope that closes a cycle declares no function: it calls the function of the declaration it repeats
+					// with that function's cycle parameters, typed as a constant with content is. A closer builds nothing, so
+					// it holds no seam's site and `stageCallLines` is empty, as it is for every closer.
+					let call = "\(closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames))(\(callArguments))"
+					return if erasedToConcreteExistential {
+						"\(stageCallLines)let \(property.label) = \(property.typeDescription.asSource)(\(call))\n"
+					} else {
+						"\(stageCallLines)let \(property.asSource) = \(call)\n"
+					}
+				}
 				let generatedProperties = try await seamGuardLines + generateProperties(
 					codeGeneration: codeGeneration,
-					propertiesGeneratedLater: propertiesGeneratedLater,
+					propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater),
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 					leadingMemberWhitespace: Self.standardIndent,
 				)
+				let functionDecorator = if buildsInSendableFunction {
+					"@Sendable "
+				} else {
+					""
+				}
+				// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
+				let functionParameters = cycleParameters.map(\.property)
+				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters.map(\.description).joined()
 
 				let nonEmptyGeneratedProperties = generatedProperties.filter { !$0.isEmpty }
 				let hasGeneratedContent = !nonEmptyGeneratedProperties.isEmpty
@@ -3107,7 +3196,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					""
 				} else {
 					"""
-					func \(functionName)() -> \(concreteTypeName) {
+					\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
 					\(nonEmptyGeneratedProperties.joined(separator: "\n"))
 					\(Self.standardIndent)return \(returnLineSansReturn)\(constructionLineEnd)
 					}
@@ -3122,9 +3211,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let initializer = if !hasGeneratedContent {
 					existentialWrappedReturn + constructionLineEnd
 				} else if erasedToConcreteExistential {
-					"\(property.typeDescription.asSource)(\(functionName)())"
+					"\(property.typeDescription.asSource)(\(functionName)(\(callArguments)))"
 				} else {
-					"\(functionName)()"
+					"\(functionName)(\(callArguments))"
 				}
 
 				return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
@@ -3224,7 +3313,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		isSendable: Bool,
 		codeGeneration: CodeGeneration,
 		propertiesGeneratedLater: Set<Property>,
-		enclosingFunctionNames: [Property: String],
+		enclosingFunctionNames: [BuiltDeclaration: String],
 	) async throws -> String {
 		guard let child = propertiesToGenerate.first, let property = child.property else { return "" }
 		// A field is bound where the tree reads it, or where a site inside the fill – one of the seam whose tree the fill
@@ -4683,8 +4772,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// struct shapes), use `cycleEdges` — the globally-computed feedback
 		/// arc set — instead.
 		let isPropertyCycle: Bool
-		/// The `cycleClosingProperties` of the scope this node was built from.
-		let cycleClosingProperties: Set<Property>
+		/// The `closedOnDeclaration` of the scope this node was built from: for a cycle-closing node, the declaration it
+		/// repeats, whose builder function it calls or hands to its wrapper.
+		let closedOnDeclaration: ScopeGenerator.BuiltDeclaration?
+		/// What a node beneath this one repeats to be built again around it, which then reads no override of its own
+		/// (`generateMockBodyBindings`' `isCycleNode`): the type it is instantiated as, built for the same concrete type, as
+		/// a cycle repeats a declaration (see `ScopeGenerator.closedOnDeclaration`). Two declarations of one type that
+		/// `fulfilledByType:` resolves to different types are two nodes, each reading its own override.
+		var cycleNodeKey: String {
+			"\(instantiatedTypeDescription.asSource) fulfilled by \(concreteType.asSource)"
+		}
+
+		/// The `cycleClosedOnDeclarations` of the scope this node was built from.
+		let cycleClosedOnDeclarations: Set<ScopeGenerator.BuiltDeclaration>
 		/// The `isReferencedByCycleClosingScope` of the scope this node was built from.
 		let isReferencedByCycleClosingScope: Bool
 		/// The `cycleParameters` of the scope this node was built from: the parameters of the builder function a lazy
@@ -5389,7 +5489,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					referencedFillNames: Set(childGenerator.referencedFillNamesByKey.values),
 					forwardedProperties: forwardedProperties,
 					isPropertyCycle: isPropertyCycle,
-					cycleClosingProperties: childGenerator.cycleClosingProperties,
+					closedOnDeclaration: childGenerator.closedOnDeclaration,
+					cycleClosedOnDeclarations: childGenerator.cycleClosedOnDeclarations,
 					isReferencedByCycleClosingScope: childGenerator.isReferencedByCycleClosingScope,
 					cycleParameters: childGenerator.cycleParameters,
 					cycleParameterArgumentUnavailableProperties: Set(childGenerator.cycleParameters.map(\.property)).intersection(childUnavailableProperties),
@@ -6091,7 +6192,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ancestorTypes: Set<String> = [],
 		sendableOverrideExtractor: SendableOverrideExtractor? = nil,
 		flatParameterDisambiguationMap: [String: [TypeDescription: String]] = [:],
-		enclosingFunctionNames: [Property: String] = [:],
+		enclosingFunctionNames: [BuiltDeclaration: String] = [:],
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:],
 		uncoveredDependencyNames: [String: [TypeDescription: String]] = [:],
 		sendableAutoclosureParameters: [Property: SendableAutoclosureParameter],
@@ -6111,15 +6212,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Each builder function is named after its disambiguated label, unless a cycle-closing
 		// scope beneath this level refers to an enclosing function of that name.
 		// Nearly every level holds no node of a cycle, and its nodes keep their names.
-		let builderFunctionNamesByNode = propertyNodes.contains(where: { !$0.cycleClosingProperties.isEmpty || $0.isReferencedByCycleClosingScope })
+		let builderFunctionNamesByNode = propertyNodes.contains(where: { !$0.cycleClosedOnDeclarations.isEmpty || $0.isReferencedByCycleClosingScope })
 			? builderFunctionNames(
 				for: propertyNodes.map { node in
 					let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 					return BuilderFunctionCandidate(
 						property: node.property,
+						declaration: BuiltDeclaration(property: node.property, concreteType: node.concreteType),
 						name: disambiguated == node.propertyLabel ? nil : Self.functionName(toBuildPropertyNamed: disambiguated),
 						declaresFunction: !node.isPropertyCycle,
-						cycleClosingProperties: node.cycleClosingProperties,
+						cycleClosedOnDeclarations: node.cycleClosedOnDeclarations,
 						isReferencedByCycleClosingScope: node.isReferencedByCycleClosingScope,
 						referencedFillNames: node.referencedFillNames,
 					)
@@ -6152,7 +6254,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				if let publicMockCall = node.publicMockCall, node.fillingGenerator == nil {
 					lines.append("\(indent)\(publicMockCall.guardLine(for: node.concreteType))")
 				}
-				let nodeTypeKey = node.instantiatedTypeDescription.asSource
+				let nodeTypeKey = node.cycleNodeKey
 				let isCycleNode = ancestorTypes.contains(nodeTypeKey)
 				let builderFunctionNames = builderFunctionNamesByNode?[propertyNodeIndex] ?? BuilderFunctionNames()
 				propertyNodeIndex += 1
@@ -6176,9 +6278,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// the dep also resolves to this sibling) via a rebinding emitted
 				// by `emitReceiverBindings` inside the consumer's wrapper.
 				let outerBindingName = disambiguated
-				// A cycle-closing node declares no function: it refers to the enclosing one with its property.
+				// A cycle-closing node declares no function: it refers to the enclosing one of the declaration it repeats.
 				let functionName = if node.isPropertyCycle {
-					builderFunctionNames.enclosingFunctionNames[node.property, default: Self.functionName(toBuild: node.property)]
+					node.closedOnDeclaration.flatMap { builderFunctionNames.enclosingFunctionNames[$0] } ?? Self.functionName(toBuild: node.property)
 				} else {
 					builderFunctionNames.functionName ?? Self.functionName(toBuildPropertyNamed: disambiguated)
 				}
@@ -6205,15 +6307,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 
 				let nodeHandWrittenMockDefaultParameters = handWrittenMockDefaultParameters[node.concreteType, default: []]
-				// An instantiator node that declares the builder function a lazy cycle closes on is constructed inside that
-				// function, whose parameters hide the bindings of their labels. Its arguments are read here once, through
-				// the extractor of an enclosing `@Sendable` function if any, so each override read has one local.
+				// A node that declares the builder function a cycle closes on is constructed inside that function, whose
+				// parameters hide the bindings of their labels. Its arguments are read here once, through the extractor of
+				// an enclosing `@Sendable` function if any, so each override read has one local.
+				let argumentLazilyInstantiatedBindingNames = !node.isPropertyCycle && !node.cycleParameters.isEmpty
+					? builderLazilyInstantiatedBindingNames(for: node, from: lazilyInstantiatedBindingNames)
+					: lazilyInstantiatedBindingNames
 				let arguments = mockBuilderArguments(
 					for: node,
 					nodePath: nodePath,
-					lazilyInstantiatedBindingNames: node.isInstantiator && !node.isPropertyCycle && !node.cycleParameters.isEmpty
-						? builderLazilyInstantiatedBindingNames(for: node, from: lazilyInstantiatedBindingNames)
-						: lazilyInstantiatedBindingNames,
+					lazilyInstantiatedBindingNames: argumentLazilyInstantiatedBindingNames,
 					uncoveredDependencyNames: uncoveredDependencyNames,
 					sendableOverrideExtractor: sendableOverrideExtractor,
 					overrideReachable: thisOverrideReachable,
@@ -6274,6 +6377,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						promotedParameterName: promotedParameterName,
 						publicMockOverridesIsSendableClosure: publicMockOverridesIsSendableClosure,
 					))
+				} else if node.isPropertyCycle {
+					// A constant that closes a cycle declares no function: it calls the function of the declaration it
+					// repeats with that function's cycle parameters. It reads no override of its own (`isCycleNode`); the
+					// function reads the declaration's, so an override applies to every build of the type, re-entries too.
+					let closerArguments = mockCycleParameterArguments(
+						for: node,
+						flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+						lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+					).joined(separator: ", ")
+					lines.append("\(indent)let \(outerBindingName): \(node.instantiatedTypeDescription.asSource) = \(functionName)(\(closerArguments))")
 				} else if node.requiresFunctionWrapper
 					|| hasDisambiguatedReceiver(node, flatParameterDisambiguationMap: combinedDisambiguationMap)
 					|| !sendableAutoclosureBindings.isEmpty
@@ -6292,19 +6405,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// The node's own receives have labels of their own, which neither its declarations nor its uncovered
 					// dependencies share.
 					let uncoveredDependencies = uncoveredInstantiatedDependencies(of: node)
+					// The parameters of the builder function, when a cycle closes on it, which hide the bindings of their
+					// labels inside it, as an instantiator's do (`generateInstantiatorBinding`).
+					let ownCycleParameters = node.cycleParameters
+					let ownCycleParameterForms = ownCycleParameters.flatMap(\.providedForms).sorted()
 					let functionDisambiguationMap = routingReceives(
 						of: uncoveredDependencies,
 						toParametersNamed: uncoveredDependencyNames,
 						in: removingRenames(
 							hiddenByDeclarationsOf: node.children,
+							parameters: ownCycleParameterForms,
 							from: combinedDisambiguationMap,
 						),
 					)
 					let functionLazilyInstantiatedBindingNames = removingRenames(
 						hiddenByDeclarationsOf: node.children,
-						parameters: uncoveredDependencies.map(\.property),
+						parameters: uncoveredDependencies.map(\.property) + ownCycleParameterForms,
 						from: lazilyInstantiatedBindingNames,
 					)
+					let functionParameters = ownCycleParameters.map(\.property)
+					let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters.map(\.description).joined()
+					let callArguments = mockCycleParameterArguments(
+						for: node,
+						flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+						lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+					).joined(separator: ", ")
+					let functionDecorator = node.buildsInSendableFunction ? "@Sendable " : ""
 
 					let receiverBindings = emitReceiverBindings(
 						for: node.dependencies,
@@ -6314,6 +6440,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						indent: innerIndent,
 					)
 
+					// A `@Sendable` function that is not already inside another one – one a cycle closes on from inside a
+					// `@Sendable` builder function – starts a new extraction, as an instantiator's does: every
+					// `safeDIOverrides` read in its body becomes a local declared before it.
+					let startedSendableOverrideExtractor: SendableOverrideExtractor? = if sendableOverrideExtractor == nil, node.buildsInSendableFunction {
+						SendableOverrideExtractor(functionName: functionName)
+					} else {
+						nil
+					}
 					var childAncestors = ancestorTypes
 					childAncestors.insert(nodeTypeKey)
 					let childBindings = await generateMockBodyBindings(
@@ -6321,7 +6455,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						parentPath: nodePath,
 						indent: innerIndent,
 						ancestorTypes: childAncestors,
-						sendableOverrideExtractor: sendableOverrideExtractor,
+						sendableOverrideExtractor: sendableOverrideExtractor ?? startedSendableOverrideExtractor,
 						flatParameterDisambiguationMap: functionDisambiguationMap,
 						enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 						lazilyInstantiatedBindingNames: functionLazilyInstantiatedBindingNames,
@@ -6335,19 +6469,50 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						publicMock: publicMock?.beneathRoot,
 					)
 
+					let functionConstructionExpression = if let startedSendableOverrideExtractor {
+						// The caller read this node's own override and arguments outside any `@Sendable` function; the
+						// construction is inside this one, so it reads them into locals too.
+						mockConstructionExpression(
+							for: node,
+							overrideExpression: overrideExpression.map {
+								startedSendableOverrideExtractor.extract($0, localNameSuffix: ReservedName.configurationBuilderPropertyName)
+							},
+							arguments: mockBuilderArguments(
+								for: node,
+								nodePath: nodePath,
+								lazilyInstantiatedBindingNames: argumentLazilyInstantiatedBindingNames,
+								uncoveredDependencyNames: uncoveredDependencyNames,
+								sendableOverrideExtractor: startedSendableOverrideExtractor,
+								overrideReachable: thisOverrideReachable,
+								handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
+								sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+								publicMock: publicMock,
+							),
+							overrideReachable: thisOverrideReachable,
+							handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
+							publicMock: publicMock,
+							publicMockOverridesIsSendableClosure: publicMockOverridesIsSendableClosure,
+						)
+					} else {
+						constructionExpression
+					}
+					for extraction in startedSendableOverrideExtractor?.extractions ?? [] {
+						lines.append("\(indent)let \(extraction.localName) = \(extraction.expression)")
+					}
+
 					// The function's return type gives both branches of the `if`
 					// expression a contextual type, so no annotation is needed.
-					lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
+					lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(propertyTypeName) {")
 					await lines.append(contentsOf: callPreamble(of: node, indent: innerIndent))
 					lines.append(contentsOf: receiverBindings)
 					lines.append(contentsOf: sendableAutoclosureBindings)
 					lines.append(contentsOf: childBindings)
-					lines.append("\(innerIndent)return \(constructionExpression)\(node.constructionLineEnd)")
+					lines.append("\(innerIndent)return \(functionConstructionExpression)\(node.constructionLineEnd)")
 					lines.append("\(indent)}")
 					if let promotedParameterName {
-						lines.append("\(indent)let \(outerBindingName): \(propertyTypeName) = \(passing(promotedParameterName, orBuilding: "\(functionName)()"))")
+						lines.append("\(indent)let \(outerBindingName): \(propertyTypeName) = \(passing(promotedParameterName, orBuilding: "\(functionName)(\(callArguments))"))")
 					} else {
-						lines.append("\(indent)let \(outerBindingName): \(propertyTypeName) = \(functionName)()")
+						lines.append("\(indent)let \(outerBindingName): \(propertyTypeName) = \(functionName)(\(callArguments))")
 					}
 				} else if let promotedParameterName {
 					// Both branches give the property's type, which the default construction may not without the annotation.
@@ -6649,7 +6814,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for node: MockParameterNode,
 		outerBindingName: String,
 		functionName: String,
-		enclosingFunctionNames: [Property: String],
+		enclosingFunctionNames: [BuiltDeclaration: String],
 		nodePath: String,
 		overrideExpression: String?,
 		arguments: [String],
@@ -6755,7 +6920,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Include this node's type in ancestors so self-referencing
 			// cycles (e.g., Instantiator<Self>) are detected.
 			var functionAncestors = ancestorTypes
-			functionAncestors.insert(node.instantiatedTypeDescription.asSource)
+			functionAncestors.insert(node.cycleNodeKey)
 			let childBindings = await generateMockBodyBindings(
 				items: node.children,
 				parentPath: nodePath,
@@ -6837,8 +7002,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				publicMockOverridesIsSendableClosure: publicMockOverridesIsSendableClosure,
 			)
 			// A public mock takes a lazily instantiated dependency it builds by value, so its builder function returns
-			// the value its caller passed, if any.
-			let constructionExpression = if let promotedParameterName, node.property.propertyType.isLazilyInstantiated {
+			// the value its caller passed, if any – unless a cycle closes on the function, whose cycle-closing scopes build
+			// the declaration they repeat again, as production does: then the wrapper's closure returns it instead.
+			let constructionExpression = if let promotedParameterName, node.property.propertyType.isLazilyInstantiated, !node.isReferencedByCycleClosingScope {
 				passing(promotedParameterName, orBuilding: builtConstructionExpression)
 			} else {
 				builtConstructionExpression
@@ -6852,7 +7018,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// The builder function now returns the property type directly (including
 		// wrapping for erasedToConcreteExistential), so no outer wrapping needed.
-		let instantiatorConstruction = if forwardedArguments.isEmpty {
+		let instantiatorConstruction = if let promotedParameterName, node.property.propertyType.isLazilyInstantiated, node.isReferencedByCycleClosingScope {
+			"""
+			\(unwrappedTypeDescription) {
+			\(indent)\(standardIndent)\(passing(promotedParameterName, orBuilding: "\(functionName)(\(forwardedArguments))"))
+			\(indent)}
+			"""
+		} else if forwardedArguments.isEmpty {
 			"\(unwrappedTypeDescription)(\(functionName))"
 		} else {
 			"""

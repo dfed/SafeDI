@@ -1048,7 +1048,10 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					chain += [ancestor.builtType?.asSource ?? "", property.property.label]
 				}
 				chain += [closingType?.asSource ?? "", closingProperty.label]
-				let renameRemedy = hole.property.propertyType.isConstant ? "" : "; or give `\(closingProperty.label)` on \(closingTypeName) another label, so the cycle closes at `\(hole.property.label)` itself"
+				// Under another label, the closing property builds the type of the path's property again, whose tree leads to
+				// the hole, so the cycle closes at the hole inside the fill with the same dependencies along it, one of which is
+				// an instantiator: a cycle with none is reported as such before a fill is judged.
+				let renameRemedy = "; or give `\(closingProperty.label)` on \(closingTypeName) another label, so the cycle closes at `\(hole.property.label)` itself"
 				return [
 					SourceDiagnostic(severity: .error, location: declarationLocation, message: "SafeDI cannot fill \(builder) in \(seamName)'s dependency tree: \(closer) instantiates `\(closingProperty.asSource)`, which \(seamName)'s tree is building where it builds `\(hole.property.label)` (\(chain.joined(separator: " -> "))). Code generated outside \(module(seamModule)) cannot refer to the function \(seamName)'s initializer builds `\(closingProperty.typeDescription.asInstantiatedType.asSource)` with, and building it again would hand it other values than \(seamName)'s tree holds. Instantiate the seam where \(closingTypeName) builds `\(closingProperty.typeDescription.asInstantiatedType.asSource)` (`@Instantiated let \(hole.scopeSeamType.asSource.prefix(1).lowercased() + hole.scopeSeamType.asSource.dropFirst())Builder: Instantiator<\(hole.scopeSeamType.asSource)>`), so the cycle re-enters through the initializer SafeDI generates for \(seamName); \(fulfillRemedy(seamModule))\(renameRemedy)."),
 				] + (hole.sitePathDeclarationLocations.indices.contains(pathIndex) ? [SourceDiagnostic(severity: .note, location: hole.sitePathDeclarationLocations[pathIndex], message: "`\(pathOwner.asSource)` instantiates `\(closingProperty.asSource)` here.")] : [])
