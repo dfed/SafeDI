@@ -205,7 +205,7 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 			activeCompilationConditions: [],
 		)
 		let module = parsed.module.moduleInfo.declared(by: membership, dependingOn: [])
-		return try #require(resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: module.instantiables))[.simple(name: "Service")])
+		return try #require(resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: module.instantiables, plainTypeDeclarations: module.plainTypeDeclarations))[.simple(name: "Service")])
 	}
 
 	/// Writes each file of `contentByFileName` into a new directory, parses them as one module as `generate` does, and
@@ -230,7 +230,7 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 			activeCompilationConditions: [],
 		)
 		return (
-			try resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: parsed.module.moduleInfo.instantiables)),
+			try resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: parsed.module.moduleInfo.instantiables, plainTypeDeclarations: parsed.module.moduleInfo.plainTypeDeclarations)),
 			filePaths,
 		)
 	}

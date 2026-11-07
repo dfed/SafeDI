@@ -93,7 +93,10 @@ struct QueryNeeds: AsyncParsableCommand {
 		}
 
 		let typeDescriptionToFulfillingInstantiableMap = try resolveSafeDIFulfilledTypes(
-			instantiables: normalizingInstantiableTypes(of: parsedModules.flatMap(\.moduleInfo.instantiables)),
+			instantiables: normalizingInstantiableTypes(
+				of: parsedModules.flatMap(\.moduleInfo.instantiables),
+				plainTypeDeclarations: parsedModules.flatMap(\.moduleInfo.plainTypeDeclarations),
+			),
 		)
 		func generator(over typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]) -> DependencyTreeGenerator {
 			DependencyTreeGenerator(

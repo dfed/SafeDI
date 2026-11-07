@@ -1652,7 +1652,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        onSend: @escaping SendableHandler = {},
 		        onMain: @escaping MainActorHandler = {},
 		        onText: @escaping Callback<String> = { _ in },
-		        onNested: @escaping Nested = {},
+		        onNested: @escaping Child.Nested = {},
 		        onHandle: Handler? = {}
 		    ) -> Child {
 		        return Child(onTap: onTap, onFinish: onFinish, onSend: onSend, onMain: onMain, onText: onText, onNested: onNested, onHandle: onHandle)
@@ -1670,9 +1670,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            onSend: @escaping SendableHandler = {},
 		            onMain: @escaping MainActorHandler = {},
 		            onText: @escaping Callback<String> = { _ in },
-		            onNested: @escaping Nested = {},
+		            onNested: @escaping Child.Nested = {},
 		            onHandle: Handler? = {},
-		            _ safeDIBuilder: ((@escaping Handler, @escaping Handler, @escaping SendableHandler, @escaping MainActorHandler, @escaping Callback<String>, @escaping Nested, Handler?) -> Child)? = nil
+		            _ safeDIBuilder: ((@escaping Handler, @escaping Handler, @escaping SendableHandler, @escaping MainActorHandler, @escaping Callback<String>, @escaping Child.Nested, Handler?) -> Child)? = nil
 		        ) {
 		            self.onTap = onTap
 		            self.onFinish = onFinish
@@ -1689,10 +1689,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        let onSend: SendableHandler
 		        let onMain: MainActorHandler
 		        let onText: Callback<String>
-		        let onNested: Nested
+		        let onNested: Child.Nested
 		        let onHandle: Handler?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((@escaping Handler, @escaping Handler, @escaping SendableHandler, @escaping MainActorHandler, @escaping Callback<String>, @escaping Nested, Handler?) -> Child)?
+		        let safeDIBuilder: ((@escaping Handler, @escaping Handler, @escaping SendableHandler, @escaping MainActorHandler, @escaping Callback<String>, @escaping Child.Nested, Handler?) -> Child)?
 		    }
 		}
 		#endif

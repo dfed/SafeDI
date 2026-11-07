@@ -20,78 +20,91 @@
 
 import SafeDICore
 
-/// `unnormalizedInstantiables` with each dependency's property type, `fulfilledByType:` type, and alias
-/// `ofType:` type, and each hand-written mock's argument and return types, qualified as the compiler resolves
-/// them among the types the instantiables fulfill, so a nested type wins over a top-level type of the same
-/// name. The initializer's arguments are mapped by the qualified property types. See
-/// `TypeDescription.qualifyingInstantiatedType(within:amongInstantiableTypes:)`.
+/// `unnormalizedInstantiables` with each type a declaration spells – each dependency's property type, `fulfilledByType:`
+/// type, and alias `ofType:` type, the arguments of its initializer, other initializers, and hand-written mock, and that
+/// mock's return type – qualified as the compiler resolves it where the declaration spells it, so generated code outside
+/// the declaration names the same type. The type a dependency instantiates is qualified among the types the
+/// instantiables fulfill, so a nested type wins over a top-level type of the same name
+/// (`TypeDescription.qualifyingInstantiatedType(within:amongInstantiableTypes:)`); then each outermost name is qualified
+/// among those types and `plainTypeDeclarations` (`TypeAccessProof.NestedTypeQualifier`), so a type nested in the
+/// declaration's type, or in a type enclosing it, is qualified though it is not `@Instantiable`.
+/// - Parameter plainTypeDeclarations: The plain type declarations of the modules whose declarations
+///   `unnormalizedInstantiables` holds, each with the module that declares it.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable]) -> [Instantiable] {
+func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration]) -> [Instantiable] {
 	let instantiableTypes = Set(unnormalizedInstantiables.flatMap(\.instantiableTypes))
+	let nestedTypeQualifier = TypeAccessProof.NestedTypeQualifier(instantiables: unnormalizedInstantiables, plainTypeDeclarations: plainTypeDeclarations)
 	return unnormalizedInstantiables.map { unnormalizedInstantiable in
-		func normalized(_ typeDescription: TypeDescription) -> TypeDescription? {
+		let mentioningModule = TypeAccessProof.MentioningModule.declaration(unnormalizedInstantiable)
+		/// The instantiated type of `typeDescription` qualified among the instantiable types, or `nil` when no option
+		/// of it is one.
+		func qualifyingInstantiatedType(_ typeDescription: TypeDescription) -> TypeDescription? {
 			typeDescription.qualifyingInstantiatedType(
 				within: unnormalizedInstantiable.concreteInstantiable,
 				amongInstantiableTypes: instantiableTypes,
+				searchingTypesEnclosingIt: !unnormalizedInstantiable.declarationType.isExtension,
 			)
 		}
-		let unnormalizedToNormalizedTypeMap = unnormalizedInstantiable.dependencies.reduce(
-			into: [TypeDescription: TypeDescription](),
-		) { partialResult, nextDependency in
-			if let bestTypeDescription = normalized(nextDependency.property.typeDescription) {
-				partialResult[nextDependency.property.typeDescription] = bestTypeDescription
-			}
+		/// `typeDescription`, which a member of the declaration spells, qualified as the compiler resolves it there.
+		func normalized(_ typeDescription: TypeDescription) -> TypeDescription {
+			nestedTypeQualifier.qualifyingNestedTypes(
+				in: qualifyingInstantiatedType(typeDescription) ?? typeDescription,
+				writtenWithin: unnormalizedInstantiable.concreteInstantiable,
+				// An extension-based declaration's members are written in an extension at file scope.
+				searchingTypesEnclosingIt: !unnormalizedInstantiable.declarationType.isExtension,
+				mentionedFrom: mentioningModule,
+			)
 		}
 
 		let normalizedDependencies = unnormalizedInstantiable.dependencies.map { dependency in
 			// The type that fulfills an instantiated or aliased dependency is written where the property is.
-			let normalizedSource: Dependency.Source? = switch dependency.source {
+			let normalizedSource: Dependency.Source = switch dependency.source {
 			case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
-				fulfillingTypeDescription.flatMap(normalized).map {
-					.instantiated(
-						fulfillingTypeDescription: $0,
-						erasedToConcreteExistential: erasedToConcreteExistential,
-					)
-				}
+				.instantiated(
+					// `fulfilledByType:` names an `@Instantiable` type, or the dependency is reported unfulfillable.
+					fulfillingTypeDescription: fulfillingTypeDescription.map { qualifyingInstantiatedType($0) ?? $0 },
+					erasedToConcreteExistential: erasedToConcreteExistential,
+				)
 			case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
-				normalized(fulfillingProperty.typeDescription).map {
-					.aliased(
-						fulfillingProperty: fulfillingProperty.withUpdatedTypeDescription($0),
-						erasedToConcreteExistential: erasedToConcreteExistential,
-						onlyIfAvailable: onlyIfAvailable,
-					)
-				}
+				.aliased(
+					fulfillingProperty: fulfillingProperty.withUpdatedTypeDescription(normalized(fulfillingProperty.typeDescription)),
+					erasedToConcreteExistential: erasedToConcreteExistential,
+					onlyIfAvailable: onlyIfAvailable,
+				)
 			case .forwarded, .received:
-				nil
-			}
-			let normalizedTypeDescription = unnormalizedToNormalizedTypeMap[dependency.property.typeDescription]
-			guard normalizedSource != nil || normalizedTypeDescription != nil else {
-				// Default to what was in the code – we'll probably error later
-				return dependency
+				dependency.source
 			}
 			return Dependency(
-				property: normalizedTypeDescription.map(dependency.property.withUpdatedTypeDescription) ?? dependency.property,
-				source: normalizedSource ?? dependency.source,
+				property: dependency.property.withUpdatedTypeDescription(normalized(dependency.property.typeDescription)),
+				source: normalizedSource,
 				declarationLocation: dependency.declarationLocation,
 				identifierRange: dependency.identifierRange,
 				typeAnnotationRange: dependency.typeAnnotationRange,
 				bareAttributeRange: dependency.bareAttributeRange,
 			)
 		}
+		// Each argument is qualified on its own, which qualifies a dependency's argument as its property: the same type
+		// written in the same place.
 		let normalizedInitializer = unnormalizedInstantiable.initializer?.mapArguments {
-			$0.withUpdatedTypeDescription(unnormalizedToNormalizedTypeMap[$0.typeDescription, default: $0.typeDescription])
+			$0.withUpdatedTypeDescription(normalized($0.typeDescription))
 		}
 		let normalizedAdditionalInstantiables = unnormalizedInstantiable.instantiableTypes.dropFirst().map {
-			if let enclosingType = unnormalizedInstantiable.concreteInstantiable.popNested,
-			   let bestTypeDescription = TypeDescription.nestedOptions(
-			   	referencedType: $0,
-			   	within: enclosingType,
-			   ).first(where: { instantiableTypes.contains($0) })
-			{
-				bestTypeDescription
+			if let enclosingType = unnormalizedInstantiable.concreteInstantiable.popNested, !unnormalizedInstantiable.declarationType.isExtension {
+				// `fulfillingAdditionalTypes:` is written in the macro's attribute, outside the type, in the types
+				// enclosing it; on an extension, at file scope, where every name is as written.
+				let qualifiedInstantiableType = TypeDescription.nestedOptions(
+					referencedType: $0,
+					within: enclosingType,
+				).first(where: { instantiableTypes.contains($0) }) ?? $0
+				return nestedTypeQualifier.qualifyingNestedTypes(
+					in: qualifiedInstantiableType,
+					writtenWithin: enclosingType,
+					searchingTypesEnclosingIt: true,
+					mentionedFrom: mentioningModule,
+				)
 			} else {
-				// Default to what was in the code – we'll probably error later
-				$0
+				// A top-level type's attribute is written at file scope, where every name is as written.
+				return $0
 			}
 		}
 		var normalized = Instantiable(
@@ -104,7 +117,7 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable]) 
 			// pass-through type it names unqualified must match the qualified parameter.
 			otherInitializers: unnormalizedInstantiable.otherInitializers.compactMap { initializer in
 				initializer.mapArguments {
-					$0.withUpdatedTypeDescription(normalized($0.typeDescription) ?? $0.typeDescription)
+					$0.withUpdatedTypeDescription(normalized($0.typeDescription))
 				}
 			},
 			additionalInstantiables: normalizedAdditionalInstantiables,
@@ -123,11 +136,11 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable]) 
 			// dependencies of its own to map them by, and its mock is matched to those of the declaration it merges
 			// into, so each argument's type is qualified on its own.
 			mockInitializer: unnormalizedInstantiable.mockInitializer?.mapArguments {
-				$0.withUpdatedTypeDescription(normalized($0.typeDescription) ?? $0.typeDescription)
+				$0.withUpdatedTypeDescription(normalized($0.typeDescription))
 			},
 			// The macro requires a hand-written mock to return `Self` or the type's name as its declaration spells
 			// it, so a nested type's mock returns its unqualified name.
-			mockReturnType: unnormalizedInstantiable.mockReturnType.map { normalized($0) ?? $0 },
+			mockReturnType: unnormalizedInstantiable.mockReturnType.map { normalized($0) },
 			customMockName: unnormalizedInstantiable.customMockName,
 			mockDeclarationLocation: unnormalizedInstantiable.mockDeclarationLocation,
 			mockDeclarationAccess: unnormalizedInstantiable.mockDeclarationAccess,

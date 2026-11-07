@@ -589,13 +589,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    // These providers evaluate `Root`'s own defaults outside any actor, since SafeDI sees no isolation on it. If one
 			    // reads the state of an actor `Root` takes from a conformance or a superclass and does not compile, give its
 			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_label() -> Label? { .short }
+			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_label() -> Root.Label? { .short }
 
 			    /// Overrides for the mock dependency tree.
 			    public struct SafeDIOverrides {
 			        public init(
 			            child: (() -> Child)? = nil,
-			            label: Label? = Root.__safeDI_publicMockDefault_label()
+			            label: Root.Label? = Root.__safeDI_publicMockDefault_label()
 			        ) {
 			            self.child = child
 			            self.label = label
@@ -603,7 +603,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 
 			        public let child: (() -> Child)?
 			        /// The default of `Root`'s `label` unless set; `.init(label: nil)` passes `nil`.
-			        public let label: Label?
+			        public let label: Root.Label?
 			    }
 
 			    public static func mock(
@@ -613,7 +613,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    static func mock(
-			        theme: Theme? = nil,
+			        theme: Root.Theme? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let theme = theme ?? (.light)
@@ -623,7 +623,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			}
 
 			extension Root {
-			    public enum __safeDI_Root_mock_C8047B75F1E33031 {}
+			    public enum __safeDI_Root_mock_95F68EAF30427699 {}
 			}
 			#endif
 			""",
@@ -769,17 +769,17 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 		    // These providers evaluate `Root`'s own defaults outside any actor, since SafeDI sees no isolation on it. If one
 		    // reads the state of an actor `Root` takes from a conformance or a superclass and does not compile, give its
 		    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
-		    nonisolated static func __safeDI_publicMockDefault_label() -> Label? { .short }
+		    nonisolated static func __safeDI_publicMockDefault_label() -> Root.Label? { .short }
 
 		    public static func mock(
-		        theme: Theme? = nil
+		        theme: Root.Theme? = nil
 		    ) -> Root {
 		        Root.mock(theme: theme, label: Root.__safeDI_publicMockDefault_label())
 		    }
 
 		    static func mock(
-		        theme: Theme? = nil,
-		        label: Label? = Root.__safeDI_publicMockDefault_label()
+		        theme: Root.Theme? = nil,
+		        label: Root.Label? = Root.__safeDI_publicMockDefault_label()
 		    ) -> Root {
 		        let theme = theme ?? (.light)
 		        return Root(theme: theme, label: label)
@@ -787,7 +787,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 		}
 
 		extension Root {
-		    public enum __safeDI_Root_mock_014591869680C7C5 {}
+		    public enum __safeDI_Root_mock_523A7E0915F9DB2D {}
 		}
 		#endif
 		"""])
@@ -1250,9 +1250,10 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsInternalConfigurationSpelling_whenInternalMockBesidePublicMockBuildsTypeWithNestedDefault() async throws {
-		// `Other`'s internal mock reads `Child.SafeDIMockConfiguration`, which is declared in `Child`'s extension and so
-		// names `Theme` as written; only the public mock's module-level configuration qualifies it.
+	mutating func generate_qualifiesTypeInInternalConfiguration_whenInternalMockBesidePublicMockBuildsTypeWithNestedDefault() async throws {
+		// `Other`'s internal mock reads `Child.SafeDIMockConfiguration`, which is declared in `Child`'s extension, and the
+		// public mock's module-level configuration is declared outside `Child`: both name `Theme` qualified, as SafeDI
+		// normalizes every type a declaration spells.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				Self.root(instantiating: "child: Child"),
@@ -1317,16 +1318,16 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    /// Configuration for how this type is constructed within a mock tree.
 			    struct SafeDIMockConfiguration {
 			        init(
-			            theme: Theme = .light,
-			            _ safeDIBuilder: ((Theme) -> Child)? = nil
+			            theme: Child.Theme = .light,
+			            _ safeDIBuilder: ((Child.Theme) -> Child)? = nil
 			        ) {
 			            self.theme = theme
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        let theme: Theme
+			        let theme: Child.Theme
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Theme) -> Child)?
+			        let safeDIBuilder: ((Child.Theme) -> Child)?
 			    }
 			}
 

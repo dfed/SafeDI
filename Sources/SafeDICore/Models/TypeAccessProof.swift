@@ -393,28 +393,6 @@ public struct TypeAccessProof: Sendable {
 		return ParameterAccess(level: narrowest?.level ?? .public, cause: narrowest?.cause)
 	}
 
-	/// `type`, which a member of `enclosingType` spells – its construction initializer, `instantiate(…)` method or
-	/// hand-written mock – with each type it names qualified as Swift resolves the type's outermost name there, so that
-	/// code outside `enclosingType` names the same type: member lookup comes before the enclosing scopes, so a type
-	/// nested in `enclosingType` that SafeDI reads a declaration of wins, then one nested in the type enclosing it, and
-	/// so on outward. Written in `Outer.Child`, `Theme` is `Outer.Child.Theme` when SafeDI reads that declaration, else
-	/// `Outer.Theme` when it reads that one. A name SafeDI reads no nested declaration of – a top-level type, a module's
-	/// name, a name already qualified from the outermost, or a type `enclosingType` inherits from a superclass or a
-	/// protocol – is kept as written, as is every name after the outermost.
-	public func qualifyingNestedTypes(in type: TypeDescription, writtenWithin enclosingType: TypeDescription) -> TypeDescription {
-		// The member is declared where `enclosingType`'s declaration is, in whose module the name resolves.
-		let mentioningModule = entries[enclosingType].map(MentioningModule.declaration) ?? .generatedCode(ofModuleNamed: nil, isRunsOwnModule: true)
-		return type.nestingOutermostNames { name in
-			// The options run from the most qualified outward and end with the name as written, which is kept.
-			TypeDescription.nestedOptions(referencedType: .simple(name: name), within: enclosingType)
-				.dropLast()
-				.first { option in
-					instantiables[option] != nil || !plainTypeDeclarations.candidates(named: option, mentionedFrom: mentioningModule).isEmpty
-				}?
-				.popNested
-		}
-	}
-
 	/// The types that `types` name which no declaration SafeDI reads declares – no entry, no plain declaration a mention
 	/// in `mentioningModule` resolves to, and no recorded type enclosing them – and that counts as `public` therefore,
 	/// with the unread types that the entries and plain declarations they name are declared in extensions of, and those of
@@ -934,6 +912,65 @@ extension TypeAccessProof.Cause {
 	}
 }
 
+// MARK: - TypeAccessProof.NestedTypeQualifier
+
+extension TypeAccessProof {
+	/// Qualifies each type a member of a declaration spells by the nested type's own name as Swift resolves the type's
+	/// outermost name there, so that code outside the declaration names the same type: member lookup comes before the
+	/// enclosing scopes, so a type nested in the declaration's type that SafeDI reads a declaration of wins, then one
+	/// nested in the type enclosing it, and so on outward. Written in `Outer.Child`, `Theme` is `Outer.Child.Theme` when
+	/// SafeDI reads that declaration, else `Outer.Theme` when it reads that one. A member of an extension is written at
+	/// file scope, where only the extended type's members come before the top level. A name SafeDI reads no nested
+	/// declaration of – a top-level type, a module's name, a name already qualified from the outermost, or a type the
+	/// declaration's type inherits from a superclass or a protocol – is kept as written, as is every name after the
+	/// outermost. Normalization qualifies every type the declarations spell with it
+	/// (`normalizingInstantiableTypes(of:plainTypeDeclarations:)`), so the code SafeDI generates outside a declaration,
+	/// and the access the proof reads, name the type the declaration names.
+	public struct NestedTypeQualifier: Sendable {
+		/// A qualifier over the declarations of one run, before normalization: `instantiables`, unnormalized, and
+		/// `plainTypeDeclarations`, each with the module that declares it.
+		///
+		/// A declaration SafeDI knows no module of is read as being in the module of the declaration that mentions it:
+		/// normalization runs before the run knows its own files, and such a declaration is in one of them, or in a
+		/// directory a configuration adds.
+		public init(instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration]) {
+			instantiableTypes = Set(instantiables.flatMap(\.instantiableTypes))
+			self.plainTypeDeclarations = PlainTypeDeclarations(
+				plainTypeDeclarations,
+				entryTypes: Set(instantiables.map(\.concreteInstantiable)),
+				moduleNames: Set(instantiables.compactMap(\.moduleName)),
+				isOwnFile: { _ in true },
+			)
+		}
+
+		/// `type`, which a member of `enclosingType` spells, with each type it names qualified as Swift resolves the type's
+		/// outermost name there.
+		/// - Parameters:
+		///   - searchingTypesEnclosingIt: Whether the member is written inside the types enclosing `enclosingType`, as a
+		///     member of a type declared inside them is, rather than in an extension at file scope.
+		///   - mentioningModule: The module of the declaration the member belongs to, in which the name resolves.
+		public func qualifyingNestedTypes(
+			in type: TypeDescription,
+			writtenWithin enclosingType: TypeDescription,
+			searchingTypesEnclosingIt: Bool,
+			mentionedFrom mentioningModule: MentioningModule,
+		) -> TypeDescription {
+			type.nestingOutermostNames { name in
+				// The options run from the most qualified outward and end with the name as written, which is kept.
+				let options = TypeDescription.nestedOptions(referencedType: .simple(name: name), within: enclosingType).dropLast()
+				return (searchingTypesEnclosingIt ? options : options.prefix(1))
+					.first { option in
+						instantiableTypes.contains(option) || !plainTypeDeclarations.candidates(named: option, mentionedFrom: mentioningModule).isEmpty
+					}?
+					.popNested
+			}
+		}
+
+		private let instantiableTypes: Set<TypeDescription>
+		private let plainTypeDeclarations: PlainTypeDeclarations
+	}
+}
+
 // MARK: - TypeAccessProof.PlainTypeDeclarations
 
 extension TypeAccessProof {
@@ -965,7 +1002,10 @@ extension TypeAccessProof {
 		/// empty when SafeDI records none that module can name. A mention spelled with a module's name before the type's
 		/// (`Core.Theme`), where the view holds a module of that name and no type of it, names that module's declarations
 		/// of the rest. Otherwise the mentioning module's own declaration is what Swift resolves the name to, and without
-		/// one, a declaration another module declares `package` or wider: the only kind another module can name. A
+		/// one, a declaration another module declares `package` or wider: the only kind another module can name, and none
+		/// when the mentioning module itself declares the nested type's outermost type, which shadows every other module's
+		/// type of that name there (a module that only extends another module's type declares no type, and so names that
+		/// type's members). A
 		/// declaration SafeDI knows no module of that is not in one of the run's own files – read from a directory a
 		/// configuration adds, or by a run of the Xcode project plugin – is taken at its level when that is `package` or
 		/// wider, whichever package it is in. Generic arguments name nothing a declaration records.
@@ -981,12 +1021,20 @@ extension TypeAccessProof {
 			} else {
 				let declarations = declarationsByType[type.plainDeclarationKey] ?? []
 				let mentioningModuleDeclarations = declarations.filter { mentioningModule.declares($0, isOwnFile: isOwnFile) }
-				return mentioningModuleDeclarations.isEmpty
-					? declarations.filter { declaration in
-						(declaration.moduleName != nil || declaration.sourceFilePath.flatMap { isOwnFile?($0) } != true)
-							&& TypeAccessProof.normalized(declaration.levelBeforeExtendedTypeCap) >= .package
-					}
-					: mentioningModuleDeclarations
+				guard mentioningModuleDeclarations.isEmpty else { return mentioningModuleDeclarations }
+				// The mentioning module's own declaration of a nested type's outermost type shadows every other module's
+				// type of that name there, so a declaration another module nests in its own is not what the mention names;
+				// an extension declares no type, so a module that only extends another's type names that type's members.
+				// Own is by module name alone, nameless to nameless: a run that knows no module name counts a named
+				// module's declaration as its own above, and must not shadow that module's nested types with it.
+				let outermostTypeDeclarations = type.droppingOutermostType == nil
+					? []
+					: type.outermostTypeName.flatMap { declarationsByType[TypeDescription.simple(name: $0).plainDeclarationKey] } ?? []
+				guard !outermostTypeDeclarations.contains(where: { $0.moduleName == mentioningModule.moduleName }) else { return [] }
+				return declarations.filter { declaration in
+					(declaration.moduleName != nil || declaration.sourceFilePath.flatMap { isOwnFile?($0) } != true)
+						&& TypeAccessProof.normalized(declaration.levelBeforeExtendedTypeCap) >= .package
+				}
 			}
 		}
 

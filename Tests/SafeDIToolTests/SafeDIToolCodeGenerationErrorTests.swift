@@ -73,8 +73,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Grandchild.swift"]):6:5: error: @Received property `value: NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild. Did you mean `value: Grandchild.NestedType`?
-				\(fixtures["Grandchild.swift"]):6:26-6:36: fixit: Grandchild.NestedType
+				\(fixtures["Grandchild.swift"]):5:5: error: @Received property `value: NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild. Did you mean `value: Outer.NestedType`?
+				\(fixtures["Grandchild.swift"]):5:26-5:36: fixit: Outer.NestedType
 				"""
 			},
 		) {
@@ -91,9 +91,13 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					"""
 					import SafeDI
 
+					public enum Outer {
+					    public struct NestedType {}
+					}
+
 					@Instantiable
 					public final class Child: Instantiable {
-					    @Forwarded let value: Grandchild.NestedType
+					    @Forwarded let value: Outer.NestedType
 					    @Instantiated let grandchild: Grandchild
 					}
 					""",
@@ -102,7 +106,6 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 					@Instantiable
 					public final class Grandchild: Instantiable {
-					    public struct NestedType {}
 					    @Received let value: NestedType
 					}
 					""",
@@ -119,8 +122,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Grandchild.swift"]):5:5: error: @Received property `value: Root.NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild. Did you mean `value: NestedType`?
-				\(fixtures["Grandchild.swift"]):5:26-5:41: fixit: NestedType
+				\(fixtures["Grandchild.swift"]):5:5: error: @Received property `value: Root.NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild. Did you mean `value: Child.NestedType`?
+				\(fixtures["Grandchild.swift"]):5:26-5:41: fixit: Child.NestedType
 				"""
 			},
 		) {
