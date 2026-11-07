@@ -115,17 +115,27 @@ func executeSafeDIToolTest(
 	)
 	let swiftFiles = contentNamedSwiftFiles + pathNamedSwiftFiles
 	let fixtureDirectoryRelativePaths = swiftFiles.map { String($0.path.dropFirst(swiftFixtureDirectory.path.count + 1)) }
+	// The project root as the build system reports it to a build tool plugin that has `generate --output-directory`
+	// scan for itself: `generate`'s working directory, which holds the fixture directory.
+	let reportedProjectRootPath: String? = switch pluginInvocation {
+	case .scanDuringGenerate(reportsFixtureDirectoryThroughSymbolicLink: false):
+		FileManager.default.currentDirectoryPath
+	case .scanDuringGenerate(reportsFixtureDirectoryThroughSymbolicLink: true):
+		// The way Xcode reports a project under `/tmp`, which resolves to `/private/tmp`.
+		try symbolicLink(to: URL(fileURLWithPath: FileManager.default.currentDirectoryPath), filesToDelete: &filesToDelete).path
+	case .scanWhilePlanning, nil:
+		nil
+	}
 	// The fixture directory as the build system reports it to a build tool plugin, and spells it to the compiler.
 	let reportedFixtureDirectoryPath: String? = switch pluginInvocation {
 	case .scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: false):
 		// With its symbolic links resolved, a leading `/private` included.
 		try realPath(of: swiftFixtureDirectory)
-	case .scanDuringGenerate(reportsFixtureDirectoryThroughSymbolicLink: false):
-		swiftFixtureDirectory.path
-	case .scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: true),
-	     .scanDuringGenerate(reportsFixtureDirectoryThroughSymbolicLink: true):
+	case .scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: true):
 		// The way Xcode reports a project under `/tmp`, which resolves to `/private/tmp`.
 		try symbolicLink(to: swiftFixtureDirectory, filesToDelete: &filesToDelete).path
+	case .scanDuringGenerate:
+		try "\(#require(reportedProjectRootPath))/\(currentDirectoryRelativePath(to: swiftFixtureDirectory))"
 	case nil:
 		nil
 	}
@@ -258,8 +268,9 @@ func executeSafeDIToolTest(
 			generateArguments += ["--swift-manifest", manifestPath]
 		} else {
 			if case .scanDuringGenerate = pluginInvocation {
-				// A build tool plugin names the target's own files with the absolute paths the build system reported.
-				generateArguments += ["--output-directory", outputDirectory.path, "--mock-scoped-files"] + compilerSwiftFilePaths
+				// A build tool plugin names the target's own files with the absolute paths the build system reported,
+				// and the project root as the build system reported it.
+				generateArguments += try ["--output-directory", outputDirectory.path, "--project-root", #require(reportedProjectRootPath), "--mock-scoped-files"] + compilerSwiftFilePaths
 			}
 			for condition in activeCompilationConditions {
 				generateArguments += ["--active-compilation-conditions", condition]
@@ -552,8 +563,9 @@ enum PluginInvocation {
 	/// reuses the parse `scan` cached.
 	case scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: Bool)
 	/// The plugin cannot run `scan` while it plans the build, so `generate --output-directory` scans for itself,
-	/// reading paths relative to its working directory and naming the target's files with `--mock-scoped-files`
-	/// as the build system reports them: directly, or through a symbolic link to the fixture directory.
+	/// reading paths relative to the project root, its working directory, which `--project-root` names as the build
+	/// system reports it – directly, or through a symbolic link – and naming the target's files with
+	/// `--mock-scoped-files` under that spelling of the root.
 	case scanDuringGenerate(reportsFixtureDirectoryThroughSymbolicLink: Bool)
 }
 

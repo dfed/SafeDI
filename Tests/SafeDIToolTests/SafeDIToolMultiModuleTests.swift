@@ -299,10 +299,11 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func multiModuleTest_regeneratesDependencyRootInConsumer_whenRunUnderThePluginIntegrationOnly(integration: MultiModuleIntegration) async throws {
+	mutating func multiModuleTest_writesDependencyRootWithoutCodeInConsumer_whenRunUnderThePluginIntegrationOnly(integration: MultiModuleIntegration) async throws {
 		// `scan` plans a dependency-tree output for every file in its CSV that declares a root, and the plugin's
-		// CSV lists the dependencies' files, so every consumer writes the dependency's root again; Bazel's
-		// combined file holds only the module's own roots. This pins that behaviour as it is today.
+		// CSV lists the dependencies' files, so every consumer writes a file for the dependency's root, which holds a
+		// comment and no code, since only the module that declares a root generates it; Bazel's combined file holds only
+		// the module's own roots.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.dependencyDeclaringRoot,
 			integration: integration,
@@ -327,7 +328,9 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 			[
 				"Core": ["CoreRoot+SafeDI.swift": generatedFileHeader + coreRootCode],
 				"App": [
-					"CoreRoot+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + coreRootCode,
+					"CoreRoot+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + """
+					// SafeDI generates CoreRoot's init() only in Core, the module that declares CoreRoot. If CoreRoot() does not compile, add the SafeDI plugin to the target that declares CoreRoot.
+					""",
 					"Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + Self.rootInstantiatingEngineCode,
 				],
 			]

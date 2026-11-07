@@ -2850,54 +2850,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		}
 	}
 
-	@Test(arguments: MultiModuleIntegration.allCases)
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_leavesDependencysRootWithoutCode_whenItsTreeConstructsTypeInExtensionOfPackageType(integration: MultiModuleIntegration) async throws {
-		// M1.26 on the withheld-root path: `Base`'s root constructs `Settings.Helper`, which code in another package
-		// cannot name, since `Settings` is `package`. Under the SwiftPM plugin `App` reads `Base`'s files and leaves the
-		// root to `Base`, rather than generating code that does not compile; a `.safedi` holds no root to regenerate.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [
-				ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
-					"""
-					public protocol HelperProtocol {}
-
-					@Instantiable
-					package struct Settings: Instantiable {
-					    package init() {}
-					}
-
-					extension Settings {
-					    @Instantiable(fulfillingAdditionalTypes: [HelperProtocol.self])
-					    public struct Helper: HelperProtocol, Instantiable {
-					        public init() {}
-					    }
-					}
-					""",
-					"@Instantiable(isRoot: true)\npublic struct BaseRoot: Instantiable {\n    public init(helper: any HelperProtocol) {\n        self.helper = helper\n    }\n\n    @Instantiated(fulfilledByType: \"Settings.Helper\") let helper: any HelperProtocol\n}",
-				]),
-				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Base\n\n" + seamFixtureType(named: "Unrelated", declarations: [])], dependencies: ["Base"]),
-			],
-			integration: integration,
-			filesToDelete: &filesToDelete,
-		)
-		switch integration {
-		case .moduleInfo:
-			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + "#if canImport(Base)\nimport Base\n#endif\n\n"])
-		case .swiftPackagePlugin:
-			#expect(output.modules["App"]?.generatedFiles == [
-				"BaseRoot+SafeDI.swift": generatedFileHeader + """
-				#if canImport(Base)
-				import Base
-				#endif
-
-				// SafeDI generates the dependency tree of BaseRoot only in the module that declares it, because the tree constructs a declaration that is neither `public` nor `open`.
-				""",
-			])
-		}
-		try expectEveryModuleCompiled(output)
-	}
-
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorAtInitializer_whenCallerInAnotherPackageCallsSeamWithoutSignature() async {
@@ -3270,8 +3222,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_withholdsDependencysRoot_whenItCallsSeamOfModuleWithAnotherMockCondition() async throws {
-		// R8: `Feature`'s `FeatureRoot` calls `Service`, but `App` leaves that root to `Feature`, so no tree `App` generates
+	mutating func generate_reportsNoMockConditionDifference_whenOnlyDependencysRootCallsSeamOfModuleWithAnotherMockCondition() async throws {
+		// R8: `Feature`'s `FeatureRoot` calls `Service`, but `App` generates only its own roots, so no tree `App` generates
 		// calls the seam.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
@@ -3298,7 +3250,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			import Feature
 			#endif
 
-			// SafeDI generates the dependency tree of FeatureRoot only in the module that declares it, because the tree calls the initializer SafeDI generates for Service.
+			// SafeDI generates FeatureRoot's init() only in Feature, the module that declares FeatureRoot. If FeatureRoot() does not compile, add the SafeDI plugin to the target that declares FeatureRoot.
 			""",
 			"Root+SafeDI.swift": generatedFileHeader + """
 			#if canImport(Feature)

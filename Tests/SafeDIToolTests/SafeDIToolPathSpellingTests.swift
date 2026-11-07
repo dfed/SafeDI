@@ -187,12 +187,7 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 		// Any modifications made to this file will be overwritten on subsequent builds.
 		// Please refrain from editing this file directly.
 
-		extension InnerRoot {
-		    public init() {
-		        let dependency = Dependency()
-		        self.init(dependency: dependency)
-		    }
-		}
+		// SafeDI generates InnerRoot's init() only in the module that declares InnerRoot. If InnerRoot() does not compile, add the SafeDI plugin to the target that declares InnerRoot.
 		""",
 	]
 
