@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 import Foundation
+import Testing
 
 /// The source of a public `@Instantiable` type named `name` for a seam test's fixture, with `declarations` and an
 /// initializer taking each, conforming to `Instantiable` and to the `conformances` that follow it: a struct, or a
@@ -48,6 +49,35 @@ func seamFixtureType(
 /// `files` with no type declared as a seam, so every tree is built inline.
 func inlineFixture(_ files: [String]) -> [String] {
 	files.map { $0.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable") }
+}
+
+/// Expects the seam build of `files`, `seamOutput`, to construct the values its inline build, `inlineOutput`, constructs
+/// for `Root()`. Each file is named after the type it declares first.
+func expectSeamBuildsInlineValues(
+	of files: [String],
+	seamOutput: TestOutput,
+	inlineOutput: TestOutput,
+	filesToDelete: inout [URL],
+	sourceLocation: SourceLocation = #_sourceLocation,
+) throws {
+	func fixtureFiles(_ files: [String]) -> [String: String] {
+		var fixtureFiles = [String: String]()
+		for (index, file) in files.enumerated() {
+			let name = file.split(separator: "\n").compactMap { line -> String? in
+				guard let range = ["class ", "struct ", "enum ", "protocol ", "typealias "].lazy.compactMap({ line.range(of: $0) }).first else { return nil }
+				return String(line[range.upperBound...].prefix { $0.isLetter || $0.isNumber || $0 == "_" })
+			}.first ?? "File\(index)"
+			fixtureFiles["\(name).swift"] = file
+		}
+		return fixtureFiles
+	}
+	try expectDifferentialValuesAgree(
+		feature: DifferentialValuePath(fixtureFiles: fixtureFiles(files), generatedFiles: seamOutput.dependencyTreeFiles),
+		knownRight: DifferentialValuePath(fixtureFiles: fixtureFiles(inlineFixture(files)), generatedFiles: inlineOutput.dependencyTreeFiles),
+		probes: [DifferentialValueProbe("Root()")],
+		filesToDelete: &filesToDelete,
+		sourceLocation: sourceLocation,
+	)
 }
 
 /// `Hubs`, in package `Shop`, whose `@Instantiable` `Hub` a fixture declares `Hub.Theme` in an extension of

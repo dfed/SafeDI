@@ -81,6 +81,8 @@ struct SeamSignatureTests {
 		("accessCause", .neither),
 		("tierAccess", .callShapeAndSettledContent),
 		("isOnlyIfAvailable", .callShapeAndSettledContent),
+		// Whether the caller builds the parameter before the call, as inline builds what an alias of it reads first.
+		("requiredThroughAlias", .callShapeAndSettledContent),
 		("receivers", .settledContent),
 		// Derived from the nested seam calls the receivers come through, which the settled content holds by their tiers:
 		// what a diagnostic about a parameter on no tier names.
@@ -124,6 +126,7 @@ struct SeamSignatureTests {
 			access: label == "access" ? .package : parameter.access,
 			tierAccess: label == "tierAccess" ? .package : parameter.tierAccess,
 			isOnlyIfAvailable: label == "isOnlyIfAvailable" ? false : parameter.isOnlyIfAvailable,
+			requiredThroughAlias: label == "requiredThroughAlias" ? true : parameter.requiredThroughAlias,
 			receivers: label == "receivers" ? [] : parameter.receivers,
 			accessCause: label == "accessCause" ? .unproven(type: .simple(name: "User")) : parameter.accessCause,
 			nestedSeamCall: label == "nestedSeamCall" ? SeamSignature.NestedSeamCall(seamType: .simple(name: "Service"), seamModuleName: "Base", tier: .public, requirement: .public, callerModuleName: "Mid", parameterTierAccess: .package, receivingTypes: [.simple(name: "Badge")]) : parameter.nestedSeamCall,
