@@ -38,7 +38,7 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project’s non-root module. Must have a `.safedi` suffix. Requires '--module-name': a module info file names the module it describes. Written only when the run succeeds, and only when its bytes change.") var moduleInfoOutput: String?
 
-	@Option(help: "A path to a CSV file containing paths of SafeDI representations of other modules to parse: the `.safedi` file of each module this module imports. Each carries what a seam or public mock of a module it depends on needs, so a module this one reaches only through another is not listed.") var dependentModuleInfoFilePath: String?
+	@Option(help: "A path to a CSV file containing paths of SafeDI representations of other modules to parse: the `.safedi` file of each module this module depends on – each module whose types this module or the code SafeDI generates for its roots and mocks uses, so a module that declares a root lists every module beneath it. Each carries what a seam or public mock of a module it depends on needs, so a module is never listed only for another module's seam or public mock.") var dependentModuleInfoFilePath: String?
 
 	@Option(help: "A path to the JSON manifest `scan` writes, describing the desired Swift output files. A manifest written by hand is deprecated, and SafeDI 3.0 rejects one: pass `--output-directory`, which runs `scan` for you, or `--combined-output`, which writes every output to one file.") var swiftManifest: String?
 

@@ -3106,12 +3106,12 @@ struct SafeDIToolGraphFuzzerTests {
 	)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0x03CBD5C1EF404016
-	static let seamCorpusAcceptedSeedCount = 300
-	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x4719CEEE265AB2FC
+	static let seamCorpusFixtureHash: UInt64 = 0x8FB6ADD21F2A690A
+	static let seamCorpusAcceptedSeedCount = 292
+	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x770A6A3183616B15
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 207
+	static let seamCorpusValueOracleInspectedGraphCount = 202
 	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
 	static let seamCorpusOmittedValueGraphCount = 0
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
@@ -3140,7 +3140,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// seam tests' draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 151, 153, 163, 180, 196, 277, 298, 326, 605, 609, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x6E474857AFD23C8C
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xC48A7DC24E1A14DB
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -3357,7 +3357,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// corpus's value oracle, which the seam corpus does not run, so the seam's own shape lists it; the inherited lists
 	/// leave them out. Observed, not derived: a seed here that a run finds failing its inherited shape again is a new
 	/// failure, and goes back.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 309, 310, 311, 364, 371, 381, 393, 434, 471, 476, 525, 545, 632, 714, 728, 735, 768, 774, 786, 808, 840, 847, 903]
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 265, 309, 310, 311, 364, 371, 381, 393, 434, 471, 476, 525, 545, 632, 714, 728, 735, 768, 774, 786, 808, 840, 847, 903]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.

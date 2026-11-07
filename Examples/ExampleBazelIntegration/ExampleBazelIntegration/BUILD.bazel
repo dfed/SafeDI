@@ -17,12 +17,16 @@ safedi_swift_library(
     # The package `Subproject` and `Models` belong to, so the code SafeDI
     # generates here may call `package` initializers it generates there.
     package_name = "ExampleBazelIntegration",
-    # The modules this module imports. The initializer `Subproject`
-    # generates for its seam `WindowTitle`, which this module's root calls,
-    # depends on what `Models` declares, which `Subproject_safedi` carries.
-    safedi_deps = ["//Subproject:Subproject_safedi"],
+    # This module declares the root, so it lists every module beneath it:
+    # the root's tree can build a type any of them declares, and this
+    # module is rebuilt whenever one of them changes anyway.
+    safedi_deps = [
+        "//Models:Models_safedi",
+        "//Subproject:Subproject_safedi",
+    ],
     visibility = ["//visibility:public"],
     deps = [
+        "//Models",
         "//Subproject:Subproject",
         "@safedi//Sources/SafeDI",
     ],

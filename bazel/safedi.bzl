@@ -24,13 +24,17 @@ two artifacts:
     single statically-known file. Add `[":<rule>"]` to a downstream
     `swift_library.srcs` to compile the generated code.
 
-  - `<rule>.safedi` — the module-info artifact. A module that imports
-    this one lists this rule's label in its own `safedi_compile`'s
+  - `<rule>.safedi` — the module-info artifact. A module that depends
+    on this one lists this rule's label in its own `safedi_compile`'s
     `deps` (or `safedi_swift_library`'s `safedi_deps`) to reach
     `@Instantiable` types declared in this module without re-parsing
-    the sources. The artifact also carries what a seam or public mock
-    of a module this one depends on needs, so a module never lists a
-    module it reaches only through another.
+    the sources. A module lists each module whose types it or the code
+    SafeDI generates for its roots and mocks uses, so a module that
+    declares a root lists every module beneath it. The artifact also
+    carries what a seam or public mock of a module this one depends on
+    needs, so a module is never listed only for another module's seam
+    or public mock. The SafeDI manual's "Which modules to list" says
+    more.
 
 This rule mirrors the Tuist plugin's `SafeDI.preCompileScript`
 helper, which writes the same two artifacts in one invocation. Doing
@@ -265,10 +269,14 @@ Prefer `safedi_swift_library`, which declares this target and the
             providers = [SafeDIInfo],
             default = [],
             doc = """The `safedi_compile` labels of the modules this
-module imports, whose `.safedi` module-info artifacts this rule
-consumes for cross-module `@Instantiable` type resolution. Each
-`.safedi` carries what a seam or public mock of a module it depends on
-needs, so a module reached only through another is not listed.""",
+module depends on, whose `.safedi` module-info artifacts this rule
+consumes for cross-module `@Instantiable` type resolution: each module
+whose types this module or the code SafeDI generates for its roots and
+mocks uses, so a module that declares a root lists every module beneath
+it. Each `.safedi` carries what a seam or public mock of a module it
+depends on needs, so a module is never listed only for another module's
+seam or public mock. The SafeDI manual's "Which modules to list" says
+more.""",
         ),
         "defines": attr.string_list(
             default = [],
@@ -338,11 +346,14 @@ def safedi_swift_library(
         name: The name of the `swift_library`.
         srcs: Swift sources in this module.
         safedi_deps: The `<name>_safedi` (or `safedi_compile`) labels of
-            the modules this module imports. Each module's `.safedi`
-            carries what a seam or public mock of a module it depends
-            on needs, so a module this module reaches only through
-            another is not listed. List the libraries themselves in
-            `deps`.
+            the modules this module depends on: each module whose types
+            this module or the code SafeDI generates for its roots and
+            mocks uses, so a module that declares a root lists every
+            module beneath it. Each module's `.safedi` carries what a
+            seam or public mock of a module it depends on needs, so a
+            module is never listed only for another module's seam or
+            public mock. The SafeDI manual's "Which modules to list"
+            says more. List the libraries themselves in `deps`.
         defines: Passed to both targets.
         copts: Passed to both targets. `safedi_compile` reads only the
             `-D` flags.

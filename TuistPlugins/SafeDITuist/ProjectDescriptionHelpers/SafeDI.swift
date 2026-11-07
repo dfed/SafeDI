@@ -82,11 +82,14 @@ public enum SafeDI {
 	///     target's module (`PRODUCT_MODULE_NAME`), so two projects may
 	///     name their sources directories alike.
 	///   - dependencies: The module names (`PRODUCT_MODULE_NAME`) of the
-	///     targets this target imports, whose `.safedi` artifacts it
-	///     consumes. Each resolves to
+	///     targets this target depends on, whose `.safedi` artifacts it
+	///     consumes: each target whose types this target or the code
+	///     SafeDI generates for its roots and mocks uses, so a target that
+	///     declares a root lists every target beneath it. Each resolves to
 	///     `$(BUILT_PRODUCTS_DIR)/SafeDI/<name>.safedi`, and carries what a
 	///     seam or public mock of a module it depends on needs, so a
-	///     module this target reaches only through another is not listed.
+	///     target is never listed only for another module's seam or public
+	///     mock. The SafeDI manual's "Which modules to list" says more.
 	///     Tuist target dependencies must guarantee build order.
 	public static func preCompileScript(
 		module: String,
