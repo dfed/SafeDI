@@ -5514,6 +5514,19 @@ public actor DependencyTreeGenerator {
 			forwardedProperties.contains(property) || forwardedProperties.contains(property.asUnwrappedProperty)
 		}
 
+		// The mocked type's own aliases are bound at the mock root, beside the dependencies it promotes, so a receive in a
+		// promoted tree that one of them provides, as a scope provides a property to the scopes beneath it, reads that
+		// alias: its exact property, or the unwrapped form of an optional receive. The mock promotes nothing for such a
+		// receive, which would build a node and an override nothing reads, nor walks the tree of its type.
+		var mockedTypeAliasProperties = Set<Property>()
+		for case let .aliased(aliasProperty, _, _, _, _) in scope.propertiesToGenerate {
+			mockedTypeAliasProperties.insert(aliasProperty)
+		}
+		func isProvidedByMockedTypeAlias(_ property: Property) -> Bool {
+			!mockedTypeAliasProperties.isEmpty
+				&& ScopeGenerator.provides(property, declaredProperties: mockedTypeAliasProperties, forwardedProperties: [])
+		}
+
 		/// The scope that builds a received property promoted to the mock root, when the mock can build one.
 		/// A received dependency the mock cannot build stays received: the root's `mock()` takes it as a parameter.
 		func scopeToPromote(for receivedProperty: Property) -> (scope: Scope, erasedToConcreteExistential: Bool)? {
@@ -5537,7 +5550,10 @@ public actor DependencyTreeGenerator {
 		var scopesBuiltForRequiredProperties = [Property: Scope]()
 		repeat {
 			while let property = worklist.popLast() {
-				guard !isForwarded(property), let promotedScope = scopeToPromote(for: property)?.scope else { continue }
+				guard !isForwarded(property),
+				      !isProvidedByMockedTypeAlias(property),
+				      let promotedScope = scopeToPromote(for: property)?.scope
+				else { continue }
 				scopesBuiltForRequiredProperties[property] = promotedScope
 				guard visitedScopes.insert(ObjectIdentifier(promotedScope)).inserted else { continue }
 
@@ -5637,6 +5653,7 @@ public actor DependencyTreeGenerator {
 		let propertiesToPromote = allReceived.union(lazilyInstantiatedPropertiesToPromote).filter { receivedProperty in
 			(lazilyInstantiatedPropertiesToPromote.contains(receivedProperty) || !allOnlyIfAvailable.contains(receivedProperty))
 				&& !isForwarded(receivedProperty)
+				&& !isProvidedByMockedTypeAlias(receivedProperty)
 				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty.asUnwrappedProperty)
 		}
 		var promotedPropertiesToGenerate = [Scope.PropertyToGenerate]()

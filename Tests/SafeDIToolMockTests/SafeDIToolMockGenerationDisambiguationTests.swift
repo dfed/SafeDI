@@ -4799,7 +4799,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 	mutating func mock_takesRequiredReceiveAsParameter_whenMockedTypesOptionalAliasSharesItsLabel() async throws {
 		// Reduced from graph fuzzer seed 3217. `ProfileView`'s `onlyIfAvailable` alias binds an optional
 		// `renamedService: ServiceProtocol?`, which does not provide `Editor`'s required
-		// `renamedService: ServiceProtocol`: only a node the mock builds binds a non-optional value.
+		// `renamedService: ServiceProtocol`: only a node the mock builds binds a non-optional value. The alias is bound
+		// under a name of its own, so that it hides the parameter from no receiver of it, wherever the alias is emitted.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4920,9 +4921,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        }
 		        let profileViewBuilder = Instantiator<ProfileView>(__safeDI_profileViewBuilder)
 		        #sourceLocation(file: "\(output.fixtures["ProfileView.swift"])", line: 5)
-		        let renamedService: ServiceProtocol? = service
+		        let renamedService_ServiceProtocol: ServiceProtocol? = service
 		        #sourceLocation()
-		        return ProfileView(profileViewBuilder: profileViewBuilder, renamedService: renamedService, editor: editor, sessionBuilder: sessionBuilder)
+		        return ProfileView(profileViewBuilder: profileViewBuilder, renamedService: renamedService_ServiceProtocol, editor: editor, sessionBuilder: sessionBuilder)
 		    }
 		}
 		#endif

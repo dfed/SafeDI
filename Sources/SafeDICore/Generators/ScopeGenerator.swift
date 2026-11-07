@@ -822,8 +822,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// form (a declared form handles a non-optional version promoted to satisfy both required and
 	/// onlyIfAvailable receivers; a forwarded `x: X` fulfills an `x: X?` beneath it). A scope declares a
 	/// lazily instantiated property together with the property that receives its instance by value,
-	/// and forwards it together with that property too.
-	private static func provides(
+	/// and forwards it together with that property too. A mock's promotion asks it of the mocked type's
+	/// own aliases, which the mock binds at its root, beside the dependencies it promotes.
+	nonisolated static func provides(
 		_ property: Property,
 		declaredProperties: Set<Property>,
 		forwardedProperties: Set<Property>,
@@ -4306,9 +4307,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let rootBindingNames = treePropertyNodeBindingNames
 			.union(onlyIfAvailableOverrides.map(\.name))
 			.union(lazilyInstantiatedBindingNameMap.values.flatMap(\.values))
+		// An alias whose label a flat received parameter has would hide that parameter from the dependencies promoted
+		// beside it, whose trees receive it: the alias does not provide the receive (`isProvidedByTree`), or the mock
+		// would take no parameter for it – an optional alias beside a required non-optional receive, or an alias of
+		// another type. That alias is bound under a name of its own too, so that `mock()` keeps its signature.
 		let (rootItems, aliasBindingNames) = Self.renamingAliases(
 			in: parameterTree,
-			thatRedeclare: rootBindingNames,
+			thatRedeclare: rootBindingNames.union(flatReceivedParameters.map(\.label)),
 			reservedNames: rootBindingNames
 				.union(forwardedDependencies.map(\.property.label))
 				.union(rootDefaultParameters.map(\.label))
