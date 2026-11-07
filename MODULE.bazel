@@ -14,8 +14,9 @@ module(
 bazel_dep(name = "rules_swift", version = "3.6.1", repo_name = "build_bazel_rules_swift")
 bazel_dep(name = "apple_support", version = "2.5.4", repo_name = "build_bazel_apple_support")
 
-# Keep these versions inside Package.swift's ranges, matching
-# Package.resolved where the registry has that version.
+# These match the versions Package.resolved pins for SwiftPM, apart from
+# a Bazel Central Registry `.bcr.N` suffix.
+# Scripts/check-version-consistency.sh checks it.
 bazel_dep(name = "swift-syntax", version = "603.0.0.bcr.1")
 bazel_dep(name = "swift_argument_parser", version = "1.7.1")
 
