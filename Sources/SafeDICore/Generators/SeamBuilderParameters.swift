@@ -481,8 +481,7 @@ extension DependencyTreeGenerator {
 				accessCause: parameter.accessCause,
 				declaringType: firstReceiver?.declaringType ?? seam.concreteInstantiable,
 				declarationLocation: firstReceiver?.declarationLocation ?? seam.dependencies.first { $0.property == parameter.property }?.declarationLocation ?? seam.declarationLocation,
-				isReceivedOnlyIfAvailable: parameter.defaultsToNil
-					|| seam.dependencies.contains { $0.property == parameter.property && $0.source == .received(onlyIfAvailable: true) },
+				isReceivedOnlyIfAvailable: parameter.isOnlyIfAvailable,
 			))
 		}
 		var stage = 0

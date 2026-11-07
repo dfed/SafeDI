@@ -183,7 +183,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(user: User? = nil) {
+			    public init(user: User?) {
 			        func __safeDI_left() -> Left {
 			            let user = User()
 			            let reader = Reader(user: user)
@@ -315,7 +315,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Secret? = nil) {
+			    public init(token: Secret?) {
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
 			            let token: (any Auth)? = token
@@ -378,7 +378,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Secret? = nil) {
+			    public init(token: Secret?) {
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
 			            let token: (any Auth)? = token
@@ -501,7 +501,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Secret? = nil) {
+			    public init(token: Secret?) {
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
 			            let auth: (any Auth)? = token

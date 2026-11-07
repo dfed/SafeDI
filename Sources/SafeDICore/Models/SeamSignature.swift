@@ -94,12 +94,12 @@ public struct SeamSignature: Sendable {
 
 	/// A parameter of the generated initializer.
 	public struct Parameter: Sendable {
-		public init(property: Property, isPassThrough: Bool, access: AccessLevel, tierAccess: AccessLevel? = nil, defaultsToNil: Bool, receivers: [Receiver] = [], accessCause: TypeAccessProof.Cause? = nil, nestedSeamCall: NestedSeamCall? = nil, otherInitializerArgumentsAccess: AccessLevel = .public) {
+		public init(property: Property, isPassThrough: Bool, access: AccessLevel, tierAccess: AccessLevel? = nil, isOnlyIfAvailable: Bool, receivers: [Receiver] = [], accessCause: TypeAccessProof.Cause? = nil, nestedSeamCall: NestedSeamCall? = nil, otherInitializerArgumentsAccess: AccessLevel = .public) {
 			self.property = property
 			self.isPassThrough = isPassThrough
 			self.access = access
 			self.tierAccess = tierAccess ?? access
-			self.defaultsToNil = defaultsToNil
+			self.isOnlyIfAvailable = isOnlyIfAvailable
 			self.receivers = receivers
 			self.accessCause = accessCause
 			self.nestedSeamCall = nestedSeamCall
@@ -109,7 +109,8 @@ public struct SeamSignature: Sendable {
 		/// The parameter's label and type. A pass-through that some receiver in the tree requires has the type the
 		/// receiver declares – the optional type it is declared with where every receiver that requires it declares
 		/// it optional, since the property the caller's tree declares may be optional too; one every receiver
-		/// receives only if available has the optional form of that type, and defaults to `nil`.
+		/// receives only if available has the optional form of that type. No parameter has a default, so every call
+		/// writes every argument.
 		public let property: Property
 		/// Whether the parameter passes a property the tree receives from outside the seam, rather than one of the
 		/// seam's own `@Received` or `@Forwarded` properties.
@@ -127,11 +128,12 @@ public struct SeamSignature: Sendable {
 		/// when the tier's level is no wider.
 		public let tierAccess: AccessLevel
 
-		/// Whether the generated initializer defaults the parameter to `nil`: a pass-through every receiver receives
-		/// only if available, or the seam's own `@Received(onlyIfAvailable: true)` property. A pass-through some
-		/// receiver requires, an own required `@Received` and an own `@Forwarded` have no default, optional type or
-		/// not.
-		public let defaultsToNil: Bool
+		/// Whether the parameter is received only if available: a pass-through every receiver receives only if
+		/// available, or the seam's own `@Received(onlyIfAvailable: true)` property, which a generated caller passes
+		/// `nil` where its tree holds nothing, and a wider tier passes `nil` where it omits the parameter. A
+		/// pass-through some receiver requires, an own required `@Received` and an own `@Forwarded` are not, optional
+		/// type or not: a caller must hold a value for each.
+		public let isOnlyIfAvailable: Bool
 		/// The receives inside the seam's tree that a pass-through fulfills, in tree order, each with the access the
 		/// proof gives the parameter; a seam that passes the parameter on names them in its notes, and admits their
 		/// modules' mentions to the proof. Empty for one of the seam's own properties, which its own initializer
@@ -398,9 +400,9 @@ public struct SeamSignature: Sendable {
 
 	/// The properties the seam's tree receives only through a nested seam's call that omits them – a tier of that seam
 	/// that does not take them, or a parameter on none of its tiers – which no tier of this seam takes either: a caller
-	/// holding a value for one would have it dropped, which is reported at the caller. Each defaults to `nil`, takes no
-	/// part in the guard or a call's shape, and is never in scope inside the seam's own tree, which passes the nested
-	/// seam `nil` for it, as the tier it calls does.
+	/// holding a value for one would have it dropped, which is reported at the caller. Each is received only if
+	/// available, takes no part in the guard or a call's shape, and is never in scope inside the seam's own tree, which
+	/// passes the nested seam `nil` for it, as the tier it calls does.
 	public let noTierParameters: [Parameter]
 
 	/// The parameters the tier at `level` takes.
@@ -409,23 +411,23 @@ public struct SeamSignature: Sendable {
 	}
 
 	/// What a call of the generated initializer depends on: each parameter's label, type spelled without `any`, tier
-	/// access and whether it defaults to `nil`, and the tiers. Two signatures with one call shape generate the same
-	/// guard and the same calls, whatever their receivers and uncapped access. The guard hashes the parameters' fields
-	/// and not the tiers: both sides derive the tiers from the parameters' tier accesses, which it hashes, and from the
-	/// level of the seam's own initializer, which both read from the seam's declaration.
+	/// access and whether it is received only if available, and the tiers. Two signatures with one call shape generate
+	/// the same guard and the same calls, whatever their receivers and uncapped access. The guard hashes the parameters'
+	/// fields and not the tiers: both sides derive the tiers from the parameters' tier accesses, which it hashes, and
+	/// from the level of the seam's own initializer, which both read from the seam's declaration.
 	public struct CallShape: Hashable, Sendable {
 		public struct Parameter: Hashable, Sendable {
 			public init(_ parameter: SeamSignature.Parameter) {
 				label = parameter.property.label
 				type = parameter.property.typeDescription.withoutAny.asSource
 				tierAccess = parameter.tierAccess
-				defaultsToNil = parameter.defaultsToNil
+				isOnlyIfAvailable = parameter.isOnlyIfAvailable
 			}
 
 			public let label: String
 			public let type: String
 			public let tierAccess: AccessLevel
-			public let defaultsToNil: Bool
+			public let isOnlyIfAvailable: Bool
 		}
 
 		/// A builder the call passes: its label, its type spelled without `any`, its tier access, and each field of
@@ -462,16 +464,17 @@ public struct SeamSignature: Sendable {
 	}
 
 	/// What settling a module's seams solves for: each parameter – its property, whether it is a pass-through, its
-	/// access, tier access and default – with its receivers as a set, and the tiers. Never the receivers' order, which
-	/// a seam's tree meets differently on every pass when it carries the receivers of a seam that carries its own,
-	/// nor where a receive is declared, which a diagnostic reads and the declaring type and property already decide.
+	/// access, tier access and whether it is received only if available – with its receivers as a set, and the tiers.
+	/// Never the receivers' order, which a seam's tree meets differently on every pass when it carries the receivers of
+	/// a seam that carries its own, nor where a receive is declared, which a diagnostic reads and the declaring type and
+	/// property already decide.
 	public struct SettledContent: Hashable, Sendable {
 		public struct Parameter: Hashable, Sendable {
 			public let property: Property
 			public let isPassThrough: Bool
 			public let access: AccessLevel
 			public let tierAccess: AccessLevel
-			public let defaultsToNil: Bool
+			public let isOnlyIfAvailable: Bool
 			public let receivers: Set<Receiver>
 		}
 
@@ -503,7 +506,7 @@ public struct SeamSignature: Sendable {
 					isPassThrough: parameter.isPassThrough,
 					access: parameter.access,
 					tierAccess: parameter.tierAccess,
-					defaultsToNil: parameter.defaultsToNil,
+					isOnlyIfAvailable: parameter.isOnlyIfAvailable,
 					receivers: Set(parameter.receivers.map { receiver in
 						SettledContent.Receiver(property: receiver.property, declaringType: receiver.declaringType, access: receiver.access)
 					}),
@@ -520,16 +523,18 @@ public struct SeamSignature: Sendable {
 
 	/// The name of the empty enum the seam's module generates in an extension of the seam, which every generated
 	/// call refers to. It hashes each parameter's fields of `callShape` – label, type spelled without `any` (as the
-	/// compiler and `TypeDescription ==` treat `any P` and `P` as one type), tier access, and whether it defaults to
-	/// `nil` – so a call generated from another computation of the signature names an enum the seam's module did not
-	/// generate. The receivers are not hashed: they name declarations, and change nothing a call passes.
+	/// compiler and `TypeDescription ==` treat `any P` and `P` as one type), tier access, and whether it is received
+	/// only if available – so a call generated from another computation of the signature names an enum the seam's
+	/// module did not generate. The receivers are not hashed: they name declarations, and change nothing a call passes.
 	public var guardTypeName: String {
 		var hash = SeamSignatureHash()
 		for parameter in callShape.parameters {
 			hash.combine(parameter.label)
 			hash.combine(parameter.type)
 			hash.combine(parameter.tierAccess.spelledOnGeneratedDeclaration)
-			hash.combine(parameter.defaultsToNil ? "= nil" : "")
+			// The flag's hash input is spelled as the default the generated initializer once gave the parameter: another
+			// spelling would rename every guard of a seam with a parameter received only if available.
+			hash.combine(parameter.isOnlyIfAvailable ? "= nil" : "")
 		}
 		// Each builder after every parameter, so a seam without one hashes what it always hashed. A field is hashed,
 		// since a caller that computed the struct without it would resolve the label from its own scope instead.

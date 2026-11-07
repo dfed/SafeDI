@@ -110,7 +110,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		#expect(output.dependencyTreeFiles.keys.sorted() == ["Root+SafeDI.swift", "Screen+SafeDI.swift"])
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User, database: Database, logger: Logger? = nil) {
+		    public init(user: User, database: Database, logger: Logger?) {
 		        let cache = Cache(database: database, logger: logger)
 		        self.init(user: user, cache: cache)
 		    }
@@ -140,8 +140,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesEachKindOfParameter_whenSeamForwardsReceivesAndPassesThrough() async throws {
 		// The seam's own `@Received` and `@Forwarded` properties come first, in declaration order; then each property
-		// the tree receives from outside, in label order: required where some receiver requires it, and optional,
-		// defaulting to `nil`, where every receiver receives it only if available.
+		// the tree receives from outside, in label order: required where some receiver requires it, and optional, with no
+		// default, where every receiver receives it only if available.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -218,7 +218,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User, database: Database, logger: Logger? = nil, session: Session) {
+		    public init(user: User, database: Database, logger: Logger?, session: Session) {
 		        let cache = Cache(database: database, logger: logger)
 		        let tracker = Tracker(session: session, user: user)
 		        self.init(user: user, database: database, cache: cache, tracker: tracker)
@@ -1194,7 +1194,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let detailPath = output.fixtures["Detail.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(session: Session? = nil) {
+		    public init(session: Session?) {
 		        func __safeDI_detail() -> Detail {
 		            #sourceLocation(file: "\(detailPath)", line: 7)
 		            let current: Session? = session
@@ -2725,7 +2725,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// its own computation of the seam's signature, name one enum and pass each parameter.
 		let seamCode = """
 		extension Screen {
-		    public init(user: User, database: Database, logger: Logger? = nil) {
+		    public init(user: User, database: Database, logger: Logger?) {
 		        let cache = Cache(database: database, logger: logger)
 		        self.init(user: user, cache: cache)
 		    }
@@ -3906,7 +3906,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: nil, summary: .onlyIfAvailable, caller: .otherWrapper))
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: LazilyInstantiated<User>? = nil) {
+		    public init(user: LazilyInstantiated<User>?) {
 		        let summary = Summary(user: user)
 		        self.init(summary: summary)
 		    }
@@ -3944,7 +3944,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: .onlyIfAvailable, summary: nil, caller: .optionalWrapper))
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User? = nil) {
+		    public init(user: User?) {
 		        let detail = Detail(user: user)
 		        self.init(detail: detail)
 		    }
@@ -3981,7 +3981,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: .onlyIfAvailable, summary: nil, caller: .instanceWhoseTreeBuildsScreen))
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User? = nil) {
+		    public init(user: User?) {
 		        let detail = Detail(user: user)
 		        self.init(detail: detail)
 		    }
@@ -4857,7 +4857,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Panel+SafeDI.swift"] == generatedFileHeader + """
 		extension Internals.Panel {
-		    internal init(session: Session? = nil) {
+		    internal init(session: Session?) {
 		        let detail = Detail(session: session)
 		        self.init(detail: detail)
 		    }
@@ -4869,7 +4869,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		""")
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(session: Session? = nil) {
+		    public init(session: Session?) {
 		        func __safeDI_panel() -> Internals.Panel {
 		            _ = Internals.Panel.__safeDI_Internals_Panel_3281EFBD25960621.self
 		            return Internals.Panel(session: session)
@@ -6723,7 +6723,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 				childCell(alias, .none, parameter: "", hash: noParameterHash, rootBinding: "", rootCall: "Screen()", rootInitializer: "self.init(screen: screen)"),
 				childCell(alias, .otherType, parameter: "user: Name", hash: "D6A7623E0B4490E2", rootBinding: nameBinding, rootCall: "Screen(user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
 				childCell(alias, .instantiator, parameter: "user: Instantiator<User>", hash: "0C022EBEABB7BCBE", rootBinding: instantiatorBinding, rootCall: "Screen(user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
-				childCell(alias, .optionalWrapper, parameter: "user: LazilyInstantiated<User>? = nil", hash: "71C706F9FE9BEAFE", rootBinding: wrapperBinding, rootCall: "Screen(user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
+				childCell(alias, .optionalWrapper, parameter: "user: LazilyInstantiated<User>?", hash: "71C706F9FE9BEAFE", rootBinding: wrapperBinding, rootCall: "Screen(user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
 			]
 		}
 		let seamRootCell = AliasOfProvidedPropertyCell(alias: .onSeamRoot, neighbor: .none, expectation: .generates(
@@ -8787,9 +8787,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenOuterSeamsByValueReceiveIsBesideNestedSeamsOptionalWrapperParameter() async {
-		// `Inner`'s parameter `user: LazilyInstantiated<User>? = nil` carries `Summary`'s receive, which the outer tree
-		// receives through `Inner`'s call beside `Detail`'s `user: User`: a collision at `Screen`, naming `Summary`, the
-		// receiver inside the nested seam, not `Inner`.
+		// `Inner`'s parameter `user: LazilyInstantiated<User>?`, received only if available, carries `Summary`'s receive,
+		// which the outer tree receives through `Inner`'s call beside `Detail`'s `user: User`: a collision at `Screen`,
+		// naming `Summary`, the receiver inside the nested seam, not `Inner`.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
 			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `user` as `user: User` on `Detail` and `user: LazilyInstantiated<User>?` on `Summary`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `user` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let user: LazilyInstantiated<User>`.
@@ -9147,7 +9147,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let detailPath = output.fixtures["Detail.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(token: Token? = nil) {
+		    public init(token: Token?) {
 		        func __safeDI_detail() -> Detail {
 		            #sourceLocation(file: "\(detailPath)", line: 7)
 		            let authToken: Token? = token

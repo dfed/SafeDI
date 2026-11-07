@@ -644,7 +644,7 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 	        self.init(token: nil)
 	    }
 
-	    package init(token: Token? = nil) {
+	    package init(token: Token?) {
 	        let cache = Cache()
 	        self.init(token: token, cache: cache)
 	    }
@@ -658,7 +658,7 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 	/// `Badge`'s generated initializers, after its file's header and assertions, when `Token` is `public`.
 	private static let publicTierBadge = """
 	extension Badge {
-	    public init(token: Token? = nil) {
+	    public init(token: Token?) {
 	        let cache = Cache()
 	        self.init(token: token, cache: cache)
 	    }

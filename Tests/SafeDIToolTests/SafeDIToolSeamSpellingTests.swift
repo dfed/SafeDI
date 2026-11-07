@@ -113,7 +113,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"List+SafeDI.swift": generatedFileHeader + """
 			extension List {
-			    public init(onTap: (() -> Void)? = nil) {
+			    public init(onTap: (() -> Void)?) {
 			        func __safeDI_row() -> Row {
 			            #sourceLocation(file: "\(output.fixtures["Row.swift"])", line: 7)
 			            let action: (() -> Void)? = onTap
@@ -241,7 +241,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 	/// whatever access the initializer that receives it has: required, or only if available.
 	@Test(arguments: [
 		(forwarded: "onSelect: () -> Void", received: "@Received let onSelect: () -> Void", parameter: "onSelect: @escaping () -> Void", guardHash: "6E4AFC77A9D161A1"),
-		(forwarded: "onSelect: (() -> Void)?", received: "@Received(onlyIfAvailable: true) let onSelect: (() -> Void)?", parameter: "onSelect: (() -> Void)? = nil", guardHash: "AD44EC4607D4311B"),
+		(forwarded: "onSelect: (() -> Void)?", received: "@Received(onlyIfAvailable: true) let onSelect: (() -> Void)?", parameter: "onSelect: (() -> Void)?", guardHash: "AD44EC4607D4311B"),
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesClosureOnPublicTier_whenInternalInitializerReceivesIt(forwarded: String, received: String, parameter: String, guardHash: String) async throws {
@@ -296,7 +296,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"List+SafeDI.swift": generatedFileHeader + """
 			extension List {
-			    public init(onSelect: (@Sendable () -> Void)? = nil) {
+			    public init(onSelect: (@Sendable () -> Void)?) {
 			        let row = Row(onSelect: onSelect)
 			        self.init(row: row)
 			    }

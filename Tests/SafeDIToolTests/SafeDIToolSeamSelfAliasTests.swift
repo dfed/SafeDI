@@ -65,7 +65,7 @@ struct SafeDIToolSeamSelfAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret? = nil) {
+			    public convenience init(token: Secret?) {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
@@ -133,7 +133,7 @@ struct SafeDIToolSeamSelfAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret? = nil) {
+			    public convenience init(token: Secret?) {
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
 			        let token: Secret? = token
 			        #sourceLocation()
@@ -197,7 +197,7 @@ struct SafeDIToolSeamSelfAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(auth: (any Auth)? = nil) {
+			    public convenience init(auth: (any Auth)?) {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)

@@ -679,7 +679,8 @@ enum GraphFuzzerGeneratorFeature: String, CaseIterable, Comparable {
 /// What a seam's generated initializer takes, read from the generated code of a graph the tool accepts, which the
 /// seam smoke batch must exercise.
 enum GraphFuzzerSeamOutputFeature: String, CaseIterable, Comparable {
-	/// A parameter defaulting to `nil`: a property the seam's tree receives only if available.
+	/// A parameter received only if available, `T?` with no default: a property the seam's tree receives only if
+	/// available, or the seam's own `@Received(onlyIfAvailable: true)` property.
 	case optionalPassThrough
 	/// A required parameter the seam does not declare: a property a receiver in its tree requires.
 	case requiredPassThrough
@@ -3224,8 +3225,8 @@ enum GraphFuzzerGenerator {
 			var newDeclarations = [type("AliasLabel")]
 
 			// How `aliasToken` reaches the seam: a pass-through received only if available, which the seam takes as
-			// `AliasValue? = nil`, or a required optional parameter – the seam's own receive, its own forwarded property,
-			// or a property `AliasLeft` requires – which every caller holds a value for.
+			// `AliasValue?` that callers may pass `nil` for, or a required optional parameter – the seam's own receive,
+			// its own forwarded property, or a property `AliasLeft` requires – which every caller holds a value for.
 			enum ParameterKind {
 				case onlyIfAvailablePassThrough
 				case ownRequiredOptionalReceive
@@ -5575,7 +5576,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			if property.label == "aliasAuth", aliasedLabel(of: property.attribute) == nil {
 				features.insert(property.attribute.hasPrefix("@Instantiated") ? .uncreatedAliasDeclarationAbove : .uncreatedAliasLabelParameter)
 			} else if property.label == "aliasToken", aliasedLabel(of: property.attribute) == nil, property.attribute != "@Received(onlyIfAvailable: true)" {
-				// The seam's own only-if-available receive is a parameter that defaults to `nil`, which is no required one.
+				// The seam's own only-if-available receive is no required parameter.
 				features.insert(.uncreatedAliasRequiredOptionalParameter)
 			}
 		}
@@ -6048,7 +6049,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 
 	/// The name of the type an `@Instantiated` property of `type` with `attribute` builds: its `fulfilledByType:`,
 	/// the generic of its wrapper, or its type.
-	private static func builtTypeName(ofPropertyWithAttribute attribute: String, type: String) -> String {
+	fileprivate static func builtTypeName(ofPropertyWithAttribute attribute: String, type: String) -> String {
 		if let fulfilledByTypeRange = attribute.range(of: "fulfilledByType: \"") {
 			String(attribute[fulfilledByTypeRange.upperBound...].prefix { $0 != "\"" })
 		} else if let genericStart = type.firstIndex(of: "<"), let genericEnd = type.lastIndex(of: ">") {
@@ -6060,31 +6061,10 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 
 	/// What a seam's generated initializer takes, read from the widest tier in the seam's generated file, so that a
 	/// generator which stops drawing a shape cannot hide it: `generatedFiles` is an accepted graph's output and
-	/// `fixture` the graph, whose seams declare the labels that are not pass-throughs.
+	/// `fixture` the graph, whose declarations tell a parameter received only if available from a required one
+	/// (`GraphFuzzerSeamParameterKinds`), which the generated initializer spells alike.
 	static func seamOutputFeatures(of fixture: GraphFuzzerFixture, generatedFiles: [String: String]) -> Set<GraphFuzzerSeamOutputFeature> {
-		var ownLabelsBySeam = [String: Set<String>]()
-		for content in fixture.swiftFileContent {
-			var nextTypeIsSeam = false
-			var currentSeam: String?
-			for line in GraphFuzzerSourceLine.lines(of: content) {
-				switch line {
-				case let .instantiableAttribute(arguments):
-					nextTypeIsSeam = arguments.contains("generateDependencyTree: true")
-				case let .typeDeclaration(name):
-					currentSeam = nextTypeIsSeam ? name : nil
-					nextTypeIsSeam = false
-					if let currentSeam {
-						ownLabelsBySeam[currentSeam] = []
-					}
-				case let .property(attribute, label, _):
-					if let currentSeam, attribute.hasPrefix("@Received") || attribute == "@Forwarded" {
-						ownLabelsBySeam[currentSeam, default: []].insert(label)
-					}
-				case .instantiateMethod, .other:
-					break
-				}
-			}
-		}
+		let parameterKinds = GraphFuzzerSeamParameterKinds(fixture: fixture)
 		var features = Set<GraphFuzzerSeamOutputFeature>()
 		// The widest tier of each seam: the first of its initializers a file declares.
 		var widestTiers = [(seamTypeName: String, parameters: [String])]()
@@ -6097,12 +6077,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			// A builder for a hole is no pass-through: `holeOutputFeatures` reads it.
 			for parameter in parameters where !parameter.contains("SafeDIScope_") {
 				let label = parameter.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces)
-				if parameter.contains("= nil") {
+				let type = parameter.drop { $0 != ":" }.dropFirst().trimmingCharacters(in: .whitespaces)
+				if parameterKinds.isOnlyIfAvailable(label: label, ofSeam: seamTypeName) {
 					features.insert(.optionalPassThrough)
-				} else if !(ownLabelsBySeam[seamTypeName] ?? []).contains(label) {
+				} else if parameterKinds.isRequiredPassThrough(label: label, type: type, ofSeam: seamTypeName) {
 					features.insert(.requiredPassThrough)
 				}
-				let type = parameter.drop { $0 != ":" }.dropFirst().prefix { $0 != "=" }.trimmingCharacters(in: .whitespaces)
 				if type.hasPrefix("@escaping @") {
 					features.insert(.escapingAttributedSeamParameter)
 				} else if type.hasPrefix("@escaping ") {
@@ -6277,6 +6257,115 @@ private struct GraphFuzzerInstantiationEdge {
 		}
 		return false
 	}
+}
+
+/// Which parameters of a graph's seams are received only if available, read from the graph's declarations: a seam's
+/// generated initializer spells such a parameter `T?` with no default, as it spells a required parameter of optional
+/// type, so only the declarations tell the two apart. The seam's own `@Received(onlyIfAvailable: true)` property is
+/// one. A pass-through is one when every receive of its label by a type in the seam's tree – each type the seam builds,
+/// followed through `@Instantiated` – is only if available, and is required when every such receive is required or
+/// its type is not optional; a receive is a `@Received` property, an alias's fulfilling property, or an
+/// `instantiate(…)` parameter, which is required. A label the tree receives both ways is neither, as far as the
+/// declarations tell: the receive of the other kind may sit beneath a declaration of the label inside the tree.
+struct GraphFuzzerSeamParameterKinds {
+	init(fixture: GraphFuzzerFixture) {
+		var ownLabelsBySeam = [String: Set<String>]()
+		var ownOnlyIfAvailableLabelsBySeam = [String: Set<String>]()
+		var receivesByType = [String: [(label: String, isOnlyIfAvailable: Bool)]]()
+		var builtTypeNamesByType = [String: Set<String>]()
+		for content in fixture.swiftFileContent {
+			var nextTypeIsSeam = false
+			var nextTypeIsMockOnly = false
+			// The type whose declarations follow, or `nil` after an `@Instantiable` attribute until the declaration it
+			// decorates: a `mockOnly` declaration, or one `GraphFuzzerSourceLine` does not read, receives nothing in a tree.
+			var currentType: String?
+			var currentTypeIsSeam = false
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				switch line {
+				case let .instantiableAttribute(arguments):
+					nextTypeIsSeam = arguments.contains("generateDependencyTree: true")
+					nextTypeIsMockOnly = arguments.contains("mockOnly: true")
+					currentType = nil
+				case let .typeDeclaration(name):
+					currentType = nextTypeIsMockOnly ? nil : name
+					currentTypeIsSeam = nextTypeIsSeam
+					nextTypeIsSeam = false
+					nextTypeIsMockOnly = false
+				case let .instantiateMethod(parameters):
+					guard let currentType else { continue }
+					for parameter in GraphFuzzerOracle.topLevelParameters(parameters) where !parameter.contains(" = ") {
+						if let name = parameter.prefix(while: { $0 != ":" }).split(separator: " ").last {
+							receivesByType[currentType, default: []].append((String(name), false))
+						}
+					}
+				case let .property(attribute, label, type):
+					guard let currentType else { continue }
+					let isOnlyIfAvailable = attribute.contains("onlyIfAvailable: true")
+					if attribute.hasPrefix("@Instantiated") {
+						// By its last component, as a type declared in an extension of a namespace is declared.
+						let builtTypeName = GraphFuzzerFeature.builtTypeName(ofPropertyWithAttribute: attribute, type: type)
+						builtTypeNamesByType[currentType, default: []].insert(String(builtTypeName.split(separator: ".").last ?? Substring(builtTypeName)))
+					} else if let range = attribute.range(of: "fulfilledByDependencyNamed: \"") {
+						receivesByType[currentType, default: []].append((String(attribute[range.upperBound...].prefix { $0 != "\"" }), isOnlyIfAvailable))
+					} else if attribute.hasPrefix("@Received") {
+						// A seam's own receive is a receive of the seams whose trees build it, which pass it through.
+						receivesByType[currentType, default: []].append((label, isOnlyIfAvailable))
+						if currentTypeIsSeam {
+							ownLabelsBySeam[currentType, default: []].insert(label)
+							if isOnlyIfAvailable {
+								ownOnlyIfAvailableLabelsBySeam[currentType, default: []].insert(label)
+							}
+						}
+					} else if attribute == "@Forwarded", currentTypeIsSeam {
+						ownLabelsBySeam[currentType, default: []].insert(label)
+					}
+				case .other:
+					break
+				}
+			}
+		}
+		self.ownLabelsBySeam = ownLabelsBySeam
+		self.ownOnlyIfAvailableLabelsBySeam = ownOnlyIfAvailableLabelsBySeam
+		self.receivesByType = receivesByType
+		self.builtTypeNamesByType = builtTypeNamesByType
+	}
+
+	/// Whether the parameter `label` of the seam named `seamTypeName` is received only if available.
+	func isOnlyIfAvailable(label: String, ofSeam seamTypeName: String) -> Bool {
+		if ownLabelsBySeam[seamTypeName, default: []].contains(label) {
+			ownOnlyIfAvailableLabelsBySeam[seamTypeName, default: []].contains(label)
+		} else {
+			kindsOfReceives(of: label, inTreeOf: seamTypeName) == [true]
+		}
+	}
+
+	/// Whether the parameter `label: type` of the seam named `seamTypeName` is a pass-through some receiver requires.
+	func isRequiredPassThrough(label: String, type: String, ofSeam seamTypeName: String) -> Bool {
+		guard !ownLabelsBySeam[seamTypeName, default: []].contains(label) else { return false }
+		return !type.hasSuffix("?") || kindsOfReceives(of: label, inTreeOf: seamTypeName) == [false]
+	}
+
+	/// Whether each receive of `label` by a type in the tree of the seam named `seamTypeName` is only if available: the
+	/// seam itself, for its aliases, and each type it builds, followed through `@Instantiated`.
+	private func kindsOfReceives(of label: String, inTreeOf seamTypeName: String) -> Set<Bool> {
+		var kinds = Set<Bool>()
+		var visited = Set<String>()
+		var typeNamesToVisit = [seamTypeName]
+		while let typeName = typeNamesToVisit.popLast() {
+			guard visited.insert(typeName).inserted else { continue }
+			for receive in receivesByType[typeName, default: []] where receive.label == label {
+				kinds.insert(receive.isOnlyIfAvailable)
+			}
+			typeNamesToVisit.append(contentsOf: builtTypeNamesByType[typeName, default: []])
+		}
+		return kinds
+	}
+
+	private let ownLabelsBySeam: [String: Set<String>]
+	private let ownOnlyIfAvailableLabelsBySeam: [String: Set<String>]
+	/// The receives each type declares.
+	private let receivesByType: [String: [(label: String, isOnlyIfAvailable: Bool)]]
+	private let builtTypeNamesByType: [String: Set<String>]
 }
 
 /// One line of a generated fixture, in the shape `GraphFuzzerGenerator` emits it.
@@ -7196,18 +7285,23 @@ struct GraphFuzzerToolRuns {
 	}
 
 	/// The failure of a graph the tool accepts whose seam's generated code reads the binding of an `onlyIfAvailable`
-	/// alias bound from a parameter that defaults to `nil` anywhere but as the argument of the construction of the
+	/// alias bound from a parameter received only if available anywhere but as the argument of the construction of the
 	/// type that declares the alias, or `nil`. Inline, that alias is not created where the parameter's property is
 	/// unavailable, and any other read finds whatever declaration of the alias's label encloses it, so the seam must
 	/// reject every such read. The literal-`nil` oracle cannot see these: their `nil` is the seam call's.
 	var uncreatedAliasReadFailure: GraphFuzzerFailure? {
 		// A public mock graph's generated mocks are judged by the public mock's own oracles.
 		guard knownRightOutcome == nil, case let .accepted(seamFiles, _) = firstOutcome else { return nil }
-		// The unwrapped-form alias of a required optional parameter may be uncreated as an alias of a parameter that
-		// defaults to `nil` may, so its binding is read the same way; the exact-form alias is always created.
+		// The unwrapped-form alias of a required optional parameter may be uncreated as an alias of a parameter received
+		// only if available may, so its binding is read the same way; the exact-form alias is always created.
 		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
 		let requiredOptionalParameters: Set<String> = drawFeatures.contains(.uncreatedAliasRequiredOptionalParameter) && !drawFeatures.contains(.uncreatedAliasExactFormAlias) ? ["aliasToken"] : []
-		let reads = GraphFuzzerOracle.uncreatedAliasBindingReads(in: seamFiles, requiredOptionalParameters: requiredOptionalParameters)
+		let parameterKinds = GraphFuzzerSeamParameterKinds(fixture: fixture)
+		let reads = GraphFuzzerOracle.uncreatedAliasBindingReads(
+			in: seamFiles,
+			isOnlyIfAvailable: { parameterKinds.isOnlyIfAvailable(label: $0, ofSeam: $1) },
+			requiredOptionalParameters: requiredOptionalParameters,
+		)
 		guard !reads.isEmpty else { return nil }
 		return GraphFuzzerFailure(
 			seed: fixture.seed,
@@ -7731,16 +7825,24 @@ enum GraphFuzzerOracle {
 	]
 
 	/// Each read, in `generatedFiles`, of the binding of an `onlyIfAvailable` alias bound from a parameter of a seam's
-	/// generated initializer that defaults to `nil` – `let <alias>: T? = <parameter>`, or an erased alias mapping it –
-	/// other than as the argument of the construction that ends the body declaring the binding (`return` or
-	/// `self.init`), which is the type that declares the alias. A binding from a nearer declaration of the parameter's
-	/// name is not such an alias, and a read beneath a nearer declaration of the alias's name reads that one. The
-	/// generated code is indented by four spaces a level and opens each body on the line that declares it.
+	/// generated initializer that is received only if available – `let <alias>: T? = <parameter>`, or an erased alias
+	/// mapping it – other than as the argument of the construction that ends the body declaring the binding (`return`
+	/// or `self.init`), which is the type that declares the alias. A binding from a nearer declaration of the
+	/// parameter's name is not such an alias, and a read beneath a nearer declaration of the alias's name reads that
+	/// one. The generated code is indented by four spaces a level and opens each body on the line that declares it.
 	///
-	/// - Parameter requiredOptionalParameters: The labels of required parameters of optional type whose aliases are
-	///   read as those of a parameter defaulting to `nil` are: the unwrapped-form alias of such a parameter may be
-	///   uncreated too.
-	static func uncreatedAliasBindingReads(in generatedFiles: [String: String], requiredOptionalParameters: Set<String> = []) -> [String] {
+	/// - Parameters:
+	///   - isOnlyIfAvailable: Whether a parameter, by its label and the name of the seam whose extension declares the
+	///     initializer, is received only if available, which the generated initializer spells as it spells a required
+	///     parameter of optional type: `GraphFuzzerSeamParameterKinds.isOnlyIfAvailable(label:ofSeam:)` for a graph.
+	///   - requiredOptionalParameters: The labels of required parameters of optional type whose aliases are read as
+	///     those of a parameter received only if available are: the unwrapped-form alias of such a parameter may be
+	///     uncreated too.
+	static func uncreatedAliasBindingReads(
+		in generatedFiles: [String: String],
+		isOnlyIfAvailable: (_ label: String, _ seamTypeName: String) -> Bool,
+		requiredOptionalParameters: Set<String> = [],
+	) -> [String] {
 		var reads = [String]()
 		let declaration = try! NSRegularExpression(pattern: #"^let (`[^`]+`|[A-Za-z_][A-Za-z0-9_]*)(?:: [^=]+)? = (.*)$"#)
 		let function = try! NSRegularExpression(pattern: #"^(?:@Sendable )?func [^(]+\((.*)\) -> .* \{$"#)
@@ -7749,15 +7851,18 @@ enum GraphFuzzerOracle {
 			guard let result = expression.firstMatch(in: line, range: NSRange(location: 0, length: source.length)) else { return nil }
 			return (1..<result.numberOfRanges).map { result.range(at: $0).location == NSNotFound ? "" : source.substring(with: result.range(at: $0)) }
 		}
-		/// The labels of `parameters`, a parameter list's text, whose parameters default to `nil` when `defaultingToNil`,
-		/// or are among `requiredOptionalParameters` and are of optional type.
-		func labels(of parameters: String, defaultingToNil: Bool) -> [String] {
+		/// The labels of `parameters`, a parameter list's text, of an initializer the extension of `seamTypeName`
+		/// declares, or of a function when `seamTypeName` is `nil`; of an initializer, only those of optional type that
+		/// are received only if available or are among `requiredOptionalParameters`.
+		func labels(of parameters: String, ofInitializerOf seamTypeName: String?) -> [String] {
 			topLevelParameters(parameters).compactMap { parameter in
 				let parts = parameter.split(separator: ":", maxSplits: 1)
 				guard parts.count == 2 else { return nil }
 				let label = parts[0].trimmingCharacters(in: .whitespaces)
-				let isRequiredOptional = requiredOptionalParameters.contains(label) && parts[1].trimmingCharacters(in: .whitespaces).hasSuffix("?")
-				guard !defaultingToNil || parameter.hasSuffix("= nil") || isRequiredOptional else { return nil }
+				guard let seamTypeName else { return label }
+				guard parts[1].trimmingCharacters(in: .whitespaces).hasSuffix("?"),
+				      isOnlyIfAvailable(label, seamTypeName) || requiredOptionalParameters.contains(label)
+				else { return nil }
 				return label
 			}
 		}
@@ -7768,10 +7873,15 @@ enum GraphFuzzerOracle {
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) {
 			let lines = contents.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 			var lineIndex = 0
+			// The last component of the type the enclosing extension extends: a fuzzed seam's name.
+			var extendedTypeName = ""
 			while lineIndex < lines.count {
 				let initializerLine = lines[lineIndex]
 				let trimmed = initializerLine.trimmingCharacters(in: .whitespaces)
 				lineIndex += 1
+				if initializerLine.hasPrefix("extension "), initializerLine.hasSuffix(" {") {
+					extendedTypeName = String(initializerLine.dropFirst("extension ".count).dropLast(2).split(separator: ".").last ?? "")
+				}
 				// A tier may carry attributes before its modifier, with spaces inside them (`@available(iOS 17, *)`).
 				guard trimmed.hasSuffix(") {"),
 				      let parametersStart = trimmed.range(of: "init("),
@@ -7781,13 +7891,13 @@ enum GraphFuzzerOracle {
 				      })
 				else { continue }
 				let parameters = String(trimmed[parametersStart.upperBound..<trimmed.index(trimmed.endIndex, offsetBy: -3)])
-				let defaultingToNil = Set(labels(of: parameters, defaultingToNil: true))
-				guard !defaultingToNil.isEmpty else { continue }
+				let mayBeNil = Set(labels(of: parameters, ofInitializerOf: extendedTypeName))
+				guard !mayBeNil.isEmpty else { continue }
 				let initializerIndent = initializerLine.prefix { $0 == " " }.count
 				// Each open body's indent and the names it declares; the initializer's body first.
 				var scopes = [(indent: Int, names: Set<String>)]()
 				scopes.append((initializerIndent + 4, []))
-				// The bindings of aliases of a parameter defaulting to `nil`: the name and the scope declaring it.
+				// The bindings of aliases of a parameter that may be `nil`: the name and the scope declaring it.
 				var bindings = [(name: String, scopeIndex: Int)]()
 				while lineIndex < lines.count {
 					let line = lines[lineIndex]
@@ -7817,7 +7927,7 @@ enum GraphFuzzerOracle {
 						let name = parts[0]
 						let value = parts[1]
 						let source = value.hasPrefix("(") ? String(value.dropFirst().prefix { $0 != " " }) : value
-						let resolvesToParameter = defaultingToNil.contains(source) && !scopes.contains { $0.names.contains(source) }
+						let resolvesToParameter = mayBeNil.contains(source) && !scopes.contains { $0.names.contains(source) }
 						scopes[scopes.count - 1].names.insert(name)
 						if resolvesToParameter {
 							bindings.append((name, scopes.count - 1))
@@ -7826,7 +7936,7 @@ enum GraphFuzzerOracle {
 					if statement.hasSuffix("{") {
 						var names = Set<String>()
 						if let parts = match(function, statement) {
-							names = Set(labels(of: parts[0], defaultingToNil: false))
+							names = Set(labels(of: parts[0], ofInitializerOf: nil))
 						}
 						scopes.append((indent + 4, names))
 					}
@@ -8487,24 +8597,17 @@ enum GraphFuzzerOracle {
 	}
 
 	/// An enum named `callerName` whose functions call each of `tiers` of the seam `seamTypeName`, indexed by the tier's
-	/// position among the seam's tiers: for each tier, one call passing every parameter and one passing only those
-	/// without a default, each spelled at the narrower of the tier's access and the seam type's.
+	/// position among the seam's tiers: for each tier, one call passing every parameter, as every call must, since no
+	/// parameter has a default, spelled at the narrower of the tier's access and the seam type's.
 	private static func seamCaller(named callerName: String, of seamTypeName: String, calling tiers: [(offset: Int, element: (access: String, parameters: [String]))], seamTypeAccess: String) -> String {
 		let accessOrder = ["private", "fileprivate", "internal", "package", "public"]
 		var functions = [String]()
 		for (index, tier) in tiers {
 			let access = [tier.access, seamTypeAccess].min { (accessOrder.firstIndex(of: $0) ?? 2) < (accessOrder.firstIndex(of: $1) ?? 2) } ?? "internal"
 			let labels = tier.parameters.map { $0.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces) }
-			let requiredParameters = tier.parameters.filter { !$0.contains("= nil") }
-			let requiredLabels = requiredParameters.map { $0.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces) }
 			functions.append("""
 			    \(access) static func callTier\(index)(\(tier.parameters.joined(separator: ", "))) -> \(seamTypeName) {
 			        \(seamTypeName)(\(labels.map { "\($0): \($0)" }.joined(separator: ", ")))
-			    }
-			""")
-			functions.append("""
-			    \(access) static func callTier\(index)Omitting(\(requiredParameters.joined(separator: ", "))) -> \(seamTypeName) {
-			        \(seamTypeName)(\(requiredLabels.map { "\($0): \($0)" }.joined(separator: ", ")))
 			    }
 			""")
 		}

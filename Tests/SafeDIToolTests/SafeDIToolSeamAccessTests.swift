@@ -296,7 +296,7 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 			        self.init(theme: nil)
 			    }
 
-			    package init(theme: Theme? = nil) {
+			    package init(theme: Theme?) {
 			        let badge = Badge(theme: theme)
 			        self.init(badge: badge)
 			    }

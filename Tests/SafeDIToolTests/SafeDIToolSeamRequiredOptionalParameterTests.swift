@@ -1049,7 +1049,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret? = nil) {
+			    public convenience init(token: Secret?) {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_sub() -> Sub {
 			                #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 7)
@@ -1120,7 +1120,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret? = nil) {
+			    public convenience init(token: Secret?) {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_sub() -> Sub {
 			                #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 7)
