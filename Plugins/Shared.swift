@@ -43,6 +43,22 @@ import PackagePlugin
 			"2.3.0-alpha-2"
 		}
 
+		/// The SHA-256 of the `SafeDITool-macos-arm64` asset of the
+		/// `safeDIVersion` release, which `InstallSafeDITool` checks its
+		/// download against. `Scripts/update-version.sh` writes it from the
+		/// binary the release uploads.
+		var safeDIToolMacOSArm64SHA256: String {
+			"1070d7b3c2162f05834c8e8600fa2d887a9ef85217b586a02849e9ed093b5534"
+		}
+
+		/// The SHA-256 of the `SafeDITool-macos-x86_64` asset of the
+		/// `safeDIVersion` release, which `InstallSafeDITool` checks its
+		/// download against. `Scripts/update-version.sh` writes it from the
+		/// binary the release uploads.
+		var safeDIToolMacOSX86_64SHA256: String {
+			"8be0cbd8e50c5b463ce378d2e3a3786131df4ab383beee22c65f31b2bb8e439e"
+		}
+
 		/// Hardcoded source repo (forks must update this to point at their
 		/// own releases for the downloader to work for their users).
 		var safeDIOrigin: URL {

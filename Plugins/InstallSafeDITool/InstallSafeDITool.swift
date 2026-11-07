@@ -57,6 +57,8 @@ struct InstallSafeDITool: CommandPlugin {
 			let expectedToolFolder = context.expectedToolFolder
 			let expectedToolLocation = context.expectedToolLocation
 			let safeDIOrigin = context.safeDIOrigin
+			let macOSArm64SHA256 = context.safeDIToolMacOSArm64SHA256
+			let macOSX86_64SHA256 = context.safeDIToolMacOSX86_64SHA256
 
 			// `XcodeCommandPlugin.performCommand` is synchronous. Bridge to
 			// the async `downloadTool` helper via a dispatch group. On
@@ -73,6 +75,8 @@ struct InstallSafeDITool: CommandPlugin {
 					try await downloadTool(
 						originURL: safeDIOrigin,
 						version: version,
+						macOSArm64SHA256: macOSArm64SHA256,
+						macOSX86_64SHA256: macOSX86_64SHA256,
 						expectedToolFolder: expectedToolFolder,
 						expectedToolLocation: expectedToolLocation,
 						safediFolder: safediFolder,
@@ -88,7 +92,9 @@ struct InstallSafeDITool: CommandPlugin {
 #endif
 
 /// Downloads the correct architecture's prebuilt binary from GitHub
-/// Releases, marks it executable, and moves it into the expected
+/// Releases, checks it against the SHA-256 the release published for it
+/// (`macOSArm64SHA256` or `macOSX86_64SHA256`), marks it executable, and
+/// moves it into the expected
 /// per-version location. Also writes a `.gitignore` inside `.safedi/`
 /// (on first run) that excludes the per-version binaries from source
 /// control — the binary is per-machine and shouldn't be committed.
@@ -102,6 +108,8 @@ struct InstallSafeDITool: CommandPlugin {
 private func downloadTool(
 	originURL: URL,
 	version: String,
+	macOSArm64SHA256: String,
+	macOSX86_64SHA256: String,
 	expectedToolFolder: URL,
 	expectedToolLocation: URL,
 	safediFolder: URL,
@@ -113,8 +121,10 @@ private func downloadTool(
 		// to run on that same host later when the build plugin launches it.
 		#if arch(arm64)
 			let toolName = "SafeDITool-macos-arm64"
+			let expectedSHA256 = macOSArm64SHA256
 		#elseif arch(x86_64)
 			let toolName = "SafeDITool-macos-x86_64"
+			let expectedSHA256 = macOSX86_64SHA256
 		#else
 			throw UnsupportedHostError()
 		#endif
@@ -149,6 +159,19 @@ private func downloadTool(
 					statusCode: httpResponse.statusCode,
 				)
 			}
+		}
+		// Check the download before it is made executable: a corrupted or
+		// substituted file is deleted, never installed, and the build plugin
+		// never runs it.
+		do {
+			try verifySHA256(
+				ofFileAt: downloadedURL,
+				downloadedFrom: githubDownloadURL,
+				matches: expectedSHA256,
+			)
+		} catch {
+			try? FileManager.default.removeItem(at: downloadedURL)
+			throw error
 		}
 		let downloadedFileAttributes = try FileManager.default.attributesOfItem(atPath: downloadedURL.path(percentEncoded: false))
 		guard let currentPermissions = downloadedFileAttributes[.posixPermissions] as? NSNumber,
