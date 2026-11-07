@@ -1214,7 +1214,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_writesRootInAdditionalDirectory_whenBuildSettingsActivateConfigurationThatIncludesIt() async throws {
+	mutating func generate_writesFileOfRootInAdditionalDirectory_whenBuildSettingsActivateConfigurationThatIncludesIt() async throws {
 		let project = try await scannedAdditionalDirectoryProject()
 
 		let generatedRoot = try await project.generate(buildSettingArguments: Self.buildSettingArguments(activeCompilationConditions: "STAGING"))
@@ -1228,12 +1228,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
-		extension StagingRoot {
-		    public init() {
-		        let dependency = Dependency()
-		        self.init(dependency: dependency)
-		    }
-		}
+		// SafeDI generates StagingRoot's init() only in the module that declares StagingRoot. If StagingRoot() does not compile, add the SafeDI plugin to the target that declares StagingRoot.
 		""")
 	}
 

@@ -209,19 +209,19 @@ public actor DependencyTreeGenerator {
 			}
 			return generatedRoots
 		}
-		// The file of a root this module leaves to the module that declares it holds no code, so it says why.
-		return generatedRoots + rootsGeneratedOnlyByTheirModule.map { withheldRoot in
-			let reason = switch withheldRoot.reason {
-			case .constructsNonPublicDeclaration:
-				"the tree constructs a declaration that is neither `public` nor `open`"
-			case let .callsSeam(seam):
-				// Type names are written bare in generated comments, as the root's is; backticks mark keywords and properties.
-				"the tree calls the initializer SafeDI generates for \(seam.asSource)"
-			}
+		// The file `scan` plans for a root another module declares holds no code: that module generates the root's
+		// `init()`, so the file says where, and what to do when that module does not run SafeDI. A root without
+		// dependencies gets no `init()` in its own module either, so its file says nothing.
+		return generatedRoots + rootsOfOtherModules.map { root in
+			let rootType = root.concreteInstantiable.asSource
+			// Type and module names are written bare in generated comments, as the root's is.
+			let declaringModule = root.moduleName.map { "\($0), the module that declares \(rootType)" } ?? "the module that declares \(rootType)"
 			return GeneratedRoot(
-				typeDescription: withheldRoot.typeDescription,
-				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[withheldRoot.typeDescription]?.sourceFilePath,
-				code: "// SafeDI generates the dependency tree of \(withheldRoot.typeDescription.asSource) only in the module that declares it, because \(reason).",
+				typeDescription: root.concreteInstantiable,
+				sourceFilePath: root.sourceFilePath,
+				code: root.dependencies.isEmpty
+					? ""
+					: "// SafeDI generates \(rootType)'s init() only in \(declaringModule). If \(rootType)() does not compile, add the SafeDI plugin to the target that declares \(rootType).",
 			)
 		}
 	}
@@ -2924,18 +2924,12 @@ public actor DependencyTreeGenerator {
 	/// declaration any generated code could construct is `public` or `open`.
 	private lazy var emittingModuleToCheck: EmittingModule? = constructsOnlyPublicDeclarations ? nil : emittingModule
 
-	/// The roots whose trees this module generates code for, from `rootScopes`, the module's roots in type order. A
-	/// root declared in one of the module's own files is generated once every construction in its tree is known to
+	/// The roots whose trees this module generates code for, from `rootScopes`, the module's roots in type order: those
+	/// declared in one of the module's own files. Each is generated once every construction in its tree is known to
 	/// compile in the module; otherwise one error reports each declaration that keeps a construction from compiling,
 	/// however many of the roots' trees construct it. A root declared elsewhere – a file of another module that the
-	/// build tool plugin's input or `additionalDirectoriesToInclude` reaches – is generated, as its own module generates
-	/// it, only when its tree constructs `public` and `open` declarations alone, which every module can construct, and
-	/// calls no initializer SafeDI generates for a seam: each module calls the tier of a seam it can reach, so a copy
-	/// generated here could pass a receiver `nil` where the root's module passes a value. A seam SafeDI cannot name is
-	/// built inline, so a tree through it is judged by its constructions alone. Otherwise the root is withheld, which
-	/// `rootsGeneratedOnlyByTheirModule` records: its file holds no code but a comment saying why, and nothing is
-	/// reported, since the module that declares the root, when it runs SafeDI, generates it and reports what keeps it
-	/// from compiling.
+	/// build tool plugin's input or `additionalDirectoriesToInclude` reaches, or a module info file – is generated only
+	/// by the module that declares it, which `rootsOfOtherModules` records, so nothing is reported about it here.
 	/// - Parameters:
 	///   - rootScopes: The module's roots in type order, each with the scope its tree is generated from.
 	///   - seamTrees: The seams this module generates an initializer for, each with the scope its tree is generated
@@ -2946,10 +2940,10 @@ public actor DependencyTreeGenerator {
 		checkingSeamTrees seamTrees: [(instantiable: Instantiable, scope: Scope)] = [],
 	) throws -> [(typeDescription: TypeDescription, scope: Scope)] {
 		guard let emittingModule else { return rootScopes }
-		// A project whose types are all `public` has no construction to check; a seam call is checked regardless.
+		// A project whose types are all `public` has no construction to check.
 		let checksConstructions = !constructsOnlyPublicDeclarations
 		var rootScopesToGenerate = [(typeDescription: TypeDescription, scope: Scope)]()
-		var withheldRoots = [WithheldRoot]()
+		var rootsOfOtherModules = [Instantiable]()
 		var inaccessibleConstructions = [DependencyTreeGeneratorError.InaccessibleConstruction]()
 		for seamTree in seamTrees where checksConstructions {
 			inaccessibleConstructions += Self.inaccessibleConstructions(
@@ -2967,89 +2961,36 @@ public actor DependencyTreeGenerator {
 		}
 		for rootScope in rootScopes {
 			let rootInstantiable = rootScope.scope.instantiable
-			if rootInstantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false {
-				if checksConstructions {
-					inaccessibleConstructions += Self.inaccessibleConstructions(
-						Self.constructions(
-							inTreeRootedAt: rootScope.scope,
-							rootIsConstructedWithMockMethod: false,
-							rootReferenceLocation: rootInstantiable.declarationLocation,
-							isMock: false,
-							emittingModule: emittingModule,
-							extendedTypes: extendedTypeDeclarations,
-						),
-						from: emittingModule,
-						extendedTypes: extendedTypeDeclarations,
-					)
-				}
-				rootScopesToGenerate.append(rootScope)
-			} else if checksConstructions, !Self.constructions(
-				inTreeRootedAt: rootScope.scope,
-				rootIsConstructedWithMockMethod: false,
-				rootReferenceLocation: nil,
-				isMock: false,
-				emittingModule: emittingModule,
-				extendedTypes: extendedTypeDeclarations,
-			).allSatisfy(Self.isPubliclyConstructible) {
-				withheldRoots.append(WithheldRoot(typeDescription: rootScope.typeDescription, reason: .constructsNonPublicDeclaration))
-			} else if !seams.isEmpty, let seam = Self.firstSeamCalled(inTreeRootedAt: rootScope.scope) {
-				withheldRoots.append(WithheldRoot(typeDescription: rootScope.typeDescription, reason: .callsSeam(seam)))
-			} else {
-				rootScopesToGenerate.append(rootScope)
+			guard rootInstantiable.sourceFilePath.map(emittingModule.isOwnFile) == true else {
+				rootsOfOtherModules.append(rootInstantiable)
+				continue
 			}
+			if checksConstructions {
+				inaccessibleConstructions += Self.inaccessibleConstructions(
+					Self.constructions(
+						inTreeRootedAt: rootScope.scope,
+						rootIsConstructedWithMockMethod: false,
+						rootReferenceLocation: rootInstantiable.declarationLocation,
+						isMock: false,
+						emittingModule: emittingModule,
+						extendedTypes: extendedTypeDeclarations,
+					),
+					from: emittingModule,
+					extendedTypes: extendedTypeDeclarations,
+				)
+			}
+			rootScopesToGenerate.append(rootScope)
 		}
 		guard inaccessibleConstructions.isEmpty else {
 			throw DependencyTreeGeneratorError.inaccessibleConstructions(inaccessibleConstructions)
 		}
-		rootsGeneratedOnlyByTheirModule = withheldRoots
+		self.rootsOfOtherModules = rootsOfOtherModules
 		return rootScopesToGenerate
 	}
 
-	/// The roots another module declares that this module leaves to the module that declares them, in type order.
+	/// The roots another module declares, in type order, whose `init()` that module generates rather than this one.
 	/// Empty until the tree has been generated.
-	private var rootsGeneratedOnlyByTheirModule = [WithheldRoot]()
-
-	/// A root another module declares that this module leaves to that module, with why.
-	private struct WithheldRoot {
-		let typeDescription: TypeDescription
-		let reason: Reason
-
-		enum Reason {
-			/// The root's tree constructs a declaration that is neither `public` nor `open`. Decided first, so a tree
-			/// that also calls a seam carries this reason.
-			case constructsNonPublicDeclaration
-			/// The root's tree calls the initializer SafeDI generates for this seam: the first one a declaration-order
-			/// walk of the tree meets.
-			case callsSeam(TypeDescription)
-		}
-	}
-
-	/// The seam whose generated initializer the tree rooted at `rootScope` calls first in a depth-first walk that
-	/// visits each scope's instantiated properties – wrappers' included – in declaration order, or `nil` when the
-	/// tree calls none. The order is the declarations', which no name decides.
-	private static func firstSeamCalled(inTreeRootedAt rootScope: Scope) -> TypeDescription? {
-		var visitedScopes = Set<ObjectIdentifier>()
-		var scopesToVisit = [rootScope]
-		while let scope = scopesToVisit.popLast() {
-			// The scope graph is cyclic, so each scope is visited once.
-			guard visitedScopes.insert(ObjectIdentifier(scope)).inserted else { continue }
-			if scope.seamCall != nil {
-				return scope.instantiable.concreteInstantiable
-			}
-			let firstChildIndex = scopesToVisit.endIndex
-			for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
-				scopesToVisit.append(childScope)
-			}
-			scopesToVisit[firstChildIndex...].reverse()
-		}
-		return nil
-	}
-
-	/// Whether code in every module can construct `instantiable` with its hand-written mock method when
-	/// `withMockMethod` is set, and otherwise with its initializer or `instantiate()` method.
-	private static func isPubliclyConstructible(_ construction: Construction) -> Bool {
-		construction.accessNeeds.allSatisfy { $0.level.satisfies(.public) }
-	}
+	private var rootsOfOtherModules = [Instantiable]()
 
 	/// Whether code in every module can construct `instantiable` with its hand-written mock method when
 	/// `withMockMethod` is set, and otherwise with its initializer or `instantiate()` method, among `extendedTypes`,
@@ -3126,8 +3067,8 @@ public actor DependencyTreeGenerator {
 		/// The path with the earliest reference location decides it, as it decides `referenceLocation`.
 		let inlineSeam: DependencyTreeGeneratorError.InaccessibleConstruction.InlineSeam?
 
-		/// The declarations whose access decides whether the construction compiles, which both the check of every
-		/// construction and the decision to generate a root another module declares read.
+		/// The declarations whose access decides whether the construction compiles, which the check of every
+		/// construction reads.
 		var accessNeeds: [AccessNeed] {
 			(isSeamLeaf
 				? DependencyTreeGenerator.seamLeafAccessNeeds(of: instantiable)
@@ -3363,7 +3304,7 @@ public actor DependencyTreeGenerator {
 					: .withoutMock(instantiable.concreteInstantiable, declaringModuleName: nil, needsPublicDeclaration: false, isSeam: instantiable.generatesDependencyTree)
 			}
 		}
-		// The root is the module's own, or is not reported, so it is neither a seam candidate nor a seam built inline.
+		// The root is the module's own, or a mock's, so it is neither a seam candidate nor a seam built inline.
 		var scopesToWalk = [(scope: rootScope, usesMockMethod: rootIsConstructedWithMockMethod, referenceLocation: rootReferenceLocation, seamCandidateOnPaths: SeamCandidateOnPaths.agreed(nil), inlineSeamOnPath: DependencyTreeGeneratorError.InaccessibleConstruction.InlineSeam?.none, publicMockCandidate: candidate(of: rootScope.instantiable))]
 		while let (scope, usesMockMethod, referenceLocation, seamCandidateOnPaths, inlineSeamOnPath, publicMockCandidate) = scopesToWalk.popLast() {
 			let key = ConstructionKey(scope: ObjectIdentifier(scope), usesMockMethod: usesMockMethod)
@@ -3869,9 +3810,8 @@ public actor DependencyTreeGenerator {
 	/// it parsed them, under its own mock condition, which selects the module's mock-only declarations – whose mock
 	/// methods can prove a parameter's type – as the module's own run does only when the two conditions are spelled the
 	/// same. A seam whose module's condition is spelled otherwise is reported at the first dependency, in source order,
-	/// that instantiates it in a tree this module generates: an own root's, since a root another module declares whose
-	/// tree calls a seam is left to that module, or an own seam's, without entering another module's seam, whose tree
-	/// that module generates.
+	/// that instantiates it in a tree this module generates: an own root's, since a root another module declares is left
+	/// to that module, or an own seam's, without entering another module's seam, whose tree that module generates.
 	private func validateCalledSeamModulesShareMockCondition() throws {
 		var seamModuleMockConditionBySeam = [TypeDescription: (seam: SeamResolution.ForeignSeam, mockCondition: MockCondition)]()
 		for (seamType, foreignSeam) in seams.foreignSeams {

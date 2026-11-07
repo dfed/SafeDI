@@ -490,6 +490,12 @@ extension Target {
 					arguments: [
 						inputSourcesFile.path(percentEncoded: false),
 						"--output-directory", outputDirectory.path(percentEncoded: false),
+						// Not fixed yet: the CSV is relative to the project root and `--mock-scoped-files` names the files
+						// under it as Xcode reported it, while `generate` takes its working directory, which is resolved, as
+						// the root. So a project Xcode reports through a symbolic link (one under `/tmp`, say) finds none of
+						// its files its own and generates none of its roots and mocks. `generate --project-root` fixes it,
+						// but this fallback runs the SafeDITool pinned in `Package.swift`, and 2.3.0-alpha-1 rejects the
+						// option: the plugin passes it once the pinned binary accepts it.
 						"--mock-scoped-files",
 					] + inputSwiftFiles.map { $0.path(percentEncoded: false) }
 						+ buildSettingCompilationConditionArguments,

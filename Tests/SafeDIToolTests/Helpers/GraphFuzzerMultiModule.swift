@@ -593,48 +593,27 @@ struct GraphFuzzerMultiModuleRuns: Sendable {
 	/// The renaming the graph was run under, or `nil` for the graph as generated.
 	let renaming: GraphFuzzerRenaming?
 	let moduleInfoOutcome: GraphFuzzerMultiModuleOutcome
-	/// What the plugin produced, less the roots `regeneratedRoots` lists.
 	let pluginOutcome: GraphFuzzerMultiModuleOutcome
-	/// The roots the plugin wrote again in a module because a module it depends on declares them, in dependency
-	/// order of the consuming module and then by root name, each with how its code differs from the declaring
-	/// module's own, when it does.
-	let regeneratedRoots: [GraphFuzzerRegeneratedRoot]
 
 	/// Whether the module-info integration, which runs `generate` for every module, generated every module.
 	var isAccepted: Bool {
 		moduleInfoOutcome.isAccepted
 	}
 
-	/// The failure of a graph the two integrations give other results for, or `nil` when they agree: the plugin
-	/// output writes a dependency's root again with other code than the dependency's own, or the outcomes differ in
-	/// the first aspect `GraphFuzzerMultiModuleOutcome.difference` finds.
+	/// The failure of a graph the two integrations give other results for, or `nil` when they agree: the outcomes
+	/// differ in the first aspect `GraphFuzzerMultiModuleOutcome.difference` finds.
 	var failure: GraphFuzzerFailure? {
 		let graph = renaming.map { "\($0.description.prefix(1).uppercased())\($0.description.dropFirst()) and split into modules, the graph" } ?? "Split into modules, the graph"
-		let summary: String
-		if let regeneratedRootDifference = regeneratedRoots.compactMap(\.difference).first {
-			summary = "\(graph) \(regeneratedRootDifference)"
-		} else if let difference = GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: moduleInfoOutcome, andPlugin: pluginOutcome, modules: partition.modules) {
-			summary = "\(graph) differs between the .moduleInfo and .swiftPackagePlugin integrations in \(difference)."
-		} else {
+		guard let difference = GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: moduleInfoOutcome, andPlugin: pluginOutcome, modules: partition.modules) else {
 			return nil
 		}
+		let summary = "\(graph) differs between the .moduleInfo and .swiftPackagePlugin integrations in \(difference)."
 		return GraphFuzzerFailure(
 			seed: seed,
 			kind: .integrationsDiffer,
 			details: "\(summary)\nModules:\n\(partition.description)\nUnder .moduleInfo:\n\(moduleInfoOutcome.description)\nUnder .swiftPackagePlugin:\n\(pluginOutcome.description)",
 		)
 	}
-}
-
-/// A root the plugin wrote again in a module's output because a module it depends on declares it: the plugin's
-/// `scan` plans a dependency-tree file for every root in its CSV, which lists the files of the modules the module
-/// depends on, where the module-info integration writes only the module's own roots.
-struct GraphFuzzerRegeneratedRoot: Equatable, Sendable {
-	let consumerModuleName: String
-	let declaringModuleName: String
-	let rootTypeName: String
-	/// How the consumer's code for the root differs from the declaring module's own, or `nil` when it reads the same.
-	let difference: String?
 }
 
 /// Runs a graph, split by its partition, through both multi-module integrations.
@@ -644,84 +623,16 @@ enum GraphFuzzerMultiModuleProperty {
 	/// under each integration, without compiling, and reduces what each produced to a `GraphFuzzerMultiModuleOutcome`.
 	static func runs(of fixture: GraphFuzzerFixture, partition: GraphFuzzerPartition, renaming: GraphFuzzerRenaming? = nil) async throws -> GraphFuzzerMultiModuleRuns {
 		let modules = partition.moduleFixtures(of: fixture, renamedBy: renaming)
-		let moduleInfoOutcome = try await outcome(of: modules, integration: .moduleInfo, seed: fixture.seed)
-		var pluginVerdicts = try await outcome(of: modules, integration: .swiftPackagePlugin, seed: fixture.seed).verdicts
-		let regeneratedRoots = removingRegeneratedRoots(
-			from: &pluginVerdicts,
-			moduleNameByDeclaredTypeName: moduleNameByDeclaredTypeName(of: modules),
-			dependenciesByModuleName: Dictionary(uniqueKeysWithValues: partition.modules.map { ($0.name, $0.dependencies) }),
-		)
-		return GraphFuzzerMultiModuleRuns(
+		// The plugin's `scan` plans a dependency-tree file for every root in its CSV, which lists the files of the
+		// modules the module depends on, and `generate` writes the file of a root another module declares without
+		// code, as the module-info integration writes no file for it: the outcomes are compared as written.
+		return try await GraphFuzzerMultiModuleRuns(
 			seed: fixture.seed,
 			partition: partition,
 			renaming: renaming,
-			moduleInfoOutcome: moduleInfoOutcome,
-			pluginOutcome: GraphFuzzerMultiModuleOutcome(verdicts: pluginVerdicts),
-			regeneratedRoots: regeneratedRoots,
+			moduleInfoOutcome: outcome(of: modules, integration: .moduleInfo, seed: fixture.seed),
+			pluginOutcome: outcome(of: modules, integration: .swiftPackagePlugin, seed: fixture.seed),
 		)
-	}
-
-	/// Removes from the plugin's `verdicts` each root a module wrote again because a module it depends on declares it
-	/// (`GraphFuzzerRegeneratedRoot`), and returns those roots, each compared with the declaring module's own code
-	/// for it, which it must read exactly as. A root of a type declared in a module the consumer does not depend on
-	/// is kept: the plugin's CSV holds no file of that module, so such a unit is the consumer's own.
-	///
-	/// - Parameters:
-	///   - moduleNameByDeclaredTypeName: The module declaring each type, by the type's name
-	///     (`moduleNameByDeclaredTypeName(of:)`).
-	///   - dependenciesByModuleName: Every module each module depends on, directly or through another.
-	static func removingRegeneratedRoots(
-		from verdicts: inout [GraphFuzzerMultiModuleOutcome.ModuleVerdict],
-		moduleNameByDeclaredTypeName: [String: String],
-		dependenciesByModuleName: [String: [String]],
-	) -> [GraphFuzzerRegeneratedRoot] {
-		var regeneratedRoots = [GraphFuzzerRegeneratedRoot]()
-		for (index, verdict) in verdicts.enumerated() {
-			guard case var .accepted(generatedModule) = verdict.kind else { continue }
-			for unitName in generatedModule.units.keys.sorted() {
-				guard let rootTypeName = GraphFuzzerGeneratedModule.rootTypeName(ofUnitNamed: unitName),
-				      let declaringModuleName = moduleNameByDeclaredTypeName[rootTypeName],
-				      dependenciesByModuleName[verdict.moduleName, default: []].contains(declaringModuleName)
-				else { continue }
-				let regeneratedCode = generatedModule.units.removeValue(forKey: unitName)
-				let declaringModuleCode: String? = verdicts.first { $0.moduleName == declaringModuleName }.flatMap { declaringVerdict in
-					switch declaringVerdict.kind {
-					case let .accepted(declaringModule):
-						declaringModule.units[unitName]
-					case .skipped, .rejected:
-						nil
-					}
-				}
-				regeneratedRoots.append(GraphFuzzerRegeneratedRoot(
-					consumerModuleName: verdict.moduleName,
-					declaringModuleName: declaringModuleName,
-					rootTypeName: rootTypeName,
-					difference: regeneratedCode == declaringModuleCode
-						? nil
-						: "has \(declaringModuleName)'s root \(rootTypeName) written again by the .swiftPackagePlugin integration in module \(verdict.moduleName) with other code than \(declaringModuleName)'s own:\n\(regeneratedCode ?? "")\nagainst\n\(declaringModuleCode ?? "nothing")",
-				))
-			}
-			verdicts[index] = GraphFuzzerMultiModuleOutcome.ModuleVerdict(moduleName: verdict.moduleName, kind: .accepted(generatedModule))
-		}
-		return regeneratedRoots
-	}
-
-	/// The module declaring each type a module's files declare, by the type's name.
-	static func moduleNameByDeclaredTypeName(of modules: [ModuleFixture]) -> [String: String] {
-		let declarationExpression = try! NSRegularExpression(pattern: "(?:class|protocol|extension)\\s+([A-Za-z0-9_]+)")
-		var moduleNameByDeclaredTypeName = [String: String]()
-		for module in modules {
-			for content in module.swiftFileContent + module.swiftFileContentByFilePath.keys.sorted().map({ module.swiftFileContentByFilePath[$0]! }) {
-				let source = content as NSString
-				for match in declarationExpression.matches(in: content, range: NSRange(location: 0, length: source.length)) {
-					let typeName = source.substring(with: match.range(at: 1))
-					if moduleNameByDeclaredTypeName[typeName] == nil {
-						moduleNameByDeclaredTypeName[typeName] = module.name
-					}
-				}
-			}
-		}
-		return moduleNameByDeclaredTypeName
 	}
 
 	/// `text` with each path under a fixture root – a directory named by a UUID under the temporary directory,

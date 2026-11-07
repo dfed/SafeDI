@@ -450,9 +450,122 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 		try expectEveryModuleCompiled(output)
 	}
 
+	// MARK: A seam of a module no module name or target graph names
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsDependencysSeamInline_whenOwnFilesAreMockScopedWithoutTargetGraph(scansDuringGenerate: Bool) async throws {
+		// `App`'s CSV lists `Feature`'s files, and the module's own files are the mock-scoped ones alone, as `scan` plans
+		// a seam's output for a mock-scoped file alone: `Feature`'s seam is no seam `App` generates, and with no module
+		// name or target graph its module is unknown, so `App` builds its tree inline, saying so where it constructs
+		// `Screen`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: Self.featureModuleWithScreenSeam),
+				ModuleFixture(
+					name: "App",
+					packageName: "Shop",
+					swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let screen: Screen"])],
+					dependencies: ["Feature"],
+				),
+			],
+			integration: .swiftPackagePlugin,
+			writesTargetGraph: false,
+			scansDuringGenerate: scansDuringGenerate,
+			filesToDelete: &filesToDelete,
+		)
+		if scansDuringGenerate {
+			#expect(output.modules["Feature"]?.generatedFiles == [
+				"Screen+SafeDI.swift": generatedFileHeader + """
+				extension Screen {
+				    public init(logger: Logger?) {
+				        let detail = Detail(logger: logger)
+				        self.init(detail: detail)
+				    }
+				}
+
+				extension Screen {
+				    public enum __safeDI_Screen_5F3FDE2D827DABB3 {}
+				}
+				""",
+			])
+			#expect(output.modules["App"]?.generatedFiles == [
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        let logger = Logger()
+				        func __safeDI_screen() -> Screen {
+				            let detail = Detail(logger: logger)
+				            return Screen(detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it.
+				        }
+				        let screen: Screen = __safeDI_screen()
+				        self.init(logger: logger, screen: screen)
+				    }
+				}
+				""",
+			])
+		} else {
+			#expect(output.modules["Feature"]?.generatedFiles == [
+				"Screen+SafeDI.swift": generatedFileHeader + """
+				extension Screen {
+				    public init(logger: Logger?) {
+				        let detail = Detail(logger: logger)
+				        self.init(detail: detail)
+				    }
+				}
+
+				extension Screen {
+				    public enum __safeDI_Screen_5F3FDE2D827DABB3 {}
+				}
+				""",
+			])
+			#expect(output.modules["App"]?.generatedFiles == [
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        let logger = Logger()
+				        func __safeDI_screen() -> Screen {
+				            let detail = Detail(logger: logger)
+				            return Screen(detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it.
+				        }
+				        let screen: Screen = __safeDI_screen()
+				        self.init(logger: logger, screen: screen)
+				    }
+				}
+				""",
+			])
+		}
+		try expectEveryModuleCompiled(output)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// `Feature`'s public `Logger`; the public `Detail`, which receives `logger` only if available; and the seam `Screen`,
+	/// which instantiates `Detail`.
+	private static let featureModuleWithScreenSeam = [
+		seamFixtureType(named: "Logger", declarations: []),
+		"""
+		@Instantiable
+		public struct Detail: Instantiable {
+		    public init(logger: Logger?) {
+		        self.logger = logger
+		    }
+
+		    @Received(onlyIfAvailable: true) let logger: Logger?
+		}
+		""",
+		seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let detail: Detail"]),
+	]
 
 	/// `Feature`'s `package` `Service`.
 	private static let packageService = """
