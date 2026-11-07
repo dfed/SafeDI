@@ -1,0 +1,3 @@
+# SafeDIToolTestSupport
+
+The helpers the five `SafeDITool` test targets share. `SafeDIToolTestExecution.swift` (`executeSafeDIToolTest`) and `SafeDIToolMultiModuleTestExecution.swift` run fixtures through the whole pipeline; `SafeDICompileVerifier.swift` compiles each test's fixtures and generated code. The graph fuzzer's rules load as you read its files: `.claude/rules/fuzzer-overview.md`, `fuzzer-seam-draws.md`, `fuzzer-seam-oracles.md`, `fuzzer-corpora.md` and `fuzzer-value-oracles.md`. Which target a test goes in, fixture naming and the rest of the testing rules are in the root `CLAUDE.md`.

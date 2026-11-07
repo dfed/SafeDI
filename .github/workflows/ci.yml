@@ -1212,6 +1212,12 @@ jobs:
       # that need it, and this step checks that each names a path that exists.
       - name: Check Excluded Links
         run: python3 .github/scripts/check-excluded-markdown-links.py .github/md-dead-link-check.toml
+      # Claude Code truncates an instruction file it loads on demand at 40,000
+      # characters, and loads a rules file without `paths:` in every session, so
+      # this step keeps CLAUDE.md, the directory CLAUDE.md files and
+      # `.claude/rules` within the limits the root CLAUDE.md states.
+      - name: Check Claude Instruction Files
+        run: Scripts/check-claude-instruction-files.sh
 
   lint-swift:
     name: Lint Swift

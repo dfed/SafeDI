@@ -1,0 +1,3 @@
+# Generators
+
+`DependencyTreeGenerator.swift` builds and validates the production trees and the mock roots; `ScopeGenerator.swift` emits the code. The rules in `.claude/rules/` load as you read files here: cycle mechanisms (`cycle-generation.md`, `cycle-validation.md`), mocks (`mock-generation.md`, `mock-root-promotion.md`, `lazily-instantiated.md`, `public-mocks.md`), seams (`seams.md`, `seam-access-proof.md`, `seam-generation.md`, `seam-holes.md`), `validation-boundaries.md` and `reserved-names-and-spelling.md`. Grep loads none of them: when you change a generator from a file elsewhere, read the ones for its topic first.
