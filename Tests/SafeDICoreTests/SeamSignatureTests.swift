@@ -80,7 +80,7 @@ struct SeamSignatureTests {
 		// what a diagnostic says about the access.
 		("accessCause", .neither),
 		("tierAccess", .callShapeAndSettledContent),
-		("defaultsToNil", .callShapeAndSettledContent),
+		("isOnlyIfAvailable", .callShapeAndSettledContent),
 		("receivers", .settledContent),
 		// Derived from the nested seam calls the receivers come through, which the settled content holds by their tiers:
 		// what a diagnostic about a parameter on no tier names.
@@ -113,7 +113,7 @@ struct SeamSignatureTests {
 	private static let parameter = parameter(withReceiver: receiver)
 
 	private static func parameter(withReceiver receiver: SeamSignature.Receiver) -> SeamSignature.Parameter {
-		SeamSignature.Parameter(property: Property(label: "user", typeDescription: .optional(.simple(name: "User"))), isPassThrough: true, access: .public, tierAccess: .internal, defaultsToNil: true, receivers: [receiver])
+		SeamSignature.Parameter(property: Property(label: "user", typeDescription: .optional(.simple(name: "User"))), isPassThrough: true, access: .public, tierAccess: .internal, isOnlyIfAvailable: true, receivers: [receiver])
 	}
 
 	private static func parameter(changing label: String) -> SeamSignature.Parameter {
@@ -123,7 +123,7 @@ struct SeamSignatureTests {
 			isPassThrough: label == "isPassThrough" ? false : parameter.isPassThrough,
 			access: label == "access" ? .package : parameter.access,
 			tierAccess: label == "tierAccess" ? .package : parameter.tierAccess,
-			defaultsToNil: label == "defaultsToNil" ? false : parameter.defaultsToNil,
+			isOnlyIfAvailable: label == "isOnlyIfAvailable" ? false : parameter.isOnlyIfAvailable,
 			receivers: label == "receivers" ? [] : parameter.receivers,
 			accessCause: label == "accessCause" ? .unproven(type: .simple(name: "User")) : parameter.accessCause,
 			nestedSeamCall: label == "nestedSeamCall" ? SeamSignature.NestedSeamCall(seamType: .simple(name: "Service"), seamModuleName: "Base", tier: .public, requirement: .public, callerModuleName: "Mid", parameterTierAccess: .package, receivingTypes: [.simple(name: "Badge")]) : parameter.nestedSeamCall,

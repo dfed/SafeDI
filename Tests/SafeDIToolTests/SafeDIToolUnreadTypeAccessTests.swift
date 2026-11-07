@@ -104,14 +104,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesUnreadTypeOnPublicTierAsOptionalParameter_whenSeamReceivesItOnlyIfAvailable() async throws {
-		// A4: received only if available, the unread type is an optional parameter of the public tier, defaulting to `nil`.
+		// A4: received only if available, the unread type is an optional parameter of the public tier.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.screenModules(receives: ["@Received(onlyIfAvailable: true) let window: Window?"], hostForwards: ["window: Window"]),
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window"], tiers: """
-		    public init(window: Window? = nil) {
+		    public init(window: Window?) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
 		    }
@@ -645,7 +645,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(config: nil, id: nil)
 		    }
 
-		    package init(config: Space.Config? = nil, id: Space.ID? = nil) {
+		    package init(config: Space.Config?, id: Space.ID?) {
 		        let cache = Cache()
 		        self.init(config: config, id: id, cache: cache)
 		    }
@@ -738,7 +738,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(ledger: nil, label: nil)
 		    }
 
-		    package init(ledger: Shelf.Ledger? = nil, label: Shelf.Label? = nil) {
+		    package init(ledger: Shelf.Ledger?, label: Shelf.Label?) {
 		        let cache = Cache()
 		        self.init(ledger: ledger, label: label, cache: cache)
 		    }
@@ -765,7 +765,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(ledger: nil)
 		    }
 
-		    package init(ledger: Space.Ledger? = nil) {
+		    package init(ledger: Space.Ledger?) {
 		        let cache = Cache()
 		        self.init(ledger: ledger, cache: cache)
 		    }
@@ -857,7 +857,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(token: nil)
 		    }
 
-		    package init(token: Token? = nil) {
+		    package init(token: Token?) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
 		    }
@@ -1171,7 +1171,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Paints"], tiers: """
-		    public init(theme: Theme? = nil) {
+		    public init(theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -1221,7 +1221,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(window: window, token: nil)
 		    }
 
-		    package init(window: Window, token: Token? = nil) {
+		    package init(window: Window, token: Token?) {
 		        let cache = Cache()
 		        self.init(window: window, token: token, cache: cache)
 		    }
@@ -1250,7 +1250,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(palette: nil)
 		    }
 
-		    package init(palette: Palette? = nil) {
+		    package init(palette: Palette?) {
 		        let cache = Cache()
 		        self.init(palette: palette, cache: cache)
 		    }
@@ -1278,7 +1278,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(inner: nil)
 		    }
 
-		    package init(inner: Outer.Inner? = nil) {
+		    package init(inner: Outer.Inner?) {
 		        let cache = Cache()
 		        self.init(inner: inner, cache: cache)
 		    }
@@ -1356,7 +1356,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(kind: nil)
 		    }
 
-		    package init(kind: `Protocol`? = nil) {
+		    package init(kind: `Protocol`?) {
 		        let cache = Cache()
 		        self.init(kind: kind, cache: cache)
 		    }
@@ -1384,7 +1384,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(commented: nil)
 		    }
 
-		    package init(commented: Commented? = nil) {
+		    package init(commented: Commented?) {
 		        let cache = Cache()
 		        self.init(commented: commented, cache: cache)
 		    }
@@ -1440,7 +1440,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(handler: nil)
 		    }
 
-		    internal init(handler: Handler? = nil) {
+		    internal init(handler: Handler?) {
 		        let cache = Cache()
 		        self.init(handler: handler, cache: cache)
 		    }
@@ -1504,7 +1504,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(store: nil)
 		    }
 
-		    package init(store: Store? = nil) {
+		    package init(store: Store?) {
 		        let cache = Cache()
 		        self.init(store: store, cache: cache)
 		    }
@@ -2191,7 +2191,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		let assertions = integration == .swiftPackagePlugin ? Self.inactiveAssertion("FLAG") : ""
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Core"], assertions: assertions, tiers: """
-		    public init(theme: Theme? = nil) {
+		    public init(theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -2218,7 +2218,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(theme: nil)
 		    }
 
-		    package init(theme: Theme? = nil) {
+		    package init(theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -2252,7 +2252,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			        self.init(theme: nil)
 			    }
 
-			    internal init(theme: Theme? = nil) {
+			    internal init(theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
@@ -2263,14 +2263,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			        self.init(theme: nil)
 			    }
 
-			    package init(theme: Theme? = nil) {
+			    package init(theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
 			""", guardHash: "27F6F01DC5D0EF8E")
 		default:
 			Self.screenFiles(.moduleInfo, comment: [], assertions: Self.inactiveAssertion("A") + Self.inactiveAssertion("B"), tiers: """
-			    public init(theme: Theme? = nil) {
+			    public init(theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
@@ -2300,7 +2300,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(theme: nil)
 		    }
 
-		    package init(theme: Theme? = nil) {
+		    package init(theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -2330,14 +2330,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			        self.init(theme: nil)
 			    }
 
-			    package init(theme: Theme? = nil) {
+			    package init(theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
 			""", guardHash: "27F6F01DC5D0EF8E")
 		} else {
 			Self.screenFiles(.moduleInfo, comment: ["Theme"], assertions: Self.inactiveAssertion("FLAG"), tiers: """
-			    public init(theme: Theme? = nil) {
+			    public init(theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
@@ -2589,7 +2589,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			        self.init(theme: nil)
 			    }
 
-			    package init(theme: Theme? = nil) {
+			    package init(theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
@@ -2597,7 +2597,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			try expectEveryModuleCompiled(output)
 		case .swiftPackagePlugin:
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], assertions: Self.inactiveAssertion("FLAG"), tiers: """
-			    public init(theme: Theme? = nil) {
+			    public init(theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
@@ -2624,7 +2624,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Token"], assertions: Self.inactiveAssertion("FLAG"), tiers: """
-		    public init(token: Token? = nil) {
+		    public init(token: Token?) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
 		    }
@@ -2649,7 +2649,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window"], tiers: """
-		    public init(window: Window? = nil) {
+		    public init(window: Window?) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
 		    }

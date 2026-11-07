@@ -3387,12 +3387,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"\(hole.builderLabel.spelledAsArgumentLabel) \(hole.internalName): \(hole.builderType(qualifiedBy: hole.innerSeamType == nil ? nil : hole.scopeSeamType).asSource)"
 		}
 		let builderArguments = signature.holes.map { "\($0.builderLabel.spelledAsArgumentLabel): \($0.internalName)" }
+		// No parameter has a default: every call writes every argument, so a hand-written call fails to compile when the
+		// tree comes to take another parameter, rather than passing `nil` for it.
 		func parameterList(of parameters: [SeamSignature.Parameter]) -> String {
-			(parameters
-				.map { parameter in
-					"\(parameter.property.asFunctionParamterSyntax.description)\(parameter.defaultsToNil ? " = nil" : "")"
-				}
-				+ builderParameters)
+			(parameters.map(\.property.asFunctionParamterSyntax.description) + builderParameters)
 				.joined(separator: ", ")
 		}
 		let tierParameters = signature.tiers.map(signature.parameters(ofTierAt:))

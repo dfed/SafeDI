@@ -4387,14 +4387,14 @@ public actor DependencyTreeGenerator {
 			let componentSeams = seamInstantiables.filter { component.contains($0.concreteInstantiable) }
 			let reachableTypeDescriptions = Self.typesReachable(fromRoots: component, in: instantiables)
 			// A component settles in a fixed point in which every input to `seamRoot` only grows: a tree built with more
-			// parameters in scope receives no less from outside it, each label's form only strengthens (`X? = nil`,
-			// then `X?`, `X`, a wrapper), a parameter that stops defaulting to `nil` never defaults again, and the
-			// receivers of each parameter only accumulate. Nothing else a pass finds feeds the next: an alias bound
-			// from a parameter that may be `nil` is bound from that parameter alone, as an optional value passed to its
-			// declaring type, and every other read of it is rejected before emission, so it adds no parameter. The
-			// computation ends when a pass changes no signature's content – never the receivers' order,
-			// which a tree carrying the receivers of a seam that carries its own meets differently on every pass – or
-			// at the limit, which no input reaches by the argument above and which reports the component if one does.
+			// parameters in scope receives no less from outside it, each label's form only strengthens (`X?` received
+			// only if available, then a required `X?`, `X`, a wrapper), a parameter that stops being received only if
+			// available never is again, and the receivers of each parameter only accumulate. Nothing else a pass finds
+			// feeds the next: an alias bound from a parameter that may be `nil` is bound from that parameter alone, as an
+			// optional value passed to its declaring type, and every other read of it is rejected before emission, so it
+			// adds no parameter. The computation ends when a pass changes no signature's content – never the receivers'
+			// order, which a tree carrying the receivers of a seam that carries its own meets differently on every pass –
+			// or at the limit, which no input reaches by the argument above and which reports the component if one does.
 			var errorsOfLastPass = [DependencyTreeGeneratorError]()
 			var failedSeamsOfLastPass = Set<TypeDescription>()
 			var settled = false
@@ -4565,26 +4565,26 @@ public actor DependencyTreeGenerator {
 
 	/// The parameters that pass a seam's own `@Received` and `@Forwarded` properties, in declaration order, each as
 	/// visible as `proof` shows its type to be – the seam's own initializer, which takes it, among the members that
-	/// prove it – and capped at the seam's type. One received only if available defaults to `nil`, like a property the
-	/// tree receives only if available; a required `@Received` and a `@Forwarded` property have no default. Read from
-	/// `dependencies` rather than through `forwardedReceivableProperties` or `propertiesToDeclare(in:)`: those are
-	/// unordered sets that hold the by-value form of each wrapper beside it, while a parameter is one property in
-	/// declaration order.
+	/// prove it – and capped at the seam's type. One received only if available is a parameter received only if
+	/// available, like a property the tree receives only if available; a required `@Received` and a `@Forwarded`
+	/// property are not. Read from `dependencies` rather than through `forwardedReceivableProperties` or
+	/// `propertiesToDeclare(in:)`: those are unordered sets that hold the by-value form of each wrapper beside it, while
+	/// a parameter is one property in declaration order.
 	private static func ownParameters(of seam: Instantiable, proof: TypeAccessProof) -> [SeamSignature.Parameter] {
 		let typeLevel = parameterAccess(seam.effectiveTypeAccess)
 		return seam.dependencies.compactMap { dependency in
 			switch dependency.source {
 			case let .received(onlyIfAvailable):
-				ownParameter(dependency.property, of: seam, typeLevel: typeLevel, defaultsToNil: onlyIfAvailable, proof: proof)
+				ownParameter(dependency.property, of: seam, typeLevel: typeLevel, isOnlyIfAvailable: onlyIfAvailable, proof: proof)
 			case .forwarded:
-				ownParameter(dependency.property, of: seam, typeLevel: typeLevel, defaultsToNil: false, proof: proof)
+				ownParameter(dependency.property, of: seam, typeLevel: typeLevel, isOnlyIfAvailable: false, proof: proof)
 			case .instantiated, .aliased:
 				nil
 			}
 		}
 	}
 
-	private static func ownParameter(_ property: Property, of seam: Instantiable, typeLevel: AccessLevel, defaultsToNil: Bool, proof: TypeAccessProof) -> SeamSignature.Parameter {
+	private static func ownParameter(_ property: Property, of seam: Instantiable, typeLevel: AccessLevel, isOnlyIfAvailable: Bool, proof: TypeAccessProof) -> SeamSignature.Parameter {
 		let access = proof.access(ofParameterTyped: property.typeDescription, mentionedFrom: .declaration(seam), admittedModules: [seam.moduleName])
 		// Widening the seam's own initializer, which a remedy may offer, needs each of its other arguments' types to be as
 		// visible.
@@ -4592,7 +4592,7 @@ public actor DependencyTreeGenerator {
 			.filter { $0.innerLabel != property.label }
 			.map { proof.access(ofParameterTyped: $0.typeDescription, mentionedFrom: .declaration(seam), admittedModules: [seam.moduleName]).level }
 			.min() ?? .public
-		return SeamSignature.Parameter(property: property, isPassThrough: false, access: access.level, tierAccess: min(access.level, typeLevel), defaultsToNil: defaultsToNil, accessCause: access.cause, otherInitializerArgumentsAccess: otherInitializerArgumentsAccess)
+		return SeamSignature.Parameter(property: property, isPassThrough: false, access: access.level, tierAccess: min(access.level, typeLevel), isOnlyIfAvailable: isOnlyIfAvailable, accessCause: access.cause, otherInitializerArgumentsAccess: otherInitializerArgumentsAccess)
 	}
 
 	/// The tiers of a seam's generated initializer, widest first: one at the seam type's effective access, as its
@@ -4810,10 +4810,10 @@ public actor DependencyTreeGenerator {
 	/// The generator of `seam`'s tree, rooted at `rootScope`, with the parameters of `signature` in scope throughout:
 	/// each by its own form and its unwrapped form; a non-optional `LazilyInstantiated` parameter also by its
 	/// instance, which a by-value receiver reads, as it reads a forwarded wrapper's (an optional wrapper offers
-	/// nothing but itself); and every optional parameter, required or defaulting to `nil`, as a property that may be
-	/// `nil`, from which an `onlyIfAvailable` alias is bound as an optional value. No receive in the tree is beneath a
-	/// declaration of its label that does not provide it: `validatePropertiesAreFulfillable` has reported each as
-	/// hidden, from the seam's own chain.
+	/// nothing but itself); and every optional parameter, required or received only if available, as a property that
+	/// may be `nil`, from which an `onlyIfAvailable` alias is bound as an optional value. No receive in the tree is
+	/// beneath a declaration of its label that does not provide it: `validatePropertiesAreFulfillable` has reported each
+	/// as hidden, from the seam's own chain.
 	private static func seamRootGenerator(
 		rootScope: Scope,
 		seamRoot: ScopeGenerator.SeamRoot,
@@ -4835,18 +4835,15 @@ public actor DependencyTreeGenerator {
 			}
 			// Which forms of an optional parameter may be `nil` where inline they would be unavailable, so that an
 			// `onlyIfAvailable` alias of that form is bound from the parameter as an optional value: (a) both forms of a
-			// parameter the seam's callers may pass `nil` for – a pass-through received only if available, or the seam's
-			// own `onlyIfAvailable` receive, decided from the seam's own dependency, since `ownParameters` gives no own
-			// parameter a default – because inline such an alias is not created for a caller holding nothing; (b) only
-			// the unwrapped form of a required optional parameter, which every caller holds a value for: an alias of
-			// exactly `x: X?` is created from it wherever the tree is built, as inline creates it from the caller's
-			// `x: X?`, while a caller's `x: X?` never provides `x: X`.
+			// parameter received only if available, which the seam's callers may pass `nil` for – a pass-through every
+			// receiver receives only if available, or the seam's own `onlyIfAvailable` receive – because inline such an
+			// alias is not created for a caller holding nothing; (b) only the unwrapped form of a required optional
+			// parameter, which every caller holds a value for: an alias of exactly `x: X?` is created from it wherever
+			// the tree is built, as inline creates it from the caller's `x: X?`, while a caller's `x: X?` never provides
+			// `x: X`.
 			if property.typeDescription.isOptional {
-				let callersMayPassNil = parameter.isPassThrough
-					? parameter.defaultsToNil
-					: rootScope.instantiable.dependencies.contains { $0.property == property && $0.source == .received(onlyIfAvailable: true) }
 				runtimeOptionalProperties.insert(property.asUnwrappedProperty)
-				if callersMayPassNil {
+				if parameter.isOnlyIfAvailable {
 					runtimeOptionalProperties.insert(property)
 				}
 			} else {
@@ -5061,7 +5058,7 @@ public actor DependencyTreeGenerator {
 					isPassThrough: true,
 					access: access.level,
 					tierAccess: labelReceivers.compactMap(\.noTierCallTier).max() ?? access.level,
-					defaultsToNil: true,
+					isOnlyIfAvailable: true,
 					receivers: labelReceivers.map { $0.with(access: access.level).asSignatureReceiver },
 					accessCause: access.cause,
 					nestedSeamCall: nestedSeamCall,
@@ -5119,7 +5116,7 @@ public actor DependencyTreeGenerator {
 				property: parameterProperty,
 				isPassThrough: true,
 				access: access.level,
-				defaultsToNil: !isRequired,
+				isOnlyIfAvailable: !isRequired,
 				receivers: parameterReceivers.map { $0.with(access: access.level).asSignatureReceiver },
 				accessCause: access.cause,
 			))
@@ -5139,11 +5136,11 @@ public actor DependencyTreeGenerator {
 		// omitted by the widest tier, which cannot pass `nil` for it: reported once, at the widest tier.
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
 		let parameters = (ownParameters + passThroughs).map { parameter in
-			SeamSignature.Parameter(property: parameter.property, isPassThrough: parameter.isPassThrough, access: parameter.access, tierAccess: min(parameter.access, seamTypeAccess), defaultsToNil: parameter.defaultsToNil, receivers: parameter.receivers, accessCause: parameter.accessCause, otherInitializerArgumentsAccess: parameter.otherInitializerArgumentsAccess)
+			SeamSignature.Parameter(property: parameter.property, isPassThrough: parameter.isPassThrough, access: parameter.access, tierAccess: min(parameter.access, seamTypeAccess), isOnlyIfAvailable: parameter.isOnlyIfAvailable, receivers: parameter.receivers, accessCause: parameter.accessCause, otherInitializerArgumentsAccess: parameter.otherInitializerArgumentsAccess)
 		}
 		let holes = Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables)
 		let tiers = Self.tiers(of: seam, parameters: parameters)
-		for omitted in parameters where omitted.tierAccess < seamTypeAccess && !omitted.defaultsToNil {
+		for omitted in parameters where omitted.tierAccess < seamTypeAccess && !omitted.isOnlyIfAvailable {
 			// A pass-through that reaches this seam only through a nested seam call the module reaches no tier of,
 			// and that the check of every construction is certain to report, is no omission of this seam's: the check
 			// reports the nested seam's type, whose widening makes a tier of that seam reachable, with its fix-it, and
@@ -5151,8 +5148,8 @@ public actor DependencyTreeGenerator {
 			// the check may pass, is reported here.
 			let omittedReceivers = receivers(ofLabel: omitted.property.label)
 			guard omittedReceivers.isEmpty || !omittedReceivers.allSatisfy(\.isFromReportedSeamCall) else { continue }
-			// An omitted own `@Received` property is a required one: one received only if available defaults to `nil`
-			// (`ownParameters(of:)`), which the loop leaves out.
+			// An omitted own `@Received` property is a required one: the loop leaves out one received only if available
+			// (`ownParameters(of:)`), for which a wider tier passes `nil`.
 			let ownParameter: DependencyTreeGeneratorError.SeamError.OwnParameter = switch seam.dependencies.first(where: { $0.property == omitted.property })?.source {
 			case .forwarded:
 				.forwarded
@@ -5248,7 +5245,7 @@ public actor DependencyTreeGenerator {
 
 	/// The scope that calls `seam`'s generated initializer wherever a tree reaches it, which declares the whole
 	/// signature: the parameters of `tier` – the seam's own `@Received` and `@Forwarded` properties as the seam declares
-	/// them, and each pass-through as a `@Received` property, received only if available when it defaults to `nil` –
+	/// them, and each pass-through as a `@Received` property, received only if available when the parameter is –
 	/// which the tier's initializer takes, and every parameter the tier omits or no tier takes, as an only-if-available
 	/// receive the call never passes but which orders the leaf among its siblings as the receivers built inline would.
 	/// - Parameter initializerAccess: The access the leaf's initializer carries, the tier's level: the check of every
@@ -5276,7 +5273,7 @@ public actor DependencyTreeGenerator {
 					Initializer.Argument(
 						innerLabel: parameter.property.label,
 						typeDescription: parameter.property.asFunctionParamter.typeDescription,
-						defaultValueExpression: parameter.defaultsToNil ? "nil" : nil,
+						defaultValueExpression: nil,
 					)
 				},
 			),
@@ -5290,7 +5287,7 @@ public actor DependencyTreeGenerator {
 				} else {
 					Dependency(
 						property: parameter.property,
-						source: .received(onlyIfAvailable: parameter.defaultsToNil),
+						source: .received(onlyIfAvailable: parameter.isOnlyIfAvailable),
 						declarationLocation: seam.declarationLocation,
 					)
 				}

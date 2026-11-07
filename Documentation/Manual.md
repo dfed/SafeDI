@@ -724,7 +724,7 @@ SafeDI generates, in `Feature`:
 
 ```swift
 extension Screen {
-    public init(user: User, database: Database, logger: Logger? = nil) {
+    public init(user: User, database: Database, logger: Logger?) {
         let cache = Cache(database: database, logger: logger)
         self.init(user: user, cache: cache)
     }
@@ -735,7 +735,7 @@ extension Screen {
 }
 ```
 
-The generated initializer takes the seam’s own `@Received` and `@Forwarded` properties first, in declaration order and as the seam declares them, then every property its tree receives that nothing inside the tree provides, in label order: required where some receiver requires it, keeping an optional type a receiver declares (`session: Session?`) without a default, and defaulting to `nil` where every receiver receives it only if available, as the seam’s own receive only if available does. A tree that reaches the seam calls the generated initializer as it would call any other initializer, passing a property received only if available by the usual [availability rule](#conditionally-receiving-dependencies) – `nil` where its own tree does not provide it, as for `logger` here – so receivers get the values they would get inline, except in the shapes [listed below](#where-a-seam-differs-from-building-its-tree-inline):
+The generated initializer takes the seam’s own `@Received` and `@Forwarded` properties first, in declaration order and as the seam declares them, then every property its tree receives that nothing inside the tree provides, in label order: required where some receiver requires it, keeping an optional type a receiver declares (`session: Session?`), and optional (`logger: Logger?`) where every receiver receives it only if available, as the seam’s own receive only if available is too. No parameter has a default. A tree that reaches the seam calls the generated initializer as it would call any other initializer, passing a property received only if available by the usual [availability rule](#conditionally-receiving-dependencies) – `nil` where its own tree does not provide it, as for `logger` here – so receivers get the values they would get inline, except in the shapes [listed below](#where-a-seam-differs-from-building-its-tree-inline):
 
 ```swift
 // Generated in module App, whose root instantiates Screen.
@@ -745,7 +745,7 @@ func __safeDI_screen() -> Screen {
 }
 ```
 
-Each generated call refers to the enum generated beside the initializer. Adding a `@Received` property beneath the seam adds a parameter and renames the enum, so a stale generated call fails to compile rather than passing `nil` where a value was expected. A hand-written call gets only the compiler’s check: it fails to compile when a required parameter is added, a parameter’s type changes, or one is removed, and still compiles, passing `nil`, when a `= nil` parameter is added for a receive that every receiver takes only if available.
+Each generated call refers to the enum generated beside the initializer. Adding a `@Received` property beneath the seam adds a parameter and renames the enum, so a stale generated call fails to compile rather than passing `nil` where a value was expected. A hand-written call writes every argument, so it fails to compile when a parameter is added, changes type, or is removed.
 
 The seam’s module and each caller compute the initializer from the same declarations, the seam’s module’s own files and the modules it depends on: under the `SafeDIGenerator` plugin from the target graph the plugin writes, and otherwise from the `.safedi` files [Custom build system integration](#custom-build-system-integration) says to pass. The plugin cannot tell whether a dependency target applies it, so every generated call to another module’s seam carries the comment above under the plugin. Under Bazel, Tuist or a custom build, a module that calls another module’s seam read that module’s `.safedi`, so the seam’s module ran SafeDI, and the call’s comment says instead that the code SafeDI generated for that module must be compiled into it: its `safedi_compile` rule listed in its library’s `srcs` under Bazel, `SafeDI.generatedSource` among its target’s `sources` under Tuist, or the file its `SafeDITool generate` run writes compiled into it. A seam whose module SafeDI does not know – declared in a directory a `#SafeDIConfiguration` adds, in a `.safedi` written without `--module-name`, or in a file no target of the plugin’s graph lists – is built inline by every tree that reaches it (a target the [Xcode project plugin](#limits-of-the-xcode-project-plugin) builds names no module), and each production construction of it says so in a comment. A seam whose initializer depends on a declaration its callers cannot see, such as one in its own module’s `additionalDirectoriesToInclude`, is an error at the seam when that changes what a call depends on, as is a declaration outside the tree whose initializer, `instantiate(…)` or mock method takes a parameter’s type as a dependency, when that changes it.
 

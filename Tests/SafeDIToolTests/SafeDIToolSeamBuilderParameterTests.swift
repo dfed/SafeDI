@@ -2605,7 +2605,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public let `case`: any Clock
 		    }
 
-		    public init(userServiceBuilder: Instantiator<Impl>? = nil, caseBuilder __safeDI_caseBuilder: @escaping (SafeDIScope_Profile_case) -> any Clock, userServiceBuilder_Profile __safeDI_userServiceBuilder_Profile: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+		    public init(userServiceBuilder: Instantiator<Impl>?, caseBuilder __safeDI_caseBuilder: @escaping (SafeDIScope_Profile_case) -> any Clock, userServiceBuilder_Profile __safeDI_userServiceBuilder_Profile: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
 		        let `default` = Count()
 		        func __safeDI_profile() -> Profile {
 		            let badge = Badge(userServiceBuilder: userServiceBuilder)
@@ -2832,7 +2832,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        self.init(theme: nil, userServiceBuilder: __safeDI_userServiceBuilder)
 		    }
 
-		    package init(theme: Theme? = nil, userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+		    package init(theme: Theme?, userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
 		        let session = Session()
 		        let badge = Badge()
 		        let banner = Banner(theme: theme)

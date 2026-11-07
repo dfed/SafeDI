@@ -585,14 +585,14 @@ struct SafeDIToolGraphFuzzerTests {
 		let inline = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S7_Root+SafeDI.swift": "let reader = S7_Reader(token: token, user: nil)\nreturn S7_Screen(reader: reader)"], warnings: [])
 		let seamPassingNil = GraphFuzzerToolOutcome.accepted(generatedFiles: [
 			"S7_Root+SafeDI.swift": "return S7_Screen(token: nil)",
-			"S7_Screen+SafeDI.swift": "public init(token: S7_Token? = nil) {\n    let reader = S7_Reader(token: nil, user: nil)\n    self.init(reader: reader)\n}",
+			"S7_Screen+SafeDI.swift": "public init(token: S7_Token?) {\n    let reader = S7_Reader(token: nil, user: nil)\n    self.init(reader: reader)\n}",
 		], warnings: [])
 		let defect = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: seamPassingNil, secondOutcome: seamPassingNil, inlineOutcome: inline)
 		#expect(defect.nilArgumentFailure?.kind == .seamPassesNilWhereInlinePassesValue)
 		#expect(defect.nilArgumentFailure?.details.prefix { $0 != "\n" } == "`S7_Reader(token:)` is passed `nil` 1 times with the seam and 0 without it.")
 		let seamPassingValue = GraphFuzzerToolOutcome.accepted(generatedFiles: [
 			"S7_Root+SafeDI.swift": "let token = S7_Token()\nreturn S7_Screen(token: token)",
-			"S7_Screen+SafeDI.swift": "public init(token: S7_Token? = nil) {\n    let reader = S7_Reader(token: token, user: nil)\n    self.init(reader: reader)\n}",
+			"S7_Screen+SafeDI.swift": "public init(token: S7_Token?) {\n    let reader = S7_Reader(token: token, user: nil)\n    self.init(reader: reader)\n}",
 		], warnings: [])
 		let sound = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: seamPassingValue, secondOutcome: seamPassingValue, inlineOutcome: inline)
 		#expect(sound.nilArgumentFailure == nil)
@@ -607,11 +607,11 @@ struct SafeDIToolGraphFuzzerTests {
 		// a `public` tier taking a type the generator declared `package`. A tier as narrow as the type is sound.
 		let unsoundTier = """
 		extension S1_ProofSeam {
-		    public convenience init(proofTheme: S1_ProofTheme? = nil) {
+		    public convenience init(proofTheme: S1_ProofTheme?) {
 		        self.init(proofTheme: proofTheme)
 		    }
 
-		    package convenience init(proofCrate: S1_ProofSpace.S1_ProofCrate, proofTheme: S1_ProofTheme? = nil) {
+		    package convenience init(proofCrate: S1_ProofSpace.S1_ProofCrate, proofTheme: S1_ProofTheme?) {
 		        let proofBadge = S1_ProofBadge(proofTheme: proofTheme)
 		        self.init(proofBadge: proofBadge)
 		    }
@@ -624,11 +624,11 @@ struct SafeDIToolGraphFuzzerTests {
 		let typeAccess: [String: GraphFuzzerGenerator.AccessLevel] = ["S1_ProofTheme": .package, "S1_ProofSpace.S1_ProofCrate": .internal]
 
 		#expect(GraphFuzzerOracle.tiersWiderThanParameterTypes(in: ["S1_ProofSeam+SafeDI.swift": unsoundTier], typeAccess: typeAccess) == [
-			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`'s `public` initializer takes `proofTheme: S1_ProofTheme? = nil`, but `S1_ProofTheme` is `package`.",
+			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`'s `public` initializer takes `proofTheme: S1_ProofTheme?`, but `S1_ProofTheme` is `package`.",
 			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`'s `package` initializer takes `proofCrate: S1_ProofSpace.S1_ProofCrate`, but `S1_ProofSpace.S1_ProofCrate` is `internal`.",
 		])
 		#expect(GraphFuzzerOracle.tiersWiderThanParameterTypes(in: ["S1_ProofSeam+SafeDI.swift": unsoundTier], typeAccess: ["S1_ProofTheme": .package, "S1_ProofSpace.S1_ProofCrate": .package]) == [
-			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`'s `public` initializer takes `proofTheme: S1_ProofTheme? = nil`, but `S1_ProofTheme` is `package`.",
+			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`'s `public` initializer takes `proofTheme: S1_ProofTheme?`, but `S1_ProofTheme` is `package`.",
 		])
 	}
 
@@ -704,19 +704,45 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// A seam's tiers and a call of its public tier from a caller in another package.
 	private static let omittingCall = [
-		"FuzzFeature/S1_ProofSeam+SafeDI.swift": "extension S1_ProofSeam {\n    public convenience init() {\n        self.init(proofTheme: nil)\n    }\n\n    package convenience init(proofTheme: S1_ProofTheme? = nil) {\n        self.init(proofBadge: S1_ProofBadge(proofTheme: proofTheme))\n    }\n}\n\nextension S1_ProofSeam {\n    public enum __safeDI_S1_ProofSeam_0123456789ABCDEF {}\n}\n",
+		"FuzzFeature/S1_ProofSeam+SafeDI.swift": "extension S1_ProofSeam {\n    public convenience init() {\n        self.init(proofTheme: nil)\n    }\n\n    package convenience init(proofTheme: S1_ProofTheme?) {\n        self.init(proofBadge: S1_ProofBadge(proofTheme: proofTheme))\n    }\n}\n\nextension S1_ProofSeam {\n    public enum __safeDI_S1_ProofSeam_0123456789ABCDEF {}\n}\n",
 		"FuzzOther/S1_ProofOtherRoot+SafeDI.swift": "extension S1_ProofOtherRoot {\n    public convenience init() {\n        func __safeDI_proofSeam() -> S1_ProofSeam {\n            _ = S1_ProofSeam.__safeDI_S1_ProofSeam_0123456789ABCDEF.self\n            return S1_ProofSeam()\n        }\n        self.init(proofSeam: __safeDI_proofSeam())\n    }\n}\n",
 	]
 
 	@Test
+	func seamParameterKinds_tellParameterReceivedOnlyIfAvailableFromRequiredOne_byReceivesInSeamsTree() {
+		// A seam's generated initializer spells `x: X?` alike whether `x` is received only if available or required, so the
+		// oracles read the kind from the graph: the seam's own receive as declared, and a pass-through by every receive of
+		// its label in the seam's tree – followed into a type declared in a namespace, and not into a `mockOnly` fake or a
+		// type outside the tree. A label the tree receives both ways is neither.
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"@Instantiable(generateDependencyTree: true)\npublic final class Screen: Instantiable {\n\t@Received(onlyIfAvailable: true) let session: Session?\n\t@Received let user: User?\n\t@Instantiated let detail: Detail\n\t@Instantiated let shelf: Space.Shelf\n}\n",
+			"@Instantiable\npublic final class Detail: Instantiable {\n\t@Received(onlyIfAvailable: true) let logger: Logger?\n\t@Received let token: Token?\n\t@Received(onlyIfAvailable: true) let theme: Theme?\n\t@Received(fulfilledByDependencyNamed: \"mixed\", ofType: Mixed.self, onlyIfAvailable: true) let alias: Mixed?\n\t@Received let mixed: Mixed?\n}\n\n@Instantiable(mockOnly: true)\nstruct Fake {\n\t@Received let theme: Theme\n}\n",
+			"public enum Space {}\n\nextension Space {\n\t@Instantiable\n\tpublic final class Shelf: Instantiable {\n\t\t@Received(onlyIfAvailable: true) let crate: Crate?\n\t}\n}\n",
+			"@Instantiable\npublic final class Outside: Instantiable {\n\t@Received let logger: Logger\n}\n",
+		])
+		let kinds = GraphFuzzerSeamParameterKinds(fixture: fixture)
+		let labels = ["session", "user", "logger", "token", "theme", "mixed", "crate"]
+		#expect(labels.filter { kinds.isOnlyIfAvailable(label: $0, ofSeam: "Screen") } == ["session", "logger", "theme", "crate"])
+		#expect(labels.filter { kinds.isRequiredPassThrough(label: $0, type: "T?", ofSeam: "Screen") } == ["token"])
+		#expect(kinds.isRequiredPassThrough(label: "mixed", type: "Mixed", ofSeam: "Screen"))
+		#expect(!kinds.isRequiredPassThrough(label: "user", type: "User", ofSeam: "Screen"))
+	}
+
+	/// Whether a parameter of the seams the oracle tests below hand-write is received only if available: `token` is,
+	/// which a seam's generated initializer spells as it spells a required `Token?`.
+	private static func tokenIsOnlyIfAvailable(_ label: String, ofSeam _: String) -> Bool {
+		label == "token"
+	}
+
+	@Test
 	func uncreatedAliasBindingReads_reportEachRead_whenSeamReadsAliasOfParameterThatMayBeNil() {
-		// The structural oracle: an `onlyIfAvailable` alias bound from a parameter that defaults to `nil` is read only by
-		// the construction of the type that declares it. The seam outputs of an alias of such an alias, `onlyIfAvailable`
-		// and required, as the rule's first draft generated them, read it again.
+		// The structural oracle: an `onlyIfAvailable` alias bound from a parameter received only if available is read only
+		// by the construction of the type that declares it. The seam outputs of an alias of such an alias,
+		// `onlyIfAvailable` and required, as the rule's first draft generated them, read it again.
 		let aliasOfAlias = { (attribute: String) in
 			"""
 			extension Screen {
-			    public convenience init(token: Token? = nil) {
+			    public convenience init(token: Token?) {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "/F/Types.swift", line: 32)
@@ -736,12 +762,12 @@ struct SafeDIToolGraphFuzzerTests {
 			}
 			"""
 		}
-		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": aliasOfAlias("")]) == ["Screen+SafeDI.swift: `let bearer: Token? = authToken` reads `authToken`."])
-		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": aliasOfAlias(" // Declared at Types.swift:33")]) == ["Screen+SafeDI.swift: `let bearer: Token? = authToken` reads `authToken`."])
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": aliasOfAlias("")], isOnlyIfAvailable: Self.tokenIsOnlyIfAvailable) == ["Screen+SafeDI.swift: `let bearer: Token? = authToken` reads `authToken`."])
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": aliasOfAlias(" // Declared at Types.swift:33")], isOnlyIfAvailable: Self.tokenIsOnlyIfAvailable) == ["Screen+SafeDI.swift: `let bearer: Token? = authToken` reads `authToken`."])
 		// A receiver beneath, built in a builder function of its own.
 		let readerBeneath = """
 		extension Screen {
-		    public init(token: Token? = nil) {
+		    public init(token: Token?) {
 		        func __safeDI_detail() -> Detail {
 		            let authToken: Token? = token
 		            func __safeDI_reader() -> Reader {
@@ -755,13 +781,13 @@ struct SafeDIToolGraphFuzzerTests {
 		    }
 		}
 		"""
-		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": readerBeneath]) == ["Screen+SafeDI.swift: `return Reader(authToken: authToken)` reads `authToken`."])
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": readerBeneath], isOnlyIfAvailable: Self.tokenIsOnlyIfAvailable) == ["Screen+SafeDI.swift: `return Reader(authToken: authToken)` reads `authToken`."])
 		// The canonical alias, read by its declaring type alone; the seam's own alias, read by `self.init`; an alias of a
 		// local that shadows the parameter, whose readers read the local's alias; and a reader beneath a nearer declaration
 		// of the alias's label.
 		let sound = """
 		extension Screen {
-		    public init(authToken: Token? = nil, token: Token? = nil) {
+		    public init(authToken: Token?, token: Token?) {
 		        let own: Token? = token
 		        func __safeDI_left() -> Left {
 		            let token = Token()
@@ -789,7 +815,7 @@ struct SafeDIToolGraphFuzzerTests {
 		    }
 		}
 		"""
-		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": sound]) == [])
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": sound], isOnlyIfAvailable: { label, _ in ["authToken", "token"].contains(label) }) == [])
 	}
 
 	@Test
@@ -798,7 +824,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// inside an attribute's arguments; the oracle recognizes the initializer by its modifier followed by `init(`.
 		let attributed = """
 		extension Screen {
-		    @MainActor public convenience init(token: Token? = nil) {
+		    @MainActor public convenience init(token: Token?) {
 		        let authToken: Token? = token
 		        func __safeDI_reader() -> Reader {
 		            return Reader(authToken: authToken)
@@ -807,27 +833,27 @@ struct SafeDIToolGraphFuzzerTests {
 		        self.init(authToken: authToken, reader: reader)
 		    }
 
-		    @available(iOS 17, *) internal init(session: Session? = nil) {
+		    @available(iOS 17, *) internal init(session: Session?) {
 		        let bearer: Session? = session
 		        let panel = Panel(bearer: bearer)
 		        self.init(bearer: bearer, panel: panel)
 		    }
 		}
 		"""
-		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": attributed]) == [
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": attributed], isOnlyIfAvailable: { label, _ in ["session", "token"].contains(label) }) == [
 			"Screen+SafeDI.swift: `return Reader(authToken: authToken)` reads `authToken`.",
 			"Screen+SafeDI.swift: `let panel = Panel(bearer: bearer)` reads `bearer`.",
 		])
 		// A line that mentions `init(` after something other than a modifier is not an initializer.
 		let notAnInitializer = """
 		extension Screen {
-		    public static func callTier0(token: Token? = nil) -> Screen {
+		    public static func callTier0(token: Token?) -> Screen {
 		        let authToken: Token? = token
 		        return Screen.init(token: authToken)
 		    }
 		}
 		"""
-		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": notAnInitializer]) == [])
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": notAnInitializer], isOnlyIfAvailable: Self.tokenIsOnlyIfAvailable) == [])
 	}
 
 	@Test
@@ -895,8 +921,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	func uncreatedAliasBindingReads_reportRead_whenAliasOfRequiredOptionalParameterIsReadAndThatParameterIsTracked() {
-		// The unwrapped-form alias of a required optional parameter may be uncreated as an alias of a parameter that
-		// defaults to `nil` may, so its binding's reads are reported when the parameter is named; the exact-form alias
+		// The unwrapped-form alias of a required optional parameter may be uncreated as an alias of a parameter received
+		// only if available may, so its binding's reads are reported when the parameter is named; the exact-form alias
 		// is always created, so the parameter is not named for it and its reads pass.
 		let seam = """
 		extension Screen {
@@ -911,8 +937,8 @@ struct SafeDIToolGraphFuzzerTests {
 		    }
 		}
 		"""
-		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": seam], requiredOptionalParameters: ["aliasToken"]) == ["Screen+SafeDI.swift: `let reader = Reader(aliasAuth: aliasAuth)` reads `aliasAuth`."])
-		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": seam]) == [])
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": seam], isOnlyIfAvailable: { _, _ in false }, requiredOptionalParameters: ["aliasToken"]) == ["Screen+SafeDI.swift: `let reader = Reader(aliasAuth: aliasAuth)` reads `aliasAuth`."])
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": seam], isOnlyIfAvailable: { _, _ in false }) == [])
 	}
 
 	@Test
@@ -984,10 +1010,10 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test(.enabled(if: compileVerificationIsEnabled, "The value comparator compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func valueFailures_reportsOtherValues_whenSeamBuildPassesNilWhereInlineBuildPassesValue() async throws {
-		// The seam build of a smoke graph, with the root's call of a tier passing `nil` for a parameter that defaults to
-		// `nil` where it passed a value, builds other values than the inline build: the receiver beneath gets `nil`.
+		// The seam build of a smoke graph, with the root's call of a tier passing `nil` for a parameter received only if
+		// available where it passed a value, builds other values than the inline build: the receiver beneath gets `nil`.
 		let (runs, seamFiles, warnings) = try await Self.valueProbeRuns()
-		let perturbed = try #require(Self.passingNil(forADefaultedParameterIn: seamFiles, of: runs.fixture), "No smoke seam graph passes a value for a parameter that defaults to nil")
+		let perturbed = try #require(Self.passingNil(forAnOnlyIfAvailableParameterIn: seamFiles, of: runs.fixture), "No smoke seam graph passes a value for a parameter received only if available")
 		let perturbedRuns = GraphFuzzerToolRuns(fixture: runs.fixture, firstOutcome: .accepted(generatedFiles: perturbed.files, warnings: warnings), secondOutcome: .accepted(generatedFiles: perturbed.files, warnings: warnings), inlineOutcome: runs.inlineOutcome)
 
 		let failures = try GraphFuzzerOracle.valueFailures(of: [perturbedRuns])
@@ -3798,25 +3824,27 @@ struct SafeDIToolGraphFuzzerTests {
 	private static let undocumentedDifference = "probe `Root()` at <1> Root > aliasSeam > aliasRight > aliasToken:\n  feature:     aliasToken: nil\n  known right: aliasToken: <3> Value"
 
 	/// The runs of the first seam smoke graph the tool accepts with its seam and without it whose root passes a value
-	/// for a tier parameter that defaults to `nil`, with its seam build's files and warnings.
+	/// for a tier parameter received only if available, with its seam build's files and warnings.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private static func valueProbeRuns() async throws -> (runs: GraphFuzzerToolRuns, seamFiles: [String: String], warnings: [String]) {
 		for seed in seamSmokeSeeds {
 			let runs = try await GraphFuzzerOracle.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree]), renamings: [])
-			guard case let .accepted(seamFiles, warnings) = runs.firstOutcome, case .accepted = runs.inlineOutcome, passingNil(forADefaultedParameterIn: seamFiles, of: runs.fixture) != nil else { continue }
+			guard case let .accepted(seamFiles, warnings) = runs.firstOutcome, case .accepted = runs.inlineOutcome, passingNil(forAnOnlyIfAvailableParameterIn: seamFiles, of: runs.fixture) != nil else { continue }
 			return (runs, seamFiles, warnings)
 		}
-		throw GraphFuzzerTestError.noSmokeGraphPassesValueForDefaultedParameter
+		throw GraphFuzzerTestError.noSmokeGraphPassesValueForOnlyIfAvailableParameter
 	}
 
-	/// `seamFiles` with the first call, in a root's file, of a seam tier's parameter that defaults to `nil` passing
-	/// `nil` instead of the value it passed, with the parameter's label; or `nil` when no root's call passes a value
-	/// for such a parameter.
-	private static func passingNil(forADefaultedParameterIn seamFiles: [String: String], of fixture: GraphFuzzerFixture) -> (files: [String: String], label: String)? {
+	/// `seamFiles` with the first call, in a root's file, of a seam tier's parameter received only if available
+	/// (`GraphFuzzerSeamParameterKinds`) passing `nil` instead of the value it passed, with the parameter's label; or
+	/// `nil` when no root's call passes a value for such a parameter.
+	private static func passingNil(forAnOnlyIfAvailableParameterIn seamFiles: [String: String], of fixture: GraphFuzzerFixture) -> (files: [String: String], label: String)? {
+		let parameterKinds = GraphFuzzerSeamParameterKinds(fixture: fixture)
 		for (_, contents) in seamFiles.sorted(by: { $0.key < $1.key }) where contents.contains("public enum __safeDI_") {
 			for initializer in GraphFuzzerOracle.seamInitializerParameters(inGeneratedFile: contents) {
-				for parameter in initializer.parameters where parameter.hasSuffix("= nil") {
+				for parameter in initializer.parameters {
 					let label = parameter.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces)
+					guard parameterKinds.isOnlyIfAvailable(label: label, ofSeam: initializer.seamTypeName) else { continue }
 					for (rootFileName, rootContents) in seamFiles.sorted(by: { $0.key < $1.key }) where rootFileName.hasPrefix("\(fixture.typeNamePrefix)Root") {
 						// The arguments of the first call of the seam: up to the parenthesis that closes it.
 						guard let callRange = rootContents.range(of: "\(initializer.seamTypeName)(") else { continue }
@@ -4009,5 +4037,5 @@ final class GraphFuzzerReport: Sendable {
 }
 
 private enum GraphFuzzerTestError: Error {
-	case noSmokeGraphPassesValueForDefaultedParameter
+	case noSmokeGraphPassesValueForOnlyIfAvailableParameter
 }

@@ -610,7 +610,7 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			        self.init(token: nil)
 			    }
 
-			    @MainActor internal init(token: Token? = nil) {
+			    @MainActor internal init(token: Token?) {
 			        let presenter = Presenter()
 			        let detail = Detail(token: token)
 			        self.init(presenter: presenter, detail: detail)
