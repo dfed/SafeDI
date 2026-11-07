@@ -8041,15 +8041,16 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorNamingView_whenTargetTheXcodeProjectPluginBuildsCannotBuildTreeOfTypeWithPublicMock() async {
-		// M8.24: without a target graph no module is known, so `Service`'s public mock cannot be called, and its tree is
-		// built inline, where `TokenCache` is `internal`.
+	mutating func generate_throwsErrorSayingDeclaringModuleIsUnknown_whenRunThatNamesNoModuleCannotBuildTreeOfTypeWithPublicMock() async {
+		// M8.24: without a target graph or a module name – as the Xcode project plugin runs the tool – `App` reads
+		// `Core`'s files without knowing which module declares `Service`, so `Service`'s public mock cannot be called, and
+		// its tree is built inline, where `TokenCache` is `internal`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let servicePath = NormalizedFilePath(fixtures["Core"]!.compilerPath(of: "Service.swift")).path
 			return """
-			\(servicePath):4:1: error: `Service` has a public `mock()`, but it cannot be called from a target the Xcode project plugin builds, and `TokenCache` is `internal`. Build this target's mocks in a SwiftPM package target.
-			\(servicePath):5:5: error: `Service` has a public `mock()`, but it cannot be called from a target the Xcode project plugin builds, and `TokenCache`’s initializer is `internal`. Build this target's mocks in a SwiftPM package target.
-			\(servicePath):10:5: error: `Service` has a public `mock()`, but it cannot be called from a target the Xcode project plugin builds, and `Service`’s initializer is `internal`. Build this target's mocks in a SwiftPM package target.
+			\(servicePath):4:1: error: `Service` has a public `mock()`, but SafeDI does not know which module declares `Service`, so this run cannot call it, and `TokenCache` is `internal`. Build these mocks in a Swift package target, or give this run the module info of the module that declares `Service`, written with `--module-name`.
+			\(servicePath):5:5: error: `Service` has a public `mock()`, but SafeDI does not know which module declares `Service`, so this run cannot call it, and `TokenCache`’s initializer is `internal`. Build these mocks in a Swift package target, or give this run the module info of the module that declares `Service`, written with `--module-name`.
+			\(servicePath):10:5: error: `Service` has a public `mock()`, but SafeDI does not know which module declares `Service`, so this run cannot call it, and `Service`’s initializer is `internal`. Build these mocks in a Swift package target, or give this run the module info of the module that declares `Service`, written with `--module-name`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -8059,6 +8060,155 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorSayingDeclaringModuleIsUnknown_whenRunThatNamesNoModuleReadsTypeWithPublicMockFromAdditionalDirectory() async {
+		// M8.24 as the Xcode project plugin runs it: the target reads `Service` through `additionalDirectoriesToInclude`,
+		// which no module name covers, so `Service`'s public mock cannot be called, and its tree is built inline, where
+		// `TokenCache` is `internal`.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["AdditionalDirectory/TokenCache.swift"]):2:1: error: `Service` has a public `mock()`, but SafeDI does not know which module declares `Service`, so this run cannot call it, and `TokenCache` is `internal`. Build these mocks in a Swift package target, or give this run the module info of the module that declares `Service`, written with `--module-name`.
+			\(fixtures["AdditionalDirectory/TokenCache.swift"]):3:5: error: `Service` has a public `mock()`, but SafeDI does not know which module declares `Service`, so this run cannot call it, and `TokenCache`’s initializer is `internal`. Build these mocks in a Swift package target, or give this run the module info of the module that declares `Service`, written with `--module-name`.
+			\(fixtures["AdditionalDirectory/TokenCache.swift"]):8:5: error: `Service` has a public `mock()`, but SafeDI does not know which module declares `Service`, so this run cannot call it, and `Service`’s initializer is `internal`. Build these mocks in a Swift package target, or give this run the module info of the module that declares `Service`, written with `--module-name`.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#SafeDIConfiguration(
+					    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+					)
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct Screen: Instantiable {
+					    public init(service: Service) {
+					        self.service = service
+					    }
+
+					    @Received let service: Service
+					}
+					""",
+				],
+				additionalDirectorySwiftFileContent: [
+					"""
+					@Instantiable
+					struct TokenCache: Instantiable {
+					    init() {}
+					}
+
+					@Instantiable(generateMock: .public)
+					public struct Service: Instantiable {
+					    init(tokenCache: TokenCache) {
+					        self.tokenCache = tokenCache
+					    }
+
+					    @Instantiated let tokenCache: TokenCache
+					}
+					""",
+				],
+				pluginInvocation: .scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: false),
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsPublicMock_whenRunThatNamesNoModuleReadsModuleInfoNamingDeclaringModule() async throws {
+		// M8.24's modules, with `App`'s run given no module name: `Core`'s module info names `Core`, so SafeDI knows which
+		// module declares `Service`, and `Screen`'s mock calls its public mock rather than building its tree.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.unknownModuleModules(omitsCoreModuleName: false, omitsAppModuleName: true),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            service: Service.SafeDIOverrides = .init()
+		        ) {
+		            self.service = service
+		        }
+
+		        let service: Service.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        _ = Service.__safeDI_Service_mock_51799E6AA5E7B634.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let service = Service.mock(safeDIOverrides: safeDIOverrides.service)
+		        return Screen(service: service)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsPublicMock_whenTargetGraphNamesModuleOfTypeWithPublicMock() async throws {
+		// M8.24's modules built with the target graph the SwiftPM plugin writes: `Core` is known, so `Screen`'s mock calls
+		// `Service`'s public mock rather than building its tree, where `TokenCache` is `internal`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.unknownModuleModules(omitsCoreModuleName: false),
+			integration: .swiftPackagePlugin,
+			filesToDelete: &filesToDelete,
+		)
+
+		let header = generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+
+		"""
+		#expect(output.modules["App"]?.generatedFiles == [
+			"Screen+SafeDIMock.swift": header + """
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            service: Service.SafeDIOverrides = .init()
+			        ) {
+			            self.service = service
+			        }
+
+			        let service: Service.SafeDIOverrides
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        _ = Service.__safeDI_Service_mock_51799E6AA5E7B634.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
+			        let service = Service.mock(safeDIOverrides: safeDIOverrides.service)
+			        return Screen(service: service)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": header,
+		])
+		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -9654,7 +9804,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	"""
 
 	/// M8.24's and M8.25's modules: `Service`, with a public mock, builds an `internal` `TokenCache`.
-	private static func unknownModuleModules(omitsCoreModuleName: Bool) -> [ModuleFixture] {
+	private static func unknownModuleModules(omitsCoreModuleName: Bool, omitsAppModuleName: Bool = false) -> [ModuleFixture] {
 		[
 			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
 			import SafeDI
@@ -9685,7 +9835,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 			    @Received let service: Service
 			}
-			"""], dependencies: ["Core"]),
+			"""], dependencies: ["Core"], omitsModuleName: omitsAppModuleName),
 		]
 	}
 

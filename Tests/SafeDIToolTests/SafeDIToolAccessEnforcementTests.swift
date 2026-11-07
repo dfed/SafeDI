@@ -2051,47 +2051,26 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 	}
 
-	@Test(arguments: [DependencyTreeGenerator.EmittingModule.UnnamedReason.xcodeProjectPlugin, .noModuleName])
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_reportsSeamBuiltInlineAtItsReferenceAndEachDeclaration_whenTargetThatNamesNoModuleCannotConstructItsTree(unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason) async {
+	mutating func generate_reportsSeamBuiltInlineAtItsReferenceAndEachDeclaration_whenTargetThatNamesNoModuleCannotConstructItsTree() async {
 		// As the Xcode project plugin runs the tool for an app target that reads its local package's modules through
 		// `additionalDirectoriesToInclude`: a CSV of the target's own files, `scan` while planning, then `generate` with
-		// the manifest, and no target graph, so SafeDI knows no module. The plugin passes the target's product module
-		// name, which tells the run apart from one given no module name, whose error leads with another remedy. The
-		// errors are joined in source order, and the harness writes the target's files and the additional directory
-		// into directories with random names.
-		let buildSettingArguments: [String] = switch unnamedReason {
-		case .xcodeProjectPlugin:
-			["--build-setting-product-module-name=[App]"]
-		case .noModuleName:
-			[]
-		}
+		// the manifest, and no target graph, so SafeDI knows no module, and the errors are those of any run given no
+		// module name. They are joined in source order, and the harness writes the target's files and the additional
+		// directory into directories with random names.
 		await assertThrowsError(diagnostics: { fixtures in
 			let rootPath = NormalizedFilePath(fixtures.compilerPath(of: "Root.swift")).path
 			let featureViewPath = fixtures["AdditionalDirectory/FeatureView.swift"]
-			let inlineSeamError = "\(rootPath):9:5: error: \(Self.inlineSeamMessage(reaching: "`Formatter` is `internal`", unnamedReason: unnamedReason))"
-			// Each error is at a declaration the target reads from another directory, so under the Xcode project plugin it
-			// names the target by what it builds, since "this module" would read as the declaration's own.
-			let featureViewErrors = switch unnamedReason {
-			case .xcodeProjectPlugin:
-				"""
-				\(featureViewPath):5:5: error: `FeatureView`’s initializer is `internal`, so the target that builds `FeatureView`, which the Xcode project plugin cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
-				\(featureViewPath):5:5-5:5: fixit: package\(" ")
-				\(featureViewPath):15:1: error: `Formatter` is `internal`, so the target that builds it, which the Xcode project plugin cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, or `public` if the two modules are in different packages.
-				\(featureViewPath):15:1-15:1: fixit: package\(" ")
-				\(featureViewPath):16:5: error: `Formatter`’s initializer is `internal`, so the target that builds `Formatter`, which the Xcode project plugin cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
-				\(featureViewPath):16:5-16:5: fixit: package\(" ")
-				"""
-			case .noModuleName:
-				"""
-				\(featureViewPath):5:5: error: `FeatureView`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
-				\(featureViewPath):5:5-5:5: fixit: package\(" ")
-				\(featureViewPath):15:1: error: `Formatter` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, or `public` if the two modules are in different packages.
-				\(featureViewPath):15:1-15:1: fixit: package\(" ")
-				\(featureViewPath):16:5: error: `Formatter`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
-				\(featureViewPath):16:5-16:5: fixit: package\(" ")
-				"""
-			}
+			let inlineSeamError = "\(rootPath):9:5: error: \(Self.inlineSeamMessage(reaching: "`Formatter` is `internal`"))"
+			let featureViewErrors = """
+			\(featureViewPath):5:5: error: `FeatureView`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
+			\(featureViewPath):5:5-5:5: fixit: package\(" ")
+			\(featureViewPath):15:1: error: `Formatter` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, or `public` if the two modules are in different packages.
+			\(featureViewPath):15:1-15:1: fixit: package\(" ")
+			\(featureViewPath):16:5: error: `Formatter`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
+			\(featureViewPath):16:5-16:5: fixit: package\(" ")
+			"""
 			return rootPath < featureViewPath ? "\(inlineSeamError)\n\(featureViewErrors)" : "\(featureViewErrors)\n\(inlineSeamError)"
 		}) {
 			try await executeSafeDIToolTest(
@@ -2107,37 +2086,21 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 				],
 				pluginInvocation: .scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: false),
 				filesToDelete: &filesToDelete,
-				buildSettingArguments: buildSettingArguments,
 			)
 		}
 	}
 
-	@Test(arguments: [DependencyTreeGenerator.EmittingModule.UnnamedReason.xcodeProjectPlugin, .noModuleName])
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_reportsConstructionNamingMockAndItsTarget_whenTargetThatNamesNoModuleCannotConstructTypeItsMockBuilds(unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason) async {
+	mutating func generate_reportsConstructionNamingMock_whenTargetThatNamesNoModuleCannotConstructTypeItsMockBuilds() async {
 		// The mock of `Screen`, a type of the target's own, builds `Formatter`, which the target reads from another
-		// directory: under the Xcode project plugin the error names the target by what it builds, since "this module"
-		// would read as the declaration's own.
-		let buildSettingArguments: [String] = switch unnamedReason {
-		case .xcodeProjectPlugin:
-			["--build-setting-product-module-name=[App]"]
-		case .noModuleName:
-			[]
-		}
+		// directory, as under the Xcode project plugin: the error names the mock and the module it is generated in.
 		await assertThrowsError(diagnostics: { fixtures in
 			let formatterPath = fixtures["AdditionalDirectory/Formatter.swift"]
-			return switch unnamedReason {
-			case .xcodeProjectPlugin:
-				"""
-				\(formatterPath):2:1: error: `Formatter` is `internal`, so the mock of `Screen`, generated in the target that builds `Screen`, which the Xcode project plugin cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, or `public` if the two modules are in different packages.
-				\(formatterPath):2:1-2:1: fixit: package\(" ")
-				"""
-			case .noModuleName:
-				"""
-				\(formatterPath):2:1: error: `Formatter` is `internal`, so the mock of `Screen`, generated in this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, or `public` if the two modules are in different packages.
-				\(formatterPath):2:1-2:1: fixit: package\(" ")
-				"""
-			}
+			return """
+			\(formatterPath):2:1: error: `Formatter` is `internal`, so the mock of `Screen`, generated in this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, or `public` if the two modules are in different packages.
+			\(formatterPath):2:1-2:1: fixit: package\(" ")
+			"""
 		}) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -2165,7 +2128,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 				],
 				pluginInvocation: .scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: false),
 				filesToDelete: &filesToDelete,
-				buildSettingArguments: buildSettingArguments,
 			)
 		}
 	}
@@ -2177,7 +2139,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			let rootPath = NormalizedFilePath(fixtures["App"]!.compilerPath(of: "Root.swift")).path
 			let featureViewPath = NormalizedFilePath(fixtures["Feature"]!.compilerPath(of: "FeatureView.swift")).path
 			return """
-			\(rootPath):9:5: error: \(Self.inlineSeamMessage(reaching: "`FeatureView`’s initializer is `internal`", unnamedReason: .noModuleName))
+			\(rootPath):9:5: error: \(Self.inlineSeamMessage(reaching: "`FeatureView`’s initializer is `internal`"))
 			\(featureViewPath):5:5: error: `FeatureView`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
 			\(featureViewPath):5:5-5:5: fixit: package\(" ")
 			"""
@@ -2197,8 +2159,52 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_commentsSeamBuiltInlineBeforeAssumedPackageAccess_whenXcodeProjectTargetBuildsPackageSeamOfUnnamedModule() async throws {
-		// `App` reads `Feature`'s files with no target graph and the product module name the Xcode project plugin passes,
+	mutating func generate_callsSeamsInitializer_whenTargetGraphNamesModuleOfSeamWhoseTreeTargetCannotConstruct() async throws {
+		// The modules a run that names no module builds `FeatureView`'s tree inline for, where `App` cannot construct
+		// `Formatter`, built with the target graph the SwiftPM plugin writes: `Feature` generates `FeatureView`'s
+		// initializer, which constructs its own `Formatter`, and `App` calls it.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesOfTargetReachingFeatureView(formatterDeclaration: Self.internalFormatter),
+			integration: .swiftPackagePlugin,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.modules["Feature"]).generatedFiles == [
+			"FeatureView+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + """
+			extension FeatureView {
+			    package init() {
+			        let networkClient = NetworkClient()
+			        let formatter = Formatter()
+			        self.init(networkClient: networkClient, formatter: formatter)
+			    }
+			}
+
+			extension FeatureView {
+			    public enum __safeDI_FeatureView_CBF29CE484222325 {}
+			}
+			""",
+		])
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feature") + "\n\n" + """
+			extension Root {
+			    public init() {
+			        func __safeDI_featureView() -> FeatureView {
+			            _ = FeatureView.__safeDI_FeatureView_CBF29CE484222325.self // If this line does not compile, add the SafeDI plugin to the target that declares FeatureView.
+			            return FeatureView()
+			        }
+			        let featureView: FeatureView = __safeDI_featureView()
+			        self.init(featureView: featureView)
+			    }
+			}
+			""",
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_commentsSeamBuiltInlineBeforeAssumedPackageAccess_whenRunThatNamesNoModuleBuildsPackageSeamOfUnnamedModule() async throws {
+		// `App` reads `Feature`'s files with no target graph and no module name, as the Xcode project plugin runs the tool,
 		// so SafeDI knows neither module: it builds `Screen`'s tree inline, and assumes `package` access reaches it.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
@@ -2254,7 +2260,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 						""",
 					],
 					dependencies: ["Feature"],
-					buildSettingArguments: buildSettingCompilationConditionArguments + ["--build-setting-product-module-name=[App]"],
 				),
 			],
 			integration: .swiftPackagePlugin,
@@ -2272,7 +2277,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			        let session = Session()
 			        func __safeDI_screen() -> Screen {
 			            let detail = Detail(session: session) // SafeDI could not verify that Detail is in this package; `package` access is assumed.
-			            return Screen(session: session, detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it (a target the Xcode project plugin builds names no module; see the Manual's "Limits of the Xcode project plugin"). // SafeDI could not verify that Screen is in this package; `package` access is assumed.
+			            return Screen(session: session, detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it. // SafeDI could not verify that Screen is in this package; `package` access is assumed.
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(session: session, screen: screen)
@@ -3604,14 +3609,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	/// The error a target that names no module gets where it refers to `FeatureView`, whose tree it builds inline,
 	/// which says that `reachedDeclaration`, the first declaration in source order in the tree that the target cannot
-	/// reach, keeps the tree from compiling, and leads with the remedy that works where `unnamedReason` puts the run.
-	private static func inlineSeamMessage(reaching reachedDeclaration: String, unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason) -> String {
-		switch unnamedReason {
-		case .xcodeProjectPlugin:
-			"`FeatureView` is declared with `generateDependencyTree: true`, but a target the Xcode project plugin builds cannot call the initializer SafeDI generates for it, so this target builds its tree inline. \(reachedDeclaration), so that tree cannot be built here. Declare a root in a Swift package target that depends on `FeatureView`'s module and call it from this target, or make the types in `FeatureView`'s tree `public`."
-		case .noModuleName:
-			"`FeatureView` is declared with `generateDependencyTree: true`, but SafeDI does not know which module declares `FeatureView`, so this run builds `FeatureView`'s tree inline. \(reachedDeclaration), so that tree cannot be built here. Declare `FeatureView` in a module whose SafeDITool run is given its name (`--module-name`), so that this module calls the initializer SafeDI generates for `FeatureView`, or make the types in `FeatureView`'s tree `public`."
-		}
+	/// reach, keeps the tree from compiling, and leads with the remedy every build can apply.
+	private static func inlineSeamMessage(reaching reachedDeclaration: String) -> String {
+		"`FeatureView` is declared with `generateDependencyTree: true`, but SafeDI does not know which module declares `FeatureView`, so this run builds `FeatureView`'s tree inline. \(reachedDeclaration), so that tree cannot be built here. Make the types in `FeatureView`'s tree `public`, or, in a build that can name modules, declare `FeatureView` in a module whose SafeDITool run is given its name (`--module-name`, Bazel's `module_name`), so that this module calls the initializer SafeDI generates for `FeatureView`."
 	}
 
 	/// `Core`, in its own package, declaring with `serviceAttribute` the `public` `Service`, whose `package` initializer
