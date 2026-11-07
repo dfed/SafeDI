@@ -7969,8 +7969,8 @@ enum GraphFuzzerOracle {
 	/// the known-right path the same graph with no seam and the files the tool generated for that; the probes are the
 	/// graph's roots and the generated mocks that take no required parameter. Each path is built from the graph drawn
 	/// storing every parameter, so the comparator sees every value the generated code passes; storing changes nothing
-	/// the tool generates. Every eager read of a wrapper's instance where a seam builds a hole's struct, the one
-	/// documented divergence of values, is exempted by its shape in a graph whose seam declares a hole's struct (`isEagerInstanceRead`). The graphs of one call are compared in one batch.
+	/// the tool generates. Nothing is exempted: a seam hands a hole's struct the memo of each value it defers, so a fill
+	/// creates the value where inline would. The graphs of one call are compared in one batch.
 	/// Nothing is compared when `compileVerificationIsEnabled` is `false`.
 	static func valueFailures(of toolRuns: [GraphFuzzerToolRuns]) throws -> [UInt64: GraphFuzzerFailure] {
 		try valueComparisons(of: toolRuns).failures
@@ -8090,14 +8090,7 @@ enum GraphFuzzerOracle {
 			case let .success(valueComparison):
 				// A public mock graph exempts the shape matrix's stated divergences, derived from its leaf calls.
 				let statedDivergences = isPublicMockGraph ? Self.statedPublicMockValueDivergences(in: valueComparison, of: runs) : []
-				let seamFiles: [String: String] = if case let .accepted(generatedFiles, _) = runs.firstOutcome {
-					generatedFiles
-				} else {
-					[:]
-				}
-				let differences = valueComparison.differences.filter { difference in
-					!statedDivergences.contains(difference) && (isPublicMockGraph || !Self.isEagerInstanceRead(difference, inGraphWhoseSeamGenerated: seamFiles))
-				}
+				let differences = valueComparison.differences.filter { !statedDivergences.contains($0) }
 				guard !differences.isEmpty else { continue }
 				failures[runs.fixture.seed] = GraphFuzzerFailure(
 					seed: runs.fixture.seed,
@@ -8114,23 +8107,6 @@ enum GraphFuzzerOracle {
 			}
 		}
 		return (failures, comparedValueOracleSeeds)
-	}
-
-	/// Whether `difference` is the eager read of a wrapper's instance where a seam builds a hole's struct that the Manual
-	/// lists under "Where a seam differs from building its tree inline", and nothing else: the seam defers a by-value
-	/// parameter, but hands the struct the instance of the `LazilyInstantiated` it holds the parameter in, where inline
-	/// the fill's receiver reads the caller's wrapper when it is built, so the seam build describes the same instance,
-	/// marked `(built before the probe's value)`, where the inline build does not mark it. A seam call itself reads
-	/// nothing early: it hands each by-value parameter to an `@autoclosure`, so the read is exempted only in a graph
-	/// whose seam files (`seamGeneratedFiles`) declare a hole's struct (or a staged hole's enum of structs), and a seam that takes a pass-through by value
-	/// again is a failure everywhere else.
-	static func isEagerInstanceRead(_ difference: DifferentialValueDifference, inGraphWhoseSeamGenerated seamGeneratedFiles: [String: String]) -> Bool {
-		let marker = " (built before the probe's value)"
-		// A hole's struct, or the enum holding a staged hole's structs.
-		return seamGeneratedFiles.values.contains { $0.contains("struct SafeDIScope_") || $0.contains("enum SafeDIScope_") }
-			&& difference.path.last?.hasSuffix(".instance") == true
-			&& difference.feature.contains(marker)
-			&& difference.feature.replacingOccurrences(of: marker, with: "") == difference.knownRight
 	}
 
 	/// How many times the code in `generatedFiles` passes a literal `nil` to each argument of each construction of a

@@ -599,8 +599,21 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 			_ = try await QueryNeeds.parse(["Engine", "--module-info", path, copiedPath]).query()
 			Issue.record("Did not throw error!")
 		} catch let error as QueryError {
-			#expect(error == .moduleInfoNamedTwice(moduleName: "Engines", paths: [path, copiedPath].sorted()))
-			#expect(error.description == "The module info files \([path, copiedPath].sorted().map { "'\($0)'" }.joined(separator: " and ")) both record module 'Engines'. Name each module once.")
+			let paths = [path, copiedPath].sorted()
+			#expect(error == .moduleInfoNamedTwice(moduleName: "Engines", paths: paths))
+			#expect(try QueryErrorReport(error).json() == """
+			{
+			  "error" : {
+			    "kind" : "moduleInfoNamedTwice",
+			    "message" : "The module info files '\(paths[0])' and '\(paths[1])' both record module 'Engines'. Name each module once.",
+			    "paths" : [
+			      "\(paths[0])",
+			      "\(paths[1])"
+			    ]
+			  },
+			  "formatVersion" : 0
+			}
+			""")
 		}
 	}
 
@@ -622,8 +635,21 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 			_ = try await QueryNeeds.parse(["Engine", "--include", directory.path, "--module-info", path]).query()
 			Issue.record("Did not throw error!")
 		} catch let error as QueryError {
-			#expect(error == .modulesShareName(moduleName: "Engines", paths: [directory.path, path].sorted()))
-			#expect(error.kind == "modulesShareName")
+			let paths = [directory.path, path].sorted()
+			#expect(error == .modulesShareName(moduleName: "Engines", paths: paths))
+			#expect(try QueryErrorReport(error).json() == """
+			{
+			  "error" : {
+			    "kind" : "modulesShareName",
+			    "message" : "'\(paths[0])' and '\(paths[1])' are both module 'Engines': a directory is named after its last path component, and a module info file after the module it records. Name each module once.",
+			    "paths" : [
+			      "\(paths[0])",
+			      "\(paths[1])"
+			    ]
+			  },
+			  "formatVersion" : 0
+			}
+			""")
 		}
 	}
 

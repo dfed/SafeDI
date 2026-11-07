@@ -2113,6 +2113,40 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesEarliestPlainDeclarationCallersCannotSee_whenAdditionalDirectoryProvesSixParametersNarrowerUnderTargetGraph() async {
+		// X4 with six parameters, each proved `package` by a declaration in a file of its own in the directory the
+		// configuration adds: the error is at the earliest declaration by source location, `T1`'s, which is the third
+		// parameter by label, not the first or the last.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["AdditionalDirectory/T1.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: the initializer SafeDI generates for it takes its parameters at the access this declaration of `T1` proves, which is in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see it, so they would count `T1` as `public`, and their calls would not match the initializer. Declare `T1` in a file of this module, or of a module it depends on.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"#SafeDIConfiguration(additionalDirectoriesToInclude: [\"$ADDITIONAL_DIRECTORY\"])",
+					Self.screenSource(
+						receives: [
+							"@Received(onlyIfAvailable: true) let alpha: T4?",
+							"@Received(onlyIfAvailable: true) let beta: T2?",
+							"@Received(onlyIfAvailable: true) let delta: T1?",
+							"@Received(onlyIfAvailable: true) let echo: T6?",
+							"@Received(onlyIfAvailable: true) let gamma: T3?",
+							"@Received(onlyIfAvailable: true) let zeta: T5?",
+						],
+						imports: [],
+					),
+				],
+				additionalDirectorySwiftFileContent: (1...6).map { "package struct T\($0) {\n    package init() {}\n}" },
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				pluginTargetGraph: Self.featureTargetGraph,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_namesPlainDeclarationCallersCannotSee_whenAdditionalDirectoryProvesPublicMockParameterNarrowerUnderTargetGraph() async {
 		// X5: the public mock's twin of X4.
 		await assertThrowsError(diagnostics: { fixtures in

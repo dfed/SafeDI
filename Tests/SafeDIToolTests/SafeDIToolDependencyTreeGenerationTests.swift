@@ -5401,6 +5401,151 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingDeclarationCallersCannotSee_whenCallersComputationFindsTwoReceivesOfOneLabelUnderTargetGraph() async {
+		// `Feature.Screen` receives `logger: Logger`, which this run qualifies as `Feature.Logger` by the additional
+		// directory's declaration, and `Detail` receives `logger: Feature.Logger`: one parameter here. The callers cannot
+		// qualify `Logger`, so for them the tree receives `logger` as two types, which they cannot compute a signature
+		// for: the error names the declaration that fulfills the type of the parameter their error names.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Screen.swift"]):2:5: error: SafeDI cannot generate the dependency tree of `Feature.Screen`: the initializer SafeDI generates for it depends on `Feature.Logger`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see that declaration, so their calls would not match the initializer. Declare `Feature.Logger` in a file of this module, or of a module it depends on.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#SafeDIConfiguration(
+					    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+					)
+					""",
+					"""
+					public extension Feature {
+					    @Instantiable(generateDependencyTree: true)
+					    final class Screen: Instantiable {
+					        public init(logger: Logger, detail: Detail) {
+					            self.logger = logger
+					            self.detail = detail
+					        }
+
+					        @Received let logger: Logger
+					        @Instantiated let detail: Detail
+					    }
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Detail: Instantiable {
+					    public init(logger: Feature.Logger) {
+					        self.logger = logger
+					    }
+
+					    @Received let logger: Feature.Logger
+					}
+					""",
+				],
+				additionalDirectorySwiftFileContent: [
+					"""
+					public enum Feature {}
+
+					public extension Feature {
+					    @Instantiable
+					    final class Logger: Instantiable {
+					        public init() {}
+					    }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				pluginTargetGraph: { inputSwiftFilePaths in
+					PluginTargetGraph(
+						target: PluginTargetGraph.Target(moduleName: "App", packageID: "application", sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: []),
+						dependencyTargets: [],
+					)
+				},
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingDeclarationCallersCannotSee_whenCallersComputationFindsHandWrittenInitializerTakingGeneratedLabelsUnderTargetGraph() async {
+		// `Feature.Screen` instantiates `logger: Logger`, which this run builds as the additional directory's
+		// `Feature.Logger`, which receives `token`: the generated initializer takes `name` and `token`. The callers build
+		// the top-level `Logger`, which receives nothing, so for them it takes `name` alone, which the hand-written
+		// `init(name:)` can be called with: the error names the declaration the callers cannot see.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Screen.swift"]):2:5: error: SafeDI cannot generate the dependency tree of `Feature.Screen`: the initializer SafeDI generates for it depends on `Feature.Logger`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see that declaration, so their calls would not match the initializer. Declare `Feature.Logger` in a file of this module, or of a module it depends on.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#SafeDIConfiguration(
+					    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+					)
+					""",
+					"""
+					public extension Feature {
+					    @Instantiable(generateDependencyTree: true)
+					    struct Screen: Instantiable {
+					        public init(name: String, logger: Logger) {
+					            self.name = name
+					            self.logger = logger
+					        }
+
+					        public init(name: String) {
+					            self.init(name: name, logger: Logger(token: Token()))
+					        }
+
+					        @Received let name: String
+					        @Instantiated let logger: Logger
+					    }
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Logger: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					public struct Token {
+					    public init() {}
+					}
+					""",
+				],
+				additionalDirectorySwiftFileContent: [
+					"""
+					public enum Feature {}
+
+					public extension Feature {
+					    @Instantiable
+					    struct Logger: Instantiable {
+					        public init(token: Token) {
+					            self.token = token
+					        }
+
+					        @Received let token: Token
+					    }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				pluginTargetGraph: { inputSwiftFilePaths in
+					PluginTargetGraph(
+						target: PluginTargetGraph.Target(moduleName: "App", packageID: "application", sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: []),
+						dependencyTargets: [],
+					)
+				},
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenDependentModuleInfoWasWrittenAgainstOtherDeclarationsOfItsDependency() async throws {
 		// `Core`'s module info was written by a run that saw `Base` as it was then, in which `Reader` received
 		// `token: Token`; `App`'s run reads that module info beside a `Base` in which `Reader` receives `token: String`.
@@ -5505,6 +5650,105 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 				],
 				integration: .moduleInfo,
 				moduleInfoOverrides: ["Core": coreModuleInfoPath],
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtSeam_whenCallerReadsSeamsModuleUnderConditionThatGivesItsTreeTwoReceivesOfOneLabel() async {
+		// Under the SwiftPM plugin `App` reads `Core`'s files under its own conditions, which lack `CORE_READS_TOKEN`:
+		// there `Reader` receives `token: String` beside `Detail`'s `token: Token`, a label collision `Core`'s own run,
+		// which reads `Reader` receiving `token: Token`, does not have, reported in `App`'s run at the seam.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.declarationPath(of: "Screen.swift", in: "Core", fixtures: fixtures, under: .swiftPackagePlugin)):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `token` as `token: Token` on `Detail` and `token: String` on `Reader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Rename one of the properties, or @Instantiated one of them inside the tree.
+			\(Self.declarationPath(of: "Detail.swift", in: "Core", fixtures: fixtures, under: .swiftPackagePlugin)):7:5: note: `Detail` receives `token: Token` here.
+			\(Self.declarationPath(of: "Reader.swift", in: "Core", fixtures: fixtures, under: .swiftPackagePlugin)):17:5: note: `Reader` receives `token: String` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Core",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							@Instantiable(generateDependencyTree: true)
+							public struct Screen: Instantiable {
+							    public init(detail: Detail, reader: Reader) {
+							        self.detail = detail
+							        self.reader = reader
+							    }
+
+							    @Instantiated let detail: Detail
+							    @Instantiated let reader: Reader
+							}
+							""",
+							"""
+							@Instantiable
+							public struct Detail: Instantiable {
+							    public init(token: Token) {
+							        self.token = token
+							    }
+
+							    @Received let token: Token
+							}
+							""",
+							"""
+							#if CORE_READS_TOKEN
+							@Instantiable
+							public struct Reader: Instantiable {
+							    public init(token: Token) {
+							        self.token = token
+							    }
+
+							    @Received let token: Token
+							}
+							#else
+							@Instantiable
+							public struct Reader: Instantiable {
+							    public init(token: String) {
+							        self.token = token
+							    }
+
+							    @Received let token: String
+							}
+							#endif
+							""",
+							"""
+							@Instantiable
+							public struct Token: Instantiable {
+							    public init() {}
+							}
+							""",
+						],
+						activeCompilationConditions: ["CORE_READS_TOKEN"],
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							import Core
+
+							@Instantiable(isRoot: true)
+							public struct Root: Instantiable {
+							    public init(token: Token, screen: Screen) {
+							        self.token = token
+							        self.screen = screen
+							    }
+
+							    @Instantiated let token: Token
+							    @Instantiated let screen: Screen
+							}
+							""",
+						],
+						dependencies: ["Core"],
+					),
+				],
+				integration: .swiftPackagePlugin,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -8705,8 +8949,10 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			.components(separatedBy: "\n#").first ?? ""
 		let codeBlocks = section.components(separatedBy: "```swift\n").dropFirst().map { $0.components(separatedBy: "\n```").first ?? "" }
 		// The fourth block illustrates the access a parameter is taken at, and is not generated from these fixtures; the
-		// two after it show a seam's builder for a hole, which `SafeDIToolSeamBuilderParameterTests` reads.
-		#expect(codeBlocks.count == 6)
+		// two after it show a seam's builder for a hole, which `SafeDIToolSeamBuilderParameterTests` reads, and the last
+		// illustrates the struct a hand-written implementation reads a deferred value from, which
+		// `SafeDIToolSeamHoleLazyInputTests` generates.
+		#expect(codeBlocks.count == 7)
 		let fixture = try #require(codeBlocks.first).replacingOccurrences(of: "// In module Feature.\n", with: "")
 		let generated = try #require(codeBlocks.dropFirst().first)
 		let callerBlock = try #require(codeBlocks.dropFirst(2).first)

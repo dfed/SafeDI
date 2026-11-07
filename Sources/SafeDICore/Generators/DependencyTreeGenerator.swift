@@ -1716,6 +1716,8 @@ public actor DependencyTreeGenerator {
 			// the `@Sendable` builder function inside the seam's tree that reads it would built inline.
 			let capturingFunction = if let seamType = capture.capturingSeamType {
 				"`\(seamType.asSource)`'s generated initializer takes `\(capture.receivedProperty.label)` as a `@Sendable` closure, because a `@Sendable` function inside `\(seamType.asSource)`'s tree reads it, and that closure"
+			} else if let fillSeamType = capture.capturingFillSeamType {
+				"`\(fillSeamType.asSource)`'s tree builds `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` inside a `@Sendable` function, so the function SafeDI generates to fill its builder is `@Sendable` too, and it"
 			} else {
 				"SafeDI builds `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` in a `@Sendable` function\(sendableBuilderReason), which"
 			}
@@ -2612,7 +2614,7 @@ public actor DependencyTreeGenerator {
 			let declarationLocation: Dependency.DeclarationLocation?
 			let declaringType: TypeDescription
 			/// Whether `declaringType` is forwarded `property`, which the tree is then handed rather than builds.
-			var isForwarded = false
+			let isForwarded: Bool
 		}
 
 		/// A received dependency the generated code cannot pass, because a closer ancestor declares another property
@@ -4914,8 +4916,8 @@ public actor DependencyTreeGenerator {
 					)
 				} ?? false
 				// A fill binds the fields of the hole's struct its tree reads, which hide every declaration of their labels
-				// above it.
-				let fillFieldLabels = child.fillHole.map { Set($0.stages.joined().map(\.property.label)) } ?? []
+				// above it, but for those bound from a deferred parameter, which it reads from the caller's scope.
+				let fillFieldLabels = child.fillStructBoundLabels
 				generatorsToVisit.append(Frame(
 					generator: child,
 					providedProperties: childProvidedProperties,
@@ -6496,15 +6498,6 @@ public actor DependencyTreeGenerator {
 				}
 			}) {
 				receiver = RequiredReceiver(dependency: dependency, requiredOnlyIfAvailableAliases: requiredOnlyIfAvailableAliases)
-			} else if let seamCall = scope.seamCall,
-			          let dependency = scope.instantiable.dependencies.first(where: { dependency in
-			          	// A call of a seam whose tree requires a pass-through through an `onlyIfAvailable` alias requires it, at the
-			          	// seam's declaration.
-			          	dependency.property.asUnwrappedProperty == property.asUnwrappedProperty
-			          		&& seamCall.requiredThroughAliasProperties.contains(dependency.property)
-			          })
-			{
-				receiver = RequiredReceiver(dependency: dependency, requiredOnlyIfAvailableAliases: requiredOnlyIfAvailableAliases)
 			} else if let requiredAlias = declarations.onlyIfAvailableAliases.first(where: { alias in
 				// An alias bound from a property the scope declares or forwards is bound from that declaration.
 				alias.fulfillingProperty.label == property.label
@@ -6928,7 +6921,8 @@ public actor DependencyTreeGenerator {
 			var fills = [(scope: Scope, fieldForms: Set<Property>)]()
 			if scope.publicMockCall != nil {
 				for case let .fill(hole, fillScope) in scope.holeArguments {
-					fills.append((fillScope, ScopeGenerator.fieldForms(of: hole)))
+					// A public mock takes no deferred parameter, so its fill binds every field.
+					fills.append((fillScope, ScopeGenerator.fieldForms(of: hole, boundLabels: Set(hole.stages.joined().map(\.property.label)))))
 				}
 			}
 			self.fills = fills
@@ -7088,12 +7082,12 @@ public actor DependencyTreeGenerator {
 				}
 			}
 			// What this scope's tree requires through `onlyIfAvailable` aliases of the scopes enclosing it, through any chain
-			// of aliases, given what the children's trees require.
-			// A seam call requires what the seam's tree requires through an `onlyIfAvailable` alias of a pass-through, as
-			// `ScopeGenerator` has it.
+			// of aliases, given what the children's trees require. No scope this walk meets calls a seam: only
+			// `createSeamScopeMapping` creates a `seamCall`, and validation walks every seam's tree inline, whose receivers
+			// require what `ScopeGenerator` has a seam call require through `SeamCall.requiredThroughAliasProperties`.
 			let requiredAliasFulfillingProperties = declarations.requiredAliasFulfillingProperties(
 				childRequiredReceived: childRequiredReceived,
-				childRequiredAliasFulfillingProperties: childRequiredAliasFulfillingProperties.union(scope.seamCall?.requiredThroughAliasProperties ?? []),
+				childRequiredAliasFulfillingProperties: childRequiredAliasFulfillingProperties,
 			)
 
 			let id = ObjectIdentifier(scope)

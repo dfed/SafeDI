@@ -157,6 +157,71 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		}
 	}
 
+	// MARK: A lazy cycle inside the seam's tree
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNearestDeclarationToFunctionLazyCycleClosesOn_whenCycleIsInsideSeamsTree() async throws {
+		// `Top`, the seam, builds `A` through an instantiator; `A` receives `x` only if available and builds `Mid`, which
+		// declares `x` and builds `A` again. The cycle is inside the seam's tree: `A`'s builder function takes `x`, which
+		// `Top` passes the value it takes – `nil` from `Root` – and `Mid` its own, as the inline build does.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let top: Top"]),
+			seamFixtureType(named: "Top", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let x: X?", "@Instantiated let midBuilder: Instantiator<Mid>"]),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+		]
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_top() -> Top {
+			            _ = Top.__safeDI_Top_4D7DF7CAE6B5A7D3.self
+			            return Top(x: nil)
+			        }
+			        let top: Top = __safeDI_top()
+			        self.init(top: top)
+			    }
+			}
+			""",
+			"Top+SafeDI.swift": generatedFileHeader + """
+			extension Top {
+			    public convenience init(x __safeDI_x_: @autoclosure @escaping () -> X?) {
+			        let x = LazilyInstantiated<X?>(__safeDI_x_)
+			        func __safeDI_aBuilder(x: X?) -> A {
+			            func __safeDI_midBuilder() -> Mid {
+			                let x = X()
+			                let aBuilder = Instantiator<A> {
+			                    __safeDI_aBuilder(x: x)
+			                }
+			                return Mid(x: x, aBuilder: aBuilder)
+			            }
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            return A(x: x, midBuilder: midBuilder)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(x: x.instance)
+			        }
+			        self.init(aBuilder: aBuilder)
+			    }
+			}
+
+			extension Top {
+			    public enum __safeDI_Top_4D7DF7CAE6B5A7D3 {}
+			}
+			""",
+		])
+		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		try expectDifferentialValuesAgree(
+			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.dependencyTreeFiles),
+			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(inlineFixture(fixture)), generatedFiles: inlineOutput.dependencyTreeFiles),
+			probes: [DifferentialValueProbe("Root()")],
+			filesToDelete: &filesToDelete,
+		)
+	}
+
 	// MARK: An onlyIfAvailable alias of a label the function a lazy cycle closes on takes
 
 	@Test
