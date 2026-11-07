@@ -4525,7 +4525,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					parts.append("\(argument.label.spelledAsArgumentLabel): \(resolved)")
 				}
 			} else if argument.hasDefaultValue, argument.label != "_" {
-				parts.append("\(argument.label.spelledAsArgumentLabel): \(defaultValues[argument.label] ?? argument.label)")
+				// `mock()` takes an `@autoclosure` parameter as an autoclosure, or a public mock as a closure, and
+				// passes its call, so the value is evaluated where the type is built.
+				let parameterValue = argument.typeDescription.strippingEscaping.autoclosureValueType == nil ? argument.label : "\(argument.label)()"
+				parts.append("\(argument.label.spelledAsArgumentLabel): \(defaultValues[argument.label] ?? parameterValue)")
 			}
 		}
 		return parts.joined(separator: ", ")
@@ -4876,8 +4879,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// ensure a concrete builder (e.g., `ConcreteService.init`) is assignable to
 		/// a closure returning the property type (e.g., `() -> ServiceProtocol`).
 		var builderClosureType: String {
-			let parameterTypes = callSiteArguments
-				.map(\.typeDescription.asFunctionParameter.asSource)
+			let parameterTypes = builderParameterTypes
+				.map(\.asSource)
 				.joined(separator: ", ")
 			return "(\(parameterTypes)) -> \(instantiatedTypeDescription.asSource)"
 		}
@@ -4890,7 +4893,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			ConfigurationRequirements(
 				childProperties: propertyChildren.map(\.property),
 				defaultParameters: defaultParameters.map { Property(label: $0.label, typeDescription: $0.typeDescription) },
-				builderParameterTypes: callSiteArguments.map(\.typeDescription.asFunctionParameter),
+				builderParameterTypes: builderParameterTypes,
 			)
 		}
 
@@ -4908,10 +4911,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Used in `SafeDIMockConfiguration` structs which are deduplicated by
 		/// concrete type and must have a single consistent builder signature.
 		var concreteBuilderClosureType: String {
-			let parameterTypes = callSiteArguments
-				.map(\.typeDescription.asFunctionParameter.asSource)
+			let parameterTypes = builderParameterTypes
+				.map(\.asSource)
 				.joined(separator: ", ")
 			return "(\(parameterTypes)) -> \(concreteType.asSource)"
+		}
+
+		/// The parameter types of the builder closures that override how this node is built, one per call-site argument:
+		/// the argument's type, or the type of the value an `@autoclosure` argument takes, which the mock evaluates before
+		/// it calls the builder, as it does before it calls the construction.
+		var builderParameterTypes: [TypeDescription] {
+			callSiteArguments.map { argument in
+				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter
+			}
 		}
 
 		/// Call-site arguments with labeled non-dependency defaults also elided,
@@ -5109,15 +5121,40 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		struct DefaultParameter: Sendable {
 			/// The parameter label (e.g., "theme", "isPro").
 			let label: String
-			/// The type of the parameter.
+			/// The type of the parameter, without `@escaping`.
 			let typeDescription: TypeDescription
+			/// The type of the value the parameter takes: `typeDescription`, or the type an `@autoclosure` parameter's
+			/// closure returns.
+			let valueTypeDescription: TypeDescription
 			/// The default value expression (e.g., ".light", "false").
 			let defaultExpression: String
-			/// Whether the parameter type is spelled as a closure/function type, which a configuration can mark `@Sendable`.
+			/// Whether the value's type is spelled as a closure/function type, which a configuration can mark `@Sendable`.
 			let isClosureType: Bool
 			/// Whether the parameter is declared `@escaping`, so that its type is a function type even when it is a
-			/// typealias, which `isClosureType` cannot see through.
+			/// typealias, which `isClosureType` cannot see through. An `@escaping @autoclosure` parameter's value is not
+			/// such a function, so this is `false` for it.
 			let isDeclaredEscaping: Bool
+			/// Whether the parameter is an `@autoclosure`: a configuration stores a closure that returns the value, which
+			/// the mock calls where it builds the type, so the value is evaluated once per construction, as in production.
+			var isAutoclosure: Bool {
+				typeDescription.autoclosureValueType != nil
+			}
+
+			/// This parameter as a public mock takes it: an `@autoclosure` parameter as a closure that returns the value,
+			/// which the construction function defaults to a closure that evaluates the default and calls where it builds
+			/// the type, so that a caller in another module can leave it out. Any other parameter is unchanged.
+			var publicMockForm: DefaultParameter {
+				guard isAutoclosure else { return self }
+				let closureType = TypeDescription.closure(arguments: [], isAsync: false, doesThrow: false, returnType: valueTypeDescription)
+				return DefaultParameter(
+					label: label,
+					typeDescription: typeDescription,
+					valueTypeDescription: closureType,
+					defaultExpression: "{ \(defaultExpression) }",
+					isClosureType: true,
+					isDeclaredEscaping: false,
+				)
+			}
 
 			/// Whether this is the default of a parameter with `label` and `typeDescription`. The type check is
 			/// load-bearing: a hand-written mock's `count: Double = 0.5` is no default for `init`'s `count: Int`.
@@ -5134,13 +5171,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					      argument.label != "_",
 					      let defaultExpression = argument.defaultValueExpression
 					else { return nil }
-					return DefaultParameter(
-						label: argument.label,
-						typeDescription: argument.typeDescription.strippingEscaping,
-						defaultExpression: defaultExpression,
-						isClosureType: argument.typeDescription.strippingEscaping.isClosure,
-						isDeclaredEscaping: argument.typeDescription.isEscaping,
-					)
+					let typeDescription = argument.typeDescription.strippingEscaping
+					if let valueTypeDescription = typeDescription.autoclosureValueType {
+						return DefaultParameter(
+							label: argument.label,
+							typeDescription: typeDescription,
+							valueTypeDescription: valueTypeDescription,
+							defaultExpression: defaultExpression,
+							isClosureType: valueTypeDescription.isClosure,
+							isDeclaredEscaping: false,
+						)
+					} else {
+						return DefaultParameter(
+							label: argument.label,
+							typeDescription: typeDescription,
+							valueTypeDescription: typeDescription,
+							defaultExpression: defaultExpression,
+							isClosureType: typeDescription.isClosure,
+							isDeclaredEscaping: argument.typeDescription.isEscaping,
+						)
+					}
 				}
 			}
 		}
@@ -6037,10 +6087,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Default-valued parameters.
 		for defaultParameter in node.defaultParameters {
-			let typeSource = defaultParameter.typeDescription.asSource
+			let typeSource = defaultParameter.valueTypeDescription.asSource
 			// Only add @Sendable if this struct requires it AND the type doesn't already have it.
 			let closureSendable = (requiresSendable && !typeSource.contains("@Sendable")) ? "@Sendable " : ""
-			if defaultParameter.isClosureType {
+			if defaultParameter.isAutoclosure, !requiresSendable {
+				// An `@autoclosure` parameter is evaluated where the type is built: the struct stores a closure that
+				// returns the value, which its initializer takes as an autoclosure, as the parameter does, and the mock
+				// calls it once per construction (`resolveBuilderArguments`).
+				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping () -> \(typeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
+				storedProperties.append("\(innerIndent)let \(defaultParameter.label): () -> \(typeSource)")
+			} else if defaultParameter.isClosureType, !defaultParameter.isAutoclosure {
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(closureSendable)@escaping \(typeSource) = \(defaultExpression(defaultParameter))")
 				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(closureSendable)\(typeSource)")
 			} else if requiresSendable {
@@ -6636,7 +6692,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// declares (see `callSiteArgumentsForPrunedOverride(handWrittenMockDefaultParameters:)`).
 	/// When the node's type is in `sendableConfigurationTypeNames`, its struct stores
 	/// each non-closure default as a `@Sendable` closure (`generateConfigurationStruct`),
-	/// so the argument calls it, wherever it is read from.
+	/// so the argument calls it, wherever it is read from. Every struct stores the value of an
+	/// `@autoclosure` parameter as a closure, which the argument calls too.
 	private static func resolveBuilderArguments(
 		for node: MockParameterNode,
 		nodePath: String,
@@ -6657,9 +6714,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 		)
 		let storesDefaultsAsClosures = sendableConfigurationTypeNames.contains(node.concreteType.asSource)
-		/// `expression`, called when the struct stores the default of `argument` as a closure.
+		/// `expression`, called when the struct stores the default of `argument` as a closure: always for an
+		/// `@autoclosure` parameter, and for every value that is not a function when the struct is `@Sendable`-typed.
 		func readingDefault(_ expression: String, of argument: Initializer.Argument) -> String {
-			if storesDefaultsAsClosures, !argument.typeDescription.strippingEscaping.isClosure {
+			let typeDescription = argument.typeDescription.strippingEscaping
+			return if typeDescription.autoclosureValueType != nil || (storesDefaultsAsClosures && !typeDescription.isClosure) {
 				"\(expression)()"
 			} else {
 				expression

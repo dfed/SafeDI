@@ -525,10 +525,11 @@ import Testing
 		}
 
 		@Test
-		func declaration_throwsError_whenDefaultValuedParameterIsAutoclosure() {
+		func declaration_expandsWithoutDiagnostic_whenDefaultValuedParameterIsAutoclosure() {
+			// A generated mock takes the value as an `@autoclosure` of its own and passes on its call.
 			assertMacroExpansion(
 				"""
-				@Instantiable
+				@Instantiable(generateMock: .public)
 				public struct Service: Instantiable {
 				    public init(flag: @autoclosure () -> Bool = false) {}
 				}
@@ -538,13 +539,6 @@ import Testing
 				    public init(flag: @autoclosure () -> Bool = false) {}
 				}
 				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "A default-valued `@autoclosure` parameter cannot be forwarded by a generated mock. Remove `@autoclosure` from `flag`, or remove its default.",
-						line: 3,
-						column: 17,
-					),
-				],
 				macros: instantiableTestMacros,
 			)
 		}
