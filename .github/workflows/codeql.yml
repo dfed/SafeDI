@@ -60,6 +60,14 @@ jobs:
     # every target in this package is recompiled under the tracer.
     # GitHub's guidance for Swift is to build only the code you want
     # analyzed.
+    # GitHub's macOS images export ImageVersion (for example
+    # 20261102.0473.1) from ~/.bashrc; it is not in the `env` context, so a
+    # step reads it for the cache key below. The OS build stands in if an
+    # image ever stops exporting it.
+    - if: matrix.language == 'swift'
+      name: Read Runner Image Version
+      id: runner-image
+      run: echo "version=${ImageVersion:-$(sw_vers -buildVersion)}" >> "$GITHUB_OUTPUT"
     - if: matrix.language == 'swift'
       name: Cache Build Directory
       uses: actions/cache@v6
@@ -68,8 +76,14 @@ jobs:
         # "native" distinguishes this cache from the one the emulated
         # build wrote: an exact key hit is never re-saved, so reusing the
         # old key would leave the arm64 build products uncached forever.
-        key: codeql-swift-native-${{ runner.os }}-xcode-26.4-${{ hashFiles('Package.resolved') }}
+        # The runner image is in the key for the same reason: when runner
+        # image 20261102.0473 rolled out, CI's macOS test job restored the
+        # previous image's cache and rebuilt swift-syntax (~8 min) on every
+        # run. The first run on a new image restores an older image's
+        # cache, builds incrementally, and saves under its own key.
+        key: codeql-swift-native-${{ runner.os }}-xcode-26.4-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}
         restore-keys: |
+          codeql-swift-native-${{ runner.os }}-xcode-26.4-${{ steps.runner-image.outputs.version }}-
           codeql-swift-native-${{ runner.os }}-xcode-26.4-
 
     # Initializes the CodeQL tools for scanning.
