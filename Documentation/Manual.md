@@ -908,6 +908,16 @@ The mock cannot build, and so takes as a flat parameter:
 
 A receive of such a dependency beneath the type that instantiates it is handed that type’s parameter. Beneath a `Sendable` wrapper, the parameter is a `@Sendable` autoclosure, as [above](#overriding-dependencies).
 
+`mock()` takes one value for each name and type, and passes it to every type in the tree that creates that dependency. Say `Profile` and `Settings` each instantiate `userService: AnyUserService` from a `DefaultUserService` the mock’s module cannot see: `Screen.mock(userService:)` hands both the same value. To give one type its own instance, override how that type is built. The override’s closure is passed the value the mock would use, which this one ignores:
+
+```swift
+// `profile` gets `a`, and `settings` gets `b`.
+Screen.mock(
+    userService: a,
+    safeDIOverrides: .init(settings: { _ in Settings(userService: b) })
+)
+```
+
 A flat `mock()` parameter for a value the mock does not build defaults to the type’s hand-written mock when that mock takes no required argument and this module can call it, which it cannot when the mock is `internal` to another module. The mock is the one the mock’s tree builds a property of the type with – the type’s own, or a [`mockOnly`](#the-mockonly-parameter) declaration’s, such as a fake that fulfills a protocol – so a forwarded `service: Service` whose fake is `FakeService` makes `mock(service: Service = FakeService.mock())`.
 
 A [lazily instantiated](#lazilyinstantiated) dependency is overridden like any other `@Instantiated` dependency: its entry is a closure that returns the instance, which the mock calls the first time the instance is read. A type’s generated mock therefore has the same parameters whether the dependencies it receives are lazily instantiated or not.
@@ -1442,7 +1452,7 @@ public final class DisabledEventLogger: EventLogger, Instantiable { … }
 #endif
 ```
 
-- Platform conditions such as `os(iOS)`, `arch(arm64)`, `canImport(UIKit)`, `targetEnvironment(simulator)`, `swift(>=6.0)`, and `compiler(>=6.0)` are left to the compiler. SafeDITool scans every clause one of them could select, so declarations under `#if os(iOS)` and under its `#else` are both visible to code generation. Declare a dependency once, outside such a block: SafeDITool reports a dependency declared in each clause of a type that generated code builds as declared more than once. Likewise declare an `@Instantiable` type, or a type that fulfills one, once outside such a block, with the platform difference inside its body or its `instantiate(…)` method: SafeDITool reports a type declared in each clause as fulfilled more than once, and, when every duplicate is inside such a block, gives this remedy beside the one for a plain duplicate.
+- Platform conditions such as `os(iOS)`, `arch(arm64)`, `canImport(UIKit)`, `targetEnvironment(simulator)`, `swift(>=6.0)`, and `compiler(>=6.0)` are left to the compiler. SafeDITool scans every clause one of them could select, so declarations under `#if os(iOS)` and under its `#else` are both visible to code generation, as [Platform conditions](#platform-conditions) describes.
 
 The reported conditions are taken as complete, so a condition your build defines but your integration does not report would make SafeDITool scan the wrong clause. To keep that from going unnoticed, every generated file begins by asserting each decision SafeDITool made about a block that can change what it generates: one that declares an `@Instantiable` type, a dependency, an `instantiate()` method, an initializer SafeDI could select to construct its type, or a `#SafeDIConfiguration`, or a type whose access a generated initializer or mock relies on. Such a type is one a declaration SafeDI reads names, or that is or encloses the type an `@Instantiable` extension extends, and that the module can name, or, under Bazel and Tuist, one declared `package`. An assertion reads:
 
@@ -1469,6 +1479,45 @@ public struct ProfileView: Instantiable {
 ```
 
 Initializers in an `@Instantiable` extension are never asserted, because the extension’s `instantiate()` method constructs the type.
+
+### Platform conditions
+
+SafeDITool generates code before the compiler picks a clause of `#if os(iOS)`, and it generates one call for every platform, so it builds every dependency any clause declares, on every platform. Give a type the same dependencies and the same initializer on every platform: declare them once, outside the `#if`, and put the platform difference inside the type’s body.
+
+- A dependency declared in each clause is an error, wherever generated code builds the type: SafeDITool reports it as declared more than once.
+- A dependency declared in only one clause, beside an initializer that does not take it in the other clause, is built on every platform. The build then fails, at the generated call, on each platform whose clause does not declare it.
+
+```swift
+// Fails to compile on macOS: the generated code builds `haptics` there too,
+// and calls `init(haptics:)`, which macOS does not have.
+@Instantiable
+public final class Feedback: Instantiable {
+    #if os(iOS)
+    public init(haptics: Haptics) { self.haptics = haptics }
+    @Instantiated private let haptics: Haptics
+    #else
+    public init() {}
+    #endif
+}
+
+// Compiles on every platform: one dependency and one initializer,
+// with the platform difference inside the body.
+@Instantiable
+public final class Feedback: Instantiable {
+    public init(haptics: Haptics) { self.haptics = haptics }
+    @Instantiated private let haptics: Haptics
+
+    public func confirm() {
+        #if os(iOS)
+        haptics.playSuccess()
+        #endif
+    }
+}
+```
+
+`Haptics` then exists on every platform too, and can do nothing where there is nothing to do.
+
+The same holds for types: declare an `@Instantiable` type, or a type that fulfills one, once, outside the `#if`, with the platform difference inside its body or its `instantiate(…)` method. SafeDITool reports a type declared in each clause as fulfilled more than once, and, when every duplicate is inside such a block, suggests this beside the remedy for a plain duplicate.
 
 ### Declarations that only feed mock generation
 
@@ -1565,19 +1614,23 @@ The construction check in [Access levels](#access-levels) reads these declaratio
 
 ### Where a seam differs from building its tree inline
 
-The generated initializer passes each dependency to its receivers by label, as a root’s `init()` does, without knowing what its callers pass, so SafeDI reports an error at the seam, saying what to change, where one parameter per label cannot reproduce what the tree reads or the initializer cannot be declared:
+The generated initializer takes one parameter for each name the tree receives from outside, and passes it to the receivers by name, as a root’s `init()` does, without knowing what its callers pass. So a few trees that build inline are errors at a seam, and a few build differently.
 
-- One label received in forms no single parameter provides: a by-value receive beside an optional wrapper receive, two wrapper kinds, or the seam’s own receive beside a form it does not provide. As inline, a required non-optional `LazilyInstantiated` or `SendableLazilyInstantiated` provides the by-value forms and the optional form of its kind, and a by-value property its optional form.
-- A receive whose label a type between the seam and the receiver, the seam included, declares with a property that does not provide it: the hidden-label error the tree gets inline once a caller provides the property.
-- An initializer in the seam’s body that a call with a generated initializer’s argument labels can reach – its labels hold those in order, and every other argument has a default value.
-- A `@Sendable` builder function inside the seam that reads a parameter of a non-`Sendable` wrapper type (`Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated`), even where inline would pass `nil`, since the parameter is declared outside every builder function: receive the label inside the seam as the `Sendable` wrapper of that kind, and declare it so where the caller declares it. A parameter taken as an `@autoclosure` that such a function reads is a `@Sendable` closure held in a `SendableLazilyInstantiated`, which needs the deployment targets [Sendable wrappers](#sendable-wrappers) states, and a caller that would hand it the instance of a wrapper that is not `Sendable` is an error, as the capture is inline.
+#### Errors at a seam
+
+SafeDI reports each of these, saying what to change:
+
+- **One name received in two forms that one parameter cannot carry.** One type receives `session: Session` and another `session: LazilyInstantiated<Session>?`: the initializer has one `session` parameter, and no one value is both. Receive the name one way, or declare it on the seam in a form that provides the others. As inline, a required, non-optional `LazilyInstantiated` or `SendableLazilyInstantiated` provides its instance and its own optional form, and a value provides its optional form. Two wrapper kinds under one name, or the seam’s own receive beside a form it does not provide, are the same error. So are two unrelated types under one name, such as `token: Token` and `token: String`: rename one, or instantiate one inside the tree.
+- **A `Sendable` builder inside the seam that reads a wrapper that is not `Sendable`.** It applies to a `Sendable` wrapper inside the seam, such as a `SendableInstantiator`, whose tree receives an `Instantiator`, `ErasedInstantiator` or `LazilyInstantiated` the seam takes as a parameter, even where inline would pass `nil`. The parameter is declared outside the wrapper’s `@Sendable` builder, which can capture only a `Sendable` value, and SafeDI never marks generated code `@unchecked Sendable` to get around that. Receive the name inside the seam as the `Sendable` wrapper of that kind, and declare it so where the caller declares it. A value the seam takes as an `@autoclosure` that such a builder reads is held in a `SendableLazilyInstantiated`, which needs the deployment targets [Sendable wrappers](#sendable-wrappers) states, and a caller that would hand it the instance of a wrapper that is not `Sendable` is an error, as the same capture is inline.
+- **A name hidden from its receiver.** A type between the seam and the receiver, the seam included, declares the name with a property that does not provide it: the error the tree gets inline once a caller provides the property.
+- **An initializer the generated one would collide with.** An initializer in the seam’s body that a call with the generated initializer’s argument labels can reach: its labels hold those in order, and every other parameter has a default value.
+- **A value a hole’s implementation reads, bound on the way to the seam built again.** A seam whose tree instantiates the seam again, directly or through another seam of its module, hands the builders it took on to that call, so the caller that fills a builder cannot hand its implementation a value the tree declares on that path. Receive the value on the seam, so the builder carries it, or make an `@Instantiable` declaration that fulfills the hole’s type one the seam’s module reads, so the seam fills the builder itself.
+
+#### Trees a seam builds differently
 
 A rename declared `onlyIfAvailable` inside the seam, of one of its parameters, is bound from that parameter and is `nil` where the caller passes `nil`, so every type beneath reads the value it reads inline. When a type in the seam’s tree requires such a rename, the caller builds its dependency before the seam, as inline builds it before that type’s branch.
 
-For a seam built again inside the tree that fills it, or inside its own tree:
-
-- A hole’s implementation that reads a value the seam takes as an `@autoclosure`, where the implementation’s own tree builds the seam again beneath another declaration of the value’s label, reads the struct’s property when the implementation is built. Inline, its receiver reads the value when that receiver is built.
-- A seam whose tree instantiates the seam again, directly or through another seam of its module, hands the builders it took on to that call; a value the implementation reads that such a path binds is an error, as for a builder passed up.
+A hole’s implementation that reads a value the seam takes as an `@autoclosure`, where the implementation’s own tree builds the seam again beneath another declaration of the value’s label, reads the struct’s property when the implementation is built. Inline, its receiver reads the value when that receiver is built.
 
 ### Generated imports
 
