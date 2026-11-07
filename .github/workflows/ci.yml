@@ -79,6 +79,23 @@ jobs:
           echo "docc=$docc" >> "$GITHUB_OUTPUT"
           echo "source=$source docc=$docc"
 
+  version-consistency-check:
+    name: Version Consistency Check
+    # Checks that each SwiftPM dependency Package.resolved pins has the
+    # same version in MODULE.bazel (or is listed as SwiftPM only), and
+    # that SafeDI's own version agrees across the files the publish
+    # workflow stamps. Runs on every change, as the job below does: it
+    # takes seconds. It reads text files with portable shell tools, so it
+    # runs on Linux with no container.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Check version consistency
+        run: ./Scripts/check-version-consistency.sh
+
   update-version-check:
     name: Update Version Script Check
     # Runs on every change, Markdown-only ones included: the script
@@ -111,6 +128,8 @@ jobs:
         # also carry `version = "X"` can't false-positive.
         run: |
           awk '/^module\(/,/^\)/' MODULE.bazel | grep -q 'version = "99.99.99-test"'
+      - name: Check version consistency after a prerelease
+        run: ./Scripts/check-version-consistency.sh
       - name: Verify a prerelease leaves the install snippets unchanged
         run: |
           changed=$(git diff --name-only | sort)
@@ -124,6 +143,8 @@ jobs:
           fi
       - name: Run update-version script for a stable release
         run: ./Scripts/update-version.sh 99.99.99 abc123testchecksum456
+      - name: Check version consistency after a stable release
+        run: ./Scripts/check-version-consistency.sh
       - name: Verify a stable release changes the expected files
         # Keep this list in step with DOCUMENTATION_FILES in the script
         # and with the files publish.yml's Commit step adds.
@@ -1100,7 +1121,7 @@ jobs:
           path: |
             ~/.cache/bazel-disk
             ~/.cache/bazel-repository
-          key: bazel-${{ runner.os }}-xcode-26.0-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'Package.resolved', 'Examples/ExampleBazelIntegration/MODULE.bazel', 'Examples/ExampleBazelIntegration/MODULE.bazel.lock') }}
+          key: bazel-${{ runner.os }}-xcode-26.0-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'Examples/ExampleBazelIntegration/MODULE.bazel', 'Examples/ExampleBazelIntegration/MODULE.bazel.lock') }}
           restore-keys: |
             bazel-${{ runner.os }}-xcode-26.0-
       # Wrapping `bazelisk build` in retry — not just dependency
@@ -1148,7 +1169,7 @@ jobs:
             echo "::error::The example ran a SafeDITool other than //Sources/SafeDITool:SafeDITool built from this checkout."
             exit 1
           fi
-      # `bazel run @safedi//bazel:safeditool` runs SafeDITool in the
+      # `bazel run @safedi//:SafeDITool` runs SafeDITool in the
       # directory it is run from, so a relative path among its arguments
       # resolves there rather than in the runfiles tree. Run from a
       # subdirectory of the workspace, as a user may. No target outputs a
@@ -1160,7 +1181,7 @@ jobs:
         working-directory: Examples/ExampleBazelIntegration/Subproject
         run: |
           bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" '--remote_download_regex=.*\.safedi$' //Subproject:Subproject
-          bazelisk run --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" @safedi//bazel:safeditool -- dump ../bazel-bin/Subproject/Subproject_safedi.safedi > /dev/null
+          bazelisk run --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" @safedi//:SafeDITool -- dump ../bazel-bin/Subproject/Subproject_safedi.safedi > /dev/null
       # Optimized builds define `NDEBUG` and no `DEBUG`, so the rule must report the
       # former, withhold the latter, and SafeDI must wire the example's
       # `#elseif NDEBUG` logger. The `_safedi` target is listed so

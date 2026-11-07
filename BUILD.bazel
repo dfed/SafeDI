@@ -1,6 +1,21 @@
-"""Root Bazel package — exports Package.swift/Package.resolved for rules_swift_package_manager."""
+"""Short labels for SafeDI's Bazel targets.
 
-exports_files([
-    "Package.swift",
-    "Package.resolved",
-])
+The Bazel Central Registry's modules for Swift packages name their products
+at the repository root with the SwiftPM product name, such as
+`@swift-syntax//:SwiftSyntax` and `@swift_argument_parser//:ArgumentParser`.
+These aliases do the same for SafeDI: `@safedi//:SafeDI` for the library,
+and `bazel run @safedi//:SafeDITool -- <arguments>` for the SafeDITool a
+build's `safedi_compile` targets run. The labels they point at work too.
+"""
+
+alias(
+    name = "SafeDI",
+    actual = "//Sources/SafeDI",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "SafeDITool",
+    actual = "//bazel:safeditool",
+    visibility = ["//visibility:public"],
+)

@@ -63,7 +63,7 @@ release's source archive records. The rule runs
     `archive_override` of a GitHub archive), so the rule never runs a
     binary older than itself. See `bazel/extensions.bzl`.
 
-`bazel run @safedi//bazel:safeditool -- <arguments>` runs the same
+`bazel run @safedi//:SafeDITool -- <arguments>` runs the same
 SafeDITool, for `query needs` or `dump` over this rule's `.safedi` files.
 Registering another toolchain of this type is not supported.
 

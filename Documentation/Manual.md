@@ -1275,7 +1275,7 @@ safedi_swift_library(
     safedi_deps = ["//Subproject:Subproject_safedi"],
     deps = [
         "//Subproject",
-        "@safedi//Sources/SafeDI",
+        "@safedi//:SafeDI",
     ],
 )
 ```
@@ -1420,7 +1420,7 @@ Your integration already has a `SafeDITool`; a [custom build system](#custom-bui
 
 - **Swift package:** `.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the package’s directory, or `swift run SafeDITool` with the `sourceBuild` trait; writes no `.safedi` files.
 - **Xcode project:** `SourcePackages/artifacts/safedi/SafeDIToolBinary/…` in the project’s derived data, or `.safedi/<version>/safeditool` once [installed](#installing-the-prebuilt-safeditool-binary); writes no `.safedi` files.
-- **Bazel:** `bazel run @safedi//bazel:safeditool -- <arguments>` runs the `SafeDITool` your build runs, prebuilt or built from source, in the directory you run it from, so relative paths among the arguments work; writes `bazel-bin/<package>/<name>_safedi.safedi`, though when the action’s result comes from a cache, such as `--disk_cache`, only for a build passed `--remote_download_regex='.*\.safedi$'`.
+- **Bazel:** `bazel run @safedi//:SafeDITool -- <arguments>` runs the `SafeDITool` your build runs, prebuilt or built from source, in the directory you run it from, so relative paths among the arguments work; writes `bazel-bin/<package>/<name>_safedi.safedi`, though when the action’s result comes from a cache, such as `--disk_cache`, only for a build passed `--remote_download_regex='.*\.safedi$'`.
 - **Tuist:** `Tuist/.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the directory that holds `Tuist/Package.swift`; writes `$BUILT_PRODUCTS_DIR/SafeDI/<PRODUCT_MODULE_NAME>.safedi`.
 
 On an Intel Mac, the bundle’s directory is `SafeDITool-macos-x86_64`.
@@ -1837,7 +1837,7 @@ A focused app – one that builds a single feature with mock data instead of the
 A project whose build already writes `.safedi` [module info files](#custom-build-system-integration) – a Bazel or Tuist project, or any other that runs `generate --module-info-output` per module – can name those files with `--module-info`, instead of or alongside directories, and skip parsing the sources. In a Bazel project, after a build that writes them to `bazel-bin` ([Running SafeDITool yourself](#running-safeditool-yourself) says when one does):
 
 ```bash
-bazel run @safedi//bazel:safeditool -- query needs HomeFeature --module-info bazel-bin/Modules/Foundations/Foundations_safedi.safedi bazel-bin/Modules/Services/Services_safedi.safedi bazel-bin/Modules/HomeFeature/HomeFeature_safedi.safedi
+bazel run @safedi//:SafeDITool -- query needs HomeFeature --module-info bazel-bin/Modules/Foundations/Foundations_safedi.safedi bazel-bin/Modules/Services/Services_safedi.safedi bazel-bin/Modules/HomeFeature/HomeFeature_safedi.safedi
 ```
 
 For each type named, the query builds the type as its `mock()` does, with every dependency it receives provided by an `@Instantiable` declaration, and reports:

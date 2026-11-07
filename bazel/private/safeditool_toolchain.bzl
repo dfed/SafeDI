@@ -94,10 +94,10 @@ resolved_safeditool = rule(
     implementation = _resolved_safeditool_impl,
     doc = """An executable that runs the SafeDITool the
 `safeditool_toolchain_type` toolchain resolves to, which is the one
-`safedi_compile` runs in the same build: `bazel run @safedi//bazel:safeditool
--- <arguments>`. Under `bazel run`, SafeDITool runs in the directory
-`bazel run` was run from, so relative paths among the arguments resolve from
-there.""",
+`safedi_compile` runs in the same build: `bazel run @safedi//:SafeDITool --
+<arguments>`, through the alias at the repository root. Under `bazel run`,
+SafeDITool runs in the directory `bazel run` was run from, so relative paths
+among the arguments resolve from there.""",
     executable = True,
     toolchains = [_SAFEDITOOL_TOOLCHAIN_TYPE],
 )

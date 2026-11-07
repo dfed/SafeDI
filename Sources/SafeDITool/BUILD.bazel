@@ -9,6 +9,6 @@ swift_binary(
     visibility = ["//visibility:public"],
     deps = [
         "//Sources/SafeDIToolLibrary",
-        "@swiftpkg_swift_argument_parser//:ArgumentParser",
+        "@swift_argument_parser//:ArgumentParser",
     ],
 )

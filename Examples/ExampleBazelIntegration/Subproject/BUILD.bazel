@@ -19,6 +19,6 @@ safedi_swift_library(
     visibility = ["//ExampleBazelIntegration:__pkg__"],
     deps = [
         "//Models",
-        "@safedi//Sources/SafeDI",
+        "@safedi//:SafeDI",
     ],
 )
