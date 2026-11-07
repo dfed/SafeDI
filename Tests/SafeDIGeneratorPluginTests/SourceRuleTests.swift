@@ -33,7 +33,7 @@ struct SourceRuleTests {
 			"Sources/SafeDI/Decorators/Instantiable.swift",
 			"Sources/SafeDICore/Generators/ScopeGenerator.swift",
 			"Sources/SafeDIMacros/Macros/InstantiableMacro.swift",
-			"Sources/SafeDITool/GenerateCommand.swift",
+			"Sources/SafeDIToolLibrary/GenerateCommand.swift",
 		]))
 		#expect(try findings(of: [.forceUnwrap, .forceTry, .forceCast, .trap, .uniqueKeysWithValues]) == [])
 	}

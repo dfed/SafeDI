@@ -21,7 +21,8 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
 
 /// How `generate` uses the compilation conditions a build system expands into the
 /// `--build-setting-active-compilation-conditions` and `--build-setting-other-swift-flags`

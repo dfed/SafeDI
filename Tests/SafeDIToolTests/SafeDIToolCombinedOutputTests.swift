@@ -22,7 +22,8 @@ import ArgumentParser
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
 
 struct SafeDIToolCombinedOutputTests: ~Copyable {
 	// MARK: Initialization

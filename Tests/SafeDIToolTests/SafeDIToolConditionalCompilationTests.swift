@@ -21,7 +21,8 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
 
 /// How `SafeDITool` scans `#if` blocks, verified from source to generated output.
 ///

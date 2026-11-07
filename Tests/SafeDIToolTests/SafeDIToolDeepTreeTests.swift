@@ -21,7 +21,8 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
 
 /// Dependency trees and chains of received dependencies far deeper than a concurrency thread's stack holds
 /// recursion for. Tests run on such threads, half a megabyte on Apple platforms, and a debug build spends kilobytes

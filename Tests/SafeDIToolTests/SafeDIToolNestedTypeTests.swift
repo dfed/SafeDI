@@ -21,7 +21,8 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
 
 /// A dependency that names a nested `@Instantiable` type without qualifying it, wherever in the dependency’s type
 /// that name sits, and a dependency that names a nested type no `@Instantiable` fulfills, qualified as the

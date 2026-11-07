@@ -1033,6 +1033,21 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: swift package resolve
+      # Swift Build (the default build system from Swift 6.4) compiles a
+      # target only after the targets that the graph SwiftPM hands it
+      # names as its dependencies. A full build can hide a missing edge
+      # by compiling the imported module first by chance, so this builds
+      # the support target the `SafeDITool` test targets share on its
+      # own, from an empty scratch path rather than the cached `.build`:
+      # it fails whenever that graph omits a module the support target
+      # imports, which `SafeDIToolTestSupport` depending on the
+      # executable target `SafeDITool` did.
+      - name: Build the SafeDITool Test Support Target Alone with Swift Build
+        # Measured 26 s on a 10-core Mac (Swift 6.4.2, swift-syntax built
+        # from source into the empty scratch path); set from this job's
+        # first runs on the 4-core Linux runner, which has no measurement yet.
+        timeout-minutes: 15
+        run: swift build --build-system swiftbuild --traits sourceBuild --target SafeDIToolTestSupport --scratch-path "$RUNNER_TEMP/swiftbuild-test-support"
       # A time limit for the macOS job's reason: twice the longest
       # successful run of this step over the same 177 CI runs, in which 88
       # runs took 2.8 to 15.9 minutes (median 8.2, 95th percentile 13.0).
