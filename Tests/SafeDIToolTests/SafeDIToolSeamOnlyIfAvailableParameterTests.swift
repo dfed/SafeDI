@@ -109,7 +109,7 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			    public init() {
 			        let session = Session()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_91B5820CDC525781.self
+			            _ = Screen.__safeDI_Screen_E820B06031D9247B.self
 			            return Screen(session: session, token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -123,14 +123,15 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			        self.init(session: session, token: nil)
 			    }
 
-			    internal init(session: Session?, token: Token?) {
-			        let detail = Detail(token: token)
+			    internal init(session: Session?, token __safeDI_token: @autoclosure @escaping () -> Token?) {
+			        let token = LazilyInstantiated<Token?>(__safeDI_token)
+			        let detail = Detail(token: token.instance)
 			        self.init(session: session, detail: detail)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_91B5820CDC525781 {}
+			    public enum __safeDI_Screen_E820B06031D9247B {}
 			}
 			""",
 		])
@@ -156,8 +157,8 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(onlyIfAvailableOutput.dependencyTreeFiles == Self.sessionPassThroughOutput(guardName: "__safeDI_Screen_75FDE4A4CAE60A7D"))
-		#expect(requiredOutput.dependencyTreeFiles == Self.sessionPassThroughOutput(guardName: "__safeDI_Screen_8FA1C5921394D121"))
+		#expect(onlyIfAvailableOutput.dependencyTreeFiles == Self.sessionPassThroughOutput(guardName: "__safeDI_Screen_23887EC7D88CECA7"))
+		#expect(requiredOutput.dependencyTreeFiles == Self.sessionPassThroughOutput(guardName: "__safeDI_Screen_A7948F0FC398BA9B"))
 	}
 
 	// MARK: Tests – The public mock of a seam
@@ -244,7 +245,7 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 		        let user = User()
 		        let database = Database()
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_154FFE4ADBF72F8B.self\(callerComment)
+		            _ = Screen.__safeDI_Screen_3192EA1C03ABD98F.self\(callerComment)
 		            return Screen(user: user, database: database, logger: nil)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -311,14 +312,17 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 		#expect(before.modules["Feature"]?.generatedFiles == ["Screen+SafeDI.swift": generatedFileHeader + Self.screenInitializer])
 		#expect(after.modules["Feature"]?.generatedFiles == ["Screen+SafeDI.swift": generatedFileHeader + """
 		extension Screen {
-		    public init(user: User, analytics: Analytics?, database: Database, logger: Logger?) {
-		        let cache = Cache(database: database, logger: logger, analytics: analytics)
+		    public init(user: User, analytics __safeDI_analytics: @autoclosure @escaping () -> Analytics?, database __safeDI_database: @autoclosure @escaping () -> Database, logger __safeDI_logger: @autoclosure @escaping () -> Logger?) {
+		        let analytics = LazilyInstantiated<Analytics?>(__safeDI_analytics)
+		        let database = LazilyInstantiated<Database>(__safeDI_database)
+		        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
+		        let cache = Cache(database: database.instance, logger: logger.instance, analytics: analytics.instance)
 		        self.init(user: user, cache: cache)
 		    }
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_C2D5D79CB9294E2F {}
+		    public enum __safeDI_Screen_DB875D4EBE21120B {}
 		}
 		"""])
 		try expectEveryModuleCompiled(before)
@@ -351,14 +355,16 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 	/// What `Feature` generates for `screen` beside `cache(receivingAnalytics: false)`.
 	private static let screenInitializer = """
 	extension Screen {
-	    public init(user: User, database: Database, logger: Logger?) {
-	        let cache = Cache(database: database, logger: logger)
+	    public init(user: User, database __safeDI_database: @autoclosure @escaping () -> Database, logger __safeDI_logger: @autoclosure @escaping () -> Logger?) {
+	        let database = LazilyInstantiated<Database>(__safeDI_database)
+	        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
+	        let cache = Cache(database: database.instance, logger: logger.instance)
 	        self.init(user: user, cache: cache)
 	    }
 	}
 
 	extension Screen {
-	    public enum __safeDI_Screen_154FFE4ADBF72F8B {}
+	    public enum __safeDI_Screen_3192EA1C03ABD98F {}
 	}
 	"""
 
@@ -499,8 +505,9 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(session: Session?) {
-			        let detail = Detail(session: session)
+			    public init(session __safeDI_session: @autoclosure @escaping () -> Session?) {
+			        let session = LazilyInstantiated<Session?>(__safeDI_session)
+			        let detail = Detail(session: session.instance)
 			        self.init(detail: detail)
 			    }
 			}

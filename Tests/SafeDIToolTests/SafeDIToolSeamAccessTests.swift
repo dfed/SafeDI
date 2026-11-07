@@ -365,14 +365,15 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.screenModules(seam: true, screenInitializer: "package init(reader: Reader)", declarations: ["@Instantiated let reader: Reader"], appDeclarations: ["@Instantiated let token: Token", "@Instantiated let screen: Screen"]), integration: integration, filesToDelete: &filesToDelete)
 		#expect(Self.seamFile(of: output, integration: integration) == generatedFileHeader + """
 		extension Screen {
-		    public init(token: Token) {
-		        let reader = Reader(token: token)
+		    public init(token __safeDI_token: @autoclosure @escaping () -> Token) {
+		        let token = LazilyInstantiated<Token>(__safeDI_token)
+		        let reader = Reader(token: token.instance)
 		        self.init(reader: reader)
 		    }
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_1EB503BFA23A82BA {}
+		    public enum __safeDI_Screen_F2F345803C710CE2 {}
 		}
 		""")
 		#expect(Self.rootFile(of: output, integration: integration) == generatedFileHeader + """
@@ -384,7 +385,7 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 		    public convenience init() {
 		        let token = Token()
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_1EB503BFA23A82BA.self\(Self.pluginComment(integration))
+		            _ = Screen.__safeDI_Screen_F2F345803C710CE2.self\(Self.pluginComment(integration))
 		            return Screen(token: token)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -423,14 +424,15 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 			#expect(output.modules["Feature"]?.generatedFiles == [
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public init(logger: Logger?) {
-				        let detail = Detail(logger: logger)
+				    public init(logger __safeDI_logger: @autoclosure @escaping () -> Logger?) {
+				        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
+				        let detail = Detail(logger: logger.instance)
 				        self.init(detail: detail)
 				    }
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_5F3FDE2D827DABB3 {}
+				    public enum __safeDI_Screen_20C0E63A654A9D89 {}
 				}
 				""",
 			])
@@ -457,14 +459,15 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 			#expect(output.modules["Feature"]?.generatedFiles == [
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public init(logger: Logger?) {
-				        let detail = Detail(logger: logger)
+				    public init(logger __safeDI_logger: @autoclosure @escaping () -> Logger?) {
+				        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
+				        let detail = Detail(logger: logger.instance)
 				        self.init(detail: detail)
 				    }
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_5F3FDE2D827DABB3 {}
+				    public enum __safeDI_Screen_20C0E63A654A9D89 {}
 				}
 				""",
 			])

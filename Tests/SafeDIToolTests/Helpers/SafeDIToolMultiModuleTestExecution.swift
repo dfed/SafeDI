@@ -336,7 +336,7 @@ func executeSafeDIToolMultiModuleTest(
 ) async throws -> MultiModuleTestOutput {
 	let transitiveDependencies = try transitiveDependenciesByModuleName(of: modules)
 
-	let fixtureRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+	let fixtureRoot = (TestFixtureLocation.parentDirectory ?? FileManager.default.temporaryDirectory).appendingPathComponent(UUID().uuidString)
 	try FileManager.default.createDirectory(at: fixtureRoot, withIntermediateDirectories: true)
 	filesToDelete.append(fixtureRoot)
 	let moduleInfoDirectory = fixtureRoot.appendingPathComponent("ModuleInfo")

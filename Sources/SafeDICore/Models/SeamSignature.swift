@@ -94,13 +94,15 @@ public struct SeamSignature: Sendable {
 
 	/// A parameter of the generated initializer.
 	public struct Parameter: Sendable {
-		public init(property: Property, isPassThrough: Bool, access: AccessLevel, tierAccess: AccessLevel? = nil, isOnlyIfAvailable: Bool, requiredThroughAlias: Bool = false, receivers: [Receiver] = [], accessCause: TypeAccessProof.Cause? = nil, nestedSeamCall: NestedSeamCall? = nil, otherInitializerArgumentsAccess: AccessLevel = .public) {
+		public init(property: Property, isPassThrough: Bool, access: AccessLevel, tierAccess: AccessLevel? = nil, isOnlyIfAvailable: Bool, requiredThroughAlias: Bool = false, deferral: Deferral = .none, internalName: String? = nil, receivers: [Receiver] = [], accessCause: TypeAccessProof.Cause? = nil, nestedSeamCall: NestedSeamCall? = nil, otherInitializerArgumentsAccess: AccessLevel = .public) {
 			self.property = property
 			self.isPassThrough = isPassThrough
 			self.access = access
 			self.tierAccess = tierAccess ?? access
 			self.isOnlyIfAvailable = isOnlyIfAvailable
 			self.requiredThroughAlias = isOnlyIfAvailable && requiredThroughAlias
+			self.deferral = deferral
+			self.internalName = internalName ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
 			self.receivers = receivers
 			self.accessCause = accessCause
 			self.nestedSeamCall = nestedSeamCall
@@ -147,6 +149,63 @@ public struct SeamSignature: Sendable {
 		public let receivers: [Receiver]
 		/// For a parameter on no tier (`SeamSignature.noTierParameters`), the nested seam call that omits it, else `nil`.
 		public let nestedSeamCall: NestedSeamCall?
+		/// Whether the generated initializer takes the parameter by value or defers it: a by-value pass-through – a
+		/// constant, or its optional form – is taken as an `@autoclosure`, which the narrowest tier's body holds in a
+		/// `LazilyInstantiated` under the parameter's label, so the tree reads the caller's value where it would read it
+		/// inline, when a receiver is first built.
+		public let deferral: Deferral
+		/// The name the generated initializer binds a deferred parameter's autoclosure to: `__safeDI_<label>`, renamed
+		/// past every builder function name in the seam's tree, which would shadow it. Unused for a parameter taken by
+		/// value.
+		public let internalName: String
+
+		/// How the generated initializer takes a parameter.
+		public enum Deferral: Hashable, Sendable {
+			/// Taken by value, as spelled.
+			case none
+			/// Taken as `@autoclosure @escaping () -> T`, held in a `LazilyInstantiated<T>` the tree reads where it reads
+			/// the label; `@Sendable`, held in a `SendableLazilyInstantiated<T>`, when a `@Sendable` function inside the
+			/// seam's tree reads it, or a nested seam takes it `@Sendable`.
+			case deferred(isSendable: Bool)
+
+			/// What the guard hashes for the deferral.
+			var hashToken: String {
+				switch self {
+				case .none:
+					""
+				case let .deferred(isSendable):
+					isSendable ? "deferred @Sendable" : "deferred"
+				}
+			}
+		}
+
+		/// Whether the generated initializer takes the parameter as an `@autoclosure`.
+		public var isDeferred: Bool {
+			deferral != .none
+		}
+
+		/// The type a deferred parameter's autoclosure returns and its `LazilyInstantiated` holds: the parameter's type,
+		/// with an implicitly unwrapped optional spelled as its optional form, which an autoclosure's return type and a
+		/// generic argument cannot spell, and whose instance a receiver of the implicitly unwrapped type accepts.
+		public var deferredValueType: TypeDescription {
+			if case let .implicitlyUnwrappedOptional(wrappedType) = property.typeDescription {
+				.optional(wrappedType)
+			} else {
+				property.typeDescription
+			}
+		}
+
+		/// The parameter as the generated initializer declares it. No parameter has a default, so every call passes a
+		/// deferred one too, `nil` where the caller holds nothing.
+		public var generatedSpelling: String {
+			switch deferral {
+			case .none:
+				property.asFunctionParamterSyntax.description
+			case let .deferred(isSendable):
+				"\(property.label.spelledAsArgumentLabel) \(internalName): @autoclosure @escaping\(isSendable ? " @Sendable" : "") () -> \(deferredValueType.asSource)"
+			}
+		}
+
 		/// For one of the seam's own properties, the narrowest access the declarations prove for the types of the seam's
 		/// own initializer's other arguments: widening that initializer makes it more visible only up to that access, so a
 		/// remedy offers it only for a level no wider. `public` for a pass-through.
@@ -160,8 +219,9 @@ public struct SeamSignature: Sendable {
 	public struct Hole: Sendable {
 		/// A value in scope at the site, which the scope struct the builder is handed carries.
 		public struct Field: Sendable {
-			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false) {
+			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, isDeferredParameter: Bool = false) {
 				self.property = property
+				self.isDeferredParameter = isDeferredParameter
 				self.access = access
 				self.accessCause = accessCause
 				self.declaringType = declaringType
@@ -184,6 +244,15 @@ public struct SeamSignature: Sendable {
 			/// Whether the field passes through a parameter the seam's tree receives only if available, so a caller
 			/// may pass `nil` for it.
 			public let isReceivedOnlyIfAvailable: Bool
+			/// Whether the field is bound from a deferred parameter (`SeamSignature.Parameter.isDeferred`), which the
+			/// seam's tree holds in a `LazilyInstantiated`: the struct is handed its instance.
+			public let isDeferredParameter: Bool
+
+			/// The value the seam's tree hands the struct for the field: the declaration of its label, or the instance of a
+			/// deferred parameter's `LazilyInstantiated`.
+			var boundValue: String {
+				isDeferredParameter ? "\(property.label).\(Dependency.lazilyInstantiatedInstancePropertyName)" : property.label
+			}
 		}
 
 		/// A declaration on the site's path whose label a fill cannot read from the scope struct: the nearest declaration
@@ -417,8 +486,8 @@ public struct SeamSignature: Sendable {
 	}
 
 	/// What a call of the generated initializer depends on: each parameter's label, type spelled without `any`, tier
-	/// access, whether it is received only if available and whether the caller builds it first
-	/// (`requiredThroughAlias`), and the tiers. Two signatures with one call shape generate the same guard and the same
+	/// access, whether it is received only if available, whether it is deferred and `@Sendable` (`deferral`), and
+	/// whether the caller builds it first (`requiredThroughAlias`), and the tiers. Two signatures with one call shape generate the same guard and the same
 	/// calls, whatever their receivers and uncapped access. The guard hashes the parameters' fields and not the tiers:
 	/// both sides derive the tiers from the parameters' tier accesses, which it hashes, and from the level of the seam's
 	/// own initializer, which both read from the seam's declaration.
@@ -430,6 +499,7 @@ public struct SeamSignature: Sendable {
 				tierAccess = parameter.tierAccess
 				isOnlyIfAvailable = parameter.isOnlyIfAvailable
 				requiredThroughAlias = parameter.requiredThroughAlias
+				deferral = parameter.deferral
 			}
 
 			public let label: String
@@ -437,6 +507,7 @@ public struct SeamSignature: Sendable {
 			public let tierAccess: AccessLevel
 			public let isOnlyIfAvailable: Bool
 			public let requiredThroughAlias: Bool
+			public let deferral: SeamSignature.Parameter.Deferral
 		}
 
 		/// A builder the call passes: its label, its type spelled without `any`, its tier access, and each field of
@@ -485,6 +556,7 @@ public struct SeamSignature: Sendable {
 			public let tierAccess: AccessLevel
 			public let isOnlyIfAvailable: Bool
 			public let requiredThroughAlias: Bool
+			public let deferral: SeamSignature.Parameter.Deferral
 			public let receivers: Set<Receiver>
 		}
 
@@ -518,6 +590,7 @@ public struct SeamSignature: Sendable {
 					tierAccess: parameter.tierAccess,
 					isOnlyIfAvailable: parameter.isOnlyIfAvailable,
 					requiredThroughAlias: parameter.requiredThroughAlias,
+					deferral: parameter.deferral,
 					receivers: Set(parameter.receivers.map { receiver in
 						SettledContent.Receiver(property: receiver.property, declaringType: receiver.declaringType, access: receiver.access)
 					}),
@@ -535,7 +608,7 @@ public struct SeamSignature: Sendable {
 	/// The name of the empty enum the seam's module generates in an extension of the seam, which every generated
 	/// call refers to. It hashes each parameter's fields of `callShape` – label, type spelled without `any` (as the
 	/// compiler and `TypeDescription ==` treat `any P` and `P` as one type), tier access, whether it is received only
-	/// if available, and whether it is required through an alias – so a call generated from another computation of the
+	/// if available, whether it is deferred and `@Sendable`, and whether it is required through an alias – so a call generated from another computation of the
 	/// signature names an enum the seam's module did not generate. The receivers are not hashed: they name
 	/// declarations, and change nothing a call passes.
 	public var guardTypeName: String {
@@ -547,6 +620,11 @@ public struct SeamSignature: Sendable {
 			// The flag's hash input is spelled as the default the generated initializer once gave the parameter: another
 			// spelling would rename every guard of a seam with a parameter received only if available.
 			hash.combine(parameter.isOnlyIfAvailable ? "= nil" : "")
+			// The deferral only where the parameter is deferred, so a seam that takes every parameter by value hashes what it
+			// always hashed.
+			if parameter.deferral != .none {
+				hash.combine(parameter.deferral.hashToken)
+			}
 			// Only where it is set, so a seam without it hashes what it always hashed, and a caller that computed the
 			// signature without it names an enum the seam's module did not generate.
 			if parameter.requiredThroughAlias {

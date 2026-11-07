@@ -119,7 +119,8 @@ extension DependencyTreeGenerator {
 		}
 		// A builder's name inside the initializer is renamed while a property of the tree would have a builder function
 		// of that name, which would shadow it.
-		let builderFunctionNames = builderFunctionNamesOfProperties(in: generator)
+		// Nor may it equal a deferred parameter's name, which the parameters take first.
+		let builderFunctionNames = builderFunctionNamesOfProperties(in: generator).union(parameters.filter(\.isDeferred).map(\.internalName))
 		func internalName(ofBuilderLabeled builderLabel: String) -> String {
 			var name = ScopeGenerator.functionName(toBuildPropertyNamed: builderLabel)
 			while builderFunctionNames.contains(name) {
@@ -418,7 +419,7 @@ extension DependencyTreeGenerator {
 
 	/// The names of the builder functions the properties of the tree `generator` roots would have, which a builder's
 	/// name inside the generated initializer must not equal.
-	private static func builderFunctionNamesOfProperties(in generator: ScopeGenerator) -> Set<String> {
+	static func builderFunctionNamesOfProperties(in generator: ScopeGenerator) -> Set<String> {
 		var names = Set<String>()
 		var generatorsToVisit = [generator]
 		while let visited = generatorsToVisit.popLast() {
@@ -440,6 +441,7 @@ extension DependencyTreeGenerator {
 		let declaringType: TypeDescription
 		let declarationLocation: Dependency.DeclarationLocation?
 		var isReceivedOnlyIfAvailable = false
+		var isDeferredParameter = false
 		var builtAfter: Property?
 		var reason = SeamSignature.Hole.UncarriedDeclaration.Reason.other
 	}
@@ -473,7 +475,7 @@ extension DependencyTreeGenerator {
 		for parameter in parameters {
 			// A pass-through is declared, as far as a fill's reader is told, by the first type in the tree that receives it.
 			let firstReceiver = parameter.receivers.first
-			declare(PathDeclaration(
+			var parameterDeclaration = PathDeclaration(
 				property: parameter.property,
 				isBoundBeforeSite: true,
 				stage: 0,
@@ -482,7 +484,9 @@ extension DependencyTreeGenerator {
 				declaringType: firstReceiver?.declaringType ?? seam.concreteInstantiable,
 				declarationLocation: firstReceiver?.declarationLocation ?? seam.dependencies.first { $0.property == parameter.property }?.declarationLocation ?? seam.declarationLocation,
 				isReceivedOnlyIfAvailable: parameter.isOnlyIfAvailable,
-			))
+			)
+			parameterDeclaration.isDeferredParameter = parameter.isDeferred
+			declare(parameterDeclaration)
 		}
 		var stage = 0
 		var stageBoundaryDepths = [Int]()
@@ -582,6 +586,7 @@ extension DependencyTreeGenerator {
 					declaringType: declaration.declaringType,
 					declarationLocation: declaration.declarationLocation,
 					isReceivedOnlyIfAvailable: declaration.isReceivedOnlyIfAvailable,
+					isDeferredParameter: declaration.isDeferredParameter,
 				))
 			} else {
 				uncarriedDeclarations.append(SeamSignature.Hole.UncarriedDeclaration(

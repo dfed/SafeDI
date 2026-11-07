@@ -87,6 +87,11 @@ struct SeamSignatureTests {
 		// Derived from the nested seam calls the receivers come through, which the settled content holds by their tiers:
 		// what a diagnostic about a parameter on no tier names.
 		("nestedSeamCall", .neither),
+		// Whether a call's value is taken as an `@autoclosure`, and a `@Sendable` one, which the call's text does not show
+		// but its compilation depends on.
+		("deferral", .callShapeAndSettledContent),
+		// Generated code's name for a deferred parameter's autoclosure inside the initializer, which no call names.
+		("internalName", .neither),
 		// Derived from the declarations the signature is computed from, as `access` is: whether a diagnostic offers to
 		// widen the seam's own initializer.
 		("otherInitializerArgumentsAccess", .neither),
@@ -127,6 +132,8 @@ struct SeamSignatureTests {
 			tierAccess: label == "tierAccess" ? .package : parameter.tierAccess,
 			isOnlyIfAvailable: label == "isOnlyIfAvailable" ? false : parameter.isOnlyIfAvailable,
 			requiredThroughAlias: label == "requiredThroughAlias" ? true : parameter.requiredThroughAlias,
+			deferral: label == "deferral" ? .deferred(isSendable: false) : parameter.deferral,
+			internalName: label == "internalName" ? "__safeDI_user_" : parameter.internalName,
 			receivers: label == "receivers" ? [] : parameter.receivers,
 			accessCause: label == "accessCause" ? .unproven(type: .simple(name: "User")) : parameter.accessCause,
 			nestedSeamCall: label == "nestedSeamCall" ? SeamSignature.NestedSeamCall(seamType: .simple(name: "Service"), seamModuleName: "Base", tier: .public, requirement: .public, callerModuleName: "Mid", parameterTierAccess: .package, receivingTypes: [.simple(name: "Badge")]) : parameter.nestedSeamCall,

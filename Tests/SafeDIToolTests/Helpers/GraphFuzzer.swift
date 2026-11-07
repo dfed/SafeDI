@@ -7737,8 +7737,8 @@ enum GraphFuzzerOracle {
 	/// the known-right path the same graph with no seam and the files the tool generated for that; the probes are the
 	/// graph's roots and the generated mocks that take no required parameter. Each path is built from the graph drawn
 	/// storing every parameter, so the comparator sees every value the generated code passes; storing changes nothing
-	/// the tool generates. Every eager read of a wrapper's instance at a seam call, the one documented divergence of
-	/// values, is exempted by its shape (`isEagerInstanceRead`). The graphs of one call are compared in one batch.
+	/// the tool generates. Every eager read of a wrapper's instance where a seam builds a hole's struct, the one
+	/// documented divergence of values, is exempted by its shape in a graph whose seam declares a hole's struct (`isEagerInstanceRead`). The graphs of one call are compared in one batch.
 	/// Nothing is compared when `compileVerificationIsEnabled` is `false`.
 	static func valueFailures(of toolRuns: [GraphFuzzerToolRuns]) throws -> [UInt64: GraphFuzzerFailure] {
 		try valueComparisons(of: toolRuns).failures
@@ -7858,8 +7858,13 @@ enum GraphFuzzerOracle {
 			case let .success(valueComparison):
 				// A public mock graph exempts the shape matrix's stated divergences, derived from its leaf calls.
 				let statedDivergences = isPublicMockGraph ? Self.statedPublicMockValueDivergences(in: valueComparison, of: runs) : []
+				let seamFiles: [String: String] = if case let .accepted(generatedFiles, _) = runs.firstOutcome {
+					generatedFiles
+				} else {
+					[:]
+				}
 				let differences = valueComparison.differences.filter { difference in
-					!statedDivergences.contains(difference) && (isPublicMockGraph || !Self.isEagerInstanceRead(difference))
+					!statedDivergences.contains(difference) && (isPublicMockGraph || !Self.isEagerInstanceRead(difference, inGraphWhoseSeamGenerated: seamFiles))
 				}
 				guard !differences.isEmpty else { continue }
 				failures[runs.fixture.seed] = GraphFuzzerFailure(
@@ -7879,13 +7884,19 @@ enum GraphFuzzerOracle {
 		return (failures, comparedValueOracleSeeds)
 	}
 
-	/// Whether `difference` is the eager read of a wrapper's instance at a seam call that the Manual lists under "Where a
-	/// seam differs from building its tree inline", and nothing else: a seam call passes `.instance` of a wrapper its
-	/// caller holds, where inline the receiver inside the seam's tree reads it when it is built, so the seam build
-	/// describes the same instance, marked `(built before the probe's value)`, where the inline build does not mark it.
-	static func isEagerInstanceRead(_ difference: DifferentialValueDifference) -> Bool {
+	/// Whether `difference` is the eager read of a wrapper's instance where a seam builds a hole's struct that the Manual
+	/// lists under "Where a seam differs from building its tree inline", and nothing else: the seam defers a by-value
+	/// parameter, but hands the struct the instance of the `LazilyInstantiated` it holds the parameter in, where inline
+	/// the fill's receiver reads the caller's wrapper when it is built, so the seam build describes the same instance,
+	/// marked `(built before the probe's value)`, where the inline build does not mark it. A seam call itself reads
+	/// nothing early: it hands each by-value parameter to an `@autoclosure`, so the read is exempted only in a graph
+	/// whose seam files (`seamGeneratedFiles`) declare a hole's struct (or a staged hole's enum of structs), and a seam that takes a pass-through by value
+	/// again is a failure everywhere else.
+	static func isEagerInstanceRead(_ difference: DifferentialValueDifference, inGraphWhoseSeamGenerated seamGeneratedFiles: [String: String]) -> Bool {
 		let marker = " (built before the probe's value)"
-		return difference.path.last?.hasSuffix(".instance") == true
+		// A hole's struct, or the enum holding a staged hole's structs.
+		return seamGeneratedFiles.values.contains { $0.contains("struct SafeDIScope_") || $0.contains("enum SafeDIScope_") }
+			&& difference.path.last?.hasSuffix(".instance") == true
 			&& difference.feature.contains(marker)
 			&& difference.feature.replacingOccurrences(of: marker, with: "") == difference.knownRight
 	}
@@ -8576,12 +8587,21 @@ enum GraphFuzzerOracle {
 	/// `parameter`, a parameter of a generated initializer of `seamTypeName`, as code outside the seam's extension spells
 	/// it: a builder for a hole (`userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService)
 	/// -> any UserService`) without its internal name, and with its scope struct, which the extension names unqualified,
-	/// qualified by the seam. Any other parameter as written.
+	/// qualified by the seam; a deferred parameter (`user __safeDI_user: @autoclosure @escaping () -> User`) as the value
+	/// its autoclosure returns, which a caller passes as a local (`user: User`), `@escaping` where that value is a
+	/// closure. Any other parameter as written.
 	static func callerSpelling(ofParameter parameter: String, of seamTypeName: String) -> String {
 		let parameter = parameter.trimmingCharacters(in: .whitespaces)
 		let label = parameter.prefix { $0 != ":" }
 		guard label.contains(" ") else { return parameter }
 		let type = parameter.dropFirst(label.count)
+		let deferredPrefixes = [": @autoclosure @escaping @Sendable () -> ", ": @autoclosure @escaping () -> "]
+		if let deferredPrefix = deferredPrefixes.first(where: { type.hasPrefix($0) }) {
+			let returnedValue = type.dropFirst(deferredPrefix.count)
+			let defaultSuffix = returnedValue.hasSuffix(" = nil") ? " = nil" : ""
+			let valueType = String(returnedValue.dropLast(defaultSuffix.count))
+			return "\(label.prefix { $0 != " " }): \(GraphFuzzerSpelling.isFunctionType(valueType) ? "@escaping " : "")\(valueType)\(defaultSuffix)"
+		}
 		return String(label.prefix { $0 != " " }) + type.replacingOccurrences(of: #"(?<![A-Za-z0-9_.])SafeDIScope_"#, with: "\(seamTypeName).SafeDIScope_", options: .regularExpression)
 	}
 
@@ -8673,11 +8693,22 @@ enum GraphFuzzerOracle {
 		return directory
 	}
 
-	/// Replaces the fixture directory, whose last component is a fresh UUID each run, however the path is spelled.
-	/// It appears in generated code only in `#sourceLocation` paths and comments, so the code still compiles.
-	private static func normalizer(fixtureDirectory: String) -> (String) -> String {
+	/// Replaces each path to the fixture directory, from the path's start through the directory's last component, a fresh
+	/// UUID each run, with `<fixture-directory>`, however the path is spelled: as the harness wrote it, resolved, or with or
+	/// without a leading `/private`, since every spelling ends in that component. The directories above it are no part of
+	/// what the oracle compares, and a renaming must not rewrite them when it is undone: a macOS runner's temporary
+	/// directory, `/var/folders/h5/t85nd…/T`, holds `t8`, which undoing a label reversal reads as a label.
+	/// The path appears in generated code only in `#sourceLocation` paths and comments, so the code still compiles.
+	static func normalizer(fixtureDirectory: String) -> (String) -> String {
 		let uniqueComponent = (fixtureDirectory as NSString).lastPathComponent
-		return { $0.replacingOccurrences(of: uniqueComponent, with: "<fixture-directory>") }
+		guard !uniqueComponent.isEmpty else { return { $0 } }
+		// A path starts after whitespace, a quote, a backtick or an opening parenthesis, as the tool's diagnostics and
+		// `#sourceLocation` directives spell it.
+		let pattern = #"(?:[^\s"'`(]*/)?"# + NSRegularExpression.escapedPattern(for: uniqueComponent)
+		return { text in
+			guard text.contains(uniqueComponent) else { return text }
+			return text.replacingOccurrences(of: pattern, with: "<fixture-directory>", options: .regularExpression)
+		}
 	}
 
 	/// Compiles each graph's fixture, with the generated code when the tool accepted it, and returns the failure
