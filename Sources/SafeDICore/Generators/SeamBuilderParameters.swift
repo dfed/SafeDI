@@ -374,8 +374,9 @@ extension DependencyTreeGenerator {
 
 	/// The declarations the scope of `generator` binds for the scopes beneath it, each with `reason`: its children and
 	/// aliases, its forwarded properties when `includingForwardedProperties`, and, for a fill, every field of the filled
-	/// seam's struct and what that seam's path declares beside them, which together are what the filled seam's tree
-	/// binds or is building where the fill is called.
+	/// seam's struct the fill binds (`ScopeGenerator.fillBoundFields`) and what that seam's path declares beside them,
+	/// which together are what the filled seam's tree binds or is building where the fill is called. A field bound from
+	/// a deferred parameter that the fill reads from the caller's scope is the caller's declaration, bound above.
 	private static func declarationsBound(
 		by generator: ScopeGenerator,
 		includingForwardedProperties: Bool,
@@ -383,8 +384,10 @@ extension DependencyTreeGenerator {
 	) -> [SeamSignature.Hole.UncarriedDeclaration] {
 		var declarations = [SeamSignature.Hole.UncarriedDeclaration]()
 		if let filledHole = generator.fillHole {
+			// A fill binds the fields it reads from its struct; one bound from a deferred parameter it reads from the
+			// caller's scope declares nothing.
 			for declaration in filledHole.uncarriedDeclarations.map({ ($0.property, $0.declaringType, $0.declarationLocation) })
-				+ filledHole.stages.joined().map({ ($0.property, $0.declaringType, $0.declarationLocation) })
+				+ generator.fillBoundFields.map({ ($0.property, $0.declaringType, $0.declarationLocation) })
 			{
 				declarations.append(SeamSignature.Hole.UncarriedDeclaration(
 					property: declaration.0,
@@ -441,7 +444,7 @@ extension DependencyTreeGenerator {
 		let declaringType: TypeDescription
 		let declarationLocation: Dependency.DeclarationLocation?
 		var isReceivedOnlyIfAvailable = false
-		var isDeferredParameter = false
+		var deferral = SeamSignature.Parameter.Deferral.none
 		var builtAfter: Property?
 		var reason = SeamSignature.Hole.UncarriedDeclaration.Reason.other
 	}
@@ -485,7 +488,7 @@ extension DependencyTreeGenerator {
 				declarationLocation: firstReceiver?.declarationLocation ?? seam.dependencies.first { $0.property == parameter.property }?.declarationLocation ?? seam.declarationLocation,
 				isReceivedOnlyIfAvailable: parameter.isOnlyIfAvailable,
 			)
-			parameterDeclaration.isDeferredParameter = parameter.isDeferred
+			parameterDeclaration.deferral = parameter.deferral
 			declare(parameterDeclaration)
 		}
 		var stage = 0
@@ -493,8 +496,10 @@ extension DependencyTreeGenerator {
 		var depth = 0
 		for (level, frame) in site.frames.enumerated() {
 			// A fill the seam generates for a seam it calls binds every field of that seam's struct a site inside it carries,
-			// which is every field: what the struct carries is what inline holds there. A declaration the struct does not
-			// carry is on the called seam's path too, bound after its site or still being built, and hides the farther
+			// which is every field it binds (`ScopeGenerator.fillBoundFields`): what the struct carries is what inline holds
+			// there. A field bound from a deferred parameter the fill reads from this seam's tree instead, where the call
+			// passed it, so the nearest declaration of its label is the one above the call. A declaration the struct does
+			// not carry is on the called seam's path too, bound after its site or still being built, and hides the farther
 			// declarations of its label.
 			if let filledHole = frame.generator.fillHole {
 				for uncarriedDeclaration in filledHole.uncarriedDeclarations {
@@ -511,7 +516,7 @@ extension DependencyTreeGenerator {
 					pathDeclaration.reason = uncarriedDeclaration.reason
 					declare(pathDeclaration)
 				}
-				for field in filledHole.stages.joined() {
+				for field in frame.generator.fillBoundFields {
 					let fieldAccess = access(of: field.property, declaredBy: instantiables[field.declaringType]?.moduleName)
 					declare(PathDeclaration(
 						property: field.property,
@@ -586,7 +591,7 @@ extension DependencyTreeGenerator {
 					declaringType: declaration.declaringType,
 					declarationLocation: declaration.declarationLocation,
 					isReceivedOnlyIfAvailable: declaration.isReceivedOnlyIfAvailable,
-					isDeferredParameter: declaration.isDeferredParameter,
+					deferral: declaration.deferral,
 				))
 			} else {
 				uncarriedDeclarations.append(SeamSignature.Hole.UncarriedDeclaration(
@@ -853,7 +858,7 @@ extension DependencyTreeGenerator {
 extension DependencyTreeGenerator {
 	/// A declaration on the path from a fill's root to a call inside the fill that re-enters a fill of the same seam call,
 	/// with that call.
-	fileprivate struct DeclarationOnPathToReenteringCall {
+	struct DeclarationOnPathToReenteringCall {
 		let declaration: SeamSignature.Hole.UncarriedDeclaration
 		/// The hole of the fill whose tree holds the path.
 		let pathHole: SeamSignature.Hole
@@ -867,7 +872,7 @@ extension DependencyTreeGenerator {
 	/// call re-enters hands its fill's reads from the caller's scope the nearest declaration of their label at the call,
 	/// and a seam that passes the site up hands it what it binds on its path to the call presenting the site; the fill,
 	/// one function, reads the outer call's values.
-	fileprivate struct FillReentryHidings {
+	struct FillReentryHidings {
 		/// The declarations of the scopes on the paths from a fill's root to each call inside it that passes this fill on,
 		/// by label, the first met for each.
 		var pathDeclarations = [String: DeclarationOnPathToReenteringCall]()
@@ -884,8 +889,14 @@ extension DependencyTreeGenerator {
 	/// the hole does not carry. What a path declares is what `holesPassedUp` collects (`declarationsBound(by:…)`), the
 	/// root's forwarded properties included. A cycle-closing scope declares nothing.
 	fileprivate static func hiddenByReenteringCalls(ofFillsOf leaf: ScopeGenerator) -> [String: FillReentryHidings] {
+		hiddenByReenteringCalls(ofFills: leaf.children)
+	}
+
+	/// What the calls inside the fills among `children`, the children of one seam call's generator, hide from each of
+	/// those fills, by the fill's key (see `hiddenByReenteringCalls(ofFillsOf:)`).
+	static func hiddenByReenteringCalls(ofFills children: [ScopeGenerator]) -> [String: FillReentryHidings] {
 		var hiddenByFillKey = [String: FillReentryHidings]()
-		for case let (pathHole?, fulfiller?) in leaf.children.map({ ($0.fillHole, $0.children.first) }) {
+		for case let (pathHole?, fulfiller?) in children.map({ ($0.fillHole, $0.children.first) }) {
 			var generatorsToVisit = [(generator: fulfiller, callingType: TypeDescription?.none, pathDeclarations: [SeamSignature.Hole.UncarriedDeclaration]())]
 			while let (generator, callingType, pathDeclarations) = generatorsToVisit.popLast() {
 				guard !generator.closesPropertyCycle else { continue }

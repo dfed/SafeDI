@@ -1880,6 +1880,22 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtProviderWithoutOfferingToPassPackage_whenCallerInSamePackageHoldsValueOnlyTheInternalTierTakes(integration: MultiModuleIntegration) async {
+		// As above, with `App` in `Feature`'s package and `Badge`'s initializer `internal`: `[3 of Int]` is `internal` as
+		// far as SafeDI can tell, so only `Service`'s `internal` tier takes `theme`, which no other module can call. Telling
+		// SafeDI a package would not help, so the error does not offer it.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Shell.swift", in: "App", fixtures, integration)):11:5: error: `Shell` provides `theme: [3 of Int]`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `internal` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `package`; mention `[3 of Int]` in a `package` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
+			\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)):7:5: note: `Badge` receives `theme: [3 of Int]?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.providedValueModules(appPackage: "Shop", badgeInitializerAccess: "", hasUnreadableSpelling: true), integration: integration, filesToDelete: &filesToDelete)
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorWhereModuleRefersToProvider_whenProvidersFileCannotBeRead() async {

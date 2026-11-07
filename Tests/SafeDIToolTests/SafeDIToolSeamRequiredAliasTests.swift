@@ -209,6 +209,37 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsDependencyCycleErrorAtReceiverOfAlias_whenInstantiatorPassThroughReceivesInstantiatorOfSeamWhoseTreeRequiresAliasOfIt() async {
+		// `Root` builds `tokenBuilder` and then `Screen` through instantiators, each of which captures what its tree
+		// receives when it is created. `Screen`'s tree requires `tokenBuilder` through `Detail`'s `onlyIfAvailable` alias,
+		// so `tokenBuilder` must be built first, but `Token` requires `screenBuilder`. No received walk follows an
+		// instantiator, so the siblings are found requiring each other in the tree validated with every seam built inline:
+		// the error is at `Child`'s receive of the alias, as inline.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let tokenBuilder: Instantiator<Token>", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
+			seamFixtureType(named: "Screen", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let detail: Detail"]),
+			seamFixtureType(named: "Detail", isFinalClass: true, declarations: [#"@Received(fulfilledByDependencyNamed: "tokenBuilder", ofType: Instantiator<Token>.self, onlyIfAvailable: true) let authTokenBuilder: Instantiator<Token>?"#, "@Instantiated let child: Child"]),
+			seamFixtureType(named: "Child", isFinalClass: true, declarations: ["@Received let authTokenBuilder: Instantiator<Token>?"]),
+			seamFixtureType(named: "Token", isFinalClass: true, declarations: ["@Received let screenBuilder: Instantiator<Screen>"]),
+		]
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Child.swift"]):7:5: error: Dependency cycle: @Instantiated `tokenBuilder: Instantiator<Token>` -> @Received `screenBuilder: Instantiator<Screen>` -> @Received `tokenBuilder: Instantiator<Token>`. `tokenBuilder: Instantiator<Token>` is received while it is still being instantiated. `authTokenBuilder: Instantiator<Token>?` renames `tokenBuilder: Instantiator<Token>` only if available, so a type that receives `authTokenBuilder` without `onlyIfAvailable` must be built after `tokenBuilder: Instantiator<Token>`. Receive `authTokenBuilder` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tokenBuilder: Instantiator<Token>` cannot be built first.
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Child.swift"]):7:5: error: Dependency cycle: @Instantiated `tokenBuilder: Instantiator<Token>` -> @Received `screenBuilder: Instantiator<Screen>` -> @Received `tokenBuilder: Instantiator<Token>`. `tokenBuilder: Instantiator<Token>` is received while it is still being instantiated. `authTokenBuilder: Instantiator<Token>?` renames `tokenBuilder: Instantiator<Token>` only if available, so a type that receives `authTokenBuilder` without `onlyIfAvailable` must be built after `tokenBuilder: Instantiator<Token>`. Receive `authTokenBuilder` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tokenBuilder: Instantiator<Token>` cannot be built first.
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_carriesRequirementThroughOuterSeam_whenNestedSeamsTypeRequiresAliasOfPassThrough() async throws {
 		// `Detail` is inside `Inner`, a seam inside `Screen`: `Inner`'s pass-through `token` carries the requirement,
 		// so `Screen`'s does too, and the caller builds `token` first.

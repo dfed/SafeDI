@@ -397,7 +397,7 @@ final class Scope: Hashable {
 				previousPassGenerator: previousPassGenerator,
 			)
 			previousPassGenerator = scopeGenerator
-		} while scopeGenerator.cycleParametersChangedInTree
+		} while scopeGenerator.cycleParametersChangedInTree || scopeGenerator.fillStructBoundLabelsChangedInTree
 		return scopeGenerator
 	}
 
@@ -685,6 +685,9 @@ private struct ScopeGeneratorUnderConstruction {
 		let hole: SeamSignature.Hole
 		let key: String
 		let functionName: String
+		/// The labels of the fields of the hole's struct the fill binds from the struct (see `fillUnderConstruction`):
+		/// every field but one bound from a deferred parameter, which the fill reads from the caller's scope.
+		var boundLabels = Set<String>()
 	}
 
 	/// The generators created so far for `propertiesToGenerate`, in order, followed by those of `fillsOfThisCall`.
@@ -711,13 +714,22 @@ private struct ScopeGeneratorUnderConstruction {
 	/// that fulfills the hole in the caller's declarations, built with the stack the seam whose tree holds the site
 	/// reaches it with, and with the fields of the site's scope struct in scope beside what encloses the call.
 	func fillUnderConstruction(fill: Fill, scope: Scope) throws -> ScopeGeneratorUnderConstruction {
+		var fill = fill
 		let hole = fill.hole
-		let fields = hole.stages.joined().map(\.property)
+		// A field bound from a parameter the seam defers holds the seam's memo of what the call passed, which is the
+		// declaration of its label in the caller's scope: the fill reads that declaration, as inline, so the value is
+		// created when the tree reads it. Except where a call inside a fill of this call passes this fill on beneath
+		// another declaration of the label (see `ScopeGenerator.fillDeferredLabelsHiddenByReenteringCalls`): the fill,
+		// one function, reads the struct's field there, which the pass before found.
+		let deferredLabelsBoundFromStruct = previousPassGenerator?.fillDeferredLabelsHiddenByReenteringCalls[fill.key] ?? []
+		let boundFields = hole.stages.joined().filter { !$0.isDeferredParameter || deferredLabelsBoundFromStruct.contains($0.property.label) }
+		fill.boundLabels = Set(boundFields.map(\.property.label))
+		let fields = boundFields.map(\.property)
 		let fieldLabels = Set(fields.map(\.label))
 		var fieldInstanceProperties = Set<Property>()
 		// A value the fill takes from the caller's scope is available as it would be to a pass-through of the call: one
 		// the caller's path is still building is not, so a receive of it only if available is passed `nil`. Each field
-		// hides every declaration of its label in the caller's scope.
+		// the fill binds hides every declaration of its label in the caller's scope.
 		var fillNearestDeclarations = childNearestDeclarations
 		for field in fields {
 			fillNearestDeclarations.replace(field, providing: CycleParameter.forms(providedBy: field))
@@ -905,7 +917,7 @@ private struct ScopeGeneratorUnderConstruction {
 			callSiteLazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties,
 		)
 		let scopeGenerator = if let fill {
-			ScopeGenerator(fill: fill.hole, key: fill.key, functionName: fill.functionName, child: builtGenerator)
+			ScopeGenerator(fill: fill.hole, key: fill.key, functionName: fill.functionName, boundLabels: fill.boundLabels, child: builtGenerator)
 		} else {
 			builtGenerator
 		}
@@ -1133,7 +1145,7 @@ struct SeamHoles {
 			for (stageIndex, depth) in hole.stageBoundaryDepths.enumerated() {
 				let stageFunction = stageIndex == 0 ? hole.internalName : "\(hole.internalName)_\(SeamSignature.Hole.stageName(at: stageIndex))"
 				let nextStageFunction = "\(hole.internalName)_\(SeamSignature.Hole.stageName(at: stageIndex + 1))"
-				let arguments = hole.stages[stageIndex].map { "\($0.property.label.spelledAsArgumentLabel): \($0.boundValue)" }.joined(separator: ", ")
+				let arguments = hole.stages[stageIndex].map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.label)" }.joined(separator: ", ")
 				stageCallsByPath[Array(hole.sitePath.prefix(depth)), default: []].append(
 					"let \(nextStageFunction) = \(stageFunction)(\(hole.stageStructType(at: stageIndex, qualifiedBy: nil).asSource)(\(arguments)))",
 				)
@@ -1239,17 +1251,14 @@ extension [String: NearestDeclaration] {
 		self[property.label] = nearestDeclaration
 	}
 
-	/// Makes `properties`, the declarations of one scope, the nearest declarations of their labels, each hiding every
-	/// declaration of its label above the scope. A label declared more than once – a mock root's forms of one label –
-	/// binds each form to the first property, in `properties`' order, that provides it.
+	/// Makes `properties`, the declarations of one scope that is no root, the nearest declarations of their labels, each
+	/// hiding every declaration of its label above the scope. Their labels are distinct: they are the dependencies of the
+	/// scope's type, which `DependencyTreeGenerator.validateDependencyLabelsAreDistinct` rejects before a tree that builds
+	/// it is created when two share a label. A root's declarations, among which a mock root's forms of one label repeat
+	/// it, join the bindings the tree is given instead (`join(_:providing:)`).
 	mutating func replaceLabels(of properties: [Property]) {
-		var replacedLabels = Set<String>()
 		for property in properties {
-			if replacedLabels.insert(property.label).inserted {
-				replace(property, providing: CycleParameter.forms(providedBy: property))
-			} else {
-				join(property, providing: CycleParameter.forms(providedBy: property))
-			}
+			replace(property, providing: CycleParameter.forms(providedBy: property))
 		}
 	}
 
