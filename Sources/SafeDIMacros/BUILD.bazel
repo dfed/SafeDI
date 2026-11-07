@@ -10,11 +10,11 @@ swift_compiler_plugin(
     module_name = "SafeDIMacros",
     visibility = ["//visibility:public"],
     deps = [
-        "@swiftpkg_swift_syntax//:SwiftCompilerPlugin",
-        "@swiftpkg_swift_syntax//:SwiftDiagnostics",
-        "@swiftpkg_swift_syntax//:SwiftParser",
-        "@swiftpkg_swift_syntax//:SwiftSyntax",
-        "@swiftpkg_swift_syntax//:SwiftSyntaxBuilder",
-        "@swiftpkg_swift_syntax//:SwiftSyntaxMacros",
+        "@swift-syntax//:SwiftCompilerPlugin",
+        "@swift-syntax//:SwiftDiagnostics",
+        "@swift-syntax//:SwiftParser",
+        "@swift-syntax//:SwiftSyntax",
+        "@swift-syntax//:SwiftSyntaxBuilder",
+        "@swift-syntax//:SwiftSyntaxMacros",
     ],
 )

@@ -1100,7 +1100,7 @@ jobs:
           path: |
             ~/.cache/bazel-disk
             ~/.cache/bazel-repository
-          key: bazel-${{ runner.os }}-xcode-26.0-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'Package.resolved', 'Examples/ExampleBazelIntegration/MODULE.bazel', 'Examples/ExampleBazelIntegration/MODULE.bazel.lock') }}
+          key: bazel-${{ runner.os }}-xcode-26.0-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'Examples/ExampleBazelIntegration/MODULE.bazel', 'Examples/ExampleBazelIntegration/MODULE.bazel.lock') }}
           restore-keys: |
             bazel-${{ runner.os }}-xcode-26.0-
       # Wrapping `bazelisk build` in retry — not just dependency
