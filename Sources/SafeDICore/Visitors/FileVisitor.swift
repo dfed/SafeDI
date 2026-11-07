@@ -90,6 +90,7 @@ public final class FileVisitor: SyntaxVisitor {
 	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
 		// The block's declarations in every clause, including those of nested blocks, which this visitor
 		// reaches again only in the clauses it scans.
+		enclosingBlocksNameConditionOnlyTheCompilerDecides.append(node.namesConditionOnlyTheCompilerDecides)
 		let (content, blockOutputFileDeclarations, plainTypeNames) = node.safeDIContentAmongDeclarations(
 			enclosedBy: parentType,
 			enclosingTypeAccess: enclosingTypeAccess,
@@ -145,6 +146,7 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visitPost(_: IfConfigDeclSyntax) {
+		enclosingBlocksNameConditionOnlyTheCompilerDecides.removeLast()
 		if importOnlyBlockDepth > 0 {
 			importOnlyBlockDepth -= 1
 		}
@@ -211,9 +213,7 @@ public final class FileVisitor: SyntaxVisitor {
 			sourceLocationConverter: sourceLocationConverter,
 		)
 		instantiableVisitor.walk(node)
-		for instantiable in instantiableVisitor.instantiables {
-			instantiables.append(instantiable)
-		}
+		appendInstantiables(of: instantiableVisitor)
 		record(instantiableVisitor.conditionalCompilationDecisions)
 		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
 		// Recorded from the attribute, whether or not an `instantiate()` method the members' `#if` blocks
@@ -311,12 +311,25 @@ public final class FileVisitor: SyntaxVisitor {
 	private var enclosingExtensionAccess: AccessDeclaration?
 	/// The type the extension enclosing the walk's position extends, if one does.
 	private var enclosingExtendedType: TypeDescription?
+	/// For each `#if` block that encloses the walk's position, outermost first, whether a clause's condition names
+	/// something only the compiler decides (`IfConfigDeclSyntax.namesConditionOnlyTheCompilerDecides`).
+	private var enclosingBlocksNameConditionOnlyTheCompilerDecides = [Bool]()
 	private let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
 	private let sourceLocationConverter: SourceLocationConverter?
 	/// The `#if` clauses the evaluator selected for scanning.
 	private var activeIfConfigClauses = Set<SyntaxIdentifier>()
 	/// How many `#if` blocks deep the walk is inside a block that `importSegments` holds as source.
 	private var importOnlyBlockDepth = 0
+
+	/// Records the instantiables `instantiableVisitor` found at the walk's position, each marked with whether a block
+	/// whose condition only the compiler decides encloses it.
+	private func appendInstantiables(of instantiableVisitor: InstantiableVisitor) {
+		let isInsideCompilerDecidedBlock = enclosingBlocksNameConditionOnlyTheCompilerDecides.contains(true)
+		for var instantiable in instantiableVisitor.instantiables {
+			instantiable.isInsideCompilerDecidedBlock = isInsideCompilerDecidedBlock
+			instantiables.append(instantiable)
+		}
+	}
 
 	private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
 		let instantiableVisitor = InstantiableVisitor(
@@ -328,9 +341,7 @@ public final class FileVisitor: SyntaxVisitor {
 			sourceLocationConverter: sourceLocationConverter,
 		)
 		instantiableVisitor.walk(node)
-		for instantiable in instantiableVisitor.instantiables {
-			instantiables.append(instantiable)
-		}
+		appendInstantiables(of: instantiableVisitor)
 		record(instantiableVisitor.conditionalCompilationDecisions)
 		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
 		let definedType = typeDefined(named: node.name.text)

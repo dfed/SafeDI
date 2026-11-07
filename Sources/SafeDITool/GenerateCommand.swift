@@ -382,6 +382,13 @@ struct Generate: AsyncParsableCommand {
 				importStatements: dependentModuleInfo.flatMap { $0.imports + $0.mockImports } + module.imports + module.mockImports,
 				isOwnFile: isOwnFile,
 			),
+			unreadImports: unreadImports(
+				membership: membership,
+				dependentModuleInfo: dependentModuleInfo,
+				isOwnFile: isOwnFile,
+				comparisonFilePaths: comparisonFilePaths,
+				conditionalCompilation: evaluator,
+			),
 		)
 		if let moduleInfoOutput {
 			try module.moduleInfoData.write(toPath: moduleInfoOutput)
@@ -518,6 +525,8 @@ struct Generate: AsyncParsableCommand {
 					fulfilledBy: typeDescriptionToFulfillingInstantiableMap,
 					orDeclaredAmong: Set(dependentModuleInfo.flatMap(\.instantiableTypeNamesInAnyClause) + module.instantiableTypeNamesInAnyClause),
 				)
+				// A type whose only declaration is `mockOnly` has its mock already: the hand-written one.
+				try sourceConfiguration?.validateAdditionalMocksToGenerate(namingMockOnlyDeclarationsIn: typeDescriptionToFulfillingInstantiableMap)
 				// A type another module generates a public mock for is called there, never generated here.
 				try sourceConfiguration?.validateAdditionalMocksToGenerate(
 					namingPublicMocksOf: typeDescriptionToFulfillingInstantiableMap.values.filter { instantiable in
@@ -979,7 +988,7 @@ struct Generate: AsyncParsableCommand {
 					missingDependencyModuleName: visible.missingDependencyModuleName,
 					visibleInstantiables: visible.instantiables,
 					visiblePlainTypeDeclarations: visible.plainTypeDeclarations,
-					callCarriesPluginComment: !visible.readFromModuleInfo,
+					callComment: visible.readFromModuleInfo ? .moduleInfo(declaringModuleName: moduleName) : .plugin,
 					// A module info holds the module's declarations as the module read them.
 					declaringModuleMockCondition: visible.readFromModuleInfo ? nil : visible.mockCondition,
 				)
@@ -993,7 +1002,7 @@ struct Generate: AsyncParsableCommand {
 				missingDependencyModuleName: visible.missingDependencyModuleName,
 				visibleInstantiables: visible.instantiables,
 				visiblePlainTypeDeclarations: visible.plainTypeDeclarations,
-				callCarriesPluginComment: !visible.readFromModuleInfo,
+				callComment: visible.readFromModuleInfo ? .moduleInfo(declaringModuleName: moduleName) : .plugin,
 				declaringModuleMockCondition: visible.mockCondition,
 			)
 		}
@@ -1140,6 +1149,52 @@ struct Generate: AsyncParsableCommand {
 	private var writesModuleInfoWithoutTargetGraph: Bool {
 		moduleInfoOutput != nil && swiftManifest == nil
 	}
+
+	/// What this run knows of the modules a file imports that it read nothing of: under the plugin's target graph, the
+	/// modules the graph does not hold; in a run that reads or writes module info, those whose module info it was not
+	/// given. `nil` for a run that does neither, as the Xcode project plugin's, and for a run given module info that
+	/// names no module, since either cannot tell which modules it read. `SafeDI` itself declares nothing SafeDI reads.
+	/// It reads only the imports of the run's own files: another module's file may be out of the run's reach (Bazel's
+	/// sandbox gives `generate` only its own sources), and a path another project recorded may name a different file of
+	/// this one.
+	/// - Parameters:
+	///   - dependentModuleInfo: The module info this run read.
+	///   - isOwnFile: Whether a file is one of the run's own files.
+	private func unreadImports(
+		membership: ModuleMembership?,
+		dependentModuleInfo: [ModuleInfo],
+		isOwnFile: @escaping @Sendable (String) -> Bool,
+		comparisonFilePaths: ProjectFilePaths,
+		conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+	) -> DependencyTreeGenerator.UnreadImports? {
+		let integration: DependencyTreeGenerator.UnreadImports.Integration
+		let moduleNamesRead: Set<String>
+		if let targetGraphModuleNames = membership?.targetGraphModuleNames {
+			integration = .targetGraph
+			moduleNamesRead = targetGraphModuleNames
+		} else if writesModuleInfoWithoutTargetGraph || dependentModuleInfoFilePath != nil {
+			let readModuleNames = dependentModuleInfo.compactMap(\.moduleName)
+			guard readModuleNames.count == dependentModuleInfo.count else {
+				return nil
+			}
+			integration = .moduleInfo
+			moduleNamesRead = Set(readModuleNames)
+		} else {
+			return nil
+		}
+		return DependencyTreeGenerator.UnreadImports(integration: integration) { filePath in
+			// A declaration records its file as this run named it: relative to the project root, or else to the working
+			// directory, or absolute.
+			isOwnFile(filePath)
+				? importedModuleNames(ofFileAt: comparisonFilePaths.projectFilePath(of: filePath).path, conditionalCompilation: evaluator)?
+				.subtracting(moduleNamesRead.union([Self.safeDIModuleName]))
+				.sorted()
+				: nil
+		}
+	}
+
+	/// The module SafeDI's macros and wrappers are declared in, which declares no `@Instantiable` type.
+	private static let safeDIModuleName = "SafeDI"
 
 	/// Loads the parsed `ModuleInfo` for this module. When scan ran earlier
 	/// (plugin-setup subprocess of this same build, or this command's own
@@ -1549,6 +1604,31 @@ extension SafeDIConfiguration {
 }
 
 extension SafeDIConfiguration {
+	/// Reports each `additionalMocksToGenerate` entry that names a type whose every declaration SafeDI read is `mockOnly`,
+	/// in name order: that declaration's hand-written mock is the type's mock, so a `mock()` generated for it could only
+	/// call the hand-written one. A production declaration that a `mockOnly` one merges into, under any of the type's
+	/// keys, is not `mockOnly`, so such a type's mock is generated as before.
+	func validateAdditionalMocksToGenerate(namingMockOnlyDeclarationsIn typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]) throws(AdditionalMocksNameMockOnlyDeclarationError) {
+		let listedTypeNames = Set(additionalMocksToGenerate)
+		var declarationsByTypeName = [String: [Instantiable]]()
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values where listedTypeNames.contains(instantiable.concreteInstantiable.asSource) {
+			declarationsByTypeName[instantiable.concreteInstantiable.asSource, default: []].append(instantiable)
+		}
+		// The declarations of one type under its several keys are one declaration, so they name one mock method.
+		let mockMethodNameByTypeName = declarationsByTypeName.compactMapValues { declarations in
+			declarations.allSatisfy(\.mockOnly) ? declarations.compactMap(\.customMockName).min() ?? InstantiableVisitor.mockMethodName : nil
+		}
+		guard !mockMethodNameByTypeName.isEmpty else { return }
+		throw AdditionalMocksNameMockOnlyDeclarationError(sourceDiagnostics: mockMethodNameByTypeName.keys.sorted().map { typeName in
+			let mockMethodName = mockMethodNameByTypeName[typeName, default: InstantiableVisitor.mockMethodName]
+			return SourceDiagnostic(
+				severity: .error,
+				location: declarationLocation,
+				message: "This #\(SafeDIConfigurationVisitor.macroName) lists `\(typeName)` in \(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel), but the only @\(InstantiableVisitor.macroName) declaration of `\(typeName)` SafeDI read is `mockOnly: true`, so its hand-written `\(mockMethodName)()` is already its mock. Remove `\(typeName)` from \(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel) and call `\(typeName).\(mockMethodName)()`; or, if a production @\(InstantiableVisitor.macroName) declaration of `\(typeName)` is in another module, make that module one SafeDI reads for this target: add its target to this target's `dependencies` in `Package.swift`, list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, or list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist.",
+			)
+		})
+	}
+
 	/// Reports each `additionalMocksToGenerate` entry that names a type whose public mock (`generateMock: .public`) another
 	/// module generates: that module's `mock()` is the type's mock, and a second one here would make every call ambiguous.
 	/// - Parameter publicMockTypes: The declarations of other modules that set `generateMock: .public`.
@@ -1571,6 +1651,12 @@ extension SafeDIConfiguration {
 /// A `#SafeDIConfiguration` lists, in `additionalMocksToGenerate`, types no `@Instantiable` declaration declares.
 /// Each diagnostic names one such type, in name order.
 struct AdditionalMocksNameNoInstantiableError: SourceLocatedError {
+	let sourceDiagnostics: [SourceDiagnostic]
+}
+
+/// A `#SafeDIConfiguration` lists, in `additionalMocksToGenerate`, types whose every declaration SafeDI read is `mockOnly`.
+/// Each diagnostic names one such type, in name order.
+struct AdditionalMocksNameMockOnlyDeclarationError: SourceLocatedError {
 	let sourceDiagnostics: [SourceDiagnostic]
 }
 

@@ -881,14 +881,9 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 	"""
 
 	/// The code generated in `App` for the root of `mainActorSeamModules`, after the header, whose `init()` carries
-	/// `isolation` and calls the seam with the comment the SwiftPM plugin adds.
+	/// `isolation` and calls the seam with the comment `integration` adds.
 	private static func mainActorSeamCallerCode(isolation: String, integration: MultiModuleIntegration) -> String {
-		let callComment = switch integration {
-		case .moduleInfo:
-			""
-		case .swiftPackagePlugin:
-			" // If this line does not compile, add the SafeDI plugin to the target that declares Screen."
-		}
+		let callComment = integration.seamCallComment(type: "Screen", declaringModule: "Core")
 		return """
 		#if canImport(Core)
 		import Core

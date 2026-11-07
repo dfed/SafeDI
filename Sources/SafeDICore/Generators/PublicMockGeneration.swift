@@ -1376,8 +1376,8 @@ struct PublicMockCall: Sendable {
 	let takesOverrides: Bool
 	/// The enum the call names, whose name hashes the mock's signature.
 	let guardTypeName: String
-	/// See `SeamCall.carriesPluginComment`.
-	let carriesPluginComment: Bool
+	/// See `SeamCall.comment`.
+	let comment: SeamCallComment
 	/// The module that declares the type and generated its mock.
 	let declaringModule: ModuleIdentity
 	/// The module whose mock tree makes the call.
@@ -1421,9 +1421,9 @@ extension PublicMockCall {
 	}
 
 	/// The line before the call that names the mock's guard enum, so that a call generated from another signature
-	/// than the mock's fails to compile there, with a comment under the SwiftPM plugin saying what to do then.
+	/// than the mock's fails to compile there, with a comment saying what to do then.
 	func guardLine(for concreteType: TypeDescription) -> String {
-		"_ = \(concreteType.asSource).\(guardTypeName).self\(carriesPluginComment ? " \(Instantiable.seamCallPluginComment(for: concreteType))" : "")"
+		"_ = \(concreteType.asSource).\(guardTypeName).self\(comment.lineEnd(for: concreteType))"
 	}
 }
 

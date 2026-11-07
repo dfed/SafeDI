@@ -446,6 +446,16 @@ func parseSwiftFilesDeclaringTypes(
 
 // MARK: - Private
 
+/// The modules the file at `filePath` imports in the clauses `evaluator` selects, or `nil` when the file cannot be read.
+/// Read only on the path of an error, so the file is read and parsed again rather than kept from the module's scan.
+func importedModuleNames(ofFileAt filePath: String, conditionalCompilation evaluator: ConditionalCompilationEvaluator) -> Set<String>? {
+	(try? String(contentsOfFile: filePath, encoding: .utf8)).map { source in
+		let fileVisitor = FileVisitor(conditionalCompilationEvaluator: evaluator)
+		fileVisitor.walk(Parser.parse(source: source))
+		return Set(fileVisitor.imports.map(\.moduleName))
+	}
+}
+
 /// What one file contributed to the module.
 struct FileScan: Codable, Sendable {
 	let path: String

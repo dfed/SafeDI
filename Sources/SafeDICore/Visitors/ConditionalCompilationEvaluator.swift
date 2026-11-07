@@ -243,6 +243,19 @@ enum Evaluation: Equatable {
 	}
 }
 
+extension IfConfigDeclSyntax {
+	/// Whether a clause's condition names something only the compiler decides: a call, which is how a platform or compiler
+	/// condition is spelled (`os(iOS)`, `canImport(UIKit)`, `swift(>=6)`), or a feature flag (`$Macros`). Syntax alone
+	/// decides it, whatever conditions are supplied, so the clauses SafeDI scans of such a block may be more than one.
+	var namesConditionOnlyTheCompilerDecides: Bool {
+		clauses.contains { clause in
+			clause.condition?.tokens(viewMode: .sourceAccurate).contains { token in
+				token.parent?.is(FunctionCallExprSyntax.self) == true || token.text.hasPrefix("$")
+			} == true
+		}
+	}
+}
+
 struct ScannableClauses {
 	let clauses: [IfConfigClauseSyntax]
 	/// The evaluations of bare conditions that the selection rests on, in source order.

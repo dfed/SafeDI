@@ -2464,7 +2464,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):4:5: error: @Received property `service: Service` is not @Instantiated or @Forwarded in chain: Root -> Child. Declare `@Instantiated let service: Service` on `Root` or on another type in the chain to fix.
+				\(fixtures["Child.swift"]):4:5: error: @Received property `service: Service` is not @Instantiated or @Forwarded in chain: Root -> Child. No @Instantiable declaration fulfills `Service`, so SafeDI cannot instantiate it. Declare `@Forwarded let service: Service` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type; or decorate `Service`, or an extension of it, with @Instantiable and declare `@Instantiated let service: Service` on `Root` or on another type in the chain, to fix.
 				"""
 			},
 		) {

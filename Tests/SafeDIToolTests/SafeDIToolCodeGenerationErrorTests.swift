@@ -280,7 +280,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultNetworkService.swift"]):7:5: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultNetworkService. Declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain to fix.
+				\(fixtures["DefaultNetworkService.swift"]):7:5: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> DefaultNetworkService. No @Instantiable declaration fulfills `URLSession`, so SafeDI cannot instantiate it. Declare `@Forwarded let urlSession: URLSession` on a type below `RootViewController` in the chain, and pass the value to the `Instantiator` that builds that type; or decorate `URLSession`, or an extension of it, with @Instantiable and declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain, to fix.
 				"""
 			},
 		) {
@@ -2503,7 +2503,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):5:29: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> URLSessionWrapper. Declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain to fix.
+				\(fixtures["File.swift"]):5:29: error: @Received property `urlSession: URLSession` is not @Instantiated or @Forwarded in chain: RootViewController -> URLSessionWrapper. No @Instantiable declaration fulfills `URLSession`, so SafeDI cannot instantiate it. Declare `@Forwarded let urlSession: URLSession` on a type below `RootViewController` in the chain, and pass the value to the `Instantiator` that builds that type; or decorate `URLSession`, or an extension of it, with @Instantiable and declare `@Instantiated let urlSession: URLSession` on `RootViewController` or on another type in the chain, to fix.
 				"""
 			},
 		) {
@@ -5275,7 +5275,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Grandchild.swift"]):7:5: error: @Received property `missing: Missing` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grandchild. Declare `@Instantiated let missing: Missing` on `Root` or on another type in the chain to fix.
+				\(fixtures["Grandchild.swift"]):7:5: error: @Received property `missing: Missing` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grandchild. No @Instantiable declaration fulfills `Missing`, so SafeDI cannot instantiate it. Declare `@Forwarded let missing: Missing` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type; or decorate `Missing`, or an extension of it, with @Instantiable and declare `@Instantiated let missing: Missing` on `Root` or on another type in the chain, to fix.
 				"""
 			},
 		) {
@@ -5976,7 +5976,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):4:5: error: @Received property `user: User?` is not @Instantiated or @Forwarded in chain: Root -> Parent -> Child. Declare `@Instantiated let user: User?` on `Root` or on another type in the chain to fix.
+				\(fixtures["Child.swift"]):4:5: error: @Received property `user: User?` is not @Instantiated or @Forwarded in chain: Root -> Parent -> Child. No @Instantiable declaration fulfills `User`, so SafeDI cannot instantiate it. Declare `@Forwarded let user: User` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type; or decorate `User`, or an extension of it, with @Instantiable and declare `@Instantiated let user: User` on `Root` or on another type in the chain, to fix.
 				"""
 			},
 		) {
@@ -8025,6 +8025,183 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					    public init(missing: DefaultGreeter, maybe: Greeter) { self.missing = missing; self.maybe = maybe }
 					    @Instantiated let missing: DefaultGreeter
 					    @Received(fulfilledByDependencyNamed: "missing", ofType: DefaultGreeter.self) let maybe: Greeter
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_offersEveryIntegrationsRemedy_whenRunNeitherReadsModuleInfoNorTargetGraph() async {
+		// As the Xcode project plugin runs the tool: `scan` while planning, then `generate` with the manifest, no target
+		// graph, and no module info. SafeDI cannot tell which modules it could have read, so it names no import.
+		await assertThrowsError(diagnostics: { fixtures in
+			"\(NormalizedFilePath(fixtures.compilerPath(of: "Root.swift")).path):6:5: error: No @Instantiable type or extension fulfills `FeedScreen`, which @Instantiated property `feedScreen: FeedScreen` instantiates. Decorate `FeedScreen`, or an extension of it, with @Instantiable; list `FeedScreen` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)"
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					import Feed
+
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(feedScreen: FeedScreen) { self.feedScreen = feedScreen }
+					    @Instantiated let feedScreen: FeedScreen
+					}
+					""",
+				],
+				pluginInvocation: .scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: false),
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_suggestsForwardingReceivedProperty_whenReceivedTypeHasForwardedProperties() async {
+		// `Session` takes a forwarded `userID`, so `@Instantiated let session: Session` would be rejected in turn.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Child.swift"]):4:5: error: @Received property `session: Session` is not @Instantiated or @Forwarded in chain: Root -> Child. `Session` has @Forwarded properties, so SafeDI builds it only through an `Instantiator`, never as an @Instantiated constant. Declare `@Forwarded let session: Session` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type, to fix."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(session: Session) { self.session = session }
+					    @Received let session: Session
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Session: Instantiable {
+					    public init(userID: String) { self.userID = userID }
+					    @Forwarded let userID: String
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_suggestsInstantiatingUnwrappedType_whenRequiredOptionalReceiveIsUnfulfilled() async {
+		// The macro rejects `@Instantiated let user: User?`, and an ancestor's `user: User` fulfills the optional receive:
+		// `run_writesConvenienceExtensionOnRootOfTree_buildsUnwrappedSiblingFirst_whenRequiredOptionalReceiveUnderOnlyIfAvailableAncestorResolvesToIt`
+		// compiles the suggested declaration.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Child.swift"]):4:5: error: @Received property `user: User?` is not @Instantiated or @Forwarded in chain: Root -> Child. Declare `@Instantiated let user: User` on `Root` or on another type in the chain to fix."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(user: User?) { self.user = user }
+					    @Received let user: User?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class User: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_suggestsForwardingUnwrappedType_whenRequiredOptionalReceiveIsOfTypeWithForwardedProperties() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Child.swift"]):4:5: error: @Received property `session: Session?` is not @Instantiated or @Forwarded in chain: Root -> Child. `Session` has @Forwarded properties, so SafeDI builds it only through an `Instantiator`, never as an @Instantiated constant. Declare `@Forwarded let session: Session` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type, to fix."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(session: Session?) { self.session = session }
+					    @Received let session: Session?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Session: Instantiable {
+					    public init(userID: String) { self.userID = userID }
+					    @Forwarded let userID: String
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_suggestsForwardingOrDecoratingReceivedType_whenNoInstantiableFulfillsReceivedType() async {
+		// No `@Instantiable` declaration fulfills `Clock`, so `@Instantiated let clock: Clock` would be rejected in turn.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Child.swift"]):6:5: error: @Received property `clock: Clock` is not @Instantiated or @Forwarded in chain: Root -> Child. No @Instantiable declaration fulfills `Clock`, so SafeDI cannot instantiate it. Declare `@Forwarded let clock: Clock` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type; or decorate `Clock`, or an extension of it, with @Instantiable and declare `@Instantiated let clock: Clock` on `Root` or on another type in the chain, to fix."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					public struct Clock {}
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(clock: Clock) { self.clock = clock }
+					    @Received let clock: Clock
 					}
 					""",
 				],

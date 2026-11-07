@@ -477,6 +477,7 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("moduleName", \.moduleName),
 				BinaryLayoutField("packageName", \.packageName),
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
+				BinaryLayoutField("isInsideCompilerDecidedBlock", \.isInsideCompilerDecidedBlock),
 			],
 			unwrittenProperties: ["instantiableTypes"],
 		)
@@ -514,6 +515,7 @@ extension Instantiable: BinarySchemaMember {
 			packageName: reader.read() as String?,
 		)
 		sourceFilePath = try reader.read() as String?
+		isInsideCompilerDecidedBlock = try reader.read()
 	}
 
 	/// Every type description a file holds is part of an instantiable, which names the one that nests too deeply.
@@ -547,6 +549,7 @@ extension Instantiable: BinarySchemaMember {
 			writer.write(moduleName)
 			writer.write(packageName)
 			writer.write(sourceFilePath)
+			writer.write(isInsideCompilerDecidedBlock)
 		}
 	}
 

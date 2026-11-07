@@ -570,14 +570,14 @@ struct SeamSignatureHash {
 }
 
 /// How a tree that reaches a seam calls it: the parameters of the tier it calls, the enum the call refers to, and
-/// the comment the call carries under the SwiftPM plugin, which cannot know that the seam's module generated the
-/// initializer. A seam whose module SafeDI does not know is built inline and gets no call.
+/// the comment the call carries saying what to do when it does not compile. A seam whose module SafeDI does not know
+/// is built inline and gets no call.
 public struct SeamCall: Sendable {
 	public init(
 		parameters: [SeamSignature.Parameter],
 		holes: [SeamSignature.Hole] = [],
 		guardTypeName: String,
-		carriesPluginComment: Bool,
+		comment: SeamCallComment,
 		unreachableTierIsReported: Bool = false,
 		omittedParameters: [SeamSignature.Parameter] = [],
 		noTierParameters: [SeamSignature.Parameter] = [],
@@ -589,7 +589,7 @@ public struct SeamCall: Sendable {
 		self.parameters = parameters
 		self.holes = holes
 		self.guardTypeName = guardTypeName
-		self.carriesPluginComment = carriesPluginComment
+		self.comment = comment
 		self.unreachableTierIsReported = unreachableTierIsReported
 		self.omittedParameters = omittedParameters
 		self.noTierParameters = noTierParameters
@@ -606,11 +606,8 @@ public struct SeamCall: Sendable {
 	public let holes: [SeamSignature.Hole]
 	/// The `SeamSignature.guardTypeName` of the signature the call was generated from.
 	public let guardTypeName: String
-	/// Whether the call carries a comment saying what to do when it does not compile. Under the SwiftPM plugin,
-	/// which cannot tell whether a dependency target applies the plugin, every call to another module's seam carries
-	/// it, saying to add the plugin to the target that declares the seam. A module read from a `.safedi` file ran
-	/// `generate`, which generated the initializer, so a call to its seam carries none.
-	public let carriesPluginComment: Bool
+	/// The comment the call carries saying what to do when it does not compile.
+	public let comment: SeamCallComment
 	/// The parameters of the seam's signature the called tier does not take, which the call passes `nil` for: a caller
 	/// whose tree holds a value for one is reported, since built inline the tree would hand the value on.
 	public let omittedParameters: [SeamSignature.Parameter]
@@ -638,12 +635,12 @@ public struct SeamCall: Sendable {
 public struct SeamResolution: Sendable {
 	/// A seam declared in another module, which that module's run of `generate` generated the initializer of.
 	public struct ForeignSeam: Sendable {
-		public init(declaringModule: ModuleIdentity, missingDependencyModuleName: String? = nil, visibleInstantiables: [TypeDescription: Instantiable], visiblePlainTypeDeclarations: [PlainTypeDeclaration], callCarriesPluginComment: Bool, declaringModuleMockCondition: MockCondition? = nil) {
+		public init(declaringModule: ModuleIdentity, missingDependencyModuleName: String? = nil, visibleInstantiables: [TypeDescription: Instantiable], visiblePlainTypeDeclarations: [PlainTypeDeclaration], callComment: SeamCallComment, declaringModuleMockCondition: MockCondition? = nil) {
 			self.declaringModule = declaringModule
 			self.missingDependencyModuleName = missingDependencyModuleName
 			self.visibleInstantiables = visibleInstantiables
 			self.visiblePlainTypeDeclarations = visiblePlainTypeDeclarations
-			self.callCarriesPluginComment = callCarriesPluginComment
+			self.callComment = callComment
 			self.declaringModuleMockCondition = declaringModuleMockCondition
 		}
 
@@ -659,8 +656,8 @@ public struct SeamResolution: Sendable {
 		/// The plain type declarations of the modules whose declarations `visibleInstantiables` holds, which prove the
 		/// access of the types the seam's parameters name as they prove it in the seam's module.
 		public let visiblePlainTypeDeclarations: [PlainTypeDeclaration]
-		/// See `SeamCall.carriesPluginComment`.
-		public let callCarriesPluginComment: Bool
+		/// See `SeamCall.comment`.
+		public let callComment: SeamCallComment
 		/// The mock condition of the seam's module, when this run read that module's files under its own mock condition,
 		/// as it does under the SwiftPM plugin's target graph: `visibleInstantiables` then holds the module's mock-only
 		/// declarations as this run's condition selects them, which is how the module reads them only when the two
@@ -672,12 +669,12 @@ public struct SeamResolution: Sendable {
 	/// A type another module declares with `generateMock: .public`, whose `mock()` that module's run of `generate`
 	/// generated, and which a mock tree of this module calls where it cannot build the type's tree itself.
 	public struct ForeignPublicMock: Sendable {
-		public init(declaringModule: ModuleIdentity, missingDependencyModuleName: String? = nil, visibleInstantiables: [TypeDescription: Instantiable], visiblePlainTypeDeclarations: [PlainTypeDeclaration], callCarriesPluginComment: Bool, declaringModuleMockCondition: MockCondition) {
+		public init(declaringModule: ModuleIdentity, missingDependencyModuleName: String? = nil, visibleInstantiables: [TypeDescription: Instantiable], visiblePlainTypeDeclarations: [PlainTypeDeclaration], callComment: SeamCallComment, declaringModuleMockCondition: MockCondition) {
 			self.declaringModule = declaringModule
 			self.missingDependencyModuleName = missingDependencyModuleName
 			self.visibleInstantiables = visibleInstantiables
 			self.visiblePlainTypeDeclarations = visiblePlainTypeDeclarations
-			self.callCarriesPluginComment = callCarriesPluginComment
+			self.callComment = callComment
 			self.declaringModuleMockCondition = declaringModuleMockCondition
 		}
 
@@ -690,8 +687,8 @@ public struct SeamResolution: Sendable {
 		public let visibleInstantiables: [TypeDescription: Instantiable]
 		/// See `ForeignSeam.visiblePlainTypeDeclarations`.
 		public let visiblePlainTypeDeclarations: [PlainTypeDeclaration]
-		/// See `SeamCall.carriesPluginComment`.
-		public let callCarriesPluginComment: Bool
+		/// See `SeamCall.comment`.
+		public let callComment: SeamCallComment
 		/// The condition the declaring module generates its mocks under: its configuration's, `DEBUG` without one, read
 		/// from its module info or, under the target graph, from the configuration in a file the graph attributes to it.
 		public let declaringModuleMockCondition: MockCondition
@@ -770,10 +767,33 @@ public struct MockCondition: Hashable, Sendable {
 	public let conditionalCompilation: String?
 }
 
-extension Instantiable {
-	/// The comment a generated call to a seam carries where SafeDI cannot know that the seam's module generated the
-	/// initializer it calls. See `SeamCall.carriesPluginComment`.
-	public static func seamCallPluginComment(for seamType: TypeDescription) -> String {
-		"// If this line does not compile, add the SafeDI plugin to the target that declares \(seamType.asSource)."
+/// The comment a generated call of another module's seam or public mock carries on the line that names the enum the
+/// declaring module generated beside the initializer or mock, saying what to do when that line does not compile.
+public enum SeamCallComment: Hashable, Sendable {
+	/// No comment: the call is of a seam this module declares, whose code this run generates.
+	case noComment
+	/// The SwiftPM plugin's: it cannot tell whether a dependency target applies the plugin, so the comment says to add
+	/// the plugin to the target that declares the type.
+	case plugin
+	/// A run that read the declaring module's `.safedi` file, which that module's run of `generate` wrote beside the code
+	/// it generated: the line fails to compile only when that code is not compiled into the module, so the comment says
+	/// how each integration that writes module info compiles it in.
+	case moduleInfo(declaringModuleName: String)
+
+	/// The comment for a call of `type`'s seam or public mock, or `nil` for `noComment`.
+	public func text(for type: TypeDescription) -> String? {
+		switch self {
+		case .noComment:
+			nil
+		case .plugin:
+			"// If this line does not compile, add the SafeDI plugin to the target that declares \(type.asSource)."
+		case let .moduleInfo(declaringModuleName):
+			"// If this line does not compile, compile the code SafeDI generates for module \(declaringModuleName) into \(declaringModuleName): under Bazel, add \(declaringModuleName)'s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
+		}
+	}
+
+	/// `text(for:)` after a space, to end the line with, or an empty string for `noComment`.
+	func lineEnd(for type: TypeDescription) -> String {
+		text(for: type).map { " \($0)" } ?? ""
 	}
 }
