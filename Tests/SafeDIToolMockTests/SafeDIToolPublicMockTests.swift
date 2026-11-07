@@ -9422,6 +9422,492 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
+	/// `Screen`'s mock builds the received `filter` beside `Screen`, and `AppFilter` receives `service`, which `Screen` creates: the call of `Service`'s public mock is passed `Screen`'s `analytics`, as it is without the `filter`.
+	@Test
+	mutating func generate_passesPublicMockValueItsTreeCreates_whenMockBuildsReceivedDependencyBesideMockedType() async throws {
+		let modules = Self.receivedFilterModules(serviceReceivesAnalytics: .required)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init(),
+		            filter: ((Service) -> FilterProtocol)? = nil
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		            self.filter = filter
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let filter: ((Service) -> FilterProtocol)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        return Screen(analytics: analytics, service: service, filter: filter)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+	}
+
+	/// As `generate_passesPublicMockValueItsTreeCreates_whenMockBuildsReceivedDependencyBesideMockedType`, with `Service` receiving `analytics` only if available.
+	@Test
+	mutating func generate_passesPublicMockValueItsTreeCreates_whenMockBuildsReceivedDependencyBesideMockedTypeAndPublicMockReceivesItOnlyIfAvailable() async throws {
+		let modules = Self.receivedFilterModules(serviceReceivesAnalytics: .onlyIfAvailable)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init(),
+		            filter: ((Service) -> FilterProtocol)? = nil
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		            self.filter = filter
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let filter: ((Service) -> FilterProtocol)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        return Screen(analytics: analytics, service: service, filter: filter)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	/// As `generate_passesPublicMockValueItsTreeCreates_whenMockBuildsReceivedDependencyBesideMockedType`, with `Service` receiving `analytics` as a `LazilyInstantiated`.
+	@Test
+	mutating func generate_passesPublicMockValueItsTreeCreates_whenMockBuildsReceivedDependencyBesideMockedTypeAndPublicMockReceivesItLazily() async throws {
+		let modules = Self.receivedFilterModules(serviceReceivesAnalytics: .lazilyInstantiated)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init(),
+		            filter: ((Service) -> FilterProtocol)? = nil
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		            self.filter = filter
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let filter: ((Service) -> FilterProtocol)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let service = Service.mock(analytics: analytics.instance, safeDIOverrides: safeDIOverrides.service)
+		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        return Screen(analytics: analytics, service: service, filter: filter)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	/// As `generate_passesPublicMockValueItsTreeCreates_whenMockBuildsReceivedDependencyBesideMockedType`, with `Service` receiving an `Instantiator<Analytics>`.
+	@Test
+	mutating func generate_passesPublicMockValueItsTreeCreates_whenMockBuildsReceivedDependencyBesideMockedTypeAndPublicMockReceivesInstantiator() async throws {
+		let modules = Self.receivedFilterModules(serviceReceivesAnalytics: .instantiator)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analyticsBuilder: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init(),
+		            filter: ((Service) -> FilterProtocol)? = nil
+		        ) {
+		            self.analyticsBuilder = analyticsBuilder
+		            self.service = service
+		            self.filter = filter
+		        }
+
+		        let analyticsBuilder: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let filter: ((Service) -> FilterProtocol)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_analyticsBuilder() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analyticsBuilder { safeDIBuilder() } else { Analytics() }
+		        }
+		        let analyticsBuilder = Instantiator<Analytics>(__safeDI_analyticsBuilder)
+		        _ = Service.__safeDI_Service_mock_0B1B0F45EEE6C284.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let service = Service.mock(analyticsBuilder: analyticsBuilder, safeDIOverrides: safeDIOverrides.service)
+		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        return Screen(analyticsBuilder: analyticsBuilder, service: service, filter: filter)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+	}
+
+	/// As `generate_passesPublicMockValueItsTreeCreates_whenMockBuildsReceivedDependencyBesideMockedType`, with `AppFilter` receiving `analytics` too.
+	@Test
+	mutating func generate_passesPublicMockValueItsTreeCreates_whenMockBuildsReceivedDependencyBesideMockedTypeThatReceivesItToo() async throws {
+		let modules = Self.receivedFilterModules(serviceReceivesAnalytics: .required, filterReceivesAnalytics: true)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init(),
+		            filter: ((Analytics, Service) -> FilterProtocol)? = nil
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		            self.filter = filter
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let filter: ((Analytics, Service) -> FilterProtocol)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(analytics, service) } else { AppFilter(analytics: analytics, service: service) }
+		        return Screen(analytics: analytics, service: service, filter: filter)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	/// As `generate_passesPublicMockValueItsTreeCreates_whenMockBuildsReceivedDependencyBesideMockedType`, with `Screen`'s mock public: it takes no parameter for the `analytics` it creates.
+	@Test
+	mutating func generate_passesPublicMockValueItsTreeCreates_whenMockedTypeWithPublicMockBuildsReceivedDependencyBesideIt() async throws {
+		let modules = Self.receivedFilterModules(serviceReceivesAnalytics: .required, screenMockGeneration: ".public")
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    public struct SafeDIOverrides {
+		        public init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init(),
+		            filter: ((Service) -> FilterProtocol)? = nil
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		            self.filter = filter
+		        }
+
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
+		        public let filter: ((Service) -> FilterProtocol)?
+		    }
+
+		    // SafeDI counts `FilterProtocol` as `public`: no module it reads declares it narrower. If `FilterProtocol` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
+		    public static func mock(
+		        filter: (any FilterProtocol)? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        let filter: FilterProtocol = if let filter { filter } else if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        return Screen(analytics: analytics, service: service, filter: filter)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_mock_215B449271BCAB93 {}
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+	}
+
+	/// `Screen`'s mock builds the received `filter` beside `Screen`, and the call of `Service`'s public mock in `AppFilter`'s tree is passed `Screen`'s `analytics`, as `Screen`'s own tree would be.
+	@Test
+	mutating func generate_passesPublicMockValueItsTreeCreates_whenMockBuildsReceivedDependencyWhoseTreeCallsPublicMock() async throws {
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": Self.receivedFilterCore(serviceReceivesAnalytics: .required)]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(generateMock: true)
+			public final class Screen: Instantiable {
+			    public init(analytics: Analytics, filter: any FilterProtocol) {
+			        self.analytics = analytics
+			        self.filter = filter
+			    }
+
+			    @Instantiated let analytics: Analytics
+			    @Received let filter: any FilterProtocol
+			}
+
+			@Instantiable(fulfillingAdditionalTypes: [FilterProtocol.self])
+			public final class AppFilter: Instantiable, FilterProtocol {
+			    public init(service: Service) {
+			        self.service = service
+			    }
+
+			    @Instantiated let service: Service
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            filter: AppFilter.SafeDIMockConfiguration = .init()
+		        ) {
+		            self.analytics = analytics
+		            self.filter = filter
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let filter: AppFilter.SafeDIMockConfiguration
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_filter() -> FilterProtocol {
+		            _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.filter.service)
+		            return if let safeDIBuilder = safeDIOverrides.filter.safeDIBuilder { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        }
+		        let filter: FilterProtocol = __safeDI_filter()
+		        return Screen(analytics: analytics, filter: filter)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension AppFilter {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    struct SafeDIMockConfiguration {
+		        init(
+		            service: Service.SafeDIOverrides = .init(),
+		            _ safeDIBuilder: ((Service) -> AppFilter)? = nil
+		        ) {
+		            self.service = service
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let service: Service.SafeDIOverrides
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        let safeDIBuilder: ((Service) -> AppFilter)?
+		    }
+		}
+		#endif
+
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+	}
+
+	/// The single-module twin of `generate_passesPublicMockValueItsTreeCreates_whenMockBuildsReceivedDependencyBesideMockedType`: `Screen`'s mock builds `Service` inline, which receives `Screen`'s `analytics`.
+	@Test
+	mutating func generate_buildsDependencyOnce_whenMockBuildsReceivedDependencyBesideMockedTypeWhoseInlineTreeReceivesIt() async throws {
+		let modules = [ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: [
+			"Service.swift": Self.receivedFilterCore(serviceReceivesAnalytics: .required, serviceMockGeneration: "true"),
+			"Screen.swift": Self.receivedFilterApp(serviceReceivesAnalytics: .required, importsCore: false),
+		])]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIMockConfiguration = .init(),
+		            filter: ((Service) -> FilterProtocol)? = nil
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		            self.filter = filter
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIMockConfiguration
+		        let filter: ((Service) -> FilterProtocol)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_service() -> Service {
+		            let session = if let safeDIBuilder = safeDIOverrides.service.session { safeDIBuilder() } else { Session() }
+		            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(analytics, session) } else { Service(analytics: analytics, session: session) }
+		        }
+		        let service: Service = __safeDI_service()
+		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        return Screen(analytics: analytics, service: service, filter: filter)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Service {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            session: (() -> Session)? = nil,
+		            analytics: (() -> Analytics)? = nil
+		        ) {
+		            self.session = session
+		            self.analytics = analytics
+		        }
+
+		        let session: (() -> Session)?
+		        let analytics: (() -> Analytics)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Service {
+		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        return Service(analytics: analytics, session: session)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Service {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    struct SafeDIMockConfiguration {
+		        init(
+		            session: (() -> Session)? = nil,
+		            _ safeDIBuilder: ((Analytics, Session) -> Service)? = nil
+		        ) {
+		            self.session = session
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let session: (() -> Session)?
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        let safeDIBuilder: ((Analytics, Session) -> Service)?
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
 	// MARK: Tests – plain declarations prove a parameter's type
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -9754,6 +10240,142 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 			""",
 		] + otherFiles
+	}
+
+	/// How `Service` in `receivedFilterCore(serviceReceivesAnalytics:serviceMockGeneration:)` receives the `Analytics`
+	/// that `Screen` in `receivedFilterApp(serviceReceivesAnalytics:filterReceivesAnalytics:screenMockGeneration:importsCore:)`
+	/// instantiates in the form `Service` receives it.
+	private enum ServiceReceivesAnalytics {
+		/// `@Received let analytics: Analytics`.
+		case required
+		/// `@Received(onlyIfAvailable: true) let analytics: Analytics?`.
+		case onlyIfAvailable
+		/// `@Received let analytics: LazilyInstantiated<Analytics>`.
+		case lazilyInstantiated
+		/// `@Received let analyticsBuilder: Instantiator<Analytics>`.
+		case instantiator
+
+		/// The property `Service` receives.
+		var serviceProperty: String {
+			switch self {
+			case .required: "analytics: Analytics"
+			case .onlyIfAvailable: "analytics: Analytics?"
+			case .lazilyInstantiated: "analytics: LazilyInstantiated<Analytics>"
+			case .instantiator: "analyticsBuilder: Instantiator<Analytics>"
+			}
+		}
+
+		/// The property `Screen` instantiates.
+		var screenProperty: String {
+			switch self {
+			case .required, .onlyIfAvailable: "analytics: Analytics"
+			case .lazilyInstantiated: "analytics: LazilyInstantiated<Analytics>"
+			case .instantiator: "analyticsBuilder: Instantiator<Analytics>"
+			}
+		}
+
+		/// The label of both properties.
+		var label: String {
+			switch self {
+			case .required, .onlyIfAvailable, .lazilyInstantiated: "analytics"
+			case .instantiator: "analyticsBuilder"
+			}
+		}
+
+		/// The attribute that declares `serviceProperty`.
+		var serviceAttribute: String {
+			switch self {
+			case .required, .lazilyInstantiated, .instantiator: "@Received"
+			case .onlyIfAvailable: "@Received(onlyIfAvailable: true)"
+			}
+		}
+	}
+
+	/// `Core`'s declarations for the shape in which `Screen` instantiates `analytics` and `service` and receives a
+	/// `filter` whose type receives `service`: `Service` receives `analytics` and instantiates the `package` `Session`, so
+	/// a module of another package builds it through its public mock.
+	private static func receivedFilterCore(serviceReceivesAnalytics: ServiceReceivesAnalytics, serviceMockGeneration: String = ".public") -> String {
+		"""
+		import SafeDI
+
+		@Instantiable
+		public final class Analytics: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		package final class Session: Instantiable {
+		    package init() {}
+		}
+
+		public protocol FilterProtocol {}
+
+		@Instantiable(generateMock: \(serviceMockGeneration))
+		public final class Service: Instantiable {
+		    package init(\(serviceReceivesAnalytics.serviceProperty), session: Session) {
+		        self.\(serviceReceivesAnalytics.label) = \(serviceReceivesAnalytics.label)
+		        self.session = session
+		    }
+
+		    \(serviceReceivesAnalytics.serviceAttribute) let \(serviceReceivesAnalytics.serviceProperty)
+		    @Instantiated let session: Session
+		}
+		"""
+	}
+
+	/// `App`'s declarations for the shape `receivedFilterCore(serviceReceivesAnalytics:serviceMockGeneration:)` describes,
+	/// in which `AppFilter` receives `analytics` too when `filterReceivesAnalytics` is set.
+	private static func receivedFilterApp(
+		serviceReceivesAnalytics: ServiceReceivesAnalytics,
+		filterReceivesAnalytics: Bool = false,
+		screenMockGeneration: String = "true",
+		importsCore: Bool = true,
+	) -> String {
+		let filterParameters = filterReceivesAnalytics ? "analytics: Analytics, service: Service" : "service: Service"
+		let filterAssignments = filterReceivesAnalytics ? "        self.analytics = analytics\n        self.service = service" : "        self.service = service"
+		let filterProperties = filterReceivesAnalytics ? "    @Received let analytics: Analytics\n    @Received let service: Service" : "    @Received let service: Service"
+		return (importsCore ? "import Core\n" : "") + """
+		import SafeDI
+
+		@Instantiable(generateMock: \(screenMockGeneration))
+		public final class Screen: Instantiable {
+		    public init(\(serviceReceivesAnalytics.screenProperty), service: Service, filter: any FilterProtocol) {
+		        self.\(serviceReceivesAnalytics.label) = \(serviceReceivesAnalytics.label)
+		        self.service = service
+		        self.filter = filter
+		    }
+
+		    @Instantiated let \(serviceReceivesAnalytics.screenProperty)
+		    @Instantiated let service: Service
+		    @Received let filter: any FilterProtocol
+		}
+
+		@Instantiable(fulfillingAdditionalTypes: [FilterProtocol.self])
+		public final class AppFilter: Instantiable, FilterProtocol {
+		    public init(\(filterParameters)) {
+		\(filterAssignments)
+		    }
+
+		\(filterProperties)
+		}
+		"""
+	}
+
+	/// `Core` and `App`, in two packages, for the shape `receivedFilterCore(serviceReceivesAnalytics:serviceMockGeneration:)`
+	/// describes.
+	private static func receivedFilterModules(
+		serviceReceivesAnalytics: ServiceReceivesAnalytics,
+		filterReceivesAnalytics: Bool = false,
+		screenMockGeneration: String = "true",
+	) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": receivedFilterCore(serviceReceivesAnalytics: serviceReceivesAnalytics)]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": receivedFilterApp(
+				serviceReceivesAnalytics: serviceReceivesAnalytics,
+				filterReceivesAnalytics: filterReceivesAnalytics,
+				screenMockGeneration: screenMockGeneration,
+			)], dependencies: ["Core"]),
+		]
 	}
 
 	/// The canonical fixture's `Core` module (the shape matrix's section 0), with `appCaller` in `App`, another package.
