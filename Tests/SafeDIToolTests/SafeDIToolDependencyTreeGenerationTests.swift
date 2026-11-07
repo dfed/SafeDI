@@ -1743,74 +1743,103 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsUncreatedAliasErrorSpellingKeywordLabel_whenAliasOfPassThroughNamedDefaultIsReadOnTwoTierSeam() async {
-		// The alias's fulfilling property is labeled with a keyword, which the remedy spells as a declaration does.
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Client.swift"]):7:5: error: SafeDI cannot generate the dependency tree of `Screen`: `Client` receives `current: Token?` beneath the `onlyIfAvailable` alias `current` that `Session` declares, which is not created where ``default`: Token` is unavailable; built inline, `Client` would then read whatever property named `current` is declared above `Session`, or `nil`, depending on what encloses it. Receive `@Received(onlyIfAvailable: true) let `default`: Token?` on `Client` instead, or make the alias required.
-			"""
-		}) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(`default`: Token, screen: Screen) {
-					        self.default = `default`
-					        self.screen = screen
-					    }
+	mutating func generate_bindsAliasOfKeywordLabeledParameter_whenAliasOfPassThroughNamedDefaultIsReadOnTwoTierSeam() async throws {
+		// The alias's fulfilling property is labeled with a keyword, which the binding spells as a declaration does.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(`default`: Token, screen: Screen) {
+				        self.default = `default`
+				        self.screen = screen
+				    }
 
-					    @Instantiated let `default`: Token
-					    @Instantiated let screen: Screen
-					}
-					""",
-					"""
-					@Instantiable(generateDependencyTree: true)
-					public struct Screen: Instantiable {
-					    public init(session: Session, analytics: AnyAnalytics) {
-					        self.session = session
-					        self.analytics = analytics
-					    }
+				    @Instantiated let `default`: Token
+				    @Instantiated let screen: Screen
+				}
+				""",
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public struct Screen: Instantiable {
+				    public init(session: Session, analytics: AnyAnalytics) {
+				        self.session = session
+				        self.analytics = analytics
+				    }
 
-					    @Instantiated let session: Session
-					    @Instantiated(fulfilledByType: "Internals.Analytics", erasedToConcreteExistential: true) let analytics: AnyAnalytics
-					}
-					""",
-					"""
-					@Instantiable
-					public struct Session: Instantiable {
-					    public init(current: Token?, client: Client) {
-					        self.current = current
-					        self.client = client
-					    }
+				    @Instantiated let session: Session
+				    @Instantiated(fulfilledByType: "Internals.Analytics", erasedToConcreteExistential: true) let analytics: AnyAnalytics
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Session: Instantiable {
+				    public init(current: Token?, client: Client) {
+				        self.current = current
+				        self.client = client
+				    }
 
-					    @Received(fulfilledByDependencyNamed: "default", ofType: Token.self, onlyIfAvailable: true) let current: Token?
-					    @Instantiated let client: Client
-					}
-					""",
-					"""
-					@Instantiable
-					public struct Client: Instantiable {
-					    public init(current: Token?) {
-					        self.current = current
-					    }
+				    @Received(fulfilledByDependencyNamed: "default", ofType: Token.self, onlyIfAvailable: true) let current: Token?
+				    @Instantiated let client: Client
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Client: Instantiable {
+				    public init(current: Token?) {
+				        self.current = current
+				    }
 
-					    @Received(onlyIfAvailable: true) let current: Token?
-					}
-					""",
-					Self.internalAnalyticsContent(receivingToken: "@Received(onlyIfAvailable: true) let token: Token?", initializerParameter: "token: Token?"),
-					Self.anyAnalyticsContent,
-					"""
-					@Instantiable
-					public struct Token: Instantiable {
-					    public init() {}
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				    @Received(onlyIfAvailable: true) let current: Token?
+				}
+				""",
+				Self.internalAnalyticsContent(receivingToken: "@Received(onlyIfAvailable: true) let token: Token?", initializerParameter: "token: Token?"),
+				Self.anyAnalyticsContent,
+				"""
+				@Instantiable
+				public struct Token: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        let `default` = Token()
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_7048743525EA5C7B.self
+			            return Screen(default: `default`, token: nil)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(default: `default`, screen: screen)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    public init(`default`: Token?, token: Token?) {
+			        func __safeDI_session() -> Session {
+			            #sourceLocation(file: "\(output.fixtures["Session.swift"])", line: 8)
+			            let current: Token? = `default`
+			            #sourceLocation()
+			            let client = Client(current: current)
+			            return Session(current: current, client: client)
+			        }
+			        let session: Session = __safeDI_session()
+			        let analytics = AnyAnalytics(Internals.Analytics(token: token))
+			        self.init(session: session, analytics: analytics)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_7048743525EA5C7B {}
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -4564,84 +4593,120 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsUncreatedAliasErrorOnlyAtReader_whenTwoTypesDeclareTheSameAliasAndOneHasReaderBeneath() async {
-		// `First` and `Second` both declare the only-if-available alias of `token`; only `Reader`, beneath `First`, reads it.
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Reader.swift"]):7:5: error: SafeDI cannot generate the dependency tree of `Screen`: `Reader` receives `authToken: Token?` beneath the `onlyIfAvailable` alias `authToken` that `First` declares, which is not created where `token: Token` is unavailable; built inline, `Reader` would then read whatever property named `authToken` is declared above `First`, or `nil`, depending on what encloses it. Receive `@Received(onlyIfAvailable: true) let token: Token?` on `Reader` instead, or make the alias required.
-			"""
-		}) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(authToken: Token, token: Token, screen: Screen) {
-					        self.authToken = authToken
-					        self.token = token
-					        self.screen = screen
-					    }
+	mutating func generate_bindsEachAliasFromParameter_whenTwoTypesDeclareTheSameAliasAndOneHasReaderBeneath() async throws {
+		// `First` and `Second` both declare the only-if-available alias of `token`; `Reader`, beneath `First`, reads `First`'s binding.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(authToken: Token, token: Token, screen: Screen) {
+				        self.authToken = authToken
+				        self.token = token
+				        self.screen = screen
+				    }
 
-					    @Instantiated let authToken: Token
-					    @Instantiated let token: Token
-					    @Instantiated let screen: Screen
-					}
-					""",
-					"""
-					@Instantiable(generateDependencyTree: true)
-					public struct Screen: Instantiable {
-					    public init(first: First, second: Second) {
-					        self.first = first
-					        self.second = second
-					    }
+				    @Instantiated let authToken: Token
+				    @Instantiated let token: Token
+				    @Instantiated let screen: Screen
+				}
+				""",
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public struct Screen: Instantiable {
+				    public init(first: First, second: Second) {
+				        self.first = first
+				        self.second = second
+				    }
 
-					    @Instantiated let first: First
-					    @Instantiated let second: Second
-					}
-					""",
-					"""
-					@Instantiable
-					public struct First: Instantiable {
-					    public init(authToken: Token?, reader: Reader) {
-					        self.authToken = authToken
-					        self.reader = reader
-					    }
+				    @Instantiated let first: First
+				    @Instantiated let second: Second
+				}
+				""",
+				"""
+				@Instantiable
+				public struct First: Instantiable {
+				    public init(authToken: Token?, reader: Reader) {
+				        self.authToken = authToken
+				        self.reader = reader
+				    }
 
-					    @Received(fulfilledByDependencyNamed: "token", ofType: Token.self, onlyIfAvailable: true) let authToken: Token?
-					    @Instantiated let reader: Reader
-					}
-					""",
-					"""
-					@Instantiable
-					public struct Second: Instantiable {
-					    public init(authToken: Token?) {
-					        self.authToken = authToken
-					    }
+				    @Received(fulfilledByDependencyNamed: "token", ofType: Token.self, onlyIfAvailable: true) let authToken: Token?
+				    @Instantiated let reader: Reader
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Second: Instantiable {
+				    public init(authToken: Token?) {
+				        self.authToken = authToken
+				    }
 
-					    @Received(fulfilledByDependencyNamed: "token", ofType: Token.self, onlyIfAvailable: true) let authToken: Token?
-					}
-					""",
-					"""
-					@Instantiable
-					public struct Reader: Instantiable {
-					    public init(authToken: Token?) {
-					        self.authToken = authToken
-					    }
+				    @Received(fulfilledByDependencyNamed: "token", ofType: Token.self, onlyIfAvailable: true) let authToken: Token?
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Reader: Instantiable {
+				    public init(authToken: Token?) {
+				        self.authToken = authToken
+				    }
 
-					    @Received(onlyIfAvailable: true) let authToken: Token?
-					}
-					""",
-					"""
-					@Instantiable
-					public struct Token: Instantiable {
-					    public init() {}
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				    @Received(onlyIfAvailable: true) let authToken: Token?
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Token: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        let authToken = Token()
+			        let token = Token()
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_029593DA1BB2FBD5.self
+			            return Screen(token: token)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(authToken: authToken, token: token, screen: screen)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    public init(token: Token?) {
+			        func __safeDI_first() -> First {
+			            #sourceLocation(file: "\(output.fixtures["First.swift"])", line: 8)
+			            let authToken: Token? = token
+			            #sourceLocation()
+			            let reader = Reader(authToken: authToken)
+			            return First(authToken: authToken, reader: reader)
+			        }
+			        let first: First = __safeDI_first()
+			        func __safeDI_second() -> Second {
+			            #sourceLocation(file: "\(output.fixtures["Second.swift"])", line: 7)
+			            let authToken: Token? = token
+			            #sourceLocation()
+			            return Second(authToken: authToken)
+			        }
+			        let second: Second = __safeDI_second()
+			        self.init(first: first, second: second)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_029593DA1BB2FBD5 {}
+			}
+			""",
+		])
 	}
 
 	/// `Root` holding an erased `anyToken`, a seam `Screen` whose `Session` declares an erased `onlyIfAvailable`
@@ -4709,19 +4774,47 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsUncreatedAliasError_whenReaderBeneathReadsErasedAlias() async {
-		// An erased only-if-available alias is not created where `token` is unavailable either, and `Reader` reads it.
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Reader.swift"]):7:5: error: SafeDI cannot generate the dependency tree of `Screen`: `Reader` receives `anyToken: AnyToken?` beneath the `onlyIfAvailable` alias `anyToken` that `Session` declares, which is not created where `token: Token` is unavailable; built inline, `Reader` would then read whatever property named `anyToken` is declared above `Session`, or `nil`, depending on what encloses it. Receive `@Received(onlyIfAvailable: true) let token: Token?` on `Reader` instead, or make the alias required.
-			"""
-		}) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: Self.erasedAliasWithReaderFixture(seam: true),
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+	mutating func generate_bindsErasedAliasFromParameter_whenReaderBeneathReadsIt() async throws {
+		// An erased only-if-available alias maps the pass-through `token`, and `Reader` reads its binding.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.erasedAliasWithReaderFixture(seam: true),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        let anyToken = AnyToken(Token())
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_029593DA1BB2FBD5.self
+			            return Screen(token: nil)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(anyToken: anyToken, screen: screen)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    public init(token: Token?) {
+			        func __safeDI_session() -> Session {
+			            #sourceLocation(file: "\(output.fixtures["Session.swift"])", line: 8)
+			            let anyToken: AnyToken? = (token as Token?).map { AnyToken($0) }
+			            #sourceLocation()
+			            let reader = Reader(anyToken: anyToken)
+			            return Session(anyToken: anyToken, reader: reader)
+			        }
+			        let session: Session = __safeDI_session()
+			        self.init(session: session)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_029593DA1BB2FBD5 {}
+			}
+			""",
+		])
 	}
 
 	// MARK: Tiers and foreign seams
@@ -7557,20 +7650,69 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsUncreatedAliasError_whenAliasOfOptionalParameterIsReadBeneathItInLazyCycleOfSeams() async {
+	mutating func generate_bindsAliasFromParameter_whenAliasOfOptionalParameterIsReadBeneathItInLazyCycleOfSeams() async throws {
 		// The seams reach one another through instantiators and settle in one phase; `Reader` beneath `Detail`'s alias of the
-		// pass-through `token` is rejected.
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Reader.swift"]):7:5: error: SafeDI cannot generate the dependency tree of `Screen`: `Reader` receives `authToken: Token?` beneath the `onlyIfAvailable` alias `authToken` that `Detail` declares, which is not created where `token: Token` is unavailable; built inline, `Reader` would then read whatever property named `authToken` is declared above `Detail`, or `nil`, depending on what encloses it. Receive `@Received(onlyIfAvailable: true) let token: Token?` on `Reader` instead, or make the alias required.
-			"""
-		}) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: Self.vanishingAliasFallbackFixture(panelRequiresToken: false),
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+		// pass-through `token` reads the alias's binding.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.vanishingAliasFallbackFixture(panelRequiresToken: false),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Panel+SafeDI.swift": generatedFileHeader + """
+			extension Panel {
+			    public init(token: Token?) {
+			        func __safeDI_screenBuilder() -> Screen {
+			            _ = Screen.__safeDI_Screen_029593DA1BB2FBD5.self
+			            return Screen(token: token)
+			        }
+			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+			        self.init(screenBuilder: screenBuilder)
+			    }
+			}
+
+			extension Panel {
+			    public enum __safeDI_Panel_029593DA1BB2FBD5 {}
+			}
+			""",
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        let token = Token()
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_029593DA1BB2FBD5.self
+			            return Screen(token: token)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(token: token, screen: screen)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    public init(token: Token?) {
+			        func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Token? = token
+			            #sourceLocation()
+			            let reader = Reader(authToken: authToken)
+			            return Detail(authToken: authToken, reader: reader)
+			        }
+			        let detail: Detail = __safeDI_detail()
+			        func __safeDI_panelBuilder() -> Panel {
+			            _ = Panel.__safeDI_Panel_029593DA1BB2FBD5.self
+			            return Panel(token: token)
+			        }
+			        let panelBuilder = Instantiator<Panel>(__safeDI_panelBuilder)
+			        self.init(detail: detail, panelBuilder: panelBuilder)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_029593DA1BB2FBD5 {}
+			}
+			""",
+		])
 	}
 
 	// MARK: What a seam's callers see: the call shape

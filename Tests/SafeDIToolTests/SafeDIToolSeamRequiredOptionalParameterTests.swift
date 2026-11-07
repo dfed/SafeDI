@@ -23,14 +23,11 @@ import SafeDICore
 import Testing
 @testable import SafeDITool
 
-/// Whether an `onlyIfAvailable` alias inside a seam may be uncreated is judged by whether its fulfilling property
-/// may be `nil` where inline it would be unavailable, not by the parameter's optional type alone. A parameter the
-/// seam's callers may pass `nil` for – a pass-through received only if available, or the seam's own `onlyIfAvailable`
-/// receive – makes an alias of either spelling one that may be uncreated. A required parameter of optional type that
-/// every caller holds a value for – a required pass-through `x: X?`, the seam's own required `@Received let x: X?`, or its
-/// own `@Forwarded let x: X?` – makes only an alias of the unwrapped form `x: X` such: an alias of exactly `x: X?` is
-/// created from the parameter wherever the tree is built, as inline creates it from the caller's `x: X?`, so its readers
-/// are accepted. Each cell sits beside the inline build of the same graph.
+/// An `onlyIfAvailable` alias inside a seam of a parameter of optional type – a pass-through received only if
+/// available, the seam's own `onlyIfAvailable` receive, a required pass-through `x: X?`, the seam's own required
+/// `@Received let x: X?`, or its own `@Forwarded let x: X?` – reads that optional form whichever form it spells, as
+/// inline reads the caller's nearest declaration, so the alias is bound from the parameter and is `nil` where it is.
+/// Each cell sits beside the inline build of the same graph.
 struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 	// MARK: Initialization
 
@@ -928,7 +925,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 		])
 	}
 
-	// MARK: Controls that stay the uncreated-alias error
+	// MARK: An alias of a parameter that may be nil
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -1008,18 +1005,58 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsUncreatedAliasErrors_whenOnlyIfAvailableAliasOfParameterDefaultingToNilIsClosestDeclarationOfRequiredOptionalParameter() async throws {
+	mutating func generate_bindsAliasFromNearestAlias_whenOnlyIfAvailableAliasOfParameterDefaultingToNilIsClosestDeclarationOfRequiredOptionalParameter() async throws {
 		// `Left`'s `onlyIfAvailable` alias `token: Secret?` of the `= nil` parameter `other` is the closest declaration of `token`
-		// above `Detail`'s exact-form alias, so the chain may be uncreated where `other` is: two errors, naming `other`.
+		// above `Detail`'s exact-form alias, which is bound from it.
 		let fixture = Self.fixture(rootBuilds: "@Instantiated let hostBuilder: Instantiator<Host>", screen: ["@Instantiated let right: Right", "@Instantiated let left: Left"], left: ["@Received(fulfilledByDependencyNamed: \"other\", ofType: Secret.self, onlyIfAvailable: true) let token: Secret?", "@Instantiated let detail: Detail"], detail: [Self.exactFormAlias, "@Instantiated let reader: Reader"], reader: [Self.receive], otherTypes: [seamFixtureType(named: "Host", isFinalClass: true, declarations: ["@Forwarded let token: Secret?", "@Instantiated let screen: Screen"]), seamFixtureType(named: "Right", isFinalClass: true, declarations: ["@Received let token: Secret?"])])
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Detail.swift"]):8:5: error: SafeDI cannot generate the dependency tree of `Screen`: `Detail` aliases `token: Secret?` as `authToken`, and `token` is an `onlyIfAvailable` alias that `Left` declares, which is not created where `other: Secret` is unavailable; built inline, `authToken` would then be created from whatever property named `token` is declared above `Left`, or not at all, depending on what encloses it. Alias `other` as `authToken` with `onlyIfAvailable: true` instead, or make `token` required.
-			\(fixtures["Reader.swift"]):7:5: error: SafeDI cannot generate the dependency tree of `Screen`: `Reader` receives `authToken: Secret?` beneath the `onlyIfAvailable` alias `authToken` that `Detail` declares, which is not created where `other: Secret` is unavailable; built inline, `Reader` would then read whatever property named `authToken` is declared above `Detail`, or `nil`, depending on what encloses it. Receive `@Received(onlyIfAvailable: true) let other: Secret?` on `Reader` instead, or make the alias required.
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_hostBuilder(token: Secret?) -> Host {
+			            func __safeDI_screen() -> Screen {
+			                _ = Screen.__safeDI_Screen_BE1331602C59DC7C.self
+			                return Screen(other: nil, token: token)
+			            }
+			            let screen: Screen = __safeDI_screen()
+			            return Host(token: token, screen: screen)
+			        }
+			        let hostBuilder = Instantiator<Host> {
+			            __safeDI_hostBuilder(token: $0)
+			        }
+			        self.init(hostBuilder: hostBuilder)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    public convenience init(other: Secret?, token: Secret?) {
+			        let right = Right(token: token)
+			        func __safeDI_left() -> Left {
+			            #sourceLocation(file: "\(output.fixtures["Left.swift"])", line: 8)
+			            let token: Secret? = other
+			            #sourceLocation()
+			            func __safeDI_detail() -> Detail {
+			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+			                let authToken: Secret? = token
+			                #sourceLocation()
+			                let reader = Reader(authToken: authToken)
+			                return Detail(authToken: authToken, reader: reader)
+			            }
+			            let detail: Detail = __safeDI_detail()
+			            return Left(token: token, detail: detail)
+			        }
+			        let left: Left = __safeDI_left()
+			        self.init(right: right, left: left)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_BE1331602C59DC7C {}
+			}
+			""",
+		])
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(inlineOutput.dependencyTreeFiles == [
 			"Root+SafeDI.swift": generatedFileHeader + """
@@ -1056,6 +1093,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			}
 			""",
 		])
+		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: An erased alias of a parameter that may be nil

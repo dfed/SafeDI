@@ -798,7 +798,7 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `SpellChild` or `SpellSeam` declared with `generateMock: true`, so the spelled value reaches a generated mock.
 	case spelledTreeMocked
 	/// `addingUncreatedAliasShapes`' receive of the alias's property beneath the type that declares the
-	/// `onlyIfAvailable` alias, which the seam rejects wherever the alias may not be created.
+	/// `onlyIfAvailable` alias, which reads the alias's binding.
 	case uncreatedAliasReader
 	/// The type that builds the alias's declaring type also instantiates the alias's property.
 	case uncreatedAliasSamePropertyBeside
@@ -840,8 +840,8 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case uncreatedAliasRequiredOptionalParameter
 	/// The alias spelled with the exact optional form of its fulfilling property, `ofType: AliasValue?.self`.
 	case uncreatedAliasExactFormAlias
-	/// A reader or same-property draw replaced by its accepted twin, or `AliasDetail`'s second alias: the reader or
-	/// the second alias reads the fulfilling property, or the alias is made required.
+	/// A reader or same-property draw replaced by its twin, or `AliasDetail`'s second alias: the reader or the second
+	/// alias reads the fulfilling property, or the alias is made required.
 	case uncreatedAliasAcceptedTwin
 	/// `addingAccessProofShapes`' seam, `ProofSeam`, declared `package` or `internal`.
 	case seamTypeNarrowerThanPublic
@@ -3176,12 +3176,12 @@ enum GraphFuzzerGenerator {
 		// MARK: Uncreated aliases
 
 		/// With the `generateDependencyTree` feature on, four graphs in ten gain a small seam tree of their own whose
-		/// `onlyIfAvailable` alias may not be created, in the shapes the uncreated-alias walk decides: `AliasSeam`, which
+		/// `onlyIfAvailable` alias may be `nil`, in shapes whose seam binds the alias from a parameter: `AliasSeam`, which
 		/// the first root instantiates, instantiates `AliasLeft`, which instantiates `AliasDetail`, which declares
 		/// `aliasAuth`, an `onlyIfAvailable` alias of `aliasToken` – usually a pass-through received only if available,
 		/// and now and then a required optional parameter (the seam's own `@Received` or `@Forwarded` property, or a
-		/// property `AliasLeft` requires), whose exact-form alias (`ofType: AliasValue?.self`) is always created and
-		/// whose unwrapped-form alias is not; one graph in ten declares the alias on the seam itself. Now and then a
+		/// property `AliasLeft` requires), whose exact-form alias (`ofType: AliasValue?.self`) and
+		/// unwrapped-form alias are both bound from it; one graph in ten declares the alias on the seam itself. Now and then a
 		/// reader beneath the alias reads its property: `AliasReader` receives it, only if available or required,
 		/// declares a label-keeping alias of it retyped to an existential, is built through a wrapper, is reached
 		/// through a nested seam `AliasPanel`, or sits beneath `AliasMid`; `AliasDetail` aliases the alias's fulfilling
@@ -3191,9 +3191,10 @@ enum GraphFuzzerGenerator {
 		/// `AliasClient`'s pass-through) – the alias's own property, another type, or an instantiator; the caller holds
 		/// `aliasAuth` or `aliasToken`; `AliasLeft` instantiates `aliasToken` itself, which creates the alias on that
 		/// path while `AliasRight` beside it receives `aliasToken` only if available, or declares it so that the alias
-		/// is statically uncreated – `AliasDetail` built inside `aliasToken`'s builder, or `aliasToken` generated after
-		/// `AliasA`, which builds `AliasDetail`. About half of the reader and same-property draws produce the accepted
-		/// twin instead – the reader reads the fulfilling property, or the alias is made required – so the rest of the graph stays accepted and value-checked. `uncreatedAliasRandom`
+		/// is always `nil` – `AliasDetail` built inside `aliasToken`'s builder, or `aliasToken` generated after
+		/// `AliasA`, which builds `AliasDetail`. About half of the reader and same-property draws produce a twin instead
+		/// – the reader reads the fulfilling property, or the alias is made required. The seam must accept every such
+		/// graph inline accepts, and build the values inline builds. `uncreatedAliasRandom`
 		/// draws only for this pass.
 		private mutating func addingUncreatedAliasShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.contains(.generateDependencyTree), uncreatedAliasRandom.percentChance(40) else { return declarations }
@@ -4205,8 +4206,7 @@ enum GraphFuzzerGenerator {
 		/// label; `AliasValue` receiving `aliasDetail` only if available, so that an `AliasValue` beside `AliasDetail` is
 		/// generated after it; the seam's own only-if-available receive of `aliasToken`; and `AliasNeed`, a child of the seam
 		/// that requires `aliasToken`. A tree whose alias's property is a required optional parameter gets no new alias or
-		/// reader of an unwrapped form, which `GraphFuzzerToolRuns.uncreatedAliasRejectionFailure` takes for an exact-form
-		/// alias. `aliasExtensionRandom` draws only for this pass.
+		/// reader of an unwrapped form. `aliasExtensionRandom` draws only for this pass.
 		private mutating func addingUncreatedAliasExtensions(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard let seamIndex = declarations.firstIndex(where: { $0.name == "\(prefix)AliasSeam" }),
 			      let leftIndex = declarations.firstIndex(where: { $0.name == "\(prefix)AliasLeft" }),
@@ -6642,14 +6642,8 @@ struct GraphFuzzerFailure: Equatable {
 		/// `.safedi` files (`.moduleInfo`).
 		case integrationsDisagree = "the SwiftPM plugin flow and the module-info flow give other results"
 		case seamPassesNilWhereInlinePassesValue = "the generated code passes a literal nil more often with the seam than without it"
-		case seamReadsUncreatedAliasBinding = "a seam's generated code reads the binding of an only-if-available alias of a parameter that may be nil other than as its declaring type's argument"
-		case uncreatedAliasSeamRejectedOtherwise = "the tool rejects the uncreated-alias draw's seam with an error that is not the uncreated alias's"
-		/// The exact-form alias of a required optional parameter is always created, so an uncreated-alias error naming
-		/// it rejects a graph the rule accepts.
-		case uncreatedAliasExactFormAliasRejected = "the tool rejects the exact-form alias of a required optional parameter, which is always created"
-		/// A type's own declaration of an alias's label is not a declaration of the label the alias reads, so an
-		/// uncreated-alias error saying a type's alias reads an alias of that label the same type declares rejects an
-		/// alias as an alias of itself.
+		/// The tool rejects the alias draw's seam, with an error about that seam, where it accepts the graph with no seam.
+		case seamRejectedWhereInlineAccepts = "the tool rejects the alias draw's seam where it accepts the graph with no seam"
 		/// The differential value comparator describes other values for a probe of the seam build than for the same
 		/// probe of the inline build, beyond the documented divergences.
 		case seamBuildsOtherValuesThanInline = "the seam build constructs other values than the inline build"
@@ -7277,60 +7271,18 @@ struct GraphFuzzerToolRuns {
 		)
 	}
 
-	/// The failure of a graph whose `addingUncreatedAliasShapes` seam the tool rejects, where it accepts the graph with
-	/// no seam, with an error about that seam that is not one of the uncreated alias's, or `nil`. That seam's tree has
-	/// no shape any other seam rule rejects.
-	var uncreatedAliasRejectionFailure: GraphFuzzerFailure? {
+	/// The failure of a graph whose `addingUncreatedAliasShapes` seam the tool rejects, with an error about that seam,
+	/// where it accepts the graph with no seam, or `nil`. The seam binds an `onlyIfAvailable` alias of a parameter from
+	/// that parameter as inline binds it from the caller's nearest declaration of its label, and that seam's tree has no
+	/// shape any other seam rule rejects, so the seam must accept every graph inline accepts.
+	var seamRejectedWhereInlineAcceptsFailure: GraphFuzzerFailure? {
 		guard case let .rejected(diagnostics) = firstOutcome, case .accepted = inlineOutcome else { return nil }
 		let aliasSeamName = "dependency tree of `\(fixture.typeNamePrefix)AliasSeam`"
-		let errors = diagnostics.split(separator: "\n").filter { $0.contains(": error: ") && $0.contains(aliasSeamName) }
-		let uncreatedAliasErrors = errors.filter { line in GraphFuzzerOracle.uncreatedAliasErrorMarkers.contains { line.contains($0) } }
-		if errors.count > uncreatedAliasErrors.count {
-			return GraphFuzzerFailure(
-				seed: fixture.seed,
-				kind: .uncreatedAliasSeamRejectedOtherwise,
-				details: "With the seam:\n\(diagnostics)\nWithout it, the tool accepts the graph.",
-			)
-		}
-		// The exact-form alias of a required optional parameter is always created: the walk names an alias that may
-		// be uncreated, so an uncreated-alias error naming this one is an over-rejection. The static shapes, where
-		// the alias is uncreated whatever the parameter, are drawn only for the only-if-available pass-through.
-		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
-		if drawFeatures.contains(.uncreatedAliasExactFormAlias), drawFeatures.contains(.uncreatedAliasRequiredOptionalParameter),
-		   uncreatedAliasErrors.contains(where: { $0.contains("`aliasAuth`") })
-		{
-			return GraphFuzzerFailure(
-				seed: fixture.seed,
-				kind: .uncreatedAliasExactFormAliasRejected,
-				details: "With the seam:\n\(diagnostics)\nWithout it, the tool accepts the graph.",
-			)
-		}
-		return nil
-	}
-
-	/// The failure of a graph the tool accepts whose seam's generated code reads the binding of an `onlyIfAvailable`
-	/// alias bound from a parameter received only if available anywhere but as the argument of the construction of the
-	/// type that declares the alias, or `nil`. Inline, that alias is not created where the parameter's property is
-	/// unavailable, and any other read finds whatever declaration of the alias's label encloses it, so the seam must
-	/// reject every such read. The literal-`nil` oracle cannot see these: their `nil` is the seam call's.
-	var uncreatedAliasReadFailure: GraphFuzzerFailure? {
-		// A public mock graph's generated mocks are judged by the public mock's own oracles.
-		guard knownRightOutcome == nil, case let .accepted(seamFiles, _) = firstOutcome else { return nil }
-		// The unwrapped-form alias of a required optional parameter may be uncreated as an alias of a parameter received
-		// only if available may, so its binding is read the same way; the exact-form alias is always created.
-		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
-		let requiredOptionalParameters: Set<String> = drawFeatures.contains(.uncreatedAliasRequiredOptionalParameter) && !drawFeatures.contains(.uncreatedAliasExactFormAlias) ? ["aliasToken"] : []
-		let parameterKinds = GraphFuzzerSeamParameterKinds(fixture: fixture)
-		let reads = GraphFuzzerOracle.uncreatedAliasBindingReads(
-			in: seamFiles,
-			isOnlyIfAvailable: { parameterKinds.isOnlyIfAvailable(label: $0, ofSeam: $1) },
-			requiredOptionalParameters: requiredOptionalParameters,
-		)
-		guard !reads.isEmpty else { return nil }
+		guard diagnostics.split(separator: "\n").contains(where: { $0.contains(": error: ") && $0.contains(aliasSeamName) }) else { return nil }
 		return GraphFuzzerFailure(
 			seed: fixture.seed,
-			kind: .seamReadsUncreatedAliasBinding,
-			details: "\(reads.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
+			kind: .seamRejectedWhereInlineAccepts,
+			details: "With the seam:\n\(diagnostics)\nWithout it, the tool accepts the graph.",
 		)
 	}
 
@@ -7583,7 +7535,7 @@ enum GraphFuzzerOracle {
 		let valueComparisons = try valueComparisons(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil }, isolatingValueOracleGraphsOf: isolatedValueOracleSeeds)
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.readTwinFailure, runs.multiModuleFailures.first, renamedGraphFailures.first].compactMap(\.self)
+			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.readTwinFailure, runs.multiModuleFailures.first, renamedGraphFailures.first].compactMap(\.self)
 			// A base corpus graph is compared once its value-oracle graph is.
 			let isValueOracleGraphCompared = runs.valueOracle == nil || valueComparisons.comparedValueOracleSeeds.contains(runs.fixture.seed)
 			return GraphFuzzerResult(
@@ -7808,136 +7760,6 @@ enum GraphFuzzerOracle {
 		}
 	}
 
-	/// What each error of a seam's uncreated `onlyIfAvailable` alias says: a receive beneath it, an alias of it, or a
-	/// declaration of its property beside its declaring type.
-	static let uncreatedAliasErrorMarkers = [
-		"` beneath the `onlyIfAvailable` alias `",
-		"` is an `onlyIfAvailable` alias ",
-		": the `onlyIfAvailable` alias `",
-	]
-
-	/// Each read, in `generatedFiles`, of the binding of an `onlyIfAvailable` alias bound from a parameter of a seam's
-	/// generated initializer that is received only if available – `let <alias>: T? = <parameter>`, or an erased alias
-	/// mapping it – other than as the argument of the construction that ends the body declaring the binding (`return`
-	/// or `self.init`), which is the type that declares the alias. A binding from a nearer declaration of the
-	/// parameter's name is not such an alias, and a read beneath a nearer declaration of the alias's name reads that
-	/// one. The generated code is indented by four spaces a level and opens each body on the line that declares it.
-	///
-	/// - Parameters:
-	///   - isOnlyIfAvailable: Whether a parameter, by its label and the name of the seam whose extension declares the
-	///     initializer, is received only if available, which the generated initializer spells as it spells a required
-	///     parameter of optional type: `GraphFuzzerSeamParameterKinds.isOnlyIfAvailable(label:ofSeam:)` for a graph.
-	///   - requiredOptionalParameters: The labels of required parameters of optional type whose aliases are read as
-	///     those of a parameter received only if available are: the unwrapped-form alias of such a parameter may be
-	///     uncreated too.
-	static func uncreatedAliasBindingReads(
-		in generatedFiles: [String: String],
-		isOnlyIfAvailable: (_ label: String, _ seamTypeName: String) -> Bool,
-		requiredOptionalParameters: Set<String> = [],
-	) -> [String] {
-		var reads = [String]()
-		let declaration = try! NSRegularExpression(pattern: #"^let (`[^`]+`|[A-Za-z_][A-Za-z0-9_]*)(?:: [^=]+)? = (.*)$"#)
-		let function = try! NSRegularExpression(pattern: #"^(?:@Sendable )?func [^(]+\((.*)\) -> .* \{$"#)
-		func match(_ expression: NSRegularExpression, _ line: String) -> [String]? {
-			let source = line as NSString
-			guard let result = expression.firstMatch(in: line, range: NSRange(location: 0, length: source.length)) else { return nil }
-			return (1..<result.numberOfRanges).map { result.range(at: $0).location == NSNotFound ? "" : source.substring(with: result.range(at: $0)) }
-		}
-		/// The labels of `parameters`, a parameter list's text, of an initializer the extension of `seamTypeName`
-		/// declares, or of a function when `seamTypeName` is `nil`; of an initializer, only those of optional type that
-		/// are received only if available or are among `requiredOptionalParameters`.
-		func labels(of parameters: String, ofInitializerOf seamTypeName: String?) -> [String] {
-			topLevelParameters(parameters).compactMap { parameter in
-				let parts = parameter.split(separator: ":", maxSplits: 1)
-				guard parts.count == 2 else { return nil }
-				let label = parts[0].trimmingCharacters(in: .whitespaces)
-				guard let seamTypeName else { return label }
-				guard parts[1].trimmingCharacters(in: .whitespaces).hasSuffix("?"),
-				      isOnlyIfAvailable(label, seamTypeName) || requiredOptionalParameters.contains(label)
-				else { return nil }
-				return label
-			}
-		}
-		func references(_ name: String, in line: String) -> Bool {
-			let expression = try! NSRegularExpression(pattern: "(?<![A-Za-z0-9_.`])" + NSRegularExpression.escapedPattern(for: name) + "(?![A-Za-z0-9_`])(?!\\s*:)")
-			return expression.firstMatch(in: line, range: NSRange(location: 0, length: (line as NSString).length)) != nil
-		}
-		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) {
-			let lines = contents.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-			var lineIndex = 0
-			// The last component of the type the enclosing extension extends: a fuzzed seam's name.
-			var extendedTypeName = ""
-			while lineIndex < lines.count {
-				let initializerLine = lines[lineIndex]
-				let trimmed = initializerLine.trimmingCharacters(in: .whitespaces)
-				lineIndex += 1
-				if initializerLine.hasPrefix("extension "), initializerLine.hasSuffix(" {") {
-					extendedTypeName = String(initializerLine.dropFirst("extension ".count).dropLast(2).split(separator: ".").last ?? "")
-				}
-				// A tier may carry attributes before its modifier, with spaces inside them (`@available(iOS 17, *)`).
-				guard trimmed.hasSuffix(") {"),
-				      let parametersStart = trimmed.range(of: "init("),
-				      ["public ", "package ", "internal "].contains(where: { modifier in
-				      	trimmed.range(of: "\(modifier)init(")?.upperBound == parametersStart.upperBound
-				      		|| trimmed.range(of: "\(modifier)convenience init(")?.upperBound == parametersStart.upperBound
-				      })
-				else { continue }
-				let parameters = String(trimmed[parametersStart.upperBound..<trimmed.index(trimmed.endIndex, offsetBy: -3)])
-				let mayBeNil = Set(labels(of: parameters, ofInitializerOf: extendedTypeName))
-				guard !mayBeNil.isEmpty else { continue }
-				let initializerIndent = initializerLine.prefix { $0 == " " }.count
-				// Each open body's indent and the names it declares; the initializer's body first.
-				var scopes = [(indent: Int, names: Set<String>)]()
-				scopes.append((initializerIndent + 4, []))
-				// The bindings of aliases of a parameter that may be `nil`: the name and the scope declaring it.
-				var bindings = [(name: String, scopeIndex: Int)]()
-				while lineIndex < lines.count {
-					let line = lines[lineIndex]
-					lineIndex += 1
-					let indent = line.prefix { $0 == " " }.count
-					let code = line.trimmingCharacters(in: .whitespaces)
-					if code == "}", indent == initializerIndent {
-						break
-					}
-					guard !code.isEmpty, !code.hasPrefix("#sourceLocation"), !code.hasPrefix("//") else { continue }
-					while let last = scopes.last, indent < last.indent, scopes.count > 1 {
-						scopes.removeLast()
-						bindings.removeAll { $0.scopeIndex >= scopes.count }
-					}
-					let statement = code.components(separatedBy: " // Declared at ").first ?? code
-					let declared = match(declaration, statement)
-					// A read of a binding – in a declaration, in its value – is the declaring type's construction, which ends
-					// the body that declares the binding, or a read the seam should have rejected.
-					for binding in bindings where references(binding.name, in: declared?[1] ?? statement) {
-						let isShadowed = scopes[(binding.scopeIndex + 1)...].contains { $0.names.contains(binding.name) }
-						let isDeclaringConstruction = indent == scopes[binding.scopeIndex].indent && (statement.hasPrefix("return ") || statement.hasPrefix("self.init("))
-						if !isShadowed, !isDeclaringConstruction {
-							reads.append("\(fileName): `\(statement)` reads `\(binding.name)`.")
-						}
-					}
-					if let parts = declared {
-						let name = parts[0]
-						let value = parts[1]
-						let source = value.hasPrefix("(") ? String(value.dropFirst().prefix { $0 != " " }) : value
-						let resolvesToParameter = mayBeNil.contains(source) && !scopes.contains { $0.names.contains(source) }
-						scopes[scopes.count - 1].names.insert(name)
-						if resolvesToParameter {
-							bindings.append((name, scopes.count - 1))
-						}
-					}
-					if statement.hasSuffix("{") {
-						var names = Set<String>()
-						if let parts = match(function, statement) {
-							names = Set(labels(of: parts[0], ofInitializerOf: nil))
-						}
-						scopes.append((indent + 4, names))
-					}
-				}
-			}
-		}
-		return reads
-	}
-
 	/// Whether every error in `diagnostics`, a seam-world rejection, is one of a seam's own: reported at the seam
 	/// about its generated initializer or a call of it, which no inlined tree has. The inlined validation's errors
 	/// name a property or a type; a seam's name the dependency tree of the seam, or the call of its initializer.
@@ -8057,8 +7879,8 @@ enum GraphFuzzerOracle {
 	}
 
 	/// What each of a seam's own errors says after the location: the label collision, the tier that cannot take a
-	/// parameter, the redeclared initializer, the declaration the callers cannot see, the read of an uncreated
-	/// `onlyIfAvailable` alias, and the signatures that do not settle all open with the first; a missing module info with the second; and a `@Sendable` builder inside the
+	/// parameter, the redeclared initializer, the declaration the callers cannot see, and the signatures that do not
+	/// settle all open with the first; a missing module info with the second; and a `@Sendable` builder inside the
 	/// seam capturing a wrapper parameter – declared outside every builder function of the generated initializer,
 	/// whatever the caller would pass – contains the third. An inlined tree's capture names the declaring type
 	/// instead; a mock root's capture of a wrapper it is handed prints the same words, and cannot make a differential
