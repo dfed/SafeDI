@@ -881,6 +881,23 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
+		// The scopes of the types the mock-root loop below generates a mock for because they are listed.
+		let additionalMockRootScopes: Set<Scope> = additionalMocksToGenerate.isEmpty ? [] : Set(
+			typeDescriptionToFulfillingInstantiableMap.values.compactMap { instantiable in
+				additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource)
+					? typeDescriptionToScopeMap[instantiable.concreteInstantiable]
+					: nil
+			},
+		)
+		// The renames of the declarations the walk below reads are checked before it reads them, as production checks the
+		// renames of its trees before it builds scopes. Each mock root's tree, promoted dependencies included, is checked
+		// again where the root is created.
+		try Self.validateRenamesAreSpelledAsTheMacroAccepts(
+			inTreesRootedAt: validatedRootInstantiables.sorted().compactMap { typeDescriptionToScopeMap[$0] }
+				+ typeDescriptionToScopeMap.values.filter(\.instantiable.generatesMock)
+				+ Array(additionalMockRootScopes),
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+		)
 		// Validate mock scopes for cycles. Mock-only types (generateMock: true without
 		// isRoot) bypass root validation but can still have partially-lazy cycles.
 		// Uses cyclesOnly to skip unfulfillable property checks — mock-only types
@@ -891,14 +908,7 @@ public actor DependencyTreeGenerator {
 		// one cache serves this validation and every mock root.
 		try validatePropertiesAreFulfillable(
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
-			// The scopes of the types the mock-root loop below generates a mock for because they are listed.
-			additionalMockRootScopes: additionalMocksToGenerate.isEmpty ? [] : Set(
-				typeDescriptionToFulfillingInstantiableMap.values.compactMap { instantiable in
-					additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource)
-						? typeDescriptionToScopeMap[instantiable.concreteInstantiable]
-						: nil
-				},
-			),
+			additionalMockRootScopes: additionalMockRootScopes,
 			receivedPropertiesCache: &receivedPropertiesCache,
 			cyclesOnly: true,
 		)
@@ -1263,10 +1273,6 @@ public actor DependencyTreeGenerator {
 		/// properties can be of any type, `Instantiator`s included. No notes; the chain is spelled out in the message.
 		/// `requiredOnlyIfAvailableAliases` are the `onlyIfAvailable` aliases a receive in the chain requires, in chain order.
 		case dependencyReceivedInSameChainItIsInstantiated(instantiated: Property, receivedPropertyChain: [Property], declarationLocation: Dependency.DeclarationLocation?, lazilyInstantiatedProperties: [Property], requiredOnlyIfAvailableAliases: [RequiredOnlyIfAvailableAlias])
-		/// Reported at the aliased dependency that closes the cycle: the one fulfilled by the first property in
-		/// `aliasChain`, in which each aliased dependency of one type is fulfilled by the next and the last is the
-		/// first again. No notes; the chain is spelled out in the message.
-		case aliasedDependenciesFulfillOneAnother(aliasChain: [Property], declarationLocation: Dependency.DeclarationLocation?)
 		/// Reported at the hand-written `mock` method of a type whose `mock()` this module also generates.
 		case handWrittenMockSharesGeneratedMockName(TypeDescription, declaredAt: [Dependency.DeclarationLocation?], isGeneratedForAdditionalMocksToGenerate: Bool)
 		/// Reported at a hand-written `mock` method this module sees for a type another module generates a public mock
@@ -1303,6 +1309,9 @@ public actor DependencyTreeGenerator {
 		/// Reported at each dependency of one declaration whose label `String` equates with an earlier dependency's.
 		/// See `RepeatedDependencyLabel`.
 		case repeatedDependencyLabels([RepeatedDependencyLabel])
+		/// Reported at each `@Received(fulfilledByDependencyNamed:ofType:)` declaration spelled as the `@Instantiable` macro
+		/// rejects. See `RejectedRename`.
+		case rejectedRenames([RejectedRename])
 		/// Reported at each declaration whose access keeps the generated code from constructing a type, or, when the
 		/// declaration's file cannot be read, where this module refers to the construction. See `InaccessibleConstruction`.
 		case inaccessibleConstructions([InaccessibleConstruction])
@@ -1408,6 +1417,10 @@ public actor DependencyTreeGenerator {
 					.flatMap(\.self)
 			case let .repeatedDependencyLabels(repeatedDependencyLabels):
 				repeatedDependencyLabels
+					.map(\.sourceDiagnostic)
+					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
+			case let .rejectedRenames(rejectedRenames):
+				rejectedRenames
 					.map(\.sourceDiagnostic)
 					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 			case let .configurationBuiltTwoWays(configurationsBuiltTwoWays):
@@ -1538,16 +1551,6 @@ public actor DependencyTreeGenerator {
 								? Self.onlyIfAvailableRemedy
 								: requiredOnlyIfAvailableAliases.map(\.hint).joined(separator: " "))
 							+ Self.lazilyInstantiatedHint(for: lazilyInstantiatedProperties),
-					),
-				]
-			case let .aliasedDependenciesFulfillOneAnother(aliasChain, declarationLocation):
-				[
-					SourceDiagnostic(
-						severity: .error,
-						location: declarationLocation,
-						message: "Dependency cycle: each @\(Dependency.Source.receivedRawValue)(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: "
-							+ aliasChain.map { "`\($0.asSource)`" }.joined(separator: " -> ")
-							+ ". Change one of them to be fulfilled by a property outside this cycle.",
 					),
 				]
 			}
@@ -2421,6 +2424,47 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
+		/// A `@Received(fulfilledByDependencyNamed:ofType:)` declaration spelled as the `@Instantiable` macro rejects: a
+		/// rename of another rename of the same declaration, or a rename of a dependency to itself. Every build runs
+		/// SafeDITool before the compiler expands the macro, so SafeDITool reports them too, plainly, wherever its
+		/// evaluation of `#if` blocks forms one – also where the macro, which cannot tell which clauses are active,
+		/// accepts it: two renames in two `#if` blocks that are both active, or in two clauses of a block only the
+		/// compiler decides, such as `#if os(iOS)`, every clause of which SafeDITool reads.
+		struct RejectedRename {
+			enum Spelling {
+				/// The rename is fulfilled by `sourceLabel`, which `declaringType` also renames.
+				case renameOfRename(sourceLabel: String, declaringType: TypeDescription)
+				/// The rename is fulfilled by its own label with its own type.
+				case renameOfItselfWithSameType
+				/// The rename is fulfilled by its own label with its own type made non-optional, or kept, only if available.
+				case renameOfItselfOnlyIfAvailable
+			}
+
+			let property: Property
+			let spelling: Spelling
+			let declarationLocation: Dependency.DeclarationLocation?
+
+			/// An `error:` line at the rename.
+			var sourceDiagnostic: SourceDiagnostic {
+				SourceDiagnostic(
+					severity: .error,
+					location: declarationLocation,
+					message: message,
+				)
+			}
+
+			private var message: String {
+				switch spelling {
+				case let .renameOfRename(sourceLabel, declaringType):
+					"`\(property.asSource)` is renamed from `\(sourceLabel.spelledWithoutBackticks)`, which `\(declaringType.asSource)` also renames. The @\(InstantiableVisitor.macroName) macro rejects a rename of another rename of the same declaration. Rename the property the renames start from instead. SafeDITool also rejects such renames where `#if` blocks that are active together declare them, or clauses of a condition only the compiler decides, such as `os(iOS)`, which SafeDITool reads together; there, give the rename `\(sourceLabel.spelledWithoutBackticks)` another label."
+				case .renameOfItselfWithSameType:
+					"`\(property.asSource)` is renamed from itself with the same type, which renames nothing. The @\(InstantiableVisitor.macroName) macro rejects this rename. Receive it with @\(Dependency.Source.receivedRawValue) instead."
+				case .renameOfItselfOnlyIfAvailable:
+					"`\(property.asSource)` is renamed from itself only if available. The @\(InstantiableVisitor.macroName) macro rejects this spelling of @\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true). Receive it with @\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true) instead."
+				}
+			}
+		}
+
 		/// A property together with where it is declared.
 		struct LocatedProperty: Hashable {
 			let property: Property
@@ -2807,6 +2851,7 @@ public actor DependencyTreeGenerator {
 				// by property, so a seam that repeats a label is reported here rather than generating a tier that
 				// repeats it, or trapping where the uncreated-alias walk keys a seam call's parameters.
 				try Self.validateDependencyLabelsAreDistinct(in: reachableTypeDescriptions.compactMap { typeDescriptionToFulfillingInstantiableMap[$0] })
+				try Self.validateRenamesAreSpelledAsTheMacroAccepts(in: reachableTypeDescriptions.compactMap { typeDescriptionToFulfillingInstantiableMap[$0] })
 				// A foreign seam whose module's files this run read under another mock condition is reported before
 				// its signature is computed from them.
 				try validateCalledSeamModulesShareMockCondition()
@@ -4879,8 +4924,8 @@ public actor DependencyTreeGenerator {
 	/// each alias's fulfilling property that no scope between the receiver and the root provides, exactly, in
 	/// unwrapped form, or as a wrapper's instance, as `ScopeGenerator.provides` decides – with the type that
 	/// declares it, in the order the tree declares them, each declaration once, and, for an alias's fulfilling
-	/// property, the alias's own property. An alias of a property its own scope provides – instantiates, aliases,
-	/// or is forwarded – binds to that declaration, as `ScopeGenerator.init` decides, so it leaves the seam no more
+	/// property, the alias's own property. An alias of a property its own scope provides – instantiates or is
+	/// forwarded – binds to that declaration, as `ScopeGenerator.init` decides, so it leaves the seam no more
 	/// than one an ancestor provides. A receive a scope inside the tree fulfills is passed nothing, so it proves
 	/// nothing about a parameter's access and is named by no error. The generator tree is walked rather than the scopes, which a tree
 	/// can reach under several parents: a receive leaves the seam on one path and not on another, and each path is a
@@ -5609,6 +5654,7 @@ public actor DependencyTreeGenerator {
 			}
 		}
 		try Self.validateDependencyLabelsAreDistinct(in: instantiablesInMockTree)
+		try Self.validateRenamesAreSpelledAsTheMacroAccepts(in: instantiablesInMockTree)
 
 		// Validate the promoted mock scope for cycles before generating code.
 		// This catches cycles that only become visible after @Received dependencies
@@ -5654,13 +5700,11 @@ public actor DependencyTreeGenerator {
 		)
 		// That walk does not follow a received `Instantiator` to the scope it builds, and
 		// promoted scopes' trees are walked by no cycle validation (below, each is walked for
-		// hidden received dependencies alone), so report what it leaves: aliases that fulfill
-		// one another and children, here or anywhere in the mock tree, that require one
-		// another, in the order `validateChildrenDoNotRequireEachOther` checks them. The mock
-		// root's own children were checked above, so only their trees are left.
-		if let aliasesFulfillingOneAnother = Self.aliasesFulfillingOneAnother(in: mockRootScope) {
-			throw aliasesFulfillingOneAnother.error
-		} else if let mockRootChildrenRequiringEachOther {
+		// hidden received dependencies alone), so report what it leaves: children, here or
+		// anywhere in the mock tree, that require one another, in the order
+		// `validateChildrenDoNotRequireEachOther` checks them. The mock root's own children
+		// were checked above, so only their trees are left.
+		if let mockRootChildrenRequiringEachOther {
 			throw mockRootChildrenRequiringEachOther.error
 		} else {
 			var mockRootChildScopes = [(scope: Scope, enclosingProvidedProperties: Set<Property>, enclosingForwardedProperties: Set<Property>)]()
@@ -6323,34 +6367,27 @@ public actor DependencyTreeGenerator {
 				childByProperty[instanceProperty] = NamedChild(index: index, directness: 1)
 			}
 		}
-		// A child's tree that requires an alias the scope declares requires the child the alias is assigned
-		// from, directly or through other aliases the scope declares. An `onlyIfAvailable` alias is created for
-		// a receiver that requires it, so it is assigned after that child too, unless an enclosing scope provides
-		// its property, which the receiver is then handed instead.
-		var aliases = [AliasedDependency]()
+		// A child's tree that requires an alias the scope declares requires the child the alias is assigned from. No
+		// alias of the scope renames another (SafeDITool rejects that before it validates a tree that builds the
+		// scope). An `onlyIfAvailable` alias is created for a receiver that requires it, so it is assigned after that
+		// child too, unless an enclosing scope provides its property, which the receiver is then handed instead.
+		var aliasCount = 0
 		var onlyIfAvailableAliasFulfillingPropertyByProperty = [Property: Property]()
+		var aliasedChildByProperty = [Property: NamedChild]()
 		for case let .aliased(property, fulfillingProperty, _, onlyIfAvailable, _) in scope.propertiesToGenerate
 			where !onlyIfAvailable || enclosingProvidedProperties.isDisjoint(with: [property, property.asUnwrappedProperty])
 		{
-			aliases.append(AliasedDependency(property: property, fulfillingProperty: fulfillingProperty))
 			if onlyIfAvailable {
 				onlyIfAvailableAliasFulfillingPropertyByProperty[property] = fulfillingProperty
 			}
-		}
-		var aliasedChildByProperty = [Property: NamedChild]()
-		var resolvedAnAlias = true
-		while resolvedAnAlias {
-			resolvedAnAlias = false
-			for (aliasIndex, alias) in aliases.enumerated() where aliasedChildByProperty[alias.property] == nil {
-				// An alias of a child's optional form is assigned from that child, as a required receive of it is fulfilled.
-				let fulfillingProperties = alias.fulfillingProperty.typeDescription.isOptional
-					? [alias.fulfillingProperty, alias.fulfillingProperty.asUnwrappedProperty]
-					: [alias.fulfillingProperty]
-				if let namedChild = fulfillingProperties.lazy.compactMap({ childByProperty[$0] ?? aliasedChildByProperty[$0] }).first {
-					aliasedChildByProperty[alias.property] = NamedChild(index: namedChild.index, directness: 2 + aliasIndex)
-					resolvedAnAlias = true
-				}
+			// An alias of a child's optional form is assigned from that child, as a required receive of it is fulfilled.
+			let fulfillingProperties = fulfillingProperty.typeDescription.isOptional
+				? [fulfillingProperty, fulfillingProperty.asUnwrappedProperty]
+				: [fulfillingProperty]
+			if let namedChild = fulfillingProperties.lazy.compactMap({ childByProperty[$0] }).first {
+				aliasedChildByProperty[property] = NamedChild(index: namedChild.index, directness: 2 + aliasCount)
 			}
+			aliasCount += 1
 		}
 		func namedChild(declaring property: Property) -> NamedChild? {
 			childByProperty[property] ?? aliasedChildByProperty[property]
@@ -6359,7 +6396,7 @@ public actor DependencyTreeGenerator {
 		/// which `property` names less directly than any property the scope declares does.
 		func namedChild(declaringUnwrapped property: Property) -> NamedChild? {
 			namedChild(declaring: property.asUnwrappedProperty).map {
-				NamedChild(index: $0.index, directness: $0.directness + 2 + aliases.count)
+				NamedChild(index: $0.index, directness: $0.directness + 2 + aliasCount)
 			}
 		}
 		// The properties the scopes enclosing each child provide to it: those its enclosing scopes provide to this
@@ -6522,10 +6559,8 @@ public actor DependencyTreeGenerator {
 					let scope = validatedScope.scope
 					walkedScopes.append((validatedScope: validatedScope, parentIndex: parentIndex))
 					let walkedScopeIndex = walkedScopes.count - 1
-					if let aliasesFulfillingOneAnother = aliasesFulfillingOneAnother(in: scope) {
-						throw aliasesFulfillingOneAnother.error
-					} else if case let renamesContradictingOwnProperties = renamesContradictingOwnProperties(in: scope),
-					          !renamesContradictingOwnProperties.isEmpty
+					if case let renamesContradictingOwnProperties = renamesContradictingOwnProperties(in: scope),
+					   !renamesContradictingOwnProperties.isEmpty
 					{
 						// The walk in `validatePropertiesAreFulfillable` reports these for every scope it reaches, so only a
 						// scope in the tree of a dependency a mock promotes, which that walk does not reach, reports them here.
@@ -6578,92 +6613,29 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
-	/// An aliased dependency a scope declares: `property`, assigned from `fulfillingProperty`.
-	private struct AliasedDependency {
-		let property: Property
-		let fulfillingProperty: Property
-		/// Where the alias is declared, when it is known.
-		var declarationLocation: Dependency.DeclarationLocation?
-	}
-
-	/// Aliased dependencies of one scope that are each fulfilled by the next one.
-	private struct AliasesFulfillingOneAnother {
-		/// The aliases, starting and ending with the same one.
-		let aliasChain: [Property]
-		/// The declaration of the alias fulfilled by the first, which closes the cycle.
-		let closingDeclarationLocation: Dependency.DeclarationLocation?
-
-		/// The error reporting these aliases, at the one that closes the cycle.
-		var error: DependencyTreeGeneratorError {
-			DependencyTreeGeneratorError.aliasedDependenciesFulfillOneAnother(
-				aliasChain: aliasChain,
-				declarationLocation: closingDeclarationLocation,
-			)
-		}
-	}
-
-	/// The first cycle, in declaration order, of aliased dependencies of `scope` that are each fulfilled by
-	/// the next one. An alias resolves against a property declared beside it, so such aliases would each be
-	/// assigned from one not yet declared.
-	private static func aliasesFulfillingOneAnother(
-		in scope: Scope,
-	) -> AliasesFulfillingOneAnother? {
-		let aliases = scope.instantiable.dependencies.compactMap { dependency -> AliasedDependency? in
-			switch dependency.source {
-			case let .aliased(fulfillingProperty, _, _):
-				AliasedDependency(
-					property: dependency.property,
-					fulfillingProperty: fulfillingProperty,
-					declarationLocation: dependency.declarationLocation,
-				)
-			case .instantiated, .received, .forwarded:
-				nil
-			}
-		}
-		var aliasByProperty = [Property: AliasedDependency]()
-		for alias in aliases {
-			aliasByProperty[alias.property] = alias
-		}
-		for start in aliases {
-			// A chain longer than the aliases has entered a cycle that does not return to `start`.
-			var chain = [start]
-			while chain.count <= aliases.count, let next = aliasByProperty[chain[chain.count - 1].fulfillingProperty] {
-				if next.property == start.property {
-					return AliasesFulfillingOneAnother(
-						aliasChain: chain.map(\.property) + [start.property],
-						closingDeclarationLocation: chain[chain.count - 1].declarationLocation,
-					)
-				} else {
-					chain.append(next)
-				}
-			}
-		}
-		return nil
-	}
-
 	/// The renames of `scope`'s type, in declaration order, whose `fulfilledByDependencyNamed:` label the type also
-	/// declares – as a property it instantiates or forwards, or as another rename – with a type their `ofType:` does
-	/// not name. A rename refers to the property of that name on its own type. One whose `ofType:` names that
-	/// property is built after it and assigned from it; one that names another type would be assigned from whichever
-	/// declaration of its label is in scope where it is built, which depends on the order of the type's declarations.
-	/// So `ofType:` must name the type's property exactly, or, when it is lazily instantiated, the instance it offers
-	/// by value. A rename of its own label refers to no other property.
+	/// declares – as a property it instantiates or forwards – with a type their `ofType:` does not name. A rename
+	/// refers to the property of that name on its own type. One whose `ofType:` names that property is built after it
+	/// and assigned from it; one that names another type would be assigned from whichever declaration of its label is
+	/// in scope where it is built, which depends on the order of the type's declarations. So `ofType:` must name the
+	/// type's property exactly, or, when it is lazily instantiated, the instance it offers by value. A rename of
+	/// another rename of the type is rejected before scopes are built (`RejectedRename`), and a rename of its own
+	/// label refers to no other property.
 	private static func renamesContradictingOwnProperties(
 		in scope: Scope,
 	) -> [DependencyTreeGeneratorError.RenameContradictingOwnProperty] {
 		var ownDependencyByLabel = [String: Dependency]()
 		for dependency in scope.instantiable.dependencies {
 			switch dependency.source {
-			case .instantiated, .forwarded, .aliased:
+			case .instantiated, .forwarded:
 				ownDependencyByLabel[dependency.property.label] = dependency
-			case .received:
+			case .aliased, .received:
 				continue
 			}
 		}
 		return scope.instantiable.dependencies.compactMap { dependency in
 			guard case let .aliased(fulfillingProperty, _, _) = dependency.source,
 			      let ownDependency = ownDependencyByLabel[fulfillingProperty.label],
-			      ownDependency != dependency,
 			      !ownDependency.receivableProperties.contains(fulfillingProperty)
 			else { return nil }
 			return DependencyTreeGeneratorError.RenameContradictingOwnProperty(
@@ -6693,13 +6665,11 @@ public actor DependencyTreeGenerator {
 	/// property of one of its `requiredOnlyIfAvailableAliases` that `childrenRequiringEachOther`
 	/// finds is created. Such an alias counts: it is created for the receiver that requires
 	/// it, so the tree is built after `property` (see `ScopeGenerator.orderedPropertiesToGenerate`),
-	/// and the search goes on for the receiver of the alias's property: a required alias of it
-	/// the same scope declares, which is that receiver; an `onlyIfAvailable` alias of it the
-	/// same scope declares that is required in turn, through which the search goes on; or
-	/// else beneath the scope, whose children's trees receive the alias's property. The
-	/// aliases are the ones `ScopeDeclarations.requirements(childRequiredReceived:childRequirements:)`
-	/// finds for the walk, so the search sees a requirement through any chain of aliases where
-	/// the check does. An `onlyIfAvailable` alias whose property an enclosing scope provides
+	/// and the search goes on for the receiver of the alias's property beneath the scope, whose
+	/// children's trees receive it: no alias of the scope renames another, since SafeDITool rejects
+	/// that before it validates a tree that builds the scope. The aliases are the ones
+	/// `ScopeDeclarations.requirements(childRequiredReceived:childRequirements:)` finds for the walk,
+	/// so the search sees a requirement through any chain of aliases where the check does. An `onlyIfAvailable` alias whose property an enclosing scope provides
 	/// is not created where its fulfilling property is unavailable, and the receiver beneath it
 	/// that requires its property is handed the enclosing scope's property: `property` can be
 	/// that alias's property, as `childrenRequiringEachOther` asks about it, and the search then
@@ -6779,70 +6749,59 @@ public actor DependencyTreeGenerator {
 					return requiredAliasProperties
 				}
 			}
-			// The property searched for in this scope: `property`, or the property of an `onlyIfAvailable` alias of
-			// it that the scope declares and that is required, which the receiver then receives instead. A required
-			// alias of the scope's own alias is its receiver, although it refers to a property the scope declares.
-			// The chain follows each of the scope's aliases at most once: a type's properties have distinct labels,
-			// so no alias renames one to another's property, and aliases that fulfill one another are never required
-			// from above, since each is fulfilled by a property the scope declares.
+			// The property searched for beneath this scope: `property`, or the property of an `onlyIfAvailable` alias of
+			// it that the scope declares and that is required, which the receiver then receives instead.
 			var searchedProperty = property
 			var searchedPropertyIsOwnAlias = false
 			var requiredOnlyIfAvailableAliases = requiredOnlyIfAvailableAliases
-			var searchesBeneath = false
-			while receiver == nil, !searchesBeneath {
-				// An alias of a property the scope declares or forwards refers to that property, as
-				// `collectReceivedProperties` has it.
-				func receivesFromOutside(_ fulfillingProperty: Property) -> Bool {
-					fulfillingProperty == searchedProperty
-						&& (searchedPropertyIsOwnAlias || (!declarations.propertiesToDeclare.contains(fulfillingProperty) && !declarations.forwardedProperties.contains(fulfillingProperty)))
+			if let dependency = scope.instantiable.dependencies.first(where: { dependency in
+				switch dependency.source {
+				case let .received(onlyIfAvailable):
+					!onlyIfAvailable && dependency.property == property
+				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+					// An alias of a property the scope declares or forwards refers to that property, as
+					// `collectReceivedProperties` has it.
+					!onlyIfAvailable
+						&& fulfillingProperty == property
+						&& !declarations.propertiesToDeclare.contains(fulfillingProperty)
+						&& !declarations.forwardedProperties.contains(fulfillingProperty)
+				case .instantiated, .forwarded:
+					false
 				}
-				if let dependency = scope.instantiable.dependencies.first(where: { dependency in
-					switch dependency.source {
-					case let .received(onlyIfAvailable):
-						!onlyIfAvailable && dependency.property == searchedProperty
-					case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-						!onlyIfAvailable && receivesFromOutside(fulfillingProperty)
-					case .instantiated, .forwarded:
-						false
-					}
-				}) {
-					receiver = RequiredReceiver(dependency: dependency, requiredOnlyIfAvailableAliases: requiredOnlyIfAvailableAliases)
-				} else if !searchedPropertyIsOwnAlias,
-				          let uncreatedAlias = declarations.onlyIfAvailableAliases.first(where: { $0.property == searchedProperty }),
-				          enclosingForwardedProperties.isDisjoint(with: [uncreatedAlias.fulfillingProperty, uncreatedAlias.fulfillingProperty.asUnwrappedProperty]),
-				          let providedProperty = [searchedProperty, searchedProperty.asUnwrappedProperty].first(where: enclosingProvidedProperties.contains)
-				{
-					// An `onlyIfAvailable` alias whose property an enclosing scope provides, and whose fulfilling property no
-					// enclosing scope forwards, is not created where its fulfilling property is unavailable, and the receiver
-					// beneath it that requires its property is handed the enclosing scope's property instead, so that receiver
-					// is the one searched for: the search goes on as it does for the scope's own alias, with the enclosing
-					// scope's property in the hint.
-					requiredOnlyIfAvailableAliases.append(.init(
-						property: uncreatedAlias.property,
-						fulfillingProperty: uncreatedAlias.fulfillingProperty,
-						providedProperty: providedProperty,
-					))
-					searchedPropertyIsOwnAlias = true
-				} else if let requiredAlias = scope.instantiable.dependencies.first(where: { dependency in
-					if case let .aliased(fulfillingProperty, _, onlyIfAvailable: true) = dependency.source {
-						// An alias of a property the scope provides, exactly or by its unwrapped form, is created from it.
-						fulfillingProperty == searchedProperty
-							&& (searchedPropertyIsOwnAlias || !declarations.provides(fulfillingProperty))
-							&& requiredAliasProperties().contains(dependency.property)
-					} else {
-						false
-					}
-				}) {
-					// The receiver that requires the alias receives the alias's property, which the scope declares.
-					requiredOnlyIfAvailableAliases.append(.init(property: requiredAlias.property, fulfillingProperty: searchedProperty))
-					searchedProperty = requiredAlias.property
-					searchedPropertyIsOwnAlias = true
+			}) {
+				receiver = RequiredReceiver(dependency: dependency, requiredOnlyIfAvailableAliases: requiredOnlyIfAvailableAliases)
+			} else if let uncreatedAlias = declarations.onlyIfAvailableAliases.first(where: { $0.property == property }),
+			          enclosingForwardedProperties.isDisjoint(with: [uncreatedAlias.fulfillingProperty, uncreatedAlias.fulfillingProperty.asUnwrappedProperty]),
+			          let providedProperty = [property, property.asUnwrappedProperty].first(where: enclosingProvidedProperties.contains)
+			{
+				// An `onlyIfAvailable` alias whose property an enclosing scope provides, and whose fulfilling property no
+				// enclosing scope forwards, is not created where its fulfilling property is unavailable, and the receiver
+				// beneath it that requires its property is handed the enclosing scope's property instead, so that receiver
+				// is the one searched for: the search goes on as it does for the scope's own alias, with the enclosing
+				// scope's property in the hint.
+				requiredOnlyIfAvailableAliases.append(.init(
+					property: uncreatedAlias.property,
+					fulfillingProperty: uncreatedAlias.fulfillingProperty,
+					providedProperty: providedProperty,
+				))
+				searchedPropertyIsOwnAlias = true
+			} else if let requiredAlias = scope.instantiable.dependencies.first(where: { dependency in
+				if case let .aliased(fulfillingProperty, _, onlyIfAvailable: true) = dependency.source {
+					// An alias of a property the scope provides, exactly or by its unwrapped form, is created from it.
+					fulfillingProperty == property
+						&& !declarations.provides(fulfillingProperty)
+						&& requiredAliasProperties().contains(dependency.property)
 				} else {
-					searchesBeneath = true
+					false
 				}
+			}) {
+				// The receiver that requires the alias receives the alias's property, which the scope declares.
+				requiredOnlyIfAvailableAliases.append(.init(property: requiredAlias.property, fulfillingProperty: property))
+				searchedProperty = requiredAlias.property
+				searchedPropertyIsOwnAlias = true
 			}
 			// A scope that declares `property` is not searched beneath: the trees of its children receive its own.
-			if searchesBeneath, searchedPropertyIsOwnAlias || !declarations.provides(searchedProperty) {
+			if receiver == nil, searchedPropertyIsOwnAlias || !declarations.provides(searchedProperty) {
 				// The scope searched next is the last one on the stack, so the first child goes last.
 				let firstChildIndex = scopesToSearch.endIndex
 				for case let .instantiated(childProperty, childScope, _) in scope.propertiesToGenerate {
@@ -6865,16 +6824,10 @@ public actor DependencyTreeGenerator {
 			forwardedProperties = scope.instantiable.forwardedReceivableProperties
 			lazilyInstantiatedInstanceProperties = scope.instantiable.dependencies.compactMap(\.lazilyInstantiatedInstanceProperty)
 			var onlyIfAvailableAliases = [DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias]()
-			var requiredAliasFulfillingProperties = Set<Property>()
-			for case let (property, .aliased(fulfillingProperty, _, onlyIfAvailable)) in scope.instantiable.dependencies.lazy.map({ ($0.property, $0.source) }) {
-				if onlyIfAvailable {
-					onlyIfAvailableAliases.append(.init(property: property, fulfillingProperty: fulfillingProperty))
-				} else {
-					requiredAliasFulfillingProperties.insert(fulfillingProperty)
-				}
+			for case let (property, .aliased(fulfillingProperty, _, onlyIfAvailable: true)) in scope.instantiable.dependencies.lazy.map({ ($0.property, $0.source) }) {
+				onlyIfAvailableAliases.append(.init(property: property, fulfillingProperty: fulfillingProperty))
 			}
 			self.onlyIfAvailableAliases = onlyIfAvailableAliases
-			self.requiredAliasFulfillingProperties = requiredAliasFulfillingProperties
 		}
 
 		/// The properties the scope declares for its children: those it instantiates, whether or not a scope builds
@@ -6887,8 +6840,6 @@ public actor DependencyTreeGenerator {
 		let lazilyInstantiatedInstanceProperties: [Property]
 		/// The `onlyIfAvailable` aliases the scope declares, in declaration order.
 		let onlyIfAvailableAliases: [DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias]
-		/// The fulfilling properties of the required aliases the scope declares.
-		let requiredAliasFulfillingProperties: Set<Property>
 
 		/// Whether the scope provides `property` to the scopes beneath it, as `ScopeGenerator.provides` has it: it
 		/// declares or forwards the property or, for an optional property, its unwrapped form.
@@ -6945,42 +6896,27 @@ public actor DependencyTreeGenerator {
 		/// The requirements the scope's tree has of the scopes enclosing it, given what its children's trees require:
 		/// `childRequiredReceived`, the properties they require, and `childRequirements`, their requirements as
 		/// `requirements(recordedFrom:ofChild:)` records them. An `onlyIfAvailable` alias the scope declares is
-		/// required when a child's tree requires its property; when a required alias the scope declares is fulfilled by
-		/// its property, which is always created; or when the last alias of a requirement is fulfilled by its property,
-		/// through which that requirement then goes on. The last way chains through the scope's own aliases, so the
-		/// aliases are found until a pass finds no more. An alias required several ways is listed once for each, since
-		/// each depends on different aliases being created. A requirement whose last alias's fulfilling property the
-		/// scope forwards loses that alias, which is always created; one whose last alias's fulfilling property the
-		/// scope declares requires nothing of the scopes above but the property of a nearer alias one of them provides.
+		/// required when a child's tree requires its property, or when the last alias of a child's requirement is
+		/// fulfilled by its property, through which that requirement then goes on. No alias of the scope renames
+		/// another (SafeDITool rejects that before it validates a tree that builds the scope), so one pass finds them.
+		/// An alias required several ways is listed once for each, since each depends on different aliases being
+		/// created. A requirement whose last alias's fulfilling property the scope forwards loses that alias, which is
+		/// always created; one whose last alias's fulfilling property the scope declares requires nothing of the scopes
+		/// above but the property of a nearer alias one of them provides.
 		func requirements(
 			childRequiredReceived: Set<Property>,
 			childRequirements: Set<OnlyIfAvailableAliasRequirement>,
 		) -> Set<OnlyIfAvailableAliasRequirement> {
 			var requirements = childRequirements
-			if !onlyIfAvailableAliases.isEmpty {
-				var foundRequirement = true
-				while foundRequirement {
-					foundRequirement = false
-					for alias in onlyIfAvailableAliases {
-						var requiringAliasChains = [[DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias]]()
-						if childRequiredReceived.contains(alias.property) || requiredAliasFulfillingProperties.contains(alias.property) {
-							requiringAliasChains.append([])
-						}
-						// Aliases that fulfill one another are never required from above: each is fulfilled by a property
-						// the scope declares. An alias already on the chain is not followed again.
-						for requirement in requirements
-							where requirement.requiresFulfillingProperty
-							&& requirement.aliases[requirement.aliases.count - 1].fulfillingProperty == alias.property
-							&& !requirement.aliases.contains(alias)
-						{
-							requiringAliasChains.append(requirement.aliases)
-						}
-						for requiringAliases in requiringAliasChains {
-							if requirements.insert(.init(aliases: requiringAliases + [alias], requiresFulfillingProperty: true)).inserted {
-								foundRequirement = true
-							}
-						}
-					}
+			for alias in onlyIfAvailableAliases {
+				if childRequiredReceived.contains(alias.property) {
+					requirements.insert(.init(aliases: [alias], requiresFulfillingProperty: true))
+				}
+				for requirement in childRequirements
+					where requirement.requiresFulfillingProperty
+					&& requirement.aliases[requirement.aliases.count - 1].fulfillingProperty == alias.property
+				{
+					requirements.insert(.init(aliases: requirement.aliases + [alias], requiresFulfillingProperty: true))
 				}
 			}
 			guard !requirements.isEmpty else { return requirements }
@@ -8018,14 +7954,11 @@ public actor DependencyTreeGenerator {
 					}
 				}
 			}
-			/// The property whose instance a read of `property` reads. A renamed property can itself be
-			/// renamed, so this follows the type's renamings back to where they start.
+			/// The property whose instance a read of `property` reads: the property a renaming of this type renames, or
+			/// `property` itself. No renaming of a type renames another (SafeDITool rejects that before it validates a
+			/// tree that builds the scope).
 			func propertyRead(by property: Property) -> Property {
-				var readProperty = property
-				while let renamedProperty = renamedInstanceProperties[readProperty] {
-					readProperty = renamedProperty
-				}
-				return readProperty
+				renamedInstanceProperties[property] ?? property
 			}
 			func recordReads(whileCreating childScope: Scope) {
 				// Reads this type renames to one property are recorded as the read of the reader declared first. Sorted by
@@ -8063,14 +7996,13 @@ public actor DependencyTreeGenerator {
 						recordRead(of: dependency.property, by: dependency, receivedLabel: dependency.property.label)
 					}
 				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-					let readProperty = propertyRead(by: fulfillingProperty)
 					// An `onlyIfAvailable` alias is the exception when it renames the instance of a lazily instantiated
 					// property this type instantiates: `orderedPropertiesToGenerate` builds an alias after the sibling
 					// that fulfills it, and validation rejects a tree that needs the alias first, so it always reads it.
 					if fulfillingProperty.propertyType.isConstant,
-					   !onlyIfAvailable || instantiatedLazilyInstantiatedInstanceProperties.contains(readProperty)
+					   !onlyIfAvailable || instantiatedLazilyInstantiatedInstanceProperties.contains(fulfillingProperty)
 					{
-						recordRead(of: readProperty, by: dependency, receivedLabel: fulfillingProperty.label)
+						recordRead(of: fulfillingProperty, by: dependency, receivedLabel: fulfillingProperty.label)
 					}
 				}
 			}
@@ -8328,14 +8260,14 @@ public actor DependencyTreeGenerator {
 	private struct ReceivableAlias {
 		let fulfillingProperty: Property
 		let onlyIfAvailable: Bool
-		/// The `onlyIfAvailable` aliases from which an `onlyIfAvailable` alias is created in turn, in order: the alias of
-		/// `fulfillingProperty` that the alias's assignment refers to, when it is `onlyIfAvailable` too – one its own
-		/// scope declares, or, when that scope declares no property of that name and type (or its non-optional form),
-		/// the one a receive of it resolves to there, declared by an enclosing scope – then the alias of that alias's
-		/// fulfilling property, and so on. An `onlyIfAvailable` alias is created only where the alias it renames is, so
-		/// a receive that requires this alias requires each of them. Empty for a required alias, whose declaring scope
-		/// requires its fulfilling property itself (`Scope.requiredReceivedProperties`), and for an alias of aliases
-		/// that fulfill one another, which are never created and which `aliasesFulfillingOneAnother` reports.
+		/// The `onlyIfAvailable` aliases from which an `onlyIfAvailable` alias is created in turn, in order: the alias
+		/// of `fulfillingProperty` that the alias's assignment refers to, when it is `onlyIfAvailable` too – the one a
+		/// receive of it resolves to where the alias is declared, declared by an enclosing scope, when the alias's own
+		/// scope declares no property of that name and type (or its non-optional form); no alias of a scope renames
+		/// another, since SafeDITool rejects that before it validates a tree that builds the scope – then the alias of
+		/// that alias's fulfilling property, and so on. An `onlyIfAvailable` alias is created only where the alias it
+		/// renames is, so a receive that requires this alias requires each of them. Empty for a required alias, whose
+		/// declaring scope requires its fulfilling property itself (`Scope.requiredReceivedProperties`).
 		let fulfillingOnlyIfAvailableAliases: [DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias]
 		/// Whether the property the alias is ultimately created from – the fulfilling property of the last of
 		/// `fulfillingOnlyIfAvailableAliases`, or `fulfillingProperty` when there are none – is provided where the
@@ -9136,43 +9068,25 @@ public actor DependencyTreeGenerator {
 			// An `onlyIfAvailable` alias of another `onlyIfAvailable` alias is created from it, so only where it is
 			// created: a receive that requires the first requires the second, and so on along any chain of them, as
 			// `ScopeGenerator`'s `requiredOnlyIfAvailableAliasProperties` and `requiredAliasFulfillingProperties` order
-			// them and `ScopeDeclarations.requirements(childRequiredReceived:childRequirements:)` finds them. The
-			// alias's assignment refers to the scope's own alias of its fulfilling property, or, when the scope declares
-			// no property of that name and type (or its non-optional form), to the alias a receive of it resolves to
+			// them and `ScopeDeclarations.requirements(childRequiredReceived:childRequirements:)` finds them. No alias of
+			// this scope renames another, so the alias's assignment refers, when the scope declares no property of that
+			// name and type (or its non-optional form), to the alias a receive of its fulfilling property resolves to
 			// here, whose chain its own scope already resolved.
 			if !declaredAliases.isEmpty {
-				let unchainedDeclaredAliases = declaredAliases
-				for (aliasProperty, alias) in unchainedDeclaredAliases where alias.onlyIfAvailable {
-					var fulfillingOnlyIfAvailableAliases = [DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias]()
-					var aliasPropertiesInChain: Set<Property> = [aliasProperty]
-					var lastAlias = alias
-					while let fulfillingAlias = unchainedDeclaredAliases[lastAlias.fulfillingProperty],
-					      fulfillingAlias.onlyIfAvailable,
-					      aliasPropertiesInChain.insert(lastAlias.fulfillingProperty).inserted
+				for (aliasProperty, alias) in declaredAliases where alias.onlyIfAvailable {
+					if !scope.providedProperties.containsPropertyOrItsUnwrappedForm(alias.fulfillingProperty),
+					   let enclosingAlias = receivableAliases[alias.fulfillingProperty],
+					   enclosingAlias.onlyIfAvailable
 					{
-						fulfillingOnlyIfAvailableAliases.append(.init(property: lastAlias.fulfillingProperty, fulfillingProperty: fulfillingAlias.fulfillingProperty))
-						lastAlias = fulfillingAlias
-					}
-					// A chain that comes back to an alias already on it is of aliases that fulfill one another, which are
-					// never created and which `aliasesFulfillingOneAnother` reports once this walk passes, so the alias
-					// is left as it is.
-					if !aliasPropertiesInChain.contains(lastAlias.fulfillingProperty) {
-						if !scope.providedProperties.containsPropertyOrItsUnwrappedForm(lastAlias.fulfillingProperty),
-						   let enclosingAlias = receivableAliases[lastAlias.fulfillingProperty],
-						   enclosingAlias.onlyIfAvailable
-						{
-							fulfillingOnlyIfAvailableAliases.append(.init(property: lastAlias.fulfillingProperty, fulfillingProperty: enclosingAlias.fulfillingProperty))
-							fulfillingOnlyIfAvailableAliases += enclosingAlias.fulfillingOnlyIfAvailableAliases
-							lastAlias = enclosingAlias
-						}
 						declaredAliases[aliasProperty] = ReceivableAlias(
 							fulfillingProperty: alias.fulfillingProperty,
 							onlyIfAvailable: true,
-							fulfillingOnlyIfAvailableAliases: fulfillingOnlyIfAvailableAliases,
-							isFulfillingPropertyAvailable: lastAlias.isFulfillingPropertyAvailable,
+							fulfillingOnlyIfAvailableAliases: [.init(property: alias.fulfillingProperty, fulfillingProperty: enclosingAlias.fulfillingProperty)]
+								+ enclosingAlias.fulfillingOnlyIfAvailableAliases,
+							isFulfillingPropertyAvailable: enclosingAlias.isFulfillingPropertyAvailable,
 							declaringType: alias.declaringType,
-							lastAliasDeclaringType: lastAlias.lastAliasDeclaringType,
-							lastAliasDeclaringInstantiationStack: lastAlias.lastAliasDeclaringInstantiationStack,
+							lastAliasDeclaringType: enclosingAlias.lastAliasDeclaringType,
+							lastAliasDeclaringInstantiationStack: enclosingAlias.lastAliasDeclaringInstantiationStack,
 						)
 					}
 				}
@@ -9663,6 +9577,94 @@ public actor DependencyTreeGenerator {
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
 			throw error
 		}
+	}
+
+	/// Rejects each of `instantiables` that declares a rename the `@Instantiable` macro rejects. See `RejectedRename`.
+	/// Each is reported, in source order. Callers pass the declarations a production root's or a mock root's tree
+	/// builds, before any validation walk of that tree reads their dependencies, so that nothing after this sees such a
+	/// rename: the renames of one declaration are each fulfilled by a property it receives or declares as no rename, or
+	/// retype the label they keep.
+	private static func validateRenamesAreSpelledAsTheMacroAccepts(in instantiables: some Sequence<Instantiable>) throws {
+		let errors = instantiables.compactMap { instantiable -> DependencyTreeGeneratorError? in
+			let rejectedRenames = rejectedRenames(declaredBy: instantiable)
+			return rejectedRenames.isEmpty ? nil : .rejectedRenames(rejectedRenames)
+		}
+		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
+			throw error
+		}
+	}
+
+	/// Rejects each declaration that the validation of the trees rooted at `rootScopes` reads and that declares a rename
+	/// the `@Instantiable` macro rejects, as `validateRenamesAreSpelledAsTheMacroAccepts(in:)` does: the declarations of
+	/// the scopes each tree instantiates, and of the scopes the received-dependency walk follows a required received
+	/// property to – the scope of that property's type – which the walk reads without a tree building them. A
+	/// declaration with a rejected rename is reported, and the received properties it requires are not followed.
+	private static func validateRenamesAreSpelledAsTheMacroAccepts(
+		inTreesRootedAt rootScopes: [Scope],
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+	) throws {
+		var errors = [DependencyTreeGeneratorError]()
+		var visitedScopes = Set<ObjectIdentifier>()
+		var scopesToVisit = rootScopes
+		while let scope = scopesToVisit.popLast() {
+			guard visitedScopes.insert(ObjectIdentifier(scope)).inserted else { continue }
+			for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
+				scopesToVisit.append(childScope)
+			}
+			let rejectedRenames = rejectedRenames(declaredBy: scope.instantiable)
+			guard rejectedRenames.isEmpty else {
+				errors.append(.rejectedRenames(rejectedRenames))
+				continue
+			}
+			for requiredReceivedProperty in scope.requiredReceivedProperties {
+				if let receivedPropertyScope = typeDescriptionToScopeMap[requiredReceivedProperty.property.asValidatedForDependencyCycles.typeDescription] {
+					scopesToVisit.append(receivedPropertyScope)
+				}
+			}
+		}
+		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
+			throw error
+		}
+	}
+
+	/// The renames `instantiable` declares that the `@Instantiable` macro rejects, in declaration order.
+	private static func rejectedRenames(declaredBy instantiable: Instantiable) -> [DependencyTreeGeneratorError.RejectedRename] {
+		var renameLabels = Set<String>()
+		for dependency in instantiable.dependencies where dependency.source.fulfillingProperty != nil {
+			renameLabels.insert(dependency.property.label)
+		}
+		guard !renameLabels.isEmpty else { return [] }
+		var rejectedRenames = [DependencyTreeGeneratorError.RejectedRename]()
+		for dependency in instantiable.dependencies {
+			let spelling: DependencyTreeGeneratorError.RejectedRename.Spelling
+			switch dependency.source {
+			case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
+				let property = dependency.property
+				if fulfillingProperty.label != property.label {
+					guard renameLabels.contains(fulfillingProperty.label) else { continue }
+					spelling = .renameOfRename(sourceLabel: fulfillingProperty.label, declaringType: instantiable.concreteInstantiable)
+				} else if onlyIfAvailable,
+				          !erasedToConcreteExistential,
+				          fulfillingProperty.typeDescription == property.typeDescription
+				          || fulfillingProperty.typeDescription == property.typeDescription.unwrapped
+				{
+					spelling = .renameOfItselfOnlyIfAvailable
+				} else if fulfillingProperty == property {
+					spelling = .renameOfItselfWithSameType
+				} else {
+					// A rename that keeps its label and changes its type retypes the property of that label above it.
+					continue
+				}
+			case .instantiated, .received, .forwarded:
+				continue
+			}
+			rejectedRenames.append(DependencyTreeGeneratorError.RejectedRename(
+				property: dependency.property,
+				spelling: spelling,
+				declarationLocation: dependency.declarationLocation,
+			))
+		}
+		return rejectedRenames
 	}
 
 	private func validateReachableTypeDescriptions() throws {

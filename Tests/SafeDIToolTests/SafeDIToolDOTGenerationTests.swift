@@ -1184,7 +1184,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				    @Received(fulfilledByDependencyNamed: "networkService", ofType: NetworkService.self)
 				    let renamedNetworkService: NetworkService
 
-				    @Received(fulfilledByDependencyNamed: "renamedNetworkService", ofType: NetworkService.self)
+				    @Received(fulfilledByDependencyNamed: "networkService", ofType: NetworkService.self)
 				    let renamedAgainNetworkService: NetworkService
 				}
 				""",
@@ -1216,7 +1216,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 		    RootViewController -- "networkService: NetworkService"
 		    RootViewController -- "authService: AuthService"
 		    "authService: AuthService" -- "renamedNetworkService: NetworkService <- networkService: NetworkService"
-		    "authService: AuthService" -- "renamedAgainNetworkService: NetworkService <- renamedNetworkService: NetworkService"
+		    "authService: AuthService" -- "renamedAgainNetworkService: NetworkService <- networkService: NetworkService"
 		}
 		""")
 	}

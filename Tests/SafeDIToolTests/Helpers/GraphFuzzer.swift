@@ -810,8 +810,6 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case uncreatedAliasDeclarationAbove
 	/// The seam takes a parameter under the alias's label: its own receive, or a pass-through another child receives.
 	case uncreatedAliasLabelParameter
-	/// The alias's declaring type also declares an `onlyIfAvailable` alias of the alias.
-	case uncreatedAliasAliasOfAlias
 	/// The caller holds the alias's label in the alias's unwrapped type.
 	case uncreatedAliasLabelHeldByCaller
 	/// The type that builds the alias's declaring type instantiates the alias's fulfilling property, the closest
@@ -829,17 +827,8 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case uncreatedAliasReaderInsideNestedSeam
 	/// The reader beneath `AliasMid`, a type between it and the alias's declaring type.
 	case uncreatedAliasDeeperReader
-	/// The alias's declaring type also declares a required alias of the alias.
-	case uncreatedAliasRequiredAliasOfAlias
 	/// The seam itself declares the alias.
 	case uncreatedAliasOnSeamItself
-	/// The alias keeps the label of its fulfilling property and only makes it optional (`aliasToken: AliasValue?` of
-	/// `aliasToken`), a redundant spelling of a plain receive, which is not an alias of itself.
-	case uncreatedAliasLabelKeepingOptionalAlias
-	/// The label-keeping alias declared where its fulfilling property is `AliasLeft`'s own sibling of `AliasDetail`,
-	/// generated after it because `AliasValue` receives `aliasDetail`: the sibling is the alias's own fulfilling
-	/// property, not a declaration of its label, so the alias is passed `nil`, as inline.
-	case uncreatedAliasFulfillingPropertyGeneratedAfterLabelKeepingAlias
 	/// The alias declared where its fulfilling property is still being built: `AliasDetail` is built inside
 	/// `aliasToken`'s builder.
 	case uncreatedAliasFulfillingPropertyBeingBuilt
@@ -851,8 +840,8 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case uncreatedAliasRequiredOptionalParameter
 	/// The alias spelled with the exact optional form of its fulfilling property, `ofType: AliasValue?.self`.
 	case uncreatedAliasExactFormAlias
-	/// A reader, alias-of-alias or same-property draw replaced by its accepted twin: the reader or the second alias
-	/// reads the fulfilling property, or the alias is made required.
+	/// A reader or same-property draw replaced by its accepted twin, or `AliasDetail`'s second alias: the reader or
+	/// the second alias reads the fulfilling property, or the alias is made required.
 	case uncreatedAliasAcceptedTwin
 	/// `addingAccessProofShapes`' seam, `ProofSeam`, declared `package` or `internal`.
 	case seamTypeNarrowerThanPublic
@@ -1026,9 +1015,7 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case uncreatedAliasLabelDeclaredBesideAndAbove
 	/// `AliasClient` receiving a lazily instantiated wrapper under the alias's label.
 	case uncreatedAliasClientReceivesWrapper
-	/// A seam that declares the alias also declaring an alias of it.
-	case uncreatedAliasAliasOfAliasOnSeam
-	/// `AliasReader` receiving `AliasDetail`'s alias of the alias.
+	/// `AliasReader` receiving `AliasDetail`'s second alias, of the alias's fulfilling property.
 	case uncreatedAliasReaderOfAliasOfAlias
 	/// `AliasReader`'s label-keeping alias of the alias, required.
 	case uncreatedAliasRequiredLabelKeepingAliasReader
@@ -1538,7 +1525,6 @@ enum GraphFuzzerGenerator {
 			seamRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.seamRandomSeedMask)
 			spellingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.spellingRandomSeedMask)
 			uncreatedAliasRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.uncreatedAliasRandomSeedMask)
-			labelKeepingAliasRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.labelKeepingAliasRandomSeedMask)
 			generatedNameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.generatedNameRandomSeedMask)
 			unbuildableDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencyRandomSeedMask)
 			unbuildableDependencyReceiverRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencyReceiverRandomSeedMask)
@@ -1833,10 +1819,6 @@ enum GraphFuzzerGenerator {
 			proofTypeAccess
 		}
 
-		/// Draws only whether `addingUncreatedAliasShapes`' alias keeps its fulfilling property's label, and then whether
-		/// that property is `AliasLeft`'s own sibling generated after `AliasDetail`: rolls added after the pass's other draws
-		/// were pinned, so that every other graph of the pass is drawn as before.
-		private var labelKeepingAliasRandom: GraphFuzzerRandomNumberGenerator
 		private let features: Set<GraphFuzzerGeneratorFeature>
 		/// How many types that are not `@Instantiable` `addingDependenciesMocksCannotBuild` instantiates.
 		private var unbuildableTypeCount = 0
@@ -2492,8 +2474,8 @@ enum GraphFuzzerGenerator {
 
 		/// Now and then adds a chain of aliases through an `onlyIfAvailable` alias to a type of the graph: a second
 		/// alias, required or `onlyIfAvailable`, of an `onlyIfAvailable` alias the type declares (or is given here, of a
-		/// property provided above it), on the same type or on a type it instantiates; now and then a third alias of
-		/// the second; and, usually, a receive of the last alias, required or `onlyIfAvailable`, on a type the alias's
+		/// property provided above it), on a type it instantiates; now and then a third alias of the second, on a type
+		/// that one instantiates; and, usually, a receive of the last alias, required or `onlyIfAvailable`, on a type the alias's
 		/// type instantiates. A receiver that requires the last alias needs every alias in the chain created, so the
 		/// first alias's fulfilling property must be built before the receiver, which the rest of the graph can make
 		/// impossible. `aliasProperty` never aliases an optional property, so no pass before this one draws such a
@@ -2514,6 +2496,11 @@ enum GraphFuzzerGenerator {
 				guard !candidates.isEmpty else { return nil }
 				return aliasChainRandom.element(of: candidates)
 			}
+			/// Whether the declaration at `index` renames `label`: a new declaration of `label` there would turn that rename
+			/// into a rename of another rename of one declaration, which the macro rejects.
+			func renamesProperty(labeled label: String, at index: Int) -> Bool {
+				declarations[index].properties.contains { $0.attribute.contains("fulfilledByDependencyNamed: \"\(label)\"") }
+			}
 			let hostTypeIndex = aliasChainRandom.integer(in: 0...(typeCount - 1))
 			guard let hostIndex = declarations.firstIndex(where: { $0.name == typeName(hostTypeIndex) }) else { return declarations }
 			// The first alias: an `onlyIfAvailable` alias the host declares, or one it is given of a property it can
@@ -2529,7 +2516,8 @@ enum GraphFuzzerGenerator {
 						&& !candidate.type.contains("(")
 						&& !candidate.type.contains("ErasedInstantiator<")
 						&& provided.allSatisfy { $0.label != candidate.label || $0.type == candidate.type }
-						&& !declarations[hostIndex].properties.contains { $0.label == candidate.label + "Alias" }
+						&& !declarations[hostIndex].properties.contains { $0.label == candidate.label || $0.label == candidate.label + "Alias" }
+						&& !renamesProperty(labeled: candidate.label + "Alias", at: hostIndex)
 				}
 				guard !candidates.isEmpty else { return declarations }
 				let source = aliasChainRandom.element(of: candidates)
@@ -2540,17 +2528,20 @@ enum GraphFuzzerGenerator {
 				)
 				declarations[hostIndex].properties.append(firstAlias)
 			}
-			// Then one alias of it, and now and then one of that, each on the type declaring what it renames or on a
-			// type that type instantiates.
+			// Then one alias of it, and now and then one of that, each on a type that the type declaring what it renames
+			// instantiates, which declares nothing under the label it renames: the macro rejects a rename of another rename
+			// of one declaration.
 			var aliasDeclarationIndex = hostIndex
 			var alias = firstAlias
 			for _ in 0..<(aliasChainRandom.percentChance(25) ? 2 : 1) {
-				let declaringIndex = aliasChainRandom.percentChance(50)
-					? aliasDeclarationIndex
-					: instantiatedDeclarationIndex(of: aliasDeclarationIndex) ?? aliasDeclarationIndex
+				guard let declaringIndex = instantiatedDeclarationIndex(of: aliasDeclarationIndex),
+				      !declarations[declaringIndex].properties.contains(where: { $0.label == alias.label })
+				else { break }
 				let isOnlyIfAvailable = aliasChainRandom.percentChance(50)
 				let label = alias.label + "Alias"
-				guard !declarations[declaringIndex].properties.contains(where: { $0.label == label }) else { break }
+				guard !declarations[declaringIndex].properties.contains(where: { $0.label == label }),
+				      !renamesProperty(labeled: label, at: declaringIndex)
+				else { break }
 				let nextAlias = PropertyDeclaration(
 					attribute: "@Received(fulfilledByDependencyNamed: \"\(alias.label)\", ofType: \(alias.type).self\(isOnlyIfAvailable ? ", onlyIfAvailable: true" : ""))",
 					label: label,
@@ -2581,9 +2572,9 @@ enum GraphFuzzerGenerator {
 		/// path to the chain – instantiates `x: X`, a constant of a type of the graph, and another type `B` without an
 		/// instantiator. `B`, or a type a few such steps beneath it that each step dominates, declares an
 		/// `onlyIfAvailable` alias of `x`, mostly spelled with its optional form (`ofType: X?.self`) and otherwise with
-		/// `X.self`; now and then one or two aliases of that alias follow, each required or `onlyIfAvailable`, on the
-		/// same type or on a type beneath it, so that the chain crosses scopes; usually a type beneath the last alias's
-		/// type receives the alias, mostly required, or a required alias of it on the same type does instead; and
+		/// `X.self`; now and then one or two aliases of that alias follow, each required or `onlyIfAvailable`, each on a
+		/// type beneath the one before, so that the chain crosses scopes; usually a type beneath the last alias's type
+		/// receives the alias, mostly required, or a required alias of it on a new type beneath does instead; and
 		/// usually `X` receives `b`. A type beneath another is a child it dominates – counting every root's properties,
 		/// including one the other roots lack – or, where it has none, which is most often, a new type that only it
 		/// instantiates (`Link0`, `Link1`, …), so that no receiver is rejected merely because another path from a root
@@ -2619,6 +2610,11 @@ enum GraphFuzzerGenerator {
 			}
 			func declaresProperty(labeled label: String, at index: Int) -> Bool {
 				declarations[index].properties.contains { $0.label == label }
+			}
+			/// Whether the declaration at `index` renames `label`: a new declaration of `label` there would turn that rename
+			/// into a rename of another rename of one declaration, which the macro rejects.
+			func renamesProperty(labeled label: String, at index: Int) -> Bool {
+				declarations[index].properties.contains { $0.attribute.contains("fulfilledByDependencyNamed: \"\(label)\"") }
 			}
 			// Which declaration is on every path to which, read from the declarations rather than from `dominators`:
 			// a root may declare a property the other roots do not, which is not among the graph's `edges`. No pass
@@ -2695,7 +2691,8 @@ enum GraphFuzzerGenerator {
 			}
 			let firstAliasLabel = siblings.x.label + "Alias"
 			guard !hostPath.contains(where: { declaresProperty(labeled: siblings.x.label, at: $0) }),
-			      !declaresProperty(labeled: firstAliasLabel, at: hostIndex)
+			      !declaresProperty(labeled: firstAliasLabel, at: hostIndex),
+			      !renamesProperty(labeled: firstAliasLabel, at: hostIndex)
 			else { return declarations }
 			let spellsOptionalForm = siblingAliasChainRandom.percentChance(60)
 			var alias = PropertyDeclaration(
@@ -2715,20 +2712,16 @@ enum GraphFuzzerGenerator {
 				linkCount += 1
 				return declarations.count - 1
 			}
-			// Then, now and then, one or two aliases of it, each on the type declaring what it renames or on a type beneath
-			// it: one of its dominated children or, where it has none, a new link, so that a chain crosses scopes as often
-			// as it stays on one.
+			// Then, now and then, one or two aliases of it, each on a type beneath the type declaring what it renames: one of
+			// its dominated children that declares nothing under the label it renames or, where it has none, a new link. The
+			// macro rejects a rename of another rename of one declaration, so every link of a chain crosses scopes.
 			for _ in 0..<siblingAliasChainRandom.integer(in: 0...2) {
-				let declaringIndex: Int
-				if siblingAliasChainRandom.percentChance(50) {
-					declaringIndex = aliasDeclarationIndex
-				} else {
-					let children = dominatedChildren(of: aliasDeclarationIndex, onlyWithoutInstantiator: false)
-					declaringIndex = children.isEmpty ? appendLink(beneath: aliasDeclarationIndex) : siblingAliasChainRandom.element(of: children)
-				}
+				let children = dominatedChildren(of: aliasDeclarationIndex, onlyWithoutInstantiator: false)
+					.filter { !declaresProperty(labeled: alias.label, at: $0) }
+				let declaringIndex = children.isEmpty ? appendLink(beneath: aliasDeclarationIndex) : siblingAliasChainRandom.element(of: children)
 				let isOnlyIfAvailable = siblingAliasChainRandom.percentChance(50)
 				let label = alias.label + "Alias"
-				guard !declaresProperty(labeled: label, at: declaringIndex) else { break }
+				guard !declaresProperty(labeled: label, at: declaringIndex), !renamesProperty(labeled: label, at: declaringIndex) else { break }
 				let nextAlias = PropertyDeclaration(
 					attribute: "@Received(fulfilledByDependencyNamed: \"\(alias.label)\", ofType: \(alias.type).self\(isOnlyIfAvailable ? ", onlyIfAvailable: true" : ""))",
 					label: label,
@@ -2739,8 +2732,8 @@ enum GraphFuzzerGenerator {
 				alias = nextAlias
 			}
 			// Usually, a receive of the last alias, mostly required, on one of its type's dominated children or, where it
-			// has none, half the time on a new link; otherwise a required alias of the last alias on the same type, which
-			// is created whether or not anything receives it.
+			// has none, half the time on a new link; otherwise a required alias of the last alias on a new link, which is
+			// created whether or not anything receives it.
 			if siblingAliasChainRandom.percentChance(85) {
 				let receivers = dominatedChildren(of: aliasDeclarationIndex, onlyWithoutInstantiator: false)
 					.filter { !declaresProperty(labeled: alias.label, at: $0) }
@@ -2758,8 +2751,8 @@ enum GraphFuzzerGenerator {
 						label: alias.label,
 						type: alias.type,
 					))
-				} else if alias.attribute.contains("onlyIfAvailable: true"), !declaresProperty(labeled: requiredAliasLabel, at: aliasDeclarationIndex) {
-					declarations[aliasDeclarationIndex].properties.append(PropertyDeclaration(
+				} else if alias.attribute.contains("onlyIfAvailable: true") {
+					declarations[appendLink(beneath: aliasDeclarationIndex)].properties.append(PropertyDeclaration(
 						attribute: "@Received(fulfilledByDependencyNamed: \"\(alias.label)\", ofType: \(alias.type).self)",
 						label: requiredAliasLabel,
 						type: alias.type,
@@ -3191,18 +3184,16 @@ enum GraphFuzzerGenerator {
 		/// whose unwrapped-form alias is not; one graph in ten declares the alias on the seam itself. Now and then a
 		/// reader beneath the alias reads its property: `AliasReader` receives it, only if available or required,
 		/// declares a label-keeping alias of it retyped to an existential, is built through a wrapper, is reached
-		/// through a nested seam `AliasPanel`, or sits beneath `AliasMid`; `AliasDetail` aliases the alias as
-		/// `aliasBearer`, only if available or required; a declaration of the alias's label is placed beside
+		/// through a nested seam `AliasPanel`, or sits beneath `AliasMid`; `AliasDetail` aliases the alias's fulfilling
+		/// property as `aliasBearer` (an alias of the alias there would rename another rename of one declaration, which
+		/// the macro rejects); a declaration of the alias's label is placed beside
 		/// `AliasDetail` (on `AliasLeft`), above it (on the seam), or as a parameter of the seam (its own receive, or
 		/// `AliasClient`'s pass-through) – the alias's own property, another type, or an instantiator; the caller holds
 		/// `aliasAuth` or `aliasToken`; `AliasLeft` instantiates `aliasToken` itself, which creates the alias on that
 		/// path while `AliasRight` beside it receives `aliasToken` only if available, or declares it so that the alias
 		/// is statically uncreated – `AliasDetail` built inside `aliasToken`'s builder, or `aliasToken` generated after
-		/// `AliasA`, which builds `AliasDetail`; beside an alias that keeps its label, `AliasLeft` now and then
-		/// instantiates `aliasToken` itself while `AliasValue` receives `aliasDetail`, so the alias's own fulfilling
-		/// property is the sibling generated after it. About half of the reader, alias-of-alias and same-property draws
-		/// produce the accepted twin instead – the reader or the second alias reads the fulfilling property, or the
-		/// alias is made required – so the rest of the graph stays accepted and value-checked. `uncreatedAliasRandom`
+		/// `AliasA`, which builds `AliasDetail`. About half of the reader and same-property draws produce the accepted
+		/// twin instead – the reader reads the fulfilling property, or the alias is made required – so the rest of the graph stays accepted and value-checked. `uncreatedAliasRandom`
 		/// draws only for this pass.
 		private mutating func addingUncreatedAliasShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.contains(.generateDependencyTree), uncreatedAliasRandom.percentChance(40) else { return declarations }
@@ -3248,20 +3239,13 @@ enum GraphFuzzerGenerator {
 			// parameter always creates, or the unwrapped form.
 			var aliasFulfillingType = uncreatedAliasRandom.percentChance(isRequiredOptionalParameter ? 60 : 20) ? "\(valueType)?" : valueType
 			let aliasOnSeam = uncreatedAliasRandom.percentChance(10)
-			// The alias keeping its fulfilling property's label and only making it optional – a redundant spelling of a
-			// plain receive, which is not an alias of itself – where its declaring type does not declare `aliasToken`
-			// itself; every reader then reads the alias, and nothing beside it is drawn under `aliasAuth`.
-			let aliasKeepsLabel = !(aliasOnSeam && (parameterKind == .ownRequiredOptionalReceive || parameterKind == .ownRequiredOptionalForwarded)) && labelKeepingAliasRandom.percentChance(10)
-			if aliasKeepsLabel {
-				aliasFulfillingType = valueType
-			}
 			// Whether the alias is required rather than `onlyIfAvailable`: the accepted twin of a declaration of its
 			// property beside its declaring type, drawn below.
 			var aliasIsRequired = false
 			func aliasDeclaration() -> PropertyDeclaration {
 				PropertyDeclaration(
 					attribute: "@Received(fulfilledByDependencyNamed: \"aliasToken\", ofType: \(aliasFulfillingType).self\(aliasIsRequired ? "" : ", onlyIfAvailable: true"))",
-					label: aliasKeepsLabel ? "aliasToken" : "aliasAuth",
+					label: "aliasAuth",
 					type: valueType + "?",
 				)
 			}
@@ -3299,9 +3283,7 @@ enum GraphFuzzerGenerator {
 					PropertyDeclaration(attribute: "@Instantiated", label: "aliasAuth", type: "\(instantiator)<\(valueType)>")
 				}
 			}
-			// Drawn whether or not the alias keeps its label, so that the graphs it does not touch are drawn as before.
-			let labelDeclarationDraw = uncreatedAliasRandom.integer(in: 0...19)
-			switch aliasKeepsLabel ? 19 : labelDeclarationDraw {
+			switch uncreatedAliasRandom.integer(in: 0...19) {
 			case 0...4:
 				// Beside the alias's declaring type: on the type that builds it, declared before it. Half the time the
 				// accepted twin: the alias made required, which is created wherever its declaring type is built, with
@@ -3357,16 +3339,11 @@ enum GraphFuzzerGenerator {
 					break
 				}
 			}
-			// A second alias of the alias on its declaring type, only if available or required; half the time the
-			// accepted twin, an alias of the fulfilling property instead.
+			// A second alias on the alias's declaring type, of the alias's fulfilling property: an alias of the alias there
+			// would be a rename of another rename of one declaration, which the macro rejects.
 			if !aliasOnSeam, uncreatedAliasRandom.percentChance(20) {
-				// Beside an alias that keeps its label, the label names the alias, so the second alias reads it under the
-				// alias's own type.
-				let readsAlias = uncreatedAliasRandom.percentChance(50) || aliasKeepsLabel
-				let readLabel = readsAlias && !aliasKeepsLabel ? "aliasAuth" : "aliasToken"
-				let bearerIsRequired = uncreatedAliasRandom.percentChance(30)
 				detail.properties.append(PropertyDeclaration(
-					attribute: "@Received(fulfilledByDependencyNamed: \"\(readLabel)\", ofType: \(readsAlias ? valueType + "?" : valueType).self\(bearerIsRequired && readsAlias ? "" : ", onlyIfAvailable: true"))",
+					attribute: "@Received(fulfilledByDependencyNamed: \"aliasToken\", ofType: \(valueType).self, onlyIfAvailable: true)",
 					label: "aliasBearer",
 					type: valueType + "?",
 				))
@@ -3374,7 +3351,7 @@ enum GraphFuzzerGenerator {
 			// A reader beneath the alias, in one of the shapes the walk decides; half the time the accepted twin, which
 			// reads the fulfilling property instead.
 			if uncreatedAliasRandom.percentChance(50) {
-				let readsAlias = uncreatedAliasRandom.percentChance(50) && !aliasKeepsLabel
+				let readsAlias = uncreatedAliasRandom.percentChance(50)
 				let readLabel = readsAlias ? "aliasAuth" : "aliasToken"
 				var reader = type("AliasReader")
 				switch uncreatedAliasRandom.integer(in: 0...9) {
@@ -3409,18 +3386,6 @@ enum GraphFuzzerGenerator {
 					detail = readerHolder
 				}
 			}
-			// Beside an alias that keeps its label and whose property is an only-if-available pass-through nothing else
-			// declares, `AliasLeft` now and then instantiates `aliasToken` itself while `AliasValue` receives `aliasDetail`:
-			// the alias's own fulfilling property is then the sibling generated after `AliasDetail`, which creates no alias
-			// and passes `AliasDetail` nothing but `nil`, inline and in the seam alike.
-			if aliasKeepsLabel, parameterKind == .onlyIfAvailablePassThrough, leftBuildsDetailDirectly,
-			   !left.properties.contains(where: { $0.label == "aliasToken" }),
-			   !declarations[0].properties.contains(where: { $0.type == valueType }),
-			   labelKeepingAliasRandom.percentChance(40)
-			{
-				left.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasToken", type: valueType))
-				value.properties.append(PropertyDeclaration(attribute: "@Received", label: "aliasDetail", type: detail.name))
-			}
 			if aliasOnSeam {
 				seam.properties.insert(aliasDeclaration(), at: 0)
 			} else {
@@ -3434,7 +3399,6 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let uncreatedAliasRandomSeedMask: UInt64 = 0x756E637265617465
-		private static let labelKeepingAliasRandomSeedMask: UInt64 = 0x6B6565704C61626C
 
 		// MARK: Access proof
 
@@ -4236,7 +4200,7 @@ enum GraphFuzzerGenerator {
 		/// type, or an `onlyIfAvailable` alias of the pass-through `aliasOther` – on `AliasLeft`, before `AliasDetail` or
 		/// after it, on `AliasMid` between the alias and its reader, or on the seam, which may also require it as
 		/// `AliasLabel` or as a lazily instantiated wrapper the root provides; `AliasClient` receiving a wrapper of the label;
-		/// on a seam that declares the alias itself, an alias of that alias; a reader of `AliasDetail`'s alias of its alias; a
+		/// a reader of `AliasDetail`'s second alias; a
 		/// reader's label-keeping alias made required, or a reader declaring an alias of `aliasToken` under the alias's own
 		/// label; `AliasValue` receiving `aliasDetail` only if available, so that an `AliasValue` beside `AliasDetail` is
 		/// generated after it; the seam's own only-if-available receive of `aliasToken`; and `AliasNeed`, a child of the seam
@@ -4264,9 +4228,7 @@ enum GraphFuzzerGenerator {
 			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
 			let lazyWrapper = sendability == .sendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
 			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
-			let seamAndDetail = declarations[seamIndex].properties + declarations[detailIndex].properties
 			let aliasIsOnSeam = declarations[seamIndex].properties.contains { $0.attribute.contains("fulfilledByDependencyNamed: \"aliasToken\"") }
-			let aliasKeepsLabel = seamAndDetail.contains { $0.label == "aliasToken" && $0.attribute.contains("fulfilledByDependencyNamed: \"aliasToken\"") }
 			let parameterIsRequiredOptional = (declarations[seamIndex].properties + declarations[leftIndex].properties).contains {
 				$0.label == "aliasToken" && ($0.attribute == "@Received" || $0.attribute == "@Forwarded")
 			}
@@ -4286,7 +4248,7 @@ enum GraphFuzzerGenerator {
 				return true
 			}
 			// A second declaration of the alias's label.
-			if !aliasKeepsLabel, aliasExtensionRandom.percentChance(80) {
+			if aliasExtensionRandom.percentChance(80) {
 				var hosts = [leftIndex]
 				if !aliasIsOnSeam {
 					hosts.append(seamIndex)
@@ -4329,13 +4291,9 @@ enum GraphFuzzerGenerator {
 				}
 			}
 			// `AliasClient` receiving a wrapper of the label, as a type beside the alias's declaring type.
-			if !aliasKeepsLabel, index("AliasClient") == nil, !receivesLabelFromOutside(), aliasExtensionRandom.percentChance(30) {
+			if index("AliasClient") == nil, !receivesLabelFromOutside(), aliasExtensionRandom.percentChance(30) {
 				declarations.append(TypeDeclaration(name: "\(prefix)AliasClient", instantiableArguments: [], properties: [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "aliasAuth", type: "\(lazyWrapper)<\(valueType)>?")], declaresHelperTypes: false, additionalConformances: conformances))
 				declarations[seamIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasClient", type: "\(prefix)AliasClient"))
-			}
-			// On a seam that declares the alias itself, an alias of that alias.
-			if aliasIsOnSeam, !aliasKeepsLabel, !declares("aliasBearer", at: seamIndex), aliasExtensionRandom.percentChance(60) {
-				declarations[seamIndex].properties.append(PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"aliasAuth\", ofType: \(valueType)?.self, onlyIfAvailable: true)", label: "aliasBearer", type: valueType + "?"))
 			}
 			if let readerIndex = index("AliasReader") {
 				let plainReceiveIndex = declarations[readerIndex].properties.firstIndex { ($0.label == "aliasAuth" || $0.label == "aliasToken") && !isAlias($0) }
@@ -4348,7 +4306,7 @@ enum GraphFuzzerGenerator {
 					// The reader's label-keeping alias made required.
 					let alias = declarations[readerIndex].properties[labelKeepingAliasIndex]
 					declarations[readerIndex].properties[labelKeepingAliasIndex] = PropertyDeclaration(attribute: alias.attribute.replacingOccurrences(of: ", onlyIfAvailable: true", with: ""), label: alias.label, type: alias.type)
-				} else if let plainReceiveIndex, !aliasKeepsLabel, !aliasIsOnSeam, !parameterIsRequiredOptional, declarations[readerIndex].properties[plainReceiveIndex].label == "aliasAuth", aliasExtensionRandom.percentChance(40) {
+				} else if let plainReceiveIndex, !aliasIsOnSeam, !parameterIsRequiredOptional, declarations[readerIndex].properties[plainReceiveIndex].label == "aliasAuth", aliasExtensionRandom.percentChance(40) {
 					// The reader declaring an alias of `aliasToken` under the alias's own label.
 					declarations[readerIndex].properties[plainReceiveIndex] = PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"aliasToken\", ofType: \(valueType).self, onlyIfAvailable: true)", label: "aliasAuth", type: valueType + "?")
 				}
@@ -5492,14 +5450,10 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			propertiesByType.keys.contains { $0.hasSuffix(suffix) }
 		}
 		let aliasProperties = (properties(ofTypeNamed: "AliasDetail") + properties(ofTypeNamed: "AliasSeam")).filter {
-			($0.label == "aliasAuth" || $0.label == "aliasToken") && aliasedLabel(of: $0.attribute) == "aliasToken"
-		}
-		let aliasKeepsLabel = aliasProperties.contains { $0.label == "aliasToken" }
-		if aliasKeepsLabel {
-			features.insert(.uncreatedAliasLabelKeepingOptionalAlias)
+			$0.label == "aliasAuth" && aliasedLabel(of: $0.attribute) == "aliasToken"
 		}
 		if !aliasProperties.isEmpty {
-			if properties(ofTypeNamed: "AliasSeam").contains(where: { ($0.label == "aliasAuth" || $0.label == "aliasToken") && aliasedLabel(of: $0.attribute) == "aliasToken" }) {
+			if properties(ofTypeNamed: "AliasSeam").contains(where: { $0.label == "aliasAuth" && aliasedLabel(of: $0.attribute) == "aliasToken" }) {
 				features.insert(.uncreatedAliasOnSeamItself)
 			}
 			if aliasProperties.contains(where: { $0.attribute.contains("AliasValue?.self") }) {
@@ -5510,10 +5464,6 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 		}
 		let readerProperties = properties(ofTypeNamed: "AliasReader")
-		// Beneath an alias the seam declares, `AliasLeft`'s own `aliasToken` is nearer to a reader `AliasDetail` builds.
-		let readerIsBeneathLeftsToken = properties(ofTypeNamed: "AliasSeam").contains { $0.label == "aliasToken" && aliasedLabel(of: $0.attribute) == "aliasToken" }
-			&& properties(ofTypeNamed: "AliasLeft").contains { $0.label == "aliasToken" && $0.attribute == "@Instantiated" }
-			&& !properties(ofTypeNamed: "AliasSeam").contains { ["aliasReader", "aliasReaderBuilder", "aliasPanel", "aliasMid"].contains($0.label) }
 		for property in readerProperties {
 			if property.label == "aliasAuth", aliasedLabel(of: property.attribute) == "aliasAuth" {
 				features.insert(.uncreatedAliasLabelKeepingAliasReader)
@@ -5521,12 +5471,6 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				features.insert(.uncreatedAliasRequiredReader)
 			} else if property.label == "aliasAuth" {
 				features.insert(.uncreatedAliasReader)
-			} else if aliasKeepsLabel {
-				// Beneath an alias that keeps its fulfilling property's label, a receive of that label reads the alias,
-				// where no declaration of the label is nearer; an alias of `aliasToken: AliasValue` is hidden by it.
-				if property.label == "aliasToken", aliasedLabel(of: property.attribute) == nil, !readerIsBeneathLeftsToken {
-					features.insert(property.attribute == "@Received" ? .uncreatedAliasRequiredReader : .uncreatedAliasReader)
-				}
 			} else if property.label == "aliasToken" || aliasedLabel(of: property.attribute) == "aliasToken" {
 				features.insert(.uncreatedAliasAcceptedTwin)
 			}
@@ -5542,14 +5486,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				features.insert(.uncreatedAliasDeeperReader)
 			}
 		}
-		for property in properties(ofTypeNamed: "AliasDetail") where property.label == "aliasBearer" {
-			if aliasedLabel(of: property.attribute) == "aliasToken", !aliasKeepsLabel {
-				features.insert(.uncreatedAliasAcceptedTwin)
-			} else if property.attribute.contains("onlyIfAvailable") {
-				features.insert(.uncreatedAliasAliasOfAlias)
-			} else {
-				features.insert(.uncreatedAliasRequiredAliasOfAlias)
-			}
+		if properties(ofTypeNamed: "AliasDetail").contains(where: { $0.label == "aliasBearer" }) {
+			features.insert(.uncreatedAliasAcceptedTwin)
 		}
 		for property in properties(ofTypeNamed: "AliasLeft") {
 			if property.label == "aliasToken", property.attribute == "@Instantiated" {
@@ -5557,8 +5495,6 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					features.insert(.uncreatedAliasFulfillingPropertyBeingBuilt)
 				} else if properties(ofTypeNamed: "AliasValue").contains(where: { $0.label == "aliasA" }) {
 					features.insert(.uncreatedAliasFulfillingPropertyGeneratedLater)
-				} else if aliasKeepsLabel, properties(ofTypeNamed: "AliasValue").contains(where: { $0.label == "aliasDetail" && $0.attribute == "@Received" }) {
-					features.insert(.uncreatedAliasFulfillingPropertyGeneratedAfterLabelKeepingAlias)
 				} else {
 					features.insert(.uncreatedAliasFulfillingPropertyPruned)
 				}
@@ -5625,9 +5561,6 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if properties(ofTypeNamed: "AliasClient").contains(where: { $0.label == "aliasAuth" && $0.type.contains("LazilyInstantiated<") }) {
 			features.insert(.uncreatedAliasClientReceivesWrapper)
-		}
-		if aliasSeamProperties.contains(where: { $0.label == "aliasBearer" }) {
-			features.insert(.uncreatedAliasAliasOfAliasOnSeam)
 		}
 		if readerProperties.contains(where: { $0.label == "aliasBearer" && !isAliasProperty($0) }) {
 			features.insert(.uncreatedAliasReaderOfAliasOfAlias)
@@ -6618,7 +6551,6 @@ struct GraphFuzzerFailure: Equatable {
 		/// A type's own declaration of an alias's label is not a declaration of the label the alias reads, so an
 		/// uncreated-alias error saying a type's alias reads an alias of that label the same type declares rejects an
 		/// alias as an alias of itself.
-		case uncreatedAliasReadsItself = "the tool rejects an alias as an alias of itself"
 		/// The differential value comparator describes other values for a probe of the seam build than for the same
 		/// probe of the inline build, beyond the documented divergences.
 		case seamBuildsOtherValuesThanInline = "the seam build constructs other values than the inline build"
@@ -7261,13 +7193,6 @@ struct GraphFuzzerToolRuns {
 				details: "With the seam:\n\(diagnostics)\nWithout it, the tool accepts the graph.",
 			)
 		}
-		if uncreatedAliasErrors.contains(where: GraphFuzzerOracle.isUncreatedAliasErrorOfAliasReadingItself) {
-			return GraphFuzzerFailure(
-				seed: fixture.seed,
-				kind: .uncreatedAliasReadsItself,
-				details: "With the seam:\n\(diagnostics)\nWithout it, the tool accepts the graph.",
-			)
-		}
 		// The exact-form alias of a required optional parameter is always created: the walk names an alias that may
 		// be uncreated, so an uncreated-alias error naming this one is an over-rejection. The static shapes, where
 		// the alias is uncreated whatever the parameter, are drawn only for the only-if-available pass-through.
@@ -7803,17 +7728,6 @@ enum GraphFuzzerOracle {
 			let inlineCount = inlineCounts[key] ?? 0
 			return seamCount > inlineCount ? "`\(key)` is passed `nil` \(seamCount) times with the seam and \(inlineCount) without it." : nil
 		}
-	}
-
-	/// Whether `error`, an uncreated-alias error, says a type aliases a property under the label of the uncreated
-	/// alias it reads, and that the reading type declares that alias itself – the message names another declaring
-	/// type only where it is not the reader. A type cannot declare two properties of one label, so that alias reads
-	/// itself, which an alias that keeps its fulfilling property's label does not.
-	static func isUncreatedAliasErrorOfAliasReadingItself(_ error: Substring) -> Bool {
-		let pattern = #"aliases `[^`]+` as `([^`]+)`, and `\1` is an `onlyIfAvailable` alias that is not created "#
-		guard let expression = try? NSRegularExpression(pattern: pattern) else { return false }
-		let text = String(error)
-		return expression.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
 	}
 
 	/// What each error of a seam's uncreated `onlyIfAvailable` alias says: a receive beneath it, an alias of it, or a
