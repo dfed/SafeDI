@@ -64,8 +64,6 @@ public enum FixableInstantiableError: DiagnosticError {
 	/// `generateMock: .public` on a declaration with a generic parameter clause, or on one declared inside the body of
 	/// `genericTypeName`, a type that has one.
 	case publicMockOnGenericType(typeName: String, genericTypeName: String?)
-	/// A default-valued non-dependency parameter is `@autoclosure`, which a generated mock cannot pass on.
-	case defaultValuedAutoclosureParameter(parameterLabel: String)
 	case mockOnlyWithIsRoot
 	/// A `mockOnly` declaration spells `mockAttributes`, which only a generated `mock()` reads: a `mockOnly`
 	/// declaration's hand-written mock is the type's mock, and none is generated from it.
@@ -224,8 +222,6 @@ public enum FixableInstantiableError: DiagnosticError {
 			} else {
 				"`generateMock: .public` cannot be used on the generic type `\(typeName)`: SafeDI cannot generate a public `mock()` for a type in a generic context. Use `generateMock: .internal` for a mock its own module calls, or write a public `mock()` by hand for other modules to call."
 			}
-		case let .defaultValuedAutoclosureParameter(parameterLabel):
-			"A default-valued `@autoclosure` parameter cannot be forwarded by a generated mock. Remove `@autoclosure` from `\(parameterLabel)`, or remove its default."
 		case .mockOnlyWithIsRoot:
 			"`mockOnly` types cannot be marked `isRoot`."
 		case .mockAttributesOnMockOnly:
@@ -316,7 +312,6 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .publicMockRequiresPublicType,
 			     .publicMockOnExtension,
 			     .publicMockOnGenericType,
-			     .defaultValuedAutoclosureParameter,
 			     .mockOnlyWithIsRoot,
 			     .generateDependencyTreeWithIsRoot,
 			     .generateDependencyTreeWithMockOnly,
@@ -410,8 +405,6 @@ public enum FixableInstantiableError: DiagnosticError {
 				}
 			case .publicMockOnExtension, .publicMockOnGenericType:
 				"Replace `.public` with `.internal`"
-			case let .defaultValuedAutoclosureParameter(parameterLabel):
-				"Remove `@autoclosure` from `\(parameterLabel)`"
 			case .mockOnlyWithIsRoot:
 				"Remove `isRoot: true`"
 			case .mockAttributesOnMockOnly:

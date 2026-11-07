@@ -1411,16 +1411,6 @@ public struct InstantiableMacro: MemberMacro {
 			// `_`-labeled non-dependency defaults are elided from the mock
 			// call site, so the default is evaluated in the callee's scope.
 			guard firstName != "_" else { continue }
-			// A generated mock takes the value as a parameter of its own and passes it on, which an
-			// `@autoclosure` parameter, evaluated where it is called, cannot take.
-			if let attributedType = AttributedTypeSyntax(parameter.type),
-			   attributedType.attributes.contains(where: { AttributeSyntax($0)?.attributeName.trimmedDescription == "autoclosure" })
-			{
-				context.diagnose(Diagnostic(
-					node: Syntax(parameter),
-					message: FixableInstantiableError.defaultValuedAutoclosureParameter(parameterLabel: innerName.text).diagnostic,
-				))
-			}
 			let finder = SelfReferenceFinder(viewMode: .sourceAccurate)
 			finder.walk(Syntax(defaultValue))
 			guard finder.containsSelfReference else { continue }

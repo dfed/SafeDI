@@ -612,6 +612,15 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// The type of the value an `@autoclosure` parameter of this type takes: the closure's return type (`Int` for
+	/// `@autoclosure () -> Int`, `@escaping` or not), or `nil` for a type that is not an `@autoclosure`.
+	public var autoclosureValueType: TypeDescription? {
+		guard case let .attributed(.closure(_, _, _, returnType), _, attributes) = self,
+		      attributes.contains("autoclosure")
+		else { return nil }
+		return returnType
+	}
+
 	/// Strips the `@escaping` attribute, if present. Returns `self` unchanged for non-attributed types.
 	/// Used when a type will appear in a position where `@escaping` is invalid (e.g., closure return types).
 	public var strippingEscaping: TypeDescription {

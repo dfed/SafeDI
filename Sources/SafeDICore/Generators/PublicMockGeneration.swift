@@ -195,9 +195,9 @@ extension ScopeGenerator {
 		// optional itself, which the member holds as it is, defaulting to what the declaration's default evaluates to.
 		// The struct is declared at the module's top level, where a type nested in the type is named qualified.
 		for defaultParameter in publicDefaultParameters(of: node, handWrittenMockDefaultParameters: handWrittenMockDefaultParameters) {
-			let valueType = defaultParameter.typeDescription
+			let valueType = defaultParameter.valueTypeDescription
 			let access = context.access(ofTypes: [valueType], admittedModules: admittedModules).level
-			if defaultParameter.typeDescription.isOptional {
+			if valueType.isOptional {
 				let isNilLiteral = defaultParameter.defaultExpression == "nil"
 				let provider = "\(concreteType.asSource).\(PublicMockContext.providerName(label: defaultParameter.label))()"
 				let forwarder = "\(context.forwarderName(of: concreteType, label: defaultParameter.label))()"
@@ -225,7 +225,7 @@ extension ScopeGenerator {
 
 		// The builder, which the type's own type and every type its arguments name keep from being wider. It takes each
 		// argument as the type's member declares it, named as the members above name their types.
-		let builderParameterTypes = node.callSiteArguments.map(\.typeDescription.asFunctionParameter)
+		let builderParameterTypes = node.builderParameterTypes
 		let builderAccess = context.access(ofTypes: builderParameterTypes + [concreteType], admittedModules: admittedModules).level
 		let builderType = "(\(sendableAnnotation)(\(builderParameterTypes.map(\.asSource).joined(separator: ", "))) -> \(concreteType.asSource))?"
 		members.append(PublicStructMember(
@@ -256,16 +256,17 @@ extension ScopeGenerator {
 
 	/// The default-valued parameters of `node`, each with the expression a public mock resolves it with: its type's
 	/// hand-written mock's default of the same label and type when the mock declares one, as the type's internal
-	/// configuration struct resolves it, whichever way the node is built.
+	/// configuration struct resolves it, whichever way the node is built. Each is in its public mock form
+	/// (`MockParameterNode.DefaultParameter.publicMockForm`).
 	static func publicDefaultParameters(
 		of node: MockParameterNode,
 		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
 	) -> [MockParameterNode.DefaultParameter] {
 		node.defaultParameters.map { defaultParameter in
-			guard let handWrittenDefault = handWrittenMockDefaultParameters.first(where: {
+			let handWrittenDefault = handWrittenMockDefaultParameters.first(where: {
 				$0.isDefault(forParameterLabeled: defaultParameter.label, ofType: defaultParameter.typeDescription)
-			}) else { return defaultParameter }
-			return handWrittenDefault
+			})
+			return (handWrittenDefault ?? defaultParameter).publicMockForm
 		}
 	}
 
@@ -386,18 +387,24 @@ extension ScopeGenerator {
 		var constructionArguments = [String]()
 		for argument in node.callSiteArguments {
 			let name = argument.innerLabel
+			// The value of an `@autoclosure` parameter, which the function takes as a closure, is evaluated here, once per
+			// construction, as in production.
+			var value = name
 			if !dependencyLabels.contains(argument.innerLabel), let defaultParameter = defaultParametersByLabel[argument.label] {
-				if defaultParameter.typeDescription.isOptional {
-					parameters.append("\(name.spelledAsArgumentLabel): \(defaultParameter.typeDescription.asSource)")
+				if defaultParameter.valueTypeDescription.isOptional {
+					parameters.append("\(name.spelledAsArgumentLabel): \(defaultParameter.valueTypeDescription.asSource)")
 				} else {
-					parameters.append("\(name.spelledAsArgumentLabel): \(TypeDescription.optional(defaultParameter.typeDescription).asSource)")
+					parameters.append("\(name.spelledAsArgumentLabel): \(TypeDescription.optional(defaultParameter.valueTypeDescription).asSource)")
 					resolutions.append("\(standardIndent)\(standardIndent)let \(name) = \(name) ?? (\(defaultParameter.defaultExpression))")
+				}
+				if defaultParameter.isAutoclosure {
+					value = "\(name)()"
 				}
 			} else {
 				parameters.append("\(name.spelledAsArgumentLabel): \(argument.typeDescription.asFunctionParameter.asSource)")
 			}
-			builderArguments.append(name)
-			constructionArguments.append(argument.label == "_" ? name : "\(argument.label.spelledAsArgumentLabel): \(name)")
+			builderArguments.append(value)
+			constructionArguments.append(argument.label == "_" ? value : "\(argument.label.spelledAsArgumentLabel): \(value)")
 		}
 		parameters.append("\(ReservedName.configurationBuilderPropertyName): \(builderType)")
 		let construction = if node.useMockInitializer {
@@ -409,11 +416,11 @@ extension ScopeGenerator {
 		}
 		let returnType = node.useMockInitializer ? node.instantiatedTypeDescription.asSource : concreteType.asSource
 		let builderName = ReservedName.configurationBuilderPropertyName
-		let optionalDefaultParameters = defaultParameters.filter { $0.typeDescription.isOptional && $0.defaultExpression != "nil" }
+		let optionalDefaultParameters = defaultParameters.filter { $0.valueTypeDescription.isOptional && $0.defaultExpression != "nil" }
 		var lines = [String]()
 		lines.append("extension \(concreteType.asSource) {")
 		for defaultParameter in optionalDefaultParameters {
-			lines.append("\(standardIndent)nonisolated static func \(PublicMockContext.providerName(label: defaultParameter.label))() -> \(defaultParameter.typeDescription.asSource) { \(defaultParameter.defaultExpression) }")
+			lines.append("\(standardIndent)nonisolated static func \(PublicMockContext.providerName(label: defaultParameter.label))() -> \(defaultParameter.valueTypeDescription.asSource) { \(defaultParameter.defaultExpression) }")
 		}
 		// The function mirrors the isolation the member it calls spells, so a caller that can call the member can call it.
 		let isolationPrefix = node.constructionIsolation.map { "\($0) " } ?? ""
@@ -425,7 +432,7 @@ extension ScopeGenerator {
 		// A public member's default names the provider through a module-level function, which a public declaration's
 		// default argument can name without naming the type, which may be narrower than `public`.
 		let optionalDefaultValueTypes = optionalDefaultParameters.map { defaultParameter in
-			(label: defaultParameter.label, valueType: defaultParameter.typeDescription)
+			(label: defaultParameter.label, valueType: defaultParameter.valueTypeDescription)
 		}
 		for (label, valueType) in optionalDefaultValueTypes where context.access(ofTypes: [valueType], admittedModules: admittedModules).level == .public {
 			lines.append("@usableFromInline nonisolated func \(context.forwarderName(of: concreteType, label: label))() -> \(valueType.asSource) { \(concreteType.asSource).\(PublicMockContext.providerName(label: label))() }")
@@ -520,8 +527,8 @@ extension ScopeGenerator {
 					"\(nodePath).\(argument.label)"
 				}
 				return storesDefaultsAsClosures ? "\(expression)()" : expression
-			} else if let defaultParameter = defaultParametersByLabel[argument.label],
-			          defaultParameter.typeDescription.isOptional,
+			} else if let defaultParameter = defaultParametersByLabel[argument.label]?.publicMockForm,
+			          defaultParameter.valueTypeDescription.isOptional,
 			          defaultParameter.defaultExpression != "nil"
 			{
 				// No configuration holds the default beneath a pruned edge, so the provider evaluates it.
@@ -834,6 +841,15 @@ extension ScopeGenerator {
 			if rootDefault.defaultExpression.hasPrefix("#") {
 				// A magic literal is evaluated where the parameter is declared, so the parameter keeps it.
 				leadingParameters.append(PublicMockParameter(name: rootDefault.label, type: type, typeSource: rootDefault.typeSource, defaultSource: rootDefault.defaultExpression, defaultKind: .expression, access: typeAccess, role: .constructionDefault))
+			} else if let valueType = type.autoclosureValueType {
+				// An `@autoclosure` parameter is taken as a closure that returns the value, which defaults to a closure
+				// that evaluates the default in this module, and the construction calls it (`generateReturnArgumentList`).
+				leadingParameters.append(optionalParameter(
+					named: rootDefault.label,
+					type: .closure(arguments: [], isAsync: false, doesThrow: false, returnType: valueType),
+					resolvedTo: "{ \(rootDefault.defaultExpression) }",
+					role: .constructionDefault,
+				))
 			} else if type.isOptional {
 				let isNilLiteral = rootDefault.defaultExpression == "nil"
 				let providerCall = isNilLiteral ? "nil" : provider(named: rootDefault.label, type: type, access: typeAccess, expression: rootDefault.defaultExpression)

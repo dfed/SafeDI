@@ -199,12 +199,6 @@ struct FixableInstantiableErrorTests {
 	}
 
 	@Test
-	func defaultValuedAutoclosureParameter_fixIt_mentionsRemovingAutoclosure() {
-		let error = FixableInstantiableError.defaultValuedAutoclosureParameter(parameterLabel: "flag")
-		#expect(error.fixIt.message == "Remove `@autoclosure` from `flag`")
-	}
-
-	@Test
 	func mockGenerationArgumentFixItMessage_fixItID_isMessage() {
 		let message = MockGenerationArgumentFixItMessage(replacement: ".internal")
 		#expect(message.message == "Replace `.public` with `.internal`")
