@@ -1142,7 +1142,7 @@ jobs:
           # `${{ inputs.command }}` directly into a bash `for` loop
           # and tacks ` && break` onto the same source line, so a
           # multi-line YAML command leaves `&& break` orphaned.
-          command: bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Sources/SafeDI:SafeDI //Sources/SafeDICore:SafeDICore //Sources/SafeDIMacros:SafeDIMacros //Sources/SafeDITool:SafeDITool
+          command: bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Sources/SafeDI:SafeDI //Sources/SafeDICore:SafeDICore //Sources/SafeDIMacros:SafeDIMacros //Sources/SafeDITool:SafeDITool //bazel:safedi
       - name: Build downstream example (mirrors BCR `bcr_test_module.build_example`)
         uses: ./.github/actions/retry
         with:
