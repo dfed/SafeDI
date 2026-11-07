@@ -734,6 +734,9 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 
 		Required parameters of `Engine.mock()` that no @Instantiable declaration removes:
 		  (none)
+
+		Defaulted parameters of `Engine.mock()` that no @Instantiable declaration removes:
+		  (none)
 		""")
 	}
 
