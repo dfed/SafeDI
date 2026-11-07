@@ -23,7 +23,7 @@
 /// has to pass. `SafeDITool query` reports it twice, over the declarations with every hand-written mock removed
 /// for what the type needs in production, and over every declaration for what its mock needs, so that a project
 /// can be assembled from exactly the modules one type needs. See
-/// `DependencyTreeGenerator.requirements(forTypeNamed:generatesMock:)`.
+/// `DependencyTreeGenerator.requirements(forTypeNamed:generatesMock:mockEmittingModule:)`.
 public struct TypeRequirements: Equatable, Sendable {
 	// MARK: Initialization
 
@@ -47,16 +47,16 @@ public struct TypeRequirements: Equatable, Sendable {
 	public let typeDescription: TypeDescription
 	/// The declarations that build the type and its dependencies, each once, in the order they are reached: the
 	/// type's own declarations, then those of every dependency built beside it, then the hand-written mocks that
-	/// default its `@Forwarded` parameters. Built from these declarations alone, the type takes no value but
-	/// `forwardedParameters` and `requiredParameters`.
+	/// default its `@Forwarded` parameters and its `requiredParameters`. Built from these declarations alone, the type
+	/// takes no value but `forwardedParameters` and `requiredParameters`.
 	public let declarations: [Declaration]
 	/// The received properties built by erasing a concrete type, because no `@Instantiable` declaration
 	/// fulfills the property's type. Each is built only where one of its declarations is visible.
 	public let erasures: [Erasure]
 	/// The `@Forwarded` dependencies of the type, which are parameters of `mock()` in this order.
 	public let forwardedParameters: [ForwardedParameter]
-	/// The values that no declaration anywhere provides, which a caller passes, in the order `mock()` declares
-	/// them as parameters.
+	/// The values that no declaration anywhere provides, which a caller passes unless the parameter has a default, in
+	/// the order `mock()` declares them as parameters.
 	public let requiredParameters: [RequiredParameter]
 
 	/// A declaration that builds the type or one of its dependencies.
@@ -133,9 +133,10 @@ public struct TypeRequirements: Equatable, Sendable {
 
 	/// A value no `@Instantiable` declaration provides, which `mock()` takes as a parameter.
 	public struct RequiredParameter: Equatable, Sendable {
-		public init(label: String, typeSource: String, reason: Reason) {
+		public init(label: String, typeSource: String, defaultExpression: String?, reason: Reason) {
 			self.label = label
 			self.typeSource = typeSource
+			self.defaultExpression = defaultExpression
 			self.reason = reason
 		}
 
@@ -143,6 +144,9 @@ public struct TypeRequirements: Equatable, Sendable {
 		public let label: String
 		/// The parameter's type as `mock()` spells it.
 		public let typeSource: String
+		/// The parameter's default: a call of the hand-written mock of the parameter's type that takes no arguments.
+		/// `nil` when the caller must pass the parameter.
+		public let defaultExpression: String?
 		public let reason: Reason
 
 		public enum Reason: Equatable, Sendable {

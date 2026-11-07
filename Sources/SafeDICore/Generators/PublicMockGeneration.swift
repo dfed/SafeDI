@@ -681,36 +681,20 @@ struct PublicMockPlan: Sendable {
 
 extension ScopeGenerator {
 	/// The plan of the public mock of `instantiable`, a mock root with `parameters`, named by `parameterNames`.
-	/// - Parameter forwardedParameterMockDefaults: The name of the hand-written mock that a forwarded parameter of its
-	///   type defaults to, by type (`MockScopes.forwardedParameterMockDefaults`).
 	static func publicMockPlan(
 		of instantiable: Instantiable,
 		parameters: MockRootParameters,
 		parameterNames: MockRootParameterNames,
-		forwardedParameterMockDefaults: [TypeDescription: String],
 		context: PublicMockContext,
 	) -> PublicMockPlan {
-		// The value an internal mock's forwarded parameter defaults to, which a public mock takes as `T? = nil`. Each
-		// label names one argument.
-		var constructionDefaults = [String: String]()
-		for argument in parameters.rootConstructionInitializer?.arguments ?? [] {
-			constructionDefaults[argument.innerLabel] = argument.defaultValueExpression
-		}
-		var forwardedDefaults = [String: (expression: String, isHandWrittenMock: Bool)]()
-		for dependency in parameters.forwardedDependencies {
-			if let defaultExpression = constructionDefaults[dependency.property.label] {
-				forwardedDefaults[dependency.property.label] = (defaultExpression, false)
-			} else if let mockMethodName = forwardedParameterMockDefaults[dependency.property.typeDescription] {
-				forwardedDefaults[dependency.property.label] = ("\(dependency.property.typeDescription.asSource).\(mockMethodName)()", true)
-			}
-		}
 		let treePropertyNodes = parameters.parameterTree.propertyNodes
 		var plan = publicMockPlan(
 			of: instantiable,
 			forwardedDependencies: parameters.forwardedDependencies,
-			forwardedDefaults: forwardedDefaults,
+			forwardedDefaults: parameters.forwardedParameterDefaults,
 			rootDefaultParameters: parameters.rootDefaultParameters,
 			flatReceivedParameters: zip(parameters.flatReceivedProperties, parameterNames.flatReceivedNames).map { (property: $0, name: $1) },
+			flatReceivedParameterMockDefaults: parameters.flatReceivedParameterMockDefaults,
 			flatUncoveredParameters: parameters.flatUncoveredParameters,
 			promotedNodes: publicMockPromotedNodes(of: instantiable, in: treePropertyNodes).map { node in
 				(node: node, name: disambiguatedLabel(for: node, labelMap: parameters.rootLabelMap))
@@ -775,17 +759,19 @@ extension ScopeGenerator {
 
 	/// The plan of a public mock of `instantiable` whose internal mock would take the given parameters.
 	/// - Parameters:
-	///   - forwardedDefaults: The default an internal mock gives each forwarded parameter, by label: the construction
-	///     initializer's default (`isHandWrittenMock` false) or the call of the forwarded type's hand-written mock.
+	///   - forwardedDefaults: The default an internal mock gives each forwarded parameter, by label.
+	///   - flatReceivedParameterMockDefaults: The hand-written mock an internal mock defaults each of
+	///     `flatReceivedParameters` to, which a public mock takes as `T? = nil` too.
 	///   - hasOverrides: Whether the mock has a `SafeDIOverrides`, which holds the mocked type's own optional-typed
 	///     defaults unless `mock()` is isolated to a global actor; otherwise each is a parameter defaulting to its
 	///     provider.
 	static func publicMockPlan(
 		of instantiable: Instantiable,
 		forwardedDependencies: [Dependency],
-		forwardedDefaults: [String: (expression: String, isHandWrittenMock: Bool)],
+		forwardedDefaults: [String: ForwardedParameterDefault],
 		rootDefaultParameters: [MockRootParameters.RootDefaultParameter],
 		flatReceivedParameters: [(property: Property, name: String)],
+		flatReceivedParameterMockDefaults: [Property: FlatParameterMockDefault],
 		flatUncoveredParameters: [MockRootParameters.UncoveredParameter],
 		promotedNodes: [(node: MockParameterNode, name: String)],
 		onlyIfAvailableOverrides: [OnlyIfAvailableOverride],
@@ -849,8 +835,8 @@ extension ScopeGenerator {
 		for dependency in forwardedDependencies {
 			let property = dependency.property
 			if let forwardedDefault = forwardedDefaults[property.label] {
-				if property.typeDescription.isOptional, !forwardedDefault.isHandWrittenMock {
-					let providerCall = provider(named: property.label, type: property.typeDescription, access: access(of: property.typeDescription, receivedAs: nil), expression: forwardedDefault.expression)
+				if property.typeDescription.isOptional, case let .constructionDefault(expression) = forwardedDefault {
+					let providerCall = provider(named: property.label, type: property.typeDescription, access: access(of: property.typeDescription, receivedAs: nil), expression: expression)
 					leadingParameters.append(PublicMockParameter(name: property.label, type: property.typeDescription, provenType: property.typeDescription, typeSource: property.typeDescription.asSource, defaultSource: providerCall, defaultKind: .provider, access: access(of: property.typeDescription, receivedAs: nil), role: .forwarded(property)))
 				} else {
 					leadingParameters.append(optionalParameter(named: property.label, type: property.typeDescription.strippingEscaping, provenType: property.typeDescription.strippingEscaping, resolvedTo: forwardedDefault.expression, role: .forwarded(property)))
@@ -898,6 +884,11 @@ extension ScopeGenerator {
 				// a `@Sendable` builder function captures is taken `@Sendable`, so a caller passes it up `@Sendable` too.
 				let builder = sendablePassedUpBuilders.contains(property) ? Property(label: property.label, typeDescription: .attributed(property.typeDescription, specifiers: [], attributes: ["Sendable"])) : property
 				leadingParameters.append(PublicMockParameter(name: name, type: builder.typeDescription, provenType: builder.typeDescription, typeSource: builder.typeDescription.asFunctionParameter.asSource, defaultSource: nil, defaultKind: .none, access: hole.tierAccess, accessCause: hole.accessCause, role: .received(builder, isRequired: true), hole: hole))
+			} else if let mockDefault = flatReceivedParameterMockDefaults[property] {
+				// The mock builds the dependency with the hand-written mock when passed `nil`, as an internal mock defaults it.
+				defaultResolutions.append("\(bodyIndent)let \(name) = \(name) ?? (\(mockDefault.expression))")
+				let optionalProperty = Property(label: property.label, typeDescription: .optional(property.typeDescription))
+				leadingParameters.append(PublicMockParameter(name: name, type: optionalProperty.typeDescription, provenType: optionalProperty.typeDescription, typeSource: optionalProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: optionalProperty.typeDescription, receivedAs: property.label), accessCause: cause(of: optionalProperty.typeDescription, receivedAs: property.label), role: .received(optionalProperty, isRequired: false), isBuiltWhenNil: true))
 			} else {
 				leadingParameters.append(PublicMockParameter(name: name, type: property.typeDescription, provenType: property.typeDescription, typeSource: property.typeDescription.asFunctionParameter.asSource, defaultSource: nil, defaultKind: .none, access: access(of: property.typeDescription, receivedAs: property.label), role: .received(property, isRequired: true)))
 			}
@@ -1259,9 +1250,9 @@ extension ScopeGenerator {
 	/// What keeps `instantiable`'s public mock from being generated, from the parameters this mock root's `mock()`
 	/// takes: a narrower enclosing type, and each required parameter narrower than `public`. A public mock's tiers are
 	/// otherwise always generated, so this decides whether one root can be generated, which the query reports too.
-	/// - Parameter forwardedTypesWithMockDefaults: The types whose hand-written mock a forwarded parameter of their type
-	///   defaults to (`MockScopes.forwardedParameterMockDefaults`), which the mock then takes as `T? = nil`.
-	func publicMockFindings(of instantiable: Instantiable, context: PublicMockContext, forwardedTypesWithMockDefaults: Set<TypeDescription>) async -> [PublicMockFinding] {
+	/// - Parameter mockDefaults: The hand-written mock a flat parameter of each type defaults to, which the mock then
+	///   takes as `T? = nil`.
+	func publicMockFindings(of instantiable: Instantiable, context: PublicMockContext, mockDefaults: [TypeDescription: FlatParameterMockDefault]) async -> [PublicMockFinding] {
 		// The type's own declaration, the types enclosing it in its file and, for a type declared inside an extension,
 		// the declarations of the type the extension extends that SafeDI records, outermost first, each with its own
 		// level. The macro requires the type itself to be `public` or `open`, or directly inside a `public extension`, but
@@ -1284,7 +1275,7 @@ extension ScopeGenerator {
 		if let narrowerEnclosingType {
 			return [PublicMockFinding.narrowerEnclosingType(of: instantiable, enclosingTypeName: narrowerEnclosingType.type.asSource, enclosingLevel: narrowerEnclosingType.level)]
 		}
-		let parameters = await mockRootParameters(instantiable: instantiable)
+		let parameters = await mockRootParameters(instantiable: instantiable, mockDefaults: mockDefaults)
 		let ownModules: Set<String?> = [context.moduleName, instantiable.moduleName]
 		let receiverModulesByLabel = Self.receiverModules(in: parameters.parameterTree, context: context)
 		let treeReceivers = Self.treeReceivers(in: parameters.parameterTree, mockedType: instantiable)
@@ -1307,15 +1298,13 @@ extension ScopeGenerator {
 				receivers: isForwarded ? [] : treeReceivers.filter { ($0.dependency.source.fulfillingProperty ?? $0.dependency.property).label == property.label },
 			))
 		}
-		let constructionDefaultLabels = Set((parameters.rootConstructionInitializer?.arguments ?? []).filter(\.hasDefaultValue).map(\.innerLabel))
-		for dependency in parameters.forwardedDependencies
-			where !constructionDefaultLabels.contains(dependency.property.label) && !forwardedTypesWithMockDefaults.contains(dependency.property.typeDescription)
-		{
+		// A parameter with a default is taken as `T? = nil`, which a tier that cannot take it passes.
+		for dependency in parameters.forwardedDependencies where parameters.forwardedParameterDefaults[dependency.property.label] == nil {
 			check(dependency.property, kind: .forwarded)
 		}
 		// A builder the tree passes up is checked as the hole's own builder is, below.
 		let passedUpHoles = parameters.parameterTree.passedUpHolesByBuilder
-		for property in parameters.flatReceivedProperties where passedUpHoles[property] == nil {
+		for property in parameters.flatReceivedProperties where passedUpHoles[property] == nil && parameters.flatReceivedParameterMockDefaults[property] == nil {
 			check(property, kind: .received)
 		}
 		for uncovered in parameters.flatUncoveredParameters {

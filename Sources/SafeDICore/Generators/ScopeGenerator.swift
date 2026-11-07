@@ -1903,13 +1903,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	struct MockContext {
 		/// The conditional compilation flag for wrapping mock output (e.g. "DEBUG").
 		let mockConditionalCompilation: String?
-		/// Maps types with hand-written mock methods to their mock method name (e.g. "mock" or a custom name).
-		/// Used to provide default values for forwarded dependencies whose type has a hand-written mock.
-		let forwardedParameterMockDefaults: [TypeDescription: String]
-		/// The comment that ends the line of a forwarded parameter whose default calls the hand-written mock in
-		/// `forwardedParameterMockDefaults`, by type, as `Scope.ConstructionComments.mockMethod` ends each line that
-		/// constructs a type with its hand-written mock. A type with no comment is not listed.
-		let forwardedParameterMockDefaultComments: [TypeDescription: String]
+		/// The hand-written mock a flat parameter of `mock()` of each type defaults to (see `FlatParameterMockDefault`).
+		let flatParameterMockDefaults: [TypeDescription: FlatParameterMockDefault]
 		/// Globally-computed feedback arc set (see
 		/// `DependencyTreeGenerator.computeCycleEdges`). Alphabetical-DFS
 		/// selection makes every root walking the same graph agree on which
@@ -3420,6 +3415,45 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	// MARK: Mock Root Code Generation
 
+	/// The hand-written mock a flat parameter of `mock()` – a `@Forwarded` property of the mocked type, or a received
+	/// dependency the mock cannot build – defaults to: the one the mock scope map builds a property of the parameter's
+	/// type with, when it takes no required argument and the module generating the mock can call it
+	/// (`DependencyTreeGenerator.flatParameterMockDefaults(in:emittingModule:)`).
+	struct FlatParameterMockDefault: Sendable {
+		/// The concrete type whose hand-written mock the default calls.
+		let concreteType: TypeDescription
+		/// The name of the hand-written mock: `customMockName`, or `mock`.
+		let methodName: String
+		/// The comment that ends the parameter's line, as `Scope.ConstructionComments.mockMethod` ends each line that
+		/// constructs a type with its hand-written mock, or `nil` for none.
+		let comment: String?
+		/// The file that declares the hand-written mock.
+		let mockFilePath: String?
+
+		/// The call of the hand-written mock that takes no argument.
+		var expression: String {
+			"\(concreteType.asSource).\(methodName)()"
+		}
+	}
+
+	/// The default value of a `@Forwarded` parameter of `mock()`.
+	enum ForwardedParameterDefault {
+		/// The default value of the parameter of the mocked type's construction with the forwarded property's label.
+		case constructionDefault(String)
+		/// The hand-written mock of the forwarded type.
+		case handWrittenMock(FlatParameterMockDefault)
+
+		/// The parameter's default expression.
+		var expression: String {
+			switch self {
+			case let .constructionDefault(expression):
+				expression
+			case let .handWrittenMock(mockDefault):
+				mockDefault.expression
+			}
+		}
+	}
+
 	/// The parameters a mock root's `mock()` takes, before the labels of flat parameters that collide are
 	/// named apart. `generateMockRootCode` emits them; `DependencyTreeGenerator.mockRequirements(forTypeNamed:)`
 	/// reports them.
@@ -3432,12 +3466,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let rootLabelMap: [String: [TypeDescription: String]]
 		/// The mocked type's `@Forwarded` dependencies, in the order they are parameters of `mock()`.
 		let forwardedDependencies: [Dependency]
+		/// The default of each of `forwardedDependencies` that has one, by label: the default `rootConstructionInitializer`
+		/// gives the parameter of its label, else the hand-written mock of its type.
+		let forwardedParameterDefaults: [String: ForwardedParameterDefault]
 		/// The initializer the mock constructs the mocked type with: its hand-written mock when it has one.
 		let rootConstructionInitializer: Initializer?
 		/// The non-dependency parameters of `rootConstructionInitializer` that have defaults.
 		let rootDefaultParameters: [RootDefaultParameter]
 		/// The received properties the mock cannot build, as the caller of `mock()` provides them: by value.
 		let flatReceivedProperties: [Property]
+		/// The hand-written mock each of `flatReceivedProperties` whose type has one defaults to.
+		let flatReceivedParameterMockDefaults: [Property: FlatParameterMockDefault]
 		/// The received properties every receiver receives only if available and nothing in the mock provides.
 		let onlyIfAvailableReceivedProperties: [Property]
 		/// The `@Instantiated` dependencies, of the mocked type and of the types in its tree, that no node builds.
@@ -3572,7 +3611,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// The parameters this scope's `mock()` takes as a mock root. See `MockRootParameters`.
-	func mockRootParameters(instantiable: Instantiable) async -> MockRootParameters {
+	/// - Parameter mockDefaults: The hand-written mock a flat parameter of each type defaults to.
+	func mockRootParameters(instantiable: Instantiable, mockDefaults: [TypeDescription: FlatParameterMockDefault]) async -> MockRootParameters {
 		// 1. Build the parameter tree.
 		let parameterTree = await rootMockParameterTree
 		// A public mock another module generated builds what its call does not pass, so `mock()` takes no parameter or
@@ -3624,6 +3664,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					typeDescription: argument.typeDescription.strippingEscaping,
 				))
 				parametersKeepingTheirLabels.append(Property(label: argument.label, typeDescription: argument.typeDescription))
+			}
+		}
+		// A forwarded parameter takes the default the construction gives the parameter of its label, else the hand-written
+		// mock its type has.
+		var constructionDefaults = [String: String]()
+		for argument in rootConstructionInitializer?.arguments ?? [] {
+			constructionDefaults[argument.innerLabel] = argument.defaultValueExpression
+		}
+		var forwardedParameterDefaults = [String: ForwardedParameterDefault]()
+		for dependency in forwardedDependencies {
+			if let constructionDefault = constructionDefaults[dependency.property.label] {
+				forwardedParameterDefaults[dependency.property.label] = .constructionDefault(constructionDefault)
+			} else if let mockDefault = mockDefaults[dependency.property.typeDescription] {
+				forwardedParameterDefaults[dependency.property.label] = .handWrittenMock(mockDefault)
 			}
 		}
 
@@ -3748,6 +3802,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				flatReceivedProperties.append(receivedProperty)
 			}
 		}
+		// A received dependency the mock cannot build defaults to the hand-written mock its type has, as a forwarded one does.
+		var flatReceivedParameterMockDefaults = [Property: FlatParameterMockDefault]()
+		for property in flatReceivedProperties {
+			flatReceivedParameterMockDefaults[property] = mockDefaults[property.typeDescription]
+		}
 
 		var uncoveredDependencies = UncoveredDependencies()
 		// Collect uncovered @Instantiated deps from the root type.
@@ -3820,9 +3879,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			parameterTree: parameterTree,
 			rootLabelMap: rootLabelMap,
 			forwardedDependencies: forwardedDependencies,
+			forwardedParameterDefaults: forwardedParameterDefaults,
 			rootConstructionInitializer: rootConstructionInitializer,
 			rootDefaultParameters: rootDefaultParameters,
 			flatReceivedProperties: flatReceivedProperties,
+			flatReceivedParameterMockDefaults: flatReceivedParameterMockDefaults,
 			onlyIfAvailableReceivedProperties: onlyIfAvailableReceivedProperties,
 			flatUncoveredParameters: flatUncoveredParameters,
 			lazilyInstantiatedReceivedProperties: lazilyInstantiatedReceivedProperties,
@@ -3860,10 +3921,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let publicMock = instantiable.generateMock == .public ? context.publicMockContext : nil
 
 		// 1. Build the parameter tree and identify the flat parameters.
-		let parameters = await mockRootParameters(instantiable: instantiable)
+		let parameters = await mockRootParameters(instantiable: instantiable, mockDefaults: context.flatParameterMockDefaults)
 		let parameterTree = parameters.parameterTree
 		let forwardedDependencies = parameters.forwardedDependencies
-		let rootConstructionInitializer = parameters.rootConstructionInitializer
 		let rootDefaultParameters = parameters.rootDefaultParameters
 		let treePropertyNodes = parameterTree.propertyNodes
 		let flatReceivedProperties = parameters.flatReceivedProperties
@@ -3984,7 +4044,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				of: instantiable,
 				parameters: parameters,
 				parameterNames: parameterNames,
-				forwardedParameterMockDefaults: context.forwardedParameterMockDefaults,
 				context: publicMock,
 			)
 		}
@@ -4072,39 +4131,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		// Build mock() signature.
-		// Build a lookup of default values from the construction initializer
-		// so forwarded deps with defaults on customMock preserve them.
-		let constructionDefaults: [String: String] = {
-			guard let rootConstructionInitializer else { return [:] }
-			var defaults = [String: String]()
-			for argument in rootConstructionInitializer.arguments {
-				if let defaultExpression = argument.defaultValueExpression {
-					defaults[argument.innerLabel] = defaultExpression
-				}
-			}
-			return defaults
-		}()
 		var mockParameters = [String]()
 		// The comment that ends the line of the parameter at each index, after its comma: a default that calls a
 		// hand-written mock ends with the comment that ends every line constructing a type with that mock.
 		var mockParameterComments = [Int: String]()
 		for dependency in forwardedDependencies {
 			let typeSource = dependency.property.typeDescription.asFunctionParameter.asSource
-			if let defaultExpression = constructionDefaults[dependency.property.label] {
+			switch parameters.forwardedParameterDefaults[dependency.property.label] {
+			case let .constructionDefault(defaultExpression):
 				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource) = \(defaultExpression)")
-			} else if let mockMethodName = context.forwardedParameterMockDefaults[dependency.property.typeDescription] {
-				let mockTypeName = dependency.property.typeDescription.asSource
-				mockParameterComments[mockParameters.count] = context.forwardedParameterMockDefaultComments[dependency.property.typeDescription]
-				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource) = \(mockTypeName).\(mockMethodName)()")
-			} else {
+			case let .handWrittenMock(mockDefault):
+				mockParameterComments[mockParameters.count] = mockDefault.comment
+				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource) = \(mockDefault.expression)")
+			case nil:
 				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource)")
 			}
 		}
 		for rootDefault in rootDefaultParameters {
 			mockParameters.append("\(bodyIndent)\(rootDefault.label): \(rootDefault.typeSource) = \(rootDefault.defaultExpression)")
 		}
-		for flatReceived in flatReceivedParameters {
-			mockParameters.append("\(bodyIndent)\(flatReceived.label): \(flatReceived.typeSource)")
+		for (property, flatReceived) in zip(flatReceivedProperties, flatReceivedParameters) {
+			if let mockDefault = parameters.flatReceivedParameterMockDefaults[property] {
+				mockParameterComments[mockParameters.count] = mockDefault.comment
+				mockParameters.append("\(bodyIndent)\(flatReceived.label): \(flatReceived.typeSource) = \(mockDefault.expression)")
+			} else {
+				mockParameters.append("\(bodyIndent)\(flatReceived.label): \(flatReceived.typeSource)")
+			}
 		}
 		for flatUncovered in flatUncoveredParameters {
 			if flatUncovered.isSendableAutoclosure {

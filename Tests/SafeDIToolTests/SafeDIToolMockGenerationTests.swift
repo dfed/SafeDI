@@ -13388,8 +13388,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_takesReceivedDependencyAsParameter_whenItsTypeHasForwardedPropertiesAndAHandWrittenMock() async throws {
-		// The hand-written mock still takes the forwarded `token`, which the mock does not have.
+	mutating func mock_defaultsReceivedDependencyParameterToHandWrittenMock_whenItsTypeHasForwardedPropertiesAndAHandWrittenMockThatTakesNothing() async throws {
+		// The mock cannot build `Session`, which only an `Instantiator` handed its forwarded `token` can build, so it takes
+		// it as a parameter, which defaults to the hand-written mock, since that mock takes no required argument.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -13428,7 +13429,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		#if DEBUG
 		extension Consumer {
 		    static func mock(
-		        session: Session
+		        session: Session = Session.preview()
 		    ) -> Consumer {
 		        return Consumer(session: session)
 		    }
