@@ -9008,10 +9008,10 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_createsAliasFromOptionalParameter_whenCallerHoldsOnlyOptionalFormOfFulfillingProperty() async throws {
-		// The first documented divergence: the caller's tree holds only `token: Token?`, so inline does not create
-		// `Detail`'s alias of `token: Token` and passes `nil`; the seam, which cannot tell that caller from one holding
-		// `token: Token`, binds the alias from its parameter, non-`nil` where the caller passes a value.
+	mutating func generate_bindsAliasFromOptionalFormOfFulfillingProperty_whenCallerHoldsOnlyThatForm() async throws {
+		// The caller's tree holds only `token: Token?`. `Detail`'s `onlyIfAvailable` alias of `token: Token` reads that
+		// optional form, inline as through the seam, which binds the alias from its parameter: both are non-`nil` where the
+		// caller's `token` is.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: Self.aliasOfOptionalParameterFixture(seam: true),
 			buildSwiftOutputDirectory: true,
@@ -9065,8 +9065,10 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        func __safeDI_featureBuilder(token: Token?) -> Feature {
 		            func __safeDI_screen() -> Screen {
 		                func __safeDI_detail() -> Detail {
-		                    // Did not create `authToken: Token?` because `token: Token` is unavailable.
-		                    return Detail(authToken: nil)
+		                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+		                    let authToken: Token? = token
+		                    #sourceLocation()
+		                    return Detail(authToken: authToken)
 		                }
 		                let detail: Detail = __safeDI_detail()
 		                return Screen(detail: detail)

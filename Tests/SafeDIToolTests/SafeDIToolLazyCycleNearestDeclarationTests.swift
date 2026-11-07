@@ -1830,18 +1830,21 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesParameterInPlaceOfUncreatedAlias_whenScopeAboveClosedOnFunctionInstantiatesLabel() async throws {
-		// `Root`'s `renamed` provides the alias's label above the function, so `Mid` creates no alias, as where the function
-		// takes no parameter, and `X`, `Mid` and the `A` built again are each handed `Root`'s `renamed` through the parameter.
+	mutating func generate_passesNearerAliasToFunctionBuiltAgain_whenScopeAboveClosedOnFunctionInstantiatesLabel() async throws {
+		// `Root`'s `renamed` is the nearest declaration of the alias's label above the function, but `Mid`'s alias is a nearer
+		// one, bound from `Mid`'s `x`, which is built first and passed `nil` for the alias it waits on. `Mid` and the `A` built
+		// again are handed `Mid`'s alias.
 		let fixture = Self.aliasOfParameterLabelFixture(rootDeclares: ["@Instantiated let renamed: X"])
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
 		extension Root {
 		    public convenience init() {
 		        let renamed = X(renamed: nil)
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
-		                // Did not create `renamed: X?` because `x: X` is unavailable.
-		                let x = X(renamed: renamed)
+		                let x = X(renamed: nil)
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		                let renamed: X? = x
+		                #sourceLocation()
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -1856,7 +1859,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(renamed: renamed, aBuilder: aBuilder)
 		    }
 		}
-		""", mock: """
+		""" }, mock: { fixtures in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -1879,7 +1882,10 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        let renamed = if let safeDIBuilder = safeDIOverrides.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
-		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(renamed) } else { X(renamed: renamed) }
+		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		                let renamed: X? = x
+		                #sourceLocation()
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -1895,13 +1901,14 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    }
 		}
 		#endif
-		""", buildsTheSameValuesAs: """
+		""" }, buildsTheSameValuesAs: """
 		extension Root {
 		    public convenience init() {
 		        let renamed = X(renamed: nil)
 		        func a(renamed: X?) -> A {
 		            A(renamed: renamed, midBuilder: Instantiator<Mid> {
-		                Mid(x: X(renamed: renamed), renamed: renamed, aBuilder: Instantiator<A> { a(renamed: renamed) })
+		                let x = X(renamed: nil)
+		                return Mid(x: x, renamed: x, aBuilder: Instantiator<A> { a(renamed: x) })
 		            })
 		        }
 		        self.init(renamed: renamed, aBuilder: Instantiator<A> { a(renamed: renamed) })
@@ -1912,9 +1919,9 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesRequiredParameterInPlaceOfUncreatedAlias_whenScopeAboveClosedOnFunctionAliasesLabel() async throws {
-		// `A` requires `renamed`, which `Root`'s alias provides above the function, so the parameter is required, and `Mid`
-		// creates no alias, as where the function takes no parameter.
+	mutating func generate_passesNearerAliasToRequiredParameter_whenScopeAboveClosedOnFunctionAliasesLabel() async throws {
+		// `A` requires `renamed`, which `Root`'s alias provides above the function, so the parameter is required. `Mid`'s
+		// alias is a nearer declaration of the label, bound from `Mid`'s `x`, and the `A` built again is handed it.
 		let fixture = Self.aliasOfParameterLabelFixture(
 			rootDeclares: ["@Instantiated let x0: X", #"@Received(fulfilledByDependencyNamed: "x0", ofType: X.self, onlyIfAvailable: true) let renamed: X?"#],
 			aReceives: "@Received let renamed: X?",
@@ -1928,8 +1935,10 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        #sourceLocation()
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
-		                // Did not create `renamed: X?` because `x: X` is unavailable.
-		                let x = X(renamed: renamed)
+		                let x = X(renamed: nil)
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		                let renamed: X? = x
+		                #sourceLocation()
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -1970,7 +1979,10 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        #sourceLocation()
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
-		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(renamed) } else { X(renamed: renamed) }
+		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		                let renamed: X? = x
+		                #sourceLocation()
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -1992,7 +2004,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        let x0 = X(renamed: nil)
 		        func a(renamed: X?) -> A {
 		            A(renamed: renamed, midBuilder: Instantiator<Mid> {
-		                Mid(x: X(renamed: renamed), renamed: renamed, aBuilder: Instantiator<A> { a(renamed: renamed) })
+		                let x = X(renamed: nil)
+		                return Mid(x: x, renamed: x, aBuilder: Instantiator<A> { a(renamed: x) })
 		            })
 		        }
 		        self.init(x0: x0, renamed: x0, aBuilder: Instantiator<A> { a(renamed: x0) })
@@ -3160,7 +3173,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            func __safeDI_midBuilder() -> Mid {
 		                func __safeDI_renamed() -> X {
 		                    func __safeDI_bBuilder(renamed: X?) -> B {
-		                        let leaf = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed.bBuilder.leaf { safeDIBuilder(nil) } else { Leaf(renamed: nil) }
+		                        let leaf = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed.bBuilder.leaf { safeDIBuilder(renamed) } else { Leaf(renamed: renamed) }
 		                        func __safeDI_cBuilder() -> C {
 		                            func __safeDI_source() -> X {
 		                                let bBuilder = Instantiator<B> {
@@ -3228,19 +3241,23 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		// `X` receives `renamed` through an `onlyIfAvailable` alias, `previous`, whose fulfilling property `renamed: X` is still
 		// being built around `X`, in every form the parameter provides: `X` is passed `nil`, as before.
 		let fixture = Self.typeBuiltAsParameterLabelFixture(xDeclares: [#"@Received(fulfilledByDependencyNamed: "renamed", ofType: X.self, onlyIfAvailable: true) let previous: X?"#])
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_renamed() -> X {
-		            // Did not create `previous: X?` because `renamed: X` is unavailable.
-		            return X(previous: nil)
+		            #sourceLocation(file: "\(fixtures["X.swift"])", line: 7)
+		            let previous: X? = nil
+		            #sourceLocation()
+		            return X(previous: previous)
 		        }
 		        let renamed: X = __safeDI_renamed()
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
 		                func __safeDI_renamed() -> X {
-		                    // Did not create `previous: X?` because `renamed: X` is unavailable.
-		                    return X(previous: nil)
+		                    #sourceLocation(file: "\(fixtures["X.swift"])", line: 7)
+		                    let previous: X? = nil
+		                    #sourceLocation()
+		                    return X(previous: previous)
 		                }
 		                let renamed: X = __safeDI_renamed()
 		                let aBuilder = Instantiator<A> {
@@ -3257,7 +3274,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(renamed: renamed, aBuilder: aBuilder)
 		    }
 		}
-		""", mock: """
+		""" }, mock: { fixtures in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -3277,10 +3294,22 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let renamed = if let safeDIBuilder = safeDIOverrides.renamed { safeDIBuilder(nil) } else { X(previous: nil) }
+		        func __safeDI_renamed() -> X {
+		            #sourceLocation(file: "\(fixtures["X.swift"])", line: 7)
+		            let previous: X? = nil
+		            #sourceLocation()
+		            return if let safeDIBuilder = safeDIOverrides.renamed { safeDIBuilder(previous) } else { X(previous: previous) }
+		        }
+		        let renamed: X = __safeDI_renamed()
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
-		                let renamed = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed { safeDIBuilder(nil) } else { X(previous: nil) }
+		                func __safeDI_renamed() -> X {
+		                    #sourceLocation(file: "\(fixtures["X.swift"])", line: 7)
+		                    let previous: X? = nil
+		                    #sourceLocation()
+		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed { safeDIBuilder(previous) } else { X(previous: previous) }
+		                }
+		                let renamed: X = __safeDI_renamed()
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -3296,7 +3325,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    }
 		}
 		#endif
-		""", buildsTheSameValuesAs: """
+		""" }, buildsTheSameValuesAs: """
 		extension Root {
 		    public convenience init() {
 		        func a(renamed: X?) -> A {
@@ -3314,12 +3343,10 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesNilToReceiverOfUncreatedAliasOfParameterLabel_whenTypeDeclaringAliasIsBuiltInsideLabel() async throws {
-		// Nothing above the function provides `renamed`. `Mid` builds `renamed` before `source`, and `X`'s `Leaf` declares an
-		// `onlyIfAvailable` alias `renamed` of `source`, which `Leaf2` receives only if available. Inside `renamed`, `source` is
-		// generated later, so the alias is not created, and the parameter does not stand in for it while `renamed` is still
-		// being built: `Leaf2` is passed `nil`, as where the function takes no parameter. The mock hands `Leaf2` whatever
-		// `renamed` names where `Leaf` is built, here the parameter, as it hands it the mock's override without the cycle.
+	mutating func generate_bindsAliasOfParameterLabelFromSiblingBuiltFirst_whenTypeDeclaringAliasIsBuiltInsideLabel() async throws {
+		// Nothing above the function provides `renamed`. `X`'s `Leaf` declares an `onlyIfAvailable` alias `renamed` of
+		// `source`, which `Leaf2` receives only if available and reads, as the nearest declaration of its label. So `Mid` builds
+		// `source` first, inside which the alias is `nil`, then `renamed`, inside which it is bound from `source`.
 		let fixture = Self.typeBuiltAsParameterLabelFixture(
 			rootDeclares: [],
 			midDeclares: ["@Instantiated let source: X", "@Instantiated let renamed: X"],
@@ -3332,31 +3359,35 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 				seamFixtureType(named: "Leaf2", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?"]),
 			],
 		)
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
-		                func __safeDI_renamed() -> X {
-		                    func __safeDI_leaf() -> Leaf {
-		                        // Did not create `renamed: X?` because `source: X` is unavailable.
-		                        let leaf2 = Leaf2(renamed: nil)
-		                        return Leaf(renamed: nil, leaf2: leaf2)
-		                    }
-		                    let leaf: Leaf = __safeDI_leaf()
-		                    return X(leaf: leaf)
-		                }
-		                let renamed: X = __safeDI_renamed()
 		                func __safeDI_source() -> X {
 		                    func __safeDI_leaf() -> Leaf {
-		                        // Did not create `renamed: X?` because `source: X` is unavailable.
+		                        #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
+		                        let renamed: X? = nil
+		                        #sourceLocation()
 		                        let leaf2 = Leaf2(renamed: renamed)
-		                        return Leaf(renamed: nil, leaf2: leaf2)
+		                        return Leaf(renamed: renamed, leaf2: leaf2)
 		                    }
 		                    let leaf: Leaf = __safeDI_leaf()
 		                    return X(leaf: leaf)
 		                }
 		                let source: X = __safeDI_source()
+		                func __safeDI_renamed() -> X {
+		                    func __safeDI_leaf() -> Leaf {
+		                        #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
+		                        let renamed: X? = source
+		                        #sourceLocation()
+		                        let leaf2 = Leaf2(renamed: renamed)
+		                        return Leaf(renamed: renamed, leaf2: leaf2)
+		                    }
+		                    let leaf: Leaf = __safeDI_leaf()
+		                    return X(leaf: leaf)
+		                }
+		                let renamed: X = __safeDI_renamed()
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -3371,7 +3402,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(aBuilder: aBuilder)
 		    }
 		}
-		""", mock: """
+		""" }, mock: { fixtures in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -3394,24 +3425,30 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        let renamed: X? = safeDIOverrides.renamed
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
-		                func __safeDI_renamed() -> X {
-		                    func __safeDI_leaf() -> Leaf {
-		                        let leaf2 = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed.leaf.leaf2 { safeDIBuilder(renamed) } else { Leaf2(renamed: renamed) }
-		                        return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed.leaf.safeDIBuilder { safeDIBuilder(nil, leaf2) } else { Leaf(renamed: nil, leaf2: leaf2) }
-		                    }
-		                    let leaf: Leaf = __safeDI_leaf()
-		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed.safeDIBuilder { safeDIBuilder(leaf) } else { X(leaf: leaf) }
-		                }
-		                let renamed: X = __safeDI_renamed()
 		                func __safeDI_source() -> X {
 		                    func __safeDI_leaf() -> Leaf {
+		                        #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
+		                        let renamed: X? = nil
+		                        #sourceLocation()
 		                        let leaf2 = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.source.leaf.leaf2 { safeDIBuilder(renamed) } else { Leaf2(renamed: renamed) }
-		                        return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.source.leaf.safeDIBuilder { safeDIBuilder(nil, leaf2) } else { Leaf(renamed: nil, leaf2: leaf2) }
+		                        return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.source.leaf.safeDIBuilder { safeDIBuilder(renamed, leaf2) } else { Leaf(renamed: renamed, leaf2: leaf2) }
 		                    }
 		                    let leaf: Leaf = __safeDI_leaf()
 		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.source.safeDIBuilder { safeDIBuilder(leaf) } else { X(leaf: leaf) }
 		                }
 		                let source: X = __safeDI_source()
+		                func __safeDI_renamed() -> X {
+		                    func __safeDI_leaf() -> Leaf {
+		                        #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
+		                        let renamed: X? = source
+		                        #sourceLocation()
+		                        let leaf2 = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed.leaf.leaf2 { safeDIBuilder(renamed) } else { Leaf2(renamed: renamed) }
+		                        return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed.leaf.safeDIBuilder { safeDIBuilder(renamed, leaf2) } else { Leaf(renamed: renamed, leaf2: leaf2) }
+		                    }
+		                    let leaf: Leaf = __safeDI_leaf()
+		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed.safeDIBuilder { safeDIBuilder(leaf) } else { X(leaf: leaf) }
+		                }
+		                let renamed: X = __safeDI_renamed()
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -3427,13 +3464,14 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    }
 		}
 		#endif
-		""", mockBuildsTheSameValues: false, buildsTheSameValuesAs: """
+		""" }, mockBuildsTheSameValues: false, buildsTheSameValuesAs: """
 		extension Root {
 		    public convenience init() {
 		        func a(renamed: X?) -> A {
 		            A(renamed: renamed, midBuilder: Instantiator<Mid> {
-		                let renamed = X(leaf: Leaf(renamed: nil, leaf2: Leaf2(renamed: nil)))
-		                return Mid(source: X(leaf: Leaf(renamed: nil, leaf2: Leaf2(renamed: renamed))), renamed: renamed, aBuilder: Instantiator<A> { a(renamed: renamed) })
+		                let source = X(leaf: Leaf(renamed: nil, leaf2: Leaf2(renamed: nil)))
+		                let renamed = X(leaf: Leaf(renamed: source, leaf2: Leaf2(renamed: source)))
+		                return Mid(source: source, renamed: renamed, aBuilder: Instantiator<A> { a(renamed: renamed) })
 		            })
 		        }
 		        self.init(aBuilder: Instantiator<A> { a(renamed: nil) })
@@ -3446,9 +3484,9 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesParameterToTypeBuiltAsParameterLabel_whenScopeBetweenDeclaresLabelInFormItReceives() async throws {
 		// `Mid` declares `renamed: X?`, an `onlyIfAvailable` alias of its `x`, and instantiates `Inner`, whose `renamed: X`
-		// receives `renamed` only if available. That `X` is passed `renamed` where the function takes no parameter: `Mid`
-		// declares the form it receives, which is not being built, and `renamed` names `Root`'s, since the alias is not
-		// created. The parameter passes it on, as before. The mock passes `X` `nil`, with or without the cycle (see
+		// receives `renamed` only if available. The alias is bound from `x`, built first, and is the nearest declaration of the
+		// label for `Mid`'s children and the `A` built again. The `X` built as `Inner`'s `renamed` is passed `nil`, since that
+		// `renamed` is still being built, as the mock passes it (see
 		// `generate_passesParameterToTypeBuiltAsParameterLabel_whenScopeAboveFunctionDeclaresLabelInFormItReceives`).
 		let fixture = Self.typeBuiltAsParameterLabelFixture(
 			midDeclares: [
@@ -3458,16 +3496,18 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			],
 			otherTypes: [seamFixtureType(named: "Inner", isFinalClass: true, declarations: ["@Instantiated let renamed: X"])],
 		)
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
 		extension Root {
 		    public convenience init() {
 		        let renamed = X(renamed: nil)
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
-		                // Did not create `renamed: X?` because `x: X` is unavailable.
-		                let x = X(renamed: renamed)
+		                let x = X(renamed: nil)
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
+		                let renamed: X? = x
+		                #sourceLocation()
 		                func __safeDI_inner() -> Inner {
-		                    let renamed = X(renamed: renamed)
+		                    let renamed = X(renamed: nil)
 		                    return Inner(renamed: renamed)
 		                }
 		                let inner: Inner = __safeDI_inner()
@@ -3485,7 +3525,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(renamed: renamed, aBuilder: aBuilder)
 		    }
 		}
-		""", mock: """
+		""" }, mock: { fixtures in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -3508,7 +3548,10 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        let renamed = if let safeDIBuilder = safeDIOverrides.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
-		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(renamed) } else { X(renamed: renamed) }
+		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
+		                let renamed: X? = x
+		                #sourceLocation()
 		                func __safeDI_inner() -> Inner {
 		                    let renamed = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.inner.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
 		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.inner.safeDIBuilder { safeDIBuilder(renamed) } else { Inner(renamed: renamed) }
@@ -3529,12 +3572,13 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    }
 		}
 		#endif
-		""", mockBuildsTheSameValues: false, buildsTheSameValuesAs: """
+		""" }, mockBuildsTheSameValues: false, buildsTheSameValuesAs: """
 		extension Root {
 		    public convenience init() {
 		        func a(renamed: X?) -> A {
 		            A(renamed: renamed, midBuilder: Instantiator<Mid> {
-		                Mid(x: X(renamed: renamed), renamed: renamed, inner: Inner(renamed: X(renamed: renamed)), aBuilder: Instantiator<A> { a(renamed: renamed) })
+		                let x = X(renamed: nil)
+		                return Mid(x: x, renamed: x, inner: Inner(renamed: X(renamed: nil)), aBuilder: Instantiator<A> { a(renamed: x) })
 		            })
 		        }
 		        let renamed = X(renamed: nil)
@@ -3631,7 +3675,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    ) -> Root {
 		        func __safeDI_renamed() -> X {
 		            func __safeDI_aBuilder(renamed: X?) -> A {
-		                let leaf = Leaf(renamed: nil)
+		                let leaf = Leaf(renamed: renamed)
 		                func __safeDI_midBuilder() -> Mid {
 		                    func __safeDI_source() -> X {
 		                        let aBuilder = Instantiator<A> {
@@ -3679,9 +3723,9 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesParameterToTypeBuiltAsParameterLabel_whenScopeAboveFunctionDeclaresLabelInFormItReceives() async throws {
-		// `Root` declares `renamed: X?`, an alias of its `other`, which `X`, built as `Mid`'s `renamed: X`, receives where the
-		// function takes no parameter: the parameter passes it on, as before. The mock passes `X` `nil`, with or without the
-		// cycle: its rule counts the `renamed: X` still being built as hiding every form of the label.
+		// `Root` declares `renamed: X?`, an alias of its `other`, but `X`, built as `Mid`'s `renamed: X`, receives `renamed`
+		// only if available inside that `renamed`, the nearest declaration of the label, still being built: it is passed
+		// `nil`, as the mock passes it, with or without the cycle.
 		let fixture = Self.typeBuiltAsParameterLabelFixture(rootDeclares: [
 			"@Instantiated let other: X",
 			#"@Received(fulfilledByDependencyNamed: "other", ofType: X.self, onlyIfAvailable: true) let renamed: X?"#,
@@ -3695,7 +3739,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        #sourceLocation()
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
-		                let renamed = X(renamed: renamed)
+		                let renamed = X(renamed: nil)
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -3757,7 +3801,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        func a(renamed: X?) -> A {
 		            A(renamed: renamed, midBuilder: Instantiator<Mid> {
-		                let x = X(renamed: renamed)
+		                let x = X(renamed: nil)
 		                return Mid(renamed: x, aBuilder: Instantiator<A> { a(renamed: x) })
 		            })
 		        }

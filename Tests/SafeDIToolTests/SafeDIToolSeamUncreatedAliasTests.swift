@@ -68,9 +68,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_screen() -> Screen {
 				            func __safeDI_left() -> Left {
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
-				                    let reader = Reader(authToken: nil)
-				                    return Detail(authToken: nil, reader: reader)
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+				                    let authToken: Secret? = nil
+				                    #sourceLocation()
+				                    let reader = Reader(authToken: authToken)
+				                    return Detail(authToken: authToken, reader: reader)
 				                }
 				                let detail: Detail = __safeDI_detail()
 				                return Left(detail: detail)
@@ -118,9 +120,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_screen() -> Screen {
 				            func __safeDI_left() -> Left {
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+				                    let authToken: Secret? = nil
+				                    #sourceLocation()
 				                    let reader = Reader(authToken: authToken)
-				                    return Detail(authToken: nil, reader: reader)
+				                    return Detail(authToken: authToken, reader: reader)
 				                }
 				                let detail: Detail = __safeDI_detail()
 				                return Left(detail: detail)
@@ -160,9 +164,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_left() -> Left {
 			                func __safeDI_detail() -> Detail {
-			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret? = nil
+			                    #sourceLocation()
 			                    let reader = Reader(authToken: authToken)
-			                    return Detail(authToken: nil, reader: reader)
+			                    return Detail(authToken: authToken, reader: reader)
 			                }
 			                let detail: Detail = __safeDI_detail()
 			                return Left(detail: detail)
@@ -200,7 +206,9 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        let authToken = Secret()
 			        func __safeDI_screen() -> Screen {
-			            // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Screen.swift"])", line: 8)
+			            let authToken: Secret? = nil
+			            #sourceLocation()
 			            let reader = Reader(authToken: authToken)
 			            return Screen(authToken: authToken, reader: reader)
 			        }
@@ -234,9 +242,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_leftBuilder(authToken: Secret) -> Left {
 			                func __safeDI_detail() -> Detail {
-			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret? = nil
+			                    #sourceLocation()
 			                    let reader = Reader(authToken: authToken)
-			                    return Detail(authToken: nil, reader: reader)
+			                    return Detail(authToken: authToken, reader: reader)
 			                }
 			                let detail: Detail = __safeDI_detail()
 			                return Left(authToken: authToken, detail: detail)
@@ -279,9 +289,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_left() -> Left {
 			                func __safeDI_detail() -> Detail {
-			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
-			                    let reader = Reader(authToken: nil)
-			                    return Detail(authToken: nil, reader: reader)
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret? = nil
+			                    #sourceLocation()
+			                    let reader = Reader(authToken: authToken)
+			                    return Detail(authToken: authToken, reader: reader)
 			                }
 			                let detail: Detail = __safeDI_detail()
 			                return Left(detail: detail)
@@ -319,9 +331,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_left() -> Left {
 			                func __safeDI_detail() -> Detail {
-			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
-			                    let reader = Reader(authToken: nil)
-			                    return Detail(authToken: nil, reader: reader)
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret? = nil
+			                    #sourceLocation()
+			                    let reader = Reader(authToken: authToken)
+			                    return Detail(authToken: authToken, reader: reader)
 			                }
 			                let detail: Detail = __safeDI_detail()
 			                return Left(detail: detail)
@@ -359,9 +373,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_authToken() -> Secret {
 			            func __safeDI_detailBuilder() -> Detail {
-			                // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
-			                let reader = Reader(authToken: nil)
-			                return Detail(authToken: nil, reader: reader)
+			                #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                let authToken: Secret? = nil
+			                #sourceLocation()
+			                let reader = Reader(authToken: authToken)
+			                return Detail(authToken: authToken, reader: reader)
 			            }
 			            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 			            return Secret(detailBuilder: detailBuilder)
@@ -370,9 +386,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_token() -> Secret {
 			                func __safeDI_detailBuilder() -> Detail {
-			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret? = nil
+			                    #sourceLocation()
 			                    let reader = Reader(authToken: authToken)
-			                    return Detail(authToken: nil, reader: reader)
+			                    return Detail(authToken: authToken, reader: reader)
 			                }
 			                let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 			                return Secret(detailBuilder: detailBuilder)
@@ -410,9 +428,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_a() -> A {
 			                func __safeDI_detail() -> Detail {
-			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret? = nil
+			                    #sourceLocation()
 			                    let reader = Reader(authToken: authToken)
-			                    return Detail(authToken: nil, reader: reader)
+			                    return Detail(authToken: authToken, reader: reader)
 			                }
 			                let detail: Detail = __safeDI_detail()
 			                return A(detail: detail)
@@ -449,9 +469,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_authToken() -> Secret {
 			            func __safeDI_detailBuilder() -> Detail {
-			                // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
-			                let reader = Reader(authToken: nil)
-			                return Detail(authToken: nil, reader: reader)
+			                #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                let authToken: Secret? = nil
+			                #sourceLocation()
+			                let reader = Reader(authToken: authToken)
+			                return Detail(authToken: authToken, reader: reader)
 			            }
 			            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 			            return Secret(detailBuilder: detailBuilder)
@@ -460,9 +482,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_token() -> Secret {
 			                func __safeDI_detailBuilder() -> Detail {
-			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
-			                    let reader = Reader(authToken: nil)
-			                    return Detail(authToken: nil, reader: reader)
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret? = nil
+			                    #sourceLocation()
+			                    let reader = Reader(authToken: authToken)
+			                    return Detail(authToken: authToken, reader: reader)
 			                }
 			                let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 			                return Secret(detailBuilder: detailBuilder)
@@ -513,7 +537,9 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_left() -> Left {
 			                func __safeDI_detail() -> Detail {
-			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret? = nil
+			                    #sourceLocation()
 			                    func __safeDI_reader() -> Reader {
 			                        #sourceLocation(file: "\(inlineOutput.fixtures["Reader.swift"])", line: 7)
 			                        let bearer: Secret? = authToken
@@ -521,7 +547,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			                        return Reader(bearer: bearer)
 			                    }
 			                    let reader: Reader = __safeDI_reader()
-			                    return Detail(authToken: nil, reader: reader)
+			                    return Detail(authToken: authToken, reader: reader)
 			                }
 			                let detail: Detail = __safeDI_detail()
 			                return Left(detail: detail)
@@ -561,7 +587,9 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				            func __safeDI_left() -> Left {
 				                let authToken = Secret()
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+				                    let authToken: Secret? = nil
+				                    #sourceLocation()
 				                    return Detail(authToken: authToken)
 				                }
 				                let detail: Detail = __safeDI_detail()
@@ -627,13 +655,17 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_other() -> Secret {
 			                func __safeDI_left() -> Left {
-			                    // Did not create `authToken: Secret?` because `other: Secret` is unavailable.
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Left.swift"])", line: 8)
+			                    let authToken: Secret? = nil
+			                    #sourceLocation()
 			                    func __safeDI_detail() -> Detail {
-			                        // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
-			                        return Detail(authToken: nil)
+			                        #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+			                        let authToken: Secret? = nil
+			                        #sourceLocation()
+			                        return Detail(authToken: authToken)
 			                    }
 			                    let detail: Detail = __safeDI_detail()
-			                    return Left(authToken: nil, detail: detail)
+			                    return Left(authToken: authToken, detail: detail)
 			                }
 			                let left: Left = __safeDI_left()
 			                return Secret(left: left)
@@ -675,7 +707,9 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			                    }
 			                    let authToken: Secret = __safeDI_authToken()
 			                    func __safeDI_detail() -> Detail {
-			                        // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                        #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+			                        let authToken: Secret? = nil
+			                        #sourceLocation()
 			                        return Detail(authToken: authToken)
 			                    }
 			                    let detail: Detail = __safeDI_detail()
@@ -716,7 +750,9 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			            func __safeDI_left() -> Left {
 			                let authToken: Auth = Secret()
 			                func __safeDI_detail() -> Detail {
-			                    // Did not create `authToken: (any Auth)?` because `token: Secret` is unavailable.
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+			                    let authToken: (any Auth)? = nil
+			                    #sourceLocation()
 			                    return Detail(authToken: authToken)
 			                }
 			                let detail: Detail = __safeDI_detail()
@@ -863,8 +899,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_screen() -> Screen {
 				            func __safeDI_left() -> Left {
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
-				                    return Detail(authToken: nil)
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+				                    let authToken: Secret? = nil
+				                    #sourceLocation()
+				                    return Detail(authToken: authToken)
 				                }
 				                let detail: Detail = __safeDI_detail()
 				                return Left(detail: detail)
@@ -911,8 +949,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_screen() -> Screen {
 				            func __safeDI_left() -> Left {
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
-				                    return Detail(authToken: nil)
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+				                    let authToken: Secret? = nil
+				                    #sourceLocation()
+				                    return Detail(authToken: authToken)
 				                }
 				                let detail: Detail = __safeDI_detail()
 				                return Left(detail: detail)
@@ -1064,8 +1104,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_screen() -> Screen {
 				            func __safeDI_leftBuilder(authToken: Secret) -> Left {
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
-				                    return Detail(authToken: nil)
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+				                    let authToken: Secret? = nil
+				                    #sourceLocation()
+				                    return Detail(authToken: authToken)
 				                }
 				                let detail: Detail = __safeDI_detail()
 				                return Left(authToken: authToken, detail: detail)
@@ -1116,8 +1158,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_screen() -> Screen {
 				            func __safeDI_leftBuilder(authToken: Secret) -> Left {
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
-				                    return Detail(authToken: nil)
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+				                    let authToken: Secret? = nil
+				                    #sourceLocation()
+				                    return Detail(authToken: authToken)
 				                }
 				                let detail: Detail = __safeDI_detail()
 				                return Left(authToken: authToken, detail: detail)
@@ -1417,14 +1461,16 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_left() -> Left {
 			                func __safeDI_detail() -> Detail {
-			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret? = nil
+			                    #sourceLocation()
 			                    func __safeDI_mid() -> Mid {
 			                        let authToken = Secret()
 			                        let reader = Reader(authToken: authToken)
 			                        return Mid(authToken: authToken, reader: reader)
 			                    }
 			                    let mid: Mid = __safeDI_mid()
-			                    return Detail(authToken: nil, mid: mid)
+			                    return Detail(authToken: authToken, mid: mid)
 			                }
 			                let detail: Detail = __safeDI_detail()
 			                return Left(detail: detail)
@@ -1811,9 +1857,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_authToken() -> Secret {
 			            func __safeDI_detailBuilder() -> Detail {
-			                // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+			                let authToken: Secret? = nil
+			                #sourceLocation()
 			                let reader = Reader(token: nil)
-			                return Detail(authToken: nil, reader: reader)
+			                return Detail(authToken: authToken, reader: reader)
 			            }
 			            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 			            return Secret(detailBuilder: detailBuilder)
@@ -1833,9 +1881,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_token() -> Secret {
 			            func __safeDI_detailBuilder() -> Detail {
-			                // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+			                let authToken: Secret? = nil
+			                #sourceLocation()
 			                let reader = Reader(token: nil)
-			                return Detail(authToken: nil, reader: reader)
+			                return Detail(authToken: authToken, reader: reader)
 			            }
 			            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 			            return Secret(detailBuilder: detailBuilder)
@@ -1856,9 +1906,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_authToken() -> Secret {
 			            func __safeDI_detailBuilder() -> Detail {
-			                // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                let authToken: Secret? = nil
+			                #sourceLocation()
 			                let reader = Reader(token: nil)
-			                return Detail(authToken: nil, reader: reader)
+			                return Detail(authToken: authToken, reader: reader)
 			            }
 			            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 			            return Secret(detailBuilder: detailBuilder)
@@ -1867,9 +1919,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_token() -> Secret {
 			                func __safeDI_detailBuilder() -> Detail {
-			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret? = nil
+			                    #sourceLocation()
 			                    let reader = Reader(token: nil)
-			                    return Detail(authToken: nil, reader: reader)
+			                    return Detail(authToken: authToken, reader: reader)
 			                }
 			                let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 			                return Secret(detailBuilder: detailBuilder)
@@ -1990,9 +2044,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Screen.swift"])", line: 8)
+				            let authToken: Secret? = nil
+				            #sourceLocation()
 				            let reader = Reader(token: nil)
-				            return Screen(authToken: nil, reader: reader)
+				            return Screen(authToken: authToken, reader: reader)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(screen: screen)
@@ -2024,7 +2080,9 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let authToken = Secret()
 				        func __safeDI_screen() -> Screen {
-				            // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Screen.swift"])", line: 8)
+				            let authToken: Secret? = nil
+				            #sourceLocation()
 				            let reader = Reader(token: nil)
 				            return Screen(authToken: authToken, reader: reader)
 				        }
@@ -2098,8 +2156,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			            func __safeDI_screen() -> Screen {
 			                func __safeDI_left() -> Left {
 			                    func __safeDI_detail() -> Detail {
-			                        // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
-			                        return Detail(authToken: nil)
+			                        #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+			                        let authToken: Secret? = token
+			                        #sourceLocation()
+			                        return Detail(authToken: authToken)
 			                    }
 			                    let detail: Detail = __safeDI_detail()
 			                    return Left(detail: detail)
@@ -2122,9 +2182,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesSeamItsOwnBinding_whereInlinePassesCallersEarlierSiblingForSeamsOwnAlias() async throws {
-		// The Manual's second divergence: inline, `Root`'s earlier `authToken` is passed to the seam in place of its own
-		// uncreated alias; the seam's own alias is bound from its parameter, which the caller passes `nil`.
+	mutating func generate_passesSeamItsOwnBinding_asInlinePassesItsOwnAliasForSeamsOwnAlias() async throws {
+		// What was the Manual's second divergence: inline, `Screen`'s own alias is the nearest declaration of `authToken`, so
+		// `Screen` is passed it, `nil`, rather than `Root`'s earlier `authToken`, as the seam binds it from its parameter,
+		// which the caller passes `nil`.
 		let fixture = Self.fixture(rootHolds: ["@Instantiated let authToken: Secret"], screen: [Self.alias, "@Instantiated let detail: Detail"], left: nil, detail: [], reader: nil)
 		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
@@ -2164,7 +2225,9 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        let authToken = Secret()
 			        func __safeDI_screen() -> Screen {
-			            // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Screen.swift"])", line: 8)
+			            let authToken: Secret? = nil
+			            #sourceLocation()
 			            let detail = Detail()
 			            return Screen(authToken: authToken, detail: detail)
 			        }
@@ -2198,9 +2261,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_left() -> Left {
 			                func __safeDI_detail() -> Detail {
-			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
-			                    let reader = Reader(authToken: nil)
-			                    return Detail(authToken: nil, reader: reader)
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret? = nil
+			                    #sourceLocation()
+			                    let reader = Reader(authToken: authToken)
+			                    return Detail(authToken: authToken, reader: reader)
 			                }
 			                let detail: Detail = __safeDI_detail()
 			                return Left(detail: detail)
@@ -2208,9 +2273,11 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			            let left: Left = __safeDI_left()
 			            func __safeDI_right() -> Right {
 			                func __safeDI_detail() -> Detail {
-			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
-			                    let reader = Reader(authToken: nil)
-			                    return Detail(authToken: nil, reader: reader)
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret? = nil
+			                    #sourceLocation()
+			                    let reader = Reader(authToken: authToken)
+			                    return Detail(authToken: authToken, reader: reader)
 			                }
 			                let detail: Detail = __safeDI_detail()
 			                return Right(detail: detail)
@@ -2680,8 +2747,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_screen() -> Screen {
 				            func __safeDI_left() -> Left {
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: (any Auth)?` because `token: any Auth` is unavailable.
-				                    return Detail(authToken: nil)
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+				                    let authToken: (any Auth)? = nil
+				                    #sourceLocation()
+				                    return Detail(authToken: authToken)
 				                }
 				                let detail: Detail = __safeDI_detail()
 				                return Left(detail: detail)
@@ -2702,8 +2771,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_screen() -> Screen {
 				            func __safeDI_left() -> Left {
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: (() -> Void)?` because `token: () -> Void` is unavailable.
-				                    return Detail(authToken: nil)
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+				                    let authToken: (() -> Void)? = nil
+				                    #sourceLocation()
+				                    return Detail(authToken: authToken)
 				                }
 				                let detail: Detail = __safeDI_detail()
 				                return Left(detail: detail)
@@ -2724,8 +2795,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_screen() -> Screen {
 				            func __safeDI_left() -> Left {
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: Feature.Secret?` because `token: Feature.Secret` is unavailable.
-				                    return Detail(authToken: nil)
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+				                    let authToken: Feature.Secret? = nil
+				                    #sourceLocation()
+				                    return Detail(authToken: authToken)
 				                }
 				                let detail: Detail = __safeDI_detail()
 				                return Left(detail: detail)
@@ -2746,8 +2819,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_screen() -> Screen {
 				            func __safeDI_left() -> Left {
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: SecretID?` because `token: SecretID` is unavailable.
-				                    return Detail(authToken: nil)
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+				                    let authToken: SecretID? = nil
+				                    #sourceLocation()
+				                    return Detail(authToken: authToken)
 				                }
 				                let detail: Detail = __safeDI_detail()
 				                return Left(detail: detail)
@@ -2768,8 +2843,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_screen() -> Screen {
 				            func __safeDI_left() -> Left {
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: Secret?` because `token: Secret?` is unavailable.
-				                    return Detail(authToken: nil)
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+				                    let authToken: Secret? = nil
+				                    #sourceLocation()
+				                    return Detail(authToken: authToken)
 				                }
 				                let detail: Detail = __safeDI_detail()
 				                return Left(detail: detail)
@@ -2790,8 +2867,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_screen() -> Screen {
 				            func __safeDI_left() -> Left {
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: (@Sendable () -> Void)?` because `token: @Sendable () -> Void` is unavailable.
-				                    return Detail(authToken: nil)
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+				                    let authToken: (@Sendable () -> Void)? = nil
+				                    #sourceLocation()
+				                    return Detail(authToken: authToken)
 				                }
 				                let detail: Detail = __safeDI_detail()
 				                return Left(detail: detail)
@@ -2812,8 +2891,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_screen() -> Screen {
 				            func __safeDI_left() -> Left {
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: (() -> Void)?` because `token: (() -> Void)?` is unavailable.
-				                    return Detail(authToken: nil)
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+				                    let authToken: (() -> Void)? = nil
+				                    #sourceLocation()
+				                    return Detail(authToken: authToken)
 				                }
 				                let detail: Detail = __safeDI_detail()
 				                return Left(detail: detail)
@@ -2834,8 +2915,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_screen() -> Screen {
 				            func __safeDI_left() -> Left {
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: (a: Int, b: String)?` because `token: (a: Int, b: String)` is unavailable.
-				                    return Detail(authToken: nil)
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+				                    let authToken: (a: Int, b: String)? = nil
+				                    #sourceLocation()
+				                    return Detail(authToken: authToken)
 				                }
 				                let detail: Detail = __safeDI_detail()
 				                return Left(detail: detail)
@@ -2856,8 +2939,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_screen() -> Screen {
 				            func __safeDI_left() -> Left {
 				                func __safeDI_detail() -> Detail {
-				                    // Did not create `authToken: Box<Secret>?` because `token: Box<Secret>` is unavailable.
-				                    return Detail(authToken: nil)
+				                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+				                    let authToken: Box<Secret>? = nil
+				                    #sourceLocation()
+				                    return Detail(authToken: authToken)
 				                }
 				                let detail: Detail = __safeDI_detail()
 				                return Left(detail: detail)
