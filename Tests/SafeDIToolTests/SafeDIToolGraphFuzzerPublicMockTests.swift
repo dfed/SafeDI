@@ -70,7 +70,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			return GraphFuzzerPublicMockDraw.outputFeatures(of: result.fixture, generatedFiles: generatedFiles).contains(.unreadTypeComment)
 		})
 		let drawFeatures = passingResults.reduce(into: Set<GraphFuzzerPublicMockDrawFeature>()) { $0.formUnion(GraphFuzzerPublicMockDraw.drawFeatures(of: $1.fixture)) }
-		#expect(Set([GraphFuzzerPublicMockDrawFeature.bothConsumerModules, .otherPackageConsumerModuleOnly, .samePackageConsumerModuleOnly, .sendableWrapperAboveLeaf, .mockConditionDiffers]).subtracting(drawFeatures).sorted() == [])
+		#expect(Set([GraphFuzzerPublicMockDrawFeature.bothConsumerModules, .otherPackageConsumerModuleOnly, .samePackageConsumerModuleOnly, .sendableWrapperAboveLeaf, .mockConditionDiffers, .seamDependency, .seamDependencyChain]).subtracting(drawFeatures).sorted() == [])
 		#expect(results.contains { !$0.isAccepted }, "Rejected none of \(SafeDIToolGraphFuzzerTests.publicMockSmokeSeeds.count) graphs")
 	}
 

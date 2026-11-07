@@ -26,11 +26,12 @@ projects, and each project's `Project.swift` calls two helpers:
 - `SafeDI.preCompileScript(module:dependencies:)` — returns a `TargetScript.pre`
   that runs `SafeDITool generate --combined-output` against one module at
   build time. Every call writes
-  `$(BUILT_PRODUCTS_DIR)/SafeDI/<module>.safedi` for downstream consumers and
+  `$(BUILT_PRODUCTS_DIR)/SafeDI/$(PRODUCT_MODULE_NAME).safedi` for downstream
+  consumers, named after the target's module, and
   `$(DERIVED_FILE_DIR)/SafeDIGenerated.swift` (every dependency-tree, mock,
   and mock-configuration body concatenated into one file). `dependencies:`
-  lists upstream modules whose `.safedi` to feed in via
-  `--dependent-module-info-file-path`.
+  lists the module names of the targets this target imports, whose `.safedi`
+  to feed in via `--dependent-module-info-file-path`.
 - `SafeDI.generatedSource` — the single `.generated(...)` source entry to add
   to a target's `sources`. Always at
   `$(DERIVED_FILE_DIR)/SafeDIGenerated.swift`.

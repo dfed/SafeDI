@@ -40,7 +40,7 @@ struct Dump: ParsableCommand {
 		encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 		// The header, not the file's extension, decides how to read it: a scan cache can be named anything.
 		let json = if BinaryFile.data(data, beginsAs: .moduleInfo) {
-			try encoder.encode(ModuleInfo(moduleInfoData: data))
+			try encoder.encode(ModuleInfoFile(moduleInfoData: data))
 		} else if BinaryFile.data(data, beginsAs: .scanCache) {
 			try encoder.encode(CachedScannedModuleInfo(scanCacheData: data))
 		} else {

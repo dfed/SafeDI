@@ -5543,6 +5543,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: false,
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "ExternalModule", "--package-name", "Example"],
 		)
 
 		// Second module: Service @Received ExternalEngine. The dependent module info
@@ -5568,7 +5569,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [externalModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [externalModuleOutput.writtenModuleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
@@ -10821,6 +10822,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "CrossModule", "--package-name", "Example"],
 		)
 
 		let output = try await executeSafeDIToolTest(
@@ -10850,7 +10852,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [crossModuleOutput.writtenModuleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
@@ -10918,6 +10920,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				// the conformance being in a parallel module.
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "DependentServiceOnly", "--package-name", "Example"],
 		)
 
 		let output = try await executeSafeDIToolTest(
@@ -10930,7 +10933,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [dependentServiceOnlyOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [dependentServiceOnlyOutput.writtenModuleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.

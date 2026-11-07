@@ -8,9 +8,10 @@ import ProjectDescription
 //   `SafeDI.preCompileScript(module:dependencies:)` — pre-compile script
 //   phase that runs `SafeDITool generate --combined-output` against
 //   one module. The producing target writes
-//   `$(BUILT_PRODUCTS_DIR)/SafeDI/<module>.safedi`; downstream targets
-//   list the producer's name in `dependencies:` and the helper passes
-//   that artifact through `--dependent-module-info-file-path`.
+//   `$(BUILT_PRODUCTS_DIR)/SafeDI/$(PRODUCT_MODULE_NAME).safedi`;
+//   downstream targets list the producer's module name in
+//   `dependencies:` and the helper passes that artifact through
+//   `--dependent-module-info-file-path`.
 //
 //   `SafeDI.generatedSource` — the single `.generated(...)` entry to
 //   add to a target's `sources`. Always at
@@ -44,13 +45,14 @@ public enum SafeDI {
 	/// --combined-output` against `module`'s sources at build time.
 	///
 	/// Every call writes
-	/// `$(BUILT_PRODUCTS_DIR)/SafeDI/<module>.safedi` (module info, for
-	/// downstream consumers) and
-	/// `$(DERIVED_FILE_DIR)/SafeDIGenerated.swift` (every generated
-	/// dependency-tree, mock, and mock-configuration body
-	/// concatenated into one file). Downstream targets pass the
-	/// producer's name in `dependencies:` so the helper feeds that
-	/// `.safedi` artifact through `--dependent-module-info-file-path`.
+	/// `$(BUILT_PRODUCTS_DIR)/SafeDI/$(PRODUCT_MODULE_NAME).safedi`
+	/// (module info, for downstream consumers, named after the target's
+	/// module) and `$(DERIVED_FILE_DIR)/SafeDIGenerated.swift` (every
+	/// generated dependency-tree, mock, and mock-configuration body
+	/// concatenated into one file), each only when its bytes change.
+	/// Downstream targets pass the producer's module name in
+	/// `dependencies:` so the helper feeds that `.safedi` artifact
+	/// through `--dependent-module-info-file-path`.
 	/// The script reports the conditions the target compiles with by
 	/// passing its `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and
 	/// `OTHER_SWIFT_FLAGS` build settings, so a `-D` flag counts too.
@@ -76,15 +78,16 @@ public enum SafeDI {
 	///
 	/// - Parameters:
 	///   - module: Directory under `$SRCROOT` holding the target's
-	///     Swift sources. Also the basename of the module-info
-	///     artifact this target emits, so it must be distinct across
-	///     the workspace's projects (name the sources directory after
-	///     the module, as the example's `Projects/Subproject/Subproject/`
-	///     does).
-	///   - dependencies: Modules whose `.safedi` artifacts this target
+	///     Swift sources. The module-info artifact is named after the
+	///     target's module (`PRODUCT_MODULE_NAME`), so two projects may
+	///     name their sources directories alike.
+	///   - dependencies: The module names (`PRODUCT_MODULE_NAME`) of the
+	///     targets this target imports, whose `.safedi` artifacts it
 	///     consumes. Each resolves to
-	///     `$(BUILT_PRODUCTS_DIR)/SafeDI/<name>.safedi`. Tuist target
-	///     dependencies must guarantee build order.
+	///     `$(BUILT_PRODUCTS_DIR)/SafeDI/<name>.safedi`, and carries what a
+	///     seam or public mock of a module it depends on needs, so a
+	///     module this target reaches only through another is not listed.
+	///     Tuist target dependencies must guarantee build order.
 	public static func preCompileScript(
 		module: String,
 		dependencies: [String] = [],
@@ -94,7 +97,7 @@ public enum SafeDI {
 			FileListGlob.glob("$(BUILT_PRODUCTS_DIR)/SafeDI/\($0).safedi")
 		}
 		let outputPaths: [Path] = [
-			"$(BUILT_PRODUCTS_DIR)/SafeDI/\(module).safedi",
+			"$(BUILT_PRODUCTS_DIR)/SafeDI/$(PRODUCT_MODULE_NAME).safedi",
 			"$(DERIVED_FILE_DIR)/SafeDIGenerated.swift",
 		]
 
@@ -127,6 +130,7 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 	: "${SRCROOT:?SRCROOT must be set}"
 	: "${DERIVED_FILE_DIR:?DERIVED_FILE_DIR must be set}"
 	: "${BUILT_PRODUCTS_DIR:?BUILT_PRODUCTS_DIR must be set}"
+	: "${PRODUCT_MODULE_NAME:?PRODUCT_MODULE_NAME must be set}"
 
 	scratch_dir="$DERIVED_FILE_DIR"
 	mkdir -p "$scratch_dir"
@@ -134,11 +138,10 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 	shared_safedi_dir="$BUILT_PRODUCTS_DIR/SafeDI"
 	mkdir -p "$shared_safedi_dir"
 
-	# `$module` may contain slashes (e.g. `Sources/App`). Create the
-	# parent dir of the module-info output explicitly so the write
-	# doesn't fail on the intermediate directories.
-	module_info_output="$shared_safedi_dir/$module.safedi"
-	mkdir -p "$(dirname "$module_info_output")"
+	# Named after the module, whatever the sources directory is named, so
+	# two projects whose targets name their directories alike write two
+	# files, and a dependent finds each by its module name.
+	module_info_output="$shared_safedi_dir/$PRODUCT_MODULE_NAME.safedi"
 
 	combined_output="$scratch_dir/SafeDIGenerated.swift"
 
@@ -227,7 +230,7 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 		for dependency_name in "$@"; do
 			dependency_path="$shared_safedi_dir/$dependency_name.safedi"
 			if [ ! -f "$dependency_path" ]; then
-				echo "error: SafeDI plugin: $dependency_name.safedi not found at $dependency_path. Add $dependency_name to this target's dependencies so it builds first, and check that it also runs SafeDI.preCompileScript." >&2
+				echo "error: SafeDI plugin: $dependency_name.safedi not found at $dependency_path. The dependencies of SafeDI.preCompileScript list module names (PRODUCT_MODULE_NAME). Add the target of module $dependency_name to this target's dependencies so it builds first, and check that it also runs SafeDI.preCompileScript." >&2
 				exit 1
 			fi
 			if [ "$first" = 1 ]; then
@@ -285,9 +288,7 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 	# Xcode passes the compiler as `-package-name`.
 	case "$generate_help" in
 		*--module-name*)
-			if [ -n "${PRODUCT_MODULE_NAME:-}" ]; then
-				set -- "$@" --module-name "$PRODUCT_MODULE_NAME"
-			fi
+			set -- "$@" --module-name "$PRODUCT_MODULE_NAME"
 			if [ -n "${SWIFT_PACKAGE_NAME:-}" ]; then
 				set -- "$@" --package-name "$SWIFT_PACKAGE_NAME"
 			fi
@@ -296,8 +297,8 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 
 	"$safedi_tool" generate "$@"
 
-	echo "SafeDI: wrote $module_info_output"
-	echo "SafeDI: wrote $combined_output"
+	echo "SafeDI: generated $module_info_output"
+	echo "SafeDI: generated $combined_output"
 	"""
 }
 

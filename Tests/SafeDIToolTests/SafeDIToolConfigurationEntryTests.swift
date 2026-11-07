@@ -620,6 +620,7 @@ struct SafeDIToolConfigurationEntryTests: ~Copyable {
 		let toolsModuleOutput = try await executeSafeDIToolTest(
 			swiftFileContent: [Self.debugToolContent(inClauseOf: "DEBUG")],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "ToolsModule", "--package-name", "Example"],
 		)
 
 		let output = try await executeSafeDIToolTest(
@@ -629,7 +630,7 @@ struct SafeDIToolConfigurationEntryTests: ~Copyable {
 				#SafeDIConfiguration(additionalMocksToGenerate: ["DebugTool"])
 				""",
 			],
-			dependentModuleInfoPaths: [toolsModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [toolsModuleOutput.writtenModuleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 		)

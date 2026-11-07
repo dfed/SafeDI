@@ -75,6 +75,7 @@ extension DeclModifierListSyntax {
 			.first
 		return AccessDeclaration(
 			level: accessModifier?.level ?? .internal,
+			spellsAccessModifier: accessModifier != nil,
 			modifierRange: accessModifier.flatMap { sourceLocationConverter?.sourceRange(of: $0.name) },
 			declarationStartLocation: sourceLocationConverter?.declarationLocation(for: (first?.name ?? keyword).positionAfterSkippingLeadingTrivia),
 			isExtension: keyword.tokenKind == .keyword(.extension),

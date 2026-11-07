@@ -4407,6 +4407,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		let tool = try Generate.parse([
 			swiftFileCSV.relativePath,
 			"--module-info-output", moduleInfoOutput.relativePath,
+			"--module-name", "Example",
 			"--swift-manifest", manifestFile.relativePath,
 		])
 		try await tool.run()
@@ -4441,7 +4442,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		try JSONEncoder().encode(manifest).write(to: manifestFile)
 		let moduleInfoOutput = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".safedi")
 
-		filesToDelete += [swiftFileCSV, swiftFile, manifestFile, moduleInfoOutput]
+		// A run that fails writes no module info.
+		filesToDelete += [swiftFileCSV, swiftFile, manifestFile]
 
 		await assertThrowsError(
 			"Found @Instantiable(isRoot: true) in '\(swiftFile.relativePath)', but this file is not listed in the manifest’s dependencyTreeGeneration. SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateDependencyTree: true` or `generateMock: true`, or a #SafeDIConfiguration in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it. A hand-written manifest must list the file, or the type must not be a root.",
@@ -4449,10 +4451,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			let tool = try Generate.parse([
 				swiftFileCSV.relativePath,
 				"--module-info-output", moduleInfoOutput.relativePath,
+				"--module-name", "Example",
 				"--swift-manifest", manifestFile.relativePath,
 			])
 			try await tool.run()
 		}
+		#expect(!FileManager.default.fileExists(atPath: moduleInfoOutput.path))
 	}
 
 	@Test

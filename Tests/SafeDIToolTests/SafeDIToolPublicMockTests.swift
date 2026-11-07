@@ -65,7 +65,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.moduleInfo.instantiables.map(\.generateMock) == [mockGeneration])
+		#expect(output.generateOutput.module.instantiables.map(\.generateMock) == [mockGeneration])
 		#expect(output.mockFiles.keys.sorted() == (mockGeneration.generatesMock ? ["Service+SafeDIMock.swift"] : []))
 	}
 
@@ -7078,56 +7078,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenPublicMocksTreeReachesDeclarationOfModuleInfoNamingNoModule() async {
-		// M8.25b: `Base`'s module info was written without `--module-name`, so the modules that call `Service`'s public
-		// mock compute its signature without `Logger`: for them `logger` is a hole, whose builder the mock would take,
-		// while `Core` builds it. The calls would not match the mock, so `Core` reports `Service`, naming `Logger`.
-		await assertThrowsMultiModuleError(inModule: "Core", diagnostics: { fixtures in
-			"\(fixtures["Core"]!["Service.swift"]):3:29: error: SafeDI cannot generate the public mock of `Service`: its signature depends on `Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call the mock, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the mock. Generate that module's module info with `--module-name`."
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(
-						name: "Base",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							@Instantiable
-							public final class Logger: Instantiable {
-							    public init() {}
-							}
-							""",
-						],
-						omitsModuleName: true,
-					),
-					ModuleFixture(
-						name: "Core",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import Base
-
-							@Instantiable(generateMock: .public)
-							public struct Service: Instantiable {
-							    public init(logger: Logger) {
-							        self.logger = logger
-							    }
-
-							    @Instantiated let logger: Logger
-							}
-							""",
-						],
-						dependencies: ["Base"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenPublicMocksTreeReachesAdditionalDirectoryDeclarationUnderTargetGraph() async {
 		// M8.26: the callers compute `Service`'s public mock from the files the plugin's target graph lists, which leave
 		// out the directory the configuration adds and its `Detail`, so for them `detail` is a hole.
@@ -7176,63 +7126,88 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenConsumerMustCallPublicMockOfModuleWhoseDependencysModuleInfoIsNotGiven() async {
-		// M8.26b: `App` cannot build `Service`'s tree, so it must call the public mock, whose signature is computed from
-		// what `Core` sees, which includes `Base`: `App`, given only `Core`'s module info, cannot compute it. Reported at
-		// `App`'s dependency on `Service`.
-		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"""
-			\(fixtures["App"]!["Screen.swift"]):9:5: error: SafeDI cannot generate a call to the public mock SafeDI generated for `Service` in module `Core`, which this module's mocks cannot build inline: that mock's signature depends on the declarations `Core` sees, which include module `Base`'s, and this run was not given `Base`'s SafeDI module info. Give this run every module `Core` depends on: add `Base`'s `Base_safedi` target to this target's `safedi_deps` under Bazel (the `deps` of a hand-written `safedi_compile`), add `Base` to the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(name: "Base", packageName: "pkg", swiftFileContent: [
-						"""
-						@Instantiable
-						public final class Analytics: Instantiable {
-						    public init() {}
-						}
-						""",
-					]),
-					ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
-						"""
-						import Base
+	mutating func generate_callsPublicMock_whenConsumerListsOnlyTheDeclaringModule() async throws {
+		// M8.26b, cell 5: `App` cannot build `Service`'s tree, so it calls the public mock, whose signature is computed from
+		// what `Core` sees, which includes `Base`: `Core`'s `.safedi` carries it, so `App`, which lists only `Core`, computes it.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Base", packageName: "pkg", swiftFileContent: [
+					"""
+					@Instantiable
+					public final class Analytics: Instantiable {
+					    public init() {}
+					}
+					""",
+				]),
+				ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
+					"""
+					import Base
 
-						@Instantiable
-						package final class Session: Instantiable {
-						    package init() {}
-						}
+					@Instantiable
+					package final class Session: Instantiable {
+					    package init() {}
+					}
 
-						@Instantiable(generateMock: .public)
-						public struct Service: Instantiable {
-						    package init(analytics: Analytics, session: Session) {
-						        self.analytics = analytics
-						        self.session = session
-						    }
-
-						    @Instantiated let analytics: Analytics
-						    @Instantiated let session: Session
-						}
-						""",
-					], dependencies: ["Base"]),
-					ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
-					import Core
-
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(service: Service) {
-					        self.service = service
+					@Instantiable(generateMock: .public)
+					public struct Service: Instantiable {
+					    package init(analytics: Analytics, session: Session) {
+					        self.analytics = analytics
+					        self.session = session
 					    }
 
-					    @Instantiated let service: Service
+					    @Instantiated let analytics: Analytics
+					    @Instantiated let session: Session
 					}
-					"""], dependencies: ["Core"]),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
+					""",
+				], dependencies: ["Base"]),
+				ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
+				import Core
+
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(service: Service) {
+				        self.service = service
+				    }
+
+				    @Instantiated let service: Service
+				}
+				"""], dependencies: ["Core"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Base)
+		import Base
+		#endif
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            service: Service.SafeDIOverrides = .init()
+		        ) {
+		            self.service = service
+		        }
+
+		        let service: Service.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        _ = Service.__safeDI_Service_mock_51799E6AA5E7B634.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Service", declaringModule: "Core"))
+		        let service = Service.mock(safeDIOverrides: safeDIOverrides.service)
+		        return Screen(service: service)
+		    }
 		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -9091,25 +9066,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": header,
 		])
 		try expectEveryModuleCompiled(output)
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorNamingView_whenModuleInfoOfTypeWithPublicMockNamesNoModule() async {
-		// M8.25: `Core`'s module info names no module, so `Service`'s public mock cannot be called from `App`.
-		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"""
-			\(fixtures["Core"]!["Service.swift"]):4:1: error: `Service` has a public `mock()`, but it cannot be called from a module whose module info names no module, and `TokenCache` is `internal`. Generate the module info of the module that declares `Service` with `--module-name`.
-			\(fixtures["Core"]!["Service.swift"]):5:5: error: `Service` has a public `mock()`, but it cannot be called from a module whose module info names no module, and `TokenCache`’s initializer is `internal`. Generate the module info of the module that declares `Service` with `--module-name`.
-			\(fixtures["Core"]!["Service.swift"]):10:5: error: `Service` has a public `mock()`, but it cannot be called from a module whose module info names no module, and `Service`’s initializer is `internal`. Generate the module info of the module that declares `Service` with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: Self.unknownModuleModules(omitsCoreModuleName: true),
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
 	}
 
 	@Test

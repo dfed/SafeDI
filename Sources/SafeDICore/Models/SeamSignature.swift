@@ -671,9 +671,8 @@ public struct SeamCall: Sendable {
 public struct SeamResolution: Sendable {
 	/// A seam declared in another module, which that module's run of `generate` generated the initializer of.
 	public struct ForeignSeam: Sendable {
-		public init(declaringModule: ModuleIdentity, missingDependencyModuleName: String? = nil, visibleInstantiables: [TypeDescription: Instantiable], visiblePlainTypeDeclarations: [PlainTypeDeclaration], callComment: SeamCallComment, declaringModuleMockCondition: MockCondition? = nil) {
+		public init(declaringModule: ModuleIdentity, visibleInstantiables: [TypeDescription: Instantiable], visiblePlainTypeDeclarations: [PlainTypeDeclaration], callComment: SeamCallComment, declaringModuleMockCondition: MockCondition? = nil) {
 			self.declaringModule = declaringModule
-			self.missingDependencyModuleName = missingDependencyModuleName
 			self.visibleInstantiables = visibleInstantiables
 			self.visiblePlainTypeDeclarations = visiblePlainTypeDeclarations
 			self.callComment = callComment
@@ -682,10 +681,6 @@ public struct SeamResolution: Sendable {
 
 		/// The module that declares the seam, whose name is known: a seam whose module is unknown is built inline.
 		public let declaringModule: ModuleIdentity
-		/// The name of a module the declaring module depends on whose declarations this run was not given, or `nil`
-		/// when every one was: a seam's signature is computed from what its module sees, so a reached seam of a
-		/// module with one missing is an error, while an unreached one is not.
-		public let missingDependencyModuleName: String?
 		/// The declarations the seam's module can see, resolved as `generate` resolves them, from which the seam's
 		/// signature is computed exactly as that module computed it. The seams of one module share one map.
 		public let visibleInstantiables: [TypeDescription: Instantiable]
@@ -705,9 +700,8 @@ public struct SeamResolution: Sendable {
 	/// A type another module declares with `generateMock: .public`, whose `mock()` that module's run of `generate`
 	/// generated, and which a mock tree of this module calls where it cannot build the type's tree itself.
 	public struct ForeignPublicMock: Sendable {
-		public init(declaringModule: ModuleIdentity, missingDependencyModuleName: String? = nil, visibleInstantiables: [TypeDescription: Instantiable], visiblePlainTypeDeclarations: [PlainTypeDeclaration], callComment: SeamCallComment, declaringModuleMockCondition: MockCondition) {
+		public init(declaringModule: ModuleIdentity, visibleInstantiables: [TypeDescription: Instantiable], visiblePlainTypeDeclarations: [PlainTypeDeclaration], callComment: SeamCallComment, declaringModuleMockCondition: MockCondition) {
 			self.declaringModule = declaringModule
-			self.missingDependencyModuleName = missingDependencyModuleName
 			self.visibleInstantiables = visibleInstantiables
 			self.visiblePlainTypeDeclarations = visiblePlainTypeDeclarations
 			self.callComment = callComment
@@ -716,8 +710,6 @@ public struct SeamResolution: Sendable {
 
 		/// The module that declares the type, whose name is known: a type whose module is unknown is built inline.
 		public let declaringModule: ModuleIdentity
-		/// See `ForeignSeam.missingDependencyModuleName`.
-		public let missingDependencyModuleName: String?
 		/// The declarations the declaring module can see, resolved as `generate` resolves them, from which the public
 		/// mock's signature is computed exactly as that module computed it.
 		public let visibleInstantiables: [TypeDescription: Instantiable]
@@ -730,8 +722,9 @@ public struct SeamResolution: Sendable {
 		public let declaringModuleMockCondition: MockCondition
 	}
 
-	public init(currentModule: ModuleIdentity, currentModuleMockCondition: MockCondition = MockCondition("DEBUG"), generatedSeams: Set<TypeDescription>, foreignSeams: [TypeDescription: ForeignSeam], foreignPublicMocks: [TypeDescription: ForeignPublicMock] = [:], callersComputeFromTargetGraph: Bool = false, callersVisibleInstantiables: [TypeDescription: Instantiable]? = nil, callersVisiblePlainTypeDeclarations: [PlainTypeDeclaration] = [], carriesUnreadTypeComment: Bool = false) {
+	public init(currentModule: ModuleIdentity, currentModuleMockCondition: MockCondition = MockCondition("DEBUG"), generatedSeams: Set<TypeDescription>, foreignSeams: [TypeDescription: ForeignSeam], foreignPublicMocks: [TypeDescription: ForeignPublicMock] = [:], foreignDeclarationsSeenByModule: [String: ForeignDeclarations]? = nil, callersComputeFromTargetGraph: Bool = false, callersVisibleInstantiables: [TypeDescription: Instantiable]? = nil, callersVisiblePlainTypeDeclarations: [PlainTypeDeclaration] = [], carriesUnreadTypeComment: Bool = false) {
 		self.carriesUnreadTypeComment = carriesUnreadTypeComment
+		self.foreignDeclarationsSeenByModule = foreignDeclarationsSeenByModule
 		self.currentModule = currentModule
 		self.currentModuleMockCondition = currentModuleMockCondition
 		self.generatedSeams = generatedSeams
@@ -752,24 +745,74 @@ public struct SeamResolution: Sendable {
 	public let currentModuleMockCondition: MockCondition
 	/// The concrete types of the seams the module's own files declare, whose initializers this run generates.
 	public let generatedSeams: Set<TypeDescription>
-	/// The seams other modules declare, by concrete type. A seam declared with `generateDependencyTree: true` that is
-	/// in neither set – one whose module SafeDI does not know: declared in a directory a `#SafeDIConfiguration` adds,
-	/// in a `.safedi` written without `--module-name`, or in a file no target of the plugin's graph lists – has no
-	/// set of declarations its signature could be computed from, so every tree builds it inline, as any other type.
+	/// The seams other modules declare, by concrete type: under a build system that runs `generate` once per module,
+	/// those of the modules whose `.safedi` this run was given, never those it reads only in their views, which
+	/// `foreignDeclarationsSeenByModule` holds; under the plugin's target graph, those of every module the graph lists. A
+	/// seam declared with `generateDependencyTree: true` that is in neither set – one whose module SafeDI does not know:
+	/// declared in a directory a `#SafeDIConfiguration` adds, or in a file no target of the plugin's graph lists – has
+	/// no set of declarations its signature could be computed from, so every tree builds it inline, as any other type.
 	public let foreignSeams: [TypeDescription: ForeignSeam]
-	/// The `generateMock: .public` types other modules declare, by concrete type. One whose module SafeDI does not know
-	/// is in neither this map nor the module's own files, and every mock tree builds it inline, as any other type.
+	/// The `generateMock: .public` types other modules declare, by concrete type, read from the same modules as
+	/// `foreignSeams`. One whose module SafeDI does not know is in neither this map nor the module's own files, and
+	/// every mock tree builds it inline, as any other type.
 	public let foreignPublicMocks: [TypeDescription: ForeignPublicMock]
+	/// Under a build system that runs `generate` once per module, the seams and public mocks each module whose
+	/// signatures a nested computation computes sees among the modules it depends on, by that module's name, read from
+	/// the views the `.safedi` files carry; `nil` under the plugin's target graph, where `foreignSeams` and
+	/// `foreignPublicMocks` hold every module's. A seam or public mock only a view holds is never in the global maps,
+	/// which this module's own trees read by type: a type of this module's that shares its name is never taken for it.
+	public let foreignDeclarationsSeenByModule: [String: ForeignDeclarations]?
+
+	/// The seams and public mocks a module sees among the modules it depends on, by concrete type.
+	public struct ForeignDeclarations: Sendable {
+		public init(seams: [TypeDescription: ForeignSeam], publicMocks: [TypeDescription: ForeignPublicMock]) {
+			self.seams = seams
+			self.publicMocks = publicMocks
+		}
+
+		public let seams: [TypeDescription: ForeignSeam]
+		public let publicMocks: [TypeDescription: ForeignPublicMock]
+	}
+
+	/// The seams and public mocks a nested computation of the signatures of `moduleName`'s seams and public mocks reads,
+	/// which are those that module's own run read: from the views under a build system that runs `generate` once per
+	/// module, and from the global maps under the target graph.
+	public func foreignDeclarations(seenByModuleNamed moduleName: String) -> ForeignDeclarations {
+		if let foreignDeclarationsSeenByModule {
+			foreignDeclarationsSeenByModule[moduleName] ?? ForeignDeclarations(seams: [:], publicMocks: [:])
+		} else {
+			ForeignDeclarations(seams: foreignSeams, publicMocks: foreignPublicMocks)
+		}
+	}
+
+	/// This resolution as a nested computation of the signatures of `moduleName`'s seams reads it: with the seams and
+	/// public mocks that module's own run read in place of this module's.
+	public func resolution(seenByModuleNamed moduleName: String) -> SeamResolution {
+		let foreignDeclarations = foreignDeclarations(seenByModuleNamed: moduleName)
+		return SeamResolution(
+			currentModule: currentModule,
+			currentModuleMockCondition: currentModuleMockCondition,
+			generatedSeams: generatedSeams,
+			foreignSeams: foreignDeclarations.seams,
+			foreignPublicMocks: foreignDeclarations.publicMocks,
+			foreignDeclarationsSeenByModule: foreignDeclarationsSeenByModule,
+			callersComputeFromTargetGraph: callersComputeFromTargetGraph,
+			callersVisibleInstantiables: callersVisibleInstantiables,
+			callersVisiblePlainTypeDeclarations: callersVisiblePlainTypeDeclarations,
+			carriesUnreadTypeComment: carriesUnreadTypeComment,
+		)
+	}
+
 	/// Whether the modules that call this module's seams compute their signatures from the build system's target
 	/// graph, which lists the files of each target: under the SwiftPM plugin, every seam's tree must then reach only
 	/// declarations the graph attributes to a module, since a caller cannot see a declaration in a directory this
 	/// module's `#SafeDIConfiguration` adds, and its call would name an enum the seam's module did not generate.
 	public let callersComputeFromTargetGraph: Bool
 	/// The declarations the modules that call this module's seams see, resolved as `generate` resolves them, when
-	/// they differ from what this run sees, else `nil`: this module's own files and the modules its module info
-	/// names, without a dependent module info that names no module (one generated without `--module-name`), or,
-	/// under the target graph, the files the graph attributes to this module and the modules it depends on, without
-	/// the directories this module's `#SafeDIConfiguration` adds. A seam this module generates whose signature,
+	/// they differ from what this run sees, else `nil`: under the target graph, the files the graph attributes to
+	/// this module and the modules it depends on, without the directories this module's `#SafeDIConfiguration` adds.
+	/// Under a build system that runs `generate` once per module the callers see exactly what this run reads, every
+	/// module info naming its module, so this is `nil` there. A seam this module generates whose signature,
 	/// computed over these declarations, differs from the one computed over what this run sees is an error at the
 	/// seam: the callers' calls would not match the initializer. `nil` too when this module's name is unknown, since
 	/// every caller then builds its seams inline and computes no signature.

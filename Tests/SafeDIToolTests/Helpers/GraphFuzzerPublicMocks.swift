@@ -33,6 +33,13 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case samePackageConsumerModuleOnly
 	/// Only the consumer module in another package.
 	case otherPackageConsumerModuleOnly
+	/// Declarations of the declaring module moved beneath it, into the modules that only the declaring module and the
+	/// module beneath it list, so that a consumer computes a public mock's signature from the declaring module's view
+	/// (`GraphFuzzerSeamDependencyDraw`).
+	case seamDependency
+	/// A chain of public mocks two modules deep beneath the declaring module, `ChainLink` and `ChainBase`
+	/// (`GraphFuzzerSeamDependencyDraw.chainPercent`).
+	case seamDependencyChain
 	/// One, two, or three types declared with `generateMock: .public`.
 	case onePublicMockType
 	case twoPublicMockTypes
@@ -358,6 +365,7 @@ struct GraphFuzzerPublicMockDraw {
 		var callShapeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockCallShapeRandomSeedMask)
 		var namespaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockNamespaceRandomSeedMask)
 		var unreadTypeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockUnreadTypeRandomSeedMask)
+		var seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.publicMockRandomSeedMask)
 		draw(
 			random: &random,
 			spellingRandom: &spellingRandom,
@@ -368,7 +376,20 @@ struct GraphFuzzerPublicMockDraw {
 			callShapeRandom: &callShapeRandom,
 			namespaceRandom: &namespaceRandom,
 			unreadTypeRandom: &unreadTypeRandom,
+			seamDependencyRandom: &seamDependencyRandom,
 		)
+		// Which files move beneath the declaring module: decided after the rest of the draw, from a stream of its own, so
+		// that a graph without it is drawn as before. Each file is read as the drawn graph writes it.
+		let rendering = Rendering(prefix: prefix, storesEveryParameter: false, isKnownRight: false)
+		let units = files.map { file in
+			// A configuration file is found by its name, which `SafeDIConfiguration.swift` must keep in its own module.
+			GraphFuzzerSeamDependencyDraw.Unit(module: file.module, source: file.declarations.map { $0(rendering) }.joined(separator: "\n\n"), mayMove: file.fileName?.hasSuffix("SafeDIConfiguration.swift") != true)
+		}
+		for (index, destination) in zip(files.indices, GraphFuzzerSeamDependencyDraw.destinations(of: units, typeNamePrefix: prefix, random: &seamDependencyRandom)) {
+			if let destination {
+				files[index].module = destination
+			}
+		}
 	}
 
 	/// The files of the graph, each beginning with its module's marker: as drawn, or, for the known-right path of the
@@ -377,18 +398,20 @@ struct GraphFuzzerPublicMockDraw {
 	///   a creation stamp, as `GraphFuzzerGenerator.fixture(forSeed:storingEveryParameter:)` describes.
 	func swiftFileContent(storingEveryParameter: Bool, isKnownRight: Bool) -> [String] {
 		let rendering = Rendering(prefix: prefix, storesEveryParameter: storingEveryParameter, isKnownRight: isKnownRight)
-		return files.enumerated().map { index, file in
+		let presentModules = Set(files.map(\.module))
+		let contents = files.map { file in
 			var lines = [GraphFuzzerModule.marker + file.module.name]
 			if let fileName = file.fileName {
 				lines.append(GraphFuzzerFixture.fileNameMarker + fileName)
 			}
-			lines += file.module.dependencies.map { "import \($0.name)" }
-			var content = lines.joined(separator: "\n") + "\n\n" + file.declarations.map { $0(rendering) }.joined(separator: "\n\n") + "\n"
-			// The creation stamps' counter, in the first file of the module every other module imports.
-			if storingEveryParameter, index == 0 {
-				content += "\n" + DifferentialValueCreationStamp.counterDeclaration(named: rendering.counterName) + "\n"
-			}
-			return content
+			lines += file.module.dependencies.filter(presentModules.contains).map { "import \($0.name)" }
+			return lines.joined(separator: "\n") + "\n\n" + file.declarations.map { $0(rendering) }.joined(separator: "\n\n") + "\n"
+		}
+		guard storingEveryParameter else { return contents }
+		// The creation stamps' counter, in the first file of the module every other module imports.
+		let counterIndex = GraphFuzzerSeamDependencyDraw.creationStampCounterIndex(in: contents)
+		return GraphFuzzerSeamDependencyDraw.addingCreationStampCounterImports(to: contents).enumerated().map { index, content in
+			index == counterIndex ? content + "\n" + DifferentialValueCreationStamp.counterDeclaration(named: rendering.counterName) + "\n" : content
 		}
 	}
 
@@ -516,7 +539,7 @@ struct GraphFuzzerPublicMockDraw {
 	}
 
 	fileprivate struct File {
-		let module: GraphFuzzerModule
+		var module: GraphFuzzerModule
 		/// The file's name, for a file whose name `GraphFuzzerFixture.fileNames` should not read from its first
 		/// `@Instantiable` type: one declaring none, or a configuration.
 		var fileName: String?
@@ -630,6 +653,7 @@ struct GraphFuzzerPublicMockDraw {
 		callShapeRandom: inout GraphFuzzerRandomNumberGenerator,
 		namespaceRandom: inout GraphFuzzerRandomNumberGenerator,
 		unreadTypeRandom: inout GraphFuzzerRandomNumberGenerator,
+		seamDependencyRandom: inout GraphFuzzerRandomNumberGenerator,
 	) {
 		// Both rolls are made in every graph, so the stream is consumed the same way whatever the rest of the draw.
 		let declaresSpaceInFileOfItsOwn = namespaceRandom.percentChance(50)
@@ -1347,6 +1371,56 @@ struct GraphFuzzerPublicMockDraw {
 			+ configurationFiles.filter { $0.module == .seamModule }
 			+ consumerFiles
 			+ configurationFiles.filter { $0.module != .seamModule }
+
+		// On a stream of its own, a chain of public mocks beneath the declaring module, as
+		// `GraphFuzzerSeamDependencyDraw.chainPercent` describes: a leaf a consumer instantiates, and so calls the public
+		// mock of, and that no consumer or mock builds itself, instantiates `ChainLink`, which instantiates `ChainBase`,
+		// each with an `internal` initializer, so that the leaf's mock calls `ChainLink`'s, which calls `ChainBase`'s, which
+		// builds `ChainLeaf`, and a consumer computes each plan level by level through the declaring module's view.
+		if seamDependencyRandom.percentChance(GraphFuzzerSeamDependencyDraw.chainPercent) {
+			let rendering = Rendering(prefix: prefix, storesEveryParameter: false, isKnownRight: false)
+			let units = files.map { file in
+				GraphFuzzerSeamDependencyDraw.Unit(module: file.module, source: file.declarations.map { $0(rendering) }.joined(separator: "\n\n"), mayMove: false)
+			}
+			let analysis = GraphFuzzerSeamDependencyDraw.Analysis(units: units, typeNamePrefix: prefix)
+			// A consumer that can call a leaf's initializer – one in the declaring module's package, of a `package` or `public`
+			// initializer, or any consumer of a `public` one – may build the leaf's tree itself, which it could not under the
+			// module-info flow, where it reads no type of the modules beneath the declaring module.
+			let eligibleLeafIndices = leaves.indices.filter { leafIndex in
+				let leaf = leaves[leafIndex].declaration
+				let initializerAccess = min(leaf.initializerAccess ?? leaf.access, leaf.narrowestNamedAccess, leaf.access)
+				let consumingModules = Set(units.indices.filter { units[$0].module.isCaller && analysis.referencedNames[$0].contains(leaf.name) }.map { units[$0].module })
+				return !analysis.inlineNames.contains(leaf.name)
+					&& !analysis.namesMocksReach.contains(leaf.name)
+					&& !consumingModules.isEmpty
+					&& (initializerAccess == .internal || initializerAccess == .package && !consumingModules.contains(.samePackageCaller))
+			}
+			if !eligibleLeafIndices.isEmpty {
+				let leafIndex = seamDependencyRandom.element(of: eligibleLeafIndices)
+				let tokenName = name(GraphFuzzerSeamDependencyDraw.chainTokenSuffix)
+				let chainLeafName = name(GraphFuzzerSeamDependencyDraw.chainLeafSuffix)
+				let baseName = name(GraphFuzzerSeamDependencyDraw.chainBaseSuffix)
+				let linkName = name(GraphFuzzerSeamDependencyDraw.chainLinkSuffix)
+				var chainLeaf = InstantiableClass(name: chainLeafName, conformances: conformances)
+				chainLeaf.properties = [received("chainToken", tokenName, onlyIfAvailable: true)]
+				var base = InstantiableClass(name: baseName, initializerAccess: .internal, conformances: conformances)
+				base.mockGeneration = ".public"
+				base.properties = [Property(attribute: "@Instantiated", label: "chainLeaf", type: chainLeafName)]
+				var link = InstantiableClass(name: linkName, initializerAccess: .internal, conformances: conformances)
+				link.mockGeneration = ".public"
+				link.properties = [Property(attribute: "@Instantiated", label: "chainBase", type: baseName)]
+				var leafDeclaration = leaves[leafIndex].declaration
+				leafDeclaration.add(Property(attribute: "@Instantiated", label: "chainLink", type: linkName))
+				if let fileIndex = analysis.declaringUnitIndices[leafDeclaration.name]?.first {
+					files[fileIndex].declarations = [Self.renderer(of: leafDeclaration)]
+					files.insert(contentsOf: [
+						File(module: .seamDependency, declarations: [Self.renderer(of: link)]),
+						File(module: .seamDependencyBase, declarations: [Self.renderer(of: base)]),
+						File(module: .seamDependencyLeaf, declarations: [Self.renderer(of: chainLeaf), plainClass(tokenName, access: .public)]),
+					], at: fileIndex + 1)
+				}
+			}
+		}
 	}
 
 	/// Declares `Logger`, its production type `ConsoleLogger`, which instantiates `Level`, and a fake: a class at `package`
@@ -1917,6 +1991,13 @@ extension GraphFuzzerPublicMockDraw {
 		} else if modules.contains(.otherPackageCaller) {
 			features.insert(.otherPackageConsumerModuleOnly)
 		}
+		let seamDependencyDraw = GraphFuzzerSeamDependencyDraw.drawn(in: fixture)
+		if seamDependencyDraw.movesDeclaration {
+			features.insert(.seamDependency)
+		}
+		if seamDependencyDraw.drawsChain {
+			features.insert(.seamDependencyChain)
+		}
 		if fixture.swiftFileContent.contains(where: { $0.contains("enum \(prefix)Space {}") && !$0.contains("@Instantiable") }) {
 			features.insert(.namespaceInMarkerFreeFile)
 		}
@@ -2129,7 +2210,7 @@ extension GraphFuzzerPublicMockDraw {
 			var reachingModules = Set<GraphFuzzerModule>()
 			var fillModule: GraphFuzzerModule?
 			for (fileName, content) in zip(fixture.fileNames, fixture.swiftFileContent) {
-				guard let module = GraphFuzzerModule(declaredIn: content), module != .seamModule else { continue }
+				guard let module = GraphFuzzerModule(declaredIn: content), module.isCaller else { continue }
 				if content.contains(" let t6: \(holeLeafName)\n") {
 					reachingModules.insert(module)
 				}
@@ -2200,7 +2281,7 @@ extension GraphFuzzerPublicMockDraw {
 		var features = Set<GraphFuzzerPublicMockOutputFeature>()
 		var tierAccessesByType = [String: Set<String>]()
 		for (fileName, contents) in generatedFiles where !fileName.hasSuffix(GraphFuzzerOracle.publicMockCallerFileSuffix) {
-			let isConsumerFile = !fileName.hasPrefix(GraphFuzzerModule.seamModule.name + "/")
+			let isConsumerFile = GraphFuzzerModule.allCases.contains { $0.isCaller && fileName.hasPrefix($0.name + "/") }
 			let lines = contents.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
 			// A fill that builds the public mock's type again passes the fill around it, so the file passes it twice.
 			if isConsumerFile, lines.filter({ $0.contains(".mock(") && $0.contains("Builder: __safeDI_") }).count >= 2 {
@@ -2218,7 +2299,7 @@ extension GraphFuzzerPublicMockDraw {
 						features.insert(.publicTier)
 					}
 				}
-				if line.contains("_MockConfiguration"), line.contains("__safeDI_\(GraphFuzzerModule.seamModule.name)_") || line.contains("__safeDI_\(GraphFuzzerModule.samePackageCaller.name)_") || line.contains("__safeDI_\(GraphFuzzerModule.otherPackageCaller.name)_") {
+				if line.contains("_MockConfiguration"), GraphFuzzerModule.allCases.contains(where: { line.contains("__safeDI_\($0.name)_") }) {
 					features.insert(.moduleConfiguration)
 				}
 				if line.contains("struct SafeDIMockConfiguration") {

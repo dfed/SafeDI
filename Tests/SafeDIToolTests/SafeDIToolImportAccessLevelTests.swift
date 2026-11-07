@@ -879,6 +879,218 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: ImportCompileMode.allCases, ["public", "package"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsPublic_whenSeamOfImportedModuleNamesUnreadTypeAFileItCarriesInItsViewImports(compileMode: ImportCompileMode, kitImportLevel: String) async throws {
+		// Cell 23a: `Mid` declares the seam `Session`, and `App`, whose seam `Screen` builds it, lists `Mid` alone: `Mid`'s
+		// `.safedi` carries `Core`'s declarations and imports, so `Screen`'s generated `public` initializer, which takes
+		// `Session`'s `window: Window`, imports `Kit` `public`, attributed through `Core`'s file as when `App` listed `Core`.
+		for integration in MultiModuleIntegration.allCases {
+			let output = try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Kit",
+						packageName: "Toolkit",
+						swiftFileContentByFilePath: ["Window.swift": "public struct Window {\n    public init() {}\n}"],
+						isCheckoutPackage: true,
+						runsSafeDI: false,
+						compilerSettings: compileMode.settings,
+					),
+					ModuleFixture(
+						name: "Core",
+						packageName: "Shop",
+						swiftFileContentByFilePath: [
+							"Vault.swift": """
+							public import SafeDI
+							\(kitImportLevel) import Kit
+
+							@Instantiable
+							public struct Vault: Instantiable {
+							    \(kitImportLevel) init(window: Window) {
+							        self.window = window
+							    }
+
+							    @Received let window: Window
+							}
+							""",
+						],
+						dependencies: ["Kit"],
+						compilerSettings: compileMode.settings,
+					),
+					ModuleFixture(
+						name: "Mid",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							public import SafeDI
+							import Core
+
+							@Instantiable(generateDependencyTree: true)
+							public struct Session: Instantiable {
+							    init(vault: Vault) {
+							        self.vault = vault
+							    }
+
+							    @Instantiated let vault: Vault
+							}
+							""",
+						],
+						dependencies: ["Core"],
+						compilerSettings: compileMode.settings,
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Outlet",
+						swiftFileContent: [
+							"""
+							public import SafeDI
+							import Mid
+
+							@Instantiable(generateDependencyTree: true)
+							public struct Screen: Instantiable {
+							    init(session: Session) {
+							        self.session = session
+							    }
+
+							    @Instantiated let session: Session
+							}
+							""",
+						],
+						dependencies: ["Mid"],
+						compilerSettings: compileMode.settings,
+					),
+				],
+				integration: integration,
+				compileVerification: .recordingIssues,
+				filesToDelete: &filesToDelete,
+			)
+			let fileName = switch integration {
+			case .moduleInfo:
+				"App.swift"
+			case .swiftPackagePlugin:
+				"Screen+SafeDI.swift"
+			}
+			#expect(output.modules["App"]?.generatedFiles == [
+				fileName: Self.file(importing: Self.importBlock([
+					Self.importLine(module: "Core", spelled: "import Core"),
+					Self.importLine(module: "Kit", spelled: "public import Kit"),
+					Self.importLine(module: "Mid", spelled: "import Mid"),
+					Self.importLine(module: "SafeDI", spelled: "import SafeDI"),
+				]), bodies: [Self.screenTreeCallingMidsSession(integration: integration)]),
+			], "\(integration)")
+		}
+	}
+
+	@Test(arguments: ImportCompileMode.allCases, ["public", "package"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsPublicUnderMockCondition_whenPublicMockOfImportedModuleTakesUnreadTypeAFileItCarriesInItsViewImports(compileMode: ImportCompileMode, kitImportLevel: String) async throws {
+		// Cell 23b: `Mid` declares the public mock `Service`, whose tree builds `Core`'s `Vault`, which receives `Window`:
+		// `Service.mock()` takes `window` as a parameter. `App`, whose public mock of `Screen` builds a `Service`, lists `Mid`
+		// alone: `Mid`'s `.safedi` carries `Core`'s declarations and imports, so `Screen`'s public mock, which takes `window`
+		// too, imports `Kit` `public` under the mock condition, attributed through `Core`'s file as when `App` listed `Core`.
+		for integration in MultiModuleIntegration.allCases {
+			let output = try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Kit",
+						packageName: "Toolkit",
+						swiftFileContentByFilePath: ["Window.swift": "public struct Window {\n    public init() {}\n}"],
+						isCheckoutPackage: true,
+						runsSafeDI: false,
+						compilerSettings: compileMode.settings,
+					),
+					ModuleFixture(
+						name: "Core",
+						packageName: "Shop",
+						swiftFileContentByFilePath: [
+							"Vault.swift": """
+							public import SafeDI
+							\(kitImportLevel) import Kit
+
+							@Instantiable
+							public struct Vault: Instantiable {
+							    \(kitImportLevel) init(window: Window) {
+							        self.window = window
+							    }
+
+							    @Received let window: Window
+							}
+							""",
+						],
+						dependencies: ["Kit"],
+						compilerSettings: compileMode.settings,
+					),
+					ModuleFixture(
+						name: "Mid",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							public import SafeDI
+							import Core
+
+							@Instantiable(generateMock: .public)
+							public final class Service: Instantiable {
+							    init(vault: Vault) {
+							        self.vault = vault
+							    }
+
+							    @Instantiated private let vault: Vault
+							}
+							""",
+						],
+						dependencies: ["Core"],
+						compilerSettings: compileMode.settings,
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Outlet",
+						swiftFileContent: [
+							"""
+							public import SafeDI
+							import Mid
+
+							@Instantiable(generateMock: .public)
+							public final class Screen: Instantiable {
+							    init(service: Service) {
+							        self.service = service
+							    }
+
+							    @Instantiated private let service: Service
+							}
+							""",
+						],
+						dependencies: ["Mid"],
+						compilerSettings: compileMode.settings,
+					),
+				],
+				integration: integration,
+				compileVerification: .recordingIssues,
+				filesToDelete: &filesToDelete,
+			)
+			let mockImports = Self.importBlock([
+				Self.importLine(module: "Core", spelled: "import Core"),
+				Self.importLine(module: "Kit", spelled: "public import Kit", where: "DEBUG", otherwise: "import Kit"),
+				Self.importLine(module: "Mid", spelled: "public import Mid", where: "DEBUG", otherwise: "import Mid"),
+				Self.importLine(module: "SafeDI", spelled: "import SafeDI"),
+			])
+			let expectedFiles: [String: String] = switch integration {
+			case .moduleInfo:
+				["App.swift": Self.file(importing: mockImports, bodies: [Self.screenMockCallingMidsService(integration: integration)])]
+			case .swiftPackagePlugin:
+				[
+					"SafeDIMockConfiguration.swift": Self.file(importing: Self.importBlock([
+						Self.importLine(module: "Core", spelled: "import Core"),
+						Self.importLine(module: "Kit", spelled: "import Kit"),
+						Self.importLine(module: "Mid", spelled: "import Mid"),
+						Self.importLine(module: "SafeDI", spelled: "import SafeDI"),
+					]), bodies: [""]),
+					"Screen+SafeDIMock.swift": Self.file(importing: mockImports, bodies: [Self.screenMockCallingMidsService(integration: integration)]),
+				]
+			}
+			#expect(output.modules["App"]?.generatedFiles == expectedFiles, "\(integration)")
+		}
+	}
+
 	// MARK: Attributes beside a level
 
 	@Test(arguments: ImportCompileMode.withoutInternalImportsByDefault)
@@ -1182,6 +1394,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			swiftFileContent: Self.clockFixture(rootImports: "import SafeDI\npublic import Foundation", clockImports: "import SafeDI\ninternal import Foundation"),
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Example", "--package-name", "Example"],
 			verificationCompilerSettings: ImportCompileMode.swift6.settings,
 		)
 		let rootFilePath = output.fixtures["Root.swift"]
@@ -1191,10 +1404,10 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			ImportStatement(moduleName: "Foundation", accessLevel: .public, sourceFilePath: rootFilePath),
 			ImportStatement(moduleName: "SafeDI"),
 		]
-		#expect(output.moduleInfo.imports == expectedImports)
-		#expect(output.moduleInfo.mockImports == expectedImports)
+		#expect(try output.writtenModuleInfo.imports == expectedImports)
+		#expect(try output.writtenModuleInfo.mockImports == expectedImports)
 		// What `generate` wrote reads back the same.
-		let readModuleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.moduleInfoOutputPath)))
+		let readModuleInfo = try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath)))
 		#expect(readModuleInfo.imports == expectedImports)
 	}
 
@@ -1652,6 +1865,67 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 
 	/// The seam `Session`'s initializer. The one file of a module that reads its dependencies' module info, which SafeDI
 	/// does not read every first-party module from, names the type it reads no declaration of in a comment.
+	/// The tree of cell 23a's `Screen`, which calls `Mid`'s seam `Session`.
+	private static func screenTreeCallingMidsSession(integration: MultiModuleIntegration) -> String {
+		// A plugin's call carries the plugin comment, and a plugin's run reads every first-party module, so it names no
+		// type it reads no declaration of.
+		let pluginComment = integration.seamCallComment(type: "Session", declaringModule: "Mid")
+		let unreadTypeComment = integration == .moduleInfo ? "    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n" : ""
+		return """
+		extension Screen {
+		\(unreadTypeComment)    public init(window: Window) {
+		        func __safeDI_session() -> Session {
+		            _ = Session.__safeDI_Session_564C5E6539CF6AA0.self\(pluginComment)
+		            return Session(window: window)
+		        }
+		        let session: Session = __safeDI_session()
+		        self.init(session: session)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_564C5E6539CF6AA0 {}
+		}
+		"""
+	}
+
+	/// The public mock of cell 23b's `Screen`, which calls `Mid`'s public mock of `Service`.
+	private static func screenMockCallingMidsService(integration: MultiModuleIntegration) -> String {
+		// A plugin's call carries the plugin comment, and a plugin's run reads every first-party module, so it names no
+		// type it reads no declaration of.
+		let pluginComment = integration.seamCallComment(type: "Service", declaringModule: "Mid")
+		let unreadTypeComment = integration == .moduleInfo ? "    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n" : ""
+		return """
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    public struct SafeDIOverrides {
+		        public init(
+		            service: Service.SafeDIOverrides = .init()
+		        ) {
+		            self.service = service
+		        }
+
+		        public let service: Service.SafeDIOverrides
+		    }
+
+		\(unreadTypeComment)    public static func mock(
+		        window: Window,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        _ = Service.__safeDI_Service_mock_3CD7306A9A29A31B.self\(pluginComment)
+		        let service = Service.mock(window: window, safeDIOverrides: safeDIOverrides.service)
+		        return Screen(service: service)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_mock_3CD7306A9A29A31B {}
+		}
+		#endif
+		"""
+	}
+
 	private static func sessionTree(integration: MultiModuleIntegration) -> String {
 		let unreadTypeComment = switch integration {
 		case .moduleInfo:

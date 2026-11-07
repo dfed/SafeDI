@@ -45,11 +45,13 @@ import Testing
 /// so the renaming oracle's `rename` and `restore` apply unchanged (the module, package and helper file names hold no
 /// digit but the seed's, and no index the renamings rewrite).
 ///
-/// A module's `dependencies` are every module whose declarations its `generate` must read: the modules its files
-/// refer to and, through them, the modules those refer to. That is what a Bazel user lists in `safedi_compile`'s
-/// `deps`, since a `.safedi` holds only its own module's declarations, so a module whose tree reaches a declaration
-/// two modules down must list that module too (`multiModuleTest_throwsErrorForGrandparentDeclaration_whenModuleInfoListsOnlyTheDirectDependency`
-/// pins that). The plugin integration lists the transitive closure's files itself, so both integrations read exactly
+/// A module's `dependencies` are every module whose declarations its `generate` must read to resolve its own trees:
+/// the modules its files refer to and, through them, the modules those refer to. A base-corpus graph declares no seam
+/// and no public mock, so a `.safedi`'s view carries no declarations, and a module whose own tree builds a declaration
+/// two modules down must list that module too, as a Bazel user lists it in `safedi_compile`'s `deps`
+/// (`multiModuleTest_throwsErrorForGrandparentDeclaration_whenModuleInfoListsOnlyTheDirectDependency` pins that). A module
+/// so reads a module both from its own `.safedi` and in another's view's module graph, so each graph also checks that
+/// the two agree byte for byte. The plugin integration lists the transitive closure's files itself, so both integrations read exactly
 /// the same declarations for each module. `referencedModuleNames` keeps the modules a module's files refer to
 /// directly, which its files import.
 struct GraphFuzzerPartition: Equatable, Sendable {

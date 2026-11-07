@@ -2386,6 +2386,7 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "NetworkingModule", "--package-name", "Example"],
 		)
 
 		let output = try await executeSafeDIToolTest(
@@ -2398,7 +2399,7 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [networkingModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [networkingModuleOutput.writtenModuleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.

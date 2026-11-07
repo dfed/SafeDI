@@ -690,6 +690,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "DependentModule", "--package-name", "Example"],
 		)
 
 		await assertThrowsError(
@@ -720,7 +721,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					}
 					""",
 				],
-				dependentModuleInfoPaths: [dependentModuleOutput.moduleInfoOutputPath],
+				dependentModuleInfoPaths: [dependentModuleOutput.writtenModuleInfoOutputPath],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
@@ -753,6 +754,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "ProductionModule", "--package-name", "Example"],
 		)
 		let mockModuleOutput = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -764,6 +766,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "MockModule", "--package-name", "Example"],
 		)
 
 		await assertThrowsError(
@@ -794,7 +797,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 					}
 					""",
 				],
-				dependentModuleInfoPaths: [productionModuleOutput.moduleInfoOutputPath, mockModuleOutput.moduleInfoOutputPath],
+				dependentModuleInfoPaths: [productionModuleOutput.writtenModuleInfoOutputPath, mockModuleOutput.writtenModuleInfoOutputPath],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)

@@ -86,7 +86,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 			buildSettingArguments: Self.buildSettingArguments(),
 		)
 
-		#expect(output.moduleInfo.instantiables.map(\.concreteInstantiable.asSource) == ["Root", "ProductionLogger"])
+		#expect(output.generateOutput.module.instantiables.map(\.concreteInstantiable.asSource) == ["Root", "ProductionLogger"])
 	}
 
 	@Test
