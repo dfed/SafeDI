@@ -133,7 +133,57 @@ import Testing
 		}
 
 		@Test
-		func expansion_expandsWithoutIssue_whenForwardedPropertyIsErasedInstantiator() {
+		func expansion_warnsThatForwardingIsDeprecated_whenForwardedPropertyIsInstantiator() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Forwarded let childBuilder: Instantiator<Child>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let childBuilder: Instantiator<Child>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`@Forwarded` on an `Instantiator` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
+						line: 2,
+						column: 34,
+						severity: .warning,
+					),
+				],
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_warnsThatForwardingIsDeprecated_whenForwardedPropertyIsSendableInstantiator() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Forwarded let childBuilder: SendableInstantiator<Child>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let childBuilder: SendableInstantiator<Child>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`@Forwarded` on a `SendableInstantiator` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
+						line: 2,
+						column: 34,
+						severity: .warning,
+					),
+				],
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_warnsThatForwardingIsDeprecated_whenForwardedPropertyIsErasedInstantiator() {
 			assertMacroExpansion(
 				"""
 				public struct ExampleService {
@@ -145,6 +195,114 @@ import Testing
 				    let childBuilder: ErasedInstantiator<String, AnyChild>
 				}
 				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`@Forwarded` on an `ErasedInstantiator` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
+						line: 2,
+						column: 34,
+						severity: .warning,
+					),
+				],
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_warnsThatForwardingIsDeprecated_whenForwardedPropertyIsSendableErasedInstantiator() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Forwarded let childBuilder: SendableErasedInstantiator<String, AnyChild>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let childBuilder: SendableErasedInstantiator<String, AnyChild>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`@Forwarded` on a `SendableErasedInstantiator` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
+						line: 2,
+						column: 34,
+						severity: .warning,
+					),
+				],
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_warnsThatForwardingIsDeprecated_whenForwardedPropertyIsLazilyInstantiated() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Forwarded let exportService: LazilyInstantiated<ExportService>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let exportService: LazilyInstantiated<ExportService>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`@Forwarded` on a `LazilyInstantiated` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
+						line: 2,
+						column: 35,
+						severity: .warning,
+					),
+				],
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_warnsThatForwardingIsDeprecated_whenForwardedPropertyIsSendableLazilyInstantiated() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Forwarded let exportService: SendableLazilyInstantiated<ExportService>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let exportService: SendableLazilyInstantiated<ExportService>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`@Forwarded` on a `SendableLazilyInstantiated` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
+						line: 2,
+						column: 35,
+						severity: .warning,
+					),
+				],
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_warnsThatForwardingIsDeprecated_whenForwardedPropertyIsOptionalLazilyInstantiated() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Forwarded let exportService: LazilyInstantiated<ExportService>?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let exportService: LazilyInstantiated<ExportService>?
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`@Forwarded` on a `LazilyInstantiated` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
+						line: 2,
+						column: 35,
+						severity: .warning,
+					),
+				],
 				macros: injectableTestMacros,
 			)
 		}

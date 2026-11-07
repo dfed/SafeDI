@@ -1219,6 +1219,40 @@ import Testing
 		}
 
 		@Test
+		func declaration_warnsOnceThatForwardingIsDeprecated_whenForwardedPropertyIsLazilyInstantiated() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct DocumentView: Instantiable {
+				    public init(exportService: LazilyInstantiated<ExportService>) {
+				        self.exportService = exportService
+				    }
+				    @Forwarded let exportService: LazilyInstantiated<ExportService>
+				}
+				""",
+				expandedSource: """
+				public struct DocumentView: Instantiable {
+				    public init(exportService: LazilyInstantiated<ExportService>) {
+				        self.exportService = exportService
+				    }
+				    let exportService: LazilyInstantiated<ExportService>
+
+				    public typealias ForwardedProperties = LazilyInstantiated<ExportService>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`@Forwarded` on a `LazilyInstantiated` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
+						line: 6,
+						column: 35,
+						severity: .warning,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithClosureDependency() {
 			assertMacroExpansion(
 				"""

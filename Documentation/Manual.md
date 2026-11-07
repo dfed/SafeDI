@@ -396,6 +396,14 @@ With more than one `@Forwarded` property, `instantiate(_:)` takes them as one tu
 
 Forwarded property types do not need to be decorated with the `@Instantiable` macro. A forwarded value comes from outside the tree, so SafeDI does not follow the `@Received` dependencies of its type.
 
+Forwarding one of SafeDI’s wrappers – an [`Instantiator`](#instantiator), [`ErasedInstantiator`](#erasedinstantiator), or [`LazilyInstantiated`](#lazilyinstantiated), or one of their [`Sendable` twins](#sendable-wrappers) – is deprecated, and SafeDI 3.0 rejects it; the `@Forwarded` macro warns at such a property. Instead:
+
+- **Let SafeDI build it:** make the type the wrapper builds `@Instantiable`, forward what that type needs, and declare the wrapper `@Instantiated` on this type. A `LazilyInstantiated` declared this way still builds nothing until its instance is first read.
+- **Receive it:** declare the wrapper `@Received`, fulfilled by an ancestor that declares it.
+- **Forward the value:** forward the value the wrapper builds, which then exists as soon as this type does.
+
+A closure, or a wrapper type of your own, is a plain forwarded value, which the types beneath receive and call or read themselves: forward one to build a value SafeDI cannot build later, or more than once.
+
 ### @Received
 
 Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. A `@Received` property is fulfilled by the nearest `@Instantiated` or `@Forwarded` property above it with the same name and type; if there is none, the build fails.
@@ -514,7 +522,7 @@ public struct ParentView: View, Instantiable {
 }
 ```
 
-An `@Instantiated` erased instantiator must name the type it builds with `fulfilledByType`. An `@Received` or `@Forwarded` one is handed in rather than built, so it names no type: a type below `ParentView` can declare `@Received let childViewBuilder: ErasedInstantiator<(), AnyView>` to receive the instantiator `ParentView` creates. As with any received dependency, the label and the full type must match.
+An `@Instantiated` erased instantiator must name the type it builds with `fulfilledByType`. An `@Received` one is handed in rather than built, so it names no type (as is a `@Forwarded` one, which is [deprecated](#forwarded)): a type below `ParentView` can declare `@Received let childViewBuilder: ErasedInstantiator<(), AnyView>` to receive the instantiator `ParentView` creates. As with any received dependency, the label and the full type must match.
 
 An `ErasedInstantiator` is not `Sendable`. To share one across concurrency domains, use its [`Sendable` twin](#sendable-wrappers), `SendableErasedInstantiator`.
 
@@ -1338,8 +1346,10 @@ A build that neither the `SafeDIGenerator` plugin, the Bazel rule, nor the Tuist
 
 `SafeDITool` has two subcommands for a build:
 
-- **`generate`** (default): Parses Swift source files, builds a dependency graph, validates it, and generates the code of each root, of each type with `generateDependencyTree: true` the module declares, and of each mock. `--combined-output` concatenates every dependency-tree, mock, and mock-configuration body into one statically-known output file — a good fit for any build system that needs rule outputs declared up front. To write one `.swift` per source file that declares a root, or per file of the module’s own that declares a type with `generateDependencyTree: true`, instead, pass `--swift-manifest` a JSON manifest in the [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) format, mapping input Swift files containing `@Instantiable(isRoot: true)` to output file paths (relative to the working directory). Give each output its own file; SafeDITool rejects a manifest in which two outputs name one file. `generate` writes every output the manifest lists, and writes one without code when its input declares no such type under the active compilation conditions. `--swift-manifest` and `--combined-output` are mutually exclusive. This is the default subcommand, making it backward compatible with existing prebuild scripts that invoke `SafeDITool` without an explicit subcommand.
+- **`generate`** (default): Parses Swift source files, builds a dependency graph, validates it, and generates the code of each root, of each type with `generateDependencyTree: true` the module declares, and of each mock. `--combined-output` concatenates every dependency-tree, mock, and mock-configuration body into one statically-known output file — a good fit for any build system that needs rule outputs declared up front. To write one `.swift` per source file instead, as the `SafeDIGenerator` plugin does, pass `--output-directory` an existing directory: `generate` runs `scan` itself, writes its manifest and cache there, and writes `<File>+SafeDI.swift` for each file that declares a root and each file of the module’s own that declares a type with `generateDependencyTree: true`, `<File>+SafeDIMock.swift` for each file that declares a mocked type, and `SafeDIMockConfiguration.swift` (pass `--mock-scoped-files` the module’s own files when the input CSV lists others). Or run `scan` yourself and pass `generate --swift-manifest` the manifest it wrote. `generate` writes every output the manifest lists, and writes one without code when its input declares no such type under the active compilation conditions. A manifest written by hand, in the [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) format, is deprecated: `generate` warns when a manifest lacks fields `scan` always writes, and SafeDI 3.0 rejects such a manifest. Until then, give each output of a hand-written manifest its own file: SafeDITool rejects a manifest in which two outputs name one file. `--combined-output` cannot be combined with `--output-directory` or `--swift-manifest`. This is the default subcommand, making it backward compatible with existing prebuild scripts that invoke `SafeDITool` without an explicit subcommand.
 - **`scan`**: Scans Swift source files and produces a manifest JSON describing the `@Instantiable` types found. This is used by the `SafeDIGenerator` plugin to coordinate builds across modules, and is also useful for per-module scanning in custom build systems.
+
+`generate --additional-imported-modules` is deprecated, and SafeDI 3.0 removes it: `generate` warns when it is passed. List those modules in the module’s [`#SafeDIConfiguration`](#safediconfiguration) `additionalImportedModules` instead, which imports them whichever build runs SafeDI.
 
 Pass the target's active compilation conditions to `generate --active-compilation-conditions`, or its `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and `OTHER_SWIFT_FLAGS` build settings to `generate --build-setting-active-compilation-conditions` and `--build-setting-other-swift-flags`, so SafeDITool scans the same `#if` clauses the compiler compiles; see [Conditional compilation](#conditional-compilation).
 
@@ -1397,7 +1407,7 @@ SafeDI writes its output into the build directory rather than your source tree. 
 | Swift package built with `swift build` | `.build/plugins/outputs/<package>/<target>/destination/SafeDIGenerator/SafeDIOutput/` |
 | Bazel (`safedi_swift_library` or `safedi_compile`) | `bazel-bin/<package>/<name>_safedi.swift` for a `safedi_swift_library` named `<name>`, or `bazel-bin/<package>/<rule name>.swift` for a hand-written `safedi_compile`; one combined file per module |
 | Tuist (`SafeDITuist` plugin) | `$(DERIVED_FILE_DIR)/SafeDIGenerated.swift` for each target, under the target’s intermediates in DerivedData |
-| Custom build system | Wherever your `generate` invocation points `--combined-output` or the manifest’s output paths |
+| Custom build system | Wherever your `generate` invocation points `--combined-output` or `--output-directory` |
 
 The quickest way to locate them in any layout is:
 
@@ -1618,7 +1628,7 @@ The `SafeDIPrebuiltGenerator` plugin has been removed in SafeDI 2.x. `SafeDIGene
 
 ### Migrating prebuild scripts or custom build system integrations
 
-If you invoke `SafeDITool` directly (not via the provided SPM plugin), the 1.x `--dependency-tree-output` flag has been replaced by `generate --combined-output`.
+If you invoke `SafeDITool` directly (not via the provided SPM plugin), the 1.x `--dependency-tree-output` flag has been replaced by `generate --combined-output`. A script that also passes `--additional-imported-modules` should list those modules in the module’s [`#SafeDIConfiguration`](#safediconfiguration) `additionalImportedModules` instead: the option is [deprecated](#custom-build-system-integration).
 
 Before (1.x):
 ```bash
