@@ -90,6 +90,13 @@ struct GraphFuzzerFixture: Equatable {
 		content.split(separator: "\n").prefix(2).first { $0.hasPrefix(fileNameMarker) }.map { String($0.dropFirst(fileNameMarker.count)) }
 	}
 
+	/// Whether the oracle compiles the graph as a release build too, without `DEBUG`, after it compiles it as a debug
+	/// build: a graph with `addingMockOnlyBlockParameterTypes`' tree, whose seam's generated initializer names a type
+	/// declared in a block that guards mock-only declarations, which SafeDI reads both ways.
+	var compilesAsReleaseBuildToo: Bool {
+		swiftFileContent.contains { $0.contains("extension \(typeNamePrefix)DebugFake") }
+	}
+
 	var description: String {
 		swiftFileContent.joined(separator: "\n")
 	}
@@ -1124,6 +1131,17 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case unreadBoundaryInternalTypealias
 	/// `UnreadSeam`'s tree in the seam's module.
 	case unreadAcrossModules
+	/// `addingMockOnlyBlockParameterTypes`' value, declared in a block that guards mock-only declarations, whose `#else`
+	/// declares it at the same level as its `#if DEBUG` clause.
+	case mockOnlyBlockTypeElseSameLevel
+	/// The value declared wider in the block's `#else`.
+	case mockOnlyBlockTypeElseWider
+	/// The value declared narrower in the block's `#else`.
+	case mockOnlyBlockTypeElseNarrower
+	/// The block without an `#else`, and the value declared under `#if !DEBUG` in another file.
+	case mockOnlyBlockTypeRedeclaredWhereMockConditionIsInactive
+	/// `DebugSeam`'s tree in the seam's module.
+	case mockOnlyBlockAcrossModules
 	/// `FormsScreen`'s tree in the seam's module.
 	case formsAcrossModules
 	/// `addingLabelFormsSeam`'s seam, `FormsScreen`.
@@ -1621,6 +1639,7 @@ enum GraphFuzzerGenerator {
 			holeProtocolAccessRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holeProtocolAccessRandomSeedMask)
 			unreadTypeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unreadTypeRandomSeedMask)
 			unreadBoundaryRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unreadBoundaryRandomSeedMask)
+			mockOnlyBlockRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockOnlyBlockRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -1689,7 +1708,7 @@ enum GraphFuzzerGenerator {
 			)
 			let aliasDeclarations = addingUncreatedAliasExtensions(to: addingUncreatedAliasShapes(to: addingSpelledProperties(to: seamDeclarations)))
 			var finalDeclarations = movingSelfContainedSeamsIntoSeamModule(
-				addingUnreadParameterTypes(to: addingLabelFormsSeam(to: addingHoleShapes(to: addingAccessProofExtensions(to: addingAccessProofShapes(to: aliasDeclarations))))),
+				addingMockOnlyBlockParameterTypes(to: addingUnreadParameterTypes(to: addingLabelFormsSeam(to: addingHoleShapes(to: addingAccessProofExtensions(to: addingAccessProofShapes(to: aliasDeclarations)))))),
 			)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
@@ -1913,6 +1932,9 @@ enum GraphFuzzerGenerator {
 		/// marker, in an extension of a nested type, or as an `internal` typealias.
 		private var unreadTypeRandom: GraphFuzzerRandomNumberGenerator
 		private var unreadBoundaryRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingMockOnlyBlockParameterTypes`' choices: whether a graph gains its tree with a value of a plain type
+		/// declared in a block that guards mock-only declarations, and how the clauses where `DEBUG` is inactive declare it.
+		private var mockOnlyBlockRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -4750,8 +4772,9 @@ enum GraphFuzzerGenerator {
 		/// name no type of the rest of the graph into the seam's module half the time, so that its callers compute its
 		/// signature from what that module's declarations say, as a caller in another module does: `AliasSeam`'s tree (with
 		/// `AliasValue` and `AliasLabel`), `FormsScreen`'s (with `FormsUser` and `FormsGate`; `FormsHost`, a caller, stays),
-		/// and `SpellSeam`'s with its children (`SpellHost`, a caller, stays), unless its value names the graph's own `Value`.
-		/// Decided last, from `crossModuleRandom`, so that every other graph is drawn as before.
+		/// `SpellSeam`'s with its children (`SpellHost`, a caller, stays), unless its value names the graph's own `Value`, and
+		/// `UnreadSeam`'s and `DebugSeam`'s with their children (`UnreadHost` and `DebugHost`, callers, stay). Decided last,
+		/// from `crossModuleRandom`, so that every other graph is drawn as before.
 		private mutating func movingSelfContainedSeamsIntoSeamModule(_ declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.contains(.generateDependencyTree), declarations.contains(where: { $0.module == .seamModule }) else { return declarations }
 			var declarations = declarations
@@ -4765,6 +4788,8 @@ enum GraphFuzzerGenerator {
 				({ ["SpellSeam", "SpellChild", "SpellSibling"].map { "\(prefix)\($0)" }.contains($0) }, !spellSeamNamesValue),
 				// Drawn last, so that a graph without `addingUnreadParameterTypes`' tree draws as before.
 				({ ["UnreadSeam", "UnreadChild"].map { "\(prefix)\($0)" }.contains($0) }, true),
+				// Drawn after it, so that a graph without `addingMockOnlyBlockParameterTypes`' tree draws as before.
+				({ ["DebugSeam", "DebugChild"].map { "\(prefix)\($0)" }.contains($0) }, true),
 			]
 			for tree in trees {
 				guard declarations.contains(where: { tree.isMember($0.name) }), crossModuleRandom.percentChance(50), tree.isMovable else { continue }
@@ -4888,6 +4913,85 @@ enum GraphFuzzerGenerator {
 
 		private static let unreadTypeRandomSeedMask: UInt64 = 0x756E726561645479
 		private static let unreadBoundaryRandomSeedMask: UInt64 = 0x756E726561644264
+
+		// MARK: Mock-only block parameter types
+
+		/// With the `generateDependencyTree` feature on, a tenth of graphs gain a small seam tree of their own whose value,
+		/// `debugValue`, has a plain type, `DebugValue`, declared in an `#if DEBUG` block that also holds a `mockOnly`
+		/// extension of `DebugFake`: SafeDI reads such a block as if `DEBUG` were active for its mock-only content, and, for
+		/// its plain declarations, as it reads a platform condition – the clauses either value selects – so a type counts as
+		/// the narrowest level any of them declares it at. The block's `#else` declares the type at the same level, wider,
+		/// or narrower; or the block has no `#else`, and a second block, in `DebugChild`'s file, declares the type under
+		/// `#if !DEBUG`, `public` or `package`, with a `mockOnly` extension of `DebugOtherFake` in its `#else`, so that a
+		/// release build declares the type too and the generated files assert nothing about `DEBUG`, which the harness
+		/// does not report to the tool while it compiles with it. `DebugHost`, which the first root builds through an
+		/// instantiator, forwards the value, at its narrowest level, and instantiates `DebugSeam`, whose child `DebugChild`
+		/// receives it, required or only if available. The oracle compiles these graphs as a release build too (`compilesAsReleaseBuildToo`).
+		/// `mockOnlyBlockRandom` draws only for this pass, after every other.
+		private mutating func addingMockOnlyBlockParameterTypes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.contains(.generateDependencyTree), mockOnlyBlockRandom.percentChance(10) else { return declarations }
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let valueConformance = helperTypesAreSendable ? ": Sendable" : ""
+			let seamName = "\(prefix)DebugSeam"
+			let childName = "\(prefix)DebugChild"
+			let hostName = "\(prefix)DebugHost"
+			let valueName = "\(prefix)DebugValue"
+			func mockOnlyExtension(of fakeName: String) -> String {
+				"@Instantiable(mockOnly: true)\nextension \(fakeName) {\n\tpublic static func mock() -> \(fakeName) {\n\t\t\(fakeName)()\n\t}\n}"
+			}
+			func value(_ access: AccessLevel) -> String {
+				"\(access == .package ? "package" : "public") final class \(valueName)\(valueConformance) {}"
+			}
+			let fakeName = "\(prefix)DebugFake"
+			var seam = TypeDeclaration(name: seamName, instantiableArguments: ["generateDependencyTree: true"], properties: [PropertyDeclaration(attribute: "@Instantiated", label: "debugChild", type: childName)], declaresHelperTypes: false, additionalConformances: conformances)
+			var child = TypeDeclaration(name: childName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances)
+			var host = TypeDeclaration(name: hostName, instantiableArguments: [], properties: [
+				PropertyDeclaration(attribute: "@Forwarded", label: "debugValue", type: valueName),
+				PropertyDeclaration(attribute: "@Instantiated", label: "debugSeam", type: seamName),
+			], declaresHelperTypes: false, additionalConformances: conformances)
+			seam.additionalDeclarations.append("public struct \(fakeName) {\n\tpublic init() {}\n}")
+			// The level the block's clause selected where `DEBUG` is active declares the value at, and the narrowest of
+			// every declaration of it.
+			let narrowest: AccessLevel
+			switch mockOnlyBlockRandom.integer(in: 0...3) {
+			case 0:
+				// The `#else` declares it as the `#if` clause does.
+				narrowest = .public
+				seam.additionalDeclarations.append("#if DEBUG\n\(mockOnlyExtension(of: fakeName))\n\n\(value(.public))\n#else\n\(value(.public))\n#endif")
+			case 1:
+				// The `#else` declares it wider.
+				narrowest = .package
+				seam.additionalDeclarations.append("#if DEBUG\n\(mockOnlyExtension(of: fakeName))\n\n\(value(.package))\n#else\n\(value(.public))\n#endif")
+			case 2:
+				// The `#else` declares it narrower.
+				narrowest = .package
+				seam.additionalDeclarations.append("#if DEBUG\n\(mockOnlyExtension(of: fakeName))\n\n\(value(.public))\n#else\n\(value(.package))\n#endif")
+			default:
+				// No `#else`: another file declares it where `DEBUG` is inactive.
+				let releaseAccess: AccessLevel = mockOnlyBlockRandom.percentChance(50) ? .public : .package
+				narrowest = releaseAccess
+				let otherFakeName = "\(prefix)DebugOtherFake"
+				seam.additionalDeclarations.append("#if DEBUG\n\(mockOnlyExtension(of: fakeName))\n\n\(value(.public))\n#endif")
+				child.additionalDeclarations.append("public struct \(otherFakeName) {\n\tpublic init() {}\n}")
+				child.additionalDeclarations.append("#if !DEBUG\n\(value(releaseAccess))\n#else\n\(mockOnlyExtension(of: otherFakeName))\n#endif")
+			}
+			if narrowest < .public {
+				// The host forwards the value, so its `ForwardedProperties` typealias, which the macro declares at the host's
+				// level, names it: the host is no wider than the value, and caps the first root's initializer in turn.
+				proofTypeAccess[valueName] = narrowest
+				proofTypeAccess[hostName] = narrowest
+				host.access = narrowest
+			}
+			child.properties.append(mockOnlyBlockRandom.percentChance(50)
+				? PropertyDeclaration(attribute: "@Received", label: "debugValue", type: valueName)
+				: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "debugValue", type: "\(valueName)?"))
+			var declarations = declarations
+			declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "debugHostBuilder", type: "\(instantiator)<\(hostName)>"))
+			return declarations + [seam, child, host]
+		}
+
+		private static let mockOnlyBlockRandomSeedMask: UInt64 = 0x6D6F636B4F6E6C79
 
 		// MARK: Access proof extensions
 
@@ -5970,6 +6074,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					features.insert(.formsAcrossModules)
 				} else if name.hasSuffix("UnreadSeam") {
 					features.insert(.unreadAcrossModules)
+				} else if name.hasSuffix("DebugSeam") {
+					features.insert(.mockOnlyBlockAcrossModules)
 				}
 			}
 		}
@@ -5994,6 +6100,20 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if unreadChildProperties.contains(where: { $0.label == "unreadFlagged" }) {
 			features.insert(.recordedInFlagClause)
+		}
+		// `addingMockOnlyBlockParameterTypes`' shapes, by the levels the declarations of `DebugValue` spell, in source order.
+		let debugValueName = fixture.typeNamePrefix + "DebugValue"
+		for content in fixture.swiftFileContent where content.contains("#if DEBUG\n@Instantiable(mockOnly: true)\nextension \(fixture.typeNamePrefix)DebugFake") {
+			let levels = content.split(separator: "\n").filter { $0.hasSuffix("final class \(debugValueName) {}") || $0.hasSuffix("final class \(debugValueName): Sendable {}") }.map { $0.drop { $0 == "\t" || $0 == " " }.prefix { $0 != " " } }
+			if levels.count == 1 {
+				features.insert(.mockOnlyBlockTypeRedeclaredWhereMockConditionIsInactive)
+			} else if levels.first == levels.last {
+				features.insert(.mockOnlyBlockTypeElseSameLevel)
+			} else if levels.first == "package" {
+				features.insert(.mockOnlyBlockTypeElseWider)
+			} else {
+				features.insert(.mockOnlyBlockTypeElseNarrower)
+			}
 		}
 		// `addingLabelFormsSeam`'s shapes.
 		if declaresType(named: "FormsScreen") {
@@ -7816,8 +7936,10 @@ enum GraphFuzzerOracle {
 	/// The oracle's verdict on graphs the tool already ran.
 	/// - Parameter isolatedValueOracleSeeds: The base corpus seeds whose value-oracle graph is compared on its own.
 	static func results(of toolRuns: [GraphFuzzerToolRuns], isolatingValueOracleGraphsOf isolatedValueOracleSeeds: Set<UInt64> = []) throws -> [GraphFuzzerResult] {
+		let compiledRuns = toolRuns.filter { $0.runsDifferFailure == nil }
+		// A graph that fails as a debug build is reported as one.
 		let compilationFailures = compileVerificationIsEnabled
-			? try compilationFailures(of: toolRuns.filter { $0.runsDifferFailure == nil })
+			? try compilationFailures(of: compiledRuns).merging(compilationFailures(of: compiledRuns.filter(\.fixture.compilesAsReleaseBuildToo), definesDebug: false)) { debugFailure, _ in debugFailure }
 			: [:]
 		let valueComparisons = try valueComparisons(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil }, isolatingValueOracleGraphsOf: isolatedValueOracleSeeds)
 		return toolRuns.map { runs in
@@ -8836,7 +8958,9 @@ enum GraphFuzzerOracle {
 	/// generated code, module by module, to tell a generator defect from a fixture the fuzzer got wrong. A graph that
 	/// compiles fails when a compile it passed reports a warning in its generated code – the seam callers among it –
 	/// that its fixture does not draw, as `verifyGeneratedCodeCompiles` fails a test (`warningsOnlyGeneratedCodeDraws`).
-	static func compilationFailures(of toolRuns: [GraphFuzzerToolRuns]) throws -> [UInt64: GraphFuzzerFailure] {
+	/// - Parameter definesDebug: Whether to compile as a debug build, which defines `DEBUG`, or as a release build, which
+	///   defines no condition, so that mock-only content and generated mocks are not compiled.
+	static func compilationFailures(of toolRuns: [GraphFuzzerToolRuns], definesDebug: Bool = true) throws -> [UInt64: GraphFuzzerFailure] {
 		guard !toolRuns.isEmpty else { return [:] }
 		guard let artifacts = SafeDIBuildArtifactLocator.locate() else {
 			throw GraphFuzzerInfrastructureError(
@@ -8925,6 +9049,7 @@ enum GraphFuzzerOracle {
 					hasPackage: !modulesWithoutPackage.contains(module),
 					emitsModule: laterModulesAreCompiled,
 					moduleSearchPaths: module.transitiveDependencies.compactMap { moduleOutputDirectories[$0] },
+					definesDebug: definesDebug,
 				)
 				moduleOutputDirectories[module] = outputDirectory
 				combinedFailures.merge(moduleCompilation.failures) { first, _ in first }
@@ -8948,6 +9073,7 @@ enum GraphFuzzerOracle {
 					hasPackage: modulesWithoutPackageBySeed[seed]?.contains(module) != true,
 					emitsModule: true,
 					moduleSearchPaths: module.transitiveDependencies.compactMap { seedModuleDirectories[$0] },
+					definesDebug: definesDebug,
 				)
 				seedModuleDirectories[module] = outputDirectory
 				if let failure = unitCompilation.failures[seed] {
@@ -8957,8 +9083,9 @@ enum GraphFuzzerOracle {
 			}
 		}
 		var failures = [UInt64: GraphFuzzerFailure]()
+		let configurationNote = definesDebug ? "" : "Compiled as a release build, without `DEBUG`:\n"
 		for (seed, warnings) in generatedCodeWarnings where combinedFailures[seed] == nil {
-			failures[seed] = GraphFuzzerFailure(seed: seed, kind: .generatedCodeDrawsWarning, details: warnings.joined(separator: "\n"))
+			failures[seed] = GraphFuzzerFailure(seed: seed, kind: .generatedCodeDrawsWarning, details: configurationNote + warnings.joined(separator: "\n"))
 		}
 		for (seed, diagnostics) in combinedFailures {
 			// A graph the tool rejected is compiled without generated code, so its failure is the fixture's own.
@@ -8970,7 +9097,7 @@ enum GraphFuzzerOracle {
 			} else {
 				.generatedCodeDoesNotCompile
 			}
-			failures[seed] = GraphFuzzerFailure(seed: seed, kind: kind, details: (inputOnlyFailures[seed] ?? diagnostics).text)
+			failures[seed] = GraphFuzzerFailure(seed: seed, kind: kind, details: configurationNote + (inputOnlyFailures[seed] ?? diagnostics).text)
 		}
 		return failures
 	}
@@ -9043,6 +9170,7 @@ enum GraphFuzzerOracle {
 		hasPackage: Bool,
 		emitsModule: Bool,
 		moduleSearchPaths: [URL],
+		definesDebug: Bool,
 	) throws -> UnitsCompilation {
 		func compile(_ units: [CompilationUnit]) throws -> SwiftCompileResult {
 			try compileSwift(
@@ -9053,6 +9181,7 @@ enum GraphFuzzerOracle {
 				packageName: hasPackage ? module.packageName : nil,
 				emitsModule: emitsModule,
 				moduleSearchPaths: moduleSearchPaths,
+				definesDebug: definesDebug,
 			)
 		}
 		var remainingUnits = units
