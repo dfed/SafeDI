@@ -1303,10 +1303,10 @@ public actor DependencyTreeGenerator {
 		/// the mocked type's forwarded property fulfills but another receive of its label hides, with a note at that
 		/// receive. See `ForwardedPropertyHiddenInPromotedTree`.
 		case forwardedPropertyHiddenInPromotedTree(ForwardedPropertyHiddenInPromotedTree)
-		/// Reported at a `@Received` declaration in the tree of a dependency a mock builds beside the mocked type, beneath
-		/// a type in that tree that receives its label in a form no one declaration provides together with it, with a note
-		/// at that receive. See `ReceivedPropertyHiddenInPromotedTree`.
-		case receivedPropertyHiddenInPromotedTree(ReceivedPropertyHiddenInPromotedTree)
+		/// Reported at a `@Received` declaration in a mock's tree – the mocked type's own, or that of a dependency the mock
+		/// builds beside the mocked type – beneath a type in that tree that receives its label in a form no one declaration
+		/// provides together with it, with a note at that receive. See `ReceivedPropertyHiddenInMockTree`.
+		case receivedPropertyHiddenInMockTree(ReceivedPropertyHiddenInMockTree)
 		case instantiableHasForwardedProperty(ForwardedPropertyViolation)
 		/// Reported at the dependency declaration that closes the cycle – the `@Instantiated` or `@Received`
 		/// property whose type is already on the instantiation stack, and which is not an `@Instantiated`
@@ -1563,8 +1563,8 @@ public actor DependencyTreeGenerator {
 					.flatMap(\.self)
 			case let .forwardedPropertyHiddenInPromotedTree(forwardedPropertyHiddenInPromotedTree):
 				forwardedPropertyHiddenInPromotedTree.sourceDiagnostics
-			case let .receivedPropertyHiddenInPromotedTree(receivedPropertyHiddenInPromotedTree):
-				receivedPropertyHiddenInPromotedTree.sourceDiagnostics
+			case let .receivedPropertyHiddenInMockTree(receivedPropertyHiddenInMockTree):
+				receivedPropertyHiddenInMockTree.sourceDiagnostics
 			case let .instantiableHasForwardedProperty(violation):
 				violation.sourceDiagnostics
 			case let .constantDependencyCycleDetected(cycle, closingDependency):
@@ -2729,23 +2729,31 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
-		/// A receive in the tree of a dependency a mock root promotes, beneath or beside a receive of its label, on a type in
-		/// that tree, in a form no one declaration provides together with it. In production the tree is built above the
-		/// mocked type, where both receives resolve to the closest declaration of the label above the tree.
-		struct ReceivedPropertyHiddenInPromotedTree {
+		/// A receive in a mock's tree, beneath or beside a receive of its label, on a type in that tree, in a form no one
+		/// declaration provides together with it, where either receive is required. In production both receives resolve to
+		/// the closest declaration of the label above the tree: above the mocked type for its own tree, and above the tree
+		/// of a dependency the mock promotes, which is built above the mocked type.
+		struct ReceivedPropertyHiddenInMockTree {
+			/// The tree of a mock that holds both receives.
+			enum Tree {
+				/// The mocked type's own tree.
+				case mockedType
+				/// The tree of a dependency the mock promotes, of the given type.
+				case promotedDependency(TypeDescription)
+			}
+
 			/// The property received: the fulfilling property for an aliased dependency, the declared property otherwise.
 			let property: Property
 			let declarationLocation: Dependency.DeclarationLocation?
 			let mockedType: TypeDescription
-			/// The type of the promoted dependency whose tree holds both receives.
-			let promotedType: TypeDescription
+			let tree: Tree
 			/// The other form of the label, which `hidingType` receives.
 			let hidingProperty: Property
 			let hidingDeclarationLocation: Dependency.DeclarationLocation?
 			let hidingType: TypeDescription
 			/// Whether the type that receives `property` is `hidingType`, which declares both receives.
 			let isHiddenOnItsOwnType: Bool
-			/// The types from `promotedType` to the one that receives `property`.
+			/// The types from the type at the top of `tree` to the one that receives `property`.
 			let chain: [TypeDescription]
 
 			/// An `error:` line in the words of `HiddenReceivedProperty`'s, which names the hiding receive, and a `note:` at it.
@@ -2753,16 +2761,21 @@ public actor DependencyTreeGenerator {
 				let property = property.asSource
 				let hidingProperty = hidingProperty.asSource
 				let hidingType = hidingType.asSource
-				let promotedType = promotedType.asSource
 				let mockedType = mockedType.asSource
 				let receivingTypes = isHiddenOnItsOwnType
 					? "`\(hidingType)` and the types below it"
 					: "the types below `\(hidingType)`"
+				let (treeClause, builtType) = switch tree {
+				case .mockedType:
+					("", mockedType)
+				case let .promotedDependency(promotedType):
+					("`\(promotedType.asSource)` stands for a dependency built above `\(mockedType)`, and ", promotedType.asSource)
+				}
 				return [
 					SourceDiagnostic(
 						severity: .error,
 						location: declarationLocation,
-						message: "@\(Dependency.Source.receivedRawValue) property `\(property)` is hidden in chain: \(chain.map(\.asSource).joined(separator: " -> ")). In the mock of `\(mockedType)`, `\(promotedType)` stands for a dependency built above `\(mockedType)`, and `\(hidingType)` receives `\(hidingProperty)` with the same label, so \(receivingTypes) receive `\(hidingProperty)` instead, as they do wherever `\(promotedType)` is built. Receive `\(property)` and `\(hidingProperty)` under different labels to fix.",
+						message: "@\(Dependency.Source.receivedRawValue) property `\(property)` is hidden in chain: \(chain.map(\.asSource).joined(separator: " -> ")). In the mock of `\(mockedType)`, \(treeClause)`\(hidingType)` receives `\(hidingProperty)` with the same label, so \(receivingTypes) receive `\(hidingProperty)` instead, as they do wherever `\(builtType)` is built. Receive `\(property)` and `\(hidingProperty)` under different labels to fix.",
 					),
 					SourceDiagnostic(
 						severity: .note,
@@ -5755,17 +5768,17 @@ public actor DependencyTreeGenerator {
 		) {
 			throw DependencyTreeGeneratorError.forwardedPropertyHiddenInPromotedTree(forwardedPropertyHiddenInPromotedTree)
 		}
-		// Every receive of a label in a promoted dependency's tree, back to a type in it that declares the label, resolves
-		// in production to the one declaration of the label above that tree, which is built above the mocked type, so two
-		// receives of it there, one beneath or beside the other, must be fulfillable by one declaration, through an alias
-		// or by name alike. The mock binds the forms of the label apart, and passes one of them under the label where the
-		// other would read it, or by name where production could not. Only a label the mock binds in several forms can hold
-		// such a pair, so the trees are walked only for those.
-		//
-		// The mocked type's own tree is deliberately not walked, although production rejects such a pair wherever the
-		// mocked type is built: a mock that calls another module's public mock hands it both forms as parameters, which its
-		// tree then reads by name, so the tree built inline must be accepted as that call is. A pair there whose lower form
-		// the mock root binds under the bare label is still read through the rebinding (public fuzzer seed 574).
+		// Every receive of a label in a mock's tree, back to a type in it that declares the label, resolves in production to
+		// the one declaration of the label above that tree – above the mocked type for its own tree, and above the tree of a
+		// promoted dependency, which is built above the mocked type – so two receives of it there, one beneath or beside the
+		// other, of which one is required, must be fulfillable by one declaration, through an alias or by name alike. The
+		// required receive pins that declaration to its type, so production cannot build the other receive, or always
+		// passes it `nil`, while the mock binds the forms of the label apart and offers the other a value production never
+		// passes, or passes one form under the label where the other would read it. Two `onlyIfAvailable` receives pin
+		// nothing: production fulfills each where it is built beneath a declaration of its type, and the mock offers each
+		// its own override, as it does for siblings. One rule covers every tree the mock builds inline, at every depth, so
+		// whether a mock is accepted never depends on how it binds names. Only a label the mock binds in several forms can
+		// hold such a pair, so the trees are walked only for those.
 		var formsByLabel = [String: Set<Property>]()
 		for receivedProperty in allReceived {
 			formsByLabel[receivedProperty.label, default: []].insert(receivedProperty.asUnwrappedProperty)
@@ -5775,13 +5788,14 @@ public actor DependencyTreeGenerator {
 		}
 		let labelsBoundInSeveralForms = Set(formsByLabel.lazy.filter { $0.value.count > 1 }.map(\.key))
 		if !labelsBoundInSeveralForms.isEmpty,
-		   let receivedPropertyHiddenInPromotedTree = Self.receivedPropertyHiddenInPromotedTree(
+		   let receivedPropertyHiddenInMockTree = Self.receivedPropertyHiddenInMockTree(
 		   	labels: labelsBoundInSeveralForms,
 		   	of: instantiable,
+		   	scope: scope,
 		   	promotedChildren: mockRootScope.propertiesToGenerate[scope.propertiesToGenerate.count...],
 		   )
 		{
-			throw DependencyTreeGeneratorError.receivedPropertyHiddenInPromotedTree(receivedPropertyHiddenInPromotedTree)
+			throw DependencyTreeGeneratorError.receivedPropertyHiddenInMockTree(receivedPropertyHiddenInMockTree)
 		}
 
 		// A promoted dependency stands for one the mocked type receives from above it, so in production its tree is built
@@ -6008,6 +6022,8 @@ public actor DependencyTreeGenerator {
 		let dependency: Dependency
 		/// The property received: the fulfilling property for an aliased dependency, the declared property otherwise.
 		let property: Property
+		/// Whether `dependency` requires `property`: it is not `onlyIfAvailable`.
+		let isRequired: Bool
 		/// The type that declares `dependency`.
 		let hidingType: TypeDescription
 
@@ -6017,12 +6033,12 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
-	/// A scope that `receivedPropertyHiddenInPromotedTree` has yet to walk.
+	/// A scope that `receivedPropertyHiddenInMockTree` has yet to walk.
 	private struct ScopeToWalkForHiddenReceivedProperty {
 		let scope: Scope
-		/// The type of the promoted dependency whose tree holds `scope`.
-		let promotedType: TypeDescription
-		/// The types from `promotedType` to the type of `scope`.
+		/// The tree of the mock that holds `scope`.
+		let tree: DependencyTreeGeneratorError.ReceivedPropertyHiddenInMockTree.Tree
+		/// The types from the type at the top of `tree` to the type of `scope`.
 		let chain: [TypeDescription]
 		/// The receives of each label walked by the closest type above `scope` that receives it, when no type between
 		/// declares it, in declaration order.
@@ -6031,39 +6047,52 @@ public actor DependencyTreeGenerator {
 		let declaredLabels: Set<String>
 	}
 
-	/// A visit of a scope by `receivedPropertyHiddenInPromotedTree`: what the walk carries into it decides what it finds.
+	/// A visit of a scope by `receivedPropertyHiddenInMockTree`: what the walk carries into it decides what it finds.
 	private struct HiddenReceivedPropertyScopeVisit: Hashable {
 		let scope: ObjectIdentifier
 		let hidingPropertiesReadByLabel: [String: [Set<Property>]]
 		let declaredLabels: Set<String>
 	}
 
-	/// The first receive, walking the trees of a mock root's promoted children depth first in declaration order, of one
-	/// of `labels` beneath a type that receives that label in a form no one declaration provides together with it, or
-	/// after such a receive on its own type. `nil` when there is none. In production a promoted dependency's tree is
-	/// built above the mocked type, where every receive of the label in it resolves to the closest declaration of the
-	/// label above that tree, which cannot fulfill both, so production rejects the pair wherever the dependency is built.
-	/// The mock passes one of the two forms under the label where the other would read it, or binds it in a scope where
-	/// the other is read. A type that declares the label is what the types it builds receive under it, as in production,
-	/// and the validation of each promoted tree reports what that declaration hides.
+	/// The first receive, walking the mocked type's own tree and then the trees of a mock root's promoted children, each
+	/// depth first in declaration order, of one of `labels` beneath a type that receives that label in a form no one
+	/// declaration provides together with it, or after such a receive on its own type, where either receive is required.
+	/// `nil` when there is none. In production every receive of the label in such a tree resolves to the closest
+	/// declaration of the label above that tree – above the mocked type for its own tree, and above a promoted
+	/// dependency's tree, which is built above the mocked type – which cannot fulfill both, so the required receive leaves
+	/// production unable to build the other or passing it `nil` wherever the tree is built. The mock offers that receive a
+	/// value, passes one of the two forms under the label where the other would read it, or binds it in a scope where the
+	/// other is read. A type that declares the label is what the types it builds receive under it, as in production, and the
+	/// validation of each tree reports what that declaration hides.
 	/// - Parameters:
 	///   - labels: The labels the mock binds in several forms, the only ones that can hold such a pair.
 	///   - instantiable: The mocked type.
+	///   - scope: The scope of the mocked type, without the promoted children.
 	///   - promotedChildren: The mock root's promoted children, in the order the mock declares them.
-	private static func receivedPropertyHiddenInPromotedTree(
+	private static func receivedPropertyHiddenInMockTree(
 		labels: Set<String>,
 		of instantiable: Instantiable,
+		scope mockedTypeScope: Scope,
 		promotedChildren: ArraySlice<Scope.PropertyToGenerate>,
-	) -> DependencyTreeGeneratorError.ReceivedPropertyHiddenInPromotedTree? {
+	) -> DependencyTreeGeneratorError.ReceivedPropertyHiddenInMockTree? {
 		var walkedScopes = Set<HiddenReceivedPropertyScopeVisit>()
 		var scopesToWalk = [ScopeToWalkForHiddenReceivedProperty]()
+		// The mocked type's own tree is walked first: it is what the mock builds above its promoted children's trees.
+		walkedScopes.insert(HiddenReceivedPropertyScopeVisit(scope: ObjectIdentifier(mockedTypeScope), hidingPropertiesReadByLabel: [:], declaredLabels: []))
+		scopesToWalk.append(ScopeToWalkForHiddenReceivedProperty(
+			scope: mockedTypeScope,
+			tree: .mockedType,
+			chain: [mockedTypeScope.instantiable.concreteInstantiable],
+			hidingReceivesByLabel: [:],
+			declaredLabels: [],
+		))
 		for case let .instantiated(_, promotedScope, _) in promotedChildren
 			where walkedScopes.insert(HiddenReceivedPropertyScopeVisit(scope: ObjectIdentifier(promotedScope), hidingPropertiesReadByLabel: [:], declaredLabels: [])).inserted
 		{
 			let promotedType = promotedScope.instantiable.concreteInstantiable
 			scopesToWalk.append(ScopeToWalkForHiddenReceivedProperty(
 				scope: promotedScope,
-				promotedType: promotedType,
+				tree: .promotedDependency(promotedType),
 				chain: [promotedType],
 				hidingReceivesByLabel: [:],
 				declaredLabels: [],
@@ -6079,7 +6108,7 @@ public actor DependencyTreeGenerator {
 			let labelsDeclaredByScope = Set(scope.instantiable.dependencies.lazy.filter { !$0.source.isReceived }.map(\.property.label))
 			let receives = scope.instantiable.dependencies.compactMap { dependency in
 				Self.propertyReceivedFromAbove(byReceiveOf: dependency, onTypeDeclaring: labelsDeclaredByScope).map {
-					HidingReceive(dependency: dependency, property: $0, hidingType: scopeType)
+					HidingReceive(dependency: dependency, property: $0.property, isRequired: $0.isRequired, hidingType: scopeType)
 				}
 			}
 			var receivesByLabel = [String: [HidingReceive]]()
@@ -6091,13 +6120,20 @@ public actor DependencyTreeGenerator {
 				let receivesAbove = scopeToWalk.hidingReceivesByLabel[receive.property.label, default: []]
 				let earlierReceives = receivesAbove + receivesByLabel[receive.property.label, default: []]
 				let propertiesRead = receive.propertiesRead
-				if let hidingReceiveIndex = earlierReceives.firstIndex(where: { !Self.oneDeclarationFulfills(propertiesRead, and: $0.propertiesRead) }) {
+				// A required receive pins the declaration both resolve to to its own type, so production cannot build the
+				// other receive, or always passes it `nil` where the mock would offer a value. Two `onlyIfAvailable`
+				// receives pin nothing: production fulfills each where it is built beneath a declaration of its type, and
+				// the mock offers each its own override, as it does for siblings.
+				if let hidingReceiveIndex = earlierReceives.firstIndex(where: { earlierReceive in
+					(receive.isRequired || earlierReceive.isRequired)
+						&& !Self.oneDeclarationFulfills(propertiesRead, and: earlierReceive.propertiesRead)
+				}) {
 					let hidingReceive = earlierReceives[hidingReceiveIndex]
 					return .init(
 						property: receive.property,
 						declarationLocation: receive.dependency.declarationLocation,
 						mockedType: instantiable.concreteInstantiable,
-						promotedType: scopeToWalk.promotedType,
+						tree: scopeToWalk.tree,
 						hidingProperty: hidingReceive.property,
 						hidingDeclarationLocation: hidingReceive.dependency.declarationLocation,
 						hidingType: hidingReceive.hidingType,
@@ -6122,7 +6158,7 @@ public actor DependencyTreeGenerator {
 			{
 				scopesToWalk.append(ScopeToWalkForHiddenReceivedProperty(
 					scope: childScope,
-					promotedType: scopeToWalk.promotedType,
+					tree: scopeToWalk.tree,
 					chain: scopeToWalk.chain + [childScope.instantiable.concreteInstantiable],
 					hidingReceivesByLabel: hidingReceivesByLabel,
 					declaredLabels: declaredLabels,
@@ -6135,16 +6171,19 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// The property a receive of `dependency` reads from above the type that declares it, which declares
-	/// `labelsDeclaredByType`: the received property, or an alias's fulfilling property. `nil` for a dependency the type
-	/// creates, and for an alias of a label the type declares, which renames that property, unless the alias keeps the
-	/// label it renames.
-	private static func propertyReceivedFromAbove(byReceiveOf dependency: Dependency, onTypeDeclaring labelsDeclaredByType: Set<String>) -> Property? {
+	/// `labelsDeclaredByType`: the received property, or an alias's fulfilling property, with whether the receive
+	/// requires it. `nil` for a dependency the type creates, and for an alias of a label the type declares, which renames
+	/// that property, unless the alias keeps the label it renames.
+	private static func propertyReceivedFromAbove(
+		byReceiveOf dependency: Dependency,
+		onTypeDeclaring labelsDeclaredByType: Set<String>,
+	) -> (property: Property, isRequired: Bool)? {
 		switch dependency.source {
-		case .received:
-			dependency.property
-		case let .aliased(fulfillingProperty, _, _):
+		case let .received(onlyIfAvailable):
+			(dependency.property, !onlyIfAvailable)
+		case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 			fulfillingProperty.label == dependency.property.label || !labelsDeclaredByType.contains(fulfillingProperty.label)
-				? fulfillingProperty
+				? (fulfillingProperty, !onlyIfAvailable)
 				: nil
 		case .instantiated, .forwarded:
 			nil

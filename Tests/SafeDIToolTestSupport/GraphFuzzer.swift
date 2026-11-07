@@ -1823,10 +1823,12 @@ enum GraphFuzzerGenerator {
 				declarations.append(motifType(8, properties: [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "t9", type: typeName(9) + "?")]))
 				declarations.append(motifType(9, properties: [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "t8", type: typeName(8) + "?")]))
 			} else if roll < 15 {
-				// A mocked type whose tree receives one label as an instance and as an instantiator, which its mock names apart.
+				// A mocked type that receives one label as an instantiator and a dependency whose tree receives it as an instance:
+				// the mock builds both beside it and names them apart (`t9_Instantiator__T9`, `t9_T9`). Built one inside the
+				// other, the pair is rejected (`receivedPropertyHiddenInMockTree`).
 				declarations.append(motifType(7, arguments: ["generateMock: true"], properties: [
 					PropertyDeclaration(attribute: "@Received", label: "t9", type: "\(instantiator)<\(typeName(9))>"),
-					PropertyDeclaration(attribute: "@Instantiated", label: "t8", type: typeName(8)),
+					PropertyDeclaration(attribute: "@Received", label: "t8", type: typeName(8)),
 				]))
 				declarations.append(motifType(8, properties: [PropertyDeclaration(attribute: "@Received", label: "t9", type: typeName(9))]))
 				declarations.append(motifType(9, properties: []))
