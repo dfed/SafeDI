@@ -51,6 +51,9 @@ public enum SafeDI {
 	/// concatenated into one file). Downstream targets pass the
 	/// producer's name in `dependencies:` so the helper feeds that
 	/// `.safedi` artifact through `--dependent-module-info-file-path`.
+	/// The script reports the conditions the target compiles with by
+	/// passing its `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and
+	/// `OTHER_SWIFT_FLAGS` build settings, so a `-D` flag counts too.
 	/// The script names the module with `--module-name
 	/// $PRODUCT_MODULE_NAME`, and its package with `--package-name
 	/// $SWIFT_PACKAGE_NAME` when the target sets that build setting, for
@@ -250,17 +253,30 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 	# the binary's help, read once here, advertises it.
 	generate_help=$("$safedi_tool" generate --help) || generate_help=""
 
-	# Forward the target's active compilation conditions so SafeDITool
-	# scans the same `#if` clauses swiftc compiles. Xcode exports the
-	# build setting space-separated, so it is left unquoted to word-split.
-	if [ -n "${SWIFT_ACTIVE_COMPILATION_CONDITIONS:-}" ]; then
-		case "$generate_help" in
-			*--active-compilation-conditions*)
+	# Report the conditions swiftc compiles this target with, so SafeDITool
+	# scans the same `#if` clauses. swiftc defines each condition in
+	# `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and each `-D` flag in
+	# `OTHER_SWIFT_FLAGS`, so pass both settings as this shell expands
+	# them, in brackets that keep an empty setting a value: SafeDITool
+	# reads the `-D` flags and takes the two settings as the complete set
+	# of conditions, as it does for the `SafeDIGenerator` plugin. A
+	# SafeDITool older than 2.1.0-rc-3 has neither option, so give it
+	# `SWIFT_ACTIVE_COMPILATION_CONDITIONS` alone, which Xcode exports
+	# space-separated and which is left unquoted to word-split. The longer
+	# option name is matched first, since it contains the shorter one.
+	case "$generate_help" in
+		*--build-setting-active-compilation-conditions*)
+			set -- "$@" \\
+				"--build-setting-active-compilation-conditions=[${SWIFT_ACTIVE_COMPILATION_CONDITIONS:-}]" \\
+				"--build-setting-other-swift-flags=[${OTHER_SWIFT_FLAGS:-}]"
+			;;
+		*--active-compilation-conditions*)
+			if [ -n "${SWIFT_ACTIVE_COMPILATION_CONDITIONS:-}" ]; then
 				# shellcheck disable=SC2086
 				set -- "$@" --active-compilation-conditions $SWIFT_ACTIVE_COMPILATION_CONDITIONS
-				;;
-		esac
-	fi
+			fi
+			;;
+	esac
 
 	# Name the module this target compiles and its package, which
 	# SafeDITool records in this target's `.safedi` artifact, beside the

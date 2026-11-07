@@ -93,11 +93,13 @@ older than `2.1.0` does not forward compilation conditions, so a newer
 `SafeDITool` would treat every bare `#if` condition as inactive.
 
 Conditional compilation: the script forwards the target's
-`SWIFT_ACTIVE_COMPILATION_CONDITIONS` build setting to
-`SafeDITool generate --active-compilation-conditions`, so `#if` blocks
-are scanned the way swiftc compiles them (see the manual's "Conditional
-compilation" section). A pinned `SafeDITool` release that predates the
-option is detected and left alone, so the plugin may be newer than the pin.
+`SWIFT_ACTIVE_COMPILATION_CONDITIONS` and `OTHER_SWIFT_FLAGS` build
+settings to `SafeDITool generate` (`--build-setting-active-compilation-conditions`
+and `--build-setting-other-swift-flags`), so `#if` blocks are scanned the way
+swiftc compiles them, `-D` flags included (see the manual's "Conditional
+compilation" section). A pinned `SafeDITool` release that predates those
+options is detected and given `SWIFT_ACTIVE_COMPILATION_CONDITIONS` alone, so
+the plugin may be newer than the pin.
 
 Module and package: the script also passes `--module-name
 $PRODUCT_MODULE_NAME`, and `--package-name $SWIFT_PACKAGE_NAME` when the
