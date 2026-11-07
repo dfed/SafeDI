@@ -1463,7 +1463,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// `package`, to which `Cupboard`'s initializer raises the extension-based `Rack.Shelf`.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Service.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `theme: [3 of Int]`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `package` as far as SafeDI can tell: `Rack.Shelf`'s `mock(…)`, which mentions it, is declared on an extension that spells no access level, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions `Rack.Shelf` is `package` (`Cupboard.init(shelf:)`). If `Rack.Shelf` can be `public`, spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Rack.Shelf`, declaring the `Instantiable` conformance on `Rack.Shelf`'s own declaration or in a separate `extension Rack.Shelf: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Rack.Shelf`, apply `@Instantiable` to its declaration instead; mention `Rack.Shelf` or `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Service.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `theme: [3 of Int]`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `package` as far as SafeDI can tell: `Rack.Shelf`'s `mock(…)`, which mentions it, is declared on an extension that spells no access level, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions `Rack.Shelf` is `package` (`Cupboard.init(shelf:)`). If `Rack.Shelf` can be `public`, declare `Rack` `public` and spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Rack.Shelf`, declaring the `Instantiable` conformance on `Rack.Shelf`'s own declaration or in a separate `extension Rack.Shelf: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Rack.Shelf`, apply `@Instantiable` to its declaration instead; mention `Rack.Shelf` or `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
 			\(fixtures["Feature"]!["Badge.swift"]):10:5: note: `Badge` receives `theme: [3 of Int]` here.
 			"""
 		}) {
@@ -1580,7 +1580,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// which `Badge`'s `internal` initializer does not raise.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Service.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `shelf: Rack.Shelf`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Shelf` is `internal` as far as SafeDI can tell: it is declared `@Instantiable` on an extension that spells no access level, and no initializer, `instantiate(…)` or mock method SafeDI records mentions it more widely. If `Rack.Shelf` can be `public`, spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Rack.Shelf`, declaring the `Instantiable` conformance on `Rack.Shelf`'s own declaration or in a separate `extension Rack.Shelf: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Rack.Shelf`, apply `@Instantiable` to its declaration instead; mention `Rack.Shelf` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `internal`; build `shelf` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Service.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `shelf: Rack.Shelf`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Shelf` is `internal` as far as SafeDI can tell: it is declared `@Instantiable` on an extension that spells no access level, and no initializer, `instantiate(…)` or mock method SafeDI records mentions it more widely. If `Rack.Shelf` can be `public`, declare `Rack` `public` and spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Rack.Shelf`, declaring the `Instantiable` conformance on `Rack.Shelf`'s own declaration or in a separate `extension Rack.Shelf: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Rack.Shelf`, apply `@Instantiable` to its declaration instead; mention `Rack.Shelf` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `internal`; build `shelf` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
 			\(fixtures["Feature"]!["Badge.swift"]):10:5: note: `Badge` receives `shelf: Rack.Shelf` here.
 			"""
 		}) {
@@ -1599,7 +1599,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// `@Instantiable extension Shelf` to `package`.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Service.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `shelf: Rack.Shelf`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Shelf` is `package` as far as SafeDI can tell: it is declared `@Instantiable` on an extension that spells no access level, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(shelf:)`). If `Rack.Shelf` can be `public`, spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Rack.Shelf`, declaring the `Instantiable` conformance on `Rack.Shelf`'s own declaration or in a separate `extension Rack.Shelf: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Rack.Shelf`, apply `@Instantiable` to its declaration instead; mention `Rack.Shelf` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `shelf` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Service.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `shelf: Rack.Shelf`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Shelf` is `package` as far as SafeDI can tell: it is declared `@Instantiable` on an extension that spells no access level, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(shelf:)`). If `Rack.Shelf` can be `public`, declare `Rack` `public` and spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Rack.Shelf`, declaring the `Instantiable` conformance on `Rack.Shelf`'s own declaration or in a separate `extension Rack.Shelf: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Rack.Shelf`, apply `@Instantiable` to its declaration instead; mention `Rack.Shelf` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `shelf` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
 			\(fixtures["Feature"]!["Badge.swift"]):10:5: note: `Badge` receives `shelf: Rack.Shelf` here.
 			"""
 		}) {
@@ -1619,7 +1619,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// an order that is neither the order of their types' names, in which the proof records them, nor its reverse.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Service.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `shelf: Rack.Shelf`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Shelf` is `package` as far as SafeDI can tell: it is declared `@Instantiable` on an extension that spells no access level, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Frame.init(shelf:)`, `Drawer.init(shelf:)`, `Badge.init(shelf:)`, `Gauge.init(shelf:)`, `Easel.init(shelf:)`, `Crate.init(shelf:)`). If `Rack.Shelf` can be `public`, spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Rack.Shelf`, declaring the `Instantiable` conformance on `Rack.Shelf`'s own declaration or in a separate `extension Rack.Shelf: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Rack.Shelf`, apply `@Instantiable` to its declaration instead; mention `Rack.Shelf` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `shelf` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Service.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `shelf: Rack.Shelf`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Shelf` is `package` as far as SafeDI can tell: it is declared `@Instantiable` on an extension that spells no access level, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Frame.init(shelf:)`, `Drawer.init(shelf:)`, `Badge.init(shelf:)`, `Gauge.init(shelf:)`, `Easel.init(shelf:)`, `Crate.init(shelf:)`). If `Rack.Shelf` can be `public`, declare `Rack` `public` and spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Rack.Shelf`, declaring the `Instantiable` conformance on `Rack.Shelf`'s own declaration or in a separate `extension Rack.Shelf: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Rack.Shelf`, apply `@Instantiable` to its declaration instead; mention `Rack.Shelf` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `shelf` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
 			\(fixtures["Feature"]!["Badge.swift"]):10:5: note: `Badge` receives `shelf: Rack.Shelf` here.
 			"""
 		}) {
@@ -4207,9 +4207,557 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		}
 	}
 
+	// MARK: The level an extension of a nested type spells
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesExtensionBasedTypeOnPackageTier_whenPublicExtensionExtendsTypeNestedInPackageTypeSafeDIReads() async throws {
+		// The remedy an unspelled extension is offered, taken: SafeDI reads `Rack`'s `package` declaration and none of
+		// `Rack.Token`'s, which `Gear` declares, and Swift requires `Rack.Token` to be as visible as its extension spells, so
+		// the `public` extension, capped by `Rack`, proves it `package`, and the `package` seam `Service` takes `token`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.nestedTypeModules(
+				coreDeclaration: "package enum Rack {}",
+				gearDeclaration: "extension Rack {\n    public struct Token {\n        public init() {}\n    }\n}",
+				badgeProperty: "@Received let token: Rack.Token",
+				extensionDeclaration: "@Instantiable(conformsElsewhere: true)\npublic extension Rack.Token {\n    package static func instantiate() -> Rack.Token {\n        Rack.Token()\n    }\n}\n\nextension Rack.Token: Instantiable {}",
+				serviceAccess: "package",
+			),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Gear)
+		import Gear
+		#endif
+
+		extension Service {
+		    package init(token: Rack.Token) {
+		        let badge = Badge(token: token)
+		        self.init(badge: badge)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_158C0EFA50CACC16 {}
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesMockOnlyExtensionBasedTypeOnPackageTier_whenSeamForwardsTypeOnlyPublicMockOnlyExtensionOfTypeNestedInPackageTypeDeclares() async throws {
+		// EOU-4's remedy, taken: SafeDI reads `Rack`'s `package` declaration and none of `Rack.User`'s, which `Gear` declares,
+		// so the `public` `mockOnly` extension, capped by `Rack`, proves `Rack.User` `package`, and the `package` seam
+		// `ProfileView` takes `user`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: ["Rack.swift": "package enum Rack {}"]),
+				ModuleFixture(name: "Gear", packageName: "Shop", swiftFileContent: ["import Core\n\nextension Rack {\n    public final class User {\n        public init() {}\n    }\n}"], dependencies: ["Core"], runsSafeDI: false),
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: [
+					"UserMock.swift": "import Core\nimport Gear\n\n@Instantiable(mockOnly: true)\npublic extension Rack.User {\n    package static func mock() -> Rack.User {\n        Rack.User()\n    }\n}",
+					"ProfileView.swift": "import Core\nimport Gear\n\n@Instantiable(generateDependencyTree: true)\npackage final class ProfileView: Instantiable {\n    init(user: Rack.User, store: ProfileStore) {\n        self.user = user\n        self.store = store\n    }\n\n    @Forwarded let user: Rack.User\n    @Instantiated let store: ProfileStore\n}\n\n@Instantiable\nfinal class ProfileStore: Instantiable {\n    init() {}\n}",
+				], dependencies: ["Core", "Gear"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Gear)
+		import Gear
+		#endif
+
+		extension ProfileView {
+		    package convenience init(user: Rack.User) {
+		        let store = ProfileStore()
+		        self.init(user: user, store: store)
+		    }
+		}
+
+		extension ProfileView {
+		    public enum __safeDI_ProfileView_C933DB709369908C {}
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesExtensionBasedTypeOnPublicTier_whenPublicExtensionExtendsTypeNestedInPublicTypeSafeDIReads() async throws {
+		// The reproduced shape: SafeDI reads `Rack`'s `public` declaration and none of `Rack.Token`'s, so the `public`
+		// extension proves `Rack.Token` `public`, and the `public` seam takes `token`, naming no type SafeDI counts
+		// `public` unread. The fixture cannot compile: the conditions skip `Rack.Token`'s declaration.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.rackFileModules(
+				rackFile: "public enum Rack {}\n\n#if FLAG\nextension Rack {\n    public struct Token {}\n}\n#endif\n\n@Instantiable(conformsElsewhere: true)\npublic extension Rack.Token {\n    static func instantiate() -> Rack.Token {\n        Rack.Token()\n    }\n}\n\nextension Rack.Token: Instantiable {}",
+				badgeProperty: "@Received let token: Rack.Token",
+			),
+			integration: .moduleInfo,
+			compileVerification: .skipped,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if FLAG
+		#error("SafeDI scanned this module assuming `#if FLAG` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+		#endif
+
+		extension Service {
+		    public init(token: Rack.Token) {
+		        let badge = Badge(token: token)
+		        self.init(badge: badge)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_F4AE90F3B7B1BBFF {}
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesExtensionBasedTypeOnPublicTierCommentingEnclosingType_whenPublicExtensionExtendsTypeNestedInUnreadTypeWithInstantiableExtension() async throws {
+		// `Gear`, which does not run SafeDI, declares `Rack`, so `Rack`'s own `@Instantiable` extension counts it `public`,
+		// as an unread type, and caps `Rack.Token`, whose extension spells `public`, exactly as SafeDI reading no
+		// declaration of `Rack` does without that entry. The generated `public` initializer names `Rack.Token`, so it
+		// carries the comment naming `Rack`, the type SafeDI counts `public` unread.
+		let imports = "import Gear\n\n"
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Gear", packageName: "Shop", swiftFileContent: ["public final class Rack {\n    public init() {}\n\n    public struct Token {\n        public init() {}\n    }\n}"], runsSafeDI: false),
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: [
+					"Service.swift": imports + "@Instantiable(generateDependencyTree: true)\npublic struct Service: Instantiable {\n    public init(badge: Badge) {\n        self.badge = badge\n    }\n\n    @Instantiated let badge: Badge\n}",
+					"Badge.swift": imports + Self.badgeDeclaration(property: "@Received let token: Rack.Token", initializerAccess: ""),
+					"Extension.swift": imports + "@Instantiable(conformsElsewhere: true)\nextension Rack {\n    public static func instantiate() -> Rack {\n        Rack()\n    }\n}\n\nextension Rack: Instantiable {}\n\n@Instantiable(conformsElsewhere: true)\npublic extension Rack.Token {\n    static func instantiate() -> Rack.Token {\n        Rack.Token()\n    }\n}\n\nextension Rack.Token: Instantiable {}",
+				], dependencies: ["Gear"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Gear)
+		import Gear
+		#endif
+
+		extension Service {
+		    // SafeDI counts `Rack` as `public`: no module it reads declares it narrower. If `Rack` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
+		    public init(token: Rack.Token) {
+		        let badge = Badge(token: token)
+		        self.init(badge: badge)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_F4AE90F3B7B1BBFF {}
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingEnclosingType_whenPublicExtensionExtendsTypeNestedInPackageTypeSafeDIReads() async {
+		// `Rack`'s `package` declaration caps `Rack.Token`, which its `public` extension proves at least as visible, so
+		// `Rack.Token` is exactly as visible as `Rack`, and widening `Rack` is the remedy.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Rack.Token`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Token` is nested in `Rack`, which is declared `package` in module `Core`. Declare `Rack` `public` in module `Core`; declare `Service` `package`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Core"]!["Rack.swift"]):1:1: note: `Rack` is declared `package` here.
+			\(fixtures["Core"]!["Rack.swift"]):1:1-1:8: fixit: public
+			\(fixtures["Feature"]!["Badge.swift"]):10:5: note: `Badge` receives `token: Rack.Token` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.nestedTypeModules(
+					coreDeclaration: "package enum Rack {}",
+					gearDeclaration: "extension Rack {\n    public struct Token {\n        public init() {}\n    }\n}",
+					badgeProperty: "@Received let token: Rack.Token",
+					extensionDeclaration: "@Instantiable(conformsElsewhere: true)\npublic extension Rack.Token {\n    package static func instantiate() -> Rack.Token {\n        Rack.Token()\n    }\n}\n\nextension Rack.Token: Instantiable {}",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingEnclosingType_whenPublicExtensionExtendsTypeNestedTwoLevelsInPackageTypeSafeDIReads() async {
+		// Swift checks `public extension Rack.Bay.Bin` against `Bin`'s own level alone, and SafeDI reads `Rack.Bay`'s
+		// `package` declaration, which caps `Bin`: `Rack.Bay.Bin` is exactly as visible as `Rack.Bay`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `bin: Rack.Bay.Bin`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Bay.Bin` is nested in `Rack.Bay`, which is declared `package` in module `Core`. Declare `Rack.Bay` `public` in module `Core`; declare `Service` `package`; build `bin` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Core"]!["Rack.swift"]):2:5: note: `Rack.Bay` is declared `package` here.
+			\(fixtures["Core"]!["Rack.swift"]):2:5-2:12: fixit: public
+			\(fixtures["Feature"]!["Badge.swift"]):10:5: note: `Badge` receives `bin: Rack.Bay.Bin` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.nestedTypeModules(
+					coreDeclaration: "public enum Rack {\n    package enum Bay {}\n}",
+					gearDeclaration: "extension Rack.Bay {\n    public struct Bin {\n        public init() {}\n    }\n}",
+					badgeProperty: "@Received let bin: Rack.Bay.Bin",
+					extensionDeclaration: "@Instantiable(conformsElsewhere: true)\npublic extension Rack.Bay.Bin {\n    package static func instantiate() -> Rack.Bay.Bin {\n        Rack.Bay.Bin()\n    }\n}\n\nextension Rack.Bay.Bin: Instantiable {}",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingEnclosingEntry_whenPublicExtensionExtendsTypeNestedInPackageInstantiableType() async {
+		// The type enclosing `Rack.Token`, whose declaration sits in a clause the conditions skip, is the `package`
+		// `@Instantiable` `Rack`, whose own declaration caps it.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Rack.Token`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Token` is nested in `Rack`, whose own `@Instantiable` declaration is `package`. Declare `Rack` `public`; declare `Service` `package`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `token: Rack.Token` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.rackFileModules(
+					rackFile: "@Instantiable\npackage struct Rack: Instantiable {\n    package init() {}\n}\n\n#if FLAG\nextension Rack {\n    public struct Token {}\n}\n#endif\n\n@Instantiable(conformsElsewhere: true)\npublic extension Rack.Token {\n    package static func instantiate() -> Rack.Token {\n        Rack.Token()\n    }\n}\n\nextension Rack.Token: Instantiable {}",
+					badgeProperty: "@Received let token: Rack.Token",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorSayingLevelExtensionSpells_whenPackageExtensionExtendsTypeNestedInPublicTypeSafeDIReads() async {
+		// `Rack` is `public`, and the `package` extension proves `Rack.Token` `package`, which nothing raises.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Rack.Token`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Token` is `package` as far as SafeDI can tell: it is declared `@Instantiable` on an extension that spells `package`, and no initializer, `instantiate(…)` or mock method SafeDI records mentions it more widely. If `Rack.Token` can be `public`, spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Rack.Token`, declaring the `Instantiable` conformance on `Rack.Token`'s own declaration or in a separate `extension Rack.Token: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Rack.Token`, apply `@Instantiable` to its declaration instead; mention `Rack.Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `token: Rack.Token` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.rackFileModules(
+					rackFile: "public enum Rack {}\n\n#if FLAG\nextension Rack {\n    public struct Token {}\n}\n#endif\n\n@Instantiable(conformsElsewhere: true)\npackage extension Rack.Token {\n    static func instantiate() -> Rack.Token {\n        Rack.Token()\n    }\n}\n\nextension Rack.Token: Instantiable {}",
+					badgeProperty: "@Received let token: Rack.Token",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorSayingLevelExtensionSpells_whenInternalExtensionOfTypeNestedInPublicTypeIsRaisedOnlyToPackage() async {
+		// The `internal` extension proves `Rack.Token` `internal`, and `Badge`'s `package` initializer raises it to
+		// `package`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Rack.Token`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Token` is `package` as far as SafeDI can tell: it is declared `@Instantiable` on an extension that spells `internal`, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(token:)`). If `Rack.Token` can be `public`, spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Rack.Token`, declaring the `Instantiable` conformance on `Rack.Token`'s own declaration or in a separate `extension Rack.Token: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Rack.Token`, apply `@Instantiable` to its declaration instead; mention `Rack.Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `token: Rack.Token` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.rackFileModules(
+					rackFile: "public enum Rack {}\n\n#if FLAG\nextension Rack {\n    public struct Token {}\n}\n#endif\n\n@Instantiable(conformsElsewhere: true)\ninternal extension Rack.Token {\n    static func instantiate() -> Rack.Token {\n        Rack.Token()\n    }\n}\n\nextension Rack.Token: Instantiable {}",
+					badgeProperty: "@Received let token: Rack.Token",
+					badgeInitializerAccess: "package ",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorSayingSpelledLevelDoesNotCount_whenPublicExtensionExtendsTypeNestedInTypeSafeDIReadsNoDeclarationOf() async {
+		// SafeDI reads `Rack` but not `Rack.Bay`, whose declaration sits in a clause the conditions skip, and Swift checks
+		// the extension against `Bin`'s own level alone, so `Bay` could be narrower: the extension's `public` does not
+		// count, and spelling it is no remedy.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `bin: Rack.Bay.Bin`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Bay.Bin` is `internal` as far as SafeDI can tell: it is declared `@Instantiable` on an extension that spells `public`, which SafeDI cannot count, since it cannot prove the access of `Rack.Bay`, the type enclosing `Rack.Bay.Bin`, and no initializer, `instantiate(…)` or mock method SafeDI records mentions it more widely. Mention `Rack.Bay.Bin` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `internal`; build `bin` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `bin: Rack.Bay.Bin` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.rackFileModules(
+					rackFile: Self.unreadBayRackFile(binExtension: "@Instantiable(conformsElsewhere: true)\npublic extension Rack.Bay.Bin {\n    static func instantiate() -> Rack.Bay.Bin {\n        Rack.Bay.Bin()\n    }\n}\n\nextension Rack.Bay.Bin: Instantiable {}"),
+					badgeProperty: "@Received let bin: Rack.Bay.Bin",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorSayingSpelledLevelDoesNotCount_whenPublicExtensionOfTypeNestedInTypeSafeDIReadsNoDeclarationOfIsRaisedOnlyToPackage() async {
+		// As above, with `Badge`'s `package` initializer raising `Rack.Bay.Bin` to `package`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `bin: Rack.Bay.Bin`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Bay.Bin` is `package` as far as SafeDI can tell: it is declared `@Instantiable` on an extension that spells `public`, which SafeDI cannot count, since it cannot prove the access of `Rack.Bay`, the type enclosing `Rack.Bay.Bin`, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(bin:)`). Mention `Rack.Bay.Bin` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `bin` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `bin: Rack.Bay.Bin` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.rackFileModules(
+					rackFile: Self.unreadBayRackFile(binExtension: "@Instantiable(conformsElsewhere: true)\npublic extension Rack.Bay.Bin {\n    static func instantiate() -> Rack.Bay.Bin {\n        Rack.Bay.Bin()\n    }\n}\n\nextension Rack.Bay.Bin: Instantiable {}"),
+					badgeProperty: "@Received let bin: Rack.Bay.Bin",
+					badgeInitializerAccess: "package ",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorSayingSpelledLevelDoesNotCount_whenPublicExtensionExtendsTypeNestedInAnotherModulesInstantiableType() async {
+		// `Hub.Token`, which `Gear` declares in an extension of another module's `@Instantiable` `Hub`, is nested in a type
+		// SafeDI reads the access of only from a declaration of the same module, so the extension's `public` does not
+		// count.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Hub.Token`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Hub.Token` is `internal` as far as SafeDI can tell: it is declared `@Instantiable` on an extension that spells `public`, which SafeDI cannot count, since it cannot prove the access of `Hub`, the type enclosing `Hub.Token`, and no initializer, `instantiate(…)` or mock method SafeDI records mentions it more widely. Mention `Hub.Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `internal`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Badge.swift"]):10:5: note: `Badge` receives `token: Hub.Token` here.
+			"""
+		}) {
+			let imports = "import Gear\nimport Hubs\n\n"
+			return try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					hubsModule,
+					ModuleFixture(name: "Gear", packageName: "Shop", swiftFileContent: ["import Hubs\n\nextension Hub {\n    public struct Token {\n        public init() {}\n    }\n}"], dependencies: ["Hubs"], runsSafeDI: false),
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: [
+						"Service.swift": imports + seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+						"Badge.swift": imports + Self.badgeDeclaration(property: "@Received let token: Hub.Token", initializerAccess: ""),
+						"Extension.swift": imports + "@Instantiable(conformsElsewhere: true)\npublic extension Hub.Token {\n    static func instantiate() -> Hub.Token {\n        Hub.Token()\n    }\n}\n\nextension Hub.Token: Instantiable {}",
+					], dependencies: ["Hubs", "Gear"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingNoSpelledExtension_whenUnspelledExtensionExtendsTypeNestedInTypeSafeDIReadsNoDeclarationOf() async {
+		// As two above, unspelled: spelling the extension would not count either, so it is not offered.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `bin: Rack.Bay.Bin`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Bay.Bin` is `internal` as far as SafeDI can tell: it is declared `@Instantiable` on an extension that spells no access level, and no initializer, `instantiate(…)` or mock method SafeDI records mentions it more widely. Mention `Rack.Bay.Bin` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `internal`; build `bin` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `bin: Rack.Bay.Bin` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.rackFileModules(
+					rackFile: Self.unreadBayRackFile(binExtension: "@Instantiable\nextension Rack.Bay.Bin: Instantiable {\n    public static func instantiate() -> Rack.Bay.Bin {\n        Rack.Bay.Bin()\n    }\n}"),
+					badgeProperty: "@Received let bin: Rack.Bay.Bin",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorSayingCarriersExtensionSpellsItsLevel_whenOnlyInstantiateOfPackageExtensionBasedTypeMentionsTypeSafeDICannotRead() async {
+		// `[3 of Int]` is mentioned only by the `public` `instantiate(…)` of `Rack.Token`, whose `package` extension, which
+		// `Rack`'s `public` declaration does not cap, proves it `package`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `count: [3 of Int]`, which `Rack.Token`'s `instantiate(…)` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `package` as far as SafeDI can tell: `Rack.Token` is declared `@Instantiable` on an extension that spells `package`, so its `instantiate(…)` proves its parameter types only at `package` whatever access the method spells, and no initializer, `instantiate(…)` or mock method SafeDI records mentions `Rack.Token` or `[3 of Int]` more widely. If `Rack.Token` can be `public`, spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Rack.Token`, declaring the `Instantiable` conformance on `Rack.Token`'s own declaration or in a separate `extension Rack.Token: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Rack.Token`, apply `@Instantiable` to its declaration instead; mention `Rack.Token` or `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `count` inside the tree; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Rack.swift"]):11:36: note: `Rack.Token` receives `count: [3 of Int]` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.rackFileModules(
+					rackFile: "public enum Rack {}\n\n#if FLAG\nextension Rack {\n    public struct Token {}\n}\n#endif\n\n@Instantiable(conformsElsewhere: true)\npackage extension Rack.Token {\n    public static func instantiate(count: \(Self.unreadableThemeType)) -> Rack.Token {\n        Rack.Token()\n    }\n}\n\nextension Rack.Token: Instantiable {}",
+					badgeProperty: "@Instantiated let token: Rack.Token",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorSayingCarriersExtensionSpellsItsLevel_whenOnlyInstantiateOfRaisedInternalExtensionBasedTypeMentionsTypeSafeDICannotRead() async {
+		// As above, with an `internal` extension, which `Badge`'s `package` initializer raises to `package`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `count: [3 of Int]`, which `Rack.Token`'s `instantiate(…)` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `package` as far as SafeDI can tell: `Rack.Token`'s `instantiate(…)`, which mentions it, is declared on an extension that spells `internal`, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions `Rack.Token` is `package` (`Badge.init(token:)`). If `Rack.Token` can be `public`, spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Rack.Token`, declaring the `Instantiable` conformance on `Rack.Token`'s own declaration or in a separate `extension Rack.Token: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Rack.Token`, apply `@Instantiable` to its declaration instead; mention `Rack.Token` or `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `count` inside the tree; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Rack.swift"]):11:36: note: `Rack.Token` receives `count: [3 of Int]` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.rackFileModules(
+					rackFile: "public enum Rack {}\n\n#if FLAG\nextension Rack {\n    public struct Token {}\n}\n#endif\n\n@Instantiable(conformsElsewhere: true)\ninternal extension Rack.Token {\n    public static func instantiate(count: \(Self.unreadableThemeType)) -> Rack.Token {\n        Rack.Token()\n    }\n}\n\nextension Rack.Token: Instantiable {}",
+					badgeProperty: "@Instantiated let token: Rack.Token",
+					badgeInitializerAccess: "package ",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorSayingCarriersSpelledLevelDoesNotCount_whenOnlyInstantiateOfTypeNestedInTypeSafeDIReadsNoDeclarationOfMentionsTypeSafeDICannotRead() async {
+		// `[3 of Int]` is mentioned only by the `public` `instantiate(…)` of `Rack.Bay.Bin`, whose `public` extension does
+		// not count, since SafeDI reads no declaration of `Rack.Bay`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `count: [3 of Int]`, which `Rack.Bay.Bin`'s `instantiate(…)` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `internal` as far as SafeDI can tell: `Rack.Bay.Bin` is declared `@Instantiable` on an extension that spells `public`, which SafeDI cannot count, since it cannot prove the access of `Rack.Bay`, the type enclosing `Rack.Bay.Bin`, so its `instantiate(…)` proves its parameter types only at `internal` whatever access the method spells, and no initializer, `instantiate(…)` or mock method SafeDI records mentions `Rack.Bay.Bin` or `[3 of Int]` more widely. Mention `Rack.Bay.Bin` or `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `internal`; build `count` inside the tree; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Rack.swift"]):13:36: note: `Rack.Bay.Bin` receives `count: [3 of Int]` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.rackFileModules(
+					rackFile: Self.unreadBayRackFile(binExtension: "@Instantiable(conformsElsewhere: true)\npublic extension Rack.Bay.Bin {\n    public static func instantiate(count: \(Self.unreadableThemeType)) -> Rack.Bay.Bin {\n        Rack.Bay.Bin()\n    }\n}\n\nextension Rack.Bay.Bin: Instantiable {}"),
+					badgeProperty: "@Instantiated let bin: Rack.Bay.Bin",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorSayingCarriersSpelledLevelDoesNotCount_whenOnlyInstantiateOfRaisedTypeNestedInTypeSafeDIReadsNoDeclarationOfMentionsTypeSafeDICannotRead() async {
+		// As above, with `Badge`'s `package` initializer raising `Rack.Bay.Bin` to `package`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `count: [3 of Int]`, which `Rack.Bay.Bin`'s `instantiate(…)` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `package` as far as SafeDI can tell: `Rack.Bay.Bin`'s `instantiate(…)`, which mentions it, is declared on an extension that spells `public`, which SafeDI cannot count, since it cannot prove the access of `Rack.Bay`, the type enclosing `Rack.Bay.Bin`, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions `Rack.Bay.Bin` is `package` (`Badge.init(bin:)`). Mention `Rack.Bay.Bin` or `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `count` inside the tree; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Rack.swift"]):13:36: note: `Rack.Bay.Bin` receives `count: [3 of Int]` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.rackFileModules(
+					rackFile: Self.unreadBayRackFile(binExtension: "@Instantiable(conformsElsewhere: true)\npublic extension Rack.Bay.Bin {\n    public static func instantiate(count: \(Self.unreadableThemeType)) -> Rack.Bay.Bin {\n        Rack.Bay.Bin()\n    }\n}\n\nextension Rack.Bay.Bin: Instantiable {}"),
+					badgeProperty: "@Instantiated let bin: Rack.Bay.Bin",
+					badgeInitializerAccess: "package ",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorListingProverAtEnclosingTypesLevel_whenOnlyInstantiateOfPublicExtensionOfTypeNestedInPackageTypeMentionsTypeSafeDICannotRead() async {
+		// `Rack`'s `package` declaration caps `Rack.Token`, whose extension spells `public`, so the `public`
+		// `instantiate(…)` of `Rack.Token` proves `[3 of Int]` at `package`, as a member of any type proven exactly does.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `count: [3 of Int]`, which `Rack.Token`'s `instantiate(…)` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Rack.Token.instantiate(count:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `count` inside the tree; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Rack.swift"]):11:36: note: `Rack.Token` receives `count: [3 of Int]` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.rackFileModules(
+					rackFile: "package enum Rack {}\n\n#if FLAG\nextension Rack {\n    public struct Token {}\n}\n#endif\n\n@Instantiable(conformsElsewhere: true)\npublic extension Rack.Token {\n    public static func instantiate(count: \(Self.unreadableThemeType)) -> Rack.Token {\n        Rack.Token()\n    }\n}\n\nextension Rack.Token: Instantiable {}",
+					badgeProperty: "@Instantiated let token: Rack.Token",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorListingProverAtEnclosingTypesLevel_whenOnlyInstantiateOfPublicExtensionOfTypeNestedInPackageInstantiableTypeMentionsTypeSafeDICannotRead() async {
+		// As above, with the `package` `@Instantiable` `Rack` capping `Rack.Token`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `count: [3 of Int]`, which `Rack.Token`'s `instantiate(…)` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Rack.Token.instantiate(count:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `count` inside the tree; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Rack.swift"]):14:36: note: `Rack.Token` receives `count: [3 of Int]` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.rackFileModules(
+					rackFile: "@Instantiable\npackage struct Rack: Instantiable {\n    package init() {}\n}\n\n#if FLAG\nextension Rack {\n    public struct Token {}\n}\n#endif\n\n@Instantiable(conformsElsewhere: true)\npublic extension Rack.Token {\n    public static func instantiate(count: \(Self.unreadableThemeType)) -> Rack.Token {\n        Rack.Token()\n    }\n}\n\nextension Rack.Token: Instantiable {}",
+					badgeProperty: "@Instantiated let token: Rack.Token",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// `Core`, in package `Shop`, which declares `coreDeclaration` in `Rack.swift`, and `Gear`, which does not run SafeDI
+	/// and declares `gearDeclaration`, before `Feature`, whose seam `Service`, at `serviceAccess`, instantiates `Badge`,
+	/// which declares `badgeProperty` and takes it in an `internal` initializer, and whose `Extension.swift` holds
+	/// `extensionDeclaration`: SafeDI reads `Core`'s `package` declarations, which another module can name, and none of
+	/// `Gear`'s.
+	private static func nestedTypeModules(coreDeclaration: String, gearDeclaration: String, badgeProperty: String, extensionDeclaration: String, serviceAccess: String = "public") -> [ModuleFixture] {
+		let imports = "import Core\nimport Gear\n\n"
+		return [
+			ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: ["Rack.swift": coreDeclaration]),
+			ModuleFixture(name: "Gear", packageName: "Shop", swiftFileContent: ["import Core\n\n" + gearDeclaration], dependencies: ["Core"], runsSafeDI: false),
+			ModuleFixture(
+				name: "Feature",
+				packageName: "Shop",
+				swiftFileContentByFilePath: [
+					"Service.swift": imports + "@Instantiable(generateDependencyTree: true)\n\(serviceAccess) struct Service: Instantiable {\n    \(serviceAccess) init(badge: Badge) {\n        self.badge = badge\n    }\n\n    @Instantiated let badge: Badge\n}",
+					"Badge.swift": imports + badgeDeclaration(property: badgeProperty, initializerAccess: ""),
+					"Extension.swift": imports + extensionDeclaration,
+				],
+				dependencies: ["Core", "Gear"],
+			),
+		]
+	}
+
+	/// `Feature`, in package `Shop`, whose seam `Service` instantiates `Badge`, which declares `badgeProperty` and takes it
+	/// in an initializer at `badgeInitializerAccess`, and whose `Rack.swift` holds `rackFile`.
+	private static func rackFileModules(rackFile: String, badgeProperty: String, badgeInitializerAccess: String = "") -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: [
+				"Service.swift": seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+				"Badge.swift": badgeDeclaration(property: badgeProperty, initializerAccess: badgeInitializerAccess),
+				"Rack.swift": rackFile,
+			]),
+		]
+	}
+
+	/// The `public` `@Instantiable` `Badge`, which declares `property` and takes it in an initializer at
+	/// `initializerAccess`.
+	private static func badgeDeclaration(property: String, initializerAccess: String) -> String {
+		let declaredProperty = property[property.range(of: " let ")!.upperBound...]
+		let label = String(declaredProperty.prefix { $0 != ":" })
+		let type = declaredProperty.drop { $0 != ":" }.dropFirst().trimmingCharacters(in: .whitespaces)
+		return "@Instantiable\npublic struct Badge: Instantiable {\n    \(initializerAccess)init(\(label): \(type)) {\n        self.\(label) = \(label)\n    }\n\n    \(property)\n}"
+	}
+
+	/// A file that declares the `public` `Rack` and, in a clause the conditions skip, `Rack.Bay.Bin`, then `binExtension`:
+	/// SafeDI reads `Rack` and no declaration of `Rack.Bay`.
+	private static func unreadBayRackFile(binExtension: String) -> String {
+		"public enum Rack {}\n\n#if FLAG\nextension Rack {\n    public enum Bay {\n        public struct Bin {}\n    }\n}\n#endif\n\n" + binExtension
+	}
 
 	/// The lines a generated file repeats for a fixture's `import <moduleName>`, and the blank line after them.
 	private static func importLines(_ moduleName: String) -> String {
