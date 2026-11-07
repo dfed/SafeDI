@@ -179,9 +179,10 @@ struct PlainTypeNamesInAnyClause {
 			} else {
 				outermostName
 			}
+			// Spelled as the names of the types a module keeps are, without backticks.
 			declaredTypes.insert(GuardedPlainTypeNames.DeclaredType(
-				name: name,
-				outermostName: outermostName,
+				name: name.spelledWithoutBackticks,
+				outermostName: outermostName.spelledWithoutBackticks,
 				level: TypeAccessProof.normalized(declaration.levelBeforeExtendedTypeCap),
 			))
 		}

@@ -1336,11 +1336,12 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 	}
 
-	@Test
+	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesReceivedTypeOnPackageTier_whenDependencysMarkerFreeFileDeclaresPackageTypeWithNameInBackticks() async throws {
-		// W5: the text search for a name after its keyword misses `` `Protocol` ``, but the file holds the word `package`, so
-		// it is parsed and its declaration recorded.
+	mutating func generate_takesReceivedTypeOnPackageTier_whenDependencysMarkerFreeFileDeclaresPackageTypeWithNameInBackticks(integration: MultiModuleIntegration) async throws {
+		// W5, D3.9: the text search for a name after its keyword finds `` `Protocol` ``, so the file is parsed and its
+		// declaration recorded, under the plugin, which reads `Core`'s files for `Feature`, as under Bazel, which parses a
+		// file that holds the word `package` whatever names the search finds.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: ["Protocol.swift": "package struct `Protocol` {}"]),
@@ -1348,10 +1349,10 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 					"Screen.swift": Self.screenSource(receives: ["@Received(onlyIfAvailable: true) let kind: `Protocol`?"], imports: ["Core"]),
 				], dependencies: ["Core"]),
 			],
-			integration: .moduleInfo,
+			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: ["Core"], tiers: """
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], tiers: """
 		    public init() {
 		        self.init(kind: nil)
 		    }
@@ -1389,6 +1390,138 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(commented: commented, cache: cache)
 		    }
 		""", guardHash: "C7131F41728A076A"))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_omitsReceivedTypeFromPublicTier_whenDependencysMarkerFreeFileDeclaresPackageTypeWithNameNeedlesslyInBackticks(integration: MultiModuleIntegration) async throws {
+		// D3.1a: the text search finds `` `Token` ``, and the declaration in backticks and the mention without them name one
+		// type, which is `package`, so the `public` tier omits `token`, where it took it, counting `Token` `public`, and
+		// failed to compile.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.tokenModules(declaration: "package struct `Token` {}", receive: "@Received(onlyIfAvailable: true) let token: Token?"),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], tiers: """
+		    public init() {
+		        self.init(token: nil)
+		    }
+
+		    package init(token: Token?) {
+		        let cache = Cache()
+		        self.init(token: token, cache: cache)
+		    }
+		""", guardHash: "16885A1AAD60582A"))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingDeclaringModule_whenPublicSeamRequiresPackageTypeDependencyDeclaresWithNameNeedlesslyInBackticks(integration: MultiModuleIntegration) async {
+		// D3.1b: the receive is required, so the `public` tier cannot omit it, where the compiler rejected the generated
+		// initializer. The error names the type as its declaration spells it.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. ``Token`` is declared `package` in module `Core`. Declare ``Token`` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)):1:1: note: ``Token`` is declared `package` here.
+			\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)):1:1-1:8: fixit: public
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `token: Token` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.tokenModules(declaration: "package struct `Token` {}", receive: "@Received let token: Token"),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesNoTypeInComment_whenSeamsModuleDeclaresPublicTypeWithNameNeedlesslyInBackticksInMarkerFreeFile() async throws {
+		// D3.2: `Token` is read, `public`, so the comment that names the types SafeDI counts `public` is gone.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [Self.featureDeclaringToken("public struct `Token` {}")],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: [], tiers: """
+		    public init(token: Token) {
+		        let cache = Cache()
+		        self.init(token: token, cache: cache)
+		    }
+		""", guardHash: "1EB503BFA23A82BA"))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesTypeInComment_whenSeamsModuleDeclaresItAfterCommentFollowingKeywordInMarkerFreeFile() async throws {
+		// D3.3: a stated limit: the text search does not find `Token` behind a comment, so SafeDI reads no declaration of
+		// it, counts it `public`, and names it in the comment.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [Self.featureDeclaringToken("public struct /* note */ Token {}")],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Token"], imports: [], tiers: """
+		    public init(token: Token) {
+		        let cache = Cache()
+		        self.init(token: token, cache: cache)
+		    }
+		""", guardHash: "1EB503BFA23A82BA"))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_omitsReceivedTypeFromWiderTiers_whenSeamsModuleDeclaresInternalTypeWithNameNeedlesslyInBackticksInFileWithMarker(integration: MultiModuleIntegration) async throws {
+		// D3.5: a file that mentions `@Instantiable` is parsed whatever the text search finds, and the declaration in
+		// backticks proves the mention, `internal`, as one in a file without a marker does.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [Self.featureDeclaringToken("// Read by SafeDI: it mentions @Instantiable.\nstruct `Token` {}", receive: "@Received(onlyIfAvailable: true) let token: Token?")],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: [], tiers: """
+		    public init() {
+		        self.init(token: nil)
+		    }
+
+		    internal init(token: Token?) {
+		        let cache = Cache()
+		        self.init(token: token, cache: cache)
+		    }
+		""", guardHash: "BEC07F255DE644F9"))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_assertsDecisionSelectingDeclaration_whenDependencysMarkerFreeFileDeclaresTypeWithNameNeedlesslyInBackticksInSelectedClause() async throws {
+		// D3.7: under the plugin, `Feature` reads `Core`'s file, whose `FLAG` clause declares the `package` `Token` its tiers
+		// rely on, so `Feature`'s generated code asserts the decision, whichever way the name is spelled.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.tokenModules(
+				declaration: "#if FLAG\npackage struct `Token` {}\n#else\nstruct `Token` {}\n#endif",
+				receive: "@Received(onlyIfAvailable: true) let token: Token?",
+				conditions: ["FLAG"],
+			),
+			integration: .swiftPackagePlugin,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.swiftPackagePlugin, comment: [], imports: ["Core"], assertions: Self.activeAssertion("FLAG"), tiers: """
+		    public init() {
+		        self.init(token: nil)
+		    }
+
+		    package init(token: Token?) {
+		        let cache = Cache()
+		        self.init(token: token, cache: cache)
+		    }
+		""", guardHash: "16885A1AAD60582A"))
 		try expectEveryModuleCompiled(output)
 	}
 
@@ -3233,6 +3366,25 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		]
 	}
 
+	/// `Core`, in `Feature`'s package, whose `Token.swift`, a file without a SafeDI marker, holds `declaration`, and
+	/// `Feature`, whose seam `Screen` has `receive`; both run with `conditions`.
+	private static func tokenModules(declaration: String, receive: String, conditions: [String] = []) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: ["Token.swift": declaration], activeCompilationConditions: conditions),
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: [
+				"Screen.swift": screenSource(receives: [receive], imports: ["Core"]),
+			], dependencies: ["Core"], activeCompilationConditions: conditions),
+		]
+	}
+
+	/// `Feature`, whose `Token.swift` holds `declaration` and whose seam `Screen` has `receive`.
+	private static func featureDeclaringToken(_ declaration: String, receive: String = "@Received let token: Token") -> ModuleFixture {
+		ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: [
+			"Token.swift": declaration,
+			"Screen.swift": screenSource(receives: [receive], imports: []),
+		])
+	}
+
 	/// The comment the generated file carries above its first `public` declaration that names a type of `names`.
 	private static func comment(_ names: [String]) -> String {
 		let list = names.map { "`\($0)`" }.joinedAsTestList
@@ -3261,8 +3413,10 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		return [integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": code]
 	}
 
+	/// The lines a generated file repeats for a fixture's imports of `moduleNames`, with the blank line after them when
+	/// there are any.
 	private static func importLines(_ moduleNames: [String]) -> String {
-		moduleNames.map { "#if canImport(\($0))\nimport \($0)\n#endif\n" }.joined() + "\n"
+		moduleNames.isEmpty ? "" : moduleNames.map { "#if canImport(\($0))\nimport \($0)\n#endif\n" }.joined() + "\n"
 	}
 
 	/// The path a diagnostic names `file` of `module` by under `integration`.
