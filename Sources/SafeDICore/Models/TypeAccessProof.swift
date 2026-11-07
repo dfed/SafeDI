@@ -451,50 +451,6 @@ public struct TypeAccessProof: Sendable {
 		return unreadTypes.sorted()
 	}
 
-	/// A plain declaration read under the mock condition (`PlainTypeDeclaration.mockCondition`) that a mention of
-	/// `namedType` resolves to, as its own or as that of a type enclosing it, which a build where that condition is
-	/// inactive does not declare as widely as the mention needs.
-	public struct DeclarationReadUnderMockCondition: Sendable {
-		public let namedType: TypeDescription
-		public let declaration: PlainTypeDeclaration
-		public let mockCondition: String
-		/// The level, normalized, at which a build where the condition is inactive declares the declaration's type in a
-		/// way the mentioning module can name, or `nil` when it declares none.
-		public let levelWhereMockConditionIsInactive: AccessLevel?
-	}
-
-	/// The plain declarations read under the mock condition that a mention of a type `type` names, or of a type enclosing
-	/// one, resolves to in `mentioningModule`, where a build in which that condition is inactive declares the type
-	/// narrower than `level`, or declares none the module can name (`PlainTypeDeclaration.levelWhereMockConditionIsInactive`):
-	/// what SafeDI reads of those types there is not what such a build compiles. For each type `type` names, in the order
-	/// the compiler meets them, the declarations of the outermost such type, which a fix there fixes for the types it
-	/// encloses too. A declaration whose condition is among `assertedActiveConditions` is not one: the generated code
-	/// asserts that condition active, so it never compiles where the condition is inactive.
-	public func declarationsReadUnderMockCondition(namedBy type: TypeDescription, requiring level: AccessLevel, mentionedFrom mentioningModule: MentioningModule, assertedActiveConditions: Set<String>) -> [DeclarationReadUnderMockCondition] {
-		var declarations = [DeclarationReadUnderMockCondition]()
-		for mentionedType in Self.mentionedTypes(in: type) {
-			var outermostDeclarations = [DeclarationReadUnderMockCondition]()
-			var remainingType = mentionedType.withoutGenericArguments
-			while let checkedType = remainingType {
-				let checkedDeclarations = plainTypeDeclarations.candidates(named: checkedType, mentionedFrom: mentioningModule).compactMap { declaration -> DeclarationReadUnderMockCondition? in
-					guard let mockCondition = declaration.mockCondition, !assertedActiveConditions.contains(mockCondition) else { return nil }
-					// Another module names only a declaration at least `package` (`PlainTypeDeclarations.candidates`).
-					let levelWhereMockConditionIsInactive = declaration.levelWhereMockConditionIsInactive.map(Self.normalized).flatMap { inactiveLevel in
-						inactiveLevel >= .package || mentioningModule.declares(declaration, isOwnFile: plainTypeDeclarations.isOwnFile) ? inactiveLevel : nil
-					}
-					guard levelWhereMockConditionIsInactive.map({ $0 < Self.normalized(level) }) ?? true else { return nil }
-					return DeclarationReadUnderMockCondition(namedType: mentionedType, declaration: declaration, mockCondition: mockCondition, levelWhereMockConditionIsInactive: levelWhereMockConditionIsInactive)
-				}
-				if !checkedDeclarations.isEmpty {
-					outermostDeclarations = checkedDeclarations
-				}
-				remainingType = checkedType.popNested
-			}
-			declarations += outermostDeclarations
-		}
-		return declarations
-	}
-
 	/// The entries whose proving members, read from `admittedModules` for a type with no entry and from every module
 	/// for an entry, mention a type `type` names, and, for each such member of an entry that is not exact, the entries
 	/// that mention that entry's type, transitively: what a type's proof depends on.
