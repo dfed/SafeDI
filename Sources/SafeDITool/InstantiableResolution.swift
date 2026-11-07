@@ -138,6 +138,7 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable]) 
 			packageName: unnormalizedInstantiable.packageName,
 		)
 		normalized.sourceFilePath = unnormalizedInstantiable.sourceFilePath
+		normalized.isInsideCompilerDecidedBlock = unnormalizedInstantiable.isInsideCompilerDecidedBlock
 		return normalized
 	}
 }
@@ -148,10 +149,8 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable]) 
 func resolveSafeDIFulfilledTypes(instantiables: [Instantiable]) throws -> [TypeDescription: Instantiable] {
 	// Errors cite every declaration claiming the type rather than the pair that collided: a merged entry
 	// no longer knows which declaration it came from, and the pair would depend on collection order.
-	func productionDeclarationLocations(fulfilling instantiableType: TypeDescription) -> [Dependency.DeclarationLocation?] {
-		instantiables
-			.filter { !$0.mockOnly && $0.instantiableTypes.contains(instantiableType) }
-			.map(\.declarationLocation)
+	func productionDeclarations(fulfilling instantiableType: TypeDescription) -> [Instantiable] {
+		instantiables.filter { !$0.mockOnly && $0.instantiableTypes.contains(instantiableType) }
 	}
 	func mockProviderDeclarationLocations(fulfilling instantiableType: TypeDescription) -> [Dependency.DeclarationLocation?] {
 		instantiables
@@ -217,7 +216,12 @@ func resolveSafeDIFulfilledTypes(instantiables: [Instantiable]) throws -> [TypeD
 						typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
 					}
 				case (false, false):
-					errorByInstantiableType[instantiableType] = .foundDuplicateInstantiable(instantiableType, declaredAt: productionDeclarationLocations(fulfilling: instantiableType))
+					let productionDeclarations = productionDeclarations(fulfilling: instantiableType)
+					errorByInstantiableType[instantiableType] = .foundDuplicateInstantiable(
+						instantiableType,
+						declaredAt: productionDeclarations.map(\.declarationLocation),
+						isEachInsideCompilerDecidedBlock: productionDeclarations.allSatisfy(\.isInsideCompilerDecidedBlock),
+					)
 				}
 			} else {
 				typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
@@ -255,16 +259,23 @@ func resolveSafeDIFulfilledTypes(instantiables: [Instantiable]) throws -> [TypeD
 }
 
 private enum CollectInstantiablesError: SourceLocatedError {
-	case foundDuplicateInstantiable(TypeDescription, declaredAt: [Dependency.DeclarationLocation?])
+	/// Two or more production declarations fulfill the type. `isEachInsideCompilerDecidedBlock` says whether each is
+	/// inside an `#if` block whose condition only the compiler decides, so that the compiler may compile only one. The
+	/// flag does not say whether the blocks exclude one another (two files may each guard the type with `#if os(iOS)`),
+	/// so the message offers both remedies.
+	case foundDuplicateInstantiable(TypeDescription, declaredAt: [Dependency.DeclarationLocation?], isEachInsideCompilerDecidedBlock: Bool)
 	case duplicateMockProvider(TypeDescription, declaredAt: [Dependency.DeclarationLocation?])
 	/// The errors of different types, each reported as it would be alone, in source order.
 	case independentErrors([CollectInstantiablesError])
 
 	var sourceDiagnostics: [SourceDiagnostic] {
 		switch self {
-		case let .foundDuplicateInstantiable(duplicateInstantiable, declaredAt):
+		case let .foundDuplicateInstantiable(duplicateInstantiable, declaredAt, isEachInsideCompilerDecidedBlock):
 			Self.sourceDiagnostics(
-				message: "Found multiple @\(InstantiableVisitor.macroName) types or extensions that fulfill `\(duplicateInstantiable.asSource)`. Each type can be fulfilled by only one @\(InstantiableVisitor.macroName) declaration, across all modules. Keep one, and remove `\(duplicateInstantiable.asSource)` from the others’ `fulfillingAdditionalTypes` or remove their @\(InstantiableVisitor.macroName).",
+				message: "Found multiple @\(InstantiableVisitor.macroName) types or extensions that fulfill `\(duplicateInstantiable.asSource)`. "
+					+ (isEachInsideCompilerDecidedBlock
+						? "Each is declared inside an `#if` that only the compiler decides, such as `#if os(iOS)`, and SafeDI reads every clause. If no build compiles more than one of them, fulfill `\(duplicateInstantiable.asSource)` with one @\(InstantiableVisitor.macroName) declaration outside the `#if`, and put the platform difference inside its body or its `\(InstantiableVisitor.instantiateMethodName)(…)` method. Otherwise, keep one, and remove `\(duplicateInstantiable.asSource)` from the others’ `fulfillingAdditionalTypes` or remove their @\(InstantiableVisitor.macroName)."
+						: "Each type can be fulfilled by only one @\(InstantiableVisitor.macroName) declaration, across all modules. Keep one, and remove `\(duplicateInstantiable.asSource)` from the others’ `fulfillingAdditionalTypes` or remove their @\(InstantiableVisitor.macroName)."),
 				declaredAt: declaredAt,
 			)
 		case let .duplicateMockProvider(duplicateInstantiable, declaredAt):

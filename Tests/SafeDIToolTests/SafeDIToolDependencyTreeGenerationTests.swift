@@ -2740,14 +2740,10 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public enum __safeDI_Screen_154FFE4ADBF72F8B {}
 		}
 		"""
-		// Under the SwiftPM plugin the call says what to do when it does not compile: the plugin cannot tell whether the
-		// seam's target applies it. A module read from its `.safedi` ran `generate`, so no comment is needed.
-		let callComment = switch integration {
-		case .moduleInfo:
-			""
-		case .swiftPackagePlugin:
-			" // If this line does not compile, add the SafeDI plugin to the target that declares Screen."
-		}
+		// The call says what to do when it does not compile: under the SwiftPM plugin, apply the plugin to the seam's
+		// target, which the plugin cannot tell is applied; for a module read from its `.safedi`, compile the code its run
+		// generated into it, which `generate` cannot tell is compiled.
+		let callComment = integration.seamCallComment(type: "Screen", declaringModule: "Feature")
 		let rootCode = """
 		extension Root {
 		    public init() {
@@ -2881,12 +2877,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let callComment = switch integration {
-		case .moduleInfo:
-			""
-		case .swiftPackagePlugin:
-			" // If this line does not compile, add the SafeDI plugin to the target that declares Session."
-		}
+		let callComment = integration.seamCallComment(type: "Session", declaringModule: "Core")
 		let sessionCode = """
 		extension Session {
 		    public init(database: Database) {
@@ -2917,23 +2908,17 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			}
 			"""
 		}
-		let rootCallComment = switch integration {
-		case .moduleInfo:
-			""
-		case .swiftPackagePlugin:
-			" // If this line does not compile, add the SafeDI plugin to the target that declares "
-		}
 		let rootCode = """
 		extension Root {
 		    public init() {
 		        let database = Database()
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_FF5D0A1F23864D36.self\(rootCallComment.isEmpty ? "" : rootCallComment + "Screen.")
+		            _ = Screen.__safeDI_Screen_FF5D0A1F23864D36.self\(integration.seamCallComment(type: "Screen", declaringModule: "Feature"))
 		            return Screen(database: database)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        func __safeDI_panel() -> Panel {
-		            _ = Panel.__safeDI_Panel_FF5D0A1F23864D36.self\(rootCallComment.isEmpty ? "" : rootCallComment + "Panel.")
+		            _ = Panel.__safeDI_Panel_FF5D0A1F23864D36.self\(integration.seamCallComment(type: "Panel", declaringModule: "Feature"))
 		            return Panel(database: database)
 		        }
 		        let panel: Panel = __safeDI_panel()
@@ -3263,12 +3248,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let callComment = switch integration {
-		case .moduleInfo:
-			""
-		case .swiftPackagePlugin:
-			" // If this line does not compile, add the SafeDI plugin to the target that declares "
-		}
 		let vaultCode = """
 		extension Vault {
 		    public init(database: Database) {
@@ -3285,7 +3264,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		extension Dashboard {
 		    public init(database: Database) {
 		        func __safeDI_vault() -> Vault {
-		            _ = Vault.__safeDI_Vault_FF5D0A1F23864D36.self\(callComment.isEmpty ? "" : callComment + "Vault.")
+		            _ = Vault.__safeDI_Vault_FF5D0A1F23864D36.self\(integration.seamCallComment(type: "Vault", declaringModule: "Storage"))
 		            return Vault(database: database)
 		        }
 		        let vault: Vault = __safeDI_vault()
@@ -3302,12 +3281,12 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init() {
 		        let database = Database()
 		        func __safeDI_dashboard() -> Dashboard {
-		            _ = Dashboard.__safeDI_Dashboard_FF5D0A1F23864D36.self\(callComment.isEmpty ? "" : callComment + "Dashboard.")
+		            _ = Dashboard.__safeDI_Dashboard_FF5D0A1F23864D36.self\(integration.seamCallComment(type: "Dashboard", declaringModule: "Analytics"))
 		            return Dashboard(database: database)
 		        }
 		        let dashboard: Dashboard = __safeDI_dashboard()
 		        func __safeDI_vault() -> Vault {
-		            _ = Vault.__safeDI_Vault_FF5D0A1F23864D36.self\(callComment.isEmpty ? "" : callComment + "Vault.")
+		            _ = Vault.__safeDI_Vault_FF5D0A1F23864D36.self\(integration.seamCallComment(type: "Vault", declaringModule: "Storage"))
 		            return Vault(database: database)
 		        }
 		        let vault: Vault = __safeDI_vault()
@@ -4386,12 +4365,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let callComment = switch integration {
-		case .moduleInfo:
-			""
-		case .swiftPackagePlugin:
-			" // If this line does not compile, add the SafeDI plugin to the target that declares Screen."
-		}
+		let callComment = integration.seamCallComment(type: "Screen", declaringModule: "Core")
 		let core = try #require(output.modules["Core"])
 		let app = try #require(output.modules["App"])
 		let seamCode = cell.seamCode.contains("<DETAIL-PATH>")
@@ -4992,12 +4966,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let callComment = switch integration {
-		case .moduleInfo:
-			""
-		case .swiftPackagePlugin:
-			" // If this line does not compile, add the SafeDI plugin to the target that declares Service."
-		}
+		let callComment = integration.seamCallComment(type: "Service", declaringModule: "Core")
 		let serviceCode = """
 		extension Service {
 		    public init() {
@@ -7525,12 +7494,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		let code = Self.lazyCycleOfSeamsCode(declaresBuilderFirst: true)
-		let callComment = switch integration {
-		case .moduleInfo:
-			""
-		case .swiftPackagePlugin:
-			" // If this line does not compile, add the SafeDI plugin to the target that declares A."
-		}
+		let callComment = integration.seamCallComment(type: "A", declaringModule: "Core")
 		let rootCode = code.root.replacingOccurrences(of: "<COMMENT>", with: callComment)
 		let expectedGeneratedFiles: [String: [String: String]] = switch integration {
 		case .moduleInfo:

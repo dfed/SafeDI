@@ -8315,9 +8315,9 @@ enum GraphFuzzerOracle {
 
 	/// The trailing comments generated code carries in one flow and not the other: `// Declared at …`, which refers to an
 	/// alias's declaration where a flow does not know the compiler's spelling of its path for a `#sourceLocation`
-	/// directive, and the comment a seam call carries where SafeDI cannot know the seam's module generated the
-	/// initializer it calls, which a flow that reads the module's `.safedi` knows.
-	static let integrationSpecificTrailingComments = [" // Declared at ", " // If this line does not compile, add the SafeDI plugin"]
+	/// directive, and the comment a seam call carries saying what to do when it does not compile, which each flow words
+	/// for its own integration.
+	static let integrationSpecificTrailingComments = [" // Declared at ", " // If this line does not compile, add the SafeDI plugin", " // If this line does not compile, compile the code SafeDI generates"]
 
 	/// The failure of a graph whose `SafeDITool generate` output differs between two processes, which seed their
 	/// hashing differently, or `nil` when both processes give the same output.

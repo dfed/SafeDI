@@ -3224,6 +3224,167 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 		""")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorNamingCompilerDecidedClauses_whenEachClauseOfPlatformBlockDeclaresType() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				let message = "Found multiple @Instantiable types or extensions that fulfill `Haptics`. Each is declared inside an `#if` that only the compiler decides, such as `#if os(iOS)`, and SafeDI reads every clause. If no build compiles more than one of them, fulfill `Haptics` with one @Instantiable declaration outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. Otherwise, keep one, and remove `Haptics` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
+				return """
+				\(fixtures["Haptics.swift"]):2:1: error: \(message)
+				\(fixtures["Haptics.swift"]):7:1: error: \(message)
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#if os(iOS)
+					@Instantiable
+					public struct Haptics: Instantiable {
+					    public init() {}
+					}
+					#else
+					@Instantiable
+					public struct Haptics: Instantiable {
+					    public init() {}
+					}
+					#endif
+					""",
+				],
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorOfferingToKeepOne_whenTwoFilesGuardTypeWithSamePlatformCondition() async {
+		// Both declarations compile on iOS, so this is a plain duplicate: the message must still offer keeping one.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				let message = "Found multiple @Instantiable types or extensions that fulfill `Haptics`. Each is declared inside an `#if` that only the compiler decides, such as `#if os(iOS)`, and SafeDI reads every clause. If no build compiles more than one of them, fulfill `Haptics` with one @Instantiable declaration outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. Otherwise, keep one, and remove `Haptics` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
+				return """
+				\(fixtures["FeedbackHaptics.swift"]):2:1: error: \(message)
+				\(fixtures["ImpactHaptics.swift"]):2:1: error: \(message)
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: [
+					"Haptics.swift": "public protocol Haptics {}",
+					"FeedbackHaptics.swift": """
+					#if canImport(UIKit)
+					@Instantiable(fulfillingAdditionalTypes: [Haptics.self])
+					public struct FeedbackHaptics: Haptics, Instantiable {
+					    public init() {}
+					}
+					#endif
+					""",
+					"ImpactHaptics.swift": """
+					#if canImport(UIKit)
+					@Instantiable(fulfillingAdditionalTypes: [Haptics.self])
+					public struct ImpactHaptics: Haptics, Instantiable {
+					    public init() {}
+					}
+					#endif
+					""",
+				],
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorKeepingOneDeclaration_whenOnlyOneDuplicateIsInsidePlatformBlock() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				let message = "Found multiple @Instantiable types or extensions that fulfill `Haptics`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Haptics` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
+				return """
+				\(fixtures["Haptics.swift"]):2:1: error: \(message)
+				\(fixtures["Haptics_2.swift"]):1:1: error: \(message)
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#if os(iOS)
+					@Instantiable
+					public struct Haptics: Instantiable {
+					    public init() {}
+					}
+					#endif
+					""",
+					"""
+					@Instantiable
+					public struct Haptics: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_readsOneDeclaration_whenEachClauseOfConditionBlockDeclaresType() async throws {
+		// SafeDI decides `#if DEBUG` itself, so it reads one clause, and the type is declared once.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				#if DEBUG
+				@Instantiable
+				public struct Haptics: Instantiable {
+				    public init() {}
+				}
+				#else
+				@Instantiable
+				public struct Haptics: Instantiable {
+				    public init() {}
+				}
+				#endif
+				""",
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(haptics: Haptics) {
+				        self.haptics = haptics
+				    }
+
+				    @Instantiated let haptics: Haptics
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			activeCompilationConditions: ["DEBUG"],
+		)
+
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if !(DEBUG)
+			#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+			#endif
+
+			extension Root {
+			    public init() {
+			        let haptics = Haptics()
+			        self.init(haptics: haptics)
+			    }
+			}
+			""",
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

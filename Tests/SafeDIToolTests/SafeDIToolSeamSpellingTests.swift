@@ -761,7 +761,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					    public init() {
 					        func __safeDI_screenBuilder(value: Settings) -> Screen {
 					            func __safeDI_list() -> List {
-					                _ = List.__safeDI_List_799D68846C7AF168.self
+					                _ = List.__safeDI_List_799D68846C7AF168.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 					                return List(value: value)
 					            }
 					            let list: List = __safeDI_list()
@@ -788,7 +788,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					    public init() {
 					        func __safeDI_screenBuilder(value: @escaping (Settings) -> Void) -> Screen {
 					            func __safeDI_list() -> List {
-					                _ = List.__safeDI_List_CA5CD86521ED15DA.self
+					                _ = List.__safeDI_List_CA5CD86521ED15DA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 					                return List(value: value)
 					            }
 					            let list: List = __safeDI_list()
@@ -815,7 +815,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					    public init() {
 					        func __safeDI_screenBuilder(value: any Logging) -> Screen {
 					            func __safeDI_list() -> List {
-					                _ = List.__safeDI_List_86EFB7C4B110B9DE.self
+					                _ = List.__safeDI_List_86EFB7C4B110B9DE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 					                return List(value: value)
 					            }
 					            let list: List = __safeDI_list()
@@ -842,7 +842,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					    public init() {
 					        func __safeDI_screenBuilder(value: Catalog.Entry) -> Screen {
 					            func __safeDI_list() -> List {
-					                _ = List.__safeDI_List_9FC0BE131CCF7636.self
+					                _ = List.__safeDI_List_9FC0BE131CCF7636.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 					                return List(value: value)
 					            }
 					            let list: List = __safeDI_list()

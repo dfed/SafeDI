@@ -864,7 +864,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        let theme = LazilyInstantiated<Theme>(__safeDI_theme)
 			        let flag: Flag = Flag.instantiate()
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_97F8A0D392C5BF51.self
+			            _ = Service.__safeDI_Service_97F8A0D392C5BF51.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service(flag: flag, session: session, theme: theme.instance)
 			        }
 			        let service: Service = __safeDI_service()
@@ -1147,7 +1147,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self
+			            _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service()
 			        }
 			        let service: Service = __safeDI_service()
@@ -2038,14 +2038,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	"""
 
 	/// The generated files of `module` under `integration`: its one combined file, or, under the SwiftPM plugin, the file
-	/// generated beside `sourceFile`, the file that declares the root, whose calls of another module's seam carry the
-	/// plugin's comment.
+	/// generated beside `sourceFile`, the file that declares the root, whose calls of `Feature`'s seam carry the comment
+	/// `integration` adds.
 	private static func generatedFiles(of module: String, sourceFile: String, _ code: String, under integration: MultiModuleIntegration) -> [String: String] {
-		switch integration {
+		let code = code.replacingOccurrences(of: #"(_ = Service\.__safeDI_Service_[0-9A-F]+\.self)"#, with: "$1" + integration.seamCallComment(type: "Service", declaringModule: "Feature"), options: .regularExpression)
+		return switch integration {
 		case .moduleInfo:
 			["\(module).swift": generatedFileHeader + code]
 		case .swiftPackagePlugin:
-			["\(sourceFile)+SafeDI.swift": generatedFileHeader + code.replacingOccurrences(of: #"(_ = Service\.__safeDI_Service_[0-9A-F]+\.self)"#, with: "$1 // If this line does not compile, add the SafeDI plugin to the target that declares Service.", options: .regularExpression)]
+			["\(sourceFile)+SafeDI.swift": generatedFileHeader + code]
 		}
 	}
 
@@ -2259,7 +2260,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_9D6698F9EB89E77B.self
+			            _ = Service.__safeDI_Service_9D6698F9EB89E77B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service()
 			        }
 			        let service: Service = __safeDI_service()
@@ -2481,7 +2482,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			extension Shell {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_9D6698F9EB89E77B.self
+			            _ = Service.__safeDI_Service_9D6698F9EB89E77B.self // If this line does not compile, compile the code SafeDI generates for module Base into Base: under Bazel, add Base's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service()
 			        }
 			        let service: Service = __safeDI_service()
@@ -2567,7 +2568,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 
 			    package init(session: Session? = nil, theme: Theme? = nil) {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_05FA4E47A7B6869F.self
+			            _ = Service.__safeDI_Service_05FA4E47A7B6869F.self // If this line does not compile, compile the code SafeDI generates for module Base into Base: under Bazel, add Base's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service(session: session, theme: theme)
 			        }
 			        let service: Service = __safeDI_service()
@@ -2597,7 +2598,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        func __safeDI_holderBuilder(theme: Theme) -> Holder {
 			            let session = Session()
 			            func __safeDI_shell() -> Shell {
-			                _ = Shell.__safeDI_Shell_05FA4E47A7B6869F.self
+			                _ = Shell.__safeDI_Shell_05FA4E47A7B6869F.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			                return Shell(session: session, theme: theme)
 			            }
 			            let shell: Shell = __safeDI_shell()
@@ -2623,7 +2624,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			extension OtherRoot {
 			    public init() {
 			        func __safeDI_shell() -> Shell {
-			            _ = Shell.__safeDI_Shell_05FA4E47A7B6869F.self
+			            _ = Shell.__safeDI_Shell_05FA4E47A7B6869F.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Shell()
 			        }
 			        let shell: Shell = __safeDI_shell()
@@ -2973,7 +2974,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_9D6698F9EB89E77B.self
+			            _ = Service.__safeDI_Service_9D6698F9EB89E77B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service()
 			        }
 			        let service: Service = __safeDI_service()
@@ -3042,7 +3043,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			    public init() {
 			        let analytics = Analytics()
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_55C38F330B830A08.self
+			            _ = Service.__safeDI_Service_55C38F330B830A08.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service(analytics: analytics)
 			        }
 			        let service: Service = __safeDI_service()
@@ -3250,7 +3251,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			    public init() {
 			        func __safeDI_shellBuilder(token: Token) -> Shell {
 			            func __safeDI_service() -> Service {
-			                _ = Service.__safeDI_Service_1EB503BFA23A82BA.self
+			                _ = Service.__safeDI_Service_1EB503BFA23A82BA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			                return Service(token: token)
 			            }
 			            let service: Service = __safeDI_service()
@@ -3510,7 +3511,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    public enum __safeDI_FeedScreen_4E5235B56C7C511F {}
 		}
 		"""
-		let pluginComment = integration == .swiftPackagePlugin ? " // If this line does not compile, add the SafeDI plugin to the target that declares FeedScreen." : ""
+		let pluginComment = integration.seamCallComment(type: "FeedScreen", declaringModule: "FeedModule")
 		let appFile = generatedFileHeader + Self.importLines("FeedModule").dropLast() + Self.importLines("SharedModule") + """
 		extension Root {
 		    public convenience init() {
@@ -3736,7 +3737,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    public init() {
 		        let theme: Theme = ThemeProvider()
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_FE0EC2F5EC57A9C9.self
+		            _ = Screen.__safeDI_Screen_FE0EC2F5EC57A9C9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Screen(theme: theme)
 		        }
 		        let screen: Screen = __safeDI_screen()

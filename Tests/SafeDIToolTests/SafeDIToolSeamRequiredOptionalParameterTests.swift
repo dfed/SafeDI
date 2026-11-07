@@ -1321,7 +1321,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 				    public convenience init() {
 				        func __safeDI_hostBuilder(token: Secret?) -> Host {
 				            func __safeDI_screen() -> Screen {
-				                _ = Screen.__safeDI_Screen_4BDBF64A8A90FDCE.self
+				                _ = Screen.__safeDI_Screen_4BDBF64A8A90FDCE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				                return Screen(token: token)
 				            }
 				            let screen: Screen = __safeDI_screen()
@@ -1453,7 +1453,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 				extension Screen {
 				    public convenience init(token: Secret?) {
 				        func __safeDI_inner() -> Inner {
-				            _ = Inner.__safeDI_Inner_4BDBF64A8A90FDCE.self
+				            _ = Inner.__safeDI_Inner_4BDBF64A8A90FDCE.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				            return Inner(token: token)
 				        }
 				        let inner: Inner = __safeDI_inner()

@@ -67,6 +67,9 @@ public enum FixableInstantiableError: DiagnosticError {
 	/// A default-valued non-dependency parameter is `@autoclosure`, which a generated mock cannot pass on.
 	case defaultValuedAutoclosureParameter(parameterLabel: String)
 	case mockOnlyWithIsRoot
+	/// A `mockOnly` declaration spells `mockAttributes`, which only a generated `mock()` reads: a `mockOnly`
+	/// declaration's hand-written mock is the type's mock, and none is generated from it.
+	case mockAttributesOnMockOnly
 	case generateDependencyTreeWithIsRoot
 	case generateDependencyTreeWithMockOnly
 	/// The `mockOnly` declaration has no mock method named `methodName`. The method a fix-it adds spells
@@ -174,6 +177,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			"A default-valued `@autoclosure` parameter cannot be forwarded by a generated mock. Remove `@autoclosure` from `\(parameterLabel)`, or remove its default."
 		case .mockOnlyWithIsRoot:
 			"`mockOnly` types cannot be marked `isRoot`."
+		case .mockAttributesOnMockOnly:
+			"`mockAttributes` has no effect on a `mockOnly` declaration: its hand-written mock is the mock SafeDI uses."
 		case .generateDependencyTreeWithIsRoot:
 			"`isRoot` and `generateDependencyTree` cannot both be `true`: a root's dependency tree is generated as a `public init()` that takes nothing, and a type whose dependency tree SafeDI generates in its own module receives what its tree needs as parameters. Keep one."
 		case .generateDependencyTreeWithMockOnly:
@@ -260,7 +265,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .unnamedInstantiateDependency,
 			     .namesEncodedDifferently:
 				.error
-			case .unqualifiedNestedType:
+			case .mockAttributesOnMockOnly,
+			     .unqualifiedNestedType:
 				.warning
 			}
 			message = error.description
@@ -344,6 +350,8 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Remove `@autoclosure` from `\(parameterLabel)`"
 			case .mockOnlyWithIsRoot:
 				"Remove `isRoot: true`"
+			case .mockAttributesOnMockOnly:
+				"Remove `mockAttributes`"
 			case .generateDependencyTreeWithIsRoot, .generateDependencyTreeWithMockOnly:
 				"Remove `generateDependencyTree: true`"
 			case let .mockOnlyMissingMockMethod(typeName, methodName, accessModifier):

@@ -402,7 +402,33 @@ public struct Initializer: Codable, Hashable, Sendable {
 // MARK: - TypeDescription
 
 extension TypeDescription {
+	/// Whether a parameter of type `argument` takes a property of this type: the parameter's type is this type as a
+	/// function parameter (`asFunctionParameter`, which spells a closure type `@escaping`), with its attributes in any
+	/// order, since Swift reads `@Sendable @escaping` and `@escaping @Sendable` as one type.
 	fileprivate func isEqualToFunctionArgument(_ argument: TypeDescription) -> Bool {
-		asFunctionParameter == argument
+		asFunctionParameter.withAttributesInSortedOrder == argument.withAttributesInSortedOrder
+	}
+
+	/// This type with the attributes that apply to it in sorted order, which Swift accepts in any order.
+	private var withAttributesInSortedOrder: TypeDescription {
+		switch self {
+		case let .attributed(type, specifiers, attributes):
+			.attributed(type, specifiers: specifiers, attributes: attributes.sorted())
+		case .any,
+		     .array,
+		     .closure,
+		     .composition,
+		     .dictionary,
+		     .implicitlyUnwrappedOptional,
+		     .metatype,
+		     .nested,
+		     .optional,
+		     .simple,
+		     .some,
+		     .tuple,
+		     .unknown,
+		     .void:
+			self
+		}
 	}
 }

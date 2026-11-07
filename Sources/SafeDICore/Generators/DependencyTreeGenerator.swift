@@ -35,6 +35,8 @@ public actor DependencyTreeGenerator {
 	///     an extension extends bounds the types declared in or by that extension.
 	///   - writtenImportAccessLevels: The access levels the files SafeDI read spell on their imports, the module's own
 	///     apart from its dependencies', which decide the level each generated import spells.
+	///   - unreadImports: What the run knows of the modules a file imports that it read nothing of, or `nil` when it
+	///     cannot tell which modules it could have read.
 	public init(
 		importStatements: [ImportStatement],
 		mockImportStatements: [ImportStatement],
@@ -44,7 +46,9 @@ public actor DependencyTreeGenerator {
 		seams: SeamResolution = .none,
 		plainTypeDeclarations: [PlainTypeDeclaration] = [],
 		writtenImportAccessLevels: GeneratedImportAccess.WrittenLevels = .none,
+		unreadImports: UnreadImports? = nil,
 	) {
+		self.unreadImports = unreadImports
 		self.importStatements = importStatements
 		self.mockImportStatements = mockImportStatements
 		importAccess = GeneratedImportAccess(
@@ -66,6 +70,30 @@ public actor DependencyTreeGenerator {
 	}
 
 	// MARK: Public
+
+	/// What a run of `generate` knows of the modules a file imports that it read nothing of. A type no declaration the run
+	/// read fulfills may be declared in such a module, which the build did not give the run, so the error at a file that
+	/// instantiates the type leads with them.
+	public struct UnreadImports: Sendable {
+		/// How the run learns of the modules it reads, which decides how to give it one more.
+		public enum Integration: Hashable, Sendable {
+			/// The run reads the module info of the modules the build system lists: Bazel's, Tuist's, a custom build's.
+			case moduleInfo
+			/// The run reads the files of the targets in the SwiftPM plugin's target graph.
+			case targetGraph
+		}
+
+		/// - Parameter importedModuleNamesNotRead: The modules the file at a path imports, as the run names the file, that
+		///   the run read nothing of, in name order, or `nil` when the run does not know what the file imports. Called
+		///   only on the path of an error.
+		public init(integration: Integration, importedModuleNamesNotRead: @escaping @Sendable (_ filePath: String) -> [String]?) {
+			self.integration = integration
+			self.importedModuleNamesNotRead = importedModuleNamesNotRead
+		}
+
+		public let integration: Integration
+		public let importedModuleNamesNotRead: @Sendable (_ filePath: String) -> [String]?
+	}
 
 	/// The module the generated code compiles in, which decides what access each declaration the generated code
 	/// constructs needs.
@@ -1215,8 +1243,10 @@ public actor DependencyTreeGenerator {
 	// MARK: - DependencyTreeGeneratorError
 
 	enum DependencyTreeGeneratorError: SourceLocatedError {
-		/// `fulfilledByMockOnlyDeclaration` is set when only a `mockOnly` declaration fulfills the type.
-		case noInstantiableFound(TypeDescription, referencedBy: [LocatedProperty], fulfilledByMockOnlyDeclaration: Bool)
+		/// No production declaration fulfills a type that properties instantiate. `fulfilledByMockOnlyDeclaration` is set
+		/// when a `mockOnly` declaration fulfills it; `unreadImports` names, for each file that declares such a property,
+		/// the modules it imports that the run read nothing of, or is `nil` when the run cannot tell.
+		case noInstantiableFound(TypeDescription, referencedBy: [LocatedProperty], fulfilledByMockOnlyDeclaration: Bool, unreadImports: UnreadImportsOfFiles?)
 		case unfulfillableProperties([UnfulfillableProperty])
 		/// Reported at the dependency of a root through which its tree calls a seam whose builder for a hole it cannot
 		/// fill, with a note at the hole's declaration where its file can be read. See `UnfilledHole`.
@@ -1449,16 +1479,21 @@ public actor DependencyTreeGenerator {
 						)
 					}
 					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
-			case let .noInstantiableFound(typeDescription, referencedBy, fulfilledByMockOnlyDeclaration):
+			case let .noInstantiableFound(typeDescription, referencedBy, fulfilledByMockOnlyDeclaration, unreadImports):
 				// Sorted by location so the order never depends on map iteration.
-				referencedBy.map {
+				referencedBy.map { locatedProperty in
 					SourceDiagnostic(
 						severity: .error,
-						location: $0.declarationLocation,
+						location: locatedProperty.declarationLocation,
 						message: Self.noInstantiableFoundMessage(
 							typeDescription: typeDescription,
-							referencingProperty: $0.property,
+							referencingProperty: locatedProperty.property,
 							fulfilledByMockOnlyDeclaration: fulfilledByMockOnlyDeclaration,
+							unreadImports: unreadImports.flatMap { unreadImports in
+								locatedProperty.declarationLocation
+									.flatMap { unreadImports.moduleNamesByFilePath[$0.filePath] }
+									.map { (integration: unreadImports.integration, moduleNames: $0) }
+							},
 						),
 					)
 				}
@@ -1554,18 +1589,66 @@ public actor DependencyTreeGenerator {
 			return " A lazily instantiated dependency is created once, so it cannot break a dependency cycle: \(validatedAs)."
 		}
 
+		/// The modules each file that instantiates a type no declaration fulfills imports that the run read nothing of, and
+		/// how the run learns of the modules it reads.
+		struct UnreadImportsOfFiles {
+			let integration: UnreadImports.Integration
+			/// The modules each file imports that the run read nothing of, in name order, by the file's path, for each file
+			/// whose imports the run knows.
+			let moduleNamesByFilePath: [String: [String]]
+		}
+
+		/// - Parameter unreadImports: The modules the file that declares `referencingProperty` imports that the run read
+		///   nothing of, and how the run learns of the modules it reads, or `nil` when the run cannot tell which modules it
+		///   could have read (the Xcode project plugin's, or one run by hand) or what the file imports (another module's).
 		private static func noInstantiableFoundMessage(
 			typeDescription: TypeDescription,
 			referencingProperty: Property,
 			fulfilledByMockOnlyDeclaration: Bool,
+			unreadImports: (integration: UnreadImports.Integration, moduleNames: [String])?,
 		) -> String {
 			let typeName = typeDescription.asSource
 			let reference = "`\(typeName)`, which @\(Dependency.Source.instantiatedRawValue) property `\(referencingProperty.asSource)` instantiates"
-			return if fulfilledByMockOnlyDeclaration {
-				"No production @\(InstantiableVisitor.macroName) declaration fulfills \(reference). A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills `\(typeName)`."
-			} else {
-				"No @\(InstantiableVisitor.macroName) type or extension fulfills \(reference). Decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName); list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)"
+			guard !fulfilledByMockOnlyDeclaration else {
+				return "No production @\(InstantiableVisitor.macroName) declaration fulfills \(reference). A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills `\(typeName)`."
 			}
+			var message = "No @\(InstantiableVisitor.macroName) type or extension fulfills \(reference)."
+			// Declaring the type, or a type that fulfills it, where SafeDI reads it, after the verb that leads it.
+			let declaringRemedy = " `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName), or list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it."
+			if let unreadImports {
+				if unreadImports.moduleNames.isEmpty {
+					message += " Decorate" + declaringRemedy
+				} else {
+					message += " " + unreadImportsCause(moduleNames: unreadImports.moduleNames, typeName: typeName, integration: unreadImports.integration)
+					message += " Otherwise, decorate" + declaringRemedy
+				}
+			} else {
+				message += " Decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName); list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)"
+			}
+			return message
+		}
+
+		/// The sentences that say a file imports `moduleNames`, which the run read nothing of, so that one of them may
+		/// declare the type named `typeName`, and how `integration` gives the run that module.
+		private static func unreadImportsCause(moduleNames: [String], typeName: String, integration: UnreadImports.Integration) -> String {
+			let isOneModule = moduleNames.count == 1
+			let importedModules = moduleNames.map { "`\($0)`" }.joinedAsList
+			let declaringModuleCondition = isOneModule ? "If \(importedModules) declares `\(typeName)`," : "If one of them declares `\(typeName)`,"
+			var cause = "This file imports \(importedModules), "
+			switch integration {
+			case .moduleInfo:
+				cause += "whose SafeDI module info this run was not given. "
+				cause += declaringModuleCondition
+				cause += isOneModule ? " build it with SafeDI" : " build that module with SafeDI"
+				cause += " and give this run its module info: under Bazel, declare it with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target's `safedi_deps`; under Tuist, give its target `SafeDI.preCompileScript` and list it in the `dependencies:` of this target's `SafeDI.preCompileScript`; in a custom build, pass its `.safedi` file to `--dependent-module-info-file-path`."
+			case .targetGraph:
+				cause += isOneModule
+					? "which is not a target this target depends on, so SafeDI read none of its files. "
+					: "which are not targets this target depends on, so SafeDI read none of their files. "
+				cause += declaringModuleCondition
+				cause += " add its target to this target's `dependencies` in `Package.swift`; SafeDI does not read a package fetched from a URL, so for one of its modules add the package's checkout directory to `additionalDirectoriesToInclude` in a `#\(SafeDIConfigurationVisitor.macroName)` instead."
+			}
+			return cause
 		}
 
 		/// An `error:` line that names the type declaring the wrapper, since Xcode drops notes from build-tool
@@ -2362,7 +2445,9 @@ public actor DependencyTreeGenerator {
 				} else if !earlierName.utf8.elementsEqual(laterName.utf8) {
 					"`\(declaringType.asSource)` has dependencies `\(earlierName)` (\(earlierName.codePoints)) and `\(laterName)` (\(laterName.codePoints)), which look the same but are encoded differently, so SafeDI cannot tell them apart. The @\(InstantiableVisitor.macroName) macro rejects such names. Rename one of them."
 				} else {
-					"`\(declaringType.asSource)` declares the dependency `\(laterName)` more than once. SafeDI reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`, so a dependency declared in each clause counts twice. Declare it once, outside the `#if`."
+					// One wording for both causes, since a dependency does not record whether an `#if` encloses it: a copy-paste,
+					// which the compiler rejects too, and one declaration in each clause of an `#if` only the compiler decides.
+					"`\(declaringType.asSource)` declares the dependency `\(laterName)` more than once. Declare it once: if each clause of an `#if` that only the compiler decides, such as `#if os(iOS)`, declares it, declare it outside the `#if`, since SafeDI reads every clause."
 				}
 			}
 		}
@@ -2412,6 +2497,34 @@ public actor DependencyTreeGenerator {
 			/// The `@Received(onlyIfAvailable: true)` alias that declares `property` where `instantiable` receives it,
 			/// when that alias is not created because its fulfilling property is unavailable. `nil` otherwise.
 			let uncreatedAlias: UncreatedAlias?
+			/// Whether an `@Instantiated` declaration of `property` could fulfill it, which decides whether the hint
+			/// suggests one.
+			let instantiatedDeclaration: InstantiatedDeclaration
+
+			/// Whether an `@Instantiated` declaration of a received property's non-optional form could fulfill it. The
+			/// macro rejects an optional `@Instantiated` property, and a declaration of the non-optional form provides
+			/// a receive of the optional one, so the hint always suggests the non-optional form.
+			enum InstantiatedDeclaration: Hashable {
+				/// It could, as far as SafeDI checks: the non-optional form is not a constant, or a declaration without
+				/// `@Forwarded` properties fulfills its type.
+				case possible
+				/// The non-optional form is a constant of a type whose declaration has `@Forwarded` properties, which only
+				/// an `Instantiator` can build.
+				case typeHasForwardedProperties
+				/// The non-optional form is a constant of a type no `@Instantiable` declaration fulfills.
+				case typeIsNotInstantiable
+
+				/// Whether an `@Instantiated` declaration of `property`'s non-optional form could fulfill it, among the
+				/// declarations of `fulfillingInstantiables`.
+				static func of(_ property: Property, among fulfillingInstantiables: [TypeDescription: Instantiable]) -> Self {
+					let suggestedProperty = property.asUnwrappedProperty
+					guard suggestedProperty.propertyType.isConstant else { return .possible }
+					guard let fulfillingInstantiable = fulfillingInstantiables[suggestedProperty.typeDescription.asInstantiatedType] else {
+						return .typeIsNotInstantiable
+					}
+					return fulfillingInstantiable.dependencies.contains { $0.source == .forwarded } ? .typeHasForwardedProperties : .possible
+				}
+			}
 
 			/// An `@Received(onlyIfAvailable: true)` alias that is not created because its fulfilling property is unavailable.
 			struct UncreatedAlias: Hashable {
@@ -2453,11 +2566,23 @@ public actor DependencyTreeGenerator {
 						[]
 					}
 				} else if suggestedAlternatives.isEmpty {
-					hint = if property.propertyType.isErasedInstantiator {
+					// The macro rejects an optional `@Instantiated` property, and a declaration of the non-optional form
+					// provides a receive of the optional one (`ScopeGenerator.provides`).
+					let suggestedProperty = property.asUnwrappedProperty
+					let typeName = suggestedProperty.typeDescription.asSource
+					let forwardingRemedy = "Declare `@\(Dependency.Source.forwardedRawValue) let \(suggestedProperty.asSource)` on a type below `\(root.asSource)` in the chain, and pass the value to the `Instantiator` that builds that type"
+					hint = if suggestedProperty.propertyType.isErasedInstantiator {
 						// The `@Instantiated` macro requires an erased instantiator to name the type it builds.
-						"Declare `@\(Dependency.Source.instantiatedRawValue)(fulfilledByType:) let \(property.asSource)`, naming the type it builds, on `\(root.asSource)` or on another type in the chain to fix."
+						"Declare `@\(Dependency.Source.instantiatedRawValue)(fulfilledByType:) let \(suggestedProperty.asSource)`, naming the type it builds, on `\(root.asSource)` or on another type in the chain to fix."
 					} else {
-						"Declare `@\(Dependency.Source.instantiatedRawValue) let \(property.asSource)` on `\(root.asSource)` or on another type in the chain to fix."
+						switch instantiatedDeclaration {
+						case .possible:
+							"Declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain to fix."
+						case .typeHasForwardedProperties:
+							"`\(typeName)` has @\(Dependency.Source.forwardedRawValue) properties, so SafeDI builds it only through an `Instantiator`, never as an @\(Dependency.Source.instantiatedRawValue) constant. \(forwardingRemedy), to fix."
+						case .typeIsNotInstantiable:
+							"No @\(InstantiableVisitor.macroName) declaration fulfills `\(typeName)`, so SafeDI cannot instantiate it. \(forwardingRemedy); or decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName) and declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain, to fix."
+						}
 					}
 					fixIts = []
 				} else if suggestedAlternatives.count == 1 {
@@ -2686,6 +2811,7 @@ public actor DependencyTreeGenerator {
 	private let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
 	private let aliasDeclarationReferences: AliasDeclarationReferences
 	private let emittingModule: EmittingModule?
+	private let unreadImports: UnreadImports?
 	private let seams: SeamResolution
 	/// The declarations of types that are not `@Instantiable` this generator was given, which a generator computing
 	/// another module's view is given too.
@@ -3390,7 +3516,7 @@ public actor DependencyTreeGenerator {
 					}
 				},
 				guardTypeName: ownPlan.plan.guardTypeName,
-				carriesPluginComment: foreignPublicMock.callCarriesPluginComment,
+				comment: foreignPublicMock.callComment,
 				declaringModule: foreignPublicMock.declaringModule,
 				callerModule: emittingModule.identity,
 				requirement: requirement,
@@ -4634,7 +4760,7 @@ public actor DependencyTreeGenerator {
 						parameters: signature.parameters(ofTierAt: tier),
 						holes: signature.holes,
 						guardTypeName: signature.guardTypeName,
-						carriesPluginComment: seams.foreignSeams[instantiable.concreteInstantiable]?.callCarriesPluginComment ?? false,
+						comment: seams.foreignSeams[instantiable.concreteInstantiable]?.callComment ?? .noComment,
 						unreachableTierIsReported: unreachableTierIsReported,
 						omittedParameters: signature.parameters.filter { $0.tierAccess < tier },
 						noTierParameters: signature.noTierParameters,
@@ -9146,6 +9272,8 @@ public actor DependencyTreeGenerator {
 								declaringType: alias.declaringType,
 								fulfillingProperty: fulfillingProperty,
 							),
+							// The hint names the uncreated alias instead.
+							instantiatedDeclaration: .possible,
 						))
 					}
 				} else if alias.onlyIfAvailable,
@@ -9231,6 +9359,7 @@ public actor DependencyTreeGenerator {
 								|| receivedProperty.label == $0.label
 						}.sorted(),
 						uncreatedAlias: nil,
+						instantiatedDeclaration: .of(receivedProperty, among: typeDescriptionToFulfillingInstantiableMap),
 					))
 				}
 			}
@@ -9601,10 +9730,19 @@ public actor DependencyTreeGenerator {
 			}
 		}
 		throw DependencyTreeGeneratorError.independentErrors(unbuildableTypeDescriptions.map { unbuildableTypeDescription in
-			DependencyTreeGeneratorError.noInstantiableFound(
+			let referencingProperties = Array(referencingPropertiesByType[unbuildableTypeDescription, default: []])
+			return DependencyTreeGeneratorError.noInstantiableFound(
 				unbuildableTypeDescription,
-				referencedBy: Array(referencingPropertiesByType[unbuildableTypeDescription, default: []]),
+				referencedBy: referencingProperties,
 				fulfilledByMockOnlyDeclaration: typeDescriptionToFulfillingInstantiableMap[unbuildableTypeDescription] != nil,
+				unreadImports: unreadImports.map { unreadImports in
+					DependencyTreeGeneratorError.UnreadImportsOfFiles(
+						integration: unreadImports.integration,
+						moduleNamesByFilePath: Set(referencingProperties.compactMap(\.declarationLocation?.filePath)).reduce(into: [:]) { moduleNamesByFilePath, filePath in
+							moduleNamesByFilePath[filePath] = unreadImports.importedModuleNamesNotRead(filePath)
+						},
+					)
+				},
 			)
 		})
 	}

@@ -74,6 +74,7 @@ struct ModuleMembership: Sendable {
 		self.moduleName = moduleName
 		self.packageName = packageName
 		dependencyModuleNames = []
+		targetGraphModuleNames = nil
 		dependencyModuleNamesByModuleName = [:]
 		let declaringModule = DeclaringModule(moduleName: moduleName, packageName: packageName)
 		declaringModuleOfFile = { filePath in
@@ -92,6 +93,7 @@ struct ModuleMembership: Sendable {
 		moduleName = targetGraph.target.moduleName
 		packageName = targetGraph.target.packageID
 		dependencyModuleNames = targetGraph.target.dependencyModuleNames
+		targetGraphModuleNames = Set(([targetGraph.target] + targetGraph.dependencyTargets).map(\.moduleName))
 		// A module name repeats only in a target graph a hand wrote: the first target keeps it.
 		dependencyModuleNamesByModuleName = Dictionary(
 			([targetGraph.target] + targetGraph.dependencyTargets).map { ($0.moduleName, $0.dependencyModuleNames) },
@@ -117,6 +119,9 @@ struct ModuleMembership: Sendable {
 	/// The modules the module `generate` generates code for depends on directly, as the target graph lists them. The
 	/// options name none: the module info a run per module reads names them.
 	let dependencyModuleNames: [String]
+	/// Every module of the target graph – the module `generate` generates code for and each module whose files the input
+	/// CSV holds – or `nil` when the options, not a target graph, describe the module.
+	let targetGraphModuleNames: Set<String>?
 
 	/// The module that declares the file a declaration names as `filePath`, or `nil` when SafeDITool does not know it.
 	func declaringModule(ofFileAt filePath: String) -> DeclaringModule? {

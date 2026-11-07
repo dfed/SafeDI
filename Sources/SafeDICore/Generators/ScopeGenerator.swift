@@ -3049,7 +3049,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// signature fails to compile here rather than pass `nil` where the initializer expects a value. The
 			// statement is emitted as the body's only generated property, so the call is made in a builder function.
 			let seamGuardLines: [String] = if let seamCall {
-				["\(Self.standardIndent)_ = \(concreteTypeName).\(seamCall.guardTypeName).self\(seamCall.carriesPluginComment ? " \(Instantiable.seamCallPluginComment(for: instantiable.concreteInstantiable))" : "")"]
+				["\(Self.standardIndent)_ = \(concreteTypeName).\(seamCall.guardTypeName).self\(seamCall.comment.lineEnd(for: instantiable.concreteInstantiable))"]
 			} else {
 				[]
 			}

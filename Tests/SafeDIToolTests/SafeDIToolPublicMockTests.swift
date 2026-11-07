@@ -3586,7 +3586,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		        _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(userServiceBuilder: userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        return Screen(analytics: analytics, service: service)
 		    }
@@ -3637,7 +3637,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(DefaultUserService(analytics: analytics))
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -3706,7 +3706,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(DefaultUserService(analytics: analytics))
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -3716,7 +3716,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(DefaultUserService(analytics: analytics))
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.backupService)
 		        }
 		        let backupService: Service = __safeDI_backupService()
@@ -3813,7 +3813,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(DefaultUserService(analytics: analytics))
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder_, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -3891,7 +3891,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(DefaultUserService.mock(analytics: analytics))
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -4073,7 +4073,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -4218,7 +4218,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 		                return routerBuilder
 		            }
-		            _ = Service.__safeDI_Service_mock_EFE368FB931BE019.self
+		            _ = Service.__safeDI_Service_mock_EFE368FB931BE019.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(routerBuilderBuilder: __safeDI_routerBuilderBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -4287,7 +4287,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -4357,7 +4357,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -4459,7 +4459,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 		                return routerBuilder
 		            }
-		            _ = Service.__safeDI_Service_mock_EFE368FB931BE019.self
+		            _ = Service.__safeDI_Service_mock_EFE368FB931BE019.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(routerBuilderBuilder: __safeDI_routerBuilderBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -4573,7 +4573,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -4665,7 +4665,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -4749,7 +4749,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -4762,7 +4762,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let widget = AnyWidget(__safeDI_widget())
 		                return widget
 		            }
-		            _ = Board.__safeDI_Board_mock_43C5D884C7837347.self
+		            _ = Board.__safeDI_Board_mock_43C5D884C7837347.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Board.mock(widgetBuilder: __safeDI_widgetBuilder, safeDIOverrides: safeDIOverrides.board)
 		        }
 		        let board: Board = __safeDI_board()
@@ -4851,7 +4851,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -4864,7 +4864,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let widget = AnyWidget(__safeDI_widget())
 		                return widget
 		            }
-		            _ = Board.__safeDI_Board_mock_43C5D884C7837347.self
+		            _ = Board.__safeDI_Board_mock_43C5D884C7837347.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Board.mock(widgetBuilder: __safeDI_widgetBuilder, safeDIOverrides: safeDIOverrides.board)
 		        }
 		        let board: Board = __safeDI_board()
@@ -4950,7 +4950,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -4963,7 +4963,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let widget = AnyWidget(__safeDI_widget())
 		                return widget
 		            }
-		            _ = Board.__safeDI_Board_mock_43C5D884C7837347.self
+		            _ = Board.__safeDI_Board_mock_43C5D884C7837347.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Board.mock(widgetBuilder: __safeDI_widgetBuilder, safeDIOverrides: safeDIOverrides.board)
 		        }
 		        let board: Board = __safeDI_board()
@@ -5053,7 +5053,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -5066,7 +5066,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let widget = AnyWidget(__safeDI_widget())
 		                return widget
 		            }
-		            _ = Board.__safeDI_Board_mock_43C5D884C7837347.self
+		            _ = Board.__safeDI_Board_mock_43C5D884C7837347.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Board.mock(widgetBuilder: __safeDI_widgetBuilder, safeDIOverrides: safeDIOverrides.board)
 		        }
 		        let board: Board = __safeDI_board()
@@ -5152,7 +5152,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_9187BBE153641D70.self
+		            _ = Service.__safeDI_Service_mock_9187BBE153641D70.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -5231,7 +5231,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -5294,7 +5294,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -5352,7 +5352,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -5416,7 +5416,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -5478,7 +5478,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -5493,7 +5493,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.laterService)
 		        }
 		        let laterService: Service = __safeDI_laterService()
@@ -5587,7 +5587,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -5667,7 +5667,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -5738,7 +5738,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(__safeDI_userService())
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -5843,7 +5843,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService: any UserService = FakeUserService.mock()
 		                return userService
 		            }
-		            _ = Service.__safeDI_Service_mock_1DD763CB78198D80.self
+		            _ = Service.__safeDI_Service_mock_1DD763CB78198D80.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -5915,7 +5915,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                }
 		                return routerBuilder
 		            }
-		            _ = Service.__safeDI_Service_mock_EFE368FB931BE019.self
+		            _ = Service.__safeDI_Service_mock_EFE368FB931BE019.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Service.mock(routerBuilderBuilder: __safeDI_routerBuilderBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
@@ -5973,7 +5973,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        _ = Service.__safeDI_Service_mock_EFE368FB931BE019.self
+		        _ = Service.__safeDI_Service_mock_EFE368FB931BE019.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(routerBuilderBuilder: routerBuilderBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        return Screen(service: service)
 		    }
@@ -6018,7 +6018,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		        _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(userServiceBuilder: userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        return Screen(analytics: analytics, service: service)
 		    }
@@ -6090,37 +6090,37 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        userServiceBuilder_Service5_SafeDIMockScope_Service5_userService_to_AnyUserService: @escaping (Service5.SafeDIMockScope_Service5_userService) -> AnyUserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        _ = Service0.__safeDI_Service0_mock_E521A76982D81E57.self
+		        _ = Service0.__safeDI_Service0_mock_E521A76982D81E57.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_service0() -> Service0 {
 		            let userServiceBuilder: (Service0.SafeDIMockScope_Service0_userService) -> AnyUserService = userServiceBuilder_Service0_SafeDIMockScope_Service0_userService_to_AnyUserService
 		            return Service0.mock(userServiceBuilder: userServiceBuilder, safeDIOverrides: safeDIOverrides.service0)
 		        }
 		        let service0: Service0 = __safeDI_service0()
-		        _ = Service1.__safeDI_Service1_mock_3FE4547D4B8C13D2.self
+		        _ = Service1.__safeDI_Service1_mock_3FE4547D4B8C13D2.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_service1() -> Service1 {
 		            let userServiceBuilder: (Service1.SafeDIMockScope_Service1_userService) -> AnyUserService = userServiceBuilder_Service1_SafeDIMockScope_Service1_userService_to_AnyUserService
 		            return Service1.mock(userServiceBuilder: userServiceBuilder, safeDIOverrides: safeDIOverrides.service1)
 		        }
 		        let service1: Service1 = __safeDI_service1()
-		        _ = Service2.__safeDI_Service2_mock_FD2BD23EC0D14669.self
+		        _ = Service2.__safeDI_Service2_mock_FD2BD23EC0D14669.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_service2() -> Service2 {
 		            let userServiceBuilder: (Service2.SafeDIMockScope_Service2_userService) -> AnyUserService = userServiceBuilder_Service2_SafeDIMockScope_Service2_userService_to_AnyUserService
 		            return Service2.mock(userServiceBuilder: userServiceBuilder, safeDIOverrides: safeDIOverrides.service2)
 		        }
 		        let service2: Service2 = __safeDI_service2()
-		        _ = Service3.__safeDI_Service3_mock_B32F4DD923757D74.self
+		        _ = Service3.__safeDI_Service3_mock_B32F4DD923757D74.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_service3() -> Service3 {
 		            let userServiceBuilder: (Service3.SafeDIMockScope_Service3_userService) -> AnyUserService = userServiceBuilder_Service3_SafeDIMockScope_Service3_userService_to_AnyUserService
 		            return Service3.mock(userServiceBuilder: userServiceBuilder, safeDIOverrides: safeDIOverrides.service3)
 		        }
 		        let service3: Service3 = __safeDI_service3()
-		        _ = Service4.__safeDI_Service4_mock_4DAF33966D25A303.self
+		        _ = Service4.__safeDI_Service4_mock_4DAF33966D25A303.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_service4() -> Service4 {
 		            let userServiceBuilder: (Service4.SafeDIMockScope_Service4_userService) -> AnyUserService = userServiceBuilder_Service4_SafeDIMockScope_Service4_userService_to_AnyUserService
 		            return Service4.mock(userServiceBuilder: userServiceBuilder, safeDIOverrides: safeDIOverrides.service4)
 		        }
 		        let service4: Service4 = __safeDI_service4()
-		        _ = Service5.__safeDI_Service5_mock_ECB08E789F12B296.self
+		        _ = Service5.__safeDI_Service5_mock_ECB08E789F12B296.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_service5() -> Service5 {
 		            let userServiceBuilder: (Service5.SafeDIMockScope_Service5_userService) -> AnyUserService = userServiceBuilder_Service5_SafeDIMockScope_Service5_userService_to_AnyUserService
 		            return Service5.mock(userServiceBuilder: userServiceBuilder, safeDIOverrides: safeDIOverrides.service5)
@@ -6176,7 +6176,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        userServiceBuilder_Settings_SafeDIMockScope_Settings_userService_to_AnyUserService: @escaping (Settings.SafeDIMockScope_Settings_userService) -> AnyUserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        _ = Screen.__safeDI_Screen_mock_5A2F665AFA12A400.self
+		        _ = Screen.__safeDI_Screen_mock_5A2F665AFA12A400.self // If this line does not compile, compile the code SafeDI generates for module App into App: under Bazel, add App's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let screen = Screen.mock(userServiceBuilder_Service_SafeDIMockScope_Service_userService_to_AnyUserService: userServiceBuilder_Service_SafeDIMockScope_Service_userService_to_AnyUserService, userServiceBuilder_Settings_SafeDIMockScope_Settings_userService_to_AnyUserService: userServiceBuilder_Settings_SafeDIMockScope_Settings_userService_to_AnyUserService, safeDIOverrides: safeDIOverrides.screen)
 		        return Root(screen: screen)
 		    }
@@ -6238,7 +6238,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                let userService = AnyUserService(DefaultUserService())
 		                return userService
 		            }
-		            _ = Screen.__safeDI_Screen_mock_5A2F665AFA12A400.self
+		            _ = Screen.__safeDI_Screen_mock_5A2F665AFA12A400.self // If this line does not compile, compile the code SafeDI generates for module App into App: under Bazel, add App's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Screen.mock(userServiceBuilder_Service_SafeDIMockScope_Service_userService_to_AnyUserService: __safeDI_userServiceBuilder_Service_SafeDIMockScope_Service_userService_to_AnyUserService, userServiceBuilder_Settings_SafeDIMockScope_Settings_userService_to_AnyUserService: __safeDI_userServiceBuilder_Settings_SafeDIMockScope_Settings_userService_to_AnyUserService, safeDIOverrides: safeDIOverrides.screen)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -6457,7 +6457,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		        _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let __safeDI_serviceBuilder__safeDIBuilder = safeDIOverrides.serviceBuilder
 		        @Sendable func __safeDI_serviceBuilder() -> Service {
 		            Service.mock(userServiceBuilder: userServiceBuilder, analytics: analytics, safeDIOverrides: __safeDI_serviceBuilder__safeDIBuilder?() ?? .init())
@@ -6565,7 +6565,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		import SafeDI
 		#endif
 		"""
-		let pluginComment = integration == .swiftPackagePlugin ? " // If this line does not compile, add the SafeDI plugin to the target that declares Service." : ""
+		let pluginComment = integration.seamCallComment(type: "Service", declaringModule: "Core")
 		let screenMock = """
 		#if DEBUG
 		extension Screen {
@@ -6675,7 +6675,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"""], dependencies: ["Core"]),
 		]
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: integration, filesToDelete: &filesToDelete)
-		let pluginComment = integration == .swiftPackagePlugin ? " // If this line does not compile, add the SafeDI plugin to the target that declares Service." : ""
+		let pluginComment = integration.seamCallComment(type: "Service", declaringModule: "Core")
 		let screenMock = """
 		#if canImport(Core)
 		import Core
@@ -6822,7 +6822,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(analytics: analytics.instance, safeDIOverrides: safeDIOverrides.service)
 		        return Screen(service: service)
 		    }
@@ -6910,7 +6910,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(analytics: analytics.instance, safeDIOverrides: safeDIOverrides.service)
 		        return Screen(analytics: analytics, service: service)
 		    }
@@ -6994,7 +6994,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Panel {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_serviceBuilder() -> Service {
 		            Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.serviceBuilder)
 		        }
@@ -7161,7 +7161,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        _ = Service.__safeDI_Service_mock_4DBCFD53033F6143.self
+		        _ = Service.__safeDI_Service_mock_4DBCFD53033F6143.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(safeDIOverrides: safeDIOverrides.service)
 		        let filter = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { Hub.Filter(service: service) }
 		        return Screen(filter: filter, service: service)
@@ -7289,7 +7289,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Dashboard {
 		        let analytics = if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        return Dashboard(service: service)
 		    }
@@ -7334,7 +7334,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        _ = Dashboard.__safeDI_Dashboard_mock_81027395670D1D21.self
+		        _ = Dashboard.__safeDI_Dashboard_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let dashboard = Dashboard.mock(analytics: analytics.instance, safeDIOverrides: safeDIOverrides.dashboard)
 		        return AppRoot(analytics: analytics, dashboard: dashboard)
 		    }
@@ -7432,9 +7432,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        _ = Service.__safeDI_Service_mock_B3677AD76727096E.self
+		        _ = Service.__safeDI_Service_mock_B3677AD76727096E.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(safeDIOverrides: safeDIOverrides.service)
-		        _ = Vault.__safeDI_Vault_mock_B3677AD76727096E.self
+		        _ = Vault.__safeDI_Vault_mock_B3677AD76727096E.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let vault = Vault.mock(safeDIOverrides: safeDIOverrides.vault)
 		        return Screen(service: service, vault: vault)
 		    }
@@ -7478,7 +7478,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    public static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Outer {
-		        _ = Service.__safeDI_Service_mock_5BD7973A2F881650.self
+		        _ = Service.__safeDI_Service_mock_5BD7973A2F881650.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(safeDIOverrides: safeDIOverrides.service)
 		        return Outer(service: service)
 		    }
@@ -7516,7 +7516,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> AppRoot {
-		        _ = Outer.__safeDI_Outer_mock_51799E6AA5E7B634.self
+		        _ = Outer.__safeDI_Outer_mock_51799E6AA5E7B634.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let outer = Outer.mock(safeDIOverrides: safeDIOverrides.outer)
 		        return AppRoot(outer: outer)
 		    }
@@ -7748,7 +7748,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                if let safeDIBuilder = __safeDI_wrapperBuilder__wrapperBuilder_analytics_safeDIBuilder { safeDIBuilder() } else { Analytics() }
 		            }
 		            let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		            _ = Service.__safeDI_Service_mock_209346FEA041FD20.self
+		            _ = Service.__safeDI_Service_mock_209346FEA041FD20.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let service = Service.mock(analytics: analytics.instance, theme: nil, safeDIOverrides: __safeDI_wrapperBuilder__wrapperBuilder_service_safeDIBuilder?() ?? .init())
 		            return if let safeDIBuilder = __safeDI_wrapperBuilder__safeDIBuilder { safeDIBuilder(analytics, service) } else { Wrapper(analytics: analytics, service: service) }
 		        }
@@ -7837,7 +7837,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        _ = Service.__safeDI_Service_mock_209346FEA041FD20.self
+		        _ = Service.__safeDI_Service_mock_209346FEA041FD20.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_serviceBuilder() -> Service {
 		            Service.mock(analytics: analytics.instance, theme: nil, safeDIOverrides: safeDIOverrides.serviceBuilder)
 		        }
@@ -7949,14 +7949,14 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let constant = AnyServicing(Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.constant))
-		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_erased() -> AnyServicing {
 		            AnyServicing(Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.erased))
 		        }
 		        let erased = ErasedInstantiator<(), AnyServicing>(__safeDI_erased)
-		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let __safeDI_sendableErased__safeDIBuilder = safeDIOverrides.sendableErased
 		        @Sendable func __safeDI_sendableErased() -> AnyServicing {
 		            AnyServicing(Service.mock(analytics: analytics, safeDIOverrides: __safeDI_sendableErased__safeDIBuilder?() ?? .init()))
@@ -8029,7 +8029,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        _ = Service.__safeDI_Service_mock_209346FEA041FD20.self
+		        _ = Service.__safeDI_Service_mock_209346FEA041FD20.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(analytics: analytics.instance, theme: theme, safeDIOverrides: safeDIOverrides.service)
 		        return Screen(theme: theme, service: service)
 		    }
@@ -8140,7 +8140,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        _ = Service.__safeDI_Service_mock_CBF29CE484222325.self
+		        _ = Service.__safeDI_Service_mock_CBF29CE484222325.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service.mock() }
 		        return Screen(service: service)
 		    }
@@ -8219,7 +8219,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        _ = Service.__safeDI_Service_mock_CBCD36FF0797CB15.self
+		        _ = Service.__safeDI_Service_mock_CBCD36FF0797CB15.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(shelf: nil, safeDIOverrides: safeDIOverrides.service)
 		        return Screen(service: service)
 		    }
@@ -8322,9 +8322,107 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
-		        _ = Vault.__safeDI_Vault_mock_81027395670D1D21.self
+		        _ = Vault.__safeDI_Vault_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let vault = Vault.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.vault)
+		        return Screen(service: service, vault: vault)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsSharedDependencyOnceThroughItsPublicMock_whenCallingModuleCannotConstructIt() async throws {
+		// The Manual's remedy for a dependency the calling module cannot construct, which each public mock call would
+		// otherwise build: give it a public mock of its own, so the calling mock builds it once and passes it to every call.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
+			import SafeDI
+
+			@Instantiable(generateMock: .public)
+			public final class Analytics: Instantiable {
+			    package init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public struct Service: Instantiable {
+			    package init(analytics: Analytics) {
+			        self.analytics = analytics
+			    }
+
+			    @Received let analytics: Analytics
+			}
+
+			@Instantiable(generateMock: .public)
+			public struct Vault: Instantiable {
+			    package init(analytics: Analytics) {
+			        self.analytics = analytics
+			    }
+
+			    @Received let analytics: Analytics
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(generateMock: true)
+			public struct Screen: Instantiable {
+			    public init(service: Service, vault: Vault) {
+			        self.service = service
+			        self.vault = vault
+			    }
+
+			    @Received let service: Service
+			    @Received let vault: Vault
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: modules,
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init(),
+		            vault: Vault.SafeDIOverrides = .init()
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		            self.vault = vault
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let vault: Vault.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        _ = Analytics.__safeDI_Analytics_mock_CBF29CE484222325.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics.mock() }
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        _ = Vault.__safeDI_Vault_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let vault = Vault.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.vault)
 		        return Screen(service: service, vault: vault)
 		    }
@@ -9359,7 +9457,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	func callPublicTiers() {
 	    _ = Service.mock()
 	    _ = Service.mock(retries: 9, analytics: Analytics(), theme: Theme(), safeDIOverrides: .init(logger: .init(verbose: true), analytics: { Analytics() }, tokenCache: .init(capacity: 5), name: nil))
-	    _ = Service.__safeDI_Service_mock_209346FEA041FD20.self
+	    _ = Service.__safeDI_Service_mock_209346FEA041FD20.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 	}
 
 	@MainActor func callDashboard() {

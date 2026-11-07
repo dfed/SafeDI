@@ -197,7 +197,7 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 				    public convenience init() {
 				        let service = Service() // SafeDI could not verify that Service is in this package; `package` access is assumed.
 				        func __safeDI_panel() -> Panel {
-				            _ = Panel.__safeDI_Panel_F0C17F5BF000CB21.self
+				            _ = Panel.__safeDI_Panel_F0C17F5BF000CB21.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				            return Panel(service: service) // SafeDI could not verify that Panel is in this package; `package` access is assumed.
 				        }
 				        let panel: Panel = __safeDI_panel()
@@ -317,7 +317,7 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_shellBuilder(theme: Theme) -> Shell {
 			            func __safeDI_service() -> Service {
-			                _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self
+			                _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			                return Service(theme: theme) // SafeDI could not verify that Service is in this package; `package` access is assumed.
 			            }
 			            let service: Service = __safeDI_service()
@@ -522,12 +522,7 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 
 	/// The comment a call of `Feature`'s seam carries under `integration`.
 	private static func pluginComment(_ integration: MultiModuleIntegration) -> String {
-		switch integration {
-		case .moduleInfo:
-			""
-		case .swiftPackagePlugin:
-			" // If this line does not compile, add the SafeDI plugin to the target that declares Screen."
-		}
+		integration.seamCallComment(type: "Screen", declaringModule: "Feature")
 	}
 
 	/// `App`'s internal root, which imports `Feature` and declares `declarations`.

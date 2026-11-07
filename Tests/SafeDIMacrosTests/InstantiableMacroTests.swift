@@ -572,7 +572,7 @@ import Testing
 					),
 					DiagnosticSpec(
 						message: """
-						`Root` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs `other: Service?` from outside it. Declare each as @Instantiated, or as `@Received(fulfilledByDependencyNamed:ofType:)` naming an @Instantiated property of `Root`, or remove `isRoot: true` and instantiate `Root` from another type.
+						`Root` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs `other: Service?` from outside it. Declare each as @Instantiated, or as `@Received(fulfilledByDependencyNamed:ofType:)` naming an @Instantiated property of `Root`, or remove `isRoot: true` and instantiate `Root` from another type, or replace `isRoot: true` with `generateDependencyTree: true`, so its generated initializer takes them.
 						""",
 						line: 1,
 						column: 1,
@@ -620,7 +620,7 @@ import Testing
 				diagnostics: [
 					DiagnosticSpec(
 						message: """
-						`Foo` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs `dependency: Dependency` from outside it. Declare each as @Instantiated, or as `@Received(fulfilledByDependencyNamed:ofType:)` naming an @Instantiated property of `Foo`, or remove `isRoot: true` and instantiate `Foo` from another type.
+						`Foo` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs `dependency: Dependency` from outside it. Declare each as @Instantiated, or as `@Received(fulfilledByDependencyNamed:ofType:)` naming an @Instantiated property of `Foo`, or remove `isRoot: true` and instantiate `Foo` from another type, or replace `isRoot: true` with `generateDependencyTree: true`, so its generated initializer takes them.
 						""",
 						line: 1,
 						column: 1,
@@ -656,7 +656,7 @@ import Testing
 				diagnostics: [
 					DiagnosticSpec(
 						message: """
-						`Foo` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs `dependency: Dependency` from outside it. Declare each as @Instantiated, or as `@Received(fulfilledByDependencyNamed:ofType:)` naming an @Instantiated property of `Foo`, or remove `isRoot: true` and instantiate `Foo` from another type.
+						`Foo` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs `dependency: Dependency` from outside it. Declare each as @Instantiated, or as `@Received(fulfilledByDependencyNamed:ofType:)` naming an @Instantiated property of `Foo`, or remove `isRoot: true` and instantiate `Foo` from another type, or replace `isRoot: true` with `generateDependencyTree: true`, so its generated initializer takes them.
 						""",
 						line: 1,
 						column: 1,
@@ -1259,6 +1259,32 @@ import Testing
 				expandedSource: """
 				public struct ExampleService: Instantiable {
 				    public init(closure: @escaping @Sendable () -> Void) {
+				        self.closure = closure
+				    }
+				    let closure: @Sendable () -> Void
+
+				    public typealias ForwardedProperties = @Sendable () -> Void
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_doesNotGenerateRequiredInitializer_whenInitializerSpellsClosureAttributesInAnotherOrder() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(closure: @Sendable @escaping () -> Void) {
+				        self.closure = closure
+				    }
+				    @Forwarded let closure: @Sendable () -> Void
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(closure: @Sendable @escaping () -> Void) {
 				        self.closure = closure
 				    }
 				    let closure: @Sendable () -> Void
@@ -5649,6 +5675,94 @@ import Testing
 		}
 
 		@Test
+		func declaration_warnsWithFixItRemovingMockAttributes_whenDeclarationIsMockOnly() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true, mockAttributes: "@MainActor")
+				public final class FakeService {
+				    public static func mock() -> FakeService { FakeService() }
+				}
+				""",
+				expandedSource: """
+				public final class FakeService {
+				    public static func mock() -> FakeService { FakeService() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`mockAttributes` has no effect on a `mockOnly` declaration: its hand-written mock is the mock SafeDI uses.",
+						line: 1,
+						column: 1,
+						severity: .warning,
+						fixIts: [
+							FixItSpec(message: "Remove `mockAttributes`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true)
+				public final class FakeService {
+				    public static func mock() -> FakeService { FakeService() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_warnsWithFixItRemovingMockAttributes_whenExtensionIsMockOnly() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true, mockAttributes: "@MainActor", customMockName: "fake")
+				extension ExampleService {
+				    public static func fake() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService {
+				    public static func fake() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`mockAttributes` has no effect on a `mockOnly` declaration: its hand-written mock is the mock SafeDI uses.",
+						line: 1,
+						column: 1,
+						severity: .warning,
+						fixIts: [
+							FixItSpec(message: "Remove `mockAttributes`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true, customMockName: "fake")
+				extension ExampleService {
+				    public static func fake() -> ExampleService { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expandsWithoutIssue_whenMockAttributesIsProvidedWithGenerateMock() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, mockAttributes: "@MainActor")
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func throwsErrorWhenMockAttributesIsNotStringLiteral() {
 			assertMacroExpansion(
 				"""
@@ -9371,8 +9485,18 @@ import Testing
 							FixItSpec(message: "Remove `isRoot: true`"),
 						],
 					),
+					DiagnosticSpec(
+						message: "`mockAttributes` has no effect on a `mockOnly` declaration: its hand-written mock is the mock SafeDI uses.",
+						line: 1,
+						column: 1,
+						severity: .warning,
+						fixIts: [
+							FixItSpec(message: "Remove `mockAttributes`"),
+						],
+					),
 				],
 				macros: instantiableTestMacros,
+				applyFixIts: ["Remove `isRoot: true`"],
 				fixedSource: """
 				@Instantiable(mockOnly: true, mockAttributes: "@MainActor")
 				public struct ExampleService {
