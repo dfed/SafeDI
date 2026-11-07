@@ -1437,6 +1437,128 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fulfillsQualifiedReceive_whenNestedTypeFulfillsCompositionOfProtocolsDeclaredBesideItAndSpelledUnqualified() async throws {
+		// `Service` lists the composition of `Logging` and `Tracing`, declared beside it in `Feature`, unqualified: no
+		// option of a composition nests it in `Feature`, so it is kept, and each protocol in it is qualified. `Root`
+		// receives it qualified and `Consumer` unqualified, one type.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(service: any Feature.Logging & Feature.Tracing, consumer: Feature.Consumer) {
+				        self.service = service
+				        self.consumer = consumer
+				    }
+
+				    @Instantiated let service: any Feature.Logging & Feature.Tracing
+				    @Instantiated let consumer: Feature.Consumer
+				}
+				""",
+				"""
+				public enum Feature {
+				    public protocol Logging {}
+				    public protocol Tracing {}
+
+				    @Instantiable(fulfillingAdditionalTypes: [(Logging & Tracing).self])
+				    public final class Service: Instantiable, Logging, Tracing {
+				        public init() {}
+				    }
+
+				    @Instantiable
+				    public final class Consumer: Instantiable {
+				        public init(service: any Logging & Tracing) {
+				            self.service = service
+				        }
+
+				        @Received let service: any Logging & Tracing
+				    }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        let service: any (Feature.Logging & Feature.Tracing) = Feature.Service()
+			        let consumer = Feature.Consumer(service: service)
+			        self.init(service: service, consumer: consumer)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_qualifiesTypeDeclaredInEnclosingEnum_whenItsRawIdentifierNameHoldsPeriod() async throws {
+		// A declaration's key joins its names with periods, so `Mode.Kind`'s key reads as a type `Kind` nested in
+		// `Feature.Mode`. `Child`'s mock is declared in `extension Feature.Child`, where `Mode.Kind`, declared in
+		// `Feature`, does not resolve.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(child: Feature.Child) {
+				        self.child = child
+				    }
+
+				    @Instantiated let child: Feature.Child
+				}
+				""",
+				"""
+				public enum Feature {
+				    public enum `Mode.Kind` {
+				        case fast
+				        case slow
+				    }
+
+				    @Instantiable(generateMock: true)
+				    public final class Child: Instantiable {
+				        public init(mode: `Mode.Kind` = .fast) {
+				            self.mode = mode
+				        }
+
+				        let mode: `Mode.Kind`
+				    }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Child+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Feature.Child {
+			    static func mock(
+			        mode: Feature.`Mode.Kind` = .fast
+			    ) -> Feature.Child {
+			        return Feature.Child(mode: mode)
+			    }
+			}
+			#endif
+			""",
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        let child = Feature.Child()
+			        self.init(child: child)
+			    }
+			}
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader,
+		])
+	}
+
 	// MARK: Tests – across modules
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1540,6 +1662,119 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 		}
 		#endif
 		""")
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_qualifiesTopLevelTypeOfModuleByModulesName_whenDeclarationIsNestedInTypeSpelledWithThatModulesName(integration: MultiModuleIntegration) async throws {
+		// `Child` is nested in `Core.Namespace`, so `Core.Mode` is an option for `Mode`, and names `Core`'s top-level
+		// `Mode`, though no nested declaration is named `Mode`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(
+					name: "Core",
+					packageName: "pkg",
+					swiftFileContentByFilePath: [
+						"Core.swift": """
+						import SafeDI
+
+						public enum Mode {
+						    case fromCore
+						}
+
+						public enum Namespace {}
+
+						@Instantiable
+						public final class Service: Instantiable {
+						    public init(mode: Mode = .fromCore) {
+						        self.mode = mode
+						    }
+
+						    let mode: Mode
+						}
+						""",
+					],
+				),
+				ModuleFixture(
+					name: "App",
+					packageName: "pkg",
+					swiftFileContentByFilePath: [
+						"Namespace.swift": """
+						import Core
+						import SafeDI
+
+						extension Core.Namespace {
+						    @Instantiable(generateMock: true)
+						    public final class Child: Instantiable {
+						        public init(mode: Mode = .fromCore) {
+						            self.mode = mode
+						        }
+
+						        let mode: Mode
+						    }
+						}
+						""",
+						"Root.swift": """
+						import Core
+						import SafeDI
+
+						@Instantiable(isRoot: true)
+						public final class Root: Instantiable {
+						    public init(child: Core.Namespace.Child) {
+						        self.child = child
+						    }
+
+						    @Instantiated let child: Core.Namespace.Child
+						}
+						""",
+					],
+					dependencies: ["Core"],
+				),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let imports = """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+
+		"""
+		let rootTree = """
+		extension Root {
+		    public convenience init() {
+		        let child = Core.Namespace.Child()
+		        self.init(child: child)
+		    }
+		}
+		"""
+		let childMock = """
+		#if DEBUG
+		extension Core.Namespace.Child {
+		    static func mock(
+		        mode: Core.Mode = .fromCore
+		    ) -> Core.Namespace.Child {
+		        return Core.Namespace.Child(mode: mode)
+		    }
+		}
+		#endif
+		"""
+		switch integration {
+		case .moduleInfo:
+			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + imports + rootTree + "\n\n" + childMock])
+		case .swiftPackagePlugin:
+			#expect(output.modules["App"]?.generatedFiles == [
+				"Namespace+SafeDIMock.swift": generatedFileHeader + imports + childMock,
+				"Root+SafeDI.swift": generatedFileHeader + imports + rootTree,
+				"SafeDIMockConfiguration.swift": generatedFileHeader + imports,
+			])
+		}
 		try expectEveryModuleCompiled(output)
 	}
 

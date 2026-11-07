@@ -37,7 +37,8 @@ extension String {
 
 	/// This name without the backticks it was written with, as prose names it: `` `inout` `` is `inout`.
 	public var spelledWithoutBackticks: String {
-		String(filter { $0 != "`" })
+		// Most names hold no backtick, and scanning their bytes is far cheaper than rebuilding them by character.
+		utf8.contains(UInt8(ascii: "`")) ? String(filter { $0 != "`" }) : self
 	}
 
 	/// The identifier that this text, which joins names in `spelledAsIdentifier` spelling with text such as
