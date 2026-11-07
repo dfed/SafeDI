@@ -21,7 +21,8 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
 
 /// The module, and the package of that module, that `generate` records for each declaration it reads and for the
 /// module it generates code for: from `--module-name`, `--package-name` and the modules dependent module info records

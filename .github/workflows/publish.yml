@@ -58,7 +58,7 @@ jobs:
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Stamp version
-        run: sed -i '' 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
+        run: sed -i '' 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDIToolLibrary/SafeDITool.swift
       - name: Build SafeDITool
         run: xcrun swift build -c release --product SafeDITool --arch ${{ matrix.architecture }} -Xswiftc -Osize -Xswiftc -Xfrontend -Xswiftc -internalize-at-link -Xlinker -dead_strip
       - name: Strip binary
@@ -126,7 +126,7 @@ jobs:
             exit 1
           fi
       - name: Stamp version
-        run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
+        run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDIToolLibrary/SafeDITool.swift
       - name: Build SafeDITool
         run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
       - name: Strip binary
@@ -165,7 +165,7 @@ jobs:
             exit 1
           fi
       - name: Stamp version
-        run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
+        run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDIToolLibrary/SafeDITool.swift
       - name: Build SafeDITool
         run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
       - name: Strip binary

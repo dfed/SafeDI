@@ -138,8 +138,27 @@ let package = Package(
 			url: "https://github.com/dfed/SafeDI/releases/download/2.3.0-alpha-1/SafeDITool.artifactbundle.zip",
 			checksum: "75faa788ff5158bee649ac19e5b7789555def41a0bfc413ef00a3fc7de2f0348",
 		),
+		// The tool's commands live in a library, and the executable only runs them, so that
+		// what tests the commands depends on a library, which every build system builds
+		// before the targets that import it. In the graph SwiftPM hands the Swift Build
+		// backend (Xcode, `--build-system swiftbuild`, the default from Swift 6.4), only a
+		// test target that nothing depends on is ordered after an executable target's module
+		// it imports, so `SafeDIToolTestSupport` would compile alongside that module rather
+		// than after it. The executable target keeps the name `SafeDITool`, which names the
+		// tool the plugin asks for and the binary the release ships, so the library's module
+		// is `SafeDIToolLibrary`.
 		.executableTarget(
 			name: "SafeDITool",
+			dependencies: [
+				.product(name: "ArgumentParser", package: "swift-argument-parser"),
+				"SafeDIToolLibrary",
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.target(
+			name: "SafeDIToolLibrary",
 			dependencies: [
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
 				.product(name: "SwiftParser", package: "swift-syntax"),
@@ -149,11 +168,83 @@ let package = Package(
 				.swiftLanguageMode(.v6),
 			],
 		),
+
+		// The `SafeDITool` tests are split across five test targets, so that a release
+		// whole-module build compiles them in parallel: a whole-module compile grows
+		// faster than its line count, and one module of every test was the longest
+		// step of CI's build. Their shared helpers (`executeSafeDIToolTest`, the
+		// compile verifier, the graph fuzzer, the differential value comparator) live
+		// in `SafeDIToolTestSupport`, which declares no tests and which each test
+		// target reaches through `@testable import`, as it reaches `SafeDIToolLibrary`.
+		// It is a regular target rather than a test target because Xcode 26 rejects a
+		// test target that depends on another test target. No product lists it, so a
+		// package that depends on SafeDI never builds it, and Xcode's `SafeDI-Package`
+		// scheme, which builds products, leaves it alone; a plain `swift build` of this
+		// package builds it, in release without `-enable-testing`, so the helpers
+		// import `SafeDIToolLibrary` without `@testable`, through the declarations the
+		// library makes `public` for them. (`package` would need a package name, which
+		// the `SafeDIGenerator` plugin, compiling `PluginTargetGraph.swift` through a
+		// symbolic link, does not have.) SwiftPM compiles a regular target for the
+		// package's `platforms` rather than for the host, as it does a test target, so
+		// the helpers mark what uses macOS 13 API `@available`.
+		.target(
+			name: "SafeDIToolTestSupport",
+			dependencies: [
+				"SafeDIToolLibrary",
+				"SafeDICore",
+			],
+			path: "Tests/SafeDIToolTestSupport",
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
 		.testTarget(
 			name: "SafeDIToolTests",
 			dependencies: [
 				.product(name: "ArgumentParser", package: "swift-argument-parser"),
-				"SafeDITool",
+				"SafeDIToolLibrary",
+				"SafeDIToolTestSupport",
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.testTarget(
+			name: "SafeDIToolDependencyTreeTests",
+			dependencies: [
+				.product(name: "ArgumentParser", package: "swift-argument-parser"),
+				"SafeDIToolLibrary",
+				"SafeDIToolTestSupport",
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.testTarget(
+			name: "SafeDIToolMockTests",
+			dependencies: [
+				"SafeDIToolLibrary",
+				"SafeDIToolTestSupport",
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.testTarget(
+			name: "SafeDIToolSeamTests",
+			dependencies: [
+				"SafeDIToolLibrary",
+				"SafeDIToolTestSupport",
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.testTarget(
+			name: "SafeDIToolFuzzerTests",
+			dependencies: [
+				"SafeDIToolLibrary",
+				"SafeDIToolTestSupport",
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),

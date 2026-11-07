@@ -21,7 +21,8 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
 
 /// Which diagnostics `generate` reports, and where, depends on where the user declares things, never on the names
 /// that sort the types, properties, or files. Each test generates two inputs that differ only in names that sort the

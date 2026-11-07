@@ -1,10 +1,10 @@
 """Bazel module for SafeDI.
 
-Provides Bazel-native build targets for SafeDI's four source modules
-(SafeDI, SafeDICore, SafeDIMacros, SafeDITool) as an alternative to
-SPM. External dependencies (swift-syntax, swift-argument-parser) are
-translated from Package.swift via rules_swift_package_manager so the
-two build systems stay in sync.
+Provides Bazel-native build targets for SafeDI's five source modules
+(SafeDI, SafeDICore, SafeDIMacros, SafeDIToolLibrary, SafeDITool) as an
+alternative to SPM. External dependencies (swift-syntax,
+swift-argument-parser) are translated from Package.swift via
+rules_swift_package_manager so the two build systems stay in sync.
 """
 
 module(

@@ -21,7 +21,8 @@
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
 
 /// The declaration `resolveSafeDIFulfilledTypes` keeps for each type once a `mockOnly` declaration's mock is merged
 /// into the production declaration. Files are walked in path order, so the names of the fixture files decide which

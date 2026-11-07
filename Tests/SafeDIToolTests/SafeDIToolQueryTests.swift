@@ -22,7 +22,8 @@ import ArgumentParser
 import Foundation
 import SafeDICore
 import Testing
-@testable import SafeDITool
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
 
 /// The `query` subcommand, which reports what a type needs: the modules whose declarations build it and its
 /// dependencies, the values a caller passes, and, when the type has a mock, what that mock needs.
