@@ -123,9 +123,10 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_assumesPackageAccessWithComment_whenModuleMembershipIsUnknown() async throws {
+	mutating func generate_assumesPackageAccessWithoutComment_whenModuleMembershipIsUnknown() async throws {
 		// Without the target graph, as for the Xcode project plugin, the tool cannot tell which module declares
-		// `Service`, so it accepts a `package` declaration and says so where it constructs it.
+		// `Service`, so it accepts a `package` declaration, and the compiler reports it if the two modules are in different
+		// packages.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				Self.feature(
@@ -147,7 +148,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		#expect(try #require(output.modules["App"]).generatedFiles == Self.appGeneratedFiles(under: .swiftPackagePlugin, code: """
 		extension Root {
 		    public convenience init() {
-		        let service = Service() // SafeDI could not verify that Service is in this package; `package` access is assumed.
+		        let service = Service()
 		        self.init(service: service)
 		    }
 		}
@@ -157,7 +158,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_assumesPackageAccessWithCommentOnEachConstructionLine_whenModuleMembershipIsUnknown() async throws {
+	mutating func generate_assumesPackageAccessOnEachConstructionLine_whenModuleMembershipIsUnknown() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(
@@ -241,26 +242,25 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		// Every line that constructs a type of another module says so: in a builder function, an instantiator's, and a
-		// lazily instantiated dependency's; in a mock's tree, with an initializer and with a hand-written mock; and the
-		// line that constructs a listed mock's root. A `SafeDIMockConfiguration` constructs nothing.
+		// Every construction of a type of another module relies on `package` access: in a builder function, an
+		// instantiator's, and a lazily instantiated dependency's; in a mock's tree, with an initializer and with a
+		// hand-written mock; and the construction of a listed mock's root. No line says so.
 		let header = generatedFileHeader + Self.importBlock("Feature") + "\n" + Self.importBlock("TestSupport") + "\n\n"
-		let assumption = { (typeName: String) in "// SafeDI could not verify that \(typeName) is in this package; `package` access is assumed." }
 		#expect(try #require(output.modules["App"]).generatedFiles == [
 			"Root+SafeDI.swift": header + """
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_engine() -> Engine {
-			            let service = Service() \(assumption("Service"))
-			            return Engine(service: service) \(assumption("Engine"))
+			            let service = Service()
+			            return Engine(service: service)
 			        }
 			        let engine: Engine = __safeDI_engine()
 			        func __safeDI_serviceBuilder() -> Service {
-			            Service() \(assumption("Service"))
+			            Service()
 			        }
 			        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
 			        func __safeDI_lazyService() -> Service {
-			            Service() \(assumption("Service"))
+			            Service()
 			        }
 			        let lazyService = LazilyInstantiated<Service>(__safeDI_lazyService)
 			        self.init(engine: engine, serviceBuilder: serviceBuilder, lazyService: lazyService)
@@ -285,8 +285,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_engine() -> Engine {
-			            let service = if let safeDIBuilder = safeDIOverrides.engine.service { safeDIBuilder() } else { Service.mock() } \(assumption("Service"))
-			            return if let safeDIBuilder = safeDIOverrides.engine.safeDIBuilder { safeDIBuilder(service) } else { Engine(service: service) } \(assumption("Engine"))
+			            let service = if let safeDIBuilder = safeDIOverrides.engine.service { safeDIBuilder() } else { Service.mock() }
+			            return if let safeDIBuilder = safeDIOverrides.engine.safeDIBuilder { safeDIBuilder(service) } else { Engine(service: service) }
 			        }
 			        let engine: Engine = __safeDI_engine()
 			        return Screen(engine: engine)
@@ -311,8 +311,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Engine {
-			        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service.mock() } \(assumption("Service"))
-			        return Engine(service: service) \(assumption("Engine"))
+			        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service.mock() }
+			        return Engine(service: service)
 			    }
 			}
 			#endif
@@ -343,9 +343,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_assumesPackageAccessWithCommentAfterForwardedParameter_whenItsDefaultCallsHandWrittenMockOfUnknownModule() async throws {
-		// `mock()` defaults `user` to `User.mock()`, which constructs `User` as any line of a mock's tree does, so its
-		// line ends with the same comment, after the comma that ends the parameter.
+	mutating func generate_assumesPackageAccessWithoutComment_whenForwardedParameterDefaultCallsHandWrittenMockOfUnknownModule() async throws {
+		// `mock()` defaults `user` to `User.mock()`, which constructs `User` as any line of a mock's tree does, relying on
+		// `package` access, which nothing on the line mentions.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				Self.feature(inPackage: "Shop", declaring: Self.publicUserWithPackageMock),
@@ -372,52 +372,10 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			#if DEBUG
 			extension Profile {
 			    static func mock(
-			        user: User = User.mock(), // SafeDI could not verify that User is in this package; `package` access is assumed.
+			        user: User = User.mock(),
 			        name: String = ""
 			    ) -> Profile {
 			        return Profile(user: user, name: name)
-			    }
-			}
-			#endif
-			""",
-			"SafeDIMockConfiguration.swift": header,
-		])
-		try expectEveryModuleCompiled(output)
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_assumesPackageAccessWithCommentAfterLastForwardedParameter_whenItsDefaultCallsHandWrittenMockOfUnknownModule() async throws {
-		// `user` is the last parameter of `mock()`, so no comma ends its line before the comment.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [
-				Self.feature(inPackage: "Shop", declaring: Self.publicUserWithPackageMock),
-				Self.app(inPackage: "Shop", declaring: """
-				import Feature
-
-				@Instantiable(generateMock: true)
-				final class Profile: Instantiable {
-				    init(user: User) {
-				        self.user = user
-				    }
-				    @Forwarded let user: User
-				}
-				"""),
-			],
-			integration: .swiftPackagePlugin,
-			writesTargetGraph: false,
-			filesToDelete: &filesToDelete,
-		)
-
-		let header = generatedFileHeader + Self.importBlock("Feature") + "\n\n"
-		#expect(try #require(output.modules["App"]).generatedFiles == [
-			"Profile+SafeDIMock.swift": header + """
-			#if DEBUG
-			extension Profile {
-			    static func mock(
-			        user: User = User.mock() // SafeDI could not verify that User is in this package; `package` access is assumed.
-			    ) -> Profile {
-			        return Profile(user: user)
 			    }
 			}
 			#endif
@@ -2203,7 +2161,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_commentsSeamBuiltInlineBeforeAssumedPackageAccess_whenRunThatNamesNoModuleBuildsPackageSeamOfUnnamedModule() async throws {
+	mutating func generate_commentsSeamBuiltInlineAndAssumesPackageAccess_whenRunThatNamesNoModuleBuildsPackageSeamOfUnnamedModule() async throws {
 		// `App` reads `Feature`'s files with no target graph and no module name, as the Xcode project plugin runs the tool,
 		// so SafeDI knows neither module: it builds `Screen`'s tree inline, and assumes `package` access reaches it.
 		let output = try await executeSafeDIToolMultiModuleTest(
@@ -2267,8 +2225,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		// The seam's construction carries both comments, the one about building it inline first; `Detail`'s, the
-		// assumption alone.
+		// The seam's construction says it is built inline; neither construction says that it relies on `package` access.
 		let header = generatedFileHeader + Self.importBlock("Feature") + "\n\n"
 		#expect(try #require(output.modules["App"]).generatedFiles == [
 			"Root+SafeDI.swift": header + """
@@ -2276,8 +2233,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			    public init() {
 			        let session = Session()
 			        func __safeDI_screen() -> Screen {
-			            let detail = Detail(session: session) // SafeDI could not verify that Detail is in this package; `package` access is assumed.
-			            return Screen(session: session, detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it. // SafeDI could not verify that Screen is in this package; `package` access is assumed.
+			            let detail = Detail(session: session)
+			            return Screen(session: session, detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it.
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(session: session, screen: screen)
@@ -2398,6 +2355,269 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			\(serviceFile.path):2:1-2:1: fixit: package\(" ")
 			""")
 		}
+	}
+
+	// MARK: Tests – Modules SafeDI is not told the package of
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingToPassPackage_whenModuleWithPackageConstructsPackageTypeOfModuleRunWithoutItsPackage() async {
+		// `Feature` is compiled in package `Shop`, but its run is not told so, as a hand-wired build might do: a named
+		// module SafeDI is not told the package of has none, so `App` needs `public`, and the error says how to tell SafeDI.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let servicePath = fixtures["Feature"]!["Service.swift"]
+			return """
+			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix, or pass module `Feature`'s package to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if it is compiled with `-package-name`.
+			\(servicePath):2:1-2:8: fixit: public
+			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass module `Feature`'s package to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if it is compiled with `-package-name`.
+			\(servicePath):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Shop",
+						swiftFileContent: [Self.packageService],
+						omitsPackageName: true,
+					),
+					Self.app(inPackage: "Shop"),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingToPassPackage_whenModuleRunWithoutItsPackageConstructsPackageTypeOfModuleWithPackage() async {
+		// The mirror of the case above: `App` is compiled in package `Shop`, but its run is not told so.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let servicePath = fixtures["Feature"]!["Service.swift"]
+			return """
+			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix, or pass module `App`'s package to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if it is compiled with `-package-name`.
+			\(servicePath):2:1-2:8: fixit: public
+			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass module `App`'s package to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if it is compiled with `-package-name`.
+			\(servicePath):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.feature(inPackage: "Shop", declaring: Self.packageService),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [Self.rootInstantiating("Service")],
+						dependencies: ["Feature"],
+						omitsPackageName: true,
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingToPassBothPackages_whenNeitherModuleIsToldItsPackage() async {
+		// Bazel's default: both modules are named and neither is given a package, so a `package` type of one never
+		// reaches the other.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let servicePath = fixtures["Feature"]!["Service.swift"]
+			return """
+			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(servicePath):2:1-2:8: fixit: public
+			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(servicePath):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Shop",
+						swiftFileContent: [Self.packageService],
+						omitsPackageName: true,
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [Self.rootInstantiating("Service")],
+						dependencies: ["Feature"],
+						omitsPackageName: true,
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorWithoutOfferingToPassPackages_whenNeitherModuleIsToldItsPackageAndInitializerIsInternal() async {
+		// Bazel's commonest slip: a `public` type whose initializer spells no access. Passing the packages would make
+		// `package` access enough, which an `internal` initializer still lacks, so the error offers only `public`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let servicePath = fixtures["Feature"]!["Service.swift"]
+			return """
+			\(servicePath):3:5: error: `Service`’s initializer is `internal`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(servicePath):3:5-3:5: fixit: public\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							@Instantiable
+							public final class Service: Instantiable {
+							    init() {}
+							}
+							""",
+						],
+						omitsPackageName: true,
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [Self.rootInstantiating("Service")],
+						dependencies: ["Feature"],
+						omitsPackageName: true,
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_constructsPublicTypeWithoutComment_whenNeitherModuleIsToldItsPackage() async throws {
+		// Both modules are compiled without `-package-name`, so `public` is what reaches across, and the construction
+		// says nothing about packages.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(
+					name: "Feature",
+					packageName: "Shop",
+					swiftFileContent: [
+						"""
+						@Instantiable
+						public final class Service: Instantiable {
+						    public init() {}
+						}
+						""",
+					],
+					omitsPackageName: true,
+				),
+				ModuleFixture(
+					name: "App",
+					packageName: "Shop",
+					swiftFileContent: [Self.rootInstantiating("Service")],
+					dependencies: ["Feature"],
+					omitsPackageName: true,
+				),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.modules["App"]).generatedFiles == Self.appGeneratedFiles(under: .moduleInfo, code: """
+		extension Root {
+		    public convenience init() {
+		        let service = Service()
+		        self.init(service: service)
+		    }
+		}
+		"""))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingMockAndOfferingToPassBothPackages_whenMockCallsPackageMockMethodAndNeitherModuleIsToldItsPackage() async {
+		// `Screen`'s mock builds `Service` with its hand-written `package` mock, which needs `public` across two modules
+		// SafeDI is told no package of.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let servicePath = fixtures["Feature"]!["Service.swift"]
+			return """
+			\(servicePath):5:5: error: `Service.mock()` is `package`, so the mock of `Screen`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make `Service.mock()` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(servicePath):5:5-5:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							@Instantiable
+							public final class Service: Instantiable {
+							    public init() {}
+
+							    package static func mock() -> Service { Service() }
+							}
+							""",
+						],
+						omitsPackageName: true,
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [Self.screenMockedInApp],
+						dependencies: ["Feature"],
+						omitsPackageName: true,
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_assumesPackageAccessWithoutComment_whenNamedModuleConstructsPackageTypeOfAdditionalDirectory() async throws {
+		// `App` reads `Feature`'s files through `additionalDirectoriesToInclude`, so SafeDI knows no module that declares
+		// `Service`, and assumes `package` access reaches it; the construction says nothing about it.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(
+					name: "Feature",
+					packageName: "Shop",
+					swiftFileContent: [Self.packageService],
+					runsSafeDI: false,
+				),
+				ModuleFixture(
+					name: "App",
+					packageName: "Shop",
+					swiftFileContentByFilePath: [
+						"Root.swift": Self.rootInstantiating("Service"),
+						"SafeDIConfiguration.swift": "#SafeDIConfiguration(additionalDirectoriesToInclude: [\"$FIXTURE_ROOT/Shop/Sources/Feature\"])\n",
+					],
+					dependencies: ["Feature"],
+				),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.modules["App"]).generatedFiles == Self.appGeneratedFiles(under: .moduleInfo, code: """
+		extension Root {
+		    public convenience init() {
+		        let service = Service()
+		        self.init(service: service)
+		    }
+		}
+		"""))
+		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – Mocks
@@ -3053,37 +3273,31 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_assumesPackageAccessWithComment_whenTypeDeclaredInExtensionOfPackageEnumIsConstructedFromModuleOfUnknownPackage() async throws {
-		// Without package names the tool cannot tell whether `App` is in `Feature`'s package, so it accepts the `package`
-		// namespace and says so where it constructs the type the namespace's extension declares.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [
-				Self.featureExtendingNamespace(inPackage: "Shop", declaredAs: "package enum Space {}", omitsPackageName: true),
-				ModuleFixture(
-					name: "App",
-					packageName: "Shop",
-					swiftFileContent: [Self.rootInstantiating("Screen")],
-					dependencies: ["Feature"],
-					omitsPackageName: true,
-				),
-			],
-			integration: .moduleInfo,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(try #require(output.modules["App"]).generatedFiles == Self.appGeneratedFiles(under: .moduleInfo, code: """
-		extension Root {
-		    public convenience init() {
-		        func __safeDI_service() -> Screen {
-		            let shelf: any Shelving = Space.Shelf() // SafeDI could not verify that Space.Shelf is in this package; `package` access is assumed.
-		            return Screen(shelf: shelf)
-		        }
-		        let service: Screen = __safeDI_service()
-		        self.init(service: service)
-		    }
+	mutating func generate_throwsErrorAtNamespaceEnumOfferingToPassPackages_whenTypeDeclaredInExtensionOfPackageEnumIsConstructedAcrossModulesToldNoPackage() async {
+		// Neither run is told a package, so `App` needs `public` of the namespace, as it would from another package, and
+		// the error says how to tell SafeDI the package `Feature` is compiled with.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let spacePath = fixtures["Feature"]!["Space.swift"]
+			return """
+			\(spacePath):2:1: error: `Space`, which encloses `Space.Shelf`, is `package`, so module `App`, in another package, cannot construct `Space.Shelf` in the code SafeDI generates. Make `Space` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
+			\(spacePath):2:1-2:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.featureExtendingNamespace(inPackage: "Shop", declaredAs: "package enum Space {}", omitsPackageName: true),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [Self.rootInstantiating("Screen")],
+						dependencies: ["Feature"],
+						omitsPackageName: true,
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
 		}
-		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3418,28 +3632,27 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_assumesPackageAccessWithComment_whenTypeInExtensionOfPackageNamespaceDeclaredInsideExtensionIsConstructedFromModuleOfUnknownPackage() async throws {
-		// Without package names the tool cannot tell whether `App` is in `Core`'s package, so it accepts the `package`
-		// `Outer.Namespace`, which the check now reads, and says so where it constructs `Helper`.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: Self.modulesConstructingHelper(
-				declaredInsideExtensionOf: "Outer.Namespace",
-				namespaceFiles: ExtensionNamespaceChain.oneLink.namespaceFiles(),
-				appPackage: "Shop",
-				omitsPackageNames: true,
-			),
-			integration: .moduleInfo,
-			filesToDelete: &filesToDelete,
-		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + """
-		extension Root {
-		    public init() {
-		        let helping: any Helping = Outer.Namespace.Helper() // SafeDI could not verify that Outer.Namespace.Helper is in this package; `package` access is assumed.
-		        self.init(helping: helping)
-		    }
+	mutating func generate_throwsErrorOfferingToPassPackages_whenTypeInExtensionOfPackageNamespaceDeclaredInsideExtensionIsConstructedFromModuleToldNoPackage() async {
+		// `App` and `Core` are named and told no package, so each has none: the `package` `Outer.Namespace`, which the check
+		// reads, needs `public`, and the error also offers passing the packages if the modules are compiled with one.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let namespacePath = Self.declarationPath(of: "Namespace.swift", in: "Core", fixtures: fixtures, under: .moduleInfo)
+			return """
+			\(namespacePath):2:5: error: `Outer.Namespace`, which encloses `Outer.Namespace.Helper`, is `package`, so module `App`, in another package, cannot construct `Outer.Namespace.Helper` in the code SafeDI generates. Make `Outer.Namespace` `public` to fix, or pass the packages of modules `App` and `Core` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(namespacePath):2:5-2:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesConstructingHelper(
+					declaredInsideExtensionOf: "Outer.Namespace",
+					namespaceFiles: ExtensionNamespaceChain.oneLink.namespaceFiles(),
+					appPackage: "Shop",
+					omitsPackageNames: true,
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
 		}
-		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -4284,6 +4497,14 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			dependencies: dependencies,
 		)
 	}
+
+	/// `Feature`'s `package` `Service`, declared at line 2 with its `package` initializer at line 3.
+	private static let packageService = """
+	@Instantiable
+	package final class Service: Instantiable {
+	    package init() {}
+	}
+	"""
 
 	/// A type in `App` whose generated mock builds `Feature`'s `Service`.
 	private static let screenMockedInApp = """

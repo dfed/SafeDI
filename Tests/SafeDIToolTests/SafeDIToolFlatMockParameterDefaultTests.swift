@@ -628,9 +628,9 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_assumesPackageAccessWithCommentAfterReceivedParameter_whenItsDefaultCallsHandWrittenMockOfUnknownModule() async throws {
-		// `mock()` defaults `session` to `Session.preview()`, which constructs `Session` as any line of a mock's tree
-		// does, so its line ends with the same comment.
+	mutating func generate_assumesPackageAccessWithoutComment_whenReceivedParameterDefaultCallsHandWrittenMockOfUnknownModule() async throws {
+		// `mock()` defaults `session` to `Session.preview()`, which constructs `Session` as any line of a mock's tree does:
+		// SafeDI knows no name of `App`'s module, so it assumes `package` access, with no comment, as on every such line.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Models", packageName: "Shop", swiftFileContent: [
@@ -654,7 +654,7 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		#if DEBUG
 		extension Consumer {
 		    static func mock(
-		        session: Session = Session.preview() // SafeDI could not verify that Session is in this package; `package` access is assumed.
+		        session: Session = Session.preview()
 		    ) -> Consumer {
 		        return Consumer(session: session)
 		    }

@@ -266,13 +266,18 @@ struct AccessReachabilityTests {
 		(ModuleIdentity(moduleName: "App", packageName: "P"), ModuleIdentity(moduleName: "Feature", packageName: "Q"), true, AccessRequirement.internal),
 		(ModuleIdentity(moduleName: nil, packageName: nil), ModuleIdentity(moduleName: nil, packageName: nil), true, AccessRequirement.internal),
 		(ModuleIdentity(moduleName: "App", packageName: nil), ModuleIdentity(moduleName: "App", packageName: nil), false, AccessRequirement.internal),
+		// Two named modules: a module SafeDI is not told the package of has none, and `package` access never crosses it.
 		(ModuleIdentity(moduleName: "App", packageName: "P"), ModuleIdentity(moduleName: "Feature", packageName: "P"), false, AccessRequirement.package),
-		(ModuleIdentity(moduleName: nil, packageName: "P"), ModuleIdentity(moduleName: nil, packageName: "P"), false, AccessRequirement.package),
 		(ModuleIdentity(moduleName: "App", packageName: "P"), ModuleIdentity(moduleName: "Feature", packageName: "Q"), false, AccessRequirement.public),
-		(ModuleIdentity(moduleName: "App", packageName: "P"), ModuleIdentity(moduleName: "Feature", packageName: nil), false, AccessRequirement.packageUnverified),
-		(ModuleIdentity(moduleName: "App", packageName: nil), ModuleIdentity(moduleName: "Feature", packageName: "P"), false, AccessRequirement.packageUnverified),
-		// Bazel's default: every module is named, and none is given a package name.
-		(ModuleIdentity(moduleName: "App", packageName: nil), ModuleIdentity(moduleName: "Feature", packageName: nil), false, AccessRequirement.packageUnverified),
+		(ModuleIdentity(moduleName: "App", packageName: "P"), ModuleIdentity(moduleName: "Feature", packageName: nil), false, AccessRequirement.public),
+		(ModuleIdentity(moduleName: "App", packageName: nil), ModuleIdentity(moduleName: "Feature", packageName: "P"), false, AccessRequirement.public),
+		(ModuleIdentity(moduleName: "App", packageName: nil), ModuleIdentity(moduleName: "Feature", packageName: nil), false, AccessRequirement.public),
+		// A module whose name SafeDI does not know: two known packages still decide, and otherwise `package` is assumed.
+		(ModuleIdentity(moduleName: nil, packageName: "P"), ModuleIdentity(moduleName: "Feature", packageName: "P"), false, AccessRequirement.package),
+		(ModuleIdentity(moduleName: "App", packageName: "P"), ModuleIdentity(moduleName: nil, packageName: "Q"), false, AccessRequirement.public),
+		(ModuleIdentity(moduleName: nil, packageName: "P"), ModuleIdentity(moduleName: "Feature", packageName: nil), false, AccessRequirement.packageUnverified),
+		(ModuleIdentity(moduleName: "App", packageName: nil), ModuleIdentity(moduleName: nil, packageName: "P"), false, AccessRequirement.packageUnverified),
+		(ModuleIdentity(moduleName: nil, packageName: nil), ModuleIdentity(moduleName: "Feature", packageName: nil), false, AccessRequirement.packageUnverified),
 		(ModuleIdentity(moduleName: nil, packageName: nil), ModuleIdentity(moduleName: nil, packageName: nil), false, AccessRequirement.packageUnverified),
 	])
 	func required_followsOwnFileThenModuleThenPackage(emitter: ModuleIdentity, declarer: ModuleIdentity, isOwnFile: Bool, requirement: AccessRequirement) {

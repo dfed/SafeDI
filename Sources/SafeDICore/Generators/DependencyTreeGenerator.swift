@@ -961,7 +961,6 @@ public actor DependencyTreeGenerator {
 			flatParameterMockDefaults[type] = ScopeGenerator.FlatParameterMockDefault(
 				concreteType: instantiable.concreteInstantiable,
 				methodName: instantiable.customMockName ?? InstantiableVisitor.mockMethodName,
-				comment: scope.constructionComments.mockMethod,
 				mockFilePath: instantiable.mockDeclarationLocation?.filePath,
 			)
 		}
@@ -2026,8 +2025,12 @@ public actor DependencyTreeGenerator {
 					)
 				}
 				let fix = switch requirement {
-				case .internal, .package, .public:
+				case .internal, .package:
 					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix\(seamRemedyText)\(publicMockRemedy)."
+				case .public:
+					// Across a named module SafeDI is told no package of, a `package` declaration needs `public` unless the
+					// module is compiled with a package SafeDI was not told.
+					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix\(ModuleIdentity.passingPackageRemedy(forModulesNamed: ModuleIdentity.namesOfModulesWithoutPackage(emitter: emittingModule, declarer: declaringModule, requirement: requirement, declaredLevel: accessNeed.level)).map { ", or \($0)" } ?? "")\(seamRemedyText)\(publicMockRemedy)."
 				case .packageUnverified:
 					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix, or `\(AccessLevel.public.spelling)` if the two modules are in different packages\(seamRemedyText)\(publicMockRemedy)."
 				}
@@ -3668,40 +3671,12 @@ public actor DependencyTreeGenerator {
 		return inaccessibleConstructions
 	}
 
-	/// The comments the code generated in this module ends the lines that construct `instantiable` with, one for
-	/// each way it can be constructed: a note that the tree builds a seam inline because SafeDI does not know which
-	/// module declares it (`builtInlineSeamComment(for:)`), then, joined by a space, a note that the generated code
-	/// assumes `package` access suffices, where SafeDITool cannot tell whether the module that declares the type is in
-	/// this module's package and the construction relies on a `package` declaration. The first note is for production
-	/// constructions alone: a mock (`forMock`) builds every seam's tree inline whether or not SafeDI knows the seam's
-	/// module, so the cause the note gives would be wrong there.
-	private func constructionComments(for instantiable: Instantiable, forMock: Bool = false) -> Scope.ConstructionComments {
-		let inlineSeamComment = forMock ? nil : builtInlineSeamComment(for: instantiable)
-		func assumedPackageAccessComment(withMockMethod: Bool) -> String? {
-			guard let emittingModule = emittingModuleToCheck else { return nil }
-			let accessNeeds = instantiable.accessNeeds(constructingWithMockMethod: withMockMethod) + Self.extendedTypeAccessNeeds(of: instantiable, in: extendedTypeDeclarations)
-			// Only a `package` declaration relies on the assumption.
-			guard accessNeeds.contains(where: { $0.level == .package }) else { return nil }
-			let requirements = accessNeeds.map { emittingModule.requirement(of: $0, constructing: instantiable) }
-			guard zip(accessNeeds, requirements).allSatisfy({ $0.level.satisfies($1) }),
-			      zip(accessNeeds, requirements).contains(where: { $0.level == .package && $1 == .packageUnverified })
-			else { return nil }
-			return "// SafeDI could not verify that \(instantiable.concreteInstantiable.asSource) is in this package; `package` access is assumed."
-		}
-		func comment(withMockMethod: Bool) -> String? {
-			let comments = [inlineSeamComment, assumedPackageAccessComment(withMockMethod: withMockMethod)].compactMap(\.self)
-			return comments.isEmpty ? nil : comments.joined(separator: " ")
-		}
-		return Scope.ConstructionComments(
-			initializer: comment(withMockMethod: false),
-			mockMethod: instantiable.mockInitializer == nil ? nil : comment(withMockMethod: true),
-		)
-	}
-
-	/// The comment on a construction of `instantiable` when it is a seam that every tree of this run builds inline
-	/// because SafeDI does not know which module declares it – one neither this module generates nor another module's
-	/// run generated the initializer of (`SeamResolution.foreignSeams`) – so the initializer SafeDI generates for the
-	/// seam is called only by hand-written code; `nil` otherwise.
+	/// The comment on a production construction of `instantiable` when it is a seam that every tree of this run builds
+	/// inline because SafeDI does not know which module declares it – one neither this module generates nor another
+	/// module's run generated the initializer of (`SeamResolution.foreignSeams`) – so the initializer SafeDI generates
+	/// for the seam is called only by hand-written code; `nil` otherwise. A mock builds every seam's tree inline whether
+	/// or not SafeDI knows the seam's module, so the cause the comment gives would be wrong there, and a mock's
+	/// constructions carry none.
 	private func builtInlineSeamComment(for instantiable: Instantiable) -> String? {
 		guard instantiable.generatesDependencyTree,
 		      seams.foreignSeams[instantiable.concreteInstantiable] == nil,
@@ -4115,7 +4090,7 @@ public actor DependencyTreeGenerator {
 			seams: seams,
 			aliasDeclarationReferences: aliasDeclarationReferences,
 			checkingModule: emittingModuleToCheck,
-			constructionComments: { self.constructionComments(for: $0) },
+			builtInlineSeamComment: { self.builtInlineSeamComment(for: $0) },
 		)
 		// A root that calls a seam whose builder it cannot fill is reported before any tree is generated.
 		try Self.validateRootsFillEveryHole(
@@ -4130,7 +4105,7 @@ public actor DependencyTreeGenerator {
 			guard let seam = typeDescriptionToFulfillingInstantiableMap[seamType],
 			      let seamRoot = seamRoots[seamType] ?? nil
 			else { continue }
-			generatedSeams.append((seam, seamRoot, Self.seamRootScope(of: seam, in: seamScopeMap, aliasDeclarationReferences: aliasDeclarationReferences, constructionComments: constructionComments(for: seam))))
+			generatedSeams.append((seam, seamRoot, Self.seamRootScope(of: seam, in: seamScopeMap, aliasDeclarationReferences: aliasDeclarationReferences)))
 		}
 		// Creating a generator starts generating its code, so every construction must be known to compile first: a
 		// root's tree constructs a seam with the tier of its generated initializer the root's module can reach, and a
@@ -4572,9 +4547,9 @@ public actor DependencyTreeGenerator {
 	///   - checkingModule: The caller, as its check of every construction knows it (`emittingModuleToCheck`), or
 	///     `nil` where the caller runs no check: a caller SafeDI was not told the identity of, one every declaration
 	///     of which is `public`, or another module, whose own run checks its constructions.
-	///   - constructionComments: The comments the generated code ends the construction of each scope's type with:
-	///     those of a seam's leaf describe the call of the tier, whose level its initializer carries. None where the
-	///     map only computes signatures, which emits nothing.
+	///   - builtInlineSeamComment: The comment the generated code ends each construction of a scope's type with
+	///     (`DependencyTreeGenerator.builtInlineSeamComment(for:)`). None where the map only computes signatures, which
+	///     emits nothing.
 	private static func createSeamScopeMapping(
 		in instantiables: [TypeDescription: Instantiable],
 		reachableTypeDescriptions: Set<TypeDescription>,
@@ -4584,7 +4559,7 @@ public actor DependencyTreeGenerator {
 		seams: SeamResolution,
 		aliasDeclarationReferences: AliasDeclarationReferences,
 		checkingModule: EmittingModule?,
-		constructionComments: (Instantiable) -> Scope.ConstructionComments = { _ in Scope.ConstructionComments() },
+		builtInlineSeamComment: (Instantiable) -> String? = { _ in nil },
 	) -> [TypeDescription: Scope] {
 		var typeDescriptionToScopeMap = [TypeDescription: Scope]()
 		var scopes = [Scope]()
@@ -4613,21 +4588,19 @@ public actor DependencyTreeGenerator {
 					initializerAccess: AccessDeclaration(level: tier),
 				)
 				// Whether the check of every construction is certain to report the call it cannot reach a tier of: it reports
-				// the seam's type, which every tier's access is capped at. The check asks the type's own requirement, which
-				// can be weaker than the call's: a type whose module's package the caller cannot tell from its own is
-				// assumed to be reachable with `package` access (`AccessRequirement.packageUnverified`). No construction can
-				// be checked where the caller runs no check.
-				// A module whose package is unknown assumes `package` and builds another module's tree inline rather than
-				// calling a tier or a public mock; from outside that package the generated code does not compile (row 4b's
-				// B4.10b, M8.35b): a stated limit, never pinned.
-				let unreachableTierIsReported: Bool = if reachedTier == nil, let checkingModule {
-					!Self.seamLeafAccessNeeds(of: leafInstantiable).allSatisfy { $0.level.satisfies(checkingModule.requirement(toConstructWithInitializer: leafInstantiable)) }
-				} else {
-					false
-				}
+				// the seam's type or a type enclosing it, which every tier's access is capped at. The check asks the type's
+				// own requirement, which is the call's: both are asked of the caller's module and the module that declares
+				// the seam. The widest tier is at the type's effective access, the narrowest of its own level and its
+				// enclosing types', each of which the check reads (`seamLeafAccessNeeds(of:)`), so a caller that reaches no
+				// tier fails the check of one of them. No construction can be checked where the caller runs no check.
+				// A module whose name SafeDI does not know assumes `package` access reaches another module's declarations
+				// (`AccessRequirement.packageUnverified`) and builds another module's tree inline rather than calling a tier
+				// or a public mock; from outside that package the generated code does not compile (row 4b's B4.10b,
+				// M8.35b): a stated limit, never pinned.
+				let unreachableTierIsReported = reachedTier == nil && checkingModule != nil
 				scope = Scope(
 					instantiable: leafInstantiable,
-					constructionComments: constructionComments(leafInstantiable),
+					builtInlineSeamComment: builtInlineSeamComment(leafInstantiable),
 					seamCall: SeamCall(
 						parameters: signature.parameters(ofTierAt: tier),
 						holes: signature.holes,
@@ -4640,10 +4613,12 @@ public actor DependencyTreeGenerator {
 						requirement: requirement,
 						seamModuleName: instantiable.moduleName,
 						callerModuleName: callerModule.moduleName,
+						seamPackageName: instantiable.packageName,
+						callerPackageName: callerModule.packageName,
 					),
 				)
 			} else {
-				scope = Scope(instantiable: instantiable, constructionComments: constructionComments(instantiable))
+				scope = Scope(instantiable: instantiable, builtInlineSeamComment: builtInlineSeamComment(instantiable))
 			}
 			scopes.append(scope)
 			for instantiableType in instantiable.instantiableTypes {
@@ -4719,9 +4694,8 @@ public actor DependencyTreeGenerator {
 		of seam: Instantiable,
 		in typeDescriptionToScopeMap: [TypeDescription: Scope],
 		aliasDeclarationReferences: AliasDeclarationReferences,
-		constructionComments: Scope.ConstructionComments = Scope.ConstructionComments(),
 	) -> Scope {
-		let rootScope = Scope(instantiable: seam, constructionComments: constructionComments)
+		let rootScope = Scope(instantiable: seam)
 		populatePropertiesToGenerate(
 			of: rootScope,
 			from: typeDescriptionToScopeMap,
@@ -5420,7 +5394,7 @@ public actor DependencyTreeGenerator {
 		// Promote all received properties that have scopes.
 		// onlyIfAvailable dependencies are NOT promoted — they become optional
 		// mock parameters with no default. Nor are forwarded properties.
-		let mockRootScope = Scope(instantiable: instantiable, constructionComments: constructionComments(for: instantiable, forMock: true))
+		let mockRootScope = Scope(instantiable: instantiable)
 		// A property the tree creates is the instance of a `LazilyInstantiated` of its label that the tree receives, as in
 		// production: the mocked type's own `x: X` and an `x: LazilyInstantiated<X>` its tree receives are one instance. The
 		// mock builds that child as the `LazilyInstantiated`, whose instance it passes the mocked type. A forwarded `x: X`
@@ -7099,8 +7073,8 @@ public actor DependencyTreeGenerator {
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
 				let scope = visitedConcreteTypeToScope[instantiable.concreteInstantiable] ?? publicMockCalls[instantiable.concreteInstantiable].map { publicMockCall in
 					let leafInstantiable = Self.publicMockLeafInstantiable(of: instantiable, calling: publicMockCall)
-					return Scope(instantiable: leafInstantiable, constructionComments: constructionComments(for: leafInstantiable, forMock: true), publicMockCall: publicMockCall)
-				} ?? Scope(instantiable: instantiable, constructionComments: constructionComments(for: instantiable, forMock: true))
+					return Scope(instantiable: leafInstantiable, publicMockCall: publicMockCall)
+				} ?? Scope(instantiable: instantiable)
 				visitedConcreteTypeToScope[instantiable.concreteInstantiable] = scope
 				for instantiableType in instantiable.instantiableTypes {
 					guard let existingScope = partialResult[instantiableType] else {
@@ -7113,7 +7087,7 @@ public actor DependencyTreeGenerator {
 						   instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiableType),
 						   scope.instantiable.mockInitializer == nil
 						{
-							partialResult[instantiableType] = Scope(instantiable: instantiable, constructionComments: constructionComments(for: instantiable, forMock: true))
+							partialResult[instantiableType] = Scope(instantiable: instantiable)
 						} else {
 							partialResult[instantiableType] = scope
 						}
@@ -7164,7 +7138,6 @@ public actor DependencyTreeGenerator {
 					Scope(
 						instantiable: instantiable.keepingDependencies { !dependenciesLeftOut.contains($0) },
 						dependenciesLeftOut: dependenciesLeftOut,
-						constructionComments: scope.constructionComments,
 					)
 				}
 				scopesBuiltByHandWrittenMock[ObjectIdentifier(scope)] = scopeBuiltByHandWrittenMock
@@ -7421,7 +7394,7 @@ public actor DependencyTreeGenerator {
 				if let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription],
 				   partialResult[instantiable.concreteInstantiable] == nil
 				{
-					let scope = Scope(instantiable: instantiable, constructionComments: constructionComments(for: instantiable))
+					let scope = Scope(instantiable: instantiable, builtInlineSeamComment: builtInlineSeamComment(for: instantiable))
 					for instantiableType in instantiable.instantiableTypes {
 						partialResult[instantiableType] = scope
 					}
@@ -9478,17 +9451,6 @@ extension DependencyTreeGenerator.EmittingModule {
 			toConstructFrom: identity,
 			declaredIn: declaringModule(of: accessNeed, constructing: instantiable),
 			isOwnFile: declarationFilePath.map(isOwnFile) ?? false,
-		)
-	}
-
-	/// The access every declaration constructing `instantiable` with its initializer or `instantiate()` method relies
-	/// on needs for this module's generated code to construct it: what `requirement(of:constructing:)` asks of each
-	/// such declaration, which the type's module declares.
-	fileprivate func requirement(toConstructWithInitializer instantiable: Instantiable) -> AccessRequirement {
-		AccessLevel.required(
-			toConstructFrom: identity,
-			declaredIn: ModuleIdentity(moduleName: instantiable.moduleName, packageName: instantiable.packageName),
-			isOwnFile: instantiable.sourceFilePath.map(isOwnFile) ?? false,
 		)
 	}
 }

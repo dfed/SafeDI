@@ -125,9 +125,10 @@ struct ModuleFixture {
 	/// Whether `.moduleInfo` runs the module's `generate` without `--module-name`, as a custom script might, so its
 	/// `.safedi` names no module.
 	let omitsModuleName: Bool
-	/// Whether `.moduleInfo` runs the module's `generate` without `--package-name`, as an integration that does not
-	/// know packages does, so the tool cannot verify that two modules share one. The module still compiles in its
-	/// package.
+	/// Whether the module has no package under `.moduleInfo`: its `generate` runs without `--package-name` and its compile
+	/// passes no `-package-name`, as Bazel builds a library without `package_name` and Tuist a target without
+	/// `SWIFT_PACKAGE_NAME`. `.swiftPackagePlugin` reads the package from the target graph and compiles the module in it,
+	/// since SwiftPM gives every module a package.
 	let omitsPackageName: Bool
 	/// Whether the module is built as a release build is: see `init`.
 	let isReleaseConfiguration: Bool
@@ -569,7 +570,7 @@ func executeSafeDIToolMultiModuleTest(
 			writtenModules.map { module in
 				ModuleCompileSources(
 					moduleName: module.fixture.name,
-					packageName: module.fixture.packageName,
+					packageName: integration == .moduleInfo && module.fixture.omitsPackageName ? nil : module.fixture.packageName,
 					dependencyModuleNames: module.transitiveDependencies,
 					inputSwiftFiles: module.swiftFiles,
 					generatedFiles: outputs[module.fixture.name]!.generatedFiles,
