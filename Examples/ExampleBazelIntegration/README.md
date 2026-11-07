@@ -24,10 +24,12 @@ toolchain). The SafeDI rules themselves are platform-agnostic.
   the initializer `Subproject` generates for it is `public` without
   `theme` and `package` with it. SafeDI counts a type it reads no
   declaration of as `public`, so `Models` is a `safedi_swift_library`
-  and its `Models_safedi` is in the `safedi_deps` of `Subproject` and of
-  the app, whose root calls the seam: without it, the `public`
-  initializer would take a `package` type and fail to compile. All three
-  modules set the same `package_name`.
+  and its `Models_safedi` is in the `safedi_deps` of `Subproject`, which
+  imports it: without it, the `public` initializer would take a `package`
+  type and fail to compile. The app, whose root calls the seam, lists
+  only `Subproject_safedi`, the module it imports: `Subproject`'s
+  `.safedi` carries what `WindowTitle`'s signature needs of `Models`.
+  All three modules set the same `package_name`.
 - **`safedi_swift_library` macro** — `load("@safedi//bazel:safedi.bzl", "safedi_swift_library")`. It takes a `swift_library`'s attributes and declares two targets from them:
   - `<name>`, the `swift_library`, which compiles `srcs` together with the generated code.
   - `<name>_safedi`, a `safedi_compile` target that runs SafeDITool once over the same `srcs` and writes two outputs:

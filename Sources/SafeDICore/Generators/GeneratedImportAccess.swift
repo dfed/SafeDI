@@ -110,7 +110,7 @@ public struct GeneratedImportAccess: Sendable {
 			}
 			// A dependency's file that names a type imports the module that declares it.
 			if let sourceFilePath = instantiable.sourceFilePath,
-			   let moduleNames = writtenLevels.dependencyFileModuleNamesByFilePath[sourceFilePath]
+			   let moduleNames = writtenLevels.dependencyFileModuleNames(ofFileAt: sourceFilePath, declaredIn: instantiable.moduleName)
 			{
 				let namedTypes = instantiable.dependencies.map(\.property.typeDescription)
 					+ (instantiable.initializer?.arguments.map(\.typeDescription) ?? [])
@@ -136,9 +136,11 @@ public struct GeneratedImportAccess: Sendable {
 	public struct WrittenLevels: Sendable {
 		/// - Parameters:
 		///   - ownImportStatements: The imports of the module's own files, among which `isOwnFile` finds them.
-		///   - importStatements: The imports of every file SafeDI read, the module's own and its dependencies'.
+		///   - importStatements: The imports of every file SafeDI read, the module's own and its dependencies', each group
+		///     with the module whose files hold it, or `nil` when the group's files belong to several modules or one SafeDI
+		///     does not know: two modules can record files at one relative path, as two projects of a Tuist workspace do.
 		///   - isOwnFile: Whether a file is one of the module's own.
-		public init(ownImportStatements: [ImportStatement], importStatements: [ImportStatement], isOwnFile: (String) -> Bool) {
+		public init(ownImportStatements: [ImportStatement], importStatements: [(moduleName: String?, importStatements: [ImportStatement])], isOwnFile: (String) -> Bool) {
 			var ownLevelsByModuleName = [String: Set<AccessLevel>]()
 			for importStatement in ownImportStatements {
 				if let accessLevel = importStatement.accessLevel,
@@ -148,33 +150,72 @@ public struct GeneratedImportAccess: Sendable {
 					ownLevelsByModuleName[importStatement.moduleName, default: []].insert(accessLevel)
 				}
 			}
+			var dependencyFileModuleNamesByDeclaringFile = [DeclaringFile: Set<String>]()
 			var dependencyFileModuleNamesByFilePath = [String: Set<String>]()
-			for importStatement in importStatements {
-				// Only an import of `package` or wider lets the file's declarations that another module calls name the
-				// imported module's types.
-				if let accessLevel = importStatement.accessLevel,
-				   Self.levelsOtherModulesCanName.contains(accessLevel),
-				   let sourceFilePath = importStatement.sourceFilePath,
-				   !isOwnFile(sourceFilePath)
-				{
-					dependencyFileModuleNamesByFilePath[sourceFilePath, default: []].insert(importStatement.moduleName)
+			var moduleNamesWithFiles = Set<String>()
+			for (moduleName, groupImportStatements) in importStatements {
+				if let moduleName {
+					moduleNamesWithFiles.insert(moduleName)
+				}
+				for importStatement in groupImportStatements {
+					// Only an import of `package` or wider lets the file's declarations that another module calls name the
+					// imported module's types.
+					if let accessLevel = importStatement.accessLevel,
+					   Self.levelsOtherModulesCanName.contains(accessLevel),
+					   let sourceFilePath = importStatement.sourceFilePath,
+					   !isOwnFile(sourceFilePath)
+					{
+						if let moduleName {
+							dependencyFileModuleNamesByDeclaringFile[DeclaringFile(moduleName: moduleName, sourceFilePath: sourceFilePath), default: []].insert(importStatement.moduleName)
+						}
+						dependencyFileModuleNamesByFilePath[sourceFilePath, default: []].insert(importStatement.moduleName)
+					}
 				}
 			}
-			self.init(ownLevelsByModuleName: ownLevelsByModuleName, dependencyFileModuleNamesByFilePath: dependencyFileModuleNamesByFilePath)
+			self.init(
+				ownLevelsByModuleName: ownLevelsByModuleName,
+				moduleNamesWithFiles: moduleNamesWithFiles,
+				dependencyFileModuleNamesByDeclaringFile: dependencyFileModuleNamesByDeclaringFile,
+				dependencyFileModuleNamesByFilePath: dependencyFileModuleNamesByFilePath,
+			)
 		}
 
-		private init(ownLevelsByModuleName: [String: Set<AccessLevel>], dependencyFileModuleNamesByFilePath: [String: Set<String>]) {
+		private init(ownLevelsByModuleName: [String: Set<AccessLevel>], moduleNamesWithFiles: Set<String>, dependencyFileModuleNamesByDeclaringFile: [DeclaringFile: Set<String>], dependencyFileModuleNamesByFilePath: [String: Set<String>]) {
 			self.ownLevelsByModuleName = ownLevelsByModuleName
+			self.moduleNamesWithFiles = moduleNamesWithFiles
+			self.dependencyFileModuleNamesByDeclaringFile = dependencyFileModuleNamesByDeclaringFile
 			self.dependencyFileModuleNamesByFilePath = dependencyFileModuleNamesByFilePath
 		}
 
 		/// No file spells a level.
-		public static let none = WrittenLevels(ownLevelsByModuleName: [:], dependencyFileModuleNamesByFilePath: [:])
+		public static let none = WrittenLevels(ownLevelsByModuleName: [:], moduleNamesWithFiles: [], dependencyFileModuleNamesByDeclaringFile: [:], dependencyFileModuleNamesByFilePath: [:])
+
+		/// A file of a module whose module info SafeDI read.
+		struct DeclaringFile: Hashable {
+			let moduleName: String
+			let sourceFilePath: String
+		}
 
 		/// The levels the module's own files spell on their imports, by imported module.
 		let ownLevelsByModuleName: [String: Set<AccessLevel>]
-		/// The modules each file that is not one of the module's own imports at `package` or wider, by file.
+		/// The modules whose module info SafeDI read, whose files' imports are grouped by module.
+		let moduleNamesWithFiles: Set<String>
+		/// The modules each file of a module whose module info SafeDI read imports at `package` or wider, by module and file.
+		let dependencyFileModuleNamesByDeclaringFile: [DeclaringFile: Set<String>]
+		/// The modules each file that is not one of the module's own imports at `package` or wider, by file, whichever
+		/// module's it is.
 		let dependencyFileModuleNamesByFilePath: [String: Set<String>]
+
+		/// The modules the file at `sourceFilePath`, which the module named `moduleName` declares when SafeDI knows it,
+		/// imports at `package` or wider: the file of that module, when SafeDI read that module's module info, so a file
+		/// of another module at the same path never answers; otherwise any file at that path.
+		func dependencyFileModuleNames(ofFileAt sourceFilePath: String, declaredIn moduleName: String?) -> Set<String>? {
+			if let moduleName, moduleNamesWithFiles.contains(moduleName) {
+				dependencyFileModuleNamesByDeclaringFile[DeclaringFile(moduleName: moduleName, sourceFilePath: sourceFilePath)]
+			} else {
+				dependencyFileModuleNamesByFilePath[sourceFilePath]
+			}
+		}
 
 		/// The levels of an import through which a declaration another module calls can name the imported module's types.
 		private static let levelsOtherModulesCanName: Set<AccessLevel> = [.open, .public, .package]

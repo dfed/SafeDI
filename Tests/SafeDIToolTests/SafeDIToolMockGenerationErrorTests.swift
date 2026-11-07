@@ -317,6 +317,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "DependentModule", "--package-name", "Example"],
 		)
 		let dependentModuleFixtures = dependentModuleOutput.fixtures
 
@@ -338,7 +339,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 					)
 					""",
 				],
-				dependentModuleInfoPaths: [dependentModuleOutput.moduleInfoOutputPath],
+				dependentModuleInfoPaths: [dependentModuleOutput.writtenModuleInfoOutputPath],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
@@ -2870,6 +2871,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "DependentModule", "--package-name", "Example"],
 		)
 		let dependentModuleFixtures = dependentModuleOutput.fixtures
 
@@ -2891,7 +2893,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 					)
 					""",
 				],
-				dependentModuleInfoPaths: [dependentModuleOutput.moduleInfoOutputPath],
+				dependentModuleInfoPaths: [dependentModuleOutput.writtenModuleInfoOutputPath],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)

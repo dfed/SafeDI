@@ -258,6 +258,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 			buildCombinedOutput: true,
 			filesToDelete: &filesToDelete,
 			inputPathsRelativeToCurrentDirectory: true,
+			moduleMembershipArguments: ["--module-name", "Example", "--package-name", "Example"],
 		)
 
 		#expect(output.combinedOutput == """
@@ -301,7 +302,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		#endif
 		""", "Unexpected combined output: \(output.combinedOutput ?? "")")
 		// The module info file is binary; `dump` shows every string it holds.
-		let moduleInfo = try JSONSerialization.jsonObject(with: Data(Dump.parse([output.moduleInfoOutputPath]).json().utf8))
+		let moduleInfo = try JSONSerialization.jsonObject(with: Data(Dump.parse([output.writtenModuleInfoOutputPath]).json().utf8))
 		#expect(absolutePaths(in: moduleInfo) == [])
 	}
 
@@ -518,9 +519,10 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 				],
 				filesToDelete: &filesToDelete,
 				skipCompileVerification: true,
+				moduleMembershipArguments: ["--module-name", "Broken\(index)", "--package-name", "Example"],
 			)))
 		}
-		let dependentModuleOutputsInPathOrder = dependentModuleOutputs.sorted { $0.output.moduleInfoOutputPath < $1.output.moduleInfoOutputPath }
+		let dependentModuleOutputsInPathOrder = try dependentModuleOutputs.sorted { try $0.output.writtenModuleInfoOutputPath < $1.output.writtenModuleInfoOutputPath }
 
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -532,7 +534,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 				""",
 			],
 			// Listed in the reverse of path order, which the generated code does not follow.
-			dependentModuleInfoPaths: dependentModuleOutputsInPathOrder.reversed().map(\.output.moduleInfoOutputPath),
+			dependentModuleInfoPaths: dependentModuleOutputsInPathOrder.reversed().map { try $0.output.writtenModuleInfoOutputPath },
 			buildCombinedOutput: true,
 			filesToDelete: &filesToDelete,
 			skipCompileVerification: true,
@@ -650,6 +652,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "CrossModule", "--package-name", "Example"],
 		)
 
 		let tempDir = FileManager.default.temporaryDirectory
@@ -669,7 +672,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		try rootURL.path.write(to: csvURL, atomically: true, encoding: .utf8)
 
 		let dependentModuleCSV = tempDir.appendingPathComponent("dependent-modules.csv")
-		try crossModuleOutput.moduleInfoOutputPath.write(to: dependentModuleCSV, atomically: true, encoding: .utf8)
+		try crossModuleOutput.writtenModuleInfoOutputPath.write(to: dependentModuleCSV, atomically: true, encoding: .utf8)
 
 		let rootOutputURL = tempDir.appendingPathComponent("Root+SafeDI.swift")
 		let mockConfigURL = tempDir.appendingPathComponent("SafeDIMockConfiguration.swift")
@@ -717,6 +720,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "CrossModule", "--package-name", "Example"],
 		)
 
 		let tempDir = FileManager.default.temporaryDirectory
@@ -740,7 +744,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 
 		let dependentModuleCSV = tempDir.appendingPathComponent("dependent-modules.csv")
 		// Emulate `echo "path.safedi" > deps.csv` — trailing newline included.
-		try "\(crossModuleOutput.moduleInfoOutputPath)\n".write(to: dependentModuleCSV, atomically: true, encoding: .utf8)
+		try "\(crossModuleOutput.writtenModuleInfoOutputPath)\n".write(to: dependentModuleCSV, atomically: true, encoding: .utf8)
 
 		let combinedOutputURL = tempDir.appendingPathComponent("SafeDIGenerated.swift")
 		let tool = try Generate.parse([
@@ -782,6 +786,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "CrossModule", "--package-name", "Example"],
 		)
 
 		let output = try await executeSafeDIToolTest(
@@ -803,7 +808,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [crossModuleOutput.writtenModuleInfoOutputPath],
 			buildCombinedOutput: true,
 			filesToDelete: &filesToDelete,
 			skipCompileVerification: true,
@@ -913,6 +918,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "CrossModule", "--package-name", "Example"],
 		)
 
 		let output = try await executeSafeDIToolTest(
@@ -935,7 +941,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [crossModuleOutput.writtenModuleInfoOutputPath],
 			buildCombinedOutput: true,
 			filesToDelete: &filesToDelete,
 			skipCompileVerification: true,

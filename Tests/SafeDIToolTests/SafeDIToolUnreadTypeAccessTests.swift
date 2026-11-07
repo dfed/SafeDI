@@ -1583,35 +1583,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 	// MARK: X: a declaration of a module SafeDI knows no name of
 
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenUnnamedModuleInfoDeclaresPackageTypes() async {
-		// X1: `Core`'s `.safedi` names no module, so SafeDI counts its `package` `Store` at its declared level.
-		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `store: Store`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Store` is declared `package` in a module SafeDI knows no name of. Declare `Store` `public` in a module SafeDI knows no name of; name the module that declares `Store` where SafeDI runs on it (`module_name` under Bazel, `--module-name` otherwise); declare `Screen` `package`; receive `store` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-			\(fixtures["Core"]!["Store.swift"]):1:1: note: `Store` is declared `package` here.
-			\(fixtures["Core"]!["Store.swift"]):1:1-1:8: fixit: public
-			\(fixtures["Feature"]!["Screen.swift"]):11:5: note: `Screen` receives `store: Store` here.
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Token` is declared `package` in a module SafeDI knows no name of. Declare `Token` `public` in a module SafeDI knows no name of; name the module that declares `Token` where SafeDI runs on it (`module_name` under Bazel, `--module-name` otherwise); declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-			\(fixtures["Core"]!["Store.swift"]):6:1: note: `Token` is declared `package` here.
-			\(fixtures["Core"]!["Store.swift"]):6:1-6:8: fixit: public
-			\(fixtures["Feature"]!["Screen.swift"]):12:5: note: `Screen` receives `token: Token` here.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: ["Store.swift": "package struct Store {\n    package init() {}\n}\n\n#if DEBUG\npackage struct Token {}\n#endif"], activeCompilationConditions: ["DEBUG"], omitsModuleName: true),
-					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: [
-						"Screen.swift": Self.screenSource(receives: ["@Received let store: Store", "@Received let token: Token"], imports: ["Core"]),
-					], dependencies: ["Core"]),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
 	// MARK: SPM: a fetched package's own modules
 
 	@Test
@@ -2086,29 +2057,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 	}
 
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesPlainDeclarationCallersCannotSee_whenUnnamedModuleInfoProvesParameterNarrower() async {
-		// X3: `Core`'s `.safedi` names no module, so `Feature`'s callers, which read only named modules, cannot see `Store`
-		// and would count it `public`: the error is at `Store`'s declaration.
-		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			"""
-			\(fixtures["Core"]!["Store.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: the initializer SafeDI generates for it takes its parameters at the access this declaration of `Store` proves, which is in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see it, so they would count `Store` as `public`, and their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: ["Store.swift": "package struct Store {\n    package init() {}\n}"], omitsModuleName: true),
-					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: [
-						"Screen.swift": Self.screenSource(receives: ["@Received(onlyIfAvailable: true) let store: Store?"], imports: ["Core"]),
-					], dependencies: ["Core"]),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorNamingFirstDeclaration_whenItTiesWithConditionallyDeclaredNamesake(integration: MultiModuleIntegration) async {
@@ -2178,51 +2126,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 				pluginTargetGraph: Self.featureTargetGraph,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesPlainDeclarationCallersCannotSee_whenUnnamedModuleInfoProvesPublicMockParameterNarrower() async {
-		// X6: the public mock's twin of X3.
-		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			"""
-			\(fixtures["Core"]!["Store.swift"]):1:1: error: SafeDI cannot generate the public mock of `Screen`: it takes its parameters at the access this declaration of `Store` proves, which is in a module whose SafeDI module info names no module, and the modules that call the mock, which compute its signature from the modules this module's module info names, cannot see it, so they would count `Store` as `public`, and their calls would not match the mock. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: ["Store.swift": "package struct Store {\n    package init() {}\n}"], omitsModuleName: true),
-					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: [
-						"Screen.swift": Self.publicMockScreenSource(receives: ["@Received(onlyIfAvailable: true) let store: Store?"], imports: ["Core"]),
-					], dependencies: ["Core"]),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesEarliestPlainDeclarationCallersCannotSee_whenTwoProveParametersNarrower() async {
-		// X7: `Store` and `Token` each prove a parameter the callers would take on the `public` tier: the error is at the
-		// earlier declaration by source location, `Token`'s, although `Screen` receives `store` first.
-		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			"""
-			\(fixtures["Core"]!["Types.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: the initializer SafeDI generates for it takes its parameters at the access this declaration of `Token` proves, which is in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see it, so they would count `Token` as `public`, and their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: ["Types.swift": "package struct Token {\n    package init() {}\n}\n\npackage struct Store {\n    package init() {}\n}"], omitsModuleName: true),
-					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: [
-						"Screen.swift": Self.screenSource(receives: ["@Received(onlyIfAvailable: true) let store: Store?", "@Received(onlyIfAvailable: true) let token: Token?"], imports: ["Core"]),
-					], dependencies: ["Core"]),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
 			)
 		}
 	}

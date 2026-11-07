@@ -175,7 +175,8 @@ func executeSafeDIToolTest(
 		.joined(separator: ",")
 		.write(to: dependentModuleInfoFileCSV, atomically: true, encoding: .utf8)
 
-	let moduleInfoOutput = URL.temporaryFile.appendingPathExtension("safedi")
+	// A module info file names the module it describes, so the run writes one only when the test names its module.
+	let moduleInfoOutput: URL? = moduleMembershipArguments.contains("--module-name") ? URL.temporaryFile.appendingPathExtension("safedi") : nil
 	let outputDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
 	let manifestFile = URL.temporaryFile.appendingPathExtension("json")
 	let dotTreeOutput = URL.temporaryFile.appendingPathExtension("dot")
@@ -258,7 +259,9 @@ func executeSafeDIToolTest(
 		for module in additionalImportedModules {
 			generateArguments += ["--additional-imported-modules", module]
 		}
-		generateArguments += ["--module-info-output", moduleInfoOutput.relativePath]
+		if let moduleInfoOutput {
+			generateArguments += ["--module-info-output", moduleInfoOutput.relativePath]
+		}
 		if !dependentModuleInfoPaths.isEmpty {
 			generateArguments += ["--dependent-module-info-file-path", dependentModuleInfoFileCSV.relativePath]
 		}
@@ -304,7 +307,9 @@ func executeSafeDIToolTest(
 
 		filesToDelete.append(swiftFileCSV)
 		filesToDelete.append(swiftFixtureDirectory)
-		filesToDelete.append(moduleInfoOutput)
+		if let moduleInfoOutput {
+			filesToDelete.append(moduleInfoOutput)
+		}
 		if let additionalFixtureDirectory {
 			filesToDelete.append(additionalFixtureDirectory)
 		}
@@ -348,7 +353,7 @@ func executeSafeDIToolTest(
 			#expect(generatedFiles.keys.sorted() == plannedOutputFilePaths.map { ($0 as NSString).lastPathComponent }.sorted())
 		}
 
-		let moduleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: moduleInfoOutput))
+		let moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
 		if let generatedFiles, !generatedFiles.isEmpty, !skipCompileVerification {
 			try verifyGeneratedCodeCompiles(
 				inputSwiftFiles: swiftFiles,
@@ -356,15 +361,15 @@ func executeSafeDIToolTest(
 				generatedFiles: generatedFiles,
 				activeCompilationConditions: verificationCompilationConditions ?? activeCompilationConditions,
 				// Without a configuration, mocks are wrapped in `#if DEBUG`, which the verifier always defines.
-				mockConditionalCompilation: moduleInfo.configurations.first?.mockConditionalCompilation,
+				mockConditionalCompilation: generateOutput.module.configurations.first?.mockConditionalCompilation,
 				compilerSettings: verificationCompilerSettings,
 				filesToDelete: &filesToDelete,
 			)
 		}
 
 		return try TestOutput(
-			moduleInfo: moduleInfo,
-			moduleInfoOutputPath: moduleInfoOutput.relativePath,
+			moduleInfoFile: moduleInfoFile,
+			moduleInfoOutputPath: moduleInfoOutput?.relativePath,
 			fixtures: fixtures,
 			warnings: generateOutput.warnings,
 			generateOutput: generateOutput,
@@ -379,8 +384,14 @@ func executeSafeDIToolTest(
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct TestOutput {
-	let moduleInfo: ModuleInfo
-	let moduleInfoOutputPath: String
+	/// The module info file `generate` wrote, which it writes only for a test that names its module.
+	let moduleInfoFile: ModuleInfoFile?
+	/// The module `moduleInfoFile` describes.
+	var moduleInfo: ModuleInfo? {
+		moduleInfoFile?.module
+	}
+
+	let moduleInfoOutputPath: String?
 	/// The fixture files written for `swiftFileContent`, looked up by file name.
 	let fixtures: FixturePaths
 	/// The non-fatal diagnostics `generate` reported, which `run()` prints to standard error.
@@ -390,6 +401,20 @@ struct TestOutput {
 	let generatedFiles: [String: String]?
 	let dotTree: String?
 	let combinedOutput: String?
+
+	/// The path of the module info `generate` wrote, which a test that names its module hands to another run.
+	var writtenModuleInfoOutputPath: String {
+		get throws {
+			try #require(moduleInfoOutputPath)
+		}
+	}
+
+	/// The module info `generate` wrote, for a test that names its module.
+	var writtenModuleInfo: ModuleInfo {
+		get throws {
+			try #require(moduleInfo)
+		}
+	}
 
 	var dependencyTreeFiles: [String: String] {
 		generatedFiles?.filter { $0.key.hasSuffix("+SafeDI.swift") } ?? [:]

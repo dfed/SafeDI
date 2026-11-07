@@ -992,6 +992,7 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 			],
 			buildDOTFileOutput: false,
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "GreatGrandchildModule", "--package-name", "Example"],
 		)
 
 		let grandchildModuleOutput = try await executeSafeDIToolTest(
@@ -1029,11 +1030,12 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [greatGrandchildModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [greatGrandchildModuleOutput.writtenModuleInfoOutputPath],
 			buildDOTFileOutput: false,
 			filesToDelete: &filesToDelete,
 			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
 			skipCompileVerification: true,
+			moduleMembershipArguments: ["--module-name", "GrandchildModule", "--package-name", "Example"],
 		)
 
 		let childModuleOutput = try await executeSafeDIToolTest(
@@ -1060,13 +1062,14 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			dependentModuleInfoPaths: [
-				greatGrandchildModuleOutput.moduleInfoOutputPath,
-				grandchildModuleOutput.moduleInfoOutputPath,
+				greatGrandchildModuleOutput.writtenModuleInfoOutputPath,
+				grandchildModuleOutput.writtenModuleInfoOutputPath,
 			],
 			buildDOTFileOutput: false,
 			filesToDelete: &filesToDelete,
 			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
 			skipCompileVerification: true,
+			moduleMembershipArguments: ["--module-name", "ChildModule", "--package-name", "Example"],
 		)
 
 		let topLevelModuleOutput = try await executeSafeDIToolTest(
@@ -1083,9 +1086,9 @@ struct SafeDIToolDOTGenerationTests: ~Copyable {
 				""",
 			],
 			dependentModuleInfoPaths: [
-				greatGrandchildModuleOutput.moduleInfoOutputPath,
-				grandchildModuleOutput.moduleInfoOutputPath,
-				childModuleOutput.moduleInfoOutputPath,
+				greatGrandchildModuleOutput.writtenModuleInfoOutputPath,
+				grandchildModuleOutput.writtenModuleInfoOutputPath,
+				childModuleOutput.writtenModuleInfoOutputPath,
 			],
 			buildDOTFileOutput: true,
 			filesToDelete: &filesToDelete,

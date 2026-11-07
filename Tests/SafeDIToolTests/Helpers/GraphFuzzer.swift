@@ -191,7 +191,7 @@ struct GraphFuzzerFixture: Equatable {
 	/// module instead, which can then see the fulfilling type and builds it inline, so the seam takes no builder.
 	var withoutHoles: GraphFuzzerFixture {
 		let seamModuleHasNoPackage = modulesOmittingPackageName.contains(.seamModule)
-		let seamModuleHeader = GraphFuzzerModule.seamModule.fileHeader(omitsPackageName: seamModuleHasNoPackage)
+		let seamModuleHeader = GraphFuzzerModule.seamModule.fileHeader(omitsPackageName: seamModuleHasNoPackage, presentModules: Set(modules ?? []))
 		return GraphFuzzerFixture(
 			seed: seed,
 			swiftFileContent: swiftFileContent.map { content in
@@ -242,9 +242,18 @@ struct GraphFuzzerFixture: Equatable {
 
 /// A module of a graph split across modules. Every split graph uses the same module names and packages, so the modules
 /// of one role of many graphs compile as one module, kept apart by the per-seed type-name prefix: the seam's module
-/// in package `shop`, a caller in the same package that holds the rest of the graph, and a caller in package `other`.
-/// A file names its module on its first line, as `// module: <name>`, so every renaming and `withoutSeams` keep it.
+/// in package `shop`, a caller in the same package that holds the rest of the graph, and a caller in package `other`;
+/// and, in a graph `GraphFuzzerSeamDependencyDraw` draws them in, the chain of modules beneath the seam's module, each
+/// listing only the one beneath it, which the seam's module and its callers read only through `.safedi` files' views
+/// under the module-info flow. A file names its module on its first line, as `// module: <name>`, so every renaming
+/// and `withoutSeams` keep it. The cases are in dependency order.
 enum GraphFuzzerModule: String, CaseIterable, Comparable {
+	/// The module beneath `seamDependencyBase`, in package `base`, which only `seamDependencyBase` lists.
+	case seamDependencyLeaf = "FuzzBase"
+	/// The module beneath `seamDependency`, in package `core`, which only `seamDependency` lists.
+	case seamDependencyBase = "FuzzCore"
+	/// The module beneath the seam's module, which only the seam's module lists.
+	case seamDependency = "FuzzSession"
 	case seamModule = "FuzzFeature"
 	case samePackageCaller = "FuzzApp"
 	case otherPackageCaller = "FuzzOther"
@@ -283,20 +292,55 @@ enum GraphFuzzerModule: String, CaseIterable, Comparable {
 
 	var packageName: String {
 		switch self {
-		case .seamModule, .samePackageCaller:
+		case .seamDependency, .seamModule, .samePackageCaller:
 			"shop"
+		case .seamDependencyBase:
+			"core"
+		case .seamDependencyLeaf:
+			"base"
 		case .otherPackageCaller:
 			"other"
 		}
 	}
 
-	/// The modules this one imports: a caller imports the seam's module.
+	/// The modules this one imports when the graph has them: a caller imports the seam's module, the seam's module the
+	/// module beneath it, and that module the one beneath it.
 	var dependencies: [GraphFuzzerModule] {
 		switch self {
-		case .seamModule:
+		case .seamDependencyLeaf:
 			[]
+		case .seamDependencyBase:
+			[.seamDependencyLeaf]
+		case .seamDependency:
+			[.seamDependencyBase]
+		case .seamModule:
+			[.seamDependency]
 		case .samePackageCaller, .otherPackageCaller:
 			[.seamModule]
+		}
+	}
+
+	/// The modules this one depends on, directly or through another, in dependency order: those a compile of it searches.
+	var transitiveDependencies: [GraphFuzzerModule] {
+		Self.allCases.filter { module in
+			var pending = dependencies
+			while let dependency = pending.popLast() {
+				guard dependency != module else {
+					return true
+				}
+				pending += dependency.dependencies
+			}
+			return false
+		}
+	}
+
+	/// Whether the module calls the seam's module: a caller, which no module beneath the seam's module is.
+	var isCaller: Bool {
+		switch self {
+		case .seamDependencyLeaf, .seamDependencyBase, .seamDependency, .seamModule:
+			false
+		case .samePackageCaller, .otherPackageCaller:
+			true
 		}
 	}
 
@@ -307,6 +351,12 @@ enum GraphFuzzerModule: String, CaseIterable, Comparable {
 
 	private var order: Int {
 		switch self {
+		case .seamDependencyLeaf:
+			-3
+		case .seamDependencyBase:
+			-2
+		case .seamDependency:
+			-1
 		case .seamModule:
 			0
 		case .samePackageCaller:
@@ -327,9 +377,10 @@ enum GraphFuzzerModule: String, CaseIterable, Comparable {
 		)
 	}
 
-	/// The first lines of a file of this module: the marker, and the import of each module it depends on.
-	func fileHeader(omitsPackageName: Bool, fillsHole: Bool = false) -> String {
-		([Self.marker + name + (omitsPackageName ? Self.packageNameOmittedMarker : "") + (fillsHole ? Self.holeFulfillerMarker : "")] + dependencies.map { "import \($0.name)" }).joined(separator: "\n") + "\n\n"
+	/// The first lines of a file of this module: the marker, and the import of each module it depends on among
+	/// `presentModules`, the modules of its graph.
+	func fileHeader(omitsPackageName: Bool, fillsHole: Bool = false, presentModules: Set<GraphFuzzerModule>) -> String {
+		([Self.marker + name + (omitsPackageName ? Self.packageNameOmittedMarker : "") + (fillsHole ? Self.holeFulfillerMarker : "")] + dependencies.filter(presentModules.contains).map { "import \($0.name)" }).joined(separator: "\n") + "\n\n"
 	}
 }
 
@@ -929,6 +980,13 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case samePackageCallerRunWithoutPackageName
 	/// The seam's module without a package, so every caller needs `public` of it.
 	case seamModuleRunWithoutPackageName
+	/// Declarations of the seam's module moved beneath it, into the modules that only the seam's module and the module
+	/// beneath it list, so that a caller computes a seam's signature from the seam's module's view
+	/// (`GraphFuzzerSeamDependencyDraw`).
+	case seamDependency
+	/// A chain of seams two modules deep beneath the seam's module, `ChainLink` and `ChainBase`
+	/// (`GraphFuzzerSeamDependencyDraw.chainPercent`).
+	case seamDependencyChain
 	/// A seam, `HoleSeam`, whose module cannot see `HoleImpl`, the type that fulfills `HoleService`, which a property of
 	/// its tree instantiates: the seam takes a builder for it, which the roots' module fills.
 	case hole
@@ -1562,6 +1620,7 @@ enum GraphFuzzerGenerator {
 			holeProtocolAccessRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holeProtocolAccessRandomSeedMask)
 			unreadTypeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unreadTypeRandomSeedMask)
 			unreadBoundaryRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unreadBoundaryRandomSeedMask)
+			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
 			let sendabilityRoll = random.integer(in: 0...99)
@@ -1638,6 +1697,12 @@ enum GraphFuzzerGenerator {
 				for index in finalDeclarations.indices where finalDeclarations[index].module == nil {
 					finalDeclarations[index].module = .samePackageCaller
 				}
+				// Decided after every other pass, from a stream of its own, so that a graph without it is drawn as before. A
+				// seam's module run without its package's name could not construct the `package` declarations moved beneath it.
+				if !modulesOmittingPackageName.contains(.seamModule) {
+					drawSeamDependencies(in: &finalDeclarations, extensionSource: extensionSource)
+				}
+				presentModules = Set(finalDeclarations.compactMap(\.module))
 			}
 			// Each declaration moved to a file without a SafeDI marker, in its owner's module, named on its own line.
 			let markerFreeSources = markerFreeFiles.map { file in
@@ -1645,7 +1710,7 @@ enum GraphFuzzerGenerator {
 				guard isSplit, let module = finalDeclarations.first(where: { $0.name == file.ownerName })?.module else {
 					return fileNameLine + "\n\n" + file.declaration
 				}
-				let header = module.fileHeader(omitsPackageName: modulesOmittingPackageName.contains(module))
+				let header = module.fileHeader(omitsPackageName: modulesOmittingPackageName.contains(module), presentModules: presentModules)
 				let firstLine = header.prefix { $0 != "\n" }
 				return firstLine + "\n" + fileNameLine + header.dropFirst(firstLine.count) + file.declaration
 			}
@@ -1655,7 +1720,7 @@ enum GraphFuzzerGenerator {
 				? modulesOmittingPackageName.union([.seamModule])
 				: modulesOmittingPackageName
 			let drawnSources = finalDeclarations.map(source(of:))
-				+ [extensionSource.map { isSplit ? GraphFuzzerModule.samePackageCaller.fileHeader(omitsPackageName: modulesOmittingPackageName.contains(.samePackageCaller)) + $0 : $0 }].compactMap(\.self)
+				+ [extensionSource.map { isSplit ? GraphFuzzerModule.samePackageCaller.fileHeader(omitsPackageName: modulesOmittingPackageName.contains(.samePackageCaller), presentModules: presentModules) + $0 : $0 }].compactMap(\.self)
 				+ markerFreeSources
 			let declaresNothingPackage = { (source: String) in GraphFuzzerModule(declaredIn: source).map(modulesDeclaringNothingPackage.contains) == true }
 			raisingPackageTypeAccess(declaredIn: drawnSources.filter(declaresNothingPackage), notIn: drawnSources.filter { !declaresNothingPackage($0) })
@@ -1683,15 +1748,15 @@ enum GraphFuzzerGenerator {
 		/// file, which is `Root0`'s, and a stamp as the first stored property of every class the graph declares, each of
 		/// which begins a line, after its indentation (a nested class's, such as a spelling's `SpellOuter.Item`), with
 		/// `final class`, after a `public` or `package` modifier if it spells one, and ends it with ` {` or, for a class
-		/// without a body, ` {}`. A graph split across modules declares the counter in the seam's module, which the
-		/// others import.
+		/// without a body, ` {}`. A graph split across modules declares the counter in its lowest module, which the
+		/// others import (`GraphFuzzerSeamDependencyDraw.addingCreationStampCounterImports(to:)`).
 		private func addingCreationStamps(to sources: [String]) -> [String] {
 			let counterName = "\(prefix)CreationStamp"
 			let stamp = DifferentialValueCreationStamp.property(counterNamed: counterName)
-			// The counter is declared in the first file of the module every other module imports: the seam's module in a
-			// graph split across modules.
-			let counterIndex = sources.firstIndex { GraphFuzzerModule(declaredIn: $0) == .seamModule } ?? 0
-			return sources.enumerated().map { index, source in
+			// The counter is declared in the first file of the module every other module imports: the seam's module, or the
+			// lowest module beneath it, in a graph split across modules.
+			let counterIndex = GraphFuzzerSeamDependencyDraw.creationStampCounterIndex(in: sources)
+			return GraphFuzzerSeamDependencyDraw.addingCreationStampCounterImports(to: sources).enumerated().map { index, source in
 				let lines = source.split(separator: "\n", omittingEmptySubsequences: false).flatMap { line -> [String] in
 					let indentation = line.prefix { $0 == "\t" }
 					let declaration = line.dropFirst(indentation.count)
@@ -1854,6 +1919,11 @@ enum GraphFuzzerGenerator {
 
 		/// The modules of a split graph that have no package.
 		private var modulesOmittingPackageName = Set<GraphFuzzerModule>()
+
+		/// The modules of a split graph, once `build()` has drawn them, whose files import one another.
+		private var presentModules = Set<GraphFuzzerModule>()
+		/// Draws only which declarations of the seam's module move beneath it (`drawSeamDependencies(in:extensionSource:)`).
+		private var seamDependencyRandom: GraphFuzzerRandomNumberGenerator
 
 		/// `proofTypeAccess`, once `build()` has drawn the graph.
 		var narrowerTypeAccess: [String: AccessLevel] {
@@ -5004,7 +5074,66 @@ enum GraphFuzzerGenerator {
 				lines += ["", additionalDeclaration]
 			}
 			let imports = declaration.imports.map { "import \($0)\n" }.joined() + (declaration.imports.isEmpty ? "" : "\n")
-			return (declaration.module.map { $0.fileHeader(omitsPackageName: modulesOmittingPackageName.contains($0), fillsHole: declaration.fillsHole) } ?? "") + imports + lines.joined(separator: "\n") + "\n"
+			return (declaration.module.map { $0.fileHeader(omitsPackageName: modulesOmittingPackageName.contains($0), fillsHole: declaration.fillsHole, presentModules: presentModules) } ?? "") + imports + lines.joined(separator: "\n") + "\n"
+		}
+
+		// MARK: Modules beneath the seam's module
+
+		/// Moves declarations of a graph split across modules from the seam's module into the two modules beneath it, as
+		/// `GraphFuzzerSeamDependencyDraw` draws them from `seamDependencyRandom`. A declaration whose file holds anything
+		/// beyond what `source(of:)` writes – an import of its own, a hole's fill, a declaration another file without a
+		/// SafeDI marker holds – stays, as do the files without a marker and `extensionSource`, the roots' module's.
+		private mutating func drawSeamDependencies(in declarations: inout [TypeDeclaration], extensionSource: String?) {
+			/// The graph's files, as the draw reads them.
+			func units(of declarations: [TypeDeclaration]) -> [GraphFuzzerSeamDependencyDraw.Unit] {
+				declarations.map { declaration in
+					var withoutModule = declaration
+					withoutModule.module = nil
+					return GraphFuzzerSeamDependencyDraw.Unit(
+						module: declaration.module ?? .samePackageCaller,
+						source: source(of: withoutModule),
+						mayMove: declaration.imports.isEmpty && !declaration.fillsHole && !markerFreeFiles.contains { $0.ownerName == declaration.name },
+					)
+				} + markerFreeFiles.map { file in
+					GraphFuzzerSeamDependencyDraw.Unit(module: declarations.first { $0.name == file.ownerName }?.module ?? .samePackageCaller, source: file.declaration, mayMove: false)
+				} + [extensionSource].compactMap(\.self).map { GraphFuzzerSeamDependencyDraw.Unit(module: .samePackageCaller, source: $0, mayMove: false) }
+			}
+			// A chain of seams beneath a seam of the seam's module that a caller calls and no mock builds:
+			// `GraphFuzzerSeamDependencyDraw.chainPercent` describes it.
+			if seamDependencyRandom.percentChance(GraphFuzzerSeamDependencyDraw.chainPercent) {
+				let graphUnits = units(of: declarations)
+				let analysis = GraphFuzzerSeamDependencyDraw.Analysis(units: graphUnits, typeNamePrefix: prefix)
+				let eligibleSeamIndices = declarations.indices.filter { index in
+					declarations[index].module == .seamModule
+						&& declarations[index].instantiableArguments.contains("generateDependencyTree: true")
+						&& !analysis.inlineNames.contains(declarations[index].name)
+						&& !analysis.namesMocksReach.contains(declarations[index].name)
+						&& graphUnits.indices.contains { graphUnits[$0].module.isCaller && analysis.referencedNames[$0].contains(declarations[index].name) }
+				}
+				if !eligibleSeamIndices.isEmpty {
+					let seamIndex = seamDependencyRandom.element(of: eligibleSeamIndices)
+					let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+					let linkName = "\(prefix)\(GraphFuzzerSeamDependencyDraw.chainLinkSuffix)"
+					let baseName = "\(prefix)\(GraphFuzzerSeamDependencyDraw.chainBaseSuffix)"
+					let leafName = "\(prefix)\(GraphFuzzerSeamDependencyDraw.chainLeafSuffix)"
+					let tokenName = "\(prefix)\(GraphFuzzerSeamDependencyDraw.chainTokenSuffix)"
+					var link = TypeDeclaration(name: linkName, instantiableArguments: ["generateDependencyTree: true"], properties: [PropertyDeclaration(attribute: "@Instantiated", label: "chainBase", type: baseName)], declaresHelperTypes: false, additionalConformances: conformances)
+					link.module = .seamDependency
+					var base = TypeDeclaration(name: baseName, instantiableArguments: ["generateDependencyTree: true"], properties: [PropertyDeclaration(attribute: "@Instantiated", label: "chainLeaf", type: leafName)], declaresHelperTypes: false, additionalConformances: conformances)
+					base.module = .seamDependencyBase
+					var leaf = TypeDeclaration(name: leafName, instantiableArguments: [], properties: [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "chainToken", type: tokenName + "?")], declaresHelperTypes: false, additionalConformances: conformances)
+					leaf.module = .seamDependencyLeaf
+					leaf.additionalDeclarations.append("public final class \(tokenName): Sendable {\n\tpublic init() {}\n}")
+					declarations[seamIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "chainLink", type: linkName))
+					declarations += [link, base, leaf]
+				}
+			}
+			let destinations = GraphFuzzerSeamDependencyDraw.destinations(of: units(of: declarations), typeNamePrefix: prefix, random: &seamDependencyRandom)
+			for (index, destination) in zip(declarations.indices, destinations) {
+				if let destination {
+					declarations[index].module = destination
+				}
+			}
 		}
 
 		/// The narrowest access of the types `addingAccessProofShapes` declares narrower than `public` that `type` names,
@@ -5721,7 +5850,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			features.insert(.uncreatedAliasFulfillingPropertyRequiredBeside)
 		}
 		// `movingSelfContainedSeamsIntoSeamModule`'s trees in the seam's module.
-		for content in fixture.swiftFileContent where GraphFuzzerModule(declaredIn: content) == .seamModule {
+		for content in fixture.swiftFileContent where GraphFuzzerModule(declaredIn: content).map({ !$0.isCaller }) == true {
 			for line in GraphFuzzerSourceLine.lines(of: content) {
 				guard case let .typeDeclaration(name) = line else { continue }
 				if name.hasSuffix("AliasSeam") {
@@ -6107,6 +6236,13 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if fixture.modules != nil {
 			features.insert(.moduleSplit)
+			let seamDependencyDraw = GraphFuzzerSeamDependencyDraw.drawn(in: fixture)
+			if seamDependencyDraw.movesDeclaration {
+				features.insert(.seamDependency)
+			}
+			if seamDependencyDraw.drawsChain {
+				features.insert(.seamDependencyChain)
+			}
 		}
 		if classAccess[prefix + "ProofOtherRoot"] != nil {
 			features.insert(.otherPackageCaller)
@@ -7970,14 +8106,17 @@ enum GraphFuzzerOracle {
 		// A graph with a seam is run again with no seam: a rejection inline does not make is either a seam's own error
 		// or a defect (`differentialFailure`), and an accepted graph must pass no receiver `nil` that inline passes a
 		// value (`nilArgumentFailure`).
-		let inlineOutcome: GraphFuzzerToolOutcome? = fixture.declaresSeam ? try await toolOutcome(of: fixture.withoutSeams) : nil
+		// The inline build and the known-right path build in a caller what a seam or public mock would have built in its own
+		// module, so each module lists every module it depends on, directly or through another, as 2.2.0 asked: a module
+		// reads no type from a view.
+		let inlineOutcome: GraphFuzzerToolOutcome? = fixture.declaresSeam ? try await toolOutcome(of: fixture.withoutSeams, listsTransitiveDependencies: true) : nil
 		// A graph with a hole is run again with the fulfilling type in the seam's module, whose values a fill must equal.
 		let visibleOutcome: GraphFuzzerToolOutcome? = fixture.drawsHole ? try await toolOutcome(of: fixture.withoutHoles) : nil
 		// A graph with a public mock is run again as its known-right path, every declaration `public` and every `.public`
 		// mock `true`: the two must accept the same graphs but for a public mock's own errors
 		// (`publicMockAcceptanceFailure`), and build the same values (`valueFailures`).
 		let knownRightOutcome: GraphFuzzerToolOutcome? = GraphFuzzerGeneratorFeature.features(drawnIn: fixture).contains(.generateMockPublic)
-			? try await toolOutcome(of: GraphFuzzerGenerator.knownRightPublicMockFixture(forSeed: fixture.seed))
+			? try await toolOutcome(of: GraphFuzzerGenerator.knownRightPublicMockFixture(forSeed: fixture.seed), listsTransitiveDependencies: true)
 			: nil
 		// A graph split across modules is run again as the SwiftPM plugin runs the tool, which computes every seam
 		// signature, tier and public mock from source: the two must agree (`integrationsDisagreeFailure`). A graph with a
@@ -8027,9 +8166,11 @@ enum GraphFuzzerOracle {
 	///   - fileNames: The names to give the fixture's files, in its order, or `nil` to name each after the type it
 	///     declares, as `executeSafeDIToolTest` does.
 	///   - integration: How the tool runs over a graph split across modules.
-	static func toolOutcome(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo) async throws -> GraphFuzzerToolOutcome {
+	///   - listsTransitiveDependencies: Whether each module of a graph split across modules lists every module it depends
+	///     on rather than the modules it imports, for a build that constructs in a caller what a seam or public mock would.
+	static func toolOutcome(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo, listsTransitiveDependencies: Bool = false) async throws -> GraphFuzzerToolOutcome {
 		if let modules = fixture.modules {
-			return try await splitToolOutcome(of: fixture, modules: modules, fileNames: fileNames ?? fixture.fileNames, integration: integration)
+			return try await splitToolOutcome(of: fixture, modules: modules, fileNames: fileNames ?? fixture.fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies)
 		}
 		var filesToDelete = [URL]()
 		defer {
@@ -8066,9 +8207,10 @@ enum GraphFuzzerOracle {
 	/// (`.moduleInfo`), one `generate` per module, in dependency order, each reading the `.safedi` files of the modules it
 	/// depends on and naming its module and package, writes one combined output, which is decomposed into the files one
 	/// module writes; as the SwiftPM plugin runs it (`.swiftPackagePlugin`), `scan` and `generate` per module read the
-	/// module's own files and its dependencies' and write those files. Each generated file is keyed by its module's name
-	/// and its own (`FuzzFeature/Type+SafeDI.swift`), and the outcome is the first module's error, if any.
-	private static func splitToolOutcome(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule], fileNames: [String], integration: MultiModuleIntegration) async throws -> GraphFuzzerToolOutcome {
+	/// module's own files and its dependencies' and write those files. Each module lists the modules it imports, or, with
+	/// `listsTransitiveDependencies`, every module it depends on, as 2.2.0 asked. Each generated file is keyed by its
+	/// module's name and its own (`FuzzFeature/Type+SafeDI.swift`), and the outcome is the first module's error, if any.
+	private static func splitToolOutcome(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule], fileNames: [String], integration: MultiModuleIntegration, listsTransitiveDependencies: Bool) async throws -> GraphFuzzerToolOutcome {
 		var filesToDelete = [URL]()
 		defer {
 			for fileToDelete in filesToDelete {
@@ -8081,7 +8223,7 @@ enum GraphFuzzerOracle {
 				name: module.name,
 				packageName: module.packageName,
 				swiftFileContentByFilePath: Dictionary(uniqueKeysWithValues: modules.indices.filter { modules[$0] == module }.map { (fileNames[$0], fixture.swiftFileContent[$0]) }),
-				dependencies: module.dependencies.filter(presentModules.contains).map(\.name),
+				dependencies: (listsTransitiveDependencies ? module.transitiveDependencies : module.dependencies).filter(presentModules.contains).map(\.name),
 				omitsPackageName: fixture.modulesOmittingPackageName.contains(module),
 			)
 		}
@@ -8207,7 +8349,17 @@ enum GraphFuzzerOracle {
 			}
 			endBlock()
 		}
-		return blocksByModuleName
+		// A module whose generated code declares nothing – one beneath the seam's module, which holds no seam or mock – gets
+		// a combined output of imports alone from the module-info flow, and no file from the plugin flow.
+		return blocksByModuleName.filter { _, blocks in !blocks.allSatisfy(isImportBlock) }
+	}
+
+	/// Whether `block` holds only imports and the conditions around them.
+	private static func isImportBlock(_ block: String) -> Bool {
+		block.split(separator: "\n").allSatisfy { line in
+			let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+			return trimmedLine.hasPrefix("#if ") || trimmedLine == "#else" || trimmedLine == "#endif" || trimmedLine.split(separator: " ").contains("import")
+		}
 	}
 
 	/// The first top-level declaration, in module and then text order, that one of the two flows generates and the other
@@ -8631,7 +8783,7 @@ enum GraphFuzzerOracle {
 					module: module,
 					hasPackage: !modulesWithoutPackage.contains(module),
 					emitsModule: laterModulesAreCompiled,
-					moduleSearchPaths: module.dependencies.compactMap { moduleOutputDirectories[$0] },
+					moduleSearchPaths: module.transitiveDependencies.compactMap { moduleOutputDirectories[$0] },
 				)
 				moduleOutputDirectories[module] = outputDirectory
 				combinedFailures.merge(moduleCompilation.failures) { first, _ in first }
@@ -8654,7 +8806,7 @@ enum GraphFuzzerOracle {
 					module: module,
 					hasPackage: modulesWithoutPackageBySeed[seed]?.contains(module) != true,
 					emitsModule: true,
-					moduleSearchPaths: module.dependencies.compactMap { seedModuleDirectories[$0] },
+					moduleSearchPaths: module.transitiveDependencies.compactMap { seedModuleDirectories[$0] },
 				)
 				seedModuleDirectories[module] = outputDirectory
 				if let failure = unitCompilation.failures[seed] {

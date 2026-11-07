@@ -3537,28 +3537,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsHoleInSeamOfUnnamedModule_whenSeamsModuleIsNotNamed() async {
-		// C9.4a, H12 (i): SafeDI does not know which module declares `Service`, a seam this run generates, so it cannot know
-		// what that module's callers see. The error leads with the remedies every build can apply, and names the module
-		// last, for a build that can name it.
-		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			"""
-			\(fixtures["Feature"]!["Profile.swift"]):8:5: error: \(Self.holeInSeamOfUnnamedModuleMessage)
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: Self.canonicalFeature, omitsModuleName: true),
-					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: (Self.canonicalApp).map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsHoleInSeamOfUnnamedModule_whenRunNamesNoModule() async {
 		// A run with no target graph and no module name – as the Xcode project plugin runs the tool for a target – gets the
 		// error every run without a module name gets, never one that reads a module that depends on this one.

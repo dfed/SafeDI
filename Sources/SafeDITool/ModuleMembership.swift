@@ -73,6 +73,7 @@ struct ModuleMembership: Sendable {
 	) {
 		self.moduleName = moduleName
 		self.packageName = packageName
+		isTargetGraph = false
 		dependencyModuleNames = []
 		targetGraphModuleNames = nil
 		dependencyModuleNamesByModuleName = [:]
@@ -92,6 +93,7 @@ struct ModuleMembership: Sendable {
 	init(targetGraph: PluginTargetGraph) {
 		moduleName = targetGraph.target.moduleName
 		packageName = targetGraph.target.packageID
+		isTargetGraph = true
 		dependencyModuleNames = targetGraph.target.dependencyModuleNames
 		targetGraphModuleNames = Set(([targetGraph.target] + targetGraph.dependencyTargets).map(\.moduleName))
 		// A module name repeats only in a target graph a hand wrote: the first target keeps it.
@@ -112,6 +114,8 @@ struct ModuleMembership: Sendable {
 		}
 	}
 
+	/// Whether the plugin's target graph describes the modules, which names every module whose files the input CSV lists.
+	let isTargetGraph: Bool
 	/// The module `generate` generates code for, or `nil` when the build system did not say.
 	let moduleName: String?
 	/// The package of the module `generate` generates code for, or `nil` when the build system did not say.

@@ -34,7 +34,7 @@ import SafeDICore
 /// | 6 | 8 | ``schemaFingerprint`` |
 /// | 14 | 8 | The body's length in bytes |
 /// | 22 | 8 | The body's ``checksum(of:)`` |
-/// | 30 | | The body: a string table, then one ``CachedScannedModuleInfo`` or ``ModuleInfo`` |
+/// | 30 | | The body: a string table, then one ``CachedScannedModuleInfo`` or ``ModuleInfoFile`` |
 ///
 /// A file that fails any check is not read. A scan cache that cannot be read makes `generate` parse the
 /// module afresh, so a cache written by a SafeDITool whose stored types write other fields, fields of other
@@ -47,7 +47,7 @@ enum BinaryFile {
 	enum Kind: Equatable {
 		/// The cache `scan` writes for `generate`, which holds a ``CachedScannedModuleInfo``.
 		case scanCache
-		/// The `.safedi` file `generate` writes for dependent modules, which holds a ``ModuleInfo``.
+		/// The `.safedi` file `generate` writes for dependent modules, which holds a ``ModuleInfoFile``.
 		case moduleInfo
 
 		/// The bytes that begin every file of this kind.
@@ -95,6 +95,10 @@ enum BinaryFile {
 			FileScan.self,
 			OutputFileDeclarations.self,
 			ModuleInfo.self,
+			ModuleInfoFile.self,
+			ModuleInfoView.self,
+			ViewedModuleIdentity.self,
+			ViewedModule.self,
 			ImportStatement.self,
 			FileVisitor.ImportSegment.self,
 			ConditionalCompilationDecision.self,
@@ -318,20 +322,6 @@ extension CachedScannedModuleInfo {
 	var scanCacheData: Data {
 		get throws(BinaryFileWriteError) {
 			try BinaryFile.data(.scanCache, holding: self)
-		}
-	}
-}
-
-extension ModuleInfo {
-	/// Reads the module info file `data` holds.
-	init(moduleInfoData data: Data) throws(BinaryFileReadError) {
-		self = try BinaryFile.value(.moduleInfo, from: data)
-	}
-
-	/// This module as a module info file.
-	var moduleInfoData: Data {
-		get throws(BinaryFileWriteError) {
-			try BinaryFile.data(.moduleInfo, holding: self)
 		}
 	}
 }

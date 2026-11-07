@@ -939,6 +939,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "CrossModule", "--package-name", "Example"],
 		)
 
 		let output = try await executeSafeDIToolTest(
@@ -961,7 +962,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [crossModuleOutput.writtenModuleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
@@ -1226,6 +1227,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "CrossModule", "--package-name", "Example"],
 		)
 
 		let output = try await executeSafeDIToolTest(
@@ -1248,7 +1250,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [crossModuleOutput.writtenModuleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.

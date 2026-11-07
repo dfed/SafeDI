@@ -2687,19 +2687,20 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func query_namesModuleInfoFileModuleAfterItsFileName_whenTheNameIsOnlyTheBazelMacrosSuffix() async throws {
+	mutating func query_namesModuleInfoFileModuleAfterTheModuleItRecords_whenFileIsNamedOnlyTheBazelMacrosSuffix() async throws {
 		let output = try await executeSafeDIToolQuery(
 			typeName: "Feature",
 			modules: [QueryTestModule("HomeFeature", [Self.standaloneFeature], input: .moduleInfo(fileName: "_safedi.safedi"))],
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.result.modules == [output.module("_safedi", testModule: "HomeFeature", [output.instantiable("Feature", in: "HomeFeature")])])
+		// Cell 11: a module info file names the module it describes, whatever the file is called.
+		#expect(output.result.modules == [output.module("HomeFeature", [output.instantiable("Feature", in: "HomeFeature")])])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func query_namesModuleInfoFilesByDistinguishingPathSuffix_whenFileNamesMatch() async throws {
+	mutating func query_namesModuleInfoFilesByTheModulesTheyRecord_whenFileNamesMatch() async throws {
 		let output = try await executeSafeDIToolQuery(
 			typeName: "Feature",
 			modules: [
@@ -2710,14 +2711,14 @@ struct SafeDIToolQueryTests: ~Copyable {
 		)
 
 		#expect(output.result.modules == [
-			output.module("First/Shared", testModule: "First", [output.instantiable("Feature", in: "First")]),
-			output.module("Second/Shared", testModule: "Second", [output.instantiable("Cache", in: "Second")]),
+			output.module("First", [output.instantiable("Feature", in: "First")]),
+			output.module("Second", [output.instantiable("Cache", in: "Second")]),
 		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func query_namesModuleInfoFileByItsFileNameAsSpelled_whenItsPathReadsAsAnotherModules() async throws {
+	mutating func query_namesModuleInfoFileByTheModuleItRecords_whenItsPathReadsAsAnotherModules() async throws {
 		// `Home.safedi` beside the directory `Home`: without the extension the two paths read alike.
 		let output = try await executeSafeDIToolQuery(
 			typeName: "Feature",
@@ -2730,7 +2731,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 		#expect(output.result.modules == [
 			output.module("Home", [output.instantiable("Feature", in: "Home")]),
-			output.module("Home.safedi", testModule: "Support", [output.instantiable("Cache", in: "Support")]),
+			output.module("Support", [output.instantiable("Cache", in: "Support")]),
 		])
 	}
 

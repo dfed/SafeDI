@@ -165,8 +165,15 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		// is the reminder to write and read it too. Listing it changes the schema fingerprint, so caches written
 		// before the change are not read after it.
 		let project = try await scannedKitchenSinkProject()
+		// A module info file holds the module's declarations, as the cache does, and a view of other modules'.
+		let moduleInfoFile = ModuleInfoFile(module: project.scannedModuleInfo.moduleInfo, moduleName: "Kitchen", view: .empty)
+		let moduleInfoFileWithView = ModuleInfoFile(
+			module: project.scannedModuleInfo.moduleInfo,
+			moduleName: "Sink",
+			view: ModuleInfoView(moduleGraph: [moduleInfoFile.ownIdentity], declarations: [moduleInfoFile.ownEntry]),
+		)
 		var foundTypeNames = Set<String>()
-		for value in reflectedStructuresAndEnumerations(in: project.scannedModuleInfo) {
+		for value in reflectedStructuresAndEnumerations(in: project.scannedModuleInfo) + reflectedStructuresAndEnumerations(in: moduleInfoFileWithView) {
 			let typeName = String(reflecting: type(of: value))
 			foundTypeNames.insert(typeName)
 			guard let schemaMember = value as? any BinarySchemaMember else {
@@ -537,6 +544,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [Self.deepSource(forwarding: deeplyNestedType)],
 				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: ["--module-name", "Example", "--package-name", "Example"],
 			)
 		}
 	}
@@ -562,7 +570,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		)
 
 		#expect {
-			try moduleInfo.moduleInfoData
+			try ModuleInfoFile(module: moduleInfo, moduleName: "Deep", view: .empty).moduleInfoData
 		} throws: { error in
 			// Named by its outermost type: spelling the nested type recurses as deeply as it nests.
 			"\(error)" == "SafeDI cannot write `Level0` to a module info file: a type its declaration names nests more than 128 types deep, which is more than SafeDI reads back. To fix this, declare a typealias for part of that type, so that no type in the declaration nests more than 128 types deep."
@@ -573,17 +581,46 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func ownEntry_holdsNoPositionAndEveryFact_whenModuleRecordsPositions() async throws {
+		// Cell 21: a view entry holds no line or column, so a position-only edit leaves every dependent's `.safedi`
+		// unchanged, and keeps every fact a signature reads: which file holds each declaration, and whether each spells an
+		// access modifier. A position field added later is caught here, and so is a fact stripped by mistake.
+		let module = try await scannedKitchenSinkProject().scannedModuleInfo.moduleInfo
+		let file = ModuleInfoFile(module: module, moduleName: "Kitchen", view: .empty)
+		func positions(in value: Any) -> [Any] {
+			reflectedStructuresAndEnumerations(in: value).filter { $0 is Dependency.DeclarationLocation || $0 is Dependency.SourceRange }
+		}
+		func spelledAccessModifiers(in value: Any) -> [Bool] {
+			reflectedStructuresAndEnumerations(in: value).compactMap { ($0 as? AccessDeclaration)?.spellsAccessModifier }
+		}
+		#expect(!positions(in: file.instantiables).isEmpty)
+		#expect(!positions(in: file.plainTypeDeclarations).isEmpty)
+		#expect(spelledAccessModifiers(in: file.instantiables).contains(true) && spelledAccessModifiers(in: file.instantiables).contains(false))
+
+		let entry = file.ownEntry
+		#expect(positions(in: entry).isEmpty)
+		#expect(entry.instantiables.map(\.sourceFilePath) == file.instantiables.map(\.sourceFilePath))
+		#expect(entry.plainTypeDeclarations.map(\.sourceFilePath) == file.plainTypeDeclarations.map(\.sourceFilePath))
+		#expect(spelledAccessModifiers(in: entry.instantiables) == spelledAccessModifiers(in: file.instantiables))
+		#expect(spelledAccessModifiers(in: entry.plainTypeDeclarations) == spelledAccessModifiers(in: file.plainTypeDeclarations))
+		#expect(entry.imports == file.imports)
+		#expect(entry.mockImports == file.mockImports)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func dump_printsEverythingModuleInfoFileHoldsAsJSON() async throws {
 		let upstream = try await executeSafeDIToolTest(
 			swiftFileContent: [Self.upstreamServiceSource],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Upstream", "--package-name", "Example"],
 		)
 
-		let json = try Dump.parse([upstream.moduleInfoOutputPath]).json()
+		let json = try Dump.parse([upstream.writtenModuleInfoOutputPath]).json()
 
 		let dumped = try JSONDecoder().decode(ModuleInfo.self, from: Data(json.utf8))
 		#expect(dumped.instantiables.map(\.concreteInstantiable) == [.simple(name: "UpstreamService")])
-		#expect(reflectedDescription(of: dumped) == reflectedDescription(of: upstream.moduleInfo))
+		#expect(try reflectedDescription(of: dumped) == reflectedDescription(of: upstream.writtenModuleInfo))
 	}
 
 	@Test
@@ -616,12 +653,12 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [upstream.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [upstream.writtenModuleInfoOutputPath],
 			filesToDelete: &filesToDelete,
 			moduleMembershipArguments: ["--module-name", "Kitchen", "--package-name", "Restaurant"],
 		)
 
-		#expect(reflectedDescription(of: output.moduleInfo) == reflectedDescription(of: output.generateOutput.module))
+		#expect(try reflectedDescription(of: output.writtenModuleInfo) == reflectedDescription(of: output.generateOutput.module))
 	}
 
 	@Test
@@ -630,15 +667,17 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		let upstream = try await executeSafeDIToolTest(
 			swiftFileContent: [Self.upstreamServiceSource],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Upstream", "--package-name", "Example"],
 		)
-		var moduleInfo = try Data(contentsOf: URL(fileURLWithPath: upstream.moduleInfoOutputPath))
+		var moduleInfo = try Data(contentsOf: URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath))
 		moduleInfo[moduleInfo.endIndex - 1] ^= 0x01
-		try moduleInfo.write(to: URL(fileURLWithPath: upstream.moduleInfoOutputPath))
+		try moduleInfo.write(to: URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath))
 
-		await assertThrowsError("Could not read the SafeDI module info file at \(URL(fileURLWithPath: upstream.moduleInfoOutputPath).path): The module info file’s body does not match the checksum in its header. A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it.") {
+		let upstreamModuleInfoPath = try upstream.writtenModuleInfoOutputPath
+		await assertThrowsError("Could not read the SafeDI module info file at \(URL(fileURLWithPath: upstreamModuleInfoPath).path): The module info file’s body does not match the checksum in its header. A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it.") {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [Self.downstreamRootSource],
-				dependentModuleInfoPaths: [upstream.moduleInfoOutputPath],
+				dependentModuleInfoPaths: [upstream.writtenModuleInfoOutputPath],
 				buildCombinedOutput: true,
 				filesToDelete: &filesToDelete,
 			)
@@ -651,13 +690,15 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		let upstream = try await executeSafeDIToolTest(
 			swiftFileContent: [Self.upstreamServiceSource],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Upstream", "--package-name", "Example"],
 		)
-		try JSONEncoder().encode(upstream.moduleInfo).write(to: URL(fileURLWithPath: upstream.moduleInfoOutputPath))
+		try JSONEncoder().encode(upstream.writtenModuleInfo).write(to: URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath))
 
-		await assertThrowsError("Could not read the SafeDI module info file at \(URL(fileURLWithPath: upstream.moduleInfoOutputPath).path): The file is not a module info file: it does not begin with `SDMI`. A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it.") {
+		let upstreamModuleInfoPath = try upstream.writtenModuleInfoOutputPath
+		await assertThrowsError("Could not read the SafeDI module info file at \(URL(fileURLWithPath: upstreamModuleInfoPath).path): The file is not a module info file: it does not begin with `SDMI`. A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it.") {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [Self.downstreamRootSource],
-				dependentModuleInfoPaths: [upstream.moduleInfoOutputPath],
+				dependentModuleInfoPaths: [upstream.writtenModuleInfoOutputPath],
 				buildCombinedOutput: true,
 				filesToDelete: &filesToDelete,
 			)
@@ -1254,6 +1295,10 @@ extension CachedFileScan: BinarySample {}
 extension FileScan: BinarySample {}
 extension OutputFileDeclarations: BinarySample {}
 extension ModuleInfo: BinarySample {}
+extension ModuleInfoFile: BinarySample {}
+extension ModuleInfoView: BinarySample {}
+extension ViewedModuleIdentity: BinarySample {}
+extension ViewedModule: BinarySample {}
 extension ImportStatement: BinarySample {}
 extension FileVisitor.ImportSegment: BinarySample {}
 extension ConditionalCompilationDecision: BinarySample {}

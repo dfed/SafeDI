@@ -1778,32 +1778,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		}
 	}
 
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorNamingUnseenReceiver_whenCallersComputationThrowsForParameterItReceives() async {
-		// R8: `Base`'s `.safedi` names no module, so the modules that call `Cache` cannot see `Logger`, whose public
-		// initializer proves `Token` `public` for this module: computed without it, `Token` is `internal`, the callers'
-		// computation throws for `token`, and the error names `Logger`, the receiver of `token` they cannot see.
-		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			"""
-			\(fixtures["Feature"]!["Cache.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(name: "Core", packageName: "Shop", swiftFileContent: ["public struct Token {\n    public init() {}\n}"]),
-					ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: ["import Core\n\n" + seamFixtureType(named: "Logger", declarations: ["@Received let token: Token"])], dependencies: ["Core"], omitsModuleName: true),
-					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
-						"import Base\nimport Core\n\n" + seamFixtureType(named: "Cache", isSeam: true, declarations: ["@Instantiated let store: Helpers.Store", "@Instantiated let logger: Logger"]),
-						"import Core\n\ninternal enum Helpers {\n    @Instantiable\n    public struct Store: Instantiable {\n        public init(token: Token) {\n            self.token = token\n        }\n\n        @Received let token: Token\n    }\n}",
-					], dependencies: ["Base", "Core"]),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
 	// MARK: R5: a caller holding a value the tier it can call omits
 
 	/// `Feature`'s public seam `Service`, whose `Badge` receives `theme` only if available at `badgeInitializerAccess`,
@@ -2391,13 +2365,12 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		}
 	}
 
-	@Test(arguments: [false, true])
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenTypeInExtensionOfTypeAnotherModuleDeclaresIsRaisedOnlyToPackage(omitsModuleNames: Bool) async {
-		// B1.4r, B1.4s: `Base`'s `Service` is no declaration of `Feature`'s own that could bound `Service.Helper`: it is
-		// another module's (B1.4r), or, where neither module's `.safedi` names its module, two unknown module names never
-		// match outside a run's own files (B1.4s). `Helper` starts at `internal`, and `Screen`'s `package` initializer
-		// raises it to `package`.
+	mutating func generate_throwsError_whenTypeInExtensionOfTypeAnotherModuleDeclaresIsRaisedOnlyToPackage() async {
+		// B1.4r: `Base`'s `Service` is no declaration of `Feature`'s own that could bound `Service.Helper`: it is another
+		// module's. `Helper` starts at `internal`, and `Screen`'s `package` initializer raises it to `package`. (B1.4s, two
+		// modules whose `.safedi` named no module, went when every `.safedi` came to name its module.)
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
 			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: [3 of Int]`, which `Service.Helper` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `package` as far as SafeDI can tell: `Service.Helper`'s initializer, which mentions it, is declared inside an extension of `Service` that spells no access level, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions `Service.Helper` is `package` (`Screen.init(helper:)`). If `Service` can be `public`, spell the extension's access level (`public extension Service { … }`, dropping the modifier on `Helper` that Swift then reports as redundant; the compiler rejects a level wider than `Service`'s), or declare `Helper` in `Service`'s body or at top level; mention `Service.Helper` or `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Screen` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
@@ -2406,7 +2379,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
-					ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [seamFixtureType(named: "Service", declarations: [])], omitsModuleName: omitsModuleNames),
+					ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [seamFixtureType(named: "Service", declarations: [])]),
 					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 						"""
 						import Base
@@ -2423,7 +2396,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 						}
 						""",
 						"@Instantiable(generateDependencyTree: true)\npublic struct Screen: Instantiable {\n    package init(helper: Service.Helper) {\n        self.helper = helper\n    }\n\n    @Instantiated let helper: Service.Helper\n}",
-					], dependencies: ["Base"], omitsModuleName: omitsModuleNames),
+					], dependencies: ["Base"]),
 				],
 				integration: .moduleInfo,
 				filesToDelete: &filesToDelete,
