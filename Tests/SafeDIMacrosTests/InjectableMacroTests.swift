@@ -437,6 +437,161 @@ import Testing
 			)
 		}
 
+		@Test
+		func expansion_expandsWithoutIssue_whenInstantiatedExistentialSpelledWithAnyIsNotErased() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service") let service: any ServiceProtocol
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let service: any ServiceProtocol
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenInstantiatedExistentialSpelledWithAnySetsErasureToFalse() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: false) let service: any ServiceProtocol
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let service: any ServiceProtocol
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenErasedInstantiatedPropertyTypeIsConcreteExistential() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let service: AnyServiceProtocol
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let service: AnyServiceProtocol
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenErasedInstantiatorErasesToConcreteExistential() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let serviceBuilder: ErasedInstantiator<(), AnyServiceProtocol>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let serviceBuilder: ErasedInstantiator<(), AnyServiceProtocol>
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenErasedLazilyInstantiatedErasesToConcreteExistential() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let lazyService: LazilyInstantiated<AnyServiceProtocol>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let lazyService: LazilyInstantiated<AnyServiceProtocol>
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenErasedRenamePropertyTypeIsConcreteExistential() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "service", ofType: Service.self, erasedToConcreteExistential: true) let erasedService: AnyServiceProtocol
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let erasedService: AnyServiceProtocol
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenErasedRenameOfInstantiatorIsNotSafeDIWrapper() {
+			// A type of the project's own may take an instantiator in its initializer.
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "secretBuilder", ofType: Instantiator<Secret>.self, erasedToConcreteExistential: true) let authFactory: AnyAuthFactory
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let authFactory: AnyAuthFactory
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenErasedRenameOfFunctionIsSafeDIWrapper() {
+			// A SafeDI wrapper's initializer takes a function, so a function dependency can be erased into one.
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "makeSecret", ofType: (() -> Secret).self, erasedToConcreteExistential: true) let secretBuilder: ErasedInstantiator<(), Secret>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let secretBuilder: ErasedInstantiator<(), Secret>
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenErasedRenameOfSendableFunctionIsOptionalSafeDIWrapper() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "makeSecret", ofType: (@Sendable () -> Secret)?.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let secretBuilder: SendableErasedInstantiator<(), Secret>?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let secretBuilder: SendableErasedInstantiator<(), Secret>?
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
 		// MARK: Fixit Tests
 
 		@Test
@@ -901,6 +1056,407 @@ import Testing
 				fixedSource: """
 				public struct ExampleService {
 				    @Instantiated let serviceBuilder: Instantiator<Service>
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingErasure_whenErasedInstantiatedPropertyTypeIsExistentialSpelledWithAny() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let service: any ServiceProtocol
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let service: any ServiceProtocol
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the instance to a no-label initializer of the existential it is erased to, and an existential spelled with `any` or as a composition (`P & Q`) has none. Without the argument, the instance is assigned to the existential.",
+						line: 2,
+						column: 95,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Remove `erasedToConcreteExistential: true`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Remove `erasedToConcreteExistential: true`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service") let service: any ServiceProtocol
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingErasure_whenErasedInstantiatedPropertyTypeIsCompositionSpelledWithAny() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let service: any ServiceProtocol & Sendable
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let service: any ServiceProtocol & Sendable
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the instance to a no-label initializer of the existential it is erased to, and an existential spelled with `any` or as a composition (`P & Q`) has none. Without the argument, the instance is assigned to the existential.",
+						line: 2,
+						column: 95,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Remove `erasedToConcreteExistential: true`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Remove `erasedToConcreteExistential: true`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service") let service: any ServiceProtocol & Sendable
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenInstantiatedCompositionIsNotErased() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service") let service: ServiceProtocol & Sendable
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let service: ServiceProtocol & Sendable
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingErasure_whenErasedInstantiatedPropertyTypeIsComposition() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let service: ServiceProtocol & Sendable
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let service: ServiceProtocol & Sendable
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the instance to a no-label initializer of the existential it is erased to, and an existential spelled with `any` or as a composition (`P & Q`) has none. Without the argument, the instance is assigned to the existential.",
+						line: 2,
+						column: 95,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Remove `erasedToConcreteExistential: true`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Remove `erasedToConcreteExistential: true`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service") let service: ServiceProtocol & Sendable
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingErasure_whenErasedInstantiatorBuildsComposition() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let serviceBuilder: ErasedInstantiator<(), ServiceProtocol & Sendable>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let serviceBuilder: ErasedInstantiator<(), ServiceProtocol & Sendable>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the instance to a no-label initializer of the existential it is erased to, and an existential spelled with `any` or as a composition (`P & Q`) has none. Without the argument, the instance is assigned to the existential.",
+						line: 2,
+						column: 102,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Remove `erasedToConcreteExistential: true`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Remove `erasedToConcreteExistential: true`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service") let serviceBuilder: ErasedInstantiator<(), ServiceProtocol & Sendable>
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingErasure_whenErasedRenamePropertyTypeIsComposition() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "service", ofType: Service.self, erasedToConcreteExistential: true) let erasedService: ServiceProtocol & Sendable
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let erasedService: ServiceProtocol & Sendable
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the instance to a no-label initializer of the existential it is erased to, and an existential spelled with `any` or as a composition (`P & Q`) has none. Without the argument, the instance is assigned to the existential.",
+						line: 2,
+						column: 130,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Remove `erasedToConcreteExistential: true`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Remove `erasedToConcreteExistential: true`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "service", ofType: Service.self) let erasedService: ServiceProtocol & Sendable
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingErasure_whenErasedInstantiatorBuildsExistentialSpelledWithAny() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let serviceBuilder: ErasedInstantiator<(), any ServiceProtocol>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let serviceBuilder: ErasedInstantiator<(), any ServiceProtocol>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the instance to a no-label initializer of the existential it is erased to, and an existential spelled with `any` or as a composition (`P & Q`) has none. Without the argument, the instance is assigned to the existential.",
+						line: 2,
+						column: 102,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Remove `erasedToConcreteExistential: true`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Remove `erasedToConcreteExistential: true`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service") let serviceBuilder: ErasedInstantiator<(), any ServiceProtocol>
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingErasure_whenErasedSendableErasedInstantiatorBuildsExistentialSpelledWithAny() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let serviceBuilder: SendableErasedInstantiator<(), any ServiceProtocol>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let serviceBuilder: SendableErasedInstantiator<(), any ServiceProtocol>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the instance to a no-label initializer of the existential it is erased to, and an existential spelled with `any` or as a composition (`P & Q`) has none. Without the argument, the instance is assigned to the existential.",
+						line: 2,
+						column: 102,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Remove `erasedToConcreteExistential: true`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Remove `erasedToConcreteExistential: true`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service") let serviceBuilder: SendableErasedInstantiator<(), any ServiceProtocol>
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingErasure_whenErasedLazilyInstantiatedCreatesExistentialSpelledWithAny() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let lazyService: LazilyInstantiated<any ServiceProtocol>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let lazyService: LazilyInstantiated<any ServiceProtocol>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the instance to a no-label initializer of the existential it is erased to, and an existential spelled with `any` or as a composition (`P & Q`) has none. Without the argument, the instance is assigned to the existential.",
+						line: 2,
+						column: 99,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Remove `erasedToConcreteExistential: true`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Remove `erasedToConcreteExistential: true`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service") let lazyService: LazilyInstantiated<any ServiceProtocol>
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingErasure_whenErasedSendableLazilyInstantiatedCreatesExistentialSpelledWithAny() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let lazyService: SendableLazilyInstantiated<any ServiceProtocol>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let lazyService: SendableLazilyInstantiated<any ServiceProtocol>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the instance to a no-label initializer of the existential it is erased to, and an existential spelled with `any` or as a composition (`P & Q`) has none. Without the argument, the instance is assigned to the existential.",
+						line: 2,
+						column: 99,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Remove `erasedToConcreteExistential: true`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Remove `erasedToConcreteExistential: true`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "Service") let lazyService: SendableLazilyInstantiated<any ServiceProtocol>
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingErasure_whenErasedRenamePropertyTypeIsExistentialSpelledWithAny() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "service", ofType: Service.self, erasedToConcreteExistential: true) let erasedService: any ServiceProtocol
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let erasedService: any ServiceProtocol
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the instance to a no-label initializer of the existential it is erased to, and an existential spelled with `any` or as a composition (`P & Q`) has none. Without the argument, the instance is assigned to the existential.",
+						line: 2,
+						column: 130,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Remove `erasedToConcreteExistential: true`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Remove `erasedToConcreteExistential: true`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "service", ofType: Service.self) let erasedService: any ServiceProtocol
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingErasure_whenErasedOnlyIfAvailableRenamePropertyTypeIsOptionalExistentialSpelledWithAny() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "service", ofType: Service.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let erasedService: (any ServiceProtocol)?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let erasedService: (any ServiceProtocol)?
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the instance to a no-label initializer of the existential it is erased to, and an existential spelled with `any` or as a composition (`P & Q`) has none. Without the argument, the instance is assigned to the existential.",
+						line: 2,
+						column: 153,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Remove `erasedToConcreteExistential: true`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Remove `erasedToConcreteExistential: true`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "service", ofType: Service.self, onlyIfAvailable: true) let erasedService: (any ServiceProtocol)?
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingErasure_whenErasedRenameOfOptionalDependencyPropertyTypeIsOptionalExistentialSpelledWithAny() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "service", ofType: Service?.self, erasedToConcreteExistential: true) let erasedService: (any ServiceProtocol)?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let erasedService: (any ServiceProtocol)?
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the instance to a no-label initializer of the existential it is erased to, and an existential spelled with `any` or as a composition (`P & Q`) has none. Without the argument, the instance is assigned to the existential.",
+						line: 2,
+						column: 131,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Remove `erasedToConcreteExistential: true`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Remove `erasedToConcreteExistential: true`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "service", ofType: Service?.self) let erasedService: (any ServiceProtocol)?
 				}
 				""",
 			)
@@ -1404,6 +1960,231 @@ import Testing
 					@Received(fulfilledByDependencyNamed: "token", ofType: Secret?.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let auth: AnyAuth?
 				}
 				""",
+			)
+		}
+
+		@Test
+		func throwsErrorWhenErasedRenamePropertyTypeIsErasedInstantiator() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "secretBuilder", ofType: Instantiator<Secret>.self, erasedToConcreteExistential: true) let auth: ErasedInstantiator<(), AnyAuth>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let auth: ErasedInstantiator<(), AnyAuth>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the renamed dependency to a no-label initializer of the property’s type, and `ErasedInstantiator`’s initializer takes a closure that builds the value, not an instance. Erase where the wrapper is instantiated, with `@Instantiated(fulfilledByType:erasedToConcreteExistential:)`, and receive the erased wrapper, or erase into a type whose initializer takes the dependency.",
+						line: 2,
+						column: 5,
+						severity: .error,
+					),
+				],
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func throwsErrorWhenErasedRenamePropertyTypeIsSendableErasedInstantiator() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "secretBuilder", ofType: Instantiator<Secret>.self, erasedToConcreteExistential: true) let auth: SendableErasedInstantiator<(), AnyAuth>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let auth: SendableErasedInstantiator<(), AnyAuth>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the renamed dependency to a no-label initializer of the property’s type, and `SendableErasedInstantiator`’s initializer takes a closure that builds the value, not an instance. Erase where the wrapper is instantiated, with `@Instantiated(fulfilledByType:erasedToConcreteExistential:)`, and receive the erased wrapper, or erase into a type whose initializer takes the dependency.",
+						line: 2,
+						column: 5,
+						severity: .error,
+					),
+				],
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func throwsErrorWhenErasedRenamePropertyTypeIsInstantiator() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "secretBuilder", ofType: Instantiator<Secret>.self, erasedToConcreteExistential: true) let auth: Instantiator<Secret>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let auth: Instantiator<Secret>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the renamed dependency to a no-label initializer of the property’s type, and `Instantiator`’s initializer takes a closure that builds the value, not an instance. Erase where the wrapper is instantiated, with `@Instantiated(fulfilledByType:erasedToConcreteExistential:)`, and receive the erased wrapper, or erase into a type whose initializer takes the dependency.",
+						line: 2,
+						column: 5,
+						severity: .error,
+					),
+				],
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func throwsErrorWhenErasedRenamePropertyTypeIsSendableInstantiator() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "secretBuilder", ofType: Instantiator<Secret>.self, erasedToConcreteExistential: true) let auth: SendableInstantiator<Secret>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let auth: SendableInstantiator<Secret>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the renamed dependency to a no-label initializer of the property’s type, and `SendableInstantiator`’s initializer takes a closure that builds the value, not an instance. Erase where the wrapper is instantiated, with `@Instantiated(fulfilledByType:erasedToConcreteExistential:)`, and receive the erased wrapper, or erase into a type whose initializer takes the dependency.",
+						line: 2,
+						column: 5,
+						severity: .error,
+					),
+				],
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func throwsErrorWhenErasedRenamePropertyTypeIsLazilyInstantiated() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "lazySecret", ofType: LazilyInstantiated<Secret>.self, erasedToConcreteExistential: true) let auth: LazilyInstantiated<AnyAuth>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let auth: LazilyInstantiated<AnyAuth>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the renamed dependency to a no-label initializer of the property’s type, and `LazilyInstantiated`’s initializer takes a closure that builds the value, not an instance. Erase where the wrapper is instantiated, with `@Instantiated(fulfilledByType:erasedToConcreteExistential:)`, and receive the erased wrapper, or erase into a type whose initializer takes the dependency.",
+						line: 2,
+						column: 5,
+						severity: .error,
+					),
+				],
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func throwsErrorWhenErasedRenamePropertyTypeIsSendableLazilyInstantiated() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "lazySecret", ofType: SendableLazilyInstantiated<Secret>.self, erasedToConcreteExistential: true) let auth: SendableLazilyInstantiated<AnyAuth>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let auth: SendableLazilyInstantiated<AnyAuth>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the renamed dependency to a no-label initializer of the property’s type, and `SendableLazilyInstantiated`’s initializer takes a closure that builds the value, not an instance. Erase where the wrapper is instantiated, with `@Instantiated(fulfilledByType:erasedToConcreteExistential:)`, and receive the erased wrapper, or erase into a type whose initializer takes the dependency.",
+						line: 2,
+						column: 5,
+						severity: .error,
+					),
+				],
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func throwsErrorWhenErasedRenameOfConstantPropertyTypeIsErasedInstantiator() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "secret", ofType: Secret.self, erasedToConcreteExistential: true) let auth: ErasedInstantiator<(), AnyAuth>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let auth: ErasedInstantiator<(), AnyAuth>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the renamed dependency to a no-label initializer of the property’s type, and `ErasedInstantiator`’s initializer takes a closure that builds the value, not an instance. Erase where the wrapper is instantiated, with `@Instantiated(fulfilledByType:erasedToConcreteExistential:)`, and receive the erased wrapper, or erase into a type whose initializer takes the dependency.",
+						line: 2,
+						column: 5,
+						severity: .error,
+					),
+				],
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func throwsErrorWhenErasedOnlyIfAvailableRenamePropertyTypeIsOptionalErasedInstantiator() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "secretBuilder", ofType: Instantiator<Secret>.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let auth: ErasedInstantiator<(), AnyAuth>?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let auth: ErasedInstantiator<(), AnyAuth>?
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the renamed dependency to a no-label initializer of the property’s type, and `ErasedInstantiator`’s initializer takes a closure that builds the value, not an instance. Erase where the wrapper is instantiated, with `@Instantiated(fulfilledByType:erasedToConcreteExistential:)`, and receive the erased wrapper, or erase into a type whose initializer takes the dependency.",
+						line: 2,
+						column: 5,
+						severity: .error,
+					),
+				],
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func throwsErrorWhenErasedRenamePropertyTypeIsErasedInstantiatorBuildingExistentialSpelledWithAny() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "secretBuilder", ofType: Instantiator<Secret>.self, erasedToConcreteExistential: true) let auth: ErasedInstantiator<(), any Auth>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let auth: ErasedInstantiator<(), any Auth>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`erasedToConcreteExistential: true` passes the renamed dependency to a no-label initializer of the property’s type, and `ErasedInstantiator`’s initializer takes a closure that builds the value, not an instance. Erase where the wrapper is instantiated, with `@Instantiated(fulfilledByType:erasedToConcreteExistential:)`, and receive the erased wrapper, or erase into a type whose initializer takes the dependency.",
+						line: 2,
+						column: 5,
+						severity: .error,
+					),
+				],
+				macros: injectableTestMacros,
 			)
 		}
 	}
