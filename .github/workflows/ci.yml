@@ -1169,7 +1169,7 @@ jobs:
             echo "::error::The example ran a SafeDITool other than //Sources/SafeDITool:SafeDITool built from this checkout."
             exit 1
           fi
-      # `bazel run @safedi//bazel:safeditool` runs SafeDITool in the
+      # `bazel run @safedi//:SafeDITool` runs SafeDITool in the
       # directory it is run from, so a relative path among its arguments
       # resolves there rather than in the runfiles tree. Run from a
       # subdirectory of the workspace, as a user may. No target outputs a
@@ -1181,7 +1181,7 @@ jobs:
         working-directory: Examples/ExampleBazelIntegration/Subproject
         run: |
           bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" '--remote_download_regex=.*\.safedi$' //Subproject:Subproject
-          bazelisk run --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" @safedi//bazel:safeditool -- dump ../bazel-bin/Subproject/Subproject_safedi.safedi > /dev/null
+          bazelisk run --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" @safedi//:SafeDITool -- dump ../bazel-bin/Subproject/Subproject_safedi.safedi > /dev/null
       # Optimized builds define `NDEBUG` and no `DEBUG`, so the rule must report the
       # former, withhold the latter, and SafeDI must wire the example's
       # `#elseif NDEBUG` logger. The `_safedi` target is listed so
