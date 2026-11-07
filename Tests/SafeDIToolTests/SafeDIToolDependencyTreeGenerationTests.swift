@@ -3639,13 +3639,14 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 	@Test(arguments: [true, false])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_listsReceiverReachedUnderParentProvidingLabelFirst_whenLabelCollides(instantiatingAFirst: Bool) async {
-		// `Internals.T` receives `x: X` and `Internals.U` receives `x: Y?`: the collision names both, whichever of
-		// `A` (which provides `x` to its `T`) and `B` the tree reaches first.
+		// `Internals.T` receives `x: X` and `Internals.U` receives `x: Y?`, each `Internals.X` and `Internals.Y?` where they
+		// are written: the collision names both, whichever of `A` (which provides `x` to its `T`) and `B` the tree reaches
+		// first.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `x` as `x: Internals.X` on `Internals.T` and `x: Y?` on `Internals.U`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Rename one of the properties, or @Instantiated one of them inside the tree.
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `x` as `x: Internals.X` on `Internals.T` and `x: Internals.Y?` on `Internals.U`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Rename one of the properties, or @Instantiated one of them inside the tree.
 			\(fixtures["Root.swift"]):41:9: note: `Internals.T` receives `x: Internals.X` here.
-			\(fixtures["Root.swift"]):50:9: note: `Internals.U` receives `x: Y?` here.
+			\(fixtures["Root.swift"]):50:9: note: `Internals.U` receives `x: Internals.Y?` here.
 			"""
 		}) {
 			try await executeSafeDIToolTest(

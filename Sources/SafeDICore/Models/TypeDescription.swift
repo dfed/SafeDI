@@ -105,16 +105,23 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	/// - Parameters:
 	///   - parentType: The type within which the receiver is written.
 	///   - instantiableTypes: The types that `@Instantiable` declarations fulfill.
+	///   - searchingTypesEnclosingIt: Whether the types enclosing `parentType` are searched, as they are for a
+	///     member of `parentType`'s declaration; a member of an extension of `parentType` is written at file scope,
+	///     where only `parentType`'s own nested types and the name as written are options.
 	/// - Returns: The qualified type, or `nil` when no option of the instantiated type is an instantiable type.
 	public func qualifyingInstantiatedType(
 		within parentType: TypeDescription,
 		amongInstantiableTypes instantiableTypes: Set<TypeDescription>,
+		searchingTypesEnclosingIt: Bool = true,
 	) -> TypeDescription? {
 		replacingInstantiatedType { instantiatedType in
-			Self.nestedOptions(
+			let options = Self.nestedOptions(
 				referencedType: instantiatedType,
 				within: parentType,
-			).first(where: instantiableTypes.contains)
+			)
+			// A member of an extension is written at file scope: the extended type's own members, then the top level.
+			return (searchingTypesEnclosingIt ? options : Array(options.prefix(1) + options.suffix(1)))
+				.first(where: instantiableTypes.contains)
 		}
 	}
 

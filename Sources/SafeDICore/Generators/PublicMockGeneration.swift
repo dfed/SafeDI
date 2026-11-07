@@ -81,13 +81,6 @@ struct PublicMockContext: Sendable {
 		return "\(stem)_mockDefault_\(label)".spelledAsJoinedIdentifier
 	}
 
-	/// `type`, which a member of `enclosingType` spells, qualified so that a declaration outside `enclosingType` names the
-	/// same type (`TypeAccessProof.qualifyingNestedTypes(in:writtenWithin:)`): a module-level configuration spells it
-	/// so, and the access of a type nested in `enclosingType` is its nested declaration's.
-	func qualifyingNestedTypes(in type: TypeDescription, writtenWithin enclosingType: TypeDescription) -> TypeDescription {
-		proof.qualifyingNestedTypes(in: type, writtenWithin: enclosingType)
-	}
-
 	/// The name of the static method in a type's extension that evaluates the default of `label` for its configuration.
 	static func providerName(label: String) -> String {
 		"\(ReservedName.builderFunctionNamePrefix)mockDefault_\(label)".spelledAsJoinedIdentifier
@@ -202,7 +195,7 @@ extension ScopeGenerator {
 		// optional itself, which the member holds as it is, defaulting to what the declaration's default evaluates to.
 		// The struct is declared at the module's top level, where a type nested in the type is named qualified.
 		for defaultParameter in publicDefaultParameters(of: node, handWrittenMockDefaultParameters: handWrittenMockDefaultParameters) {
-			let valueType = context.qualifyingNestedTypes(in: defaultParameter.typeDescription, writtenWithin: concreteType)
+			let valueType = defaultParameter.typeDescription
 			let access = context.access(ofTypes: [valueType], admittedModules: admittedModules).level
 			if defaultParameter.typeDescription.isOptional {
 				let isNilLiteral = defaultParameter.defaultExpression == "nil"
@@ -232,9 +225,7 @@ extension ScopeGenerator {
 
 		// The builder, which the type's own type and every type its arguments name keep from being wider. It takes each
 		// argument as the type's member declares it, named as the members above name their types.
-		let builderParameterTypes = node.callSiteArguments.map { argument in
-			context.qualifyingNestedTypes(in: argument.typeDescription.asFunctionParameter, writtenWithin: concreteType)
-		}
+		let builderParameterTypes = node.callSiteArguments.map(\.typeDescription.asFunctionParameter)
 		let builderAccess = context.access(ofTypes: builderParameterTypes + [concreteType], admittedModules: admittedModules).level
 		let builderType = "(\(sendableAnnotation)(\(builderParameterTypes.map(\.asSource).joined(separator: ", "))) -> \(concreteType.asSource))?"
 		members.append(PublicStructMember(
@@ -389,9 +380,6 @@ extension ScopeGenerator {
 		let defaultParameters = publicDefaultParameters(of: node, handWrittenMockDefaultParameters: handWrittenMockDefaultParameters)
 		// safedi-source-rule: allow uniqueKeysWithValues — the labels of one function's parameters are distinct.
 		let defaultParametersByLabel = Dictionary(uniqueKeysWithValues: defaultParameters.map { ($0.label, $0) })
-		func qualified(_ type: TypeDescription) -> TypeDescription {
-			context.qualifyingNestedTypes(in: type, writtenWithin: concreteType)
-		}
 		var parameters = [String]()
 		var resolutions = [String]()
 		var builderArguments = [String]()
@@ -400,13 +388,13 @@ extension ScopeGenerator {
 			let name = argument.innerLabel
 			if !dependencyLabels.contains(argument.innerLabel), let defaultParameter = defaultParametersByLabel[argument.label] {
 				if defaultParameter.typeDescription.isOptional {
-					parameters.append("\(name.spelledAsArgumentLabel): \(qualified(defaultParameter.typeDescription).asSource)")
+					parameters.append("\(name.spelledAsArgumentLabel): \(defaultParameter.typeDescription.asSource)")
 				} else {
-					parameters.append("\(name.spelledAsArgumentLabel): \(TypeDescription.optional(qualified(defaultParameter.typeDescription)).asSource)")
+					parameters.append("\(name.spelledAsArgumentLabel): \(TypeDescription.optional(defaultParameter.typeDescription).asSource)")
 					resolutions.append("\(standardIndent)\(standardIndent)let \(name) = \(name) ?? (\(defaultParameter.defaultExpression))")
 				}
 			} else {
-				parameters.append("\(name.spelledAsArgumentLabel): \(qualified(argument.typeDescription.asFunctionParameter).asSource)")
+				parameters.append("\(name.spelledAsArgumentLabel): \(argument.typeDescription.asFunctionParameter.asSource)")
 			}
 			builderArguments.append(name)
 			constructionArguments.append(argument.label == "_" ? name : "\(argument.label.spelledAsArgumentLabel): \(name)")
@@ -425,7 +413,7 @@ extension ScopeGenerator {
 		var lines = [String]()
 		lines.append("extension \(concreteType.asSource) {")
 		for defaultParameter in optionalDefaultParameters {
-			lines.append("\(standardIndent)nonisolated static func \(PublicMockContext.providerName(label: defaultParameter.label))() -> \(qualified(defaultParameter.typeDescription).asSource) { \(defaultParameter.defaultExpression) }")
+			lines.append("\(standardIndent)nonisolated static func \(PublicMockContext.providerName(label: defaultParameter.label))() -> \(defaultParameter.typeDescription.asSource) { \(defaultParameter.defaultExpression) }")
 		}
 		// The function mirrors the isolation the member it calls spells, so a caller that can call the member can call it.
 		let isolationPrefix = node.constructionIsolation.map { "\($0) " } ?? ""
@@ -437,7 +425,7 @@ extension ScopeGenerator {
 		// A public member's default names the provider through a module-level function, which a public declaration's
 		// default argument can name without naming the type, which may be narrower than `public`.
 		let optionalDefaultValueTypes = optionalDefaultParameters.map { defaultParameter in
-			(label: defaultParameter.label, valueType: qualified(defaultParameter.typeDescription))
+			(label: defaultParameter.label, valueType: defaultParameter.typeDescription)
 		}
 		for (label, valueType) in optionalDefaultValueTypes where context.access(ofTypes: [valueType], admittedModules: admittedModules).level == .public {
 			lines.append("@usableFromInline nonisolated func \(context.forwarderName(of: concreteType, label: label))() -> \(valueType.asSource) { \(concreteType.asSource).\(PublicMockContext.providerName(label: label))() }")
@@ -588,10 +576,6 @@ struct PublicMockParameter: Sendable {
 	let name: String
 	/// The parameter's type as the signature spells it.
 	let type: TypeDescription
-	/// `type` as SafeDI proves its access, which `UnreadTypeComment` checks: a default-valued parameter of the mocked
-	/// type's construction, which `mock()` spells as written in the type's extension, names each type nested in the type
-	/// qualified (`TypeAccessProof.qualifyingNestedTypes(in:writtenWithin:)`); every other parameter's is `type`.
-	let provenType: TypeDescription
 	/// The parameter's type as the signature spells it, `@escaping` and `@autoclosure` included.
 	let typeSource: String
 	/// The default, as source after ` = `, or `nil` for none.
@@ -730,7 +714,6 @@ extension ScopeGenerator {
 					var noTierParameter = PublicMockParameter(
 						name: property.label,
 						type: property.typeDescription,
-						provenType: property.typeDescription,
 						typeSource: property.typeDescription.asSource,
 						defaultSource: "nil",
 						defaultKind: .nilValue,
@@ -802,11 +785,11 @@ extension ScopeGenerator {
 		var constructionDefaultValues = [String: String]()
 		let bodyIndent = "\(standardIndent)\(standardIndent)"
 		/// The parameter of a default-valued `type` taken as `T? = nil`, resolved in the body to the default, whose access
-		/// is `provenType`'s.
-		func optionalParameter(named name: String, type: TypeDescription, provenType: TypeDescription, resolvedTo expression: String, role: PublicMockParameter.Role) -> PublicMockParameter {
+		/// is `type`'s.
+		func optionalParameter(named name: String, type: TypeDescription, resolvedTo expression: String, role: PublicMockParameter.Role) -> PublicMockParameter {
 			defaultResolutions.append("\(bodyIndent)let \(name) = \(name) ?? (\(expression))")
 			let optionalType = TypeDescription.optional(type)
-			return PublicMockParameter(name: name, type: optionalType, provenType: .optional(provenType), typeSource: optionalType.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: provenType, receivedAs: nil), role: role)
+			return PublicMockParameter(name: name, type: optionalType, typeSource: optionalType.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: type, receivedAs: nil), role: role)
 		}
 		// A `mock()` isolated to a global actor evaluates the type's own defaults as an internal mock does, in its own
 		// isolation, where a default may read the actor's state: each is a parameter of `mock()`, never a field of the
@@ -837,23 +820,20 @@ extension ScopeGenerator {
 			if let forwardedDefault = forwardedDefaults[property.label] {
 				if property.typeDescription.isOptional, case let .constructionDefault(expression) = forwardedDefault {
 					let providerCall = provider(named: property.label, type: property.typeDescription, access: access(of: property.typeDescription, receivedAs: nil), expression: expression)
-					leadingParameters.append(PublicMockParameter(name: property.label, type: property.typeDescription, provenType: property.typeDescription, typeSource: property.typeDescription.asSource, defaultSource: providerCall, defaultKind: .provider, access: access(of: property.typeDescription, receivedAs: nil), role: .forwarded(property)))
+					leadingParameters.append(PublicMockParameter(name: property.label, type: property.typeDescription, typeSource: property.typeDescription.asSource, defaultSource: providerCall, defaultKind: .provider, access: access(of: property.typeDescription, receivedAs: nil), role: .forwarded(property)))
 				} else {
-					leadingParameters.append(optionalParameter(named: property.label, type: property.typeDescription.strippingEscaping, provenType: property.typeDescription.strippingEscaping, resolvedTo: forwardedDefault.expression, role: .forwarded(property)))
+					leadingParameters.append(optionalParameter(named: property.label, type: property.typeDescription.strippingEscaping, resolvedTo: forwardedDefault.expression, role: .forwarded(property)))
 				}
 			} else {
-				leadingParameters.append(PublicMockParameter(name: property.label, type: property.typeDescription, provenType: property.typeDescription, typeSource: property.typeDescription.asFunctionParameter.asSource, defaultSource: nil, defaultKind: .none, access: access(of: property.typeDescription, receivedAs: nil), role: .forwarded(property)))
+				leadingParameters.append(PublicMockParameter(name: property.label, type: property.typeDescription, typeSource: property.typeDescription.asFunctionParameter.asSource, defaultSource: nil, defaultKind: .none, access: access(of: property.typeDescription, receivedAs: nil), role: .forwarded(property)))
 			}
 		}
 		for rootDefault in rootDefaultParameters {
 			let type = rootDefault.typeDescription
-			// `mock()` is declared in the type's extension, where a type nested in it is named as written, but its access
-			// is its nested declaration's, which the qualified type names.
-			let provenType = context.qualifyingNestedTypes(in: type, writtenWithin: instantiable.concreteInstantiable)
-			let typeAccess = access(of: provenType, receivedAs: nil)
+			let typeAccess = access(of: type, receivedAs: nil)
 			if rootDefault.defaultExpression.hasPrefix("#") {
 				// A magic literal is evaluated where the parameter is declared, so the parameter keeps it.
-				leadingParameters.append(PublicMockParameter(name: rootDefault.label, type: type, provenType: provenType, typeSource: rootDefault.typeSource, defaultSource: rootDefault.defaultExpression, defaultKind: .expression, access: typeAccess, role: .constructionDefault))
+				leadingParameters.append(PublicMockParameter(name: rootDefault.label, type: type, typeSource: rootDefault.typeSource, defaultSource: rootDefault.defaultExpression, defaultKind: .expression, access: typeAccess, role: .constructionDefault))
 			} else if type.isOptional {
 				let isNilLiteral = rootDefault.defaultExpression == "nil"
 				let providerCall = isNilLiteral ? "nil" : provider(named: rootDefault.label, type: type, access: typeAccess, expression: rootDefault.defaultExpression)
@@ -871,10 +851,10 @@ extension ScopeGenerator {
 					))
 					constructionDefaultValues[rootDefault.label] = "\(ReservedName.mockOverridesParameterName).\(rootDefault.label)"
 				} else {
-					leadingParameters.append(PublicMockParameter(name: rootDefault.label, type: type, provenType: provenType, typeSource: type.asSource, defaultSource: providerCall, defaultKind: isNilLiteral ? .nilValue : .provider, access: typeAccess, role: .constructionDefault))
+					leadingParameters.append(PublicMockParameter(name: rootDefault.label, type: type, typeSource: type.asSource, defaultSource: providerCall, defaultKind: isNilLiteral ? .nilValue : .provider, access: typeAccess, role: .constructionDefault))
 				}
 			} else {
-				leadingParameters.append(optionalParameter(named: rootDefault.label, type: type, provenType: provenType, resolvedTo: rootDefault.defaultExpression, role: .constructionDefault))
+				leadingParameters.append(optionalParameter(named: rootDefault.label, type: type, resolvedTo: rootDefault.defaultExpression, role: .constructionDefault))
 			}
 		}
 		for (property, name) in flatReceivedParameters {
@@ -883,19 +863,19 @@ extension ScopeGenerator {
 				// visible as that mock's computation proves, and a caller that sees a type fulfilling the hole fills it. One
 				// a `@Sendable` builder function captures is taken `@Sendable`, so a caller passes it up `@Sendable` too.
 				let builder = sendablePassedUpBuilders.contains(property) ? Property(label: property.label, typeDescription: .attributed(property.typeDescription, specifiers: [], attributes: ["Sendable"])) : property
-				leadingParameters.append(PublicMockParameter(name: name, type: builder.typeDescription, provenType: builder.typeDescription, typeSource: builder.typeDescription.asFunctionParameter.asSource, defaultSource: nil, defaultKind: .none, access: hole.tierAccess, accessCause: hole.accessCause, role: .received(builder, isRequired: true), hole: hole))
+				leadingParameters.append(PublicMockParameter(name: name, type: builder.typeDescription, typeSource: builder.typeDescription.asFunctionParameter.asSource, defaultSource: nil, defaultKind: .none, access: hole.tierAccess, accessCause: hole.accessCause, role: .received(builder, isRequired: true), hole: hole))
 			} else if let mockDefault = flatReceivedParameterMockDefaults[property] {
 				// The mock builds the dependency with the hand-written mock when passed `nil`, as an internal mock defaults it.
 				defaultResolutions.append("\(bodyIndent)let \(name) = \(name) ?? (\(mockDefault.expression))")
 				let optionalProperty = Property(label: property.label, typeDescription: .optional(property.typeDescription))
-				leadingParameters.append(PublicMockParameter(name: name, type: optionalProperty.typeDescription, provenType: optionalProperty.typeDescription, typeSource: optionalProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: optionalProperty.typeDescription, receivedAs: property.label), accessCause: cause(of: optionalProperty.typeDescription, receivedAs: property.label), role: .received(optionalProperty, isRequired: false), isBuiltWhenNil: true))
+				leadingParameters.append(PublicMockParameter(name: name, type: optionalProperty.typeDescription, typeSource: optionalProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: optionalProperty.typeDescription, receivedAs: property.label), accessCause: cause(of: optionalProperty.typeDescription, receivedAs: property.label), role: .received(optionalProperty, isRequired: false), isBuiltWhenNil: true))
 			} else {
-				leadingParameters.append(PublicMockParameter(name: name, type: property.typeDescription, provenType: property.typeDescription, typeSource: property.typeDescription.asFunctionParameter.asSource, defaultSource: nil, defaultKind: .none, access: access(of: property.typeDescription, receivedAs: property.label), role: .received(property, isRequired: true)))
+				leadingParameters.append(PublicMockParameter(name: name, type: property.typeDescription, typeSource: property.typeDescription.asFunctionParameter.asSource, defaultSource: nil, defaultKind: .none, access: access(of: property.typeDescription, receivedAs: property.label), role: .received(property, isRequired: true)))
 			}
 		}
 		for uncovered in flatUncoveredParameters {
 			let typeSource = uncovered.isSendableAutoclosure ? "@autoclosure @escaping @Sendable () -> \(uncovered.typeSource)" : uncovered.typeSource
-			leadingParameters.append(PublicMockParameter(name: uncovered.label, type: uncovered.property.typeDescription, provenType: uncovered.property.typeDescription, typeSource: typeSource, defaultSource: nil, defaultKind: .none, access: access(of: uncovered.property.typeDescription, receivedAs: uncovered.property.label), role: .received(uncovered.property, isRequired: true)))
+			leadingParameters.append(PublicMockParameter(name: uncovered.label, type: uncovered.property.typeDescription, typeSource: typeSource, defaultSource: nil, defaultKind: .none, access: access(of: uncovered.property.typeDescription, receivedAs: uncovered.property.label), role: .received(uncovered.property, isRequired: true)))
 		}
 		// Each hole's builder, required: what fills the hole takes the values in scope at its site. The tree calls each
 		// builder by the name the sites call it by, bound before anything else, in builder-label order.
@@ -907,7 +887,6 @@ extension ScopeGenerator {
 			leadingParameters.append(PublicMockParameter(
 				name: hole.builderLabel,
 				type: closureType,
-				provenType: closureType,
 				typeSource: builderType.asSource,
 				defaultSource: nil,
 				defaultKind: .none,
@@ -925,17 +904,17 @@ extension ScopeGenerator {
 			let parameterProperty = publicMockParameterProperty(of: node)
 			let parameterName = node.property.propertyType.isLazilyInstantiated ? node.propertyLabel : name
 			promotedParameterNames[node.property] = parameterName
-			optionalReceivedParameters.append(PublicMockParameter(name: parameterName, type: parameterProperty.typeDescription, provenType: parameterProperty.typeDescription, typeSource: parameterProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), accessCause: cause(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), role: .received(parameterProperty, isRequired: false), isBuiltWhenNil: true, builtWrapper: node.property.propertyType.isLazilyInstantiated ? node.property : nil))
+			optionalReceivedParameters.append(PublicMockParameter(name: parameterName, type: parameterProperty.typeDescription, typeSource: parameterProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), accessCause: cause(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), role: .received(parameterProperty, isRequired: false), isBuiltWhenNil: true, builtWrapper: node.property.propertyType.isLazilyInstantiated ? node.property : nil))
 		}
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
-			optionalReceivedParameters.append(PublicMockParameter(name: onlyIfAvailableOverride.name, type: onlyIfAvailableOverride.typeDescription, provenType: onlyIfAvailableOverride.typeDescription, typeSource: onlyIfAvailableOverride.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: onlyIfAvailableOverride.typeDescription, receivedAs: onlyIfAvailableOverride.receivedProperty.label), accessCause: cause(of: onlyIfAvailableOverride.typeDescription, receivedAs: onlyIfAvailableOverride.receivedProperty.label), role: .received(Property(label: onlyIfAvailableOverride.receivedProperty.label, typeDescription: onlyIfAvailableOverride.typeDescription), isRequired: false)))
+			optionalReceivedParameters.append(PublicMockParameter(name: onlyIfAvailableOverride.name, type: onlyIfAvailableOverride.typeDescription, typeSource: onlyIfAvailableOverride.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: onlyIfAvailableOverride.typeDescription, receivedAs: onlyIfAvailableOverride.receivedProperty.label), accessCause: cause(of: onlyIfAvailableOverride.typeDescription, receivedAs: onlyIfAvailableOverride.receivedProperty.label), role: .received(Property(label: onlyIfAvailableOverride.receivedProperty.label, typeDescription: onlyIfAvailableOverride.typeDescription), isRequired: false)))
 		}
 		optionalReceivedParameters.sort { ($0.name, $0.typeSource) < ($1.name, $1.typeSource) }
 
 		var parameters = leadingParameters + optionalReceivedParameters
 		if hasOverrides {
 			let overridesType = TypeDescription.simple(name: "SafeDIOverrides")
-			parameters.append(PublicMockParameter(name: ReservedName.mockOverridesParameterName, type: overridesType, provenType: overridesType, typeSource: overridesType.asSource, defaultSource: ".init()", defaultKind: .expression, access: .public, role: .overrides))
+			parameters.append(PublicMockParameter(name: ReservedName.mockOverridesParameterName, type: overridesType, typeSource: overridesType.asSource, defaultSource: ".init()", defaultKind: .expression, access: .public, role: .overrides))
 		}
 		let tiers = [AccessLevel.public] + Set(parameters.map(\.access)).filter { $0 < .public }.sorted(by: >)
 		var hash = SeamSignatureHash()
@@ -1017,7 +996,7 @@ extension ScopeGenerator {
 					} else if parameter.name == ReservedName.mockOverridesParameterName {
 						nil
 					} else {
-						parameter.provenType
+						parameter.type
 					}
 				},
 				indent: indent,
