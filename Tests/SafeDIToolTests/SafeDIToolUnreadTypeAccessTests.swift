@@ -2595,7 +2595,8 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_recordsPlainTypeUnderForcedMockCondition_whenItSharesBlockWithMockOnlyExtension() async throws {
 		// IF11b: a block that holds a `mockOnly` extension is read as if the mock condition were active, and so is the plain
-		// declaration beside it: `Theme` is `package`, which the `package` tier takes, and nothing asserts `DEBUG`.
+		// declaration beside it: `Theme` is `package`, which the `package` tier takes, and nothing asserts `DEBUG`. A public
+		// mock compiles under that condition, so it may name `Theme`, where a seam's initializer may not (IFM1).
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				Self.kit(),
@@ -2627,6 +2628,273 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#endif
 		"""])
 		try expectEveryModuleCompiled(output)
+	}
+
+	// MARK: IFM: a plain declaration in a block that guards mock-only declarations
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtDeclaration_whenSeamOfAnotherModuleNamesTypeDeclaredInMockOnlyBlock(integration: MultiModuleIntegration) async {
+		// IFM1 (Probe D across modules): `Core`'s block holds a `mockOnly` extension, so SafeDI reads it as if `DEBUG` were
+		// active, for production code too, and takes the `public` `Theme` of its `#if` clause, where a build without `DEBUG`
+		// compiles the `package` one. `Feature`'s seam names `Theme`: the error is at the declaration SafeDI read.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Theme.swift", in: "Core", fixtures, integration)):11:1: error: \(Self.mockOnlyBlockNarrowerMessage(seam: "Screen", namedType: "Theme", declaredType: "Theme", level: "package", initializerLevel: "public"))
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.coreAndFeatureModules(
+					coreTheme: Self.mockOnlyBlock(declaring: "public struct Theme {}", elseDeclaring: "package struct Theme {}"),
+					receives: ["@Received(onlyIfAvailable: true) let theme: Theme?"],
+					conditions: [],
+				),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: [[String](), ["DEBUG"]])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtDeclaration_whenSeamNamesTypeItsModuleDeclaresOnlyInMockOnlyBlock(conditions: [String]) async {
+		// IFM2: `Token` is declared only in the clause of a block holding a `mockOnly` extension, which SafeDI reads as if
+		// `DEBUG` were active whatever the conditions report, so the error is the same in a build that reports `DEBUG`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Token.swift"]):11:1: error: \(Self.mockOnlyBlockMessage(seam: "Screen", namedType: "Token", declaredType: "Token"))
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.screenModules(
+					receives: ["@Received let token: Token"],
+					extraFeatureFiles: ["Token.swift": Self.mockOnlyBlock(declaring: "public struct Token {}")],
+					hostForwards: nil,
+					featureConditions: conditions,
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtEnclosingDeclaration_whenSeamNamesTypeInExtensionOfTypeDeclaredInMockOnlyBlock() async {
+		// IFM3: `Space.Config` is declared outside the block, in an extension of `Space`, whose declaration in the block caps
+		// it: SafeDI reads `Space` `public`, where a build without `DEBUG` compiles it `package`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Space.swift"]):11:1: error: \(Self.mockOnlyBlockNarrowerMessage(seam: "Screen", namedType: "Space.Config", declaredType: "Space", level: "package", initializerLevel: "public"))
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.screenModules(
+					receives: ["@Received(onlyIfAvailable: true) let config: Space.Config?"],
+					extraFeatureFiles: ["Space.swift": Self.mockOnlyBlock(declaring: "public enum Space {}", elseDeclaring: "package enum Space {}") + "\n\nextension Space {\n    public struct Config {}\n}"],
+					hostForwards: nil,
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtDeclaration_whenHoleBuilderReturnsTypeDeclaredInMockOnlyBlock() async {
+		// IFM4: the seam's tree instantiates `any Painter`, which no `@Instantiable` fulfills, so its initializer takes a
+		// builder that returns it: the builder names `Painter` as a parameter does.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Painter.swift"]):11:1: error: \(Self.mockOnlyBlockNarrowerMessage(seam: "Screen", namedType: "Painter", declaredType: "Painter", level: "package", initializerLevel: "public"))
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.screenModules(
+					receives: [],
+					instantiates: ["@Instantiated let painter: any Painter"],
+					extraFeatureFiles: ["Painter.swift": Self.mockOnlyBlock(declaring: "public protocol Painter {}", elseDeclaring: "package protocol Painter {}")],
+					hostForwards: nil,
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesTypeAtSpelledLevel_whenPlatformBlockGuardingMockOnlyDeclarationsDeclaresIt(integration: MultiModuleIntegration) async throws {
+		// IFM5: a platform condition, not the mock condition, decides the block that holds the `mockOnly` extension: SafeDI
+		// reads both clauses as the compiler may select either, so `Theme` is `package` exactly, and the seam is generated.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.coreAndFeatureModules(
+				coreTheme: Self.mockOnlyBlock(condition: "os(Linux)", declaring: "package struct Theme {}", elseDeclaring: "package struct Theme {}"),
+				receives: ["@Received(onlyIfAvailable: true) let theme: Theme?"],
+				conditions: [],
+			),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], tiers: """
+		    public init() {
+		        self.init(theme: nil)
+		    }
+
+		    package init(theme: Theme?) {
+		        let cache = Cache()
+		        self.init(theme: theme, cache: cache)
+		    }
+		""", guardHash: "27F6F01DC5D0EF8E"))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesTypeFromMockConditionClause_whenOtherClauseDeclaresItAtSameLevel(integration: MultiModuleIntegration) async throws {
+		// IFM8 (review P1): the block's `#else` declares `Theme` as its `#if` clause does, so a build where `DEBUG` is
+		// inactive declares it `public` too, and the seam is generated as it was before the check.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.coreAndFeatureModules(
+				coreTheme: Self.mockOnlyBlock(declaring: "public struct Theme {}", elseDeclaring: "public struct Theme {}"),
+				receives: ["@Received(onlyIfAvailable: true) let theme: Theme?"],
+				conditions: [],
+			),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], tiers: """
+		    public init(theme: Theme?) {
+		        let cache = Cache()
+		        self.init(theme: theme, cache: cache)
+		    }
+		""", guardHash: "717280493A095F31"))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesTypeFromMockConditionClause_whenOtherClauseDeclaresItMoreWidely(integration: MultiModuleIntegration) async throws {
+		// IFM9: SafeDI reads `Theme` `package`, from the `#if` clause, and the `#else` clause declares it `public`: the
+		// `package` tier that takes it compiles whichever clause the compiler selects.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.coreAndFeatureModules(
+				coreTheme: Self.mockOnlyBlock(declaring: "package struct Theme {}", elseDeclaring: "public struct Theme {}"),
+				receives: ["@Received(onlyIfAvailable: true) let theme: Theme?"],
+				conditions: [],
+			),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], tiers: """
+		    public init() {
+		        self.init(theme: nil)
+		    }
+
+		    package init(theme: Theme?) {
+		        let cache = Cache()
+		        self.init(theme: theme, cache: cache)
+		    }
+		""", guardHash: "27F6F01DC5D0EF8E"))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesSeam_whenRunAssertsMockConditionActive(integration: MultiModuleIntegration) async throws {
+		// IFM10 (review P2): `Screen` is declared in a production `#if DEBUG` block, so a run that reports `DEBUG` asserts it
+		// active in every file it generates, and the initializer never compiles where `DEBUG` is inactive: `Token`, declared
+		// only in a block guarding mock-only declarations, is declared wherever it does.
+		let screen = "import Kit\n#if DEBUG\n" + Self.screenSource(receives: ["@Received let token: Token"], imports: []) + "\n#endif"
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.kit(),
+				ModuleFixture(
+					name: "Feature",
+					packageName: "Shop",
+					swiftFileContentByFilePath: ["Screen.swift": screen, "Token.swift": Self.mockOnlyBlock(declaring: "public struct Token {}")],
+					dependencies: ["Kit"],
+					activeCompilationConditions: ["DEBUG"],
+				),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], assertions: Self.activeAssertion("DEBUG"), tiers: """
+		    public init(token: Token) {
+		        let cache = Cache()
+		        self.init(token: token, cache: cache)
+		    }
+		""", guardHash: "1EB503BFA23A82BA"))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsOneErrorAtOutermostDeclaration_whenSeamNamesTypeNestedInTypeDeclaredInMockOnlyBlock(integration: MultiModuleIntegration) async {
+		// IFM11 (review P3): `Space` and `Space.Config` are both declared in the block, and a build where `DEBUG` is inactive
+		// declares both `package`. Declaring `Space` at least `public` in the `#else` clause fixes both, so the error is
+		// reported once, at `Space`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Theme.swift", in: "Core", fixtures, integration)):11:1: error: \(Self.mockOnlyBlockNarrowerMessage(seam: "Screen", namedType: "Space.Config", declaredType: "Space", level: "package", initializerLevel: "public"))
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.coreAndFeatureModules(
+					coreTheme: Self.mockOnlyBlock(declaring: "public enum Space { public struct Config {} }", elseDeclaring: "package enum Space { package struct Config {} }"),
+					receives: ["@Received(onlyIfAvailable: true) let config: Space.Config?"],
+					conditions: [],
+				),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtNestedDeclaration_whenOnlyNestedTypeIsNarrowerWhereMockConditionIsInactive() async {
+		// IFM12: the `#else` clause declares `Space` `public`, as the `#if` clause does, and only `Space.Config` `package`:
+		// the error is at `Space.Config`, the declaration a build where `DEBUG` is inactive cannot name at `public`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Theme.swift", in: "Core", fixtures, .moduleInfo)):11:21: error: \(Self.mockOnlyBlockNarrowerMessage(seam: "Screen", namedType: "Space.Config", declaredType: "Space.Config", level: "package", initializerLevel: "public"))
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.coreAndFeatureModules(
+					coreTheme: Self.mockOnlyBlock(declaring: "public enum Space { public struct Config {} }", elseDeclaring: "public enum Space { package struct Config {} }"),
+					receives: ["@Received(onlyIfAvailable: true) let config: Space.Config?"],
+					conditions: [],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtDeclaration_whenOtherClauseDeclaresTypeOnlyItsOwnModuleCanName() async {
+		// IFM13: the `#else` clause declares `Theme` `internal`, which `Feature`, another module, cannot name at any level:
+		// to `Feature`, a build where `DEBUG` is inactive declares no `Theme`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Theme.swift", in: "Core", fixtures, .moduleInfo)):11:1: error: \(Self.mockOnlyBlockMessage(seam: "Screen", namedType: "Theme", declaredType: "Theme"))
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.coreAndFeatureModules(
+					coreTheme: Self.mockOnlyBlock(declaring: "public struct Theme {}", elseDeclaring: "internal struct Theme {}"),
+					receives: ["@Received(onlyIfAvailable: true) let theme: Theme?"],
+					conditions: [],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
 	}
 
 	@Test
@@ -3202,6 +3470,31 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 	/// `Theme`, declared `package` when `FLAG` is active and `public` otherwise.
 	private static let themeInEachClauseOfFlag = "#if FLAG\npackage struct Theme {}\n#else\npublic struct Theme {}\n#endif"
+
+	/// A file whose `#if <condition>` block holds a `mockOnly` extension of `Fake` and, at line 11, `declaration`, with
+	/// `elseDeclaration` in its `#else` clause when it is given.
+	private static func mockOnlyBlock(condition: String = "DEBUG", declaring declaration: String, elseDeclaring elseDeclaration: String? = nil) -> String {
+		"public struct Fake {}\n\n#if \(condition)\n@Instantiable(mockOnly: true)\nextension Fake {\n    public static func mock() -> Fake {\n        Fake()\n    }\n}\n\n\(declaration)\n" + (elseDeclaration.map { "#else\n\($0)\n" } ?? "") + "#endif"
+	}
+
+	/// The error at the declaration of `declaredType` inside a block that guards mock-only declarations, which `seam`'s
+	/// generated initializer names, as `namedType` or as a type `declaredType` encloses.
+	private static func mockOnlyBlockMessage(seam: String, namedType: String, declaredType: String) -> String {
+		let named = namedType == declaredType
+			? "`\(namedType)`, which is declared here"
+			: "`\(namedType)`, and `\(declaredType)`, which encloses it, is declared here"
+		return "SafeDI cannot generate the dependency tree of `\(seam)`: the initializer SafeDI generates for it names \(named), inside an `#if` block that guards mock-only declarations. SafeDI reads that block as if `DEBUG` were active, for production code too, but a build where `DEBUG` is inactive compiles the initializer without this declaration. Declare `\(declaredType)` outside that block."
+	}
+
+	/// The error at the declaration of `declaredType` inside a block that guards mock-only declarations, which `seam`'s
+	/// generated `initializerLevel` initializer names, as `namedType` or as a type `declaredType` encloses, where a build
+	/// in which `DEBUG` is inactive declares `declaredType` only `level`.
+	private static func mockOnlyBlockNarrowerMessage(seam: String, namedType: String, declaredType: String, level: String, initializerLevel: String) -> String {
+		let named = namedType == declaredType
+			? "`\(namedType)`, which is declared here"
+			: "`\(namedType)`, and `\(declaredType)`, which encloses it, is declared here"
+		return "SafeDI cannot generate the dependency tree of `\(seam)`: the initializer SafeDI generates for it names \(named), inside an `#if` block that guards mock-only declarations. SafeDI reads that block as if `DEBUG` were active, for production code too, but where `DEBUG` is inactive the block declares `\(declaredType)` `\(level)`, so the `\(initializerLevel)` initializer cannot name `\(namedType)` there. Declare `\(declaredType)` at least `\(initializerLevel)` in every clause of that block, or outside that block."
+	}
 
 	/// `Core`, in `Feature`'s package, whose `Theme.swift` is `coreTheme`, and `Feature`, whose seam `Screen` receives
 	/// `receives`, both run with `conditions`.

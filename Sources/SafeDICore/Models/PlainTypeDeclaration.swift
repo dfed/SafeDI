@@ -27,7 +27,9 @@
 /// A declaration is recorded with the access its chain spells, directly inside an extension or not, from each clause of
 /// an `#if` block `FileVisitor` scans: the clause the reported conditions select, and every clause of a block a platform
 /// condition decides, any of which the compiler may select. A type declared in several such clauses has several records,
-/// and counts as the narrowest of their levels. A declaration in a clause the conditions skip is not recorded.
+/// and counts as the narrowest of their levels. A declaration in a clause the conditions skip is not recorded. A
+/// declaration in a clause of a block that guards mock-only declarations is read as the clause the mock condition selects
+/// declares it (`mockCondition`).
 public struct PlainTypeDeclaration: Codable, Hashable, Sendable {
 	public init(
 		typeDescription: TypeDescription,
@@ -37,6 +39,8 @@ public struct PlainTypeDeclaration: Codable, Hashable, Sendable {
 		moduleName: String? = nil,
 		packageName: String? = nil,
 		sourceFilePath: String? = nil,
+		mockCondition: String? = nil,
+		levelWhereMockConditionIsInactive: AccessLevel? = nil,
 	) {
 		self.typeDescription = typeDescription
 		self.access = access
@@ -45,6 +49,8 @@ public struct PlainTypeDeclaration: Codable, Hashable, Sendable {
 		self.moduleName = moduleName
 		self.packageName = packageName
 		self.sourceFilePath = sourceFilePath
+		self.mockCondition = mockCondition
+		self.levelWhereMockConditionIsInactive = levelWhereMockConditionIsInactive
 	}
 
 	/// The type the declaration declares, with the types enclosing it in its file, and, for a declaration inside an
@@ -64,6 +70,17 @@ public struct PlainTypeDeclaration: Codable, Hashable, Sendable {
 	public var packageName: String?
 	/// The file that holds the declaration.
 	public var sourceFilePath: String?
+	/// The mock condition (`mockConditionalCompilation`) SafeDI took to be active to read the declaration, or `nil`. A
+	/// block that guards mock-only declarations is read as if that condition were active, for production code too, so a
+	/// declaration in a clause selected because of it may be absent, or declared otherwise, where the condition is
+	/// inactive: the access of a seam's generated initializer, which compiles there, rests on
+	/// `levelWhereMockConditionIsInactive` instead.
+	public let mockCondition: String?
+	/// For a declaration read under `mockCondition`, the narrowest level at which the clauses of its block that are
+	/// selected where that condition is inactive declare the same type in a way another file can name – its chain's
+	/// level, before the cap of an extended type, as `levelBeforeExtendedTypeCap` gives it – or `nil` when they declare
+	/// none. A seam's generated initializer can name the type there only at that level.
+	public let levelWhereMockConditionIsInactive: AccessLevel?
 
 	/// Whether code in another file than the declaration's can name the type: a `private` or `fileprivate` level
 	/// anywhere in its chain – its own, or that of a type enclosing it in its file – keeps code in any other file from
