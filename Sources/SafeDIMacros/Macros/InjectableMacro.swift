@@ -89,6 +89,46 @@ public struct InjectableMacro: PeerMacro {
 			throw InjectableError.erasedToConcreteExistentialInvalidType
 		}
 
+		if let macroWithParameters, macroWithParameters.erasedToConcreteExistentialValue {
+			let isRename = macroWithParameters.fulfilledByDependencyNamed != nil
+			// Every initializer of a SafeDI wrapper takes a function that builds the value, so a rename erases into a
+			// wrapper only a dependency spelled as a function.
+			let renamesFunction = macroWithParameters.ofType.map { Self.isFunctionType($0.typeDescription) } ?? false
+			if isRename, !renamesFunction {
+				for binding in variableDecl.bindings {
+					if let wrapperTypeName = binding.typeAnnotation?.type.typeDescription.propertyType.wrapperTypeName {
+						throw InjectableError.erasedRenameIntoWrapper(wrapperTypeName: wrapperTypeName)
+					}
+				}
+			}
+
+			// A bare type name may be a concrete existential or a protocol, which only the compiler can tell apart, so
+			// only an existential spelled with `any` or as a composition (`P & Q`), which never has an initializer, is
+			// diagnosed.
+			let typesErasedToExistentialWithoutInitializer = variableDecl.bindings.compactMap { binding -> TypeSyntax? in
+				guard let type = binding.typeAnnotation?.type,
+				      Self.isExistentialWithoutInitializer(Self.erasedType(ofPropertyTyped: type.typeDescription, isRename: isRename))
+				else {
+					return nil
+				}
+				return type
+			}
+			if let type = typesErasedToExistentialWithoutInitializer.first,
+			   let arguments = macroWithParameters.arguments.flatMap({ LabeledExprListSyntax($0) })
+			{
+				context.diagnose(Diagnostic(
+					node: type,
+					error: FixableInjectableError.erasedToConcreteExistentialOnExistentialWithoutInitializer,
+					changes: [
+						.replace(
+							oldNode: Syntax(arguments),
+							newNode: Syntax(Self.removingErasedToConcreteExistential(from: arguments)),
+						),
+					],
+				))
+			}
+		}
+
 		if let onlyIfAvailable = macroWithParameters?.onlyIfAvailable {
 			if BooleanLiteralExprSyntax(onlyIfAvailable) == nil {
 				throw InjectableError.onlyIfAvailableInvalidType
@@ -214,16 +254,8 @@ public struct InjectableMacro: PeerMacro {
 		else {
 			return unwrappedType
 		}
-		let builtTypeIndex: Int? = switch nonOptionalType.typeDescription.propertyType {
-		case .constant:
-			nil
-		case .instantiator, .sendableInstantiator, .lazilyInstantiated, .sendableLazilyInstantiated:
-			0
-		case .erasedInstantiator, .sendableErasedInstantiator:
-			1
-		}
 		var arguments = Array(genericArgumentClause.arguments)
-		guard let builtTypeIndex,
+		guard let builtTypeIndex = builtTypeIndex(of: nonOptionalType.typeDescription.propertyType),
 		      builtTypeIndex < arguments.count,
 		      let builtType = TypeSyntax(arguments[builtTypeIndex].argument),
 		      let nonOptionalBuiltType = withoutOptionality(builtType)
@@ -235,6 +267,71 @@ public struct InjectableMacro: PeerMacro {
 			\.genericArgumentClause,
 			genericArgumentClause.with(\.arguments, GenericArgumentListSyntax(arguments)),
 		))
+	}
+
+	/// The index of the generic argument that a SafeDI wrapper of `propertyType` builds, or `nil` for a constant.
+	private static func builtTypeIndex(of propertyType: Property.PropertyType) -> Int? {
+		switch propertyType {
+		case .constant:
+			nil
+		case .instantiator, .sendableInstantiator, .lazilyInstantiated, .sendableLazilyInstantiated:
+			0
+		case .erasedInstantiator, .sendableErasedInstantiator:
+			1
+		}
+	}
+
+	/// The type to whose no-label initializer generated code passes the value of a property of `propertyType` declared
+	/// with `erasedToConcreteExistential: true`. A rename's value is passed to its property's type, without the
+	/// optionality an `onlyIfAvailable` rename or a rename of an optional dependency has; an `@Instantiated` property's
+	/// instance is passed to the type its SafeDI wrapper builds, or to the property's type.
+	private static func erasedType(ofPropertyTyped propertyType: TypeDescription, isRename: Bool) -> TypeDescription {
+		let unwrappedType = propertyType.unwrapped
+		guard !isRename,
+		      case let .simple(_, generics) = unwrappedType,
+		      let builtTypeIndex = builtTypeIndex(of: unwrappedType.propertyType),
+		      builtTypeIndex < generics.count
+		else {
+			return unwrappedType
+		}
+		return generics[builtTypeIndex]
+	}
+
+	/// Whether `type` is spelled as an existential that has no initializer: with `any`, or as a composition (`P & Q`).
+	private static func isExistentialWithoutInitializer(_ type: TypeDescription) -> Bool {
+		switch type {
+		case .any, .composition:
+			true
+		case .array, .attributed, .closure, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .optional, .simple, .some, .tuple, .unknown, .void:
+			false
+		}
+	}
+
+	/// Whether `type` is spelled as a function type, optional or with attributes, such as `(@Sendable () -> Secret)?`.
+	private static func isFunctionType(_ type: TypeDescription) -> Bool {
+		switch type {
+		case .closure:
+			true
+		case let .attributed(type, _, _),
+		     let .optional(type):
+			isFunctionType(type)
+		case .any, .array, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .simple, .some, .tuple, .unknown, .void:
+			false
+		}
+	}
+
+	/// `arguments`, the arguments of an `@Instantiated` or `@Received` attribute, without `erasedToConcreteExistential:`.
+	private static func removingErasedToConcreteExistential(from arguments: LabeledExprListSyntax) -> LabeledExprListSyntax {
+		let isErasedToConcreteExistential: (LabeledExprSyntax) -> Bool = { $0.label?.text == "erasedToConcreteExistential" }
+		var remainingArguments = arguments.filter { !isErasedToConcreteExistential($0) }
+		// The argument before a removed last argument takes the removed argument's trailing comma, which is usually none.
+		if let lastArgument = arguments.last,
+		   isErasedToConcreteExistential(lastArgument),
+		   let lastRemainingIndex = remainingArguments.indices.last
+		{
+			remainingArguments[lastRemainingIndex].trailingComma = lastArgument.trailingComma
+		}
+		return LabeledExprListSyntax(remainingArguments)
 	}
 
 	/// `type` with every optional spelling around it removed (`X?`, `X!`, and `Optional<X>`), or `nil` when it is
@@ -297,6 +394,9 @@ public struct InjectableMacro: PeerMacro {
 		case fulfilledByTypeUseOnInstantiator
 		case ofTypeArgumentInvalidType
 		case erasedToConcreteExistentialInvalidType
+		/// A rename with `erasedToConcreteExistential: true` into the SafeDI wrapper named `wrapperTypeName`, whose
+		/// initializers take a function, of a dependency not spelled as a function.
+		case erasedRenameIntoWrapper(wrapperTypeName: String)
 		case erasedInstantiatorUsedWithoutFulfilledByType
 		case onlyIfAvailableInvalidType
 
@@ -318,6 +418,8 @@ public struct InjectableMacro: PeerMacro {
 				"The argument `ofType` must be a type literal, such as `Service.self`."
 			case .erasedToConcreteExistentialInvalidType:
 				"The argument `erasedToConcreteExistential` must be a Bool literal (`true` or `false`)."
+			case let .erasedRenameIntoWrapper(wrapperTypeName):
+				"`erasedToConcreteExistential: true` passes the renamed dependency to a no-label initializer of the property’s type, and `\(wrapperTypeName)`’s initializer takes a closure that builds the value, not an instance. Erase where the wrapper is instantiated, with `@Instantiated(fulfilledByType:erasedToConcreteExistential:)`, and receive the erased wrapper, or erase into a type whose initializer takes the dependency."
 			case .erasedInstantiatorUsedWithoutFulfilledByType:
 				"An @Instantiated `ErasedInstantiator` or `SendableErasedInstantiator` property must name the type it builds with the argument `fulfilledByType`, such as `@Instantiated(fulfilledByType: \"DefaultService\")`. Use an `Instantiator` or `SendableInstantiator` when the property’s type is the type it builds."
 			case .onlyIfAvailableInvalidType:

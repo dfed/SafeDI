@@ -1222,13 +1222,21 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 							"Root.swift": """
 							import Core
 
-							@Instantiable(isRoot: true)
-							final class Root: Instantiable {
-							    init(service: any ServiceProtocol) {
+							final class AnyServiceProtocol: ServiceProtocol {
+							    init(_ service: some ServiceProtocol) {
 							        self.service = service
 							    }
 
-							    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let service: any ServiceProtocol
+							    let service: any ServiceProtocol
+							}
+
+							@Instantiable(isRoot: true)
+							final class Root: Instantiable {
+							    init(service: AnyServiceProtocol) {
+							        self.service = service
+							    }
+
+							    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let service: AnyServiceProtocol
 							}
 							""",
 						],
