@@ -386,6 +386,8 @@ struct Generate: AsyncParsableCommand {
 				comparisonFilePaths: comparisonFilePaths,
 				conditionalCompilation: evaluator,
 			),
+			// Every file this run generates asserts these decisions (`compileTimeAssertions` below).
+			assertedActiveConditions: Set(module.conditionalCompilationDecisions.filter(\.isActive).map(\.condition)),
 		)
 		if let moduleInfoOutput {
 			try module.moduleInfoData.write(toPath: moduleInfoOutput)
@@ -1423,8 +1425,8 @@ struct Generate: AsyncParsableCommand {
 	/// type of that name: a mention of it decides whether that block's decisions are asserted.
 	///
 	/// A file walked again keeps the plain type declarations, and asserts the decisions about them, of the types scan
-	/// kept (`keptTypeNames`), and, when `keepsTypeDeclarationsOtherModulesCanName`, the `package` ones, as a fresh parse
-	/// keeps them. A file that mentions no SafeDI marker but declares such a type is parsed again too: the conditions of
+	/// kept (`keptTypeNames`), and, when `keepsTypeDeclarationsOtherModulesCanName`, the `package` ones and those read
+	/// under the mock condition, as a fresh parse keeps them. A file that mentions no SafeDI marker but declares such a type is parsed again too: the conditions of
 	/// its blocks select which of its declarations are read.
 	/// - Parameter isReadingModuleFile: Whether the file a cached scan names, as the manifest names it, is one of the
 	///   module's own files (see `parseModule`).

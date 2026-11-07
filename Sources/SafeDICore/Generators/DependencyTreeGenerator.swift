@@ -47,8 +47,10 @@ public actor DependencyTreeGenerator {
 		plainTypeDeclarations: [PlainTypeDeclaration] = [],
 		writtenImportAccessLevels: GeneratedImportAccess.WrittenLevels = .none,
 		unreadImports: UnreadImports? = nil,
+		assertedActiveConditions: Set<String> = [],
 	) {
 		self.unreadImports = unreadImports
+		self.assertedActiveConditions = assertedActiveConditions
 		self.importStatements = importStatements
 		self.mockImportStatements = mockImportStatements
 		importAccess = GeneratedImportAccess(
@@ -2188,6 +2190,13 @@ public actor DependencyTreeGenerator {
 				/// a parameter they would take otherwise: without it, they count the type as one SafeDI reads no declaration
 				/// of, which is `public`. Reported at the declaration.
 				case treeReachesPlainDeclarationCallersCannotSee(declaration: PlainTypeDeclaration, viaTargetGraph: Bool)
+				/// The seam's generated `initializerLevel` initializer names `namedType`, and `declaration`, of `namedType` or of
+				/// a type enclosing it, is one SafeDI read only because it takes `mockCondition` to be active: it is in a clause of
+				/// a block that guards mock-only declarations, which the selection of that condition picks
+				/// (`PlainTypeDeclaration.mockCondition`). The initializer compiles where the condition may be inactive, where
+				/// the block declares the type only `levelWhereMockConditionIsInactive`, or, when that is `nil`, not at all.
+				/// Reported at the declaration. The macro cannot see it: the block and the seam are different declarations.
+				case namesTypeDeclaredUnderMockCondition(namedType: TypeDescription, declaration: PlainTypeDeclaration, mockCondition: String, levelWhereMockConditionIsInactive: AccessLevel?, initializerLevel: AccessLevel)
 				/// A tier of the generated initializer is wider than `hole`'s builder, which every tier takes, as far as the
 				/// proof of the builder's type (`Hole.accessCause`) goes. Not a `ParameterKind`: a builder is no member of
 				/// `SeamSignature.parameters`, whose labels are what `parameterLabels(namedBy:about:)` names.
@@ -2295,6 +2304,19 @@ public actor DependencyTreeGenerator {
 					} else {
 						"SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it takes its parameters at the access this declaration of \(typeName) proves, which is in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see it, so they would count \(typeName) as `public`, and their calls would not match the initializer. Generate that module's module info with `--module-name`."
 					}
+				case let .namesTypeDeclaredUnderMockCondition(namedType, declaration, mockCondition, levelWhereMockConditionIsInactive, initializerLevel):
+					receivers = []
+					location = declaration.access.declarationStartLocation ?? location
+					let declaredType = "`\(declaration.typeDescription.asSource)`"
+					let named = namedType == declaration.typeDescription
+						? "`\(namedType.asSource)`, which is declared here"
+						: "`\(namedType.asSource)`, and \(declaredType), which encloses it, is declared here"
+					let whereInactive = if let levelWhereMockConditionIsInactive {
+						"where `\(mockCondition)` is inactive the block declares \(declaredType) `\(levelWhereMockConditionIsInactive.spelledOnGeneratedDeclaration)`, so the `\(initializerLevel.spelledOnGeneratedDeclaration)` initializer cannot name `\(namedType.asSource)` there. Declare \(declaredType) at least `\(initializerLevel.spelledOnGeneratedDeclaration)` in every clause of that block, or outside that block."
+					} else {
+						"a build where `\(mockCondition)` is inactive compiles the initializer without this declaration. Declare \(declaredType) outside that block."
+					}
+					message = "SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it names \(named), inside an `#if` block that guards mock-only declarations. SafeDI reads that block as if `\(mockCondition)` were active, for production code too, but \(whereInactive)"
 				case let .tierOmitsBuilder(hole, tier):
 					// Explained as a required parameter's omission is, by the shared formatter, with the builder's remedy in
 					// the place of a pass-through's.
@@ -2781,6 +2803,9 @@ public actor DependencyTreeGenerator {
 	/// The declarations of types that are not `@Instantiable` this generator was given, which a generator computing
 	/// another module's view is given too.
 	private let plainTypeDeclarations: [PlainTypeDeclaration]
+	/// The conditions every file this run generates asserts active (`ConditionalCompilationDecision`): its code never
+	/// compiles where one of them is inactive.
+	private let assertedActiveConditions: Set<String>
 	/// The declarations among which the declaration of a type an extension extends bounds the types declared in or by
 	/// that extension.
 	private let extendedTypeDeclarations: ExtendedTypeDeclarations
@@ -3884,6 +3909,14 @@ public actor DependencyTreeGenerator {
 			isOwnFile: emittingModule?.isOwnFile,
 		)
 		var errors = ownComputation.errors
+		// A seam's generated initializer is production code, which compiles where the mock condition may be inactive, so
+		// no type it names may rest on a declaration SafeDI read only by taking that condition to be active.
+		for seamType in generatedSeamTypes.sorted() {
+			guard let seam = typeDescriptionToFulfillingInstantiableMap[seamType],
+			      let signature = (ownComputation.seamRoots[seamType] ?? nil)?.signature
+			else { continue }
+			errors += Self.declarationsReadUnderMockCondition(namedBy: signature, of: seam, proof: ownComputation.proof, assertedActiveConditions: assertedActiveConditions)
+		}
 		// Each generated seam is computed again over the declarations its callers see, when those differ from this
 		// run's (a dependent module info that names no module; under the target graph, a directory the configuration
 		// adds). A seam whose call shape – what a call depends on, and the guard hashes: each parameter's label, type,
@@ -3952,6 +3985,31 @@ public actor DependencyTreeGenerator {
 			seamRoots[seamType] = seamRoot
 		}
 		return seamRoots
+	}
+
+	/// An error at each declaration SafeDI read only under the mock condition that `signature`, `seam`'s, names – in a
+	/// parameter of any tier, or in a hole's builder or a field of its scope struct, each at the level a tier takes it at
+	/// – where that condition is inactive, the type is not declared that widely (`TypeAccessProof`), in that order, each
+	/// once.
+	private static func declarationsReadUnderMockCondition(namedBy signature: SeamSignature, of seam: Instantiable, proof: TypeAccessProof, assertedActiveConditions: Set<String>) -> [DependencyTreeGeneratorError] {
+		let namedTypes: [(type: TypeDescription, level: AccessLevel)] = signature.parameters.map { ($0.property.typeDescription, $0.tierAccess) }
+			+ signature.holes.flatMap { hole in
+				[(hole.property.typeDescription, hole.tierAccess)] + hole.stages.flatMap { $0.map { ($0.property.typeDescription, $0.access) } }
+			}
+		var reportedDeclarations = Set<PlainTypeDeclaration>()
+		var errors = [DependencyTreeGeneratorError]()
+		for namedType in namedTypes {
+			for read in proof.declarationsReadUnderMockCondition(namedBy: namedType.type, requiring: namedType.level, mentionedFrom: .declaration(seam), assertedActiveConditions: assertedActiveConditions) where reportedDeclarations.insert(read.declaration).inserted {
+				errors.append(.seam(.init(seam: seam, kind: .namesTypeDeclaredUnderMockCondition(
+					namedType: read.namedType,
+					declaration: read.declaration,
+					mockCondition: read.mockCondition,
+					levelWhereMockConditionIsInactive: read.levelWhereMockConditionIsInactive,
+					initializerLevel: TypeAccessProof.normalized(namedType.level),
+				))))
+			}
+		}
+		return errors
 	}
 
 	/// The parameters of `ownSignature` a seam's callers would not pass as this run declares them: those

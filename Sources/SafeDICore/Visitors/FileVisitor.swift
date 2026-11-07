@@ -102,11 +102,23 @@ public final class FileVisitor: SyntaxVisitor {
 		// A plain type declaration is recorded from the clauses this visitor scans, which the conditions select as they
 		// select a block guarding production declarations. A block that also guards mock-only declarations keeps the
 		// selection that forces the mock condition active, so a plain type declared there is read under the mock condition,
-		// for production code too: a production declaration that names it is generated for the clause the mock condition
-		// selects, which the compiler checks where the condition is inactive.
+		// for production code too. Each declaration in a clause that selection picks because of the mock condition records
+		// that condition (`PlainTypeDeclaration.mockCondition`) and the level at which the clauses selected where it is
+		// inactive declare its type, and a seam's generated initializer that names it is an error at the declaration
+		// unless those clauses declare the type as widely as the initializer names it: the compiler checks that
+		// initializer where the condition may be inactive.
 		let declaresPlainType = !plainTypeNames.isEmpty
 		let scannable = conditionalCompilationEvaluator.scannableClauses(in: node, guarding: content == .none && declaresPlainType ? .production : content)
 		activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
+		clausesSelectedByMockCondition.formUnion(scannable.clausesSelectedByMockCondition)
+		if mockConditionClauseDepth == 0, !scannable.clausesSelectedByMockCondition.isEmpty {
+			// The outermost such block decides what a build where the condition is inactive selects, nested blocks included.
+			// The conditions that selection consults decide the levels recorded, so a scan cached under other values of them
+			// cannot stand for this walk.
+			let whereInactive = plainTypeLevels(declaredIn: node, by: conditionalCompilationEvaluator.whereMockConditionIsInactive)
+			levelsWhereMockConditionIsInactive = whereInactive.levels
+			consultedCompilationConditions.formUnion(whereInactive.consultedConditions)
+		}
 		if content == .none {
 			// The conditions decide which plain declarations this visitor records, and the decisions matter, only when the
 			// module keeps a declaration the block could hold, which it decides once every file is walked.
@@ -153,7 +165,17 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: IfConfigClauseSyntax) -> SyntaxVisitorContinueKind {
-		activeIfConfigClauses.contains(node.id) ? .visitChildren : .skipChildren
+		guard activeIfConfigClauses.contains(node.id) else { return .skipChildren }
+		if clausesSelectedByMockCondition.contains(node.id) {
+			mockConditionClauseDepth += 1
+		}
+		return .visitChildren
+	}
+
+	public override func visitPost(_ node: IfConfigClauseSyntax) {
+		if clausesSelectedByMockCondition.contains(node.id) {
+			mockConditionClauseDepth -= 1
+		}
 	}
 
 	public override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -320,6 +342,14 @@ public final class FileVisitor: SyntaxVisitor {
 	private var activeIfConfigClauses = Set<SyntaxIdentifier>()
 	/// How many `#if` blocks deep the walk is inside a block that `importSegments` holds as source.
 	private var importOnlyBlockDepth = 0
+	/// The clauses of blocks guarding mock-only declarations that the evaluator selected because it takes the mock
+	/// condition to be active (`ScannableClauses.clausesSelectedByMockCondition`).
+	private var clausesSelectedByMockCondition = Set<SyntaxIdentifier>()
+	/// How many of `clausesSelectedByMockCondition` enclose the walk's position.
+	private var mockConditionClauseDepth = 0
+	/// The narrowest level at which the clauses the outermost of `clausesSelectedByMockCondition` enclosing the walk's
+	/// position would give way to where the mock condition is inactive declare each type another file can name.
+	private var levelsWhereMockConditionIsInactive = [TypeDescription: AccessLevel]()
 
 	/// Records the instantiables `instantiableVisitor` found at the walk's position, each marked with whether a block
 	/// whose condition only the compiler decides encloses it.
@@ -378,13 +408,43 @@ public final class FileVisitor: SyntaxVisitor {
 	/// `@Instantiable`.
 	private func recordPlainTypeDeclaration(_ type: TypeDescription, access: AccessDeclaration, isInstantiable: Bool) {
 		if !isInstantiable {
+			let isReadUnderMockCondition = mockConditionClauseDepth > 0
 			plainTypeDeclarations.append(PlainTypeDeclaration(
 				typeDescription: type,
 				access: access,
 				enclosingTypeAccess: enclosingTypeAccess,
 				enclosingExtensionAccess: enclosingExtensionAccess,
+				mockCondition: isReadUnderMockCondition ? conditionalCompilationEvaluator.mockConditionalCompilation : nil,
+				levelWhereMockConditionIsInactive: isReadUnderMockCondition ? levelsWhereMockConditionIsInactive[type] : nil,
 			))
 		}
+	}
+
+	/// The narrowest level, before the cap of an extended type, at which the clauses of `node` that `evaluator` selects
+	/// – and the clauses it selects of the blocks nested in them – declare each type another file can name, walked from
+	/// the walk's position, so that a type nested in an enclosing type is named as this visitor names it; and every bare
+	/// condition that selection consulted, but the mock condition, which `evaluator` takes to be inactive whatever the
+	/// conditions report.
+	private func plainTypeLevels(declaredIn node: IfConfigDeclSyntax, by evaluator: ConditionalCompilationEvaluator) -> (levels: [TypeDescription: AccessLevel], consultedConditions: Set<String>) {
+		let clauseVisitor = FileVisitor(conditionalCompilationEvaluator: evaluator)
+		clauseVisitor.parentType = parentType
+		clauseVisitor.enclosingTypeAccess = enclosingTypeAccess
+		clauseVisitor.enclosingExtensionAccess = enclosingExtensionAccess
+		clauseVisitor.enclosingExtendedType = enclosingExtendedType
+		let scannable = evaluator.scannableClauses(in: node, guarding: .production)
+		for elements in scannable.clauses.compactMap(\.elements) {
+			clauseVisitor.walk(elements)
+		}
+		var levels = [TypeDescription: AccessLevel]()
+		for declaration in clauseVisitor.plainTypeDeclarations where declaration.isVisibleOutsideItsFile {
+			let level = declaration.levelBeforeExtendedTypeCap
+			levels[declaration.typeDescription] = min(levels[declaration.typeDescription] ?? level, level)
+		}
+		let consultedConditions = scannable.consultedConditions
+			.union(clauseVisitor.consultedCompilationConditions)
+			.union(clauseVisitor.plainTypeDeclarationDecisions.flatMap(\.consultedConditions))
+			.subtracting([conditionalCompilationEvaluator.mockConditionalCompilation].compactMap(\.self))
+		return (levels, consultedConditions)
 	}
 
 	/// The type a type definition named `name` defines among the members of `parentType`.

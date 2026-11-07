@@ -300,7 +300,9 @@ func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<Nor
 ///   - keepsTypeDeclarationsOtherModulesCanName: Whether the module's plain type declarations that only another module
 ///     of its package can name – those declared `package` – are kept too, wherever they are, for a run that writes the
 ///     module's info without a target graph: the modules that read that info cannot tell which of its types they will
-///     name. A `public` or `open` one proves nothing a module that reads no declaration of the type would not prove.
+///     name. So are `public` and `open` ones read under the mock condition, at which a seam that names the type is an
+///     error (`PlainTypeDeclaration.mockCondition`); any other `public` or `open` one proves nothing a module that reads
+///     no declaration of the type would not prove.
 ///   - isReadingModuleFile: Whether the file at a path among `filePaths` is one of the module's own files, rather than one
 ///     of a module it depends on: a mention in the module names an `internal` declaration of its own files only, so a
 ///     decision about another module's is that module's to assert.
@@ -414,7 +416,7 @@ func parseModule(
 /// - Parameters:
 ///   - moduleTypeNames: The names of the types the module's other declarations mention (`keptPlainTypeNames(of:)`).
 ///   - keepsTypeDeclarationsOtherModulesCanName: Whether the plain declarations that only another module of the package
-///     can name are kept too, wherever they are, as `parseModule` keeps them for a run that writes the module's info
+///     can name, and those read under the mock condition, are kept too, wherever they are, as `parseModule` keeps them for a run that writes the module's info
 ///     without a target graph.
 ///   - isReadingModuleFile: Whether the file at a path among `filePaths` is one of the module's own files, as
 ///     `parseModule` asks it.
@@ -519,8 +521,9 @@ struct FileScan: Codable, Sendable {
 	}
 
 	/// This scan, keeping the declarations of `plainTypeDeclarations` of the types `keptTypeNames` keeps, and, when
-	/// `keepingThoseOtherModulesPackageCanName`, those declared `package`. A `public` or `open` declaration of a type no
-	/// declaration of the module mentions is not kept: a type no declaration SafeDI reads declares counts as `public`
+	/// `keepingThoseOtherModulesPackageCanName`, those declared `package`, and those read under the mock condition at a
+	/// level another module can name. Any other `public` or `open` declaration of a type no declaration of the module
+	/// mentions is not kept: a type no declaration SafeDI reads declares counts as `public`
 	/// (`TypeAccessProof`), so another module proves it the same without the record.
 	///
 	/// Each block of `plainTypeDeclarationDecisions` that declares, in any clause, a type such a declaration could be of
@@ -567,11 +570,20 @@ struct FileScan: Codable, Sendable {
 			outputFileDeclarations: outputFileDeclarations,
 			plainTypeDeclarations: plainTypeDeclarations.filter { plainTypeDeclaration in
 				plainTypeDeclaration.typeDescription.outermostTypeName.map { keptTypeNames.outermostTypeNames.contains($0.spelledWithoutBackticks) } == true
-					|| (keepingThoseOtherModulesPackageCanName && TypeAccessProof.normalized(plainTypeDeclaration.levelBeforeExtendedTypeCap) == .package)
+					|| (keepingThoseOtherModulesPackageCanName && Self.otherModulesNeedRecord(of: plainTypeDeclaration))
 			},
 			plainTypeDeclarationDecisions: [],
 			keptGuardedPlainTypeNames: keptGuardedTypeNames.sorted(),
 		)
+	}
+
+	/// Whether a module that reads this module's info needs `plainTypeDeclaration`'s record when nothing in this module
+	/// mentions its type: a `package` declaration, which proves the type narrower than a type no record declares, and one
+	/// read under the mock condition that another module can name, since a seam's generated initializer that names it is
+	/// an error at it (`PlainTypeDeclaration.mockCondition`).
+	private static func otherModulesNeedRecord(of plainTypeDeclaration: PlainTypeDeclaration) -> Bool {
+		let level = TypeAccessProof.normalized(plainTypeDeclaration.levelBeforeExtendedTypeCap)
+		return level == .package || (plainTypeDeclaration.mockCondition != nil && level == .public)
 	}
 
 	/// This scan, contributing `imports` and `mockImports`.
