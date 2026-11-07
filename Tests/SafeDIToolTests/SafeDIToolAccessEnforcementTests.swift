@@ -3274,9 +3274,549 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtNamespace_whenItsMarkerFreeFileSpellsItsNameNeedlesslyInBackticks(integration: MultiModuleIntegration) async {
+		// D3.8: the text search finds `` `Space` ``, and the declaration in backticks is the one the extension of `Space`
+		// extends, so the check reads it, where the compiler would report the generated file. The error names the type as
+		// its declaration spells it.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let spacePath = Self.declarationPath(of: "Space.swift", in: "Core", fixtures: fixtures, under: integration)
+			return """
+			\(spacePath):1:1: error: ``Space``, which encloses `Space.Shelf`, is `package`, so module `App`, in another package, cannot construct `Space.Shelf` in the code SafeDI generates. Make ``Space`` `public` to fix.
+			\(spacePath):1:1-1:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.shelfInSpaceModules(space: "package enum `Space` {}", conditions: []),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	// MARK: Tests – Namespaces declared inside an extension
+
+	/// How `Core` declares the namespaces that enclose `Helper` inside extensions, each in a file without a SafeDI marker.
+	enum ExtensionNamespaceChain: CaseIterable, Sendable {
+		/// `Outer.Namespace`, `package`, inside an extension of `Outer`, in `Namespace.swift`.
+		case oneLink
+		/// `Outer.A`, `package`, inside an extension of `Outer`, in `Namespace.swift`, and `Outer.A.B`, `public`, inside an
+		/// extension of `Outer.A`, in `B.swift`.
+		case twoLinks
+		/// `Outer.Namespace`, a `package` `typealias` of `Real`, `public`, inside an extension of `Outer`, in
+		/// `Namespace.swift`.
+		case typealiasLink
+
+		/// The files that declare the namespaces, with `level` in place of the narrowest one's `package`.
+		func namespaceFiles(narrowestSpelled level: String = "package") -> [String: String] {
+			switch self {
+			case .oneLink:
+				["Namespace.swift": "extension Outer {\n    \(level) enum Namespace {}\n}"]
+			case .twoLinks:
+				["Namespace.swift": "extension Outer {\n    \(level) enum A {}\n}", "B.swift": "extension Outer.A {\n    public enum B {}\n}"]
+			case .typealiasLink:
+				["Namespace.swift": "extension Outer {\n    \(level) typealias Namespace = Real\n}", "Real.swift": "public enum Real {}"]
+			}
+		}
+
+		/// The type an extension declaring `Helper` extends.
+		var extendedType: String {
+			switch self {
+			case .oneLink, .typealiasLink:
+				"Outer.Namespace"
+			case .twoLinks:
+				"Outer.A.B"
+			}
+		}
+
+		/// The narrowest namespace, which `Namespace.swift` declares `package` at its second line.
+		var narrowestNamespace: String {
+			switch self {
+			case .oneLink, .typealiasLink:
+				"Outer.Namespace"
+			case .twoLinks:
+				"Outer.A"
+			}
+		}
+	}
+
+	@Test(arguments: ExtensionNamespaceChain.allCases, MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtNarrowestNamespace_whenAnotherPackageConstructsTypeInExtensionOfNamespaceDeclaredInsideExtension(chain: ExtensionNamespaceChain, integration: MultiModuleIntegration) async {
+		// D2.1, D2.3: the check follows `Helper`'s extended type to the declaration inside an extension of `Outer`, and on to
+		// `Outer`, each in `Core`, and reports the `package` one, where the compiler would report the generated file.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let namespacePath = Self.declarationPath(of: "Namespace.swift", in: "Core", fixtures: fixtures, under: integration)
+			let helper = "\(chain.extendedType).Helper"
+			return """
+			\(namespacePath):2:5: error: `\(chain.narrowestNamespace)`, which encloses `\(helper)`, is `package`, so module `App`, in another package, cannot construct `\(helper)` in the code SafeDI generates. Make `\(chain.narrowestNamespace)` `public` to fix.
+			\(namespacePath):2:5-2:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesConstructingHelper(declaredInsideExtensionOf: chain.extendedType, namespaceFiles: chain.namespaceFiles(), appPackage: "Other"),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: ExtensionNamespaceChain.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtReferenceNamingNamespacesModule_whenFileDeclaringNamespaceInsideExtensionCannotBeRead(chain: ExtensionNamespaceChain) async {
+		// D2.1, D2.3 under Bazel: `Core`'s `.safedi` carries the namespaces, and its files are gone, so the error is reported
+		// where `App` refers to the construction, names `Core`, and offers no fix-it.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let helper = "\(chain.extendedType).Helper"
+			return """
+			\(fixtures["App"]!["Root.swift"]):9:5: error: `\(chain.narrowestNamespace)`, which encloses `\(helper)`, is `package` in module `Core`, so module `App`, in another package, cannot construct `\(helper)` in the code SafeDI generates. Make `\(chain.narrowestNamespace)` `public` in module `Core` to fix.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesConstructingHelper(declaredInsideExtensionOf: chain.extendedType, namespaceFiles: chain.namespaceFiles(), appPackage: "Other", deletesCoreFiles: true),
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: ExtensionNamespaceChain.allCases, MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_constructsTypeInExtensionOfNamespaceDeclaredInsideExtension_whenFixItMakesNarrowestNamespacePublic(chain: ExtensionNamespaceChain, integration: MultiModuleIntegration) async throws {
+		// D2.1, D2.3: the source the error's fix-it leaves, which compiles.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesConstructingHelper(declaredInsideExtensionOf: chain.extendedType, namespaceFiles: chain.namespaceFiles(narrowestSpelled: "public"), appPackage: "Other"),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(under: integration, constructing: "\(chain.extendedType).Helper"))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: ExtensionNamespaceChain.allCases, MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_constructsTypeInExtensionOfPackageNamespaceDeclaredInsideExtension_whenModuleOfItsPackageConstructsIt(chain: ExtensionNamespaceChain, integration: MultiModuleIntegration) async throws {
+		// D2.2: another module of `Core`'s package can name the `package` namespace, as it could before the check followed it.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesConstructingHelper(declaredInsideExtensionOf: chain.extendedType, namespaceFiles: chain.namespaceFiles(), appPackage: "Shop"),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(under: integration, constructing: "\(chain.extendedType).Helper"))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_assumesPackageAccessWithComment_whenTypeInExtensionOfPackageNamespaceDeclaredInsideExtensionIsConstructedFromModuleOfUnknownPackage() async throws {
+		// Without package names the tool cannot tell whether `App` is in `Core`'s package, so it accepts the `package`
+		// `Outer.Namespace`, which the check now reads, and says so where it constructs `Helper`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesConstructingHelper(
+				declaredInsideExtensionOf: "Outer.Namespace",
+				namespaceFiles: ExtensionNamespaceChain.oneLink.namespaceFiles(),
+				appPackage: "Shop",
+				omitsPackageNames: true,
+			),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + """
+		extension Root {
+		    public init() {
+		        let helping: any Helping = Outer.Namespace.Helper() // SafeDI could not verify that Outer.Namespace.Helper is in this package; `package` access is assumed.
+		        self.init(helping: helping)
+		    }
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsNoDeclarationNamedLikeNestedInstantiable_whenMarkerFreeFileDeclaresTypeOfItsOwnName() async throws {
+		// The names that keep plain declarations hold those bounding `Outer.Namespace.Helper`, `Outer` and `Namespace`, and
+		// not `Helper`'s own: the check reads no other declaration of that name, so `Core` neither parses nor carries the
+		// unrelated internal `Helper`, in a file without a marker and without the word `package`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesConstructingHelper(
+				declaredInsideExtensionOf: "Outer.Namespace",
+				namespaceFiles: ExtensionNamespaceChain.oneLink.namespaceFiles().merging(["Unrelated.swift": "struct Helper {}"], uniquingKeysWith: { first, _ in first }),
+				appPackage: "Shop",
+			),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Outer.Namespace", "Outer"])
+		#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(under: .moduleInfo, constructing: "Outer.Namespace.Helper"))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_constructsTypeInExtensionOfNamespaceDeclaredInsideExtensionOfTypeOfModuleSafeDIDoesNotRead_whichThenFailsToCompile() async throws {
+		// D2.4: `Kit` does not run SafeDI, so the check follows `Outer.Namespace`, `public`, to `Outer`, of which it reads no
+		// declaration, and stops there: the compiler reports in the generated file that `App`, in another package, cannot
+		// see the `package` `Outer`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Kit", packageName: "Shop", swiftFileContentByFilePath: ["Outer.swift": "package enum Outer {}"], runsSafeDI: false),
+				ModuleFixture(
+					name: "Core",
+					packageName: "Shop",
+					swiftFileContentByFilePath: [
+						"Namespace.swift": "import Kit\n\nextension Outer {\n    public enum Namespace {}\n}",
+						"Helper.swift": "import Kit\n\n" + Self.helperSource(declaredInsideExtensionOf: "Outer.Namespace"),
+					],
+					dependencies: ["Kit"],
+				),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContentByFilePath: ["Root.swift": "import Kit\n" + Self.rootInstantiatingHelping], dependencies: ["Kit", "Core"]),
+			],
+			integration: .moduleInfo,
+			compileVerification: .returningOutcomeOnly,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Kit") + "\n\n" + Self.rootCode(constructing: "Outer.Namespace.Helper")])
+		try expectModuleCompilationFails(output, module: "App", containing: "cannot find 'Outer' in scope")
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_constructsTypeInExtensionOfNamespaceAnotherModuleDeclaresInsideExtension_whichThenFailsToCompile(integration: MultiModuleIntegration) async throws {
+		// D2.5: `Base`, not `Core`, declares `Outer.Namespace`, and the check looks a namespace up only in the module of the
+		// extension it bounds: in another module, a type of the name could be a namesake of the one the extension extends,
+		// and of several the check would take the narrowest, so a namesake could fail a construction that compiles. The
+		// compiler reports that `Namespace` is `package` in the generated file.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Base", packageName: "Shop", swiftFileContentByFilePath: ["Outer.swift": "public enum Outer {}\n\nextension Outer {\n    package enum Namespace {}\n}"]),
+				ModuleFixture(
+					name: "Core",
+					packageName: "Shop",
+					swiftFileContentByFilePath: ["Helper.swift": "import Base\n\n" + Self.helperSource(declaredInsideExtensionOf: "Outer.Namespace")],
+					dependencies: ["Base"],
+				),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContentByFilePath: ["Root.swift": "import Base\n" + Self.rootInstantiatingHelping], dependencies: ["Base", "Core"]),
+			],
+			integration: integration,
+			compileVerification: .returningOutcomeOnly,
+			filesToDelete: &filesToDelete,
+		)
+		let code = generatedFileHeader + Self.importBlock("Base") + "\n" + Self.importBlock("Core") + "\n\n" + Self.rootCode(constructing: "Outer.Namespace.Helper")
+		#expect(output.modules["App"]?.generatedFiles == [integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": code])
+		try expectModuleCompilationFails(output, module: "App", containing: "'Namespace' is inaccessible due to 'package' protection level")
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtInstantiableExtendedType_whenAnotherPackageConstructsTypeInExtensionOfPackageInstantiable(integration: MultiModuleIntegration) async {
+		// D2.6: the extended type is `@Instantiable`, outside every extension, and its own declaration is what is read.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let outerPath = Self.declarationPath(of: "Outer.swift", in: "Core", fixtures: fixtures, under: integration)
+			return """
+			\(outerPath):2:1: error: `Outer`, which encloses `Outer.Helper`, is `package`, so module `App`, in another package, cannot construct `Outer.Helper` in the code SafeDI generates. Make `Outer` `public` to fix.
+			\(outerPath):2:1-2:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesConstructingHelper(
+					declaredInsideExtensionOf: "Outer",
+					outerDeclaration: "@Instantiable\npackage final class Outer: Instantiable {\n    package init() {}\n}",
+					namespaceFiles: [:],
+					appPackage: "Other",
+				),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtInstantiableNamespace_whenItIsDeclaredInsideExtensionAndAnotherPackageConstructsTypeInExtensionOfIt(integration: MultiModuleIntegration) async {
+		// D2.11: the namespace inside an extension of `Outer` is `@Instantiable`, so the check reads its own declaration, and
+		// then `Outer`'s, as it does a plain namespace's.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let namespacePath = Self.declarationPath(of: "Namespace.swift", in: "Core", fixtures: fixtures, under: integration)
+			return """
+			\(namespacePath):3:5: error: `Outer.Namespace`, which encloses `Outer.Namespace.Helper`, is `package`, so module `App`, in another package, cannot construct `Outer.Namespace.Helper` in the code SafeDI generates. Make `Outer.Namespace` `public` to fix.
+			\(namespacePath):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesConstructingHelper(
+					declaredInsideExtensionOf: "Outer.Namespace",
+					namespaceFiles: ["Namespace.swift": "extension Outer {\n    @Instantiable\n    package final class Namespace: Instantiable {\n        package init() {}\n    }\n}"],
+					appPackage: "Other",
+				),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtPrivateExtension_whenNamespaceItDeclaresWithoutModifierEnclosesTypeAnotherPackageConstructs(integration: MultiModuleIntegration) async {
+		// D2.7: `Namespace` spells no level, so it takes `fileprivate` from the `private` extension it is directly inside,
+		// which is the declaration to widen.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let helperPath = Self.declarationPath(of: "Helper.swift", in: "Core", fixtures: fixtures, under: integration)
+			return """
+			\(helperPath):1:1: error: The extension that declares `Outer.Namespace`, which encloses `Outer.Namespace.Helper`, is `fileprivate`, so module `App`, in another package, cannot construct `Outer.Namespace.Helper` in the code SafeDI generates. Make the extension `public` to fix.
+			\(helperPath):1:1-1:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesConstructingHelper(
+					declaredInsideExtensionOf: "Outer.Namespace",
+					namespaceFiles: [:],
+					helperFilePrefix: "private extension Outer {\n    enum Namespace {}\n}\n\n",
+					appPackage: "Other",
+				),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingMock_whenMockInAnotherPackageConstructsTypeInExtensionOfPackageNamespaceDeclaredInsideExtension(integration: MultiModuleIntegration) async {
+		// D2.8: the mock of `Screen` builds `Helper`, and names `Outer.Namespace` in `App`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let namespacePath = Self.declarationPath(of: "Namespace.swift", in: "Core", fixtures: fixtures, under: integration)
+			return """
+			\(namespacePath):2:5: error: `Outer.Namespace`, which encloses `Outer.Namespace.Helper`, is `package`, so the mock of `Screen`, generated in module `App`, in another package, cannot construct `Outer.Namespace.Helper` in the code SafeDI generates. Make `Outer.Namespace` `public` to fix.
+			\(namespacePath):2:5-2:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesConstructingHelper(
+					declaredInsideExtensionOf: "Outer.Namespace",
+					namespaceFiles: ExtensionNamespaceChain.oneLink.namespaceFiles(),
+					appPackage: "Other",
+					appDeclaration: "import Core\n\n@Instantiable(generateMock: true)\npublic struct Screen: Instantiable {\n    public init(helping: any Helping) {\n        self.helping = helping\n    }\n\n    @Instantiated let helping: any Helping\n}",
+				),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtNamespace_whenAnotherPackageCallsGeneratedInitializerOfSeamInExtensionOfPackageNamespaceDeclaredInsideExtension(integration: MultiModuleIntegration) async {
+		// D2.9: `App` calls the initializer `Core` generates for the seam `Helper`, which names `Outer.Namespace`: the error
+		// is at the namespace, never at the generated initializer, which is as visible as `Helper`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let namespacePath = Self.declarationPath(of: "Namespace.swift", in: "Core", fixtures: fixtures, under: integration)
+			return """
+			\(namespacePath):2:5: error: `Outer.Namespace`, which encloses `Outer.Namespace.Helper`, is `package`, so module `App`, in another package, cannot construct `Outer.Namespace.Helper` in the code SafeDI generates. Make `Outer.Namespace` `public` to fix.
+			\(namespacePath):2:5-2:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesConstructingHelper(
+					declaredInsideExtensionOf: "Outer.Namespace",
+					namespaceFiles: ExtensionNamespaceChain.oneLink.namespaceFiles(),
+					helperAttribute: "@Instantiable(generateDependencyTree: true, fulfillingAdditionalTypes: [Helping.self])",
+					helperDependencies: ["@Instantiated let gear: Gear"],
+					helperFilePrefix: "@Instantiable\npublic struct Gear: Instantiable {\n    public init() {}\n}\n\n",
+					appPackage: "Other",
+				),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtNarrowestClause_whenNamespaceInsideExtensionIsDeclaredInClausesOfPlatformConditionedBlock(integration: MultiModuleIntegration) async {
+		// D2.10: the compiler may select either clause, so the check reads the narrower declaration of `Outer.Namespace`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let namespacePath = Self.declarationPath(of: "Namespace.swift", in: "Core", fixtures: fixtures, under: integration)
+			return """
+			\(namespacePath):3:5: error: `Outer.Namespace`, which encloses `Outer.Namespace.Helper`, is `package`, so module `App`, in another package, cannot construct `Outer.Namespace.Helper` in the code SafeDI generates. Make `Outer.Namespace` `public` to fix.
+			\(namespacePath):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesConstructingHelper(
+					declaredInsideExtensionOf: "Outer.Namespace",
+					namespaceFiles: ["Namespace.swift": "extension Outer {\n#if os(Linux)\n    package enum Namespace {}\n#else\n    public enum Namespace {}\n#endif\n}"],
+					appPackage: "Other",
+				),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_assertsDecisionSelectingNamespace_whenModuleOfItsPackageConstructsTypeInExtensionOfNamespaceDeclaredInsideExtensionInSelectedClause(integration: MultiModuleIntegration) async throws {
+		// D2.10: `FLAG` selects the clause that declares `Outer.Namespace` `package`, which the construction relies on, so
+		// the generated code asserts the decision, as it asserts any decision a read resolves by: `App`'s, which reads
+		// `Core`'s files under the plugin, and `Core`'s, whose `.safedi` `App` reads under Bazel.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesConstructingHelper(
+				declaredInsideExtensionOf: "Outer.Namespace",
+				namespaceFiles: ["Namespace.swift": "extension Outer {\n#if FLAG\n    package enum Namespace {}\n#else\n    enum Namespace {}\n#endif\n}"],
+				appPackage: "Shop",
+				conditions: ["FLAG"],
+			),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		switch integration {
+		case .moduleInfo:
+			#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + Self.activeAssertion("FLAG")])
+			#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(under: integration, constructing: "Outer.Namespace.Helper"))
+		case .swiftPackagePlugin:
+			#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(under: integration, constructing: "Outer.Namespace.Helper", assertions: ["FLAG"]))
+		}
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtMockGeneration_whenTypeWithPublicMockIsInExtensionOfPackageNamespaceDeclaredInsideExtension(integration: MultiModuleIntegration) async {
+		// D2.12: a public mock of `Helper` names `Outer.Namespace` in its `public` signature, which the compiler rejects.
+		await assertThrowsMultiModuleError(inModule: "Core", diagnostics: { fixtures in
+			let helperPath = Self.declarationPath(of: "Helper.swift", in: "Core", fixtures: fixtures, under: integration)
+			return """
+			\(helperPath):4:76: error: `Outer.Namespace.Helper` cannot have a public mock because `Outer.Namespace` is `package`. Make `Outer.Namespace` `public`, or use `generateMock: .internal`.
+			\(helperPath):4:76-4:83: fixit: .internal
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesConstructingHelper(
+					declaredInsideExtensionOf: "Outer.Namespace",
+					namespaceFiles: ExtensionNamespaceChain.oneLink.namespaceFiles(),
+					helperAttribute: "@Instantiable(fulfillingAdditionalTypes: [Helping.self], generateMock: .public)",
+					appPackage: "Other",
+				),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// `Core`, in package `Shop`, whose `Outer.swift` holds `outerDeclaration`, whose `namespaceFiles` declare namespaces
+	/// inside extensions, each in a file without a SafeDI marker, and whose `Helper.swift` holds `helperFilePrefix` and then
+	/// `Helper` (`helperSource(declaredInsideExtensionOf:attribute:dependencies:)`); and `App`, in `appPackage`, whose
+	/// `Root.swift` holds `appDeclaration`: by default a root that instantiates `any Helping`, so that only the code SafeDI
+	/// generates in `App` names `Helper` and the namespaces enclosing it. Both run with `conditions`.
+	private static func modulesConstructingHelper(
+		declaredInsideExtensionOf extendedType: String,
+		outerDeclaration: String = "public enum Outer {}",
+		namespaceFiles: [String: String],
+		helperAttribute: String = "@Instantiable(fulfillingAdditionalTypes: [Helping.self])",
+		helperDependencies: [String] = [],
+		helperFilePrefix: String = "",
+		appPackage: String,
+		appDeclaration: String = rootInstantiatingHelping,
+		conditions: [String] = [],
+		deletesCoreFiles: Bool = false,
+		omitsPackageNames: Bool = false,
+	) -> [ModuleFixture] {
+		let helperFile: String = helperFilePrefix + helperSource(declaredInsideExtensionOf: extendedType, attribute: helperAttribute, dependencies: helperDependencies)
+		let coreFiles: [String: String] = ["Outer.swift": outerDeclaration, "Helper.swift": helperFile].merging(namespaceFiles, uniquingKeysWith: { first, _ in first })
+		return [
+			ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: coreFiles, activeCompilationConditions: conditions, deletesSwiftFilesAfterRunning: deletesCoreFiles, omitsPackageName: omitsPackageNames),
+			ModuleFixture(name: "App", packageName: appPackage, swiftFileContentByFilePath: ["Root.swift": appDeclaration], dependencies: ["Core"], activeCompilationConditions: conditions, omitsPackageName: omitsPackageNames),
+		]
+	}
+
+	/// The public `Helping` and, inside an unspelled extension of `extendedType`, the public final class `Helper`,
+	/// declared with `attribute`, which fulfills `Helping` and declares `dependencies`, each an `@Instantiated` property its
+	/// `public` initializer takes.
+	private static func helperSource(
+		declaredInsideExtensionOf extendedType: String,
+		attribute: String = "@Instantiable(fulfillingAdditionalTypes: [Helping.self])",
+		dependencies: [String] = [],
+	) -> String {
+		let properties = dependencies.map { dependency in
+			let property = dependency[dependency.range(of: " let ")!.upperBound...]
+			return (label: String(property.prefix { $0 != ":" }), type: property.drop { $0 != ":" }.dropFirst().trimmingCharacters(in: .whitespaces))
+		}
+		let initializer: String = properties.isEmpty
+			? "        public init() {}"
+			: "        public init(\(properties.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) {\n"
+			+ properties.map { "            self.\($0.label) = \($0.label)" }.joined(separator: "\n")
+			+ "\n        }\n\n"
+			+ dependencies.map { "        \($0)" }.joined(separator: "\n")
+		return "public protocol Helping {}\n\nextension \(extendedType) {\n    \(attribute)\n    public final class Helper: Instantiable, Helping {\n\(initializer)\n    }\n}"
+	}
+
+	/// `App`'s root, which instantiates `any Helping` at line 9 of its file.
+	private static let rootInstantiatingHelping = """
+	import Core
+
+	@Instantiable(isRoot: true)
+	public struct Root: Instantiable {
+	    public init(helping: any Helping) {
+	        self.helping = helping
+	    }
+
+	    @Instantiated let helping: any Helping
+	}
+	"""
+
+	/// The code `App` generates for `rootInstantiatingHelping` when `Helping` is fulfilled by `helperType`.
+	private static func rootCode(constructing helperType: String) -> String {
+		"""
+		extension Root {
+		    public init() {
+		        let helping: any Helping = \(helperType)()
+		        self.init(helping: helping)
+		    }
+		}
+		"""
+	}
+
+	/// The files `App` generates under `integration` for `rootInstantiatingHelping` when `Helping` is fulfilled by
+	/// `helperType`, asserting that each of `assertions` is active.
+	private static func rootFiles(under integration: MultiModuleIntegration, constructing helperType: String, assertions: [String] = []) -> [String: String] {
+		let code = generatedFileHeader + importBlock("Core") + "\n\n" + assertions.map(activeAssertion).joined() + rootCode(constructing: helperType)
+		return [integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": code]
+	}
+
+	/// The compile-time assertion a generated file carries for a `#if <condition>` the tool evaluated as active, ending
+	/// with the blank line that precedes what follows.
+	private static func activeAssertion(_ condition: String) -> String {
+		"""
+		#if !(\(condition))
+		#error("SafeDI scanned this module assuming `#if \(condition)` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+		#endif
+
+		""" + "\n"
+	}
+
+	/// Expects every module before `module` to compile, and `module`'s generated code to fail to compile alongside its
+	/// inputs with an error containing `text`.
+	private func expectModuleCompilationFails(_ output: MultiModuleTestOutput, module: String, containing text: String, sourceLocation: SourceLocation = #_sourceLocation) throws {
+		guard compileVerificationIsEnabled else { return }
+		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
+		let failure = try #require(compilation.failure, sourceLocation: sourceLocation)
+		#expect(failure.moduleName == module, sourceLocation: sourceLocation)
+		#expect(compilation.modules.dropLast().allSatisfy { $0.failure == nil }, sourceLocation: sourceLocation)
+		switch failure.failure {
+		case .generatedCodeFailedAlongsideInputs:
+			break
+		case .inputsFailedOnTheirOwn, nil:
+			Issue.record("Expected \(module)'s generated code to fail to compile, but its failure is \(String(describing: failure.failure)).", sourceLocation: sourceLocation)
+		}
+		#expect(failure.standardError.contains(text), "Unexpected compiler output \(failure.standardError)", sourceLocation: sourceLocation)
+	}
 
 	/// `Core`, whose `Space.swift` is `space` and whose `Shelf.swift` declares `Space.Shelf` inside an extension of
 	/// `Space`, fulfilling `Storage`, and `App`, in another package, whose root instantiates `Storage`; both run with
