@@ -1299,7 +1299,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):6:5: error: Dependency cycle: @Instantiated `child: Child` -> @Received `maybe: Greeter?` -> @Received `x: X` -> @Received `child: Child`. `child: Child` is received while it is still being instantiated. `maybe: Greeter?` renames `x: X` only if available, so a type that receives `maybe` without `onlyIfAvailable` must be built after `x: X`. Receive `maybe` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X` cannot be built first.
+				\(fixtures["Grand.swift"]):4:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `child: Child` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `maybe: Greeter?` renames `x: X` only if available, so a type that receives `maybe` without `onlyIfAvailable` must be built after `x: X`. Receive `maybe` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X` cannot be built first.
 				"""
 			},
 		) {
@@ -1642,117 +1642,315 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenReceiverRequiresOnlyIfAvailableAliasOfEnclosingTypesOnlyIfAvailableAliasInsideItsFulfillingProperty() async {
-		// D requires C's `z`, which C creates only from B's `y`, which B creates only once `x`, the X being built, exists.
-		// Parent is no root, so only its mock's validation sees the tree.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+	mutating func mock_passesNil_whenReceiverRequiresOnlyIfAvailableAliasOfEnclosingTypesOnlyIfAvailableAliasInsideItsFulfillingProperty() async throws {
+		// D requires C's `z`, bound from B's `y`, which B declares as `nil` since `x`, the X it renames, is still being
+		// built, so `z` is `nil` too. Parent is no root, so only its mock builds the tree.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["D.swift"]):4:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `z: X?` -> @Received `y: X?` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `z: X?` renames `y: X?` only if available, so a type that receives `z` without `onlyIfAvailable` must be built after `y: X?`. Receive `z` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `y: X?` cannot be built first. `y: X?` renames `x: X` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X` cannot be built first.
+				@Instantiable(generateMock: true)
+				public final class Parent: Instantiable {
+				    public init(x: X) { self.x = x }
+				    @Instantiated let x: X
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Parent: Instantiable {
-					    public init(x: X) { self.x = x }
-					    @Instantiated let x: X
-					}
-					""",
-					"""
-					@Instantiable
-					public final class X: Instantiable {
-					    public init(b: B) { self.b = b }
-					    @Instantiated let b: B
-					}
-					""",
-					"""
-					@Instantiable
-					public final class B: Instantiable {
-					    public init(y: X?, c: C) { self.y = y; self.c = c }
-					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
-					    @Instantiated let c: C
-					}
-					""",
-					"""
-					@Instantiable
-					public final class C: Instantiable {
-					    public init(z: X?, d: D) { self.z = z; self.d = d }
-					    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) let z: X?
-					    @Instantiated let d: D
-					}
-					""",
-					"""
-					@Instantiable
-					public final class D: Instantiable {
-					    public init(z: X?) { self.z = z }
-					    @Received let z: X?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				@Instantiable
+				public final class X: Instantiable {
+				    public init(b: B) { self.b = b }
+				    @Instantiated let b: B
+				}
+				""",
+				"""
+				@Instantiable
+				public final class B: Instantiable {
+				    public init(y: X?, c: C) { self.y = y; self.c = c }
+				    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
+				    @Instantiated let c: C
+				}
+				""",
+				"""
+				@Instantiable
+				public final class C: Instantiable {
+				    public init(z: X?, d: D) { self.z = z; self.d = d }
+				    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) let z: X?
+				    @Instantiated let d: D
+				}
+				""",
+				"""
+				@Instantiable
+				public final class D: Instantiable {
+				    public init(z: X?) { self.z = z }
+				    @Received let z: X?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Parent+SafeDIMock.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Parent {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            x: X.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.x = x
+			        }
+
+			        let x: X.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Parent {
+			        func __safeDI_x() -> X {
+			            func __safeDI_b() -> B {
+			                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 4)
+			                let y: X? = nil
+			                #sourceLocation()
+			                func __safeDI_c() -> C {
+			                    #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+			                    let z: X? = y
+			                    #sourceLocation()
+			                    let d = if let safeDIBuilder = safeDIOverrides.x.b.c.d { safeDIBuilder(z) } else { D(z: z) }
+			                    return if let safeDIBuilder = safeDIOverrides.x.b.c.safeDIBuilder { safeDIBuilder(z, d) } else { C(z: z, d: d) }
+			                }
+			                let c: C = __safeDI_c()
+			                return if let safeDIBuilder = safeDIOverrides.x.b.safeDIBuilder { safeDIBuilder(y, c) } else { B(y: y, c: c) }
+			            }
+			            let b: B = __safeDI_b()
+			            return if let safeDIBuilder = safeDIOverrides.x.safeDIBuilder { safeDIBuilder(b) } else { X(b: b) }
+			        }
+			        let x: X = __safeDI_x()
+			        return Parent(x: x)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension C {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            d: ((X?) -> D)? = nil,
+			            _ safeDIBuilder: ((X?, D) -> C)? = nil
+			        ) {
+			            self.d = d
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let d: ((X?) -> D)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((X?, D) -> C)?
+			    }
+			}
+
+			extension B {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            c: C.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((X?, C) -> B)? = nil
+			        ) {
+			            self.c = c
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let c: C.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((X?, C) -> B)?
+			    }
+			}
+
+			extension X {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            b: B.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((B) -> X)? = nil
+			        ) {
+			            self.b = b
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let b: B.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((B) -> X)?
+			    }
+			}
+			#endif
+
+			""",
+		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenReceiverRequiresOnlyIfAvailableAliasOfEnclosingTypesOnlyIfAvailableAliasOfOptionalFormInsideItsFulfillingProperty() async {
-		// As above, with B's alias renaming `x: X?`, which the X being built fulfills.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+	mutating func mock_passesNil_whenReceiverRequiresOnlyIfAvailableAliasOfEnclosingTypesOnlyIfAvailableAliasOfOptionalFormInsideItsFulfillingProperty() async throws {
+		// As above, with B's alias renaming `x: X?`, which the X being built would fulfill.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["D.swift"]):4:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `z: X?` -> @Received `y: X?` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `z: X?` renames `y: X?` only if available, so a type that receives `z` without `onlyIfAvailable` must be built after `y: X?`. Receive `z` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `y: X?` cannot be built first. `y: X?` renames `x: X?` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X?`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X?` cannot be built first.
+				@Instantiable(generateMock: true)
+				public final class Parent: Instantiable {
+				    public init(x: X) { self.x = x }
+				    @Instantiated let x: X
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Parent: Instantiable {
-					    public init(x: X) { self.x = x }
-					    @Instantiated let x: X
-					}
-					""",
-					"""
-					@Instantiable
-					public final class X: Instantiable {
-					    public init(b: B) { self.b = b }
-					    @Instantiated let b: B
-					}
-					""",
-					"""
-					@Instantiable
-					public final class B: Instantiable {
-					    public init(y: X?, c: C) { self.y = y; self.c = c }
-					    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self, onlyIfAvailable: true) let y: X?
-					    @Instantiated let c: C
-					}
-					""",
-					"""
-					@Instantiable
-					public final class C: Instantiable {
-					    public init(z: X?, d: D) { self.z = z; self.d = d }
-					    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) let z: X?
-					    @Instantiated let d: D
-					}
-					""",
-					"""
-					@Instantiable
-					public final class D: Instantiable {
-					    public init(z: X?) { self.z = z }
-					    @Received let z: X?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				@Instantiable
+				public final class X: Instantiable {
+				    public init(b: B) { self.b = b }
+				    @Instantiated let b: B
+				}
+				""",
+				"""
+				@Instantiable
+				public final class B: Instantiable {
+				    public init(y: X?, c: C) { self.y = y; self.c = c }
+				    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self, onlyIfAvailable: true) let y: X?
+				    @Instantiated let c: C
+				}
+				""",
+				"""
+				@Instantiable
+				public final class C: Instantiable {
+				    public init(z: X?, d: D) { self.z = z; self.d = d }
+				    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) let z: X?
+				    @Instantiated let d: D
+				}
+				""",
+				"""
+				@Instantiable
+				public final class D: Instantiable {
+				    public init(z: X?) { self.z = z }
+				    @Received let z: X?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Parent+SafeDIMock.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Parent {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            x: X.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.x = x
+			        }
+
+			        let x: X.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Parent {
+			        func __safeDI_x() -> X {
+			            func __safeDI_b() -> B {
+			                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 4)
+			                let y: X? = nil
+			                #sourceLocation()
+			                func __safeDI_c() -> C {
+			                    #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+			                    let z: X? = y
+			                    #sourceLocation()
+			                    let d = if let safeDIBuilder = safeDIOverrides.x.b.c.d { safeDIBuilder(z) } else { D(z: z) }
+			                    return if let safeDIBuilder = safeDIOverrides.x.b.c.safeDIBuilder { safeDIBuilder(z, d) } else { C(z: z, d: d) }
+			                }
+			                let c: C = __safeDI_c()
+			                return if let safeDIBuilder = safeDIOverrides.x.b.safeDIBuilder { safeDIBuilder(y, c) } else { B(y: y, c: c) }
+			            }
+			            let b: B = __safeDI_b()
+			            return if let safeDIBuilder = safeDIOverrides.x.safeDIBuilder { safeDIBuilder(b) } else { X(b: b) }
+			        }
+			        let x: X = __safeDI_x()
+			        return Parent(x: x)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension C {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            d: ((X?) -> D)? = nil,
+			            _ safeDIBuilder: ((X?, D) -> C)? = nil
+			        ) {
+			            self.d = d
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let d: ((X?) -> D)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((X?, D) -> C)?
+			    }
+			}
+
+			extension B {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            c: C.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((X?, C) -> B)? = nil
+			        ) {
+			            self.c = c
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let c: C.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((X?, C) -> B)?
+			    }
+			}
+
+			extension X {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            b: B.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((B) -> X)? = nil
+			        ) {
+			            self.b = b
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let b: B.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((B) -> X)?
+			    }
+			}
+			#endif
+
+			""",
+		])
 	}
 
 	@Test
@@ -3395,612 +3593,1301 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenTypeInTreeOfPromotedOptionalInstantiatorRequiresOnlyIfAvailableAliasOfIt() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
+	mutating func mock_passesNil_whenTypeInTreeOfPromotedOptionalInstantiatorRequiresOnlyIfAvailableAliasOfIt() async throws {
+		// As above, with the promoted `aBuilder` received as an optional `Instantiator`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["C.swift"]):7:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>?` -> @Received `aBuilderAlias: Instantiator<A>?` -> @Received `aBuilder: Instantiator<A>?`. `aBuilder: Instantiator<A>?` is received while it is still being instantiated. `aBuilderAlias: Instantiator<A>?` renames `aBuilder: Instantiator<A>` only if available, so a type that receives `aBuilderAlias` without `onlyIfAvailable` must be built after `aBuilder: Instantiator<A>`. Receive `aBuilderAlias` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `aBuilder: Instantiator<A>` cannot be built first.
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(aBuilder: Instantiator<A>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let aBuilder: Instantiator<A>?
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(aBuilder: Instantiator<A>?) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				@Instantiable
+				public final class A: Instantiable {
+				    public init(b: B) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received let aBuilder: Instantiator<A>?
-					}
-					""",
-					"""
-					@Instantiable
-					public final class A: Instantiable {
-					    public init(b: B) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Instantiated let b: B
+				}
+				""",
+				"""
+				@Instantiable
+				public final class B: Instantiable {
+				    public init(aBuilderAlias: Instantiator<A>?, c: C) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let b: B
-					}
-					""",
-					"""
-					@Instantiable
-					public final class B: Instantiable {
-					    public init(aBuilderAlias: Instantiator<A>?, c: C) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self, onlyIfAvailable: true) let aBuilderAlias: Instantiator<A>?
+				    @Instantiated let c: C
+				}
+				""",
+				"""
+				@Instantiable
+				public final class C: Instantiable {
+				    public init(aBuilderAlias: Instantiator<A>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self, onlyIfAvailable: true) let aBuilderAlias: Instantiator<A>?
-					    @Instantiated let c: C
-					}
-					""",
-					"""
-					@Instantiable
-					public final class C: Instantiable {
-					    public init(aBuilderAlias: Instantiator<A>?) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received let aBuilderAlias: Instantiator<A>?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
 
-					    @Received let aBuilderAlias: Instantiator<A>?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension B {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            c: ((Instantiator<A>?) -> C)? = nil,
+			            _ safeDIBuilder: ((Instantiator<A>?, C) -> B)? = nil
+			        ) {
+			            self.c = c
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let c: ((Instantiator<A>?) -> C)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Instantiator<A>?, C) -> B)?
+			    }
+			}
+
+			extension A {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            b: B.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((B) -> A)? = nil
+			        ) {
+			            self.b = b
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let b: B.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((B) -> A)?
+			    }
+			}
+			#endif
+
+			""",
+			"Screen+SafeDIMock.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            aBuilder: A.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.aBuilder = aBuilder
+			        }
+
+			        let aBuilder: A.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_aBuilder() -> A {
+			            func __safeDI_b() -> B {
+			                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
+			                let aBuilderAlias: Instantiator<A>? = nil
+			                #sourceLocation()
+			                let c = if let safeDIBuilder = safeDIOverrides.aBuilder.b.c { safeDIBuilder(aBuilderAlias) } else { C(aBuilderAlias: aBuilderAlias) }
+			                return if let safeDIBuilder = safeDIOverrides.aBuilder.b.safeDIBuilder { safeDIBuilder(aBuilderAlias, c) } else { B(aBuilderAlias: aBuilderAlias, c: c) }
+			            }
+			            let b: B = __safeDI_b()
+			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        return Screen(aBuilder: aBuilder)
+			    }
+			}
+			#endif
+			""",
+		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenTypeInTreeOfPromotedInstantiatorRequiresOnlyIfAvailableAliasOfIt() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
+	mutating func mock_passesNil_whenTypeInTreeOfPromotedInstantiatorRequiresOnlyIfAvailableAliasOfIt() async throws {
+		// B renames the promoted `aBuilder` only if available inside the tree `aBuilder` builds, so the alias is `nil`,
+		// which C's required receive is passed.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["C.swift"]):7:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `aBuilderAlias: Instantiator<A>?` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. `aBuilderAlias: Instantiator<A>?` renames `aBuilder: Instantiator<A>` only if available, so a type that receives `aBuilderAlias` without `onlyIfAvailable` must be built after `aBuilder: Instantiator<A>`. Receive `aBuilderAlias` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `aBuilder: Instantiator<A>` cannot be built first.
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(aBuilder: Instantiator<A>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let aBuilder: Instantiator<A>
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(aBuilder: Instantiator<A>) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				@Instantiable
+				public final class A: Instantiable {
+				    public init(b: B) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received let aBuilder: Instantiator<A>
-					}
-					""",
-					"""
-					@Instantiable
-					public final class A: Instantiable {
-					    public init(b: B) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Instantiated let b: B
+				}
+				""",
+				"""
+				@Instantiable
+				public final class B: Instantiable {
+				    public init(aBuilderAlias: Instantiator<A>?, c: C) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let b: B
-					}
-					""",
-					"""
-					@Instantiable
-					public final class B: Instantiable {
-					    public init(aBuilderAlias: Instantiator<A>?, c: C) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self, onlyIfAvailable: true) let aBuilderAlias: Instantiator<A>?
+				    @Instantiated let c: C
+				}
+				""",
+				"""
+				@Instantiable
+				public final class C: Instantiable {
+				    public init(aBuilderAlias: Instantiator<A>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self, onlyIfAvailable: true) let aBuilderAlias: Instantiator<A>?
-					    @Instantiated let c: C
-					}
-					""",
-					"""
-					@Instantiable
-					public final class C: Instantiable {
-					    public init(aBuilderAlias: Instantiator<A>?) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received let aBuilderAlias: Instantiator<A>?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
 
-					    @Received let aBuilderAlias: Instantiator<A>?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension B {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            c: ((Instantiator<A>?) -> C)? = nil,
+			            _ safeDIBuilder: ((Instantiator<A>?, C) -> B)? = nil
+			        ) {
+			            self.c = c
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let c: ((Instantiator<A>?) -> C)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Instantiator<A>?, C) -> B)?
+			    }
+			}
+
+			extension A {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            b: B.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((B) -> A)? = nil
+			        ) {
+			            self.b = b
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let b: B.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((B) -> A)?
+			    }
+			}
+			#endif
+
+			""",
+			"Screen+SafeDIMock.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            aBuilder: A.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.aBuilder = aBuilder
+			        }
+
+			        let aBuilder: A.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_aBuilder() -> A {
+			            func __safeDI_b() -> B {
+			                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
+			                let aBuilderAlias: Instantiator<A>? = nil
+			                #sourceLocation()
+			                let c = if let safeDIBuilder = safeDIOverrides.aBuilder.b.c { safeDIBuilder(aBuilderAlias) } else { C(aBuilderAlias: aBuilderAlias) }
+			                return if let safeDIBuilder = safeDIOverrides.aBuilder.b.safeDIBuilder { safeDIBuilder(aBuilderAlias, c) } else { B(aBuilderAlias: aBuilderAlias, c: c) }
+			            }
+			            let b: B = __safeDI_b()
+			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(b) } else { A(b: b) }
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        return Screen(aBuilder: aBuilder)
+			    }
+			}
+			#endif
+			""",
+		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenTypeInTreeOfLazilyInstantiatedPropertyPromotedForRequiredOptionalInstanceRequiresOnlyIfAvailableAliasOfOptionalInstance() async {
+	mutating func mock_passesNil_whenTypeInTreeOfLazilyInstantiatedPropertyPromotedForRequiredOptionalInstanceRequiresOnlyIfAvailableAliasOfOptionalInstance() async throws {
 		// Settings requires `tracker: Tracker?`, so the mock promotes `tracker: LazilyInstantiated<Tracker>`, whose tree
-		// declares an `onlyIfAvailable` alias of `tracker: Tracker?`. The alias is not created while `tracker` is being
-		// built, so Leaf's required receive of it is a cycle, as it is in production.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+		// declares an `onlyIfAvailable` alias of `tracker: Tracker?`. The alias is `nil` while `tracker` is being built, so
+		// Leaf's required receive of it is passed `nil`, as it is in production.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["Leaf.swift"]):7:5: error: Dependency cycle: @Instantiated `tracker: Tracker` -> @Received `myTracker: Tracker?` -> @Received `tracker: Tracker`. `tracker: Tracker` is received while it is still being instantiated. `myTracker: Tracker?` renames `tracker: Tracker?` only if available, so a type that receives `myTracker` without `onlyIfAvailable` must be built after `tracker: Tracker?`. Receive `myTracker` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tracker: Tracker?` cannot be built first. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `tracker: LazilyInstantiated<Tracker>` is validated as `tracker: Tracker`.
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(home: Home, settings: Settings) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let home: Home
+				    @Instantiated let settings: Settings
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(home: Home, settings: Settings) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(tracker: LazilyInstantiated<Tracker>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let home: Home
-					    @Instantiated let settings: Settings
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Home: Instantiable {
-					    public init(tracker: LazilyInstantiated<Tracker>?) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received(onlyIfAvailable: true) let tracker: LazilyInstantiated<Tracker>?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Settings: Instantiable {
+				    public init(tracker: Tracker?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received(onlyIfAvailable: true) let tracker: LazilyInstantiated<Tracker>?
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Settings: Instantiable {
-					    public init(tracker: Tracker?) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received let tracker: Tracker?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Tracker: Instantiable {
+				    public init(inner: Inner) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received let tracker: Tracker?
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Tracker: Instantiable {
-					    public init(inner: Inner) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Instantiated let inner: Inner
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Inner: Instantiable {
+				    public init(myTracker: Tracker?, leaf: Leaf) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let inner: Inner
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Inner: Instantiable {
-					    public init(myTracker: Tracker?, leaf: Leaf) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init(myTracker: Tracker?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
-					    @Instantiated let leaf: Leaf
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Leaf: Instantiable {
-					    public init(myTracker: Tracker?) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received let myTracker: Tracker?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
 
-					    @Received let myTracker: Tracker?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Inner {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            leaf: ((Tracker?) -> Leaf)? = nil,
+			            _ safeDIBuilder: ((Tracker?, Leaf) -> Inner)? = nil
+			        ) {
+			            self.leaf = leaf
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let leaf: ((Tracker?) -> Leaf)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			    }
+			}
+
+			extension Tracker {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            inner: Inner.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((Inner) -> Tracker)? = nil
+			        ) {
+			            self.inner = inner
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let inner: Inner.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Inner) -> Tracker)?
+			    }
+			}
+			#endif
+
+			""",
+			"Screen+SafeDIMock.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            tracker: Tracker.SafeDIMockConfiguration = .init(),
+			            home: ((LazilyInstantiated<Tracker>?) -> Home)? = nil,
+			            settings: ((Tracker?) -> Settings)? = nil
+			        ) {
+			            self.tracker = tracker
+			            self.home = home
+			            self.settings = settings
+			        }
+
+			        let tracker: Tracker.SafeDIMockConfiguration
+			        let home: ((LazilyInstantiated<Tracker>?) -> Home)?
+			        let settings: ((Tracker?) -> Settings)?
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_tracker() -> Tracker {
+			            func __safeDI_inner() -> Inner {
+			                #sourceLocation(file: "\(output.fixtures["Inner.swift"])", line: 7)
+			                let myTracker: Tracker? = nil
+			                #sourceLocation()
+			                let leaf = if let safeDIBuilder = safeDIOverrides.tracker.inner.leaf { safeDIBuilder(myTracker) } else { Leaf(myTracker: myTracker) }
+			                return if let safeDIBuilder = safeDIOverrides.tracker.inner.safeDIBuilder { safeDIBuilder(myTracker, leaf) } else { Inner(myTracker: myTracker, leaf: leaf) }
+			            }
+			            let inner: Inner = __safeDI_inner()
+			            return if let safeDIBuilder = safeDIOverrides.tracker.safeDIBuilder { safeDIBuilder(inner) } else { Tracker(inner: inner) }
+			        }
+			        let tracker = LazilyInstantiated<Tracker>(__safeDI_tracker)
+			        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(tracker) } else { Home(tracker: tracker) }
+			        let settings = if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder(tracker.instance) } else { Settings(tracker: tracker.instance) }
+			        return Screen(home: home, settings: settings)
+			    }
+			}
+			#endif
+			""",
+		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenTypeInTreeOfLazilyInstantiatedPropertyPromotedForRequiredInstanceRequiresOnlyIfAvailableAliasOfOptionalInstance() async {
+	mutating func mock_passesNil_whenTypeInTreeOfLazilyInstantiatedPropertyPromotedForRequiredInstanceRequiresOnlyIfAvailableAliasOfOptionalInstance() async throws {
 		// Settings requires `tracker: Tracker`, so the mock promotes `tracker: LazilyInstantiated<Tracker>`, whose tree
-		// declares an `onlyIfAvailable` alias of `tracker: Tracker?`. The alias is not created while `tracker` is being
-		// built, so Leaf's required receive of it is a cycle, as it is in production.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+		// declares an `onlyIfAvailable` alias of `tracker: Tracker?`. The alias is `nil` while `tracker` is being built, so
+		// Leaf's required receive of it is passed `nil`, as it is in production.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["Leaf.swift"]):7:5: error: Dependency cycle: @Instantiated `tracker: Tracker` -> @Received `myTracker: Tracker?` -> @Received `tracker: Tracker`. `tracker: Tracker` is received while it is still being instantiated. `myTracker: Tracker?` renames `tracker: Tracker?` only if available, so a type that receives `myTracker` without `onlyIfAvailable` must be built after `tracker: Tracker?`. Receive `myTracker` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tracker: Tracker?` cannot be built first. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `tracker: LazilyInstantiated<Tracker>` is validated as `tracker: Tracker`.
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(home: Home, settings: Settings) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let home: Home
+				    @Instantiated let settings: Settings
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(home: Home, settings: Settings) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(tracker: LazilyInstantiated<Tracker>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let home: Home
-					    @Instantiated let settings: Settings
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Home: Instantiable {
-					    public init(tracker: LazilyInstantiated<Tracker>?) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received(onlyIfAvailable: true) let tracker: LazilyInstantiated<Tracker>?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Settings: Instantiable {
+				    public init(tracker: Tracker) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received(onlyIfAvailable: true) let tracker: LazilyInstantiated<Tracker>?
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Settings: Instantiable {
-					    public init(tracker: Tracker) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received let tracker: Tracker
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Tracker: Instantiable {
+				    public init(inner: Inner) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received let tracker: Tracker
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Tracker: Instantiable {
-					    public init(inner: Inner) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Instantiated let inner: Inner
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Inner: Instantiable {
+				    public init(myTracker: Tracker?, leaf: Leaf) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let inner: Inner
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Inner: Instantiable {
-					    public init(myTracker: Tracker?, leaf: Leaf) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init(myTracker: Tracker?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
-					    @Instantiated let leaf: Leaf
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Leaf: Instantiable {
-					    public init(myTracker: Tracker?) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received let myTracker: Tracker?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
 
-					    @Received let myTracker: Tracker?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Inner {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            leaf: ((Tracker?) -> Leaf)? = nil,
+			            _ safeDIBuilder: ((Tracker?, Leaf) -> Inner)? = nil
+			        ) {
+			            self.leaf = leaf
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let leaf: ((Tracker?) -> Leaf)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			    }
+			}
+
+			extension Tracker {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            inner: Inner.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((Inner) -> Tracker)? = nil
+			        ) {
+			            self.inner = inner
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let inner: Inner.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Inner) -> Tracker)?
+			    }
+			}
+			#endif
+
+			""",
+			"Screen+SafeDIMock.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            tracker: Tracker.SafeDIMockConfiguration = .init(),
+			            home: ((LazilyInstantiated<Tracker>?) -> Home)? = nil,
+			            settings: ((Tracker) -> Settings)? = nil
+			        ) {
+			            self.tracker = tracker
+			            self.home = home
+			            self.settings = settings
+			        }
+
+			        let tracker: Tracker.SafeDIMockConfiguration
+			        let home: ((LazilyInstantiated<Tracker>?) -> Home)?
+			        let settings: ((Tracker) -> Settings)?
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_tracker() -> Tracker {
+			            func __safeDI_inner() -> Inner {
+			                #sourceLocation(file: "\(output.fixtures["Inner.swift"])", line: 7)
+			                let myTracker: Tracker? = nil
+			                #sourceLocation()
+			                let leaf = if let safeDIBuilder = safeDIOverrides.tracker.inner.leaf { safeDIBuilder(myTracker) } else { Leaf(myTracker: myTracker) }
+			                return if let safeDIBuilder = safeDIOverrides.tracker.inner.safeDIBuilder { safeDIBuilder(myTracker, leaf) } else { Inner(myTracker: myTracker, leaf: leaf) }
+			            }
+			            let inner: Inner = __safeDI_inner()
+			            return if let safeDIBuilder = safeDIOverrides.tracker.safeDIBuilder { safeDIBuilder(inner) } else { Tracker(inner: inner) }
+			        }
+			        let tracker = LazilyInstantiated<Tracker>(__safeDI_tracker)
+			        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(tracker) } else { Home(tracker: tracker) }
+			        let settings = if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder(tracker.instance) } else { Settings(tracker: tracker.instance) }
+			        return Screen(home: home, settings: settings)
+			    }
+			}
+			#endif
+			""",
+		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenTypeInTreeOfPromotedLazilyInstantiatedPropertyRequiresOnlyIfAvailableAliasOfOptionalInstance() async {
+	mutating func mock_passesNil_whenTypeInTreeOfPromotedLazilyInstantiatedPropertyRequiresOnlyIfAvailableAliasOfOptionalInstance() async throws {
 		// Home requires `tracker: LazilyInstantiated<Tracker>`, which the mock promotes, and nothing receives the instance.
-		// The wrapper's tree declares an `onlyIfAvailable` alias of `tracker: Tracker?`, which is not created while
-		// `tracker` is being built, so Leaf's required receive of it is a cycle, as it is in production.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+		// The wrapper's tree declares an `onlyIfAvailable` alias of `tracker: Tracker?`, which is `nil` while `tracker` is
+		// being built, so Leaf's required receive of it is passed `nil`, as it is in production.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["Leaf.swift"]):7:5: error: Dependency cycle: @Instantiated `tracker: Tracker` -> @Received `myTracker: Tracker?` -> @Received `tracker: Tracker`. `tracker: Tracker` is received while it is still being instantiated. `myTracker: Tracker?` renames `tracker: Tracker?` only if available, so a type that receives `myTracker` without `onlyIfAvailable` must be built after `tracker: Tracker?`. Receive `myTracker` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tracker: Tracker?` cannot be built first. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `tracker: LazilyInstantiated<Tracker>` is validated as `tracker: Tracker`.
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(home: Home) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let home: Home
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(home: Home) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(tracker: LazilyInstantiated<Tracker>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let home: Home
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Home: Instantiable {
-					    public init(tracker: LazilyInstantiated<Tracker>) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received let tracker: LazilyInstantiated<Tracker>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Tracker: Instantiable {
+				    public init(inner: Inner) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received let tracker: LazilyInstantiated<Tracker>
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Tracker: Instantiable {
-					    public init(inner: Inner) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Instantiated let inner: Inner
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Inner: Instantiable {
+				    public init(myTracker: Tracker?, leaf: Leaf) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let inner: Inner
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Inner: Instantiable {
-					    public init(myTracker: Tracker?, leaf: Leaf) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init(myTracker: Tracker?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
-					    @Instantiated let leaf: Leaf
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Leaf: Instantiable {
-					    public init(myTracker: Tracker?) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received let myTracker: Tracker?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
 
-					    @Received let myTracker: Tracker?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Inner {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            leaf: ((Tracker?) -> Leaf)? = nil,
+			            _ safeDIBuilder: ((Tracker?, Leaf) -> Inner)? = nil
+			        ) {
+			            self.leaf = leaf
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let leaf: ((Tracker?) -> Leaf)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			    }
+			}
+
+			extension Tracker {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            inner: Inner.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((Inner) -> Tracker)? = nil
+			        ) {
+			            self.inner = inner
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let inner: Inner.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Inner) -> Tracker)?
+			    }
+			}
+			#endif
+
+			""",
+			"Screen+SafeDIMock.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            tracker: Tracker.SafeDIMockConfiguration = .init(),
+			            home: ((LazilyInstantiated<Tracker>) -> Home)? = nil
+			        ) {
+			            self.tracker = tracker
+			            self.home = home
+			        }
+
+			        let tracker: Tracker.SafeDIMockConfiguration
+			        let home: ((LazilyInstantiated<Tracker>) -> Home)?
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_tracker() -> Tracker {
+			            func __safeDI_inner() -> Inner {
+			                #sourceLocation(file: "\(output.fixtures["Inner.swift"])", line: 7)
+			                let myTracker: Tracker? = nil
+			                #sourceLocation()
+			                let leaf = if let safeDIBuilder = safeDIOverrides.tracker.inner.leaf { safeDIBuilder(myTracker) } else { Leaf(myTracker: myTracker) }
+			                return if let safeDIBuilder = safeDIOverrides.tracker.inner.safeDIBuilder { safeDIBuilder(myTracker, leaf) } else { Inner(myTracker: myTracker, leaf: leaf) }
+			            }
+			            let inner: Inner = __safeDI_inner()
+			            return if let safeDIBuilder = safeDIOverrides.tracker.safeDIBuilder { safeDIBuilder(inner) } else { Tracker(inner: inner) }
+			        }
+			        let tracker = LazilyInstantiated<Tracker>(__safeDI_tracker)
+			        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(tracker) } else { Home(tracker: tracker) }
+			        return Screen(home: home)
+			    }
+			}
+			#endif
+			""",
+		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenTypeInTreeOfMockedTypesLazilyInstantiatedPropertyRequiresOnlyIfAvailableAliasOfOptionalInstance() async {
-		// The mocked type declares `tracker: LazilyInstantiated<Tracker>` itself, so production's walk over its own tree
-		// reports the cycle that the tests above expect of a promoted `LazilyInstantiated`, with the same diagnostic.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+	mutating func mock_passesNil_whenTypeInTreeOfMockedTypesLazilyInstantiatedPropertyRequiresOnlyIfAvailableAliasOfOptionalInstance() async throws {
+		// The mocked type declares `tracker: LazilyInstantiated<Tracker>` itself; its tree's alias of `tracker: Tracker?` is
+		// `nil` while `tracker` is being built, as in the tests above.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["Leaf.swift"]):7:5: error: Dependency cycle: @Instantiated `tracker: Tracker` -> @Received `myTracker: Tracker?` -> @Received `tracker: Tracker`. `tracker: Tracker` is received while it is still being instantiated. `myTracker: Tracker?` renames `tracker: Tracker?` only if available, so a type that receives `myTracker` without `onlyIfAvailable` must be built after `tracker: Tracker?`. Receive `myTracker` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tracker: Tracker?` cannot be built first. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `tracker: LazilyInstantiated<Tracker>` is validated as `tracker: Tracker`.
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(tracker: LazilyInstantiated<Tracker>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let tracker: LazilyInstantiated<Tracker>
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(tracker: LazilyInstantiated<Tracker>) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				@Instantiable
+				public final class Tracker: Instantiable {
+				    public init(inner: Inner) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let tracker: LazilyInstantiated<Tracker>
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Tracker: Instantiable {
-					    public init(inner: Inner) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Instantiated let inner: Inner
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Inner: Instantiable {
+				    public init(myTracker: Tracker?, leaf: Leaf) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let inner: Inner
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Inner: Instantiable {
-					    public init(myTracker: Tracker?, leaf: Leaf) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init(myTracker: Tracker?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
-					    @Instantiated let leaf: Leaf
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Leaf: Instantiable {
-					    public init(myTracker: Tracker?) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received let myTracker: Tracker?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
 
-					    @Received let myTracker: Tracker?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Inner {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            leaf: ((Tracker?) -> Leaf)? = nil,
+			            _ safeDIBuilder: ((Tracker?, Leaf) -> Inner)? = nil
+			        ) {
+			            self.leaf = leaf
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let leaf: ((Tracker?) -> Leaf)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			    }
+			}
+
+			extension Tracker {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            inner: Inner.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((Inner) -> Tracker)? = nil
+			        ) {
+			            self.inner = inner
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let inner: Inner.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Inner) -> Tracker)?
+			    }
+			}
+			#endif
+
+			""",
+			"Screen+SafeDIMock.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            tracker: Tracker.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.tracker = tracker
+			        }
+
+			        let tracker: Tracker.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_tracker() -> Tracker {
+			            func __safeDI_inner() -> Inner {
+			                #sourceLocation(file: "\(output.fixtures["Inner.swift"])", line: 7)
+			                let myTracker: Tracker? = nil
+			                #sourceLocation()
+			                let leaf = if let safeDIBuilder = safeDIOverrides.tracker.inner.leaf { safeDIBuilder(myTracker) } else { Leaf(myTracker: myTracker) }
+			                return if let safeDIBuilder = safeDIOverrides.tracker.inner.safeDIBuilder { safeDIBuilder(myTracker, leaf) } else { Inner(myTracker: myTracker, leaf: leaf) }
+			            }
+			            let inner: Inner = __safeDI_inner()
+			            return if let safeDIBuilder = safeDIOverrides.tracker.safeDIBuilder { safeDIBuilder(inner) } else { Tracker(inner: inner) }
+			        }
+			        let tracker = LazilyInstantiated<Tracker>(__safeDI_tracker)
+			        return Screen(tracker: tracker)
+			    }
+			}
+			#endif
+			""",
+		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenTypeInTreeOfPromotedTypesLazilyInstantiatedPropertyRequiresOnlyIfAvailableAliasOfOptionalInstanceThatMockIsAlsoPassed() async {
+	mutating func mock_passesNil_whenTypeInTreeOfPromotedTypesLazilyInstantiatedPropertyRequiresOnlyIfAvailableAliasOfOptionalInstanceThatMockIsAlsoPassed() async throws {
 		// The mock promotes A, whose own `tracker: LazilyInstantiated<Tracker>` has a tree that declares an `onlyIfAvailable`
 		// alias of `tracker: Tracker?`. The mock is also passed a `tracker: Tracker?` for Other, but inside A the label names
-		// A's dependency, still being built, so the alias is not created and Leaf's required receive of it is a cycle.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+		// A's dependency, still being built, so the alias is `nil` and Leaf's required receive of it is passed `nil`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["Leaf.swift"]):7:5: error: Dependency cycle: @Instantiated `tracker: Tracker` -> @Received `myTracker: Tracker?` -> @Received `tracker: Tracker`. `tracker: Tracker` is received while it is still being instantiated. `myTracker: Tracker?` renames `tracker: Tracker?` only if available, so a type that receives `myTracker` without `onlyIfAvailable` must be built after `tracker: Tracker?`. Receive `myTracker` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tracker: Tracker?` cannot be built first. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `tracker: LazilyInstantiated<Tracker>` is validated as `tracker: Tracker`.
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(home: Home, other: Other) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let home: Home
+				    @Instantiated let other: Other
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(home: Home, other: Other) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(a: A) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let home: Home
-					    @Instantiated let other: Other
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Home: Instantiable {
-					    public init(a: A) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received let a: A
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Other: Instantiable {
+				    public init(tracker: Tracker?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received let a: A
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Other: Instantiable {
-					    public init(tracker: Tracker?) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received(onlyIfAvailable: true) let tracker: Tracker?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class A: Instantiable {
+				    public init(tracker: LazilyInstantiated<Tracker>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received(onlyIfAvailable: true) let tracker: Tracker?
-					}
-					""",
-					"""
-					@Instantiable
-					public final class A: Instantiable {
-					    public init(tracker: LazilyInstantiated<Tracker>) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Instantiated let tracker: LazilyInstantiated<Tracker>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Tracker: Instantiable {
+				    public init(inner: Inner) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let tracker: LazilyInstantiated<Tracker>
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Tracker: Instantiable {
-					    public init(inner: Inner) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Instantiated let inner: Inner
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Inner: Instantiable {
+				    public init(myTracker: Tracker?, leaf: Leaf) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let inner: Inner
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Inner: Instantiable {
-					    public init(myTracker: Tracker?, leaf: Leaf) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init(myTracker: Tracker?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
-					    @Instantiated let leaf: Leaf
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Leaf: Instantiable {
-					    public init(myTracker: Tracker?) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received let myTracker: Tracker?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
 
-					    @Received let myTracker: Tracker?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Inner {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            leaf: ((Tracker?) -> Leaf)? = nil,
+			            _ safeDIBuilder: ((Tracker?, Leaf) -> Inner)? = nil
+			        ) {
+			            self.leaf = leaf
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let leaf: ((Tracker?) -> Leaf)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			    }
+			}
+
+			extension Tracker {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            inner: Inner.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((Inner) -> Tracker)? = nil
+			        ) {
+			            self.inner = inner
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let inner: Inner.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Inner) -> Tracker)?
+			    }
+			}
+
+			extension A {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            tracker: Tracker.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((LazilyInstantiated<Tracker>) -> A)? = nil
+			        ) {
+			            self.tracker = tracker
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let tracker: Tracker.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((LazilyInstantiated<Tracker>) -> A)?
+			    }
+			}
+			#endif
+
+			""",
+			"Screen+SafeDIMock.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            a: A.SafeDIMockConfiguration = .init(),
+			            home: ((A) -> Home)? = nil,
+			            other: ((Tracker?) -> Other)? = nil,
+			            tracker: Tracker? = nil
+			        ) {
+			            self.a = a
+			            self.home = home
+			            self.other = other
+			            self.tracker = tracker
+			        }
+
+			        let a: A.SafeDIMockConfiguration
+			        let home: ((A) -> Home)?
+			        let other: ((Tracker?) -> Other)?
+			        let tracker: Tracker?
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        let tracker: Tracker? = safeDIOverrides.tracker
+			        func __safeDI_a() -> A {
+			            func __safeDI_tracker() -> Tracker {
+			                func __safeDI_inner() -> Inner {
+			                    #sourceLocation(file: "\(output.fixtures["Inner.swift"])", line: 7)
+			                    let myTracker: Tracker? = nil
+			                    #sourceLocation()
+			                    let leaf = if let safeDIBuilder = safeDIOverrides.a.tracker.inner.leaf { safeDIBuilder(myTracker) } else { Leaf(myTracker: myTracker) }
+			                    return if let safeDIBuilder = safeDIOverrides.a.tracker.inner.safeDIBuilder { safeDIBuilder(myTracker, leaf) } else { Inner(myTracker: myTracker, leaf: leaf) }
+			                }
+			                let inner: Inner = __safeDI_inner()
+			                return if let safeDIBuilder = safeDIOverrides.a.tracker.safeDIBuilder { safeDIBuilder(inner) } else { Tracker(inner: inner) }
+			            }
+			            let tracker = LazilyInstantiated<Tracker>(__safeDI_tracker)
+			            return if let safeDIBuilder = safeDIOverrides.a.safeDIBuilder { safeDIBuilder(tracker) } else { A(tracker: tracker) }
+			        }
+			        let a: A = __safeDI_a()
+			        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(a) } else { Home(a: a) }
+			        let other = if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder(tracker) } else { Other(tracker: tracker) }
+			        return Screen(home: home, other: other)
+			    }
+			}
+			#endif
+			""",
+		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenTypeInTreeOfPromotedTypesPropertyRequiresOnlyIfAvailableAliasOfItsOptionalFormThatMockIsAlsoPassed() async {
-		// The constant twin of the test above: the alias of `tracker: Tracker?` is not created inside the tree that builds
+	mutating func mock_passesNil_whenTypeInTreeOfPromotedTypesPropertyRequiresOnlyIfAvailableAliasOfItsOptionalFormThatMockIsAlsoPassed() async throws {
+		// The constant twin of the test above: the alias of `tracker: Tracker?` is `nil` inside the tree that builds
 		// `tracker: Tracker`, whatever the mock is passed for Other.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["Leaf.swift"]):7:5: error: Dependency cycle: @Instantiated `tracker: Tracker` -> @Received `myTracker: Tracker?` -> @Received `tracker: Tracker`. `tracker: Tracker` is received while it is still being instantiated. `myTracker: Tracker?` renames `tracker: Tracker?` only if available, so a type that receives `myTracker` without `onlyIfAvailable` must be built after `tracker: Tracker?`. Receive `myTracker` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tracker: Tracker?` cannot be built first.
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(home: Home, other: Other) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let home: Home
+				    @Instantiated let other: Other
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(home: Home, other: Other) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(a: A) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let home: Home
-					    @Instantiated let other: Other
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Home: Instantiable {
-					    public init(a: A) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received let a: A
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Other: Instantiable {
+				    public init(tracker: Tracker?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received let a: A
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Other: Instantiable {
-					    public init(tracker: Tracker?) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received(onlyIfAvailable: true) let tracker: Tracker?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class A: Instantiable {
+				    public init(tracker: Tracker) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received(onlyIfAvailable: true) let tracker: Tracker?
-					}
-					""",
-					"""
-					@Instantiable
-					public final class A: Instantiable {
-					    public init(tracker: Tracker) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Instantiated let tracker: Tracker
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Tracker: Instantiable {
+				    public init(inner: Inner) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let tracker: Tracker
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Tracker: Instantiable {
-					    public init(inner: Inner) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Instantiated let inner: Inner
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Inner: Instantiable {
+				    public init(myTracker: Tracker?, leaf: Leaf) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let inner: Inner
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Inner: Instantiable {
-					    public init(myTracker: Tracker?, leaf: Leaf) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init(myTracker: Tracker?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
-					    @Instantiated let leaf: Leaf
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Leaf: Instantiable {
-					    public init(myTracker: Tracker?) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received let myTracker: Tracker?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
 
-					    @Received let myTracker: Tracker?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Inner {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            leaf: ((Tracker?) -> Leaf)? = nil,
+			            _ safeDIBuilder: ((Tracker?, Leaf) -> Inner)? = nil
+			        ) {
+			            self.leaf = leaf
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let leaf: ((Tracker?) -> Leaf)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Tracker?, Leaf) -> Inner)?
+			    }
+			}
+
+			extension Tracker {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            inner: Inner.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((Inner) -> Tracker)? = nil
+			        ) {
+			            self.inner = inner
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let inner: Inner.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Inner) -> Tracker)?
+			    }
+			}
+
+			extension A {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            tracker: Tracker.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((Tracker) -> A)? = nil
+			        ) {
+			            self.tracker = tracker
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let tracker: Tracker.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Tracker) -> A)?
+			    }
+			}
+			#endif
+
+			""",
+			"Screen+SafeDIMock.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            a: A.SafeDIMockConfiguration = .init(),
+			            home: ((A) -> Home)? = nil,
+			            other: ((Tracker?) -> Other)? = nil,
+			            tracker: Tracker? = nil
+			        ) {
+			            self.a = a
+			            self.home = home
+			            self.other = other
+			            self.tracker = tracker
+			        }
+
+			        let a: A.SafeDIMockConfiguration
+			        let home: ((A) -> Home)?
+			        let other: ((Tracker?) -> Other)?
+			        let tracker: Tracker?
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        let tracker: Tracker? = safeDIOverrides.tracker
+			        func __safeDI_a() -> A {
+			            func __safeDI_tracker() -> Tracker {
+			                func __safeDI_inner() -> Inner {
+			                    #sourceLocation(file: "\(output.fixtures["Inner.swift"])", line: 7)
+			                    let myTracker: Tracker? = nil
+			                    #sourceLocation()
+			                    let leaf = if let safeDIBuilder = safeDIOverrides.a.tracker.inner.leaf { safeDIBuilder(myTracker) } else { Leaf(myTracker: myTracker) }
+			                    return if let safeDIBuilder = safeDIOverrides.a.tracker.inner.safeDIBuilder { safeDIBuilder(myTracker, leaf) } else { Inner(myTracker: myTracker, leaf: leaf) }
+			                }
+			                let inner: Inner = __safeDI_inner()
+			                return if let safeDIBuilder = safeDIOverrides.a.tracker.safeDIBuilder { safeDIBuilder(inner) } else { Tracker(inner: inner) }
+			            }
+			            let tracker: Tracker = __safeDI_tracker()
+			            return if let safeDIBuilder = safeDIOverrides.a.safeDIBuilder { safeDIBuilder(tracker) } else { A(tracker: tracker) }
+			        }
+			        let a: A = __safeDI_a()
+			        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(a) } else { Home(a: a) }
+			        let other = if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder(tracker) } else { Other(tracker: tracker) }
+			        return Screen(home: home, other: other)
+			    }
+			}
+			#endif
+			""",
+		])
 	}
 
 	@Test
@@ -4216,7 +5103,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["D.swift"]):4:5: error: Dependency cycle: @Instantiated `y: X` -> @Received `b: B` -> @Received `y: X?` -> @Received `y: X`. `y: X` is received while it is still being instantiated. `y: X?` renames `x: X?` only if available, and an enclosing type declares `y: X`, so a type that receives `y` without `onlyIfAvailable` is handed `y: X` where `x: X?` cannot be built first and must be built after it. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where neither can be built first.
+				\(fixtures["D.swift"]):4:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `b: B` -> @Received `x: X?` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `y: X?` renames `x: X?` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X?`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X?` cannot be built first.
 				"""
 			},
 		) {
@@ -4271,12 +5158,11 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenReceiverRequiresOnlyIfAvailableAliasOfOnlyIfAvailableAliasOfOptionalFormOfSiblingThatReceivesTheReceiversAncestorAndMockRootPromotesTheSecondAliasProperty() async {
 		// Parent.mock() builds `b`, `x`, and the promoted `z: X`. D requires E's `onlyIfAvailable` alias `z` of C's
-		// `onlyIfAvailable` alias `y` of `x: X?`, so where `y` is not created, D is handed the promoted `z`, which must
-		// then be built before `b`; but it requires `b`.
+		// `onlyIfAvailable` alias `y` of `x: X?`, so `x` must be built before `b`; but X requires `b`.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["D.swift"]):4:5: error: Dependency cycle: @Instantiated `z: X` -> @Received `b: B` -> @Received `z: X?` -> @Received `z: X`. `z: X` is received while it is still being instantiated. `z: X?` renames `y: X?` only if available, and an enclosing type declares `z: X`, so a type that receives `z` without `onlyIfAvailable` is handed `z: X` where `y: X?` cannot be built first and must be built after it. Receive `z` with `@Received(onlyIfAvailable: true)` to be passed `nil` where neither can be built first.
+				\(fixtures["D.swift"]):4:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `b: B` -> @Received `x: X?` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `y: X?` renames `x: X?` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X?`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X?` cannot be built first. `z: X?` renames `y: X?` only if available, so a type that receives `z` without `onlyIfAvailable` must be built after `y: X?`. Receive `z` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `y: X?` cannot be built first.
 				"""
 			},
 		) {
@@ -4344,7 +5230,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `y: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {

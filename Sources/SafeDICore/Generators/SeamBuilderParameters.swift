@@ -31,9 +31,9 @@ extension DependencyTreeGenerator {
 	///
 	/// A site's fields are the values whose nearest declaration on the site's path is bound before the site in the
 	/// code the seam's module generates: the seam's parameters, then each scope's on the path, outermost first, each
-	/// in the order it binds them – its forwarded properties, then its children in generation order. A declaration
-	/// bound after the site, the property still being built, and an `onlyIfAvailable` alias that is not created carry
-	/// no field, and hide the farther declarations of their label, which Swift would bind instead.
+	/// in the order it binds them – its forwarded properties, then its children in generation order, an `onlyIfAvailable`
+	/// alias bound to `nil` among them. A declaration bound after the site and the property still being built carry no
+	/// field, and hide the farther declarations of their label, which Swift would bind instead.
 	/// - Parameter scopeTypeNamePrefix: What each scope struct's name begins with: `SafeDIScope` for a seam's, and
 	///   `SafeDIMockScope` for a public mock's, whose type may be a seam too.
 	static func holes(
@@ -554,8 +554,9 @@ extension DependencyTreeGenerator {
 			let carrierProperties = frame.orderedChildren.compactMap { $0.generator.containsBuildSite ? $0.generator.property : nil }
 			for (position, child) in frame.orderedChildren.enumerated() {
 				guard let property = child.generator.property else { continue }
-				let isCreated = child.generator.uncreatedAliasProperty(unavailableProperties: child.unavailableProperties) == nil
-				var pathDeclaration = declaration(of: property, isBoundBeforeSite: position < pathPosition && isCreated)
+				// An `onlyIfAvailable` alias is bound, to `nil` where its fulfilling property is unavailable, as every other
+				// child is.
+				var pathDeclaration = declaration(of: property, isBoundBeforeSite: position < pathPosition)
 				if position > pathPosition, let pathProperty, let childType = child.generator.builtInstantiable?.concreteInstantiable {
 					// A sibling built after the scope on the path depends on a carrier: the start order builds every other
 					// one first.

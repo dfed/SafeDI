@@ -45,7 +45,9 @@ struct CycleParameter: Hashable, Sendable {
 	/// Those of `receivedForms` that some receiver requires (see `ScopeGenerator.requiredReceivedProperties`).
 	let requiredForms: Set<Property>
 	/// Those of `receivedForms` that some receiver requires through an `onlyIfAvailable` alias (see
-	/// `ScopeGenerator.requiredAliasFulfillingProperties`).
+	/// `ScopeGenerator.requiredAliasFulfillingProperties`). They order the scopes that declare the label where a
+	/// cycle-closing scope's function is called, but require nothing of them: the alias is `nil` where the label's nearest
+	/// declaration is unavailable.
 	let requiredAliasFulfillingForms: Set<Property>
 	/// The unwrapped forms of the label that every receiver receives only if available (see
 	/// `ScopeGenerator.onlyIfAvailableUnwrappedReceivedProperties`).
@@ -57,7 +59,7 @@ struct CycleParameter: Hashable, Sendable {
 
 	/// Whether every scope that calls the function passes a value: a receiver in its body requires the label.
 	var isRequired: Bool {
-		!requiredForms.isEmpty || !requiredAliasFulfillingForms.isEmpty
+		!requiredForms.isEmpty
 	}
 
 	/// The forms the parameter provides to the function's body: its property, the optional form of a non-optional
@@ -113,7 +115,7 @@ struct CycleParameter: Hashable, Sendable {
 			guard let providingForm else { return nil }
 			let requiredForms = forms.intersection(requiredReceivedProperties)
 			let requiredAliasFulfillingForms = forms.intersection(requiredAliasFulfillingProperties)
-			let isProvidingFormRequired = requiredForms.contains(providingForm) || requiredAliasFulfillingForms.contains(providingForm)
+			let isProvidingFormRequired = requiredForms.contains(providingForm)
 			let property = isProvidingFormRequired || providingForm.typeDescription.isOptional
 				? providingForm
 				: providingForm.asOptionalProperty
@@ -132,36 +134,9 @@ struct CycleParameter: Hashable, Sendable {
 }
 
 /// The parameters of the builder function a lazy cycle closes on, as the scopes beneath the function see them while
-/// their generators are created: for each parameter's label, what the nearest scope between the function and them
-/// declares under it.
+/// their generators are created. Each scope judges what it passes them against the nearest declaration of their labels
+/// (see `NearestDeclarations`).
 struct CycleParameterContext: Sendable {
-	init(parameters: [CycleParameter]) {
-		self.parameters = parameters
-		nearestDeclaredFormsByLabel = [:]
-	}
-
 	/// The function's parameters.
 	let parameters: [CycleParameter]
-	/// For each parameter's label that a scope between the function and the scope this context is given to declares,
-	/// the forms the nearest such scope declares under it, with the instance of a lazily instantiated one. A label
-	/// absent here resolves to the function's parameter.
-	private(set) var nearestDeclaredFormsByLabel: [String: Set<Property>]
-
-	/// The forms the nearest declaration of `label` beneath the function provides, or `nil` when the function's
-	/// parameter is the nearest declaration.
-	func nearestDeclaredForms(ofLabel label: String) -> Set<Property>? {
-		nearestDeclaredFormsByLabel[label]
-	}
-
-	/// This context as the scopes beneath a scope that declares `declaredProperties` see it.
-	func declaring(_ declaredProperties: Set<Property>) -> CycleParameterContext {
-		var context = self
-		for parameter in parameters {
-			let declaredForms = declaredProperties.filter { $0.label == parameter.property.label }
-			if !declaredForms.isEmpty {
-				context.nearestDeclaredFormsByLabel[parameter.property.label] = declaredForms
-			}
-		}
-		return context
-	}
 }
