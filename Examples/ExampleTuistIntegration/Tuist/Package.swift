@@ -29,6 +29,6 @@ import PackageDescription
 let package = Package(
 	name: "ExampleTuistIntegration",
 	dependencies: [
-		.package(url: "https://github.com/dfed/SafeDI.git", from: "2.2.0"),
+		.package(url: "https://github.com/dfed/SafeDI.git", exact: "2.3.0-alpha-2"),
 	],
 )
