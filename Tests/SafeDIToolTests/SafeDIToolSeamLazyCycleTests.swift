@@ -751,7 +751,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    public init() {
 		        func __safeDI_aBuilder(theme: (any Hub.Space.Theme)?) -> A {
 		            func __safeDI_service() -> Service {
-		                _ = Service.__safeDI_Service_F43E4BD26B22682A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                _ = Service.__safeDI_Service_DC70414D97AA0952.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		                return Service()
 		            }
 		            let service: Service = __safeDI_service()

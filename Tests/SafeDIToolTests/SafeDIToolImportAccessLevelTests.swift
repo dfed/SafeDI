@@ -549,14 +549,15 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 				]), bodies: [
 					"""
 					extension Session {
-					    public init(token: Token) {
-					        let vault = Vault(token: token)
+					    public init(token __safeDI_token: @autoclosure @escaping () -> Token) {
+					        let token = LazilyInstantiated<Token>(__safeDI_token)
+					        let vault = Vault(token: token.instance)
 					        self.init(vault: vault)
 					    }
 					}
 
 					extension Session {
-					    public enum __safeDI_Session_1EB503BFA23A82BA {}
+					    public enum __safeDI_Session_F2F345803C710CE2 {}
 					}
 					""",
 				]),
@@ -1826,27 +1827,29 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 
 	private static let feedTree = """
 	extension Feed {
-	    public init(url: URL) {
-	        let loader = Loader(url: url)
+	    public init(url __safeDI_url: @autoclosure @escaping () -> URL) {
+	        let url = LazilyInstantiated<URL>(__safeDI_url)
+	        let loader = Loader(url: url.instance)
 	        self.init(loader: loader)
 	    }
 	}
 
 	extension Feed {
-	    public enum __safeDI_Feed_9BE4B63397ABEE52 {}
+	    public enum __safeDI_Feed_BB233D7C144A6DFA {}
 	}
 	"""
 
 	private static let shelfTree = """
 	extension Shelf {
-	    package init(directory: URL) {
-	        let cache = Cache(directory: directory)
+	    package init(directory __safeDI_directory: @autoclosure @escaping () -> URL) {
+	        let directory = LazilyInstantiated<URL>(__safeDI_directory)
+	        let cache = Cache(directory: directory.instance)
 	        self.init(cache: cache)
 	    }
 	}
 
 	extension Shelf {
-	    public enum __safeDI_Shelf_FA4E57B2628A47FF {}
+	    public enum __safeDI_Shelf_3AB86B822A19F0A5 {}
 	}
 	"""
 
@@ -1873,10 +1876,11 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		let unreadTypeComment = integration == .moduleInfo ? "    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n" : ""
 		return """
 		extension Screen {
-		\(unreadTypeComment)    public init(window: Window) {
+		\(unreadTypeComment)    public init(window __safeDI_window: @autoclosure @escaping () -> Window) {
+		        let window = LazilyInstantiated<Window>(__safeDI_window)
 		        func __safeDI_session() -> Session {
-		            _ = Session.__safeDI_Session_564C5E6539CF6AA0.self\(pluginComment)
-		            return Session(window: window)
+		            _ = Session.__safeDI_Session_48814468D463AD3C.self\(pluginComment)
+		            return Session(window: window.instance)
 		        }
 		        let session: Session = __safeDI_session()
 		        self.init(session: session)
@@ -1884,7 +1888,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_564C5E6539CF6AA0 {}
+		    public enum __safeDI_Screen_48814468D463AD3C {}
 		}
 		"""
 	}
@@ -1935,15 +1939,17 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		}
 		return """
 		extension Session {
-		\(unreadTypeComment)    public init(url: URL, window: Window) {
-		        let vault = Vault(window: window)
-		        let loader = Loader(url: url)
+		\(unreadTypeComment)    public init(url __safeDI_url: @autoclosure @escaping () -> URL, window __safeDI_window: @autoclosure @escaping () -> Window) {
+		        let url = LazilyInstantiated<URL>(__safeDI_url)
+		        let window = LazilyInstantiated<Window>(__safeDI_window)
+		        let vault = Vault(window: window.instance)
+		        let loader = Loader(url: url.instance)
 		        self.init(vault: vault, loader: loader)
 		    }
 		}
 
 		extension Session {
-		    public enum __safeDI_Session_62A9FD17B08925BB {}
+		    public enum __safeDI_Session_602EAC63224D3199 {}
 		}
 		"""
 	}

@@ -74,12 +74,13 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window"], tiers: """
-		    public init(window: Window) {
-		        let badge = Badge(window: window)
+		    public init(window __safeDI_window: @autoclosure @escaping () -> Window) {
+		        let window = LazilyInstantiated<Window>(__safeDI_window)
+		        let badge = Badge(window: window.instance)
 		        let cache = Cache()
 		        self.init(badge: badge, cache: cache)
 		    }
-		""", guardHash: "564C5E6539CF6AA0"))
+		""", guardHash: "48814468D463AD3C"))
 		try expectEveryModuleCompiled(output)
 	}
 
@@ -1645,10 +1646,11 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#expect(output.modules["Shell"]?.generatedFiles == ["Shell.swift": generatedFileHeader + Self.importLines(["Feature", "Kit"]) + """
 		extension Frame {
 		    \(Self.comment(["Window"]))
-		    public init(window: Window) {
+		    public init(window __safeDI_window: @autoclosure @escaping () -> Window) {
+		        let window = LazilyInstantiated<Window>(__safeDI_window)
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_564C5E6539CF6AA0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Screen(window: window)
+		            return Screen(window: window.instance)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(screen: screen)
@@ -1656,7 +1658,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 
 		extension Frame {
-		    public enum __safeDI_Frame_564C5E6539CF6AA0 {}
+		    public enum __safeDI_Frame_48814468D463AD3C {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -2020,12 +2022,13 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], tiers: """
-		    public init(buffer: [3 of Int]) {
-		        let badge = Badge(buffer: buffer)
+		    public init(buffer __safeDI_buffer: @autoclosure @escaping () -> [3 of Int]) {
+		        let buffer = LazilyInstantiated<[3 of Int]>(__safeDI_buffer)
+		        let badge = Badge(buffer: buffer.instance)
 		        let cache = Cache()
 		        self.init(badge: badge, cache: cache)
 		    }
-		""", guardHash: "A0D6A17789F28799"))
+		""", guardHash: "5BD700ACBBEE0733"))
 		try expectEveryModuleCompiled(output)
 	}
 

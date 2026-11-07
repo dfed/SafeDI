@@ -99,7 +99,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			    public init() {
 			        let analytics = Analytics()
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_F284641CF6B800FD.self
+			            _ = Service.__safeDI_Service_FAC13A1F2502EB27.self
 			            return Service(analytics: analytics)
 			        }
 			        let service: Service = __safeDI_service()
@@ -109,14 +109,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			""",
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
-			    public init(analytics: Analytics?) {
-			        let badge = Badge(analytics: analytics)
+			    public init(analytics __safeDI_analytics: @autoclosure @escaping () -> Analytics?) {
+			        let analytics = LazilyInstantiated<Analytics?>(__safeDI_analytics)
+			        let badge = Badge(analytics: analytics.instance)
 			        self.init(badge: badge)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_F284641CF6B800FD {}
+			    public enum __safeDI_Service_FAC13A1F2502EB27 {}
 			}
 			""",
 		])
@@ -136,7 +137,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_BEC07F255DE644F9.self
+			            _ = Service.__safeDI_Service_58FC2EE92E8FE413.self
 			            return Service(token: nil)
 			        }
 			        let service: Service = __safeDI_service()
@@ -150,14 +151,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(token: nil)
 			    }
 
-			    internal init(token: Token?) {
-			        let badge = Badge(token: token)
+			    internal init(token __safeDI_token: @autoclosure @escaping () -> Token?) {
+			        let token = LazilyInstantiated<Token?>(__safeDI_token)
+			        let badge = Badge(token: token.instance)
 			        self.init(badge: badge)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_BEC07F255DE644F9 {}
+			    public enum __safeDI_Service_58FC2EE92E8FE413 {}
 			}
 			""",
 		])
@@ -258,14 +260,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		let releaseOutput = try await executeSafeDIToolMultiModuleTest(modules: modules(isReleaseConfiguration: true), integration: integration, filesToDelete: &filesToDelete)
 		let seamFile = generatedFileHeader + """
 		extension Service {
-		    public init(token: Token) {
-		        let badge = Badge(token: token)
+		    public init(token __safeDI_token: @autoclosure @escaping () -> Token) {
+		        let token = LazilyInstantiated<Token>(__safeDI_token)
+		        let badge = Badge(token: token.instance)
 		        self.init(badge: badge)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_1EB503BFA23A82BA {}
+		    public enum __safeDI_Service_F2F345803C710CE2 {}
 		}
 		"""
 		switch integration {
@@ -295,14 +298,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
-			    public init(token: Token) {
-			        let badge = Badge(token: token)
+			    public init(token __safeDI_token: @autoclosure @escaping () -> Token) {
+			        let token = LazilyInstantiated<Token>(__safeDI_token)
+			        let badge = Badge(token: token.instance)
 			        self.init(badge: badge)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_1EB503BFA23A82BA {}
+			    public enum __safeDI_Service_F2F345803C710CE2 {}
 			}
 			""",
 		])
@@ -342,14 +346,17 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			#endif
 
 			extension Service {
-			    public init(launchDate: Date, names: [String], retries: Int) {
-			        let badge = Badge(launchDate: launchDate, names: names, retries: retries)
+			    public init(launchDate __safeDI_launchDate: @autoclosure @escaping () -> Date, names __safeDI_names: @autoclosure @escaping () -> [String], retries __safeDI_retries: @autoclosure @escaping () -> Int) {
+			        let launchDate = LazilyInstantiated<Date>(__safeDI_launchDate)
+			        let names = LazilyInstantiated<[String]>(__safeDI_names)
+			        let retries = LazilyInstantiated<Int>(__safeDI_retries)
+			        let badge = Badge(launchDate: launchDate.instance, names: names.instance, retries: retries.instance)
 			        self.init(badge: badge)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_064FFFE97BC93B03 {}
+			    public enum __safeDI_Service_C4A4DABA7CC5162D {}
 			}
 			""",
 		])
@@ -416,10 +423,11 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		func seamFile(consumerPath: String) -> String {
 			generatedFileHeader + """
 			extension Screen {
-			    public init(session: Session) {
+			    public init(session __safeDI_session: @autoclosure @escaping () -> Session) {
+			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        func __safeDI_consumer() -> Consumer {
 			            #sourceLocation(file: "\(consumerPath)", line: 7)
-			            let auth: any Auth = session
+			            let auth: any Auth = session.instance
 			            #sourceLocation()
 			            return Consumer(auth: auth)
 			        }
@@ -429,7 +437,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_13A4BC800B514232 {}
+			    public enum __safeDI_Screen_1E2B55CC1D77755A {}
 			}
 			"""
 		}
@@ -475,14 +483,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(theme: Theme) {
-			        let shelf: Shelf = Shelf.instantiate(theme: theme)
+			    public init(theme __safeDI_theme: @autoclosure @escaping () -> Theme) {
+			        let theme = LazilyInstantiated<Theme>(__safeDI_theme)
+			        let shelf: Shelf = Shelf.instantiate(theme: theme.instance)
 			        self.init(shelf: shelf)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_DD923990A48765D6 {}
+			    public enum __safeDI_Screen_BC9F4F791E8F6B4E {}
 			}
 			""",
 		])
@@ -524,14 +533,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
-			    public init(theme: Theme) {
-			        let helper = Service.Helper(theme: theme)
+			    public init(theme __safeDI_theme: @autoclosure @escaping () -> Theme) {
+			        let theme = LazilyInstantiated<Theme>(__safeDI_theme)
+			        let helper = Service.Helper(theme: theme.instance)
 			        self.init(helper: helper)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_DD923990A48765D6 {}
+			    public enum __safeDI_Service_BC9F4F791E8F6B4E {}
 			}
 			""",
 		])
@@ -696,14 +706,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(configuration: nil)
 			    }
 
-			    internal init(configuration: Configuration?) {
-			        let badge = Badge(configuration: configuration)
+			    internal init(configuration __safeDI_configuration: @autoclosure @escaping () -> Configuration?) {
+			        let configuration = LazilyInstantiated<Configuration?>(__safeDI_configuration)
+			        let badge = Badge(configuration: configuration.instance)
 			        self.init(badge: badge)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_53F2550C79CFD135 {}
+			    public enum __safeDI_Service_80F0B4AC7EFD985F {}
 			}
 			""",
 		])
@@ -744,7 +755,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        let token = Token()
 			        let session = Session()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_68099449ED7A453D.self
+			            _ = Screen.__safeDI_Screen_BA2713BBB287D267.self
 			            return Screen(token: token, session: session)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -754,14 +765,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Token, session: Session) {
-			        let detail = Detail(session: session)
+			    public init(token: Token, session __safeDI_session: @autoclosure @escaping () -> Session) {
+			        let session = LazilyInstantiated<Session>(__safeDI_session)
+			        let detail = Detail(session: session.instance)
 			        self.init(token: token, detail: detail)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_68099449ED7A453D {}
+			    public enum __safeDI_Screen_BA2713BBB287D267 {}
 			}
 			""",
 		])
@@ -830,19 +842,22 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(flag: flag, session: nil, theme: nil)
 			    }
 
-			    package init(flag: Flag?, session: Session?, theme: Theme?) {
-			        self.init(flag: flag, session: session, theme: theme, token: nil)
+			    package init(flag: Flag?, session __safeDI_session: @autoclosure @escaping () -> Session?, theme __safeDI_theme: @autoclosure @escaping () -> Theme?) {
+			        self.init(flag: flag, session: __safeDI_session(), theme: __safeDI_theme(), token: nil)
 			    }
 
-			    internal init(flag: Flag?, session: Session?, theme: Theme?, token: Token?) {
-			        let badge = Badge(session: session, theme: theme)
-			        let tag = Tag(token: token)
+			    internal init(flag: Flag?, session __safeDI_session: @autoclosure @escaping () -> Session?, theme __safeDI_theme: @autoclosure @escaping () -> Theme?, token __safeDI_token: @autoclosure @escaping () -> Token?) {
+			        let session = LazilyInstantiated<Session?>(__safeDI_session)
+			        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
+			        let token = LazilyInstantiated<Token?>(__safeDI_token)
+			        let badge = Badge(session: session.instance, theme: theme.instance)
+			        let tag = Tag(token: token.instance)
 			        self.init(flag: flag, badge: badge, tag: tag)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_97F8A0D392C5BF51 {}
+			    public enum __safeDI_Service_55FE9472957FCF19 {}
 			}
 			""",
 		])
@@ -864,7 +879,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        let theme = LazilyInstantiated<Theme>(__safeDI_theme)
 			        let flag: Flag = Flag.instantiate()
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_97F8A0D392C5BF51.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Service.__safeDI_Service_55FE9472957FCF19.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service(flag: flag, session: session, theme: theme.instance)
 			        }
 			        let service: Service = __safeDI_service()
@@ -982,14 +997,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
-			    public init(theme: Theme) {
-			        let deep = Service.Helper.Deep(theme: theme)
+			    public init(theme __safeDI_theme: @autoclosure @escaping () -> Theme) {
+			        let theme = LazilyInstantiated<Theme>(__safeDI_theme)
+			        let deep = Service.Helper.Deep(theme: theme.instance)
 			        self.init(deep: deep)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_DD923990A48765D6 {}
+			    public enum __safeDI_Service_BC9F4F791E8F6B4E {}
 			}
 			""",
 		])
@@ -1031,14 +1047,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
-			    public init(theme: Theme) {
-			        let helper = Service.Helper(theme: theme)
+			    public init(theme __safeDI_theme: @autoclosure @escaping () -> Theme) {
+			        let theme = LazilyInstantiated<Theme>(__safeDI_theme)
+			        let helper = Service.Helper(theme: theme.instance)
 			        self.init(helper: helper)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_DD923990A48765D6 {}
+			    public enum __safeDI_Service_BC9F4F791E8F6B4E {}
 			}
 			""",
 		])
@@ -1086,14 +1103,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		        self.init(theme: nil)
 		    }
 
-		    internal init(theme: Hub.Theme?) {
-		        let badge = Badge(theme: theme)
+		    internal init(theme __safeDI_theme: @autoclosure @escaping () -> Hub.Theme?) {
+		        let theme = LazilyInstantiated<Hub.Theme?>(__safeDI_theme)
+		        let badge = Badge(theme: theme.instance)
 		        self.init(badge: badge)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_D7053AE945AC69A2 {}
+		    public enum __safeDI_Service_C770BA85936CC78A {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -1147,7 +1165,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Service.__safeDI_Service_5CF188DE6A83E906.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service()
 			        }
 			        let service: Service = __safeDI_service()
@@ -1201,14 +1219,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(token: nil)
 			    }
 
-			    internal init(token: Token?) {
-			        let badge = Badge(token: token)
+			    internal init(token __safeDI_token: @autoclosure @escaping () -> Token?) {
+			        let token = LazilyInstantiated<Token?>(__safeDI_token)
+			        let badge = Badge(token: token.instance)
 			        self.init(badge: badge)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_BEC07F255DE644F9 {}
+			    public enum __safeDI_Service_58FC2EE92E8FE413 {}
 			}
 			""",
 		])
@@ -1243,14 +1262,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		        self.init(key: nil)
 		    }
 
-		    internal init(key: Key?) {
-		        let badge = Badge(key: key)
+		    internal init(key __safeDI_key: @autoclosure @escaping () -> Key?) {
+		        let key = LazilyInstantiated<Key?>(__safeDI_key)
+		        let badge = Badge(key: key.instance)
 		        self.init(badge: badge)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_D172829639334E65 {}
+		    public enum __safeDI_Service_F7E1C338C4CDCECF {}
 		}
 		""")
 	}
@@ -1281,14 +1301,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		        self.init(key: nil)
 		    }
 
-		    internal init(key: Key?) {
-		        let badge = Badge(key: key)
+		    internal init(key __safeDI_key: @autoclosure @escaping () -> Key?) {
+		        let key = LazilyInstantiated<Key?>(__safeDI_key)
+		        let badge = Badge(key: key.instance)
 		        self.init(badge: badge)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_D172829639334E65 {}
+		    public enum __safeDI_Service_F7E1C338C4CDCECF {}
 		}
 		""")
 	}
@@ -1359,14 +1380,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(auth: nil)
 			    }
 
-			    internal init(auth: (any (Auth & Sendable))?) {
-			        let badge = Badge(auth: auth)
+			    internal init(auth __safeDI_auth: @autoclosure @escaping () -> (any (Auth & Sendable))?) {
+			        let auth = LazilyInstantiated<(any (Auth & Sendable))?>(__safeDI_auth)
+			        let badge = Badge(auth: auth.instance)
 			        self.init(badge: badge)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_692B2B58EF8BFD72 {}
+			    public enum __safeDI_Service_8A0B331F6E66CF9A {}
 			}
 			""",
 		])
@@ -1389,14 +1411,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(palette: nil)
 			    }
 
-			    internal init(palette: [String: Theme]?) {
-			        let badge = Badge(palette: palette)
+			    internal init(palette __safeDI_palette: @autoclosure @escaping () -> [String: Theme]?) {
+			        let palette = LazilyInstantiated<[String: Theme]?>(__safeDI_palette)
+			        let badge = Badge(palette: palette.instance)
 			        self.init(badge: badge)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_519C73B63C9A2FDE {}
+			    public enum __safeDI_Service_F1BFEE4E8C26FD16 {}
 			}
 			""",
 		])
@@ -1421,14 +1444,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(values: nil)
 			    }
 
-			    internal init(values: [3 of Int]?) {
-			        let badge = Badge(values: values)
+			    internal init(values __safeDI_values: @autoclosure @escaping () -> [3 of Int]?) {
+			        let values = LazilyInstantiated<[3 of Int]?>(__safeDI_values)
+			        let badge = Badge(values: values.instance)
 			        self.init(badge: badge)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_43CEEF672363ED2E {}
+			    public enum __safeDI_Service_41452DBABE69D826 {}
 			}
 			""",
 		])
@@ -1909,7 +1933,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    public init() {
 		        func __safeDI_shellBuilder(theme: Theme) -> Shell {
 		            func __safeDI_service() -> Service {
-		                _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self
+		                _ = Service.__safeDI_Service_5CF188DE6A83E906.self
 		                return Service(theme: theme)
 		            }
 		            let service: Service = __safeDI_service()
@@ -2208,14 +2232,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(theme: nil)
 			    }
 
-			    package init(theme: Hub.Theme?) {
-			        let badge = Badge(theme: theme)
+			    package init(theme __safeDI_theme: @autoclosure @escaping () -> Hub.Theme?) {
+			        let theme = LazilyInstantiated<Hub.Theme?>(__safeDI_theme)
+			        let badge = Badge(theme: theme.instance)
 			        self.init(badge: badge)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_9D6698F9EB89E77B {}
+			    public enum __safeDI_Service_93E737BA887EDA11 {}
 			}
 			""",
 		])
@@ -2234,7 +2259,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_9D6698F9EB89E77B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Service.__safeDI_Service_93E737BA887EDA11.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service()
 			        }
 			        let service: Service = __safeDI_service()
@@ -2433,14 +2458,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		        self.init(theme: nil)
 		    }
 
-		    package init(theme: Hub.Theme?) {
-		        let badge = Badge(theme: theme)
+		    package init(theme __safeDI_theme: @autoclosure @escaping () -> Hub.Theme?) {
+		        let theme = LazilyInstantiated<Hub.Theme?>(__safeDI_theme)
+		        let badge = Badge(theme: theme.instance)
 		        self.init(badge: badge)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_9D6698F9EB89E77B {}
+		    public enum __safeDI_Service_93E737BA887EDA11 {}
 		}
 		"""])
 		#expect(output.modules["Mid"]?.generatedFiles == [
@@ -2455,7 +2481,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			extension Shell {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_9D6698F9EB89E77B.self // If this line does not compile, compile the code SafeDI generates for module Base into Base: under Bazel, add Base's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Service.__safeDI_Service_93E737BA887EDA11.self // If this line does not compile, compile the code SafeDI generates for module Base into Base: under Bazel, add Base's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service()
 			        }
 			        let service: Service = __safeDI_service()
@@ -2539,10 +2565,12 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(session: nil, theme: nil)
 			    }
 
-			    package init(session: Session?, theme: Theme?) {
+			    package init(session __safeDI_session: @autoclosure @escaping () -> Session?, theme __safeDI_theme: @autoclosure @escaping () -> Theme?) {
+			        let session = LazilyInstantiated<Session?>(__safeDI_session)
+			        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_05FA4E47A7B6869F.self // If this line does not compile, compile the code SafeDI generates for module Base into Base: under Bazel, add Base's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return Service(session: session, theme: theme)
+			            _ = Service.__safeDI_Service_4376E198933DD11D.self // If this line does not compile, compile the code SafeDI generates for module Base into Base: under Bazel, add Base's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Service(session: session.instance, theme: theme.instance)
 			        }
 			        let service: Service = __safeDI_service()
 			        self.init(service: service)
@@ -2550,7 +2578,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			}
 
 			extension Shell {
-			    public enum __safeDI_Shell_05FA4E47A7B6869F {}
+			    public enum __safeDI_Shell_4376E198933DD11D {}
 			}
 			""",
 		])
@@ -2571,7 +2599,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        func __safeDI_holderBuilder(theme: Theme) -> Holder {
 			            let session = Session()
 			            func __safeDI_shell() -> Shell {
-			                _ = Shell.__safeDI_Shell_05FA4E47A7B6869F.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                _ = Shell.__safeDI_Shell_4376E198933DD11D.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			                return Shell(session: session, theme: theme)
 			            }
 			            let shell: Shell = __safeDI_shell()
@@ -2597,7 +2625,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			extension OtherRoot {
 			    public init() {
 			        func __safeDI_shell() -> Shell {
-			            _ = Shell.__safeDI_Shell_05FA4E47A7B6869F.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Shell.__safeDI_Shell_4376E198933DD11D.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Shell()
 			        }
 			        let shell: Shell = __safeDI_shell()
@@ -2899,7 +2927,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_9D6698F9EB89E77B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Service.__safeDI_Service_93E737BA887EDA11.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service()
 			        }
 			        let service: Service = __safeDI_service()
@@ -2940,18 +2968,21 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			#endif
 
 			extension Service {
-			    public init(analytics: Analytics) {
-			        self.init(analytics: analytics, handler: nil, theme: nil)
+			    public init(analytics __safeDI_analytics: @autoclosure @escaping () -> Analytics) {
+			        self.init(analytics: __safeDI_analytics(), handler: nil, theme: nil)
 			    }
 
-			    package init(analytics: Analytics, handler: Handler?, theme: Theme?) {
-			        let badge = Badge(analytics: analytics, theme: theme, handler: handler)
+			    package init(analytics __safeDI_analytics: @autoclosure @escaping () -> Analytics, handler __safeDI_handler: @autoclosure @escaping () -> Handler?, theme __safeDI_theme: @autoclosure @escaping () -> Theme?) {
+			        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+			        let handler = LazilyInstantiated<Handler?>(__safeDI_handler)
+			        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
+			        let badge = Badge(analytics: analytics.instance, theme: theme.instance, handler: handler.instance)
 			        self.init(badge: badge)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_55C38F330B830A08 {}
+			    public enum __safeDI_Service_53DD043875695A26 {}
 			}
 			""",
 		])
@@ -2968,7 +2999,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			    public init() {
 			        let analytics = Analytics()
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_55C38F330B830A08.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Service.__safeDI_Service_53DD043875695A26.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service(analytics: analytics)
 			        }
 			        let service: Service = __safeDI_service()
@@ -3062,14 +3093,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
-			    public init(token: Token) {
-			        let badge = Badge(token: token)
+			    public init(token __safeDI_token: @autoclosure @escaping () -> Token) {
+			        let token = LazilyInstantiated<Token>(__safeDI_token)
+			        let badge = Badge(token: token.instance)
 			        self.init(badge: badge)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_1EB503BFA23A82BA {}
+			    public enum __safeDI_Service_F2F345803C710CE2 {}
 			}
 			""",
 		])
@@ -3086,7 +3118,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			    public init() {
 			        func __safeDI_shellBuilder(token: Token) -> Shell {
 			            func __safeDI_service() -> Service {
-			                _ = Service.__safeDI_Service_1EB503BFA23A82BA.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
+			                _ = Service.__safeDI_Service_F2F345803C710CE2.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
 			                return Service(token: token)
 			            }
 			            let service: Service = __safeDI_service()
@@ -3152,14 +3184,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Feature.swift": generatedFileHeader + """
 			extension Service {
-			    public init(token: Token) {
-			        let badge = Badge(token: token)
+			    public init(token __safeDI_token: @autoclosure @escaping () -> Token) {
+			        let token = LazilyInstantiated<Token>(__safeDI_token)
+			        let badge = Badge(token: token.instance)
 			        self.init(badge: badge)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_1EB503BFA23A82BA {}
+			    public enum __safeDI_Service_F2F345803C710CE2 {}
 			}
 			""",
 		])
@@ -3176,7 +3209,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			    public init() {
 			        func __safeDI_shellBuilder(token: Token) -> Shell {
 			            func __safeDI_service() -> Service {
-			                _ = Service.__safeDI_Service_1EB503BFA23A82BA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                _ = Service.__safeDI_Service_F2F345803C710CE2.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			                return Service(token: token)
 			            }
 			            let service: Service = __safeDI_service()
@@ -3501,14 +3534,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + Self.importLines("Core") + """
 		extension Service {
-		\(Self.unreadTypeComment(["Theme"], integration))    public init(theme: any Theme) {
-		        let badge = Badge(theme: theme)
+		\(Self.unreadTypeComment(["Theme"], integration))    public init(theme __safeDI_theme: @autoclosure @escaping () -> any Theme) {
+		        let theme = LazilyInstantiated<any Theme>(__safeDI_theme)
+		        let badge = Badge(theme: theme.instance)
 		        self.init(badge: badge)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_DD923990A48765D6 {}
+		    public enum __safeDI_Service_BC9F4F791E8F6B4E {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -3548,14 +3582,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		let expectedFeatureFileName = integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift"
 		let expectedFeatureFile: String = [generatedFileHeader, String(Self.importLines("Core").dropLast()), Self.importLines("Other"), """
 		extension Service {
-		\(Self.unreadTypeComment(["Other.Theme"], integration))    public init(theme: any Other.Theme) {
-		        let badge = Badge(theme: theme)
+		\(Self.unreadTypeComment(["Other.Theme"], integration))    public init(theme __safeDI_theme: @autoclosure @escaping () -> any Other.Theme) {
+		        let theme = LazilyInstantiated<any Other.Theme>(__safeDI_theme)
+		        let badge = Badge(theme: theme.instance)
 		        self.init(badge: badge)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_5AFB3D86118CEB36 {}
+		    public enum __safeDI_Service_C026E16A44F7FB2E {}
 		}
 		"""].joined()
 		#expect(output.modules["Feature"]?.generatedFiles == [expectedFeatureFileName: expectedFeatureFile])
@@ -3580,14 +3615,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + Self.importLines("Core") + """
 		extension Service {
-		\(Self.unreadTypeComment(["Theme"], integration))    public init(theme: any Theme) {
-		        let badge = Badge(theme: theme)
+		\(Self.unreadTypeComment(["Theme"], integration))    public init(theme __safeDI_theme: @autoclosure @escaping () -> any Theme) {
+		        let theme = LazilyInstantiated<any Theme>(__safeDI_theme)
+		        let badge = Badge(theme: theme.instance)
 		        self.init(badge: badge)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_DD923990A48765D6 {}
+		    public enum __safeDI_Service_BC9F4F791E8F6B4E {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -4208,14 +4244,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#endif
 
 		extension Service {
-		    package init(token: Rack.Token) {
-		        let badge = Badge(token: token)
+		    package init(token __safeDI_token: @autoclosure @escaping () -> Rack.Token) {
+		        let token = LazilyInstantiated<Rack.Token>(__safeDI_token)
+		        let badge = Badge(token: token.instance)
 		        self.init(badge: badge)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_158C0EFA50CACC16 {}
+		    public enum __safeDI_Service_F2C72F9BD3F5798E {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -4282,14 +4319,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#endif
 
 		extension Service {
-		    public init(token: Rack.Token) {
-		        let badge = Badge(token: token)
+		    public init(token __safeDI_token: @autoclosure @escaping () -> Rack.Token) {
+		        let token = LazilyInstantiated<Rack.Token>(__safeDI_token)
+		        let badge = Badge(token: token.instance)
 		        self.init(badge: badge)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_F4AE90F3B7B1BBFF {}
+		    public enum __safeDI_Service_8E429FFB2D7F8CA5 {}
 		}
 		"""])
 	}
@@ -4321,14 +4359,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 
 		extension Service {
 		    // SafeDI counts `Rack` as `public`: no module it reads declares it narrower. If `Rack` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
-		    public init(token: Rack.Token) {
-		        let badge = Badge(token: token)
+		    public init(token __safeDI_token: @autoclosure @escaping () -> Rack.Token) {
+		        let token = LazilyInstantiated<Rack.Token>(__safeDI_token)
+		        let badge = Badge(token: token.instance)
 		        self.init(badge: badge)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_F4AE90F3B7B1BBFF {}
+		    public enum __safeDI_Service_8E429FFB2D7F8CA5 {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -4936,14 +4975,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	        self.init(theme: nil)
 	    }
 
-	    package init(theme: Theme?) {
-	        let badge = Badge(theme: theme)
+	    package init(theme __safeDI_theme: @autoclosure @escaping () -> Theme?) {
+	        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
+	        let badge = Badge(theme: theme.instance)
 	        self.init(badge: badge)
 	    }
 	}
 
 	extension Service {
-	    public enum __safeDI_Service_27F6F01DC5D0EF8E {}
+	    public enum __safeDI_Service_5CF188DE6A83E906 {}
 	}
 	"""
 

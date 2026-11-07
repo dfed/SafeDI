@@ -1714,11 +1714,18 @@ public actor DependencyTreeGenerator {
 			} else {
 				" (a `@Sendable` builder function in the tree of `\(capture.sendableBuilder.typeDescription.asInstantiatedType.asSource)` builds it again)"
 			}
+			// A seam's generated initializer that takes the property as a `@Sendable` closure captures what the call passes, as
+			// the `@Sendable` builder function inside the seam's tree that reads it would built inline.
+			let capturingFunction = if let seamType = capture.capturingSeamType {
+				"`\(seamType.asSource)`'s generated initializer takes `\(capture.receivedProperty.label)` as a `@Sendable` closure, because a `@Sendable` function inside `\(seamType.asSource)`'s tree reads it, and that closure"
+			} else {
+				"SafeDI builds `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` in a `@Sendable` function\(sendableBuilderReason), which"
+			}
 			let error = SourceDiagnostic(
 				severity: .error,
 				location: capture.declarationLocation,
 				message: "@\(Dependency.Source.receivedRawValue) property `\(capture.receivedProperty.asSource)` cannot be received inside a `@Sendable` function in chain: \(capture.chain.map(\.asSource).joined(separator: " -> ")). "
-					+ "SafeDI builds `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` in a `@Sendable` function\(sendableBuilderReason), which cannot capture \(capturedProperty), because `\(wrapperType.asSource)` is not `Sendable`. "
+					+ "\(capturingFunction) cannot capture \(capturedProperty), because `\(wrapperType.asSource)` is not `Sendable`. "
 					+ "\(fix) \(requirement)",
 			)
 			return if capture.wrapperDeclaringType != nil {
@@ -2186,9 +2193,11 @@ public actor DependencyTreeGenerator {
 				/// property. `tier` is the widest tier, at the seam type's access; `parameterLevel` is the parameter's own
 				/// tier access, and `cause` how its narrowest type is proven.
 				case tierOmitsRequiredParameter(parameter: Property, tier: AccessLevel, parameterLevel: AccessLevel, receivers: [Receiver], ownParameter: OwnParameter, cause: TypeAccessProof.Cause?)
-				/// The seam declares an initializer with the generated initializer's parameters, which the generated
-				/// one would redeclare. The macro cannot report it: it cannot see the pass-throughs.
-				case initializerRedeclared(parameters: [Property], handWrittenInitializer: Initializer)
+				/// The seam declares an initializer that can be called with the argument labels of a tier of the generated
+				/// initializer, whose parameters are `parameters`: a call with those labels resolves to the hand-written
+				/// initializer or is ambiguous, whatever the types. The macro cannot report it: it cannot see the
+				/// pass-throughs.
+				case initializerCollides(parameters: [SeamSignature.Parameter], builderLabels: [String], handWrittenInitializer: Initializer)
 			}
 
 			enum Kind {
@@ -2343,11 +2352,16 @@ public actor DependencyTreeGenerator {
 					)
 					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(hole.builderLabel): \(hole.builderType(qualifiedBy: hole.scopeSeamType).asSource)`, the builder for `\(hole.ownerType.asSource)`'s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(publicMockRequirement)\(causeText) \(remedies)"
 					declarationNotes = SeamAccessExplanation.declarationNotes(for: hole.accessCause, neededLevel: tier)
-				case let .parameters(.initializerRedeclared(parameters, handWrittenInitializer)):
+				case let .parameters(.initializerCollides(parameters, builderLabels, handWrittenInitializer)):
 					receivers = []
-					let signature = "init(\(parameters.map(\.asSource).joined(separator: ", ")))"
+					let handWrittenSignature = "init(\(handWrittenInitializer.arguments.map { "\($0.label):" }.joined()))"
+					let generatedSignature = "init(\((parameters.map(\.property.label) + builderLabels).map { "\($0):" }.joined()))"
 					let location = handWrittenInitializer.access.declarationStartLocation.map { " at line \($0.line)" } ?? ""
-					message = "SafeDI cannot generate the dependency tree of \(seamName): the generated initializer, `\(signature)`, takes the parameters of an initializer \(seamName) declares\(location), which it would redeclare. Remove that initializer, or change its parameters."
+					let deferredLabels = parameters.filter(\.isDeferred).map { "`\($0.property.label)`" }
+					let deferredClause = deferredLabels.isEmpty
+						? ""
+						: ", which takes \(deferredLabels.joined(separator: ", ")) as an `@autoclosure`"
+					message = "SafeDI cannot generate the dependency tree of \(seamName): it declares `\(handWrittenSignature)`\(location), which can be called with the argument labels of its generated initializer, `\(generatedSignature)`\(deferredClause). A call with those labels would resolve to the hand-written initializer or be ambiguous. Rename the hand-written initializer's argument labels, or remove it."
 				}
 				// The notes follow the receivers in the order the tree declares them, which no name decides.
 				return [SourceDiagnostic(severity: .error, location: location, message: message)]
@@ -4107,8 +4121,8 @@ public actor DependencyTreeGenerator {
 					labels.insert(label)
 				case let .tierOmitsRequiredParameter(parameter, _, _, _, _, _):
 					labels.insert(parameter.label)
-				case let .initializerRedeclared(parameters, _):
-					labels.formUnion(parameters.map(\.label))
+				case let .initializerCollides(parameters, _, _):
+					labels.formUnion(parameters.map(\.property.label))
 				}
 			}
 		}
@@ -4769,6 +4783,7 @@ public actor DependencyTreeGenerator {
 	) throws -> ScopeGenerator {
 		var nearestDeclarations = NearestDeclarations()
 		var lazilyInstantiatedInstanceProperties = Set<Property>()
+		let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: rootScope.instantiable)
 		for parameter in seamRoot.signature.parameters {
 			let property = parameter.property
 			// Each parameter is the nearest declaration of its label in the seam's tree. An optional one also stands for the
@@ -4779,6 +4794,12 @@ public actor DependencyTreeGenerator {
 			nearestDeclarations.replace(property, providing: providedForms)
 			if let instanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
 				lazilyInstantiatedInstanceProperties.insert(instanceProperty)
+			}
+			// A deferred parameter is held in a `LazilyInstantiated` under its label, whose instance the tree reads wherever
+			// it reads the label, as it reads a received wrapper's instance – except one the seam's own alias of its label
+			// reads from the autoclosure (`SeamRoot.autoclosureCallByLabel`). The memo provides only the by-value forms.
+			if parameter.isDeferred, autoclosureCallByLabel[property.label] == nil {
+				lazilyInstantiatedInstanceProperties.insert(property.asUnwrappedProperty)
 			}
 		}
 		return try rootScope.createScopeGenerator(
@@ -4808,12 +4829,55 @@ public actor DependencyTreeGenerator {
 	/// type's declaration is an ancestor's, already kept. No receive is beneath a declaration of its label that does
 	/// not provide it, which validation reports as hidden, so a receive the scopes above do not provide leaves the
 	/// seam.
-	private static func receivers(in generator: ScopeGenerator, of _: Instantiable, instantiables: [TypeDescription: Instantiable]) -> [SeamReceiver] {
+	///
+	/// Beside the receivers, what decides whether a by-value pass-through is deferred, and `@Sendable`: the reads of
+	/// labels whose nearest declaration is outside the tree – a parameter – where the tree reads them
+	/// (`parameterReads`). A parameter no read reaches, whose label a declaration inside the tree hides from every
+	/// receiver, is taken by value, so no `LazilyInstantiated` goes unread. Whether a function is `@Sendable` is read
+	/// from the facts the emitters decorate from: `buildsInSendableFunction` and `ScopeGenerator.fillStageIsSendable`.
+	private static func receivers(in generator: ScopeGenerator, of _: Instantiable, instantiables: [TypeDescription: Instantiable]) -> (receivers: [SeamReceiver], parameterReads: ParameterReads) {
 		var receivers = [SeamReceiver]()
 		var keptDeclarationIndices = [ReceiverDeclaration: Int]()
-		typealias Frame = (generator: ScopeGenerator, providedProperties: Set<Property>)
-		var generatorsToVisit: [Frame] = [(generator, [])]
-		while let (visited, providedProperties) = generatorsToVisit.popLast() {
+		var parameterReads = ParameterReads()
+		/// A generator to visit, with what the scopes enclosing it provide, whether it is built inside a `@Sendable`
+		/// function and inside a `@Sendable` fill, and the labels the scopes enclosing it declare or forward.
+		struct Frame {
+			let generator: ScopeGenerator
+			let providedProperties: Set<Property>
+			let insideSendable: Bool
+			let insideSendableFill: Bool
+			let declaredLabels: Set<String>
+		}
+		var generatorsToVisit = [Frame(generator: generator, providedProperties: [], insideSendable: false, insideSendableFill: false, declaredLabels: [])]
+		while let frame = generatorsToVisit.popLast() {
+			let visited = frame.generator
+			let providedProperties = frame.providedProperties
+			/// Records a read of `label` in this scope's code, inside a `@Sendable` function when `insideSendable` holds,
+			/// that reaches a parameter when no scope enclosing the read declares the label.
+			func recordRead(of label: String, insideSendable: Bool, declaredLabels: Set<String> = frame.declaredLabels) {
+				guard !declaredLabels.contains(label) else { return }
+				parameterReads.labelsRead.insert(label)
+				if insideSendable {
+					parameterReads.labelsReadInsideSendableFunction.insert(label)
+				}
+			}
+			// A nested seam that takes a parameter `@Sendable` reads it inside a `@Sendable` function, wherever this tree
+			// calls it.
+			for parameter in visited.seamCallParameters ?? [] where parameter.deferral == .deferred(isSendable: true) {
+				recordRead(of: parameter.property.label, insideSendable: true)
+			}
+			// A site reads every parameter whose label no scope enclosing it declares, inside a `@Sendable` function only
+			// within a `@Sendable` fill: elsewhere it reads them at the site or at the call of a staged builder's first stage,
+			// which is made before the first `@Sendable` builder function on the site's path.
+			if visited.holeSite != nil {
+				parameterReads.siteDeclaredLabels.append((frame.declaredLabels, frame.insideSendableFill))
+			}
+			if visited.closesPropertyCycle {
+				// A scope that closes a lazy cycle passes the function it refers to each parameter's nearest declaration.
+				for parameter in visited.cycleParameters {
+					recordRead(of: parameter.property.label, insideSendable: frame.insideSendable)
+				}
+			}
 			// A seam call the module reaches no tier of and the check of every construction is certain to report: it
 			// reports the seam's type, whose widening makes a tier reachable, so the receives the call folds into this
 			// seam report no omission here.
@@ -4843,9 +4907,11 @@ public actor DependencyTreeGenerator {
 						receivers.append(receiver)
 					}
 				}
+				let visitedLabels = Set(visited.providedProperties.map(\.label))
 				for dependency in instantiable.dependencies {
 					switch dependency.source {
 					case .received:
+						recordRead(of: dependency.property.label, insideSendable: frame.insideSendable)
 						guard !isProvided(dependency.property, by: providedProperties) else { continue }
 						// A nested seam's pass-through stands for the receives inside that seam, which its signature
 						// carries, so an error notes the receives inside the nested seam rather than the seam.
@@ -4880,6 +4946,11 @@ public actor DependencyTreeGenerator {
 							keep(SeamReceiver(property: dependency.property, instantiable: instantiable, declarationLocation: dependency.declarationLocation, access: initializerAccess))
 						}
 					case let .aliased(fulfillingProperty, _, _):
+						// The alias is bound in this scope's code, where the declarations of this scope are in scope too, but an
+						// alias that keeps its fulfilling property's label is not in scope where that property is read.
+						if fulfillingProperty.label == dependency.property.label || !visitedLabels.contains(fulfillingProperty.label) {
+							recordRead(of: fulfillingProperty.label, insideSendable: frame.insideSendable)
+						}
 						guard !isProvided(fulfillingProperty, by: providedProperties.union(visited.providedProperties)) else { continue }
 						keep(SeamReceiver(property: fulfillingProperty, instantiable: instantiable, declarationLocation: dependency.declarationLocation, access: initializerAccess, aliasProperty: dependency.property))
 					case .instantiated, .forwarded:
@@ -4890,13 +4961,53 @@ public actor DependencyTreeGenerator {
 			// The scope's children receive what it creates – its instantiated, aliased, and forwarded properties, with
 			// the instance of each lazily instantiated one – beside what encloses it.
 			let childProvidedProperties = providedProperties.union(visited.providedProperties)
+			let childDeclaredLabels = frame.declaredLabels.union(visited.providedProperties.map(\.label))
 			let firstChildIndex = generatorsToVisit.endIndex
 			for child in visited.children {
-				generatorsToVisit.append((child, childProvidedProperties))
+				let fillIsSendable = child.fillHole.map { hole in
+					ScopeGenerator.fillStageIsSendable(
+						hole: hole,
+						stageIndex: hole.stages.count - 1,
+						isSendable: child.fillKey.map(visited.sendableFillKeys.contains) ?? false,
+					)
+				} ?? false
+				// A fill binds the fields of the hole's struct its tree reads, which hide every declaration of their labels
+				// above it.
+				let fillFieldLabels = child.fillHole.map { Set($0.stages.joined().map(\.property.label)) } ?? []
+				generatorsToVisit.append(Frame(
+					generator: child,
+					providedProperties: childProvidedProperties,
+					insideSendable: frame.insideSendable || child.buildsInSendableFunction || fillIsSendable,
+					insideSendableFill: frame.insideSendableFill || fillIsSendable,
+					declaredLabels: fillFieldLabels.isEmpty ? childDeclaredLabels : childDeclaredLabels.union(fillFieldLabels),
+				))
 			}
 			generatorsToVisit[firstChildIndex...].reverse()
 		}
-		return receivers
+		return (receivers, parameterReads)
+	}
+
+	/// The reads of a seam's parameters its tree makes, by label: what `receivers(in:of:instantiables:)` finds beside the
+	/// receivers.
+	struct ParameterReads {
+		/// The labels the tree reads where no declaration inside it hides the label.
+		var labelsRead = Set<String>()
+		/// Of those, the labels read inside a `@Sendable` function, or handed to a nested seam that takes them `@Sendable`.
+		var labelsReadInsideSendableFunction = Set<String>()
+		/// For each site of a hole, the labels the scopes enclosing it declare, and whether it is inside a `@Sendable`
+		/// fill: the site reads every parameter whose label none of them declares.
+		var siteDeclaredLabels = [(declaredLabels: Set<String>, insideSendableFill: Bool)]()
+
+		/// Whether the tree reads the parameter labeled `label`.
+		func reads(_ label: String) -> Bool {
+			labelsRead.contains(label) || siteDeclaredLabels.contains { !$0.declaredLabels.contains(label) }
+		}
+
+		/// Whether the tree reads the parameter labeled `label` inside a `@Sendable` function.
+		func readsInsideSendableFunction(_ label: String) -> Bool {
+			labelsReadInsideSendableFunction.contains(label)
+				|| siteDeclaredLabels.contains { $0.insideSendableFill && !$0.declaredLabels.contains(label) }
+		}
 	}
 
 	/// What `seam`'s root generator emits, read from `generator`, the generator of its tree: its signature, with the
@@ -4923,7 +5034,7 @@ public actor DependencyTreeGenerator {
 		// not required of the caller: the alias binds `nil` where the caller holds nothing. The caller must still build
 		// it first where it holds it, so the parameter carries `requiredThroughAlias`.
 		let requiredProperties = generator.requiredReceivedProperties
-		let treeReceivers = Self.receivers(in: generator, of: seam, instantiables: instantiables)
+		let (treeReceivers, parameterReads) = Self.receivers(in: generator, of: seam, instantiables: instantiables)
 		func receivers(ofLabel label: String) -> [SeamReceiver] {
 			treeReceivers.filter { $0.property.label == label }
 		}
@@ -5003,6 +5114,7 @@ public actor DependencyTreeGenerator {
 			let unwrappedValues = Set(forms.filter { $0.typeDescription.unwrapped.lazilyInstantiatedInstanceType == nil }.map(\.asUnwrappedProperty))
 			let parameterProperty: Property
 			let isRequired: Bool
+			var deferral = SeamSignature.Parameter.Deferral.none
 			if let requiredWrapper = wrappers.filter({ !$0.typeDescription.isOptional }).sorted().first {
 				// A required non-optional wrapper (a wrapper received only if available is optional) provides every
 				// by-value form and the optional form of its kind; any other form is a second parameter.
@@ -5025,6 +5137,12 @@ public actor DependencyTreeGenerator {
 				let takesUnwrappedForm = requiredProperties.contains(value)
 				parameterProperty = takesUnwrappedForm ? value : Property(label: label, typeDescription: .optional(value.typeDescription))
 				isRequired = takesUnwrappedForm || forms.contains(where: requiredProperties.contains)
+				// A by-value pass-through the tree reads is deferred: the tree reads it where it would read the caller's value
+				// inline, when a receiver is first built. An instantiator is a value whose instantiation is deferred already,
+				// which the caller hands on as inline. It is `@Sendable` where a `@Sendable` function inside the tree reads it.
+				if parameterProperty.asUnwrappedProperty.propertyType.isConstant, parameterReads.reads(label) {
+					deferral = .deferred(isSendable: parameterReads.readsInsideSendableFunction(label))
+				}
 			} else {
 				// An optional wrapper provides nothing but itself: a by-value form or another kind beside it is a second
 				// parameter.
@@ -5052,6 +5170,7 @@ public actor DependencyTreeGenerator {
 				access: access.level,
 				isOnlyIfAvailable: !isRequired,
 				requiredThroughAlias: requiredThroughAlias,
+				deferral: deferral,
 				receivers: parameterReceivers.map { $0.with(access: access.level).asSignatureReceiver },
 				accessCause: access.cause,
 			))
@@ -5070,8 +5189,19 @@ public actor DependencyTreeGenerator {
 		// signature against its access, never its body. A required parameter narrower than the seam's type is
 		// omitted by the widest tier, which cannot pass `nil` for it: reported once, at the widest tier.
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
+		// A deferred parameter's autoclosure is named apart from every builder function the tree declares, which, being a
+		// local function, is in scope throughout the initializer's body and would hide it, and from every other deferred
+		// parameter's; the holes' builders are named apart from these names in turn.
+		let builderFunctionNames = Self.builderFunctionNamesOfProperties(in: generator)
+		var takenInternalNames = builderFunctionNames
 		let parameters = (ownParameters + passThroughs).map { parameter in
-			SeamSignature.Parameter(property: parameter.property, isPassThrough: parameter.isPassThrough, access: parameter.access, tierAccess: min(parameter.access, seamTypeAccess), isOnlyIfAvailable: parameter.isOnlyIfAvailable, requiredThroughAlias: parameter.requiredThroughAlias, receivers: parameter.receivers, accessCause: parameter.accessCause, otherInitializerArgumentsAccess: parameter.otherInitializerArgumentsAccess)
+			var internalName = ScopeGenerator.functionName(toBuildPropertyNamed: parameter.property.label)
+			if parameter.isDeferred {
+				while !takenInternalNames.insert(internalName).inserted {
+					internalName = "\(internalName)_".spelledAsJoinedIdentifier
+				}
+			}
+			return SeamSignature.Parameter(property: parameter.property, isPassThrough: parameter.isPassThrough, access: parameter.access, tierAccess: min(parameter.access, seamTypeAccess), isOnlyIfAvailable: parameter.isOnlyIfAvailable, requiredThroughAlias: parameter.requiredThroughAlias, deferral: parameter.deferral, internalName: internalName, receivers: parameter.receivers, accessCause: parameter.accessCause, otherInitializerArgumentsAccess: parameter.otherInitializerArgumentsAccess)
 		}
 		let holes = Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables)
 		let tiers = Self.tiers(of: seam, parameters: parameters)
@@ -5114,19 +5244,18 @@ public actor DependencyTreeGenerator {
 			else { continue }
 			errors.append(.seam(.init(seam: seam, kind: .tierOmitsBuilder(hole: hole, tier: tier))))
 		}
-		// Swift tells initializers apart by their parameters' labels and types, not by their default values, so a
-		// generated tier would redeclare a hand-written initializer with the same parameters.
+		// A hand-written initializer that a call with a tier's argument labels can reach – its labels hold the tier's in
+		// order, and every other argument has a default value – takes that call or makes it ambiguous, whatever the
+		// types: beside a deferred parameter, an existential, generic, defaulted or `Any` twin takes the call from a
+		// caller holding the value, and no comparison of types SafeDI can make tells it from one that loses.
+		let builderLabels = holes.map(\.builderLabel)
 		for tier in tiers {
-			let tierParameters = parameters.filter { $0.tierAccess >= tier }.map(\.property)
-			if let handWrittenInitializer = seam.otherInitializers.first(where: { initializer in
-				initializer.arguments.count == tierParameters.count
-					&& zip(initializer.arguments, tierParameters).allSatisfy { argument, parameter in
-						argument.label == parameter.label && argument.typeDescription == parameter.asFunctionParamter.typeDescription
-					}
-			}) {
+			let tierParameters = parameters.filter { $0.tierAccess >= tier }
+			let tierLabels = tierParameters.map(\.property.label) + builderLabels
+			if let handWrittenInitializer = seam.otherInitializers.first(where: { Self.initializer($0, isCallableWithLabels: tierLabels) }) {
 				errors.append(.seam(.init(
 					seam: seam,
-					kind: .parameters(.initializerRedeclared(parameters: tierParameters, handWrittenInitializer: handWrittenInitializer)),
+					kind: .parameters(.initializerCollides(parameters: tierParameters, builderLabels: builderLabels, handWrittenInitializer: handWrittenInitializer)),
 				)))
 			}
 		}
@@ -5134,6 +5263,26 @@ public actor DependencyTreeGenerator {
 			throw error
 		}
 		return ScopeGenerator.SeamRoot(signature: SeamSignature(seamType: seam.concreteInstantiable, parameters: parameters, tiers: tiers, noTierParameters: noTierParameters, holes: holes))
+	}
+
+	/// Whether a call of `initializer` can pass exactly `labels`, in order: they match its arguments' labels in order,
+	/// and every argument they leave out has a default value.
+	private static func initializer(_ initializer: Initializer, isCallableWithLabels labels: [String]) -> Bool {
+		// `matches[labelCount]` is whether the arguments read so far can take the first `labelCount` labels.
+		var matches = [true] + Array(repeating: false, count: labels.count)
+		for argument in initializer.arguments {
+			var nextMatches = Array(repeating: false, count: labels.count + 1)
+			for labelCount in matches.indices where matches[labelCount] {
+				if argument.hasDefaultValue {
+					nextMatches[labelCount] = true
+				}
+				if labelCount < labels.count, labels[labelCount] == argument.label {
+					nextMatches[labelCount + 1] = true
+				}
+			}
+			matches = nextMatches
+		}
+		return matches[labels.count]
 	}
 
 	/// The declaration of a hole's property, by which a hole's errors are reported once however many sites it has.
