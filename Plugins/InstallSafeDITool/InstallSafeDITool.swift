@@ -94,10 +94,10 @@ struct InstallSafeDITool: CommandPlugin {
 /// Downloads the correct architecture's prebuilt binary from GitHub
 /// Releases, checks it against the SHA-256 the release published for it
 /// (`macOSArm64SHA256` or `macOSX86_64SHA256`), marks it executable, and
-/// moves it into the expected
-/// per-version location. Also writes a `.gitignore` inside `.safedi/`
-/// (on first run) that excludes the per-version binaries from source
-/// control — the binary is per-machine and shouldn't be committed.
+/// moves it into the expected per-version location. Also writes a
+/// `.gitignore` inside `.safedi/` (on first run) that excludes the
+/// per-version binaries from source control — the binary is per-machine
+/// and shouldn't be committed.
 ///
 /// Entire body gated on macOS — Linux Foundation doesn't ship
 /// `URLSession.shared` without `FoundationNetworking`, and the Xcode
