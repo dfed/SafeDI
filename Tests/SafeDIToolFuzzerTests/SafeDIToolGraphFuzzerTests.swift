@@ -2848,13 +2848,13 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [12, 14, 25, 40, 62, 99, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xA829E931F994202E
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x64C42737CA11C603
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x83FECAC329EB5C28
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x79FFC62FE9C55A64
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -3416,7 +3416,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 98, 142, 151, 197, 208, 211, 215, 253, 551]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x6CA43C5A2417BE97
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x2FE39652F28E763F
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -3436,7 +3436,7 @@ struct SafeDIToolGraphFuzzerTests {
 				479, 482, 492, 496, 497, 498, 504, 508, 511, 515, 523, 525, 526, 527, 529, 530,
 				537, 542, 543, 545, 549, 553, 554, 555, 562, 564, 580, 581, 584, 586, 587, 592,
 				595, 597, 598, 600, 603, 607, 608, 610, 611, 613, 614, 615, 618, 619, 623, 624,
-				625, 627, 632, 635, 637, 638, 639, 642, 643, 645, 651, 652, 662, 668, 671, 672,
+				625, 627, 632, 635, 637, 638, 639, 642, 643, 645, 651, 652, 662, 665, 668, 671, 672,
 				673, 681, 683, 684, 690, 691, 693, 697, 699, 700, 706, 709, 714, 716, 721, 723,
 				726, 727, 732, 735, 738, 740, 744, 745, 747, 748, 751, 753, 754, 755, 756, 759,
 				760, 762, 765, 772, 773, 774, 777, 783, 784, 790, 792, 793, 798, 805, 807, 817,
@@ -3458,20 +3458,16 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
 			seeds: [33, 832],
 		),
-		// The base corpus's shape, a main defect, in the known-right path's inline mock: the comparator cannot compile it.
+		// The base corpus's shape in the mocked type's own tree, which a call of another module's public mock leaves no
+		// rebinding in, in the known-right path's inline mock: the comparator cannot compile it.
 		GraphFuzzerKnownIssue(
 			reason: "A type receives a label as one type while a type built inside it receives the label as another, and the mock rebinds the first under the label inside the receiver's builder function, where the second then reads it",
 			signatures: [.valueComparatorCouldNotDescribeGraph(containing: "cannot convert value of type")],
 			seeds: [574],
 		),
-		// Two shapes the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
+		// A shape the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
 		// before, a consumer held a holder the public tier omitted, which the tool rejected; now `Dock`'s own declaration
 		// proves the holder `public`, or, `package`, leaves a consumer in another package holding none.
-		GraphFuzzerKnownIssue(
-			reason: "A consumer's mock calls a tiered public mock whose tree receives one label as two types, and passes only one of the two parameters SafeDI names apart for it",
-			signatures: [.compilerError(containing: "missing argument for parameter 'count_Int' in call"), .renamedGraphDiffers(containing: "changes its generated mock configuration code")],
-			seeds: [665],
-		),
 		GraphFuzzerKnownIssue(
 			reason: "Two public mocks a consumer in another package calls each build their own instance of a dependency it cannot name (M8.9b), first built in a leaf's child, which the stated divergence's exemption does not derive",
 			signatures: [.publicMockBuildsOtherValuesThanKnownRight(containing: "t1 > t4 > session")],
@@ -3622,11 +3618,6 @@ struct SafeDIToolGraphFuzzerTests {
 				1_571, 1_650, 1_660, 1_691, 1_730, 1_769, 1_786, 1_790, 1_836, 1_992, 2_011, 2_054, 2_186, 2_254, 2_902, 2_937,
 				3_028, 3_482, 3_510, 3_702, 3_789, 3_847, 3_931, 3_966, 4_535, 4_602, 4_613, 4_631, 4_643, 4_865, 4_974, 4_975,
 			],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "A type receives a label as one type while a type built inside it receives the label as another, and the mock rebinds the first under the label inside the receiver's builder function, where the second then reads it",
-			signatures: [.compilerError(containing: "cannot convert value of type")],
-			seeds: [4_747],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A required receive in the tree of a dependency a mock promotes is handed the mocked type's onlyIfAvailable alias of that property, which is optional",
