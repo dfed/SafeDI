@@ -108,13 +108,22 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	///   - searchingTypesEnclosingIt: Whether the types enclosing `parentType` are searched, as they are for a
 	///     member of `parentType`'s declaration; a member of an extension of `parentType` is written at file scope,
 	///     where only `parentType`'s own nested types and the name as written are options.
+	///   - namesOfNestedInstantiableTypes: The name of each nested type among `instantiableTypes`, without the type
+	///     enclosing it. Every option but the name as written nests the instantiated type's own name, so when no nested
+	///     instantiable type has that name, the options before it are not searched.
 	/// - Returns: The qualified type, or `nil` when no option of the instantiated type is an instantiable type.
-	public func qualifyingInstantiatedType(
+	func qualifyingInstantiatedType(
 		within parentType: TypeDescription,
 		amongInstantiableTypes instantiableTypes: Set<TypeDescription>,
-		searchingTypesEnclosingIt: Bool = true,
+		searchingTypesEnclosingIt: Bool,
+		namesOfNestedInstantiableTypes: Set<String>,
 	) -> TypeDescription? {
 		replacingInstantiatedType { instantiatedType in
+			let searchesNestedOptions = instantiatedType.simpleNameAndGenerics.map { namesOfNestedInstantiableTypes.contains($0.name) } ?? false
+			guard searchesNestedOptions else {
+				// The name as written is the only option that can be an instantiable type.
+				return instantiableTypes.contains(instantiatedType) ? instantiatedType : nil
+			}
 			let options = Self.nestedOptions(
 				referencedType: instantiatedType,
 				within: parentType,
@@ -907,45 +916,64 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	/// - Parameter enclosingType: Returns the type to nest a type of the given outermost name in, or `nil` to keep the
 	///   name as written.
 	public func nestingOutermostNames(in enclosingType: (String) -> TypeDescription?) -> TypeDescription {
+		nestingOutermostNamesIfAny(in: enclosingType) ?? self
+	}
+
+	/// The receiver with each type it names nested as `nestingOutermostNames(in:)` nests it, or `nil` when
+	/// `enclosingType` returns `nil` for every outermost name, so that a caller keeps the receiver without rebuilding it.
+	public func nestingOutermostNamesIfAny(in enclosingType: (String) -> TypeDescription?) -> TypeDescription? {
 		switch self {
 		case let .simple(name, generics):
-			let nestedGenerics = generics.map { $0.nestingOutermostNames(in: enclosingType) }
+			let nestedGenerics = generics.replacingElementsIfAny { $0.nestingOutermostNamesIfAny(in: enclosingType) }
 			return if let parentType = enclosingType(name) {
-				.nested(name: name, parentType: parentType, generics: nestedGenerics)
+				.nested(name: name, parentType: parentType, generics: nestedGenerics ?? generics)
 			} else {
-				.simple(name: name, generics: nestedGenerics)
+				nestedGenerics.map { .simple(name: name, generics: $0) }
 			}
 		case let .nested(name, parentType, generics):
-			return .nested(name: name, parentType: parentType.nestingOutermostNames(in: enclosingType), generics: generics.map { $0.nestingOutermostNames(in: enclosingType) })
+			let nestedParentType = parentType.nestingOutermostNamesIfAny(in: enclosingType)
+			let nestedGenerics = generics.replacingElementsIfAny { $0.nestingOutermostNamesIfAny(in: enclosingType) }
+			guard nestedParentType != nil || nestedGenerics != nil else { return nil }
+			return .nested(name: name, parentType: nestedParentType ?? parentType, generics: nestedGenerics ?? generics)
 		case let .composition(types):
-			return .composition(UnorderedEquatingCollection(types.map { $0.nestingOutermostNames(in: enclosingType) }))
+			return Array(types).replacingElementsIfAny { $0.nestingOutermostNamesIfAny(in: enclosingType) }.map { .composition(UnorderedEquatingCollection($0)) }
 		case let .optional(type):
-			return .optional(type.nestingOutermostNames(in: enclosingType))
+			return type.nestingOutermostNamesIfAny(in: enclosingType).map { .optional($0) }
 		case let .implicitlyUnwrappedOptional(type):
-			return .implicitlyUnwrappedOptional(type.nestingOutermostNames(in: enclosingType))
+			return type.nestingOutermostNamesIfAny(in: enclosingType).map { .implicitlyUnwrappedOptional($0) }
 		case let .some(type):
-			return .some(type.nestingOutermostNames(in: enclosingType))
+			return type.nestingOutermostNamesIfAny(in: enclosingType).map { .some($0) }
 		case let .any(type):
-			return .any(type.nestingOutermostNames(in: enclosingType))
+			return type.nestingOutermostNamesIfAny(in: enclosingType).map { .any($0) }
 		case let .metatype(type, isType):
-			return .metatype(type.nestingOutermostNames(in: enclosingType), isType: isType)
+			return type.nestingOutermostNamesIfAny(in: enclosingType).map { .metatype($0, isType: isType) }
 		case let .attributed(type, specifiers, attributes):
-			return .attributed(type.nestingOutermostNames(in: enclosingType), specifiers: specifiers, attributes: attributes)
+			return type.nestingOutermostNamesIfAny(in: enclosingType).map { .attributed($0, specifiers: specifiers, attributes: attributes) }
 		case let .array(element):
-			return .array(element: element.nestingOutermostNames(in: enclosingType))
+			return element.nestingOutermostNamesIfAny(in: enclosingType).map { .array(element: $0) }
 		case let .dictionary(key, value):
-			return .dictionary(key: key.nestingOutermostNames(in: enclosingType), value: value.nestingOutermostNames(in: enclosingType))
+			let nestedKey = key.nestingOutermostNamesIfAny(in: enclosingType)
+			let nestedValue = value.nestingOutermostNamesIfAny(in: enclosingType)
+			guard nestedKey != nil || nestedValue != nil else { return nil }
+			return .dictionary(key: nestedKey ?? key, value: nestedValue ?? value)
 		case let .tuple(elements):
-			return .tuple(elements.map { TupleElement(label: $0.label, $0.typeDescription.nestingOutermostNames(in: enclosingType)) })
+			return elements
+				.replacingElementsIfAny { element in
+					element.typeDescription.nestingOutermostNamesIfAny(in: enclosingType).map { TupleElement(label: element.label, $0) }
+				}
+				.map { .tuple($0) }
 		case let .closure(arguments, isAsync, doesThrow, returnType):
+			let nestedArguments = arguments.replacingElementsIfAny { $0.nestingOutermostNamesIfAny(in: enclosingType) }
+			let nestedReturnType = returnType.nestingOutermostNamesIfAny(in: enclosingType)
+			guard nestedArguments != nil || nestedReturnType != nil else { return nil }
 			return .closure(
-				arguments: arguments.map { $0.nestingOutermostNames(in: enclosingType) },
+				arguments: nestedArguments ?? arguments,
 				isAsync: isAsync,
 				doesThrow: doesThrow,
-				returnType: returnType.nestingOutermostNames(in: enclosingType),
+				returnType: nestedReturnType ?? returnType,
 			)
 		case .unknown, .void:
-			return self
+			return nil
 		}
 	}
 
@@ -1225,5 +1253,22 @@ extension TypeSpecifierListSyntax {
 		} else {
 			compactMap(\.trimmedDescription)
 		}
+	}
+}
+
+extension Array {
+	/// This array with each element that `replacement` returns a value for replaced by that value, or `nil` when it
+	/// returns `nil` for every element, so that a caller keeps the array without copying it.
+	fileprivate func replacingElementsIfAny(_ replacement: (Element) -> Element?) -> [Element]? {
+		var replacedElements: [Element]?
+		for index in indices {
+			if let replacedElement = replacement(self[index]) {
+				if replacedElements == nil {
+					replacedElements = self
+				}
+				replacedElements?[index] = replacedElement
+			}
+		}
+		return replacedElements
 	}
 }

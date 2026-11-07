@@ -1806,6 +1806,89 @@ struct TypeDescriptionTests {
 		#expect(nested.asSource == expected)
 	}
 
+	@Test(arguments: [
+		"Theme",
+		"Box<Theme>",
+		"Inner.Palette",
+		"Swift.Result<Theme, Failure>",
+		"Theme?",
+		"Theme!",
+		"some Delegate",
+		"any Delegate",
+		"Delegate & Sendable",
+		"Theme.Type",
+		"@escaping (Theme) async throws -> Inner.Palette",
+		"[Theme]",
+		"[Failure: Theme]",
+		"(Theme, label: Theme)",
+		"Void",
+		"~Copyable",
+	])
+	func nestingOutermostNamesIfAny_returnsNil_whenItIsGivenNoEnclosingTypeForAnyName(source: String) {
+		let typeDescription = TypeSyntax(stringLiteral: source).typeDescription
+
+		let nested = typeDescription.nestingOutermostNamesIfAny { _ in nil }
+
+		#expect(nested == nil)
+	}
+
+	@Test(arguments: [
+		("(Failure, label: Theme)", "(Failure, label: Child.Theme)"),
+		("[Theme: Failure]", "[Child.Theme: Failure]"),
+		("(Failure) -> Theme", "(Failure) -> Child.Theme"),
+		("Swift.Result<Failure, Theme>", "Swift.Result<Failure, Child.Theme>"),
+		("Sendable & Delegate", "Sendable & Child.Delegate"),
+	])
+	func nestingOutermostNamesIfAny_keepsEveryOtherPart_whenItNestsOneNameAfterOthersItKeeps(source: String, expected: String) throws {
+		let typeDescription = TypeSyntax(stringLiteral: source).typeDescription
+
+		let nested = try #require(typeDescription.nestingOutermostNamesIfAny { name in
+			["Theme", "Delegate"].contains(name) ? .simple(name: "Child") : nil
+		})
+
+		#expect(nested.asSource == expected)
+	}
+
+	// MARK: - qualifyingInstantiatedType
+
+	@Test(arguments: [
+		("Service", "Feature.Service"),
+		("Instantiator<Service>?", "Instantiator<Feature.Service>?"),
+		("LazilyInstantiated<any Service>", "LazilyInstantiated<any Feature.Service>"),
+		("Other", "Other"),
+		("Instantiator<Other>", "Instantiator<Other>"),
+		("Inner.Service", "Feature.Inner.Service"),
+		("any Other", "any Other"),
+		("[Other]", nil),
+		("Missing", nil),
+	] as [(String, String?)])
+	func qualifyingInstantiatedType_qualifiesAsItDoesWhenSearchingEveryName_whenGivenOnlyTheNamesOfNestedInstantiableTypes(source: String, expected: String?) {
+		let typeDescription = TypeSyntax(stringLiteral: source).typeDescription
+		let parentType = TypeDescription.nested(name: "Root", parentType: .simple(name: "Feature"))
+		let instantiableTypes: Set<TypeDescription> = [
+			.nested(name: "Service", parentType: .simple(name: "Feature")),
+			.nested(name: "Service", parentType: .nested(name: "Inner", parentType: .simple(name: "Feature"))),
+			.simple(name: "Other"),
+		]
+
+		let qualified = typeDescription.qualifyingInstantiatedType(
+			within: parentType,
+			amongInstantiableTypes: instantiableTypes,
+			searchingTypesEnclosingIt: true,
+			namesOfNestedInstantiableTypes: ["Service"],
+		)
+
+		#expect(qualified?.asSource == expected)
+		// Every name the arguments spell, so that every option of each is searched.
+		let qualifiedSearchingEveryName = typeDescription.qualifyingInstantiatedType(
+			within: parentType,
+			amongInstantiableTypes: instantiableTypes,
+			searchingTypesEnclosingIt: true,
+			namesOfNestedInstantiableTypes: ["Inner", "Missing", "Other", "Service"],
+		)
+		#expect(qualified?.asSource == qualifiedSearchingEveryName?.asSource)
+	}
+
 	// MARK: - replacingInstantiatedType
 
 	@Test

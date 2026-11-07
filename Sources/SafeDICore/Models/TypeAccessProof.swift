@@ -934,17 +934,48 @@ extension TypeAccessProof {
 		/// normalization runs before the run knows its own files, and such a declaration is in one of them, or in a
 		/// directory a configuration adds.
 		public init(instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration]) {
-			instantiableTypes = Set(instantiables.flatMap(\.instantiableTypes))
-			self.plainTypeDeclarations = PlainTypeDeclarations(
+			let instantiableTypes = Set(instantiables.flatMap(\.instantiableTypes))
+			self.instantiableTypes = instantiableTypes
+			let plainTypeDeclarations = PlainTypeDeclarations(
 				plainTypeDeclarations,
 				entryTypes: Set(instantiables.map(\.concreteInstantiable)),
 				moduleNames: Set(instantiables.compactMap(\.moduleName)),
 				isOwnFile: { _ in true },
 			)
+			self.plainTypeDeclarations = plainTypeDeclarations
+			var namesOfNestedInstantiableTypes = Set<String>()
+			// An instantiable type is not spelled with `any`: a declaration's type is a name, and each
+			// `fulfillingAdditionalTypes:` entry is read through `asInstantiatedType`, which drops `any` from every type but
+			// the generic of a SafeDI wrapper the entry names (`Instantiator<any P>.self`), a wrapper listed as a type the
+			// declaration fulfills, which SafeDI does not support.
+			for case let .nested(name, _, _) in instantiableTypes {
+				namesOfNestedInstantiableTypes.insert(name)
+			}
+			self.namesOfNestedInstantiableTypes = namesOfNestedInstantiableTypes
+			namesOfNestedTypes = plainTypeDeclarations.namesOfNestedDeclarations
+				.union(namesOfNestedInstantiableTypes.map(\.spelledWithoutBackticks))
+		}
+
+		/// `type`, which a member of `enclosingType` spells, with the type it instantiates qualified among the instantiable
+		/// types as `TypeDescription.qualifyingInstantiatedType(within:amongInstantiableTypes:searchingTypesEnclosingIt:namesOfNestedInstantiableTypes:)`
+		/// qualifies it, or `nil` when no option of the instantiated type is one.
+		/// - Parameter searchingTypesEnclosingIt: Whether the member is written inside the types enclosing `enclosingType`,
+		///   rather than in an extension at file scope.
+		public func qualifyingInstantiatedType(
+			in type: TypeDescription,
+			writtenWithin enclosingType: TypeDescription,
+			searchingTypesEnclosingIt: Bool,
+		) -> TypeDescription? {
+			type.qualifyingInstantiatedType(
+				within: enclosingType,
+				amongInstantiableTypes: instantiableTypes,
+				searchingTypesEnclosingIt: searchingTypesEnclosingIt,
+				namesOfNestedInstantiableTypes: namesOfNestedInstantiableTypes,
+			)
 		}
 
 		/// `type`, which a member of `enclosingType` spells, with each type it names qualified as Swift resolves the type's
-		/// outermost name there.
+		/// outermost name there, or `nil` when it qualifies none of them.
 		/// - Parameters:
 		///   - searchingTypesEnclosingIt: Whether the member is written inside the types enclosing `enclosingType`, as a
 		///     member of a type declared inside them is, rather than in an extension at file scope.
@@ -954,8 +985,13 @@ extension TypeAccessProof {
 			writtenWithin enclosingType: TypeDescription,
 			searchingTypesEnclosingIt: Bool,
 			mentionedFrom mentioningModule: MentioningModule,
-		) -> TypeDescription {
-			type.nestingOutermostNames { name in
+		) -> TypeDescription? {
+			// Every option nests the name in `enclosingType` or a type enclosing it, so it names a nested declaration of the
+			// name, unless the outermost of those types has a module's name: a mention spelled with a module's name first
+			// names that module's declarations, top-level ones too (`PlainTypeDeclarations.candidates`).
+			let searchesEveryName = enclosingType.outermostTypeName.map(plainTypeDeclarations.moduleNames.contains) ?? false
+			return type.nestingOutermostNamesIfAny { name in
+				guard searchesEveryName || mayNameNestedType(name) else { return nil }
 				// The options run from the most qualified outward and end with the name as written, which is kept.
 				let options = TypeDescription.nestedOptions(referencedType: .simple(name: name), within: enclosingType).dropLast()
 				return (searchingTypesEnclosingIt ? options : options.prefix(1))
@@ -966,7 +1002,20 @@ extension TypeAccessProof {
 			}
 		}
 
+		/// Whether `name` may be the name of a nested instantiable type or of a nested plain declaration a mention can find,
+		/// which a declaration records without its backticks.
+		private func mayNameNestedType(_ name: String) -> Bool {
+			let spelling = name.spelledWithoutBackticks
+			// A raw identifier holding a period cannot be told from the names around it in a declaration's key.
+			return spelling.utf8.contains(UInt8(ascii: ".")) || namesOfNestedTypes.contains(spelling)
+		}
+
 		private let instantiableTypes: Set<TypeDescription>
+		/// The name of each nested type among `instantiableTypes`, without the types enclosing it.
+		private let namesOfNestedInstantiableTypes: Set<String>
+		/// The name of each nested instantiable type and of each nested plain declaration, without the types enclosing it
+		/// and without backticks.
+		private let namesOfNestedTypes: Set<String>
 		private let plainTypeDeclarations: PlainTypeDeclarations
 	}
 }
@@ -1038,10 +1087,23 @@ extension TypeAccessProof {
 			}
 		}
 
+		/// The name of each nested declaration a mention can find, without the types enclosing it: what follows the last
+		/// period of its key (`TypeDescription.plainDeclarationKey`).
+		var namesOfNestedDeclarations: Set<String> {
+			var names = Set<String>()
+			for key in declarationsByType.keys {
+				if let lastPeriod = key.utf8.lastIndex(of: UInt8(ascii: ".")) {
+					names.insert(String(key[key.utf8.index(after: lastPeriod)...]))
+				}
+			}
+			return names
+		}
+
 		/// The declarations, by the type each declares (`TypeDescription.plainDeclarationKey`).
 		private let declarationsByType: [String: [PlainTypeDeclaration]]
 		private let entryTypes: Set<TypeDescription>
-		private let moduleNames: Set<String>
+		/// The names of the modules a mention can spell before a type's name.
+		let moduleNames: Set<String>
 	}
 
 	/// The plain declarations a mention of a type names: `level`, the narrowest of their levels, proves the type.
