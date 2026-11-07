@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 // The installer hashes with CryptoKit, which only Apple platforms have; it downloads nothing elsewhere.
 #if canImport(CryptoKit)
 	import Foundation
