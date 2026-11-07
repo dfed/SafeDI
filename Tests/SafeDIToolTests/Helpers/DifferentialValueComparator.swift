@@ -1733,10 +1733,12 @@ extension DifferentialValuePath {
 			return
 		}
 		let presentModules = Set(fileModules)
+		let modulesWithoutPackage = fixture.modulesOmittingPackageName
 		self.init(modules: GraphFuzzerModule.allCases.filter(presentModules.contains).map { module in
 			DifferentialValueModule(
 				name: module.name,
-				packageName: module.packageName,
+				// A module without a package compiles without `-package-name`, as the oracle compiles it.
+				packageName: modulesWithoutPackage.contains(module) ? nil : module.packageName,
 				dependencyModuleNames: module.dependencies.filter(presentModules.contains).map(\.name),
 				fixtureFiles: Dictionary(uniqueKeysWithValues: fileModules.indices.filter { fileModules[$0] == module }.map { (fixture.fileNames[$0], fixture.swiftFileContent[$0]) }),
 				generatedFiles: Dictionary(uniqueKeysWithValues: generatedFiles.compactMap { fileName, contents in

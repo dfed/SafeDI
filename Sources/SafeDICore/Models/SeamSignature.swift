@@ -614,6 +614,8 @@ public struct SeamCall: Sendable {
 		requirement: AccessRequirement = .internal,
 		seamModuleName: String? = nil,
 		callerModuleName: String? = nil,
+		seamPackageName: String? = nil,
+		callerPackageName: String? = nil,
 	) {
 		self.parameters = parameters
 		self.holes = holes
@@ -626,6 +628,8 @@ public struct SeamCall: Sendable {
 		self.requirement = requirement
 		self.seamModuleName = seamModuleName
 		self.callerModuleName = callerModuleName
+		self.seamPackageName = seamPackageName
+		self.callerPackageName = callerPackageName
 	}
 
 	/// The parameters of the tier the call passes, each at the access it was received at inside the seam, which a
@@ -650,13 +654,16 @@ public struct SeamCall: Sendable {
 	public let seamModuleName: String?
 	/// The module that makes the call, as far as SafeDI knows it.
 	public let callerModuleName: String?
+	/// The package of the module that declares the seam, as SafeDI is told it.
+	public let seamPackageName: String?
+	/// The package of the module that makes the call, as SafeDI is told it.
+	public let callerPackageName: String?
 	/// Whether the caller's module reaches no tier of the call and the check of every construction is certain to
 	/// report the declaration whose widening makes a tier reachable: the seam's type, or a type enclosing it, which
 	/// every tier's access is capped at, fails the requirement the caller's module puts on it. A seam whose tree makes
 	/// such a call takes the call's parameters as pass-throughs but reports no omission of its own for them: the
-	/// report is the type's. `false` where the caller reaches a tier, where the check may pass the type – one whose
-	/// module's package the caller cannot tell from its own, which `package` access is assumed to reach – and where the
-	/// caller runs no check: the omission is then reported as any other receive's is.
+	/// report is the type's. `false` where the caller reaches a tier and where the caller runs no check: the omission is
+	/// then reported as any other receive's is.
 	public let unreachableTierIsReported: Bool
 }
 

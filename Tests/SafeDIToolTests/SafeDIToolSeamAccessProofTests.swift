@@ -3788,7 +3788,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			    @Received private let user: User
 			}
 			""",
-		], omitsPackageName: true)
+		])
 		let subprojectOutput = try await executeSafeDIToolMultiModuleTest(modules: [subproject], integration: .moduleInfo, filesToDelete: &filesToDelete)
 		// Split for Swift 6.2 on Linux, which times out type-checking chains like this one.
 		let expectedSubprojectFile: String = [generatedFileHeader, String(Self.importLines("Foundation").dropLast()), Self.importLines("SafeDI"), """
