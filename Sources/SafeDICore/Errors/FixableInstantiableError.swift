@@ -85,9 +85,9 @@ public enum FixableInstantiableError: DiagnosticError {
 	/// Two names of one declaration that SafeDI matches by name, `earlierName` and `laterName`, are equal as `String`s
 	/// but differ in their UTF-8 bytes: Swift reads them as two names, and SafeDI as one.
 	case namesEncodedDifferently(earlierName: String, laterName: String)
-	/// A dependency's type names types declared inside the decorated declaration, each spelled as `spelling`, which code
-	/// SafeDI generates in another type's extension cannot resolve.
-	case unqualifiedNestedType(typeNames: [(spelling: String, qualifiedSpelling: String)], enclosingTypeName: String, dependencyLabel: String)
+	/// A dependency's type names types declared inside the decorated declaration through `Self`, each spelled as
+	/// `spelling`, which code SafeDI generates in another type's extension spells as written, where `Self` is that type.
+	case nestedTypeSpelledThroughSelf(typeNames: [(spelling: String, qualifiedSpelling: String)])
 	/// A `@Received(fulfilledByDependencyNamed:ofType:)` declaration, `label`, is fulfilled by `sourceLabel`, which the
 	/// same declaration also renames. `remedy` says what to rename instead.
 	case renameOfRename(label: String, sourceLabel: String, remedy: RenameOfRenameRemedy)
@@ -255,11 +255,11 @@ public enum FixableInstantiableError: DiagnosticError {
 			"The names `\(earlierName)` (\(earlierName.codePoints)) and `\(laterName)` (\(laterName.codePoints)) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them."
 		case .unnamedInstantiateDependency:
 			"This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value."
-		case let .unqualifiedNestedType(typeNames, enclosingTypeName, dependencyLabel):
+		case let .nestedTypeSpelledThroughSelf(typeNames):
 			if typeNames.count == 1 {
-				"The generated code that builds or receives `\(dependencyLabel)` lives in another type’s extension, where \(typeNames.map { "`\($0.spelling)`" }.joinedAsList), declared in `\(enclosingTypeName)`, does not resolve. Write it as \(typeNames.map { "`\($0.qualifiedSpelling)`" }.joinedAsList)."
+				"Generated code spells \(typeNames.map { "`\($0.spelling)`" }.joinedAsList) in another type’s extension, where `Self` is that type. Write it as \(typeNames.map { "`\($0.qualifiedSpelling)`" }.joinedAsList)."
 			} else {
-				"The generated code that builds or receives `\(dependencyLabel)` lives in another type’s extension, where \(typeNames.map { "`\($0.spelling)`" }.joinedAsList), declared in `\(enclosingTypeName)`, do not resolve. Write them as \(typeNames.map { "`\($0.qualifiedSpelling)`" }.joinedAsList)."
+				"Generated code spells \(typeNames.map { "`\($0.spelling)`" }.joinedAsList) in another type’s extension, where `Self` is that type. Write them as \(typeNames.map { "`\($0.qualifiedSpelling)`" }.joinedAsList)."
 			}
 		case let .renameOfRename(label, sourceLabel, remedy):
 			"`\(label)` is renamed from `\(sourceLabel)`, which this declaration also renames. \(remedy.sentence(renaming: label))"
@@ -330,7 +330,7 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .renameOfItself:
 				.error
 			case .mockAttributesOnMockOnly,
-			     .unqualifiedNestedType:
+			     .nestedTypeSpelledThroughSelf:
 				.warning
 			}
 			message = error.description
@@ -435,7 +435,7 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Name the parameter `\(argumentLabel)`"
 			case let .namesEncodedDifferently(_, laterName):
 				"Rename `\(laterName)`"
-			case let .unqualifiedNestedType(typeNames, _, _):
+			case let .nestedTypeSpelledThroughSelf(typeNames):
 				"Replace \(typeNames.map { "`\($0.spelling)` with `\($0.qualifiedSpelling)`" }.joinedAsList)"
 			case let .renameOfRename(_, _, remedy):
 				switch remedy {

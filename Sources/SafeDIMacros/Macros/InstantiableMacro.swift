@@ -168,7 +168,7 @@ public struct InstantiableMacro: MemberMacro {
 			Self.diagnoseRenamesOfRenamesAndOfThemselves(among: declaration.memberBlock.members, context: context)
 
 			let memberDeclarations = Self.declarations(in: declaration.memberBlock.members)
-			Self.diagnoseUnqualifiedNestedTypes(
+			Self.diagnoseNestedTypesSpelledThroughSelf(
 				in: memberDeclarations
 					.compactMap { VariableDeclSyntax($0) }
 					.flatMap { variable -> [DependencyTypeSyntax] in
@@ -865,7 +865,7 @@ public struct InstantiableMacro: MemberMacro {
 			}
 
 			// Each parameter of `instantiate(…)` without a default value is a dependency, as `InstantiableVisitor` finds.
-			Self.diagnoseUnqualifiedNestedTypes(
+			Self.diagnoseNestedTypesSpelledThroughSelf(
 				in: visitor.instantiateFunctions.flatMap { instantiateFunction in
 					instantiateFunction.syntax.signature.parameterClause.parameters
 						.filter { $0.defaultValue == nil }
@@ -1551,17 +1551,14 @@ public struct InstantiableMacro: MemberMacro {
 		}
 	}
 
-	/// Diagnoses each dependency whose type names a type declared among `declarations` without qualifying it, or
-	/// through `Self`, where generated code would spell it so. Generated code spells a dependency's type as its
-	/// declaration does, and the code that builds or receives the dependency for another type – that type's
-	/// initializer, an `Instantiator`'s builder, or that type's `mock()` – lives in an extension of that other type,
-	/// where a type nested in `enclosingType` is not in scope and `Self` names the other type. SafeDI qualifies a nested
-	/// type that an `@Instantiable` declaration fulfills where it is the dependency's type or the type a wrapper such as
-	/// `Instantiator` builds, as `TypeDescription.qualifyingInstantiatedType(within:amongInstantiableTypes:)` does for
-	/// SafeDITool, so the name is not diagnosed there. An alias's `ofType:` argument spells the type of the property it
-	/// renames, which generated code spells too, so it is checked with the dependency's type. The diagnostic is a
-	/// warning because the declaration compiles while only its own `mock()`, which lives in an extension of
-	/// `enclosingType`, names the type.
+	/// Diagnoses each dependency whose type names a type declared among `declarations` through `Self`, such as
+	/// `Self.Config`. Generated code spells a dependency's type as its declaration does, and the code that builds or
+	/// receives the dependency for another type – that type's initializer, an `Instantiator`'s builder, or that type's
+	/// `mock()` – lives in an extension of that other type, where `Self` names the other type. SafeDITool qualifies a
+	/// nested type's bare name (`Config`) wherever a declaration spells it, but never a spelling through `Self`, so only
+	/// that spelling is diagnosed. An alias's `ofType:` argument spells the type of the property it renames, which
+	/// generated code spells too, so it is checked with the dependency's type. The diagnostic is a warning because the
+	/// declaration compiles while only its own `mock()`, which lives in an extension of `enclosingType`, names the type.
 	///
 	/// Each dependency gets one diagnostic, naming every such type, and one fix-it, which qualifies all of them in the
 	/// dependency's type, its `ofType:` argument, and the type of each parameter with the dependency's name among
@@ -1571,64 +1568,49 @@ public struct InstantiableMacro: MemberMacro {
 	///   - dependencies: Each dependency's name and the syntax that spells its type.
 	///   - functionSignatures: The initializers and hand-written mocks whose parameters fulfill the dependencies.
 	///   - declarations: The members of the decorated declaration, with those in each clause of its `#if` blocks.
-	///   - enclosingType: The decorated type with every type that encloses it, which the fix-it writes before the
-	///     nested type's name.
-	private static func diagnoseUnqualifiedNestedTypes(
+	///   - enclosingType: The decorated type with every type that encloses it, which the fix-it writes in place of
+	///     `Self`.
+	private static func diagnoseNestedTypesSpelledThroughSelf(
 		in dependencies: [DependencyTypeSyntax],
 		fulfilledByParametersOf functionSignatures: [FunctionSignatureSyntax],
 		declaredAmong declarations: [DeclSyntax],
 		enclosingType enclosingTypeDescription: TypeDescription,
 		context: some MacroExpansionContext,
 	) {
-		let nestedTypes = declarations.compactMap(\.nestedTypeDeclaration)
-		let nestedInstantiableTypes = Set(nestedTypes.filter(\.isInstantiable).map {
-			TypeDescription.nested(name: $0.name, parentType: enclosingTypeDescription)
-		})
 		// Sorted so that a diagnostic names the types in the same order every time.
-		let nestedTypeSpellings = Set(nestedTypes.map(\.name)).sorted().flatMap { typeName in
-			[
-				UnresolvedNestedTypeSpelling(path: [typeName], typeName: typeName),
-				UnresolvedNestedTypeSpelling(path: ["Self", typeName], typeName: typeName),
-			]
-		}
-		func unresolvedSpellings(in typeDescription: TypeDescription) -> [UnresolvedNestedTypeSpelling] {
-			nestedTypeSpellings.filter { spelling in typeDescription.namesType(where: { $0.starts(with: spelling.path) }) }
+		let nestedTypeNames = Set(declarations.compactMap(\.nestedTypeName)).sorted()
+		func namesSpelledThroughSelf(in typeDescription: TypeDescription) -> [String] {
+			nestedTypeNames.filter { typeName in typeDescription.namesType(where: { $0.starts(with: ["Self", typeName]) }) }
 		}
 		let enclosingTypeName = enclosingTypeDescription.asSource
 		let enclosingType = TypeSyntax(IdentifierTypeSyntax(name: .identifier(enclosingTypeName)))
 		let parameters = functionSignatures.flatMap(\.parameterClause.parameters)
 		for dependency in dependencies {
-			// The syntax spelling the dependency's type, and its alias's `ofType:` argument, where generated code would
-			// spell a nested type unresolved.
+			// The syntax spelling the dependency's type, and its alias's `ofType:` argument, that names a nested type
+			// through `Self`.
 			let typeSyntaxes: [(syntax: Syntax, typeDescription: TypeDescription)] = [(Syntax(dependency.type), dependency.type.typeDescription)]
 				+ (dependency.aliasedType.map { [(Syntax($0), $0.typeDescription)] } ?? [])
-			let unresolvedSyntaxes = typeSyntaxes.map { syntax, declaredTypeDescription in
-				let generatedTypeDescription = declaredTypeDescription.qualifyingInstantiatedType(
-					within: enclosingTypeDescription,
-					amongInstantiableTypes: nestedInstantiableTypes,
-				) ?? declaredTypeDescription
-				return (syntax: syntax, spellings: unresolvedSpellings(in: generatedTypeDescription))
-			}.filter { !$0.spellings.isEmpty }
-			if let diagnosedSyntax = unresolvedSyntaxes.first?.syntax {
-				let spellings = nestedTypeSpellings.filter { spelling in
-					unresolvedSyntaxes.contains { $0.spellings.contains(spelling) }
+			let diagnosedSyntaxes = typeSyntaxes.map { syntax, typeDescription in
+				(syntax: syntax, typeNames: namesSpelledThroughSelf(in: typeDescription))
+			}.filter { !$0.typeNames.isEmpty }
+			if let diagnosedSyntax = diagnosedSyntaxes.first?.syntax {
+				let typeNames = nestedTypeNames.filter { typeName in
+					diagnosedSyntaxes.contains { $0.typeNames.contains(typeName) }
 				}
 				let dependencyLabel = dependency.name.spelledAsParameterName
 				let fulfillingParameterTypes = parameters
 					.filter { ($0.secondName ?? $0.firstName).spelledAsParameterName == dependencyLabel }
 					.map(\.type)
-					.filter { !unresolvedSpellings(in: $0.typeDescription).isEmpty }
-				let qualifier = NestedTypeNameQualifier(typeNames: Set(spellings.map(\.typeName)), enclosingType: enclosingType)
+					.filter { !namesSpelledThroughSelf(in: $0.typeDescription).isEmpty }
+				let qualifier = NestedTypeThroughSelfQualifier(typeNames: Set(typeNames), enclosingType: enclosingType)
 				context.diagnose(Diagnostic(
 					node: diagnosedSyntax,
-					error: FixableInstantiableError.unqualifiedNestedType(
-						typeNames: spellings.map {
-							(spelling: $0.path.joined(separator: "."), qualifiedSpelling: "\(enclosingTypeName).\($0.typeName)")
+					error: FixableInstantiableError.nestedTypeSpelledThroughSelf(
+						typeNames: typeNames.map {
+							(spelling: "Self.\($0)", qualifiedSpelling: "\(enclosingTypeName).\($0)")
 						},
-						enclosingTypeName: enclosingTypeName,
-						dependencyLabel: dependency.name.text,
 					),
-					changes: (unresolvedSyntaxes.map(\.syntax) + fulfillingParameterTypes.map(Syntax.init)).map { syntax in
+					changes: (diagnosedSyntaxes.map(\.syntax) + fulfillingParameterTypes.map(Syntax.init)).map { syntax in
 						.replace(
 							oldNode: syntax,
 							newNode: qualifier.rewrite(syntax),
@@ -1777,12 +1759,12 @@ public struct InstantiableMacro: MemberMacro {
 		cappedBy enclosingLevel: AccessLevel,
 	) -> [(path: [String], level: AccessLevel)] {
 		declarations(in: members).flatMap { declaration -> [(path: [String], level: AccessLevel)] in
-			guard let nestedType = declaration.nestedTypeDeclaration,
+			guard let nestedTypeName = declaration.nestedTypeName,
 			      let modifiers = declaration.asProtocol(WithModifiersSyntax.self)?.modifiers
 			else {
 				return []
 			}
-			let path = enclosingPath + [nestedType.name]
+			let path = enclosingPath + [nestedTypeName]
 			let level = (modifiers.spelledAccessLevel ?? defaultLevel).capped(by: enclosingLevel)
 			let typesDeclaredInside = declaration.asProtocol(DeclGroupSyntax.self).map {
 				nestedTypes(declaredAmong: $0.memberBlock.members, defaultLevel: .internal, enclosingPath: path, cappedBy: level)
@@ -2293,18 +2275,13 @@ extension TypeDescription {
 // MARK: - DeclSyntax
 
 extension DeclSyntax {
-	/// The name of the type this declares – a struct, class, actor, enum, protocol, or type alias – and whether
-	/// `@Instantiable` decorates it, or `nil` when this declares no type.
-	fileprivate var nestedTypeDeclaration: (name: String, isInstantiable: Bool)? {
-		guard isProtocol(DeclGroupSyntax.self) || `is`(TypeAliasDeclSyntax.self),
-		      let typeDeclaration = asProtocol(NamedDeclSyntax.self)
-		else {
+	/// The name of the type this declares – a struct, class, actor, enum, protocol, or type alias – or `nil` when this
+	/// declares no type.
+	fileprivate var nestedTypeName: String? {
+		guard isProtocol(DeclGroupSyntax.self) || `is`(TypeAliasDeclSyntax.self) else {
 			return nil
 		}
-		return (
-			name: typeDeclaration.name.text,
-			isInstantiable: asProtocol(WithAttributesSyntax.self)?.attributes.instantiableMacro != nil,
-		)
+		return asProtocol(NamedDeclSyntax.self)?.name.text
 	}
 }
 
@@ -2438,41 +2415,16 @@ private struct DependencyTypeSyntax {
 	let aliasedType: ExprSyntax?
 }
 
-// MARK: - UnresolvedNestedTypeSpelling
+// MARK: - NestedTypeThroughSelfQualifier
 
-/// A spelling of a nested type that code in another type's extension does not resolve: its name alone, or through
-/// `Self`.
-private struct UnresolvedNestedTypeSpelling: Hashable {
-	/// The names that spell the type, such as `["Self", "Config"]`.
-	let path: [String]
-	/// The name of the nested type.
-	let typeName: String
-}
-
-// MARK: - NestedTypeNameQualifier
-
-/// Writes each use of a nested type's name without qualification, or through `Self`, with the type that declares it:
-/// `[Config]` becomes `[Child.Config]`, `Config.Options` becomes `Child.Config.Options`, `Self.Config` becomes
-/// `Child.Config`, and `Config.self` becomes `Child.Config.self`, while `Child.Config` is unchanged.
-private final class NestedTypeNameQualifier: SyntaxRewriter {
+/// Writes each use of a nested type's name through `Self` with the type that declares it: `Self.Config` becomes
+/// `Child.Config`, `Self.Config.Options` becomes `Child.Config.Options`, and `Self.Config.self` becomes
+/// `Child.Config.self`, while `Config` and `Child.Config`, which SafeDI qualifies or which are qualified, are unchanged.
+private final class NestedTypeThroughSelfQualifier: SyntaxRewriter {
 	init(typeNames: Set<String>, enclosingType: TypeSyntax) {
 		self.typeNames = typeNames
 		self.enclosingType = enclosingType
 		super.init(viewMode: .sourceAccurate)
-	}
-
-	override func visit(_ node: IdentifierTypeSyntax) -> TypeSyntax {
-		guard typeNames.contains(node.name.text) else {
-			return super.visit(node)
-		}
-		var qualifiedType = MemberTypeSyntax(
-			baseType: enclosingType,
-			name: node.name.trimmed,
-			genericArgumentClause: node.genericArgumentClause.map { visit($0) },
-		)
-		qualifiedType.leadingTrivia = node.leadingTrivia
-		qualifiedType.trailingTrivia = node.trailingTrivia
-		return TypeSyntax(qualifiedType)
 	}
 
 	override func visit(_ node: MemberTypeSyntax) -> TypeSyntax {
@@ -2482,19 +2434,6 @@ private final class NestedTypeNameQualifier: SyntaxRewriter {
 		return TypeSyntax(node
 			.with(\.baseType, enclosingType.with(\.leadingTrivia, node.baseType.leadingTrivia))
 			.with(\.genericArgumentClause, node.genericArgumentClause.map { visit($0) }))
-	}
-
-	override func visit(_ node: DeclReferenceExprSyntax) -> ExprSyntax {
-		guard typeNames.contains(node.baseName.text) else {
-			return super.visit(node)
-		}
-		var qualifiedType = MemberAccessExprSyntax(
-			base: enclosingTypeExpression,
-			declName: node.trimmed,
-		)
-		qualifiedType.leadingTrivia = node.leadingTrivia
-		qualifiedType.trailingTrivia = node.trailingTrivia
-		return ExprSyntax(qualifiedType)
 	}
 
 	override func visit(_ node: MemberAccessExprSyntax) -> ExprSyntax {
