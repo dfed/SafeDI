@@ -26,9 +26,12 @@ toolchain). The SafeDI rules themselves are platform-agnostic.
   declaration of as `public`, so `Models` is a `safedi_swift_library`
   and its `Models_safedi` is in the `safedi_deps` of `Subproject`, which
   imports it: without it, the `public` initializer would take a `package`
-  type and fail to compile. The app, whose root calls the seam, lists
-  only `Subproject_safedi`, the module it imports: `Subproject`'s
-  `.safedi` carries what `WindowTitle`'s signature needs of `Models`.
+  type and fail to compile. The app declares the root, which calls the
+  seam, so it lists every module beneath it, `Models_safedi` and
+  `Subproject_safedi`: a root's tree can build a type any of them
+  declares. `Subproject`'s `.safedi` also carries what `WindowTitle`'s
+  signature needs of `Models`, so a module that only calls the seam
+  would not list `Models` for it.
   All three modules set the same `package_name`.
 - **`safedi_swift_library` macro** — `load("@safedi//bazel:safedi.bzl", "safedi_swift_library")`. It takes a `swift_library`'s attributes and declares two targets from them:
   - `<name>`, the `swift_library`, which compiles `srcs` together with the generated code.
@@ -37,7 +40,7 @@ toolchain). The SafeDI rules themselves are platform-agnostic.
     - `<name>_safedi.swift` — combined dependency-tree + mocks + mock configuration source.
   With the manifest `scan` plans, as the SPM plugin uses, SafeDITool writes one generated `.swift` per source file that declares a root, one per source file that declares a `generateMock: true` type, one per `additionalMocksToGenerate` entry, and, when there are mocks, the shared mock configuration. `--combined-output` concatenates them into one statically-declared output instead — no hand-maintained output list regardless of how many `@Instantiable(isRoot:)` / `generateMock: true` types the module declares.
 - **One set of compilation conditions.** Both targets receive the same `defines` and `copts`, so SafeDITool scans the `#if` clauses the compiler compiles. SafeDITool also sees `DEBUG` in `dbg`/`fastbuild` builds, `NDEBUG` in `opt` builds, and every `-D` passed with `--@rules_swift//swift:copt`.
-- **Cross-module type resolution via `.safedi`.** The host target reaches the subproject via `safedi_deps = ["//Subproject:Subproject_safedi"]` and never re-parses its sources.
+- **Cross-module type resolution via `.safedi`.** The host target reaches the subproject and `Models` via `safedi_deps = ["//Models:Models_safedi", "//Subproject:Subproject_safedi"]` and never re-parses their sources.
 - **SafeDI consumed via `bazel_dep`.** MODULE.bazel declares
   `bazel_dep(name = "safedi", ...)`. In this repo the dep is resolved
   via `local_path_override` to the workspace root so the example
