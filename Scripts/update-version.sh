@@ -1,24 +1,36 @@
 #!/bin/bash
 
 # Updates the artifact bundle URL and checksum in Package.swift, the
-# InstallSafeDITool plugin's hardcoded SafeDI version in
-# Plugins/Shared.swift, the Bazel module version in MODULE.bazel, and,
+# InstallSafeDITool plugin's hardcoded SafeDI version and the SHA-256 of
+# each macOS SafeDITool binary it downloads in Plugins/Shared.swift, the
+# Bazel module version in MODULE.bazel, and,
 # for a stable release, the install snippets in the documentation that
 # state a SafeDI version.
 # Used by the publish workflow after building the artifact bundle.
 #
-# Usage: ./Scripts/update-version.sh <version> <checksum>
-# Example: ./Scripts/update-version.sh 2.0.0 abc123def456
+# Usage: ./Scripts/update-version.sh <version> <checksum> <macos-arm64-binary> <macos-x86_64-binary>
+# Example: ./Scripts/update-version.sh 2.0.0 abc123def456 SafeDITool-macos-arm64 SafeDITool-macos-x86_64
+#
+# The two binaries are the files the release uploads as the
+# `SafeDITool-macos-arm64` and `SafeDITool-macos-x86_64` assets, byte for
+# byte: the installer checks its download against their hashes.
 
 set -euo pipefail
 
-if [ $# -ne 2 ]; then
-    echo "Usage: $0 <version> <checksum>" >&2
+if [ $# -ne 4 ]; then
+    echo "Usage: $0 <version> <checksum> <macos-arm64-binary> <macos-x86_64-binary>" >&2
     exit 1
 fi
 
 VERSION="$1"
 CHECKSUM="$2"
+MACOS_ARM64_BINARY="$3"
+MACOS_X86_64_BINARY="$4"
+
+# `shasum` ships with both macOS and the Linux runners CI checks this
+# script on.
+MACOS_ARM64_SHA256=$(shasum -a 256 "$MACOS_ARM64_BINARY" | cut -d ' ' -f 1)
+MACOS_X86_64_SHA256=$(shasum -a 256 "$MACOS_X86_64_BINARY" | cut -d ' ' -f 1)
 
 # The documentation files whose install snippets state a SafeDI version.
 # The publish workflow commits each of them, and the CI check fails when
@@ -60,6 +72,15 @@ echo "  Package.swift: URL and checksum updated"
 sed_in_place -E "/var safeDIVersion: String \{/,/\}/ s|\"[^\"]+\"|\"${VERSION}\"|" Plugins/Shared.swift
 
 echo "  Plugins/Shared.swift: safeDIVersion updated"
+
+# Update the SHA-256 the installer checks each macOS binary against, with
+# the same address range: the only quoted string inside each getter body
+# is its digest.
+sed_in_place -E "/var safeDIToolMacOSArm64SHA256: String \{/,/\}/ s|\"[^\"]+\"|\"${MACOS_ARM64_SHA256}\"|" Plugins/Shared.swift
+sed_in_place -E "/var safeDIToolMacOSX86_64SHA256: String \{/,/\}/ s|\"[^\"]+\"|\"${MACOS_X86_64_SHA256}\"|" Plugins/Shared.swift
+
+echo "  Plugins/Shared.swift: SafeDITool-macos-arm64 SHA-256 ${MACOS_ARM64_SHA256}"
+echo "  Plugins/Shared.swift: SafeDITool-macos-x86_64 SHA-256 ${MACOS_X86_64_SHA256}"
 
 # Update the Bazel module version. Scope the replacement to the
 # `module(…)` block so the top-level version line is the only match
