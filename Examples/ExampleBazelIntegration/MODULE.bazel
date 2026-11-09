@@ -16,7 +16,7 @@ module(
 bazel_dep(name = "rules_swift", version = "3.6.1")
 bazel_dep(name = "rules_apple", version = "4.5.0")
 bazel_dep(name = "apple_support", version = "2.5.4")
-bazel_dep(name = "safedi", version = "2.3.0-alpha-2")
+bazel_dep(name = "safedi", version = "2.3.0-alpha-3")
 
 # local_path_override applies only when this module is root
 # (i.e. when you run `bazel build` from this directory). BCR
