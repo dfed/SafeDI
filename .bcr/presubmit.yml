@@ -1,8 +1,13 @@
 # BCR presubmit configuration. Pattern adapted from swift-syntax
 # (modules/swift-syntax/603.0.1/presubmit.yml) and swift-index-store
-# (modules/swift-index-store/1.9.2/presubmit.yml) — same dep shape
-# (swift-syntax + rules_swift on Bazel 9.x with Xcode 26 SDK on an
-# older runner OS).
+# (modules/swift-index-store/1.9.2/presubmit.yml), which have the same
+# dependency shape: swift-syntax and rules_swift, built with the Xcode 26
+# SDK on an older runner OS.
+#
+# Every task runs on Bazel 8.x and 9.x. MODULE.bazel declares no
+# `bazel_compatibility`, so the registry resolves SafeDI on both, and the
+# swift-syntax module SafeDI depends on tests both (periphery, another
+# Swift module that depends on it, does too).
 #
 # `build_flags` per task:
 #   - --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
@@ -39,7 +44,7 @@
 #       source whatever the flag says, so it does not need the matrix.
 matrix:
   platform: ["macos_arm64"]
-  bazel: ["9.x"]
+  bazel: ["8.x", "9.x"]
 
 tasks:
   verify_safedi_build:
@@ -60,7 +65,7 @@ bcr_test_module:
   module_path: "Examples/ExampleBazelIntegration"
   matrix:
     platform: ["macos_arm64"]
-    bazel: ["9.x"]
+    bazel: ["8.x", "9.x"]
     prefer_prebuilt_safeditool: ["true", "false"]
   tasks:
     build_example:

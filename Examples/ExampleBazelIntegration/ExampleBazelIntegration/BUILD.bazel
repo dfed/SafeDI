@@ -28,6 +28,6 @@ safedi_swift_library(
     deps = [
         "//Models",
         "//Subproject:Subproject",
-        "@safedi//Sources/SafeDI",
+        "@safedi//:SafeDI",
     ],
 )

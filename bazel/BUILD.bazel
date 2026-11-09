@@ -4,13 +4,28 @@ Downstream consumers load `safedi_swift_library` and `safedi_compile` from
 `safedi.bzl`. See `extensions.bzl` for which SafeDITool a build runs.
 """
 
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("//bazel/private:safeditool_toolchain.bzl", "resolved_safeditool", "safeditool_toolchain")
 
 exports_files(["safedi.bzl"])
 
+# `safedi.bzl` and what it loads, for a consumer's own `bzl_library` that
+# loads it, which stardoc and other `bzl_library` tooling read.
+bzl_library(
+    name = "safedi",
+    srcs = ["safedi.bzl"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@bazel_skylib//rules:common_settings",
+        "@build_bazel_rules_swift//swift",
+        "@build_bazel_rules_swift//swift:module_name",
+    ],
+)
+
 # The SafeDITool a build's `safedi_compile` targets run, for running it
-# yourself: `bazel run @safedi//bazel:safeditool -- <arguments>`.
+# yourself: `bazel run @safedi//:SafeDITool -- <arguments>`, through the
+# alias at the repository root.
 resolved_safeditool(
     name = "safeditool",
     visibility = ["//visibility:public"],

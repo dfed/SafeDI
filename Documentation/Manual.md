@@ -1275,7 +1275,7 @@ safedi_swift_library(
     safedi_deps = ["//Subproject:Subproject_safedi"],
     deps = [
         "//Subproject",
-        "@safedi//Sources/SafeDI",
+        "@safedi//:SafeDI",
     ],
 )
 ```
@@ -1285,6 +1285,8 @@ The macro accepts every `swift_library` attribute and declares two targets: the 
 A change in a module reruns the SafeDI action of each module that lists it, and, when it changes a declaration in a module that declares a seam or public mock, or in a module such a module lists, the actions of the modules above them too. For `package` access, give the modules of one package the same `package_name`: a module with a different `package_name` is in another package, and a module without one has no package.
 
 A module that needs a shape the macro does not offer can declare the `safedi_compile` rule, which `load("@safedi//bazel:safedi.bzl", "safedi_compile")` loads, and its `swift_library` separately. The rule takes `srcs` (the library’s), `deps` (the `<name>_safedi` targets `safedi_swift_library` calls `safedi_deps`), `module_name`, `package_name`, `defines` and `copts` (the library’s), and `visibility` (set it as on the library, since the modules that list the rule must see it); add `[":<rule name>"]` to the library’s `srcs`. `module_name` is required: the library’s `module_name` attribute, or the name `derive_swift_module_name` from `@rules_swift//swift:module_name.bzl` gives the library’s label; see [`bazel/safedi.bzl`](../bazel/safedi.bzl). When a library is compiled without the rule’s output in its `srcs`, every call of its seams and public mocks fails to compile with `type 'Screen' has no member '__safeDI_Screen_…'` (or `has no member 'mock'`).
+
+A macro of your own that loads `safedi.bzl` can list `@safedi//bazel:safedi`, a `bzl_library` of `safedi.bzl` and the files it loads, in the `deps` of its own `bzl_library`, which [Stardoc](https://github.com/bazelbuild/stardoc) and other `bzl_library` tooling read.
 
 `SafeDITool` runs as the prebuilt binary the SafeDI release publishes for the machine that runs the build – macOS arm64 or x86_64, or Linux x86_64 or arm64 – the same binary the `SafeDIGenerator` plugin and the Tuist plugin run. Bazel downloads it from the release’s GitHub assets the first time a build needs it, so that build needs network access to GitHub or a [repository cache](https://bazel.build/run/build#repository-cache) that holds the binary, and checks it against the sha256 recorded in the release’s source archive. On any other machine, Bazel builds `SafeDITool` from source. To always build it from source, add this line to your `.bazelrc`:
 
@@ -1420,7 +1422,7 @@ Your integration already has a `SafeDITool`; a [custom build system](#custom-bui
 
 - **Swift package:** `.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the package’s directory, or `swift run SafeDITool` with the `sourceBuild` trait; writes no `.safedi` files.
 - **Xcode project:** `SourcePackages/artifacts/safedi/SafeDIToolBinary/…` in the project’s derived data, or `.safedi/<version>/safeditool` once [installed](#installing-the-prebuilt-safeditool-binary); writes no `.safedi` files.
-- **Bazel:** `bazel run @safedi//bazel:safeditool -- <arguments>` runs the `SafeDITool` your build runs, prebuilt or built from source, in the directory you run it from, so relative paths among the arguments work; writes `bazel-bin/<package>/<name>_safedi.safedi`, though when the action’s result comes from a cache, such as `--disk_cache`, only for a build passed `--remote_download_regex='.*\.safedi$'`.
+- **Bazel:** `bazel run @safedi//:SafeDITool -- <arguments>` runs the `SafeDITool` your build runs, prebuilt or built from source, in the directory you run it from, so relative paths among the arguments work; writes `bazel-bin/<package>/<name>_safedi.safedi`, though when the action’s result comes from a cache, such as `--disk_cache`, only for a build passed `--remote_download_regex='.*\.safedi$'`.
 - **Tuist:** `Tuist/.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the directory that holds `Tuist/Package.swift`; writes `$BUILT_PRODUCTS_DIR/SafeDI/<PRODUCT_MODULE_NAME>.safedi`.
 
 On an Intel Mac, the bundle’s directory is `SafeDITool-macos-x86_64`.
@@ -1837,7 +1839,7 @@ A focused app – one that builds a single feature with mock data instead of the
 A project whose build already writes `.safedi` [module info files](#custom-build-system-integration) – a Bazel or Tuist project, or any other that runs `generate --module-info-output` per module – can name those files with `--module-info`, instead of or alongside directories, and skip parsing the sources. In a Bazel project, after a build that writes them to `bazel-bin` ([Running SafeDITool yourself](#running-safeditool-yourself) says when one does):
 
 ```bash
-bazel run @safedi//bazel:safeditool -- query needs HomeFeature --module-info bazel-bin/Modules/Foundations/Foundations_safedi.safedi bazel-bin/Modules/Services/Services_safedi.safedi bazel-bin/Modules/HomeFeature/HomeFeature_safedi.safedi
+bazel run @safedi//:SafeDITool -- query needs HomeFeature --module-info bazel-bin/Modules/Foundations/Foundations_safedi.safedi bazel-bin/Modules/Services/Services_safedi.safedi bazel-bin/Modules/HomeFeature/HomeFeature_safedi.safedi
 ```
 
 For each type named, the query builds the type as its `mock()` does, with every dependency it receives provided by an `@Instantiable` declaration, and reports:
