@@ -1265,21 +1265,20 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       # `swift run` otherwise compiles SwiftFormat from source on every
-      # run. Keyed on the container's Swift version.
+      # run. Keyed on the container's Swift version and the release
+      # configuration, so a cache holding only a debug build is not restored.
       - name: Cache SwiftFormat Build
         uses: actions/cache@v6
         with:
           path: CLI/.build
-          key: swiftformat-${{ runner.os }}-swift-6.3-${{ hashFiles('CLI/Package.resolved') }}
+          key: swiftformat-release-${{ runner.os }}-swift-6.3-${{ hashFiles('CLI/Package.resolved') }}
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
           command: swift package resolve --package-path CLI
       - name: Lint Swift
-        # SwiftFormat 0.64 has a fixed per-rule timeout that large test files trip now and then (exit 70, "rule timed
-        # out"), which is a flake, not a lint failure. One retry separates the two: a real lint failure fails twice.
-        run: |
-          swift run --package-path CLI swiftformat . --lint || {
-            echo "SwiftFormat exited $?; retrying once in case a rule timed out"
-            swift run --package-path CLI swiftformat . --lint
-          }
+        # A release build, as `CLI/lint.sh` runs. SwiftFormat stops a file with "rule timed out" when one rule is
+        # still running after 1 to 2 times (1 second plus 1 millisecond per token) of wall-clock time, a limit its
+        # command line cannot change. A debug build on this 4-core runner overran it on the largest files; a release
+        # build runs each rule tens of times faster.
+        run: swift run -c release --package-path CLI swiftformat . --lint
