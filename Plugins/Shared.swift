@@ -40,7 +40,7 @@ import PackagePlugin
 		/// that accepts every option the Xcode project plugin passes
 		/// SafeDITool (see "Conditional compilation" in CLAUDE.md).
 		var safeDIVersion: String {
-			"2.3.0-alpha-2"
+			"2.3.0-alpha-3"
 		}
 
 		/// The SHA-256 of the `SafeDITool-macos-arm64` asset of the
@@ -48,7 +48,7 @@ import PackagePlugin
 		/// download against. `Scripts/update-version.sh` writes it from the
 		/// binary the release uploads.
 		var safeDIToolMacOSArm64SHA256: String {
-			"1070d7b3c2162f05834c8e8600fa2d887a9ef85217b586a02849e9ed093b5534"
+			"c9fcfd4af8db4d5437645797eaa03d9826d3418f3fcabdb616d40053dd0adf93"
 		}
 
 		/// The SHA-256 of the `SafeDITool-macos-x86_64` asset of the
@@ -56,7 +56,7 @@ import PackagePlugin
 		/// download against. `Scripts/update-version.sh` writes it from the
 		/// binary the release uploads.
 		var safeDIToolMacOSX86_64SHA256: String {
-			"8be0cbd8e50c5b463ce378d2e3a3786131df4ab383beee22c65f31b2bb8e439e"
+			"0b3d67181d52f183fdac0e462ee39081e5815a8e1a618a451bf3a6c36fe15228"
 		}
 
 		/// Hardcoded source repo (forks must update this to point at their
