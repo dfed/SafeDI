@@ -159,7 +159,7 @@ if [ -z "$module_version" ] || [ -z "$package_version" ] || [ -z "$plugin_versio
     # `single_version` reported which file.
     failures=$((failures + 1))
 elif [ "$module_version" != "$package_version" ] || [ "$module_version" != "$plugin_version" ]; then
-    fail "SafeDI's version differs among MODULE.bazel's module(version = …), the release URL in Package.swift's binary target, and Plugins/Shared.swift's safeDIVersion. Set all three to one version: Scripts/update-version.sh <version> <checksum> writes them together."
+    fail "SafeDI's version differs among MODULE.bazel's module(version = …), the release URL in Package.swift's binary target, and Plugins/Shared.swift's safeDIVersion. Set all three to one version: Scripts/update-version.sh <version> <checksum> <macos-arm64-binary> <macos-x86_64-binary> writes them together."
 fi
 
 if [ "$failures" -gt 0 ]; then
