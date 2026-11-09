@@ -1235,7 +1235,7 @@ A public mock’s hole builders work under the plugin, but per-module trees, bui
 
 ##### Installing the prebuilt SafeDITool binary
 
-If you see a build warning that starts with **"SafeDI is planning this target’s generated files with a simpler scanner..."**, install the prebuilt tool: in Xcode, right-click your project in the navigator, choose **SafeDI → Safedi Release Install**, and approve the network-access and write-to-package-directory prompts. The command downloads the prebuilt SafeDITool release binary for your SafeDI version into `.safedi/<version>/safeditool` next to your `.xcodeproj`, and the build plugin picks it up on later builds.
+If you see a build warning that starts with **"SafeDI is planning this target’s generated files with a simpler scanner..."**, install the prebuilt tool: in Xcode, right-click your project in the navigator, choose **SafeDI → Safedi Release Install**, and approve the network-access and write-to-package-directory prompts. The command downloads the prebuilt SafeDITool release binary for your SafeDI version into `.safedi/<version>/safeditool` next to your `.xcodeproj`, and the build plugin picks it up on later builds. It installs the binary only when its SHA-256 matches the one SafeDI's release recorded for it; a download that differs is deleted, and the command fails with both hashes. Run the command again to retry.
 
 Without the installed tool, the plugin plans the build with a regex-based scanner; `swift build` gets the prebuilt binary through the default `prebuilt` trait already. Run the command once per project, and again after a SafeDI version bump if the warning reappears.
 

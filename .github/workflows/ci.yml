@@ -110,8 +110,14 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
+      - name: Make stand-in macOS binaries
+        # Outside the checkout, so the file-list checks below see only
+        # what the script edits.
+        run: |
+          printf 'stand-in arm64 SafeDITool' > "$RUNNER_TEMP/SafeDITool-macos-arm64"
+          printf 'stand-in x86_64 SafeDITool' > "$RUNNER_TEMP/SafeDITool-macos-x86_64"
       - name: Run update-version script for a prerelease
-        run: ./Scripts/update-version.sh 99.99.99-test abc123testchecksum456
+        run: ./Scripts/update-version.sh 99.99.99-test abc123testchecksum456 "$RUNNER_TEMP/SafeDITool-macos-arm64" "$RUNNER_TEMP/SafeDITool-macos-x86_64"
       - name: Verify URL was updated
         run: grep -q 'releases/download/99.99.99-test/SafeDITool.artifactbundle.zip' Package.swift
       - name: Verify checksum was updated
@@ -123,6 +129,13 @@ jobs:
         # an unquoted inline `{` trips the YAML parser.
         run: |
           grep -A 2 'var safeDIVersion: String {' Plugins/Shared.swift | grep -q '"99.99.99-test"'
+      - name: Verify Plugins/Shared.swift macOS binary hashes were updated
+        # Each digest must be the stand-in's, inside its own getter.
+        run: |
+          arm64=$(sha256sum "$RUNNER_TEMP/SafeDITool-macos-arm64" | cut -d ' ' -f 1)
+          x86_64=$(sha256sum "$RUNNER_TEMP/SafeDITool-macos-x86_64" | cut -d ' ' -f 1)
+          grep -A 2 'var safeDIToolMacOSArm64SHA256: String {' Plugins/Shared.swift | grep -q "\"$arm64\""
+          grep -A 2 'var safeDIToolMacOSX86_64SHA256: String {' Plugins/Shared.swift | grep -q "\"$x86_64\""
       - name: Verify MODULE.bazel version was updated
         # Scope to the top-level module() block so bazel_dep lines that
         # also carry `version = "X"` can't false-positive.
@@ -142,7 +155,7 @@ jobs:
             exit 1
           fi
       - name: Run update-version script for a stable release
-        run: ./Scripts/update-version.sh 99.99.99 abc123testchecksum456
+        run: ./Scripts/update-version.sh 99.99.99 abc123testchecksum456 "$RUNNER_TEMP/SafeDITool-macos-arm64" "$RUNNER_TEMP/SafeDITool-macos-x86_64"
       - name: Check version consistency after a stable release
         run: ./Scripts/check-version-consistency.sh
       - name: Verify a stable release changes the expected files

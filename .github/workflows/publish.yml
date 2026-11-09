@@ -269,7 +269,17 @@ jobs:
           echo "Computed checksum: $CHECKSUM"
 
       - name: Update version
-        run: ./Scripts/update-version.sh "${{ inputs.version }}" "${{ steps.checksum.outputs.checksum }}"
+        # The macOS binaries are the notarized files build-macos uploaded,
+        # which "Prepare release assets" copies unchanged to the release's
+        # `SafeDITool-macos-<arch>` assets, so the hashes the script writes
+        # into Plugins/Shared.swift are those of the files the installer
+        # downloads.
+        run: |
+          ./Scripts/update-version.sh \
+            "${{ inputs.version }}" \
+            "${{ steps.checksum.outputs.checksum }}" \
+            artifacts/SafeDITool-macos-arm64/SafeDITool \
+            artifacts/SafeDITool-macos-x86_64/SafeDITool
 
       - name: Show changes
         run: |
@@ -310,6 +320,8 @@ jobs:
           path: /tmp/patch/*.patch
 
       - name: Prepare release assets
+        # Copies the files "Update version" hashed, unchanged: the
+        # installer checks the macOS assets against those hashes.
         run: |
           cp artifacts/SafeDITool-macos-arm64/SafeDITool SafeDITool-macos-arm64
           cp artifacts/SafeDITool-macos-x86_64/SafeDITool SafeDITool-macos-x86_64
