@@ -1,0 +1,3 @@
+WHAT="Stage structs named Outer and Inner shadow user types of those names"
+EXPECT=reject
+DIAG="cannot convert value of type"

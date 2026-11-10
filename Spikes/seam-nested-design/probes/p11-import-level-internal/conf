@@ -1,0 +1,3 @@
+WHAT="An inner seam enum named only in an enum case, in a generated file that imports its module internally"
+EXPECT=reject
+DIAG="enum case in a public enum uses an internal type"

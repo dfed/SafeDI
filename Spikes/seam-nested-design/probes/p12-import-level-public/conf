@@ -1,0 +1,2 @@
+WHAT="The same with a public import, which the import computation must write once it reads enum cases"
+EXPECT=compile

@@ -1,0 +1,3 @@
+WHAT="A public enum whose case holds a package seam enum"
+EXPECT=reject
+DIAG="package"

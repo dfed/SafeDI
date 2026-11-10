@@ -1,0 +1,2 @@
+WHAT="package and internal seams: enum spelled @frozen public inside the narrower type, holding a package enum, opened from another module of the package"
+EXPECT=compile

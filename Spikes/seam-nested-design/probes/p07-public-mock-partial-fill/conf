@@ -1,0 +1,2 @@
+WHAT="A public mock that fills some places of an inner public mock and passes the others up, through nesting and through a @Sendable route"
+EXPECT=run

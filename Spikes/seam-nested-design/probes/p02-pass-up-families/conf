@@ -1,0 +1,2 @@
+WHAT="Passing up: inner seam by two routes (plain, and inside a @Sendable function), an inner seam with both enums, its staged place passed on from inside a @Sendable function, dispatchers shared by both families"
+EXPECT=run

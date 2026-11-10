@@ -1,0 +1,2 @@
+WHAT="The seam wraps: by value, LazilyInstantiated, ErasedInstantiator with a forwarded value share the plain builder; Sendable wrappers are staged; PR 615's two initializers; a deferred parameter's memo field"
+EXPECT=run

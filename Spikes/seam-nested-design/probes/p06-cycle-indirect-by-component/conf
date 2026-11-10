@@ -1,0 +1,2 @@
+WHAT="Cycles: indirect only within a strongly connected component of the enum graph; a self re-entering seam; dispatchers per enum"
+EXPECT=run

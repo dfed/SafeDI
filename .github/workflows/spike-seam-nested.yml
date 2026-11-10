@@ -1,6 +1,7 @@
 name: Spike Seam Nested
 
-# Runs the hand-written seam builder spike under Spikes/seam-nested on Swift 6.2. It lives on this branch only.
+# Runs the hand-written seam builder spike under Spikes/seam-nested, and the design probes under
+# Spikes/seam-nested-design, on Swift 6.2. It lives on this branch only.
 on:
   push:
     branches: [dfed--claude/spike-nested-seam-builders]
@@ -21,5 +22,15 @@ jobs:
           {
             echo '```'
             bash Spikes/seam-nested/run.sh
+            echo '```'
+          } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Run Design Probes
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo '## Design probes'
+            echo
+            echo '```'
+            bash Spikes/seam-nested-design/run.sh
             echo '```'
           } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"

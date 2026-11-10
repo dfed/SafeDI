@@ -1,0 +1,2 @@
+WHAT="The seam wraps: a fill is the place builder function called with the forwarded value; a repeat of the wrapper inside it closes on that function; a tuple and an empty forwarded value"
+EXPECT=run

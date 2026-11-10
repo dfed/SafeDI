@@ -1,0 +1,3 @@
+WHAT="A call written before the first @Sendable route existed"
+EXPECT=reject
+DIAG="missing argument for parameter"

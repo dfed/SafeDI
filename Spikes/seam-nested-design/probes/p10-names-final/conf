@@ -1,0 +1,2 @@
+WHAT="Final names: stage structs Stage1/Stage2 beside user types Inner, Outer and Stage1 (named apart); a payload struct named apart from a field's type; two hole types of one instantiated type; a type named Service_Sendable and ServiceSendable beside Service's @Sendable builder; a place labeled Sendable"
+EXPECT=compile
