@@ -1001,6 +1001,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			        lookup: [String: Int],
 			        pair: (first: Int, String),
 			        unknown: ~Copyable,
+			        variadicHandler: @escaping (Int...) throws(CancellationError) -> Void,
 			        ovenFactory: Instantiator<Oven>,
 			    ) {
 			        pantry = kitchenPantry
@@ -1018,6 +1019,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			        self.lookup = lookup
 			        self.pair = pair
 			        self.unknown = unknown
+			        self.variadicHandler = variadicHandler
 			        self.ovenFactory = ovenFactory
 			    }
 
@@ -1036,6 +1038,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			    @Received let lookup: [String: Int]
 			    @Received let pair: (first: Int, String)
 			    @Received let unknown: ~Copyable
+			    @Received let variadicHandler: (Int...) throws(CancellationError) -> Void
 			    @Instantiated let ovenFactory: Instantiator<Oven>
 			}
 			""",

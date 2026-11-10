@@ -2989,10 +2989,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 
 				let typeDescription = property.typeDescription.asSource
+				// A type constructed by annotation spells its generic arguments only in `propertyDeclaration`.
 				let unwrappedTypeDescription = property
 					.typeDescription
 					.unwrapped
-					.asSource
+					.spelledForConstruction
 				let instantiatedTypeDescription = property
 					.typeDescription
 					.unwrapped
@@ -7054,7 +7055,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		// Emit the Instantiator/ErasedInstantiator construction.
-		let unwrappedTypeDescription = node.typeDescription.unwrapped.asSource
+		let unwrappedType = node.typeDescription.unwrapped
+		let unwrappedTypeDescription = unwrappedType.spelledForConstruction
+		let outerBinding = unwrappedType.isConstructedByAnnotation ? "\(outerBindingName): \(unwrappedType.asSource)" : outerBindingName
 
 		// The builder function now returns the property type directly (including
 		// wrapping for erasedToConcreteExistential), so no outer wrapping needed.
@@ -7076,9 +7079,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		if let promotedParameterName, !node.property.propertyType.isLazilyInstantiated {
 			// A public mock takes an instantiator it builds for a received dependency as itself.
-			lines.append("\(indent)let \(outerBindingName) = \(passing(promotedParameterName, orBuilding: instantiatorConstruction))")
+			lines.append("\(indent)let \(outerBinding) = \(passing(promotedParameterName, orBuilding: instantiatorConstruction))")
 		} else {
-			lines.append("\(indent)let \(outerBindingName) = \(instantiatorConstruction)")
+			lines.append("\(indent)let \(outerBinding) = \(instantiatorConstruction)")
 		}
 
 		return lines

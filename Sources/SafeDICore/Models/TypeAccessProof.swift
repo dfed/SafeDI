@@ -476,14 +476,15 @@ public struct TypeAccessProof: Sendable {
 			     let .any(wrapped),
 			     let .metatype(wrapped, _),
 			     let .attributed(wrapped, _, _),
-			     let .array(wrapped):
+			     let .array(wrapped),
+			     let .variadic(wrapped):
 				children = [wrapped]
 			case let .dictionary(key, value):
 				children = [key, value]
 			case let .tuple(elements):
 				children = elements.map(\.typeDescription)
-			case let .closure(arguments, _, _, returnType):
-				children = arguments + [returnType]
+			case let .closure(arguments, _, _, thrownType, returnType):
+				children = arguments + (thrownType.map { [$0] } ?? []) + [returnType]
 			}
 			typesToVisit.append(contentsOf: children.reversed())
 		}
@@ -680,7 +681,7 @@ public struct TypeAccessProof: Sendable {
 			allowlistedNames.contains(name)
 		case let .nested(name, .simple(moduleName, []), _):
 			(moduleName == "Swift" || moduleName == "Foundation" || moduleName == "Dispatch" || moduleName == "SafeDI") && allowlistedNames.contains(name)
-		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .optional, .some, .tuple, .unknown, .void:
+		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .optional, .some, .tuple, .unknown, .variadic, .void:
 			false
 		}
 	}

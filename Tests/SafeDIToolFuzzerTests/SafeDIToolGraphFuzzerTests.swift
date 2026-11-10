@@ -2843,29 +2843,28 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `smokeSeeds_includeAcceptedAndRejectedGraphs_whenRunThroughTool` requires). Seeds 99, 304 and 3360 complete what
 	/// the base corpus's value oracle must show in passing graphs: a label declared at two depths of a root's tree above
 	/// a receiver of it (99), an `onlyIfAvailable` alias of a dependency a mock promotes (304), and a promoted wrapper
-	/// whose label the tree also receives by value, as the mocked type does (3360). Seeds 0 and 18 complete the elements of
-	/// a forwarded tuple with a tuple and an existential, and seed 70, which the tool rejects, keeps the rejected share at
-	/// that quarter.
+	/// whose label the tree also receives by value, as the mocked type does (3360). Seeds 18, 59, 97, 133 and 161 complete the
+	/// elements a forwarded tuple spells, and seeds 4 and 70, which the tool rejects, keep the rejected share at that quarter.
 	/// It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on
 	/// every pull request. Compiling the batch is one `swiftc` invocation when nothing fails, and comparing its values
 	/// one compile and one link.
-	static let smokeSeeds: [UInt64] = [0, 12, 14, 18, 25, 40, 62, 70, 99, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
+	static let smokeSeeds: [UInt64] = [4, 12, 14, 18, 25, 40, 59, 62, 70, 97, 99, 133, 161, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x808AF38CE8FEBA2C
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x01E85C379CD27E45
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x3DBAE4A67F8F194D
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xA2E6B426A73E49DB
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0xF718D43F54A9CF0A
+	static let corpusFixtureHash: UInt64 = 0x9F9DE4ED78FD0FB9
 
-	static let corpusPartitionHash: UInt64 = 0x6AD38463ADECC4D3
+	static let corpusPartitionHash: UInt64 = 0xDE2D8C33540001E4
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -2889,7 +2888,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.forwardedLazilyInstantiatedProperty: 281,
 		.receivedLazilyInstantiatedInstance: 219,
 		.forwardedProperty: 1_444,
-		.optionalForwardedProperty: 833,
+		.optionalForwardedProperty: 757,
 		.requiredReceive: 1_972,
 		.requiredOptionalReceive: 480,
 		.onlyIfAvailableReceive: 1_540,
@@ -2899,18 +2898,24 @@ struct SafeDIToolGraphFuzzerTests {
 		.aliasOfOptionalFormOfProperty: 12,
 		.erasedAlias: 192,
 		.erasedRenameOfOptionalDependency: 34,
-		.forwardedTupleOptionalElement: 109,
-		.forwardedTupleNestedTypeElement: 104,
-		.forwardedTupleGenericElementSpelledWithAngleBrackets: 108,
-		.forwardedTupleGenericElement: 105,
-		.forwardedTupleArrayElement: 109,
-		.forwardedTupleDictionaryElement: 104,
-		.forwardedTupleClosureElement: 108,
-		.forwardedTupleSendableClosureElement: 110,
-		.forwardedTupleOptionalClosureElement: 120,
-		.forwardedTupleExistentialElement: 114,
-		.forwardedTupleOptionalExistentialElement: 113,
-		.forwardedTupleTupleElement: 118,
+		.forwardedTupleOptionalElement: 69,
+		.forwardedTupleNestedTypeElement: 70,
+		.forwardedTupleGenericElementSpelledWithAngleBrackets: 72,
+		.forwardedTupleGenericElement: 69,
+		.forwardedTupleArrayElement: 84,
+		.forwardedTupleDictionaryElement: 73,
+		.forwardedTupleClosureElement: 77,
+		.forwardedTupleSendableClosureElement: 82,
+		.forwardedTupleOptionalClosureElement: 66,
+		.forwardedTupleExistentialElement: 77,
+		.forwardedTupleOptionalExistentialElement: 72,
+		.forwardedTupleTupleElement: 77,
+		.forwardedTupleTypedThrowsClosureElement: 77,
+		.forwardedTupleVariadicClosureElement: 63,
+		.forwardedTupleConventionClosureElement: 76,
+		.forwardedTupleIsolatedAnyClosureElement: 83,
+		.forwardedTupleQualifiedGlobalActorClosureElement: 64,
+		.forwardedTupleNonisolatedNonsendingClosureElement: 71,
 		.forwardedTupleKeywordLabel: 142,
 		.forwardedPropertiesTypealiasArgument: 139,
 		.forwardedTupleBuilderReceivedByMockedType: 119,

@@ -427,6 +427,7 @@ extension TypeDescription {
 		     .some,
 		     .tuple,
 		     .unknown,
+		     .variadic,
 		     .void:
 			self
 		}

@@ -1003,8 +1003,9 @@ extension TypeDescription: BinarySchemaMember {
 			case .array: [.init("element", TypeDescription.self)]
 			case .dictionary: [.init("key", TypeDescription.self), .init("value", TypeDescription.self)]
 			case .tuple: [.init(nil, [TupleElement].self)]
-			case .closure: [.init("arguments", [TypeDescription].self), .init("isAsync", Bool.self), .init("doesThrow", Bool.self), .init("returnType", TypeDescription.self)]
+			case .closure: [.init("arguments", [TypeDescription].self), .init("isAsync", Bool.self), .init("doesThrow", Bool.self), .init("thrownType", TypeDescription?.self), .init("returnType", TypeDescription.self)]
 			case .unknown: [.init("text", String.self)]
+			case .variadic: [.init(nil, TypeDescription.self)]
 			}
 		}
 	}
@@ -1039,9 +1040,11 @@ extension TypeDescription: BinarySchemaMember {
 			case .tuple:
 				try .tuple(reader.read())
 			case .closure:
-				try .closure(arguments: reader.read(), isAsync: reader.read(), doesThrow: reader.read(), returnType: reader.read())
+				try .closure(arguments: reader.read(), isAsync: reader.read(), doesThrow: reader.read(), thrownType: reader.read(), returnType: reader.read())
 			case .unknown:
 				try .unknown(text: reader.read())
+			case .variadic:
+				try .variadic(reader.read())
 			}
 		}
 	}
@@ -1100,15 +1103,19 @@ extension TypeDescription: BinarySchemaMember {
 		case let .tuple(elements):
 			writer.writeTag(Tag.tuple)
 			writer.write(elements)
-		case let .closure(arguments, isAsync, doesThrow, returnType):
+		case let .closure(arguments, isAsync, doesThrow, thrownType, returnType):
 			writer.writeTag(Tag.closure)
 			writer.write(arguments)
 			writer.write(isAsync)
 			writer.write(doesThrow)
+			writer.write(thrownType)
 			writer.write(returnType)
 		case let .unknown(text):
 			writer.writeTag(Tag.unknown)
 			writer.write(text)
+		case let .variadic(type):
+			writer.writeTag(Tag.variadic)
+			writer.write(type)
 		}
 	}
 
@@ -1128,6 +1135,7 @@ extension TypeDescription: BinarySchemaMember {
 		case tuple
 		case closure
 		case unknown
+		case variadic
 	}
 }
 

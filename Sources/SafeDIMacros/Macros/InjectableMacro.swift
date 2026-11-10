@@ -56,7 +56,7 @@ public struct InjectableMacro: PeerMacro {
 				switch TypeSyntax(stringLiteral: stringLiteral.content.text).typeDescription {
 				case .simple, .nested:
 					break
-				case .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown, .void:
+				case .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown, .variadic, .void:
 					throw InjectableError.fulfilledByTypeArgumentInvalidTypeDescription
 				}
 			} else {
@@ -302,7 +302,7 @@ public struct InjectableMacro: PeerMacro {
 		switch type {
 		case .any, .composition:
 			true
-		case .array, .attributed, .closure, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .optional, .simple, .some, .tuple, .unknown, .void:
+		case .array, .attributed, .closure, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .optional, .simple, .some, .tuple, .unknown, .variadic, .void:
 			false
 		}
 	}
@@ -315,7 +315,7 @@ public struct InjectableMacro: PeerMacro {
 		case let .attributed(type, _, _),
 		     let .optional(type):
 			isFunctionType(type)
-		case .any, .array, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .simple, .some, .tuple, .unknown, .void:
+		case .any, .array, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .simple, .some, .tuple, .unknown, .variadic, .void:
 			false
 		}
 	}

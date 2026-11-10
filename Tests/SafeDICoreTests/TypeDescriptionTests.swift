@@ -1951,6 +1951,88 @@ struct TypeDescriptionTests {
 
 	// MARK: - Equatable and Hashable
 
+	@Test(arguments: [
+		"() throws(Failure) -> Void",
+		"(Int) async throws(Space.Failure) -> Void",
+		"(Int...) -> Void",
+		"((any Service)...) -> Void",
+		"@convention(c) () -> Void",
+		"@convention(c, cType: \"void (*)(void)\") () -> Void",
+		"@isolated(any) () -> Void",
+		"@Space.Act () -> Void",
+		"@Space.Act @Sendable () -> Void",
+		"nonisolated(nonsending) () async -> Void",
+		"InlineArray<3, Int>",
+	])
+	func asSource_spellsWhatTheDeclarationSpells_whenTypeIsNotOneOfTheUsualClosures(source: String) {
+		let typeDescription = TypeSyntax(stringLiteral: source).typeDescription
+		#expect(typeDescription.asSource == source.replacingOccurrences(of: "c, cType: ", with: "c,cType:"))
+		#expect(!typeDescription.isUnknown)
+		#expect(TypeSyntax(stringLiteral: typeDescription.asSource).typeDescription == typeDescription)
+	}
+
+	@Test(arguments: [
+		"() throws(any Error) -> Void",
+		"() throws(Error) -> Void",
+		"() throws(any Swift.Error) -> Void",
+		"() throws(Swift.Error) -> Void",
+	])
+	func equals_returnsTrue_whenClosureNamesAnyErrorAsItsThrownType(spelling: String) {
+		let typeDescription = TypeSyntax(stringLiteral: spelling).typeDescription
+		let bareThrows = TypeSyntax(stringLiteral: "() throws -> Void").typeDescription
+		#expect(typeDescription == bareThrows)
+		#expect(Set([typeDescription]).contains(bareThrows))
+		#expect(typeDescription.asSource == spelling)
+	}
+
+	@Test(arguments: [
+		("() throws -> Void", "() throws(Failure) -> Void"),
+		("() throws(Other) -> Void", "() throws(Failure) -> Void"),
+		("(Int) -> Void", "(Int...) -> Void"),
+		("@convention(c) () -> Void", "@convention(thin) () -> Void"),
+		("@Space.Act () -> Void", "@Space.Other () -> Void"),
+		("() async -> Void", "nonisolated(nonsending) () async -> Void"),
+		("InlineArray<3, Int>", "InlineArray<4, Int>"),
+	])
+	func equals_returnsFalse_whenTypesDifferInWhatOnlyASpecifierAttributeOrEffectSpells(lhs: String, rhs: String) {
+		#expect(TypeSyntax(stringLiteral: lhs).typeDescription != TypeSyntax(stringLiteral: rhs).typeDescription)
+	}
+
+	@Test
+	func exprTypeDescription_readsThrownTypeAndVariadicArgument_whenClosureIsWrittenAsTypeLiteral() {
+		let literal: ExprSyntax = "((Int...) throws(Failure) -> Void).self"
+		#expect(literal.typeDescription == TypeSyntax(stringLiteral: "(Int...) throws(Failure) -> Void").typeDescription)
+	}
+
+	@Test
+	func asIdentifier_isOneIdentifier_whenTypeHasAttributeArgumentThrownTypeAndVariadicArgument() {
+		#expect(TypeSyntax(stringLiteral: "@convention(c) () -> Void").typeDescription.asIdentifier == "conventionc_Void_to_Void")
+		#expect(TypeSyntax(stringLiteral: "@Space.Act () -> Void").typeDescription.asIdentifier == "SpaceAct_Void_to_Void")
+		#expect(TypeSyntax(stringLiteral: "(Int...) throws(Failure) -> Void").typeDescription.asIdentifier == "Int_Variadic_throws_Failure_to_Void")
+	}
+
+	@Test
+	func namesType_findsThrownTypeAndVariadicArgument() {
+		func namesConfig(_ source: String) -> Bool {
+			TypeSyntax(stringLiteral: source).typeDescription.namesType(where: { $0 == ["Config"] })
+		}
+		#expect(namesConfig("() throws(Config) -> Void"))
+		#expect(namesConfig("(Config...) -> Void"))
+		#expect(!namesConfig("() throws(Other) -> Void"))
+	}
+
+	@Test
+	func nestingOutermostNames_nestsThrownTypeAndVariadicArgument() {
+		let nested = TypeSyntax(stringLiteral: "(Config...) throws(Config) -> Void").typeDescription.nestingOutermostNames(in: { $0 == "Config" ? .simple(name: "Child") : nil })
+		#expect(nested.asSource == "(Child.Config...) throws(Child.Config) -> Void")
+	}
+
+	@Test
+	func withoutAny_stripsAnyFromThrownTypeAndVariadicArgument() {
+		let type = TypeSyntax(stringLiteral: "((any Service)...) throws(any Other) -> Void").typeDescription
+		#expect(type.withoutAny.asSource == "(Service...) throws(Other) -> Void")
+	}
+
 	@Test
 	func equals_returnsTrueAndHashesAlike_whenTypesDifferOnlyInAnyAtAnyDepth() {
 		for (anySpelling, plainSpelling) in [
@@ -1969,6 +2051,8 @@ struct TypeDescriptionTests {
 			("Instantiator<any Service>", "Instantiator<Service>"),
 			("Feature<any Service>.Nested<any Other>", "Feature<Service>.Nested<Other>"),
 			("(any Service, ~Copyable)", "(Service, ~Copyable)"),
+			("((any Service)...) -> Void", "(Service...) -> Void"),
+			("() throws(any Service) -> Void", "() throws(Service) -> Void"),
 		] {
 			let anyType = TypeSyntax(stringLiteral: anySpelling).typeDescription
 			let plainType = TypeSyntax(stringLiteral: plainSpelling).typeDescription
@@ -2049,6 +2133,7 @@ extension TypeDescription {
 		     .simple,
 		     .some,
 		     .tuple,
+		     .variadic,
 		     .void:
 			false
 		case .unknown:
