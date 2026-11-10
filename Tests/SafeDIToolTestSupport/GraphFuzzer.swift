@@ -1197,6 +1197,120 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	}
 }
 
+/// A spelling of the type of one element of the tuple `addingForwardedTuples` draws: a `@Forwarded` property of a type
+/// with several, which the first generic argument of the erased instantiator that builds the type spells again. SafeDI
+/// compares the two by structure, so every spelling must match itself, whatever it parses to.
+enum GraphFuzzerForwardedTupleElement: CaseIterable {
+	case optional
+	case nestedType
+	case genericSpelledWithAngleBrackets
+	case generic
+	case array
+	case dictionary
+	case closure
+	case sendableClosure
+	case optionalClosure
+	case existential
+	case optionalExistential
+	case tuple
+
+	/// The labels of the tuple's elements, which no other pass draws. The elements are declared in this order, which is
+	/// not the order the tuple lists them in.
+	static let labels = ["firstValue", "secondValue", "thirdValue", "fourthValue"]
+
+	/// A label that now and then replaces the last of an element's `labels`, which sorts before them.
+	static let keywordLabel = "`default`"
+
+	/// The type of the element in a graph whose type names begin with `prefix`, with every closure `@Sendable` when
+	/// `isSendable`.
+	func spelledType(prefix: String, isSendable: Bool) -> String {
+		let sendable = isSendable ? "@Sendable " : ""
+		return switch self {
+		case .optional:
+			"Int?"
+		case .nestedType:
+			"\(prefix)ForwardedTupleSpace.Configuration"
+		case .genericSpelledWithAngleBrackets:
+			"Array<Int>"
+		case .generic:
+			"\(prefix)ForwardedTupleBox<Int>"
+		case .array:
+			"[Int]"
+		case .dictionary:
+			"[String: Int]"
+		case .closure:
+			"\(sendable)() -> Void"
+		case .sendableClosure:
+			"@Sendable (Int) -> String"
+		case .optionalClosure:
+			"(\(sendable)() -> Void)?"
+		case .existential:
+			"any \(prefix)ForwardedTupleProtocol"
+		case .optionalExistential:
+			"(any \(prefix)ForwardedTupleProtocol)?"
+		case .tuple:
+			"(x: Int?, y: String)"
+		}
+	}
+
+	/// The declarations the spelled type names: `Sendable` where the graph's helper types are, so that a `Sendable` type
+	/// can store the value.
+	func helperDeclaration(prefix: String, areSendable: Bool) -> String? {
+		let sendable = areSendable ? ": Sendable" : ""
+		return switch self {
+		case .nestedType:
+			"public enum \(prefix)ForwardedTupleSpace {\n\tpublic struct Configuration\(sendable) {\n\t\tpublic init() {}\n\t}\n}"
+		case .generic:
+			"public struct \(prefix)ForwardedTupleBox<Element>\(sendable) {\n\tpublic init() {}\n}"
+		case .existential, .optionalExistential:
+			"public protocol \(prefix)ForwardedTupleProtocol\(sendable) {}"
+		case .optional, .genericSpelledWithAngleBrackets, .array, .dictionary, .closure, .sendableClosure, .optionalClosure, .tuple:
+			nil
+		}
+	}
+
+	/// The feature of a graph that draws the spelling.
+	var feature: GraphFuzzerFeature {
+		switch self {
+		case .optional: .forwardedTupleOptionalElement
+		case .nestedType: .forwardedTupleNestedTypeElement
+		case .genericSpelledWithAngleBrackets: .forwardedTupleGenericElementSpelledWithAngleBrackets
+		case .generic: .forwardedTupleGenericElement
+		case .array: .forwardedTupleArrayElement
+		case .dictionary: .forwardedTupleDictionaryElement
+		case .closure: .forwardedTupleClosureElement
+		case .sendableClosure: .forwardedTupleSendableClosureElement
+		case .optionalClosure: .forwardedTupleOptionalClosureElement
+		case .existential: .forwardedTupleExistentialElement
+		case .optionalExistential: .forwardedTupleOptionalExistentialElement
+		case .tuple: .forwardedTupleTupleElement
+		}
+	}
+
+	/// The spelling of `type`, a type `spelledType(prefix:isSendable:)` returned, read back from its structure.
+	static func element(ofType type: String) -> GraphFuzzerForwardedTupleElement? {
+		if type.hasSuffix("?") {
+			type.contains("->") ? .optionalClosure : type.contains("any ") ? .optionalExistential : .optional
+		} else if type.contains("->") {
+			type.contains("(Int)") ? .sendableClosure : .closure
+		} else if type.hasPrefix("(") {
+			.tuple
+		} else if type.hasPrefix("any ") {
+			.existential
+		} else if type.hasPrefix("[") {
+			type.contains(": ") ? .dictionary : .array
+		} else if type.hasPrefix("Array<") {
+			.genericSpelledWithAngleBrackets
+		} else if type.hasSuffix("ForwardedTupleSpace.Configuration") {
+			.nestedType
+		} else if type.hasSuffix("ForwardedTupleBox<Int>") {
+			.generic
+		} else {
+			nil
+		}
+	}
+}
+
 /// A spelling of the type of the value `addingSpelledProperties` draws, which a seam's generated initializer, and every
 /// call of it, must spell as a parsed initializer does: a closure is `@escaping` there, an optional closure is not.
 enum GraphFuzzerSpelling: CaseIterable {
@@ -1628,6 +1742,7 @@ enum GraphFuzzerGenerator {
 			aliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasChainRandomSeedMask)
 			siblingAliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.siblingAliasChainRandomSeedMask)
 			erasedOptionalRenameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.erasedOptionalRenameRandomSeedMask)
+			forwardedTupleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.forwardedTupleRandomSeedMask)
 			proofRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.proofRandomSeedMask)
 			holeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holeRandomSeedMask)
 			holePassUpRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holePassUpRandomSeedMask)
@@ -1705,9 +1820,9 @@ enum GraphFuzzerGenerator {
 			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
 			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
 			let seamDeclarations = addingSeam(
-				to: addingErasedRenamesOfOptionalDependencies(to: addingReceiversOfDependenciesMocksCannotBuild(
+				to: addingForwardedTuples(to: addingErasedRenamesOfOptionalDependencies(to: addingReceiversOfDependenciesMocksCannotBuild(
 					to: addingSiblingAliasChains(to: addingAliasChains(to: addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations)))),
-				)),
+				))),
 			)
 			let aliasDeclarations = addingUncreatedAliasExtensions(to: addingUncreatedAliasShapes(to: addingSpelledProperties(to: seamDeclarations)))
 			var finalDeclarations = movingSelfContainedSeamsIntoSeamModule(
@@ -1891,6 +2006,8 @@ enum GraphFuzzerGenerator {
 		private var siblingAliasChainRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingErasedRenamesOfOptionalDependencies`, as `generatedNameRandom` does for its pass.
 		private var erasedOptionalRenameRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only the choices of `addingForwardedTuples`, as `generatedNameRandom` does for its pass.
+		private var forwardedTupleRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingSeam`, which draws only with the `generateDependencyTree` feature on, so
 		/// every graph without it is drawn as before.
 		private var seamRandom: GraphFuzzerRandomNumberGenerator
@@ -2479,8 +2596,9 @@ enum GraphFuzzerGenerator {
 		/// named apart where a builder function around the owner declares the constant's label. A type between the owner
 		/// and the receiver that declares the label with another type hides the constant, which the tool must reject. No
 		/// root reaches the receiver, so no production tree rejects it for receiving a property nothing above it provides.
-		/// It is drawn after every other base pass but `addingErasedRenamesOfOptionalDependencies` (and the
-		/// `generateDependencyTree` feature's passes), and `unbuildableDependencyReceiverRandom` draws only for it, so every
+		/// It is drawn after every other base pass but `addingErasedRenamesOfOptionalDependencies` and
+		/// `addingForwardedTuples` (and the `generateDependencyTree` feature's passes), and
+		/// `unbuildableDependencyReceiverRandom` draws only for it, so every
 		/// other graph is drawn as before.
 		///
 		/// Now and then, too, an owner with `generateMock: true` receives a type of the graph that no root reaches, that has
@@ -2623,8 +2741,8 @@ enum GraphFuzzerGenerator {
 		/// is `nil` where the property is and wraps it otherwise, whatever binding the property has: a forwarded optional,
 		/// an optional alias, or, in a mock, a value the mock builds, takes as a parameter, or is forwarded. `aliasProperty`
 		/// never aliases an optional property and the passes that spell `ofType: X?.self` never erase, so no other pass
-		/// draws it. It is drawn after every other base pass, and `erasedOptionalRenameRandom` draws only for it, so every
-		/// other graph is drawn as before.
+		/// draws it. It is drawn after every other base pass but `addingForwardedTuples`, and `erasedOptionalRenameRandom`
+		/// draws only for it, so every other graph is drawn as before.
 		private mutating func addingErasedRenamesOfOptionalDependencies(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard erasedOptionalRenameRandom.percentChance(25) else { return declarations }
 			var declarations = declarations
@@ -2699,6 +2817,106 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let erasedOptionalRenameRandomSeedMask: UInt64 = 0x6572617365644F70
+
+		// MARK: Forwarded tuples
+
+		/// A quarter of the graphs of the base corpus gain a small tree of their own, which names nothing else of the graph:
+		/// `TupleChild` forwards two to four values of the types `GraphFuzzerForwardedTupleElement` spells, and the first
+		/// root, or `TupleHost` beneath it, instantiates an erased instantiator of it, `AnyTupleChild` as an erasure's name
+		/// is `AnyT<n>` for `T<n>`, whose first generic argument spells the tuple of those values, in the order the macro's
+		/// typealias lists them, or now and then names the typealias. Usually `TupleReader` beside it receives the erased
+		/// instantiator, required or only if available, so that a mock of the reader builds it as a promoted dependency when
+		/// the argument names the typealias, and otherwise takes it as a parameter or an override. A
+		/// graph whose types are all `Sendable`
+		/// draws only `Sendable` values, its closures `@Sendable`, since its types are `Sendable` and its builders
+		/// `@Sendable`. A mismatched element is never drawn, since it rejects the whole graph: a hand-written test covers it.
+		/// `forwardedTupleRandom` draws only for this pass, and the pass adds only properties and types of its own, so every
+		/// other graph is drawn as before. An implicitly unwrapped optional is not drawn: the macro's typealias of one does
+		/// not compile. Nor does the seam corpus draw the pass, whose oracles it would give nothing, since no seam holds the
+		/// tree: `features` is empty only in the base corpus.
+		private mutating func addingForwardedTuples(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, forwardedTupleRandom.percentChance(25) else { return declarations }
+			var declarations = declarations
+			let isSendableWrapper = switch sendability {
+			case .nonSendable:
+				false
+			case .sendable:
+				true
+			case .mixed:
+				forwardedTupleRandom.percentChance(50)
+			}
+			var remainingElements = GraphFuzzerForwardedTupleElement.allCases
+			var elements = [GraphFuzzerForwardedTupleElement]()
+			for _ in 0..<forwardedTupleRandom.integer(in: 2...4) {
+				elements.append(remainingElements.remove(at: forwardedTupleRandom.integer(in: 0...(remainingElements.count - 1))))
+			}
+			var labels = Array(GraphFuzzerForwardedTupleElement.labels.prefix(elements.count))
+			if forwardedTupleRandom.percentChance(30) {
+				labels[labels.count - 1] = GraphFuzzerForwardedTupleElement.keywordLabel
+			}
+			let forwardedProperties = zip(labels, elements).map { label, element in
+				PropertyDeclaration(attribute: "@Forwarded", label: label, type: element.spelledType(prefix: prefix, isSendable: sendability == .sendable))
+			}
+			let childName = "\(prefix)TupleChild"
+			let erasedChildName = "\(prefix)AnyTupleChild"
+			// A tuple's keyword label needs no backticks, which the macro's typealias spells nonetheless.
+			let keywordLabelKeepsBackticks = forwardedTupleRandom.percentChance(50)
+			let tupleElements = forwardedProperties.sorted { $0.label < $1.label }.map { property in
+				"\(keywordLabelKeepsBackticks ? property.label : property.label.replacingOccurrences(of: "`", with: "")): \(property.type)"
+			}
+			let forwardedPropertiesType = forwardedTupleRandom.percentChance(20)
+				? "\(childName).ForwardedProperties"
+				: "(\(tupleElements.joined(separator: ", ")))"
+			let builderLabel = "forwardedTupleChildBuilder"
+			let builderType = "\(isSendableWrapper ? "SendableErasedInstantiator" : "ErasedInstantiator")<\(forwardedPropertiesType), \(erasedChildName)>"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			var child = TypeDeclaration(name: childName, instantiableArguments: [], properties: forwardedProperties, declaresHelperTypes: false, additionalConformances: conformances)
+			child.additionalDeclarations = [
+				"public struct \(erasedChildName)\(helperTypesAreSendable ? ": Sendable" : "") {\n\tpublic init(_ value: \(childName)) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: \(childName)\n}",
+			]
+			for element in elements {
+				if let helperDeclaration = element.helperDeclaration(prefix: prefix, areSendable: helperTypesAreSendable), !child.additionalDeclarations.contains(helperDeclaration) {
+					child.additionalDeclarations.append(helperDeclaration)
+				}
+			}
+			if forwardedTupleRandom.percentChance(25) {
+				child.instantiableArguments.append("generateMock: true")
+			}
+			var newDeclarations = [child]
+			var holderProperties = [PropertyDeclaration(
+				attribute: "@Instantiated(fulfilledByType: \"\(childName)\", erasedToConcreteExistential: true)",
+				label: builderLabel,
+				type: builderType,
+			)]
+			if forwardedTupleRandom.percentChance(60) {
+				let readerName = "\(prefix)TupleReader"
+				let receive = forwardedTupleRandom.percentChance(75)
+					? PropertyDeclaration(attribute: "@Received", label: builderLabel, type: builderType)
+					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: builderLabel, type: builderType + "?")
+				var reader = TypeDeclaration(name: readerName, instantiableArguments: [], properties: [receive], declaresHelperTypes: false, additionalConformances: conformances)
+				if forwardedTupleRandom.percentChance(50) {
+					reader.instantiableArguments.append("generateMock: true")
+				}
+				newDeclarations.append(reader)
+				holderProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "forwardedTupleReader", type: readerName))
+			}
+			if forwardedTupleRandom.percentChance(50) {
+				declarations[0].properties += holderProperties
+			} else {
+				let hostName = "\(prefix)TupleHost"
+				var host = TypeDeclaration(name: hostName, instantiableArguments: [], properties: holderProperties, declaresHelperTypes: false, additionalConformances: conformances)
+				if forwardedTupleRandom.percentChance(40) {
+					host.instantiableArguments.append("generateMock: true")
+				}
+				newDeclarations.append(host)
+				declarations[0].properties.append(forwardedTupleRandom.percentChance(50)
+					? PropertyDeclaration(attribute: "@Instantiated", label: "forwardedTupleHost", type: hostName)
+					: PropertyDeclaration(attribute: "@Instantiated", label: "forwardedTupleHostBuilder", type: "\(isSendableWrapper ? "SendableInstantiator" : "Instantiator")<\(hostName)>"))
+			}
+			return declarations + newDeclarations
+		}
+
+		private static let forwardedTupleRandomSeedMask: UInt64 = 0x66777274706C6573
 
 		/// An optional property `addingErasedRenamesOfOptionalDependencies` can rename, with the index of its type.
 		private struct ErasedOptionalRenameSource {
@@ -5406,6 +5624,27 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// An alias with `erasedToConcreteExistential: true` whose `ofType:` is optional (`ofType: X?.self`), which wraps the
 	/// property where it is present and is `nil` where it is not, whatever binding the property has.
 	case erasedRenameOfOptionalDependency
+	/// An element of each `GraphFuzzerForwardedTupleElement` of the tuple that spells an erased instantiator's first
+	/// generic argument, which is a `@Forwarded` property's type spelled again.
+	case forwardedTupleOptionalElement
+	case forwardedTupleNestedTypeElement
+	case forwardedTupleGenericElementSpelledWithAngleBrackets
+	case forwardedTupleGenericElement
+	case forwardedTupleArrayElement
+	case forwardedTupleDictionaryElement
+	case forwardedTupleClosureElement
+	case forwardedTupleSendableClosureElement
+	case forwardedTupleOptionalClosureElement
+	case forwardedTupleExistentialElement
+	case forwardedTupleOptionalExistentialElement
+	case forwardedTupleTupleElement
+	/// Such a property labeled as a keyword.
+	case forwardedTupleKeywordLabel
+	/// An erased instantiator whose first generic argument names the `ForwardedProperties` typealias of the type it
+	/// builds, which holds several such properties.
+	case forwardedPropertiesTypealiasArgument
+	/// A required receive of such an erased instantiator by a type with `generateMock: true`, whose mock builds it.
+	case forwardedTupleBuilderReceivedByMockedType
 	case multipleRoots
 	case generateMock
 	case lazyCycle
@@ -5611,6 +5850,23 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 						features.insert(.defaultValuedInstantiateParameter)
 					}
 				case let .property(attribute, label, type):
+					if attribute.hasPrefix("@Instantiated"), label == "forwardedTupleChildBuilder", let firstArgument = GraphFuzzerMirrorTypes.generic(type)?.arguments.first, firstArgument.hasPrefix("(") {
+						// A graph whose argument names the typealias spells no element, so it shows none of these.
+						for element in GraphFuzzerMirrorTypes.tupleElements(of: firstArgument) {
+							if let spelling = GraphFuzzerForwardedTupleElement.element(ofType: element.type) {
+								features.insert(spelling.feature)
+							}
+							if element.label.replacingOccurrences(of: "`", with: "") == GraphFuzzerForwardedTupleElement.keywordLabel.replacingOccurrences(of: "`", with: "") {
+								features.insert(.forwardedTupleKeywordLabel)
+							}
+						}
+					}
+					if type.contains("TupleChild.ForwardedProperties") {
+						features.insert(.forwardedPropertiesTypealiasArgument)
+					}
+					if attribute == "@Received", label == "forwardedTupleChildBuilder", let currentTypeName, mockedTypeNames.contains(currentTypeName) {
+						features.insert(.forwardedTupleBuilderReceivedByMockedType)
+					}
 					// A receive of `x: T?` names the same type as `x: T` does, and so does a receive of the instance of
 					// `x: LazilyInstantiated<T>`.
 					let nonOptionalType = type.hasSuffix("?") ? String(type.dropLast()) : type

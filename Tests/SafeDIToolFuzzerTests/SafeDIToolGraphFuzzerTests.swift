@@ -2843,26 +2843,29 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `smokeSeeds_includeAcceptedAndRejectedGraphs_whenRunThroughTool` requires). Seeds 99, 304 and 3360 complete what
 	/// the base corpus's value oracle must show in passing graphs: a label declared at two depths of a root's tree above
 	/// a receiver of it (99), an `onlyIfAvailable` alias of a dependency a mock promotes (304), and a promoted wrapper
-	/// whose label the tree also receives by value, as the mocked type does (3360). It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on
+	/// whose label the tree also receives by value, as the mocked type does (3360). Seeds 0 and 18 complete the elements of
+	/// a forwarded tuple with a tuple and an existential, and seed 70, which the tool rejects, keeps the rejected share at
+	/// that quarter.
+	/// It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on
 	/// every pull request. Compiling the batch is one `swiftc` invocation when nothing fails, and comparing its values
 	/// one compile and one link.
-	static let smokeSeeds: [UInt64] = [12, 14, 25, 40, 62, 99, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
+	static let smokeSeeds: [UInt64] = [0, 12, 14, 18, 25, 40, 62, 70, 99, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xF2BF2BF130660373
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x808AF38CE8FEBA2C
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xE1B713F7CC5E755A
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x3DBAE4A67F8F194D
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0xD4F8982048785212
+	static let corpusFixtureHash: UInt64 = 0xF718D43F54A9CF0A
 
-	static let corpusPartitionHash: UInt64 = 0x92EF7B86DB8AF050
+	static let corpusPartitionHash: UInt64 = 0x6AD38463ADECC4D3
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -2874,30 +2877,45 @@ struct SafeDIToolGraphFuzzerTests {
 	/// corpus, so a generator change that stops drawing a feature, or a tool change that stops accepting the graphs that
 	/// draw it, changes these and must update them deliberately, with the hashes and the accepted-seed pins.
 	static let corpusAcceptedFeatureCounts: [GraphFuzzerFeature: Int] = [
-		.constantProperty: 2_098,
+		.constantProperty: 2_131,
 		.erasedConstantProperty: 387,
-		.instantiatorProperty: 1_848,
-		.sendableInstantiatorProperty: 776,
-		.erasedInstantiatorProperty: 940,
-		.sendableErasedInstantiatorProperty: 325,
+		.instantiatorProperty: 1_854,
+		.sendableInstantiatorProperty: 783,
+		.erasedInstantiatorProperty: 1_167,
+		.sendableErasedInstantiatorProperty: 416,
 		.lazilyInstantiatedProperty: 343,
 		.sendableLazilyInstantiatedProperty: 128,
 		.erasedLazilyInstantiatedProperty: 186,
 		.forwardedLazilyInstantiatedProperty: 281,
 		.receivedLazilyInstantiatedInstance: 219,
-		.forwardedProperty: 1_148,
-		.optionalForwardedProperty: 564,
-		.requiredReceive: 1_921,
+		.forwardedProperty: 1_444,
+		.optionalForwardedProperty: 833,
+		.requiredReceive: 1_972,
 		.requiredOptionalReceive: 480,
-		.onlyIfAvailableReceive: 1_515,
+		.onlyIfAvailableReceive: 1_540,
 		.requiredAlias: 947,
 		.onlyIfAvailableAlias: 782,
 		.aliasOfOnlyIfAvailableAlias: 67,
 		.aliasOfOptionalFormOfProperty: 12,
 		.erasedAlias: 192,
 		.erasedRenameOfOptionalDependency: 34,
+		.forwardedTupleOptionalElement: 109,
+		.forwardedTupleNestedTypeElement: 104,
+		.forwardedTupleGenericElementSpelledWithAngleBrackets: 108,
+		.forwardedTupleGenericElement: 105,
+		.forwardedTupleArrayElement: 109,
+		.forwardedTupleDictionaryElement: 104,
+		.forwardedTupleClosureElement: 108,
+		.forwardedTupleSendableClosureElement: 110,
+		.forwardedTupleOptionalClosureElement: 120,
+		.forwardedTupleExistentialElement: 114,
+		.forwardedTupleOptionalExistentialElement: 113,
+		.forwardedTupleTupleElement: 118,
+		.forwardedTupleKeywordLabel: 142,
+		.forwardedPropertiesTypealiasArgument: 139,
+		.forwardedTupleBuilderReceivedByMockedType: 119,
 		.multipleRoots: 1_520,
-		.generateMock: 1_924,
+		.generateMock: 1_997,
 		.lazyCycle: 1_042,
 		.constantCycleCloser: 28,
 		.sameLabelWithDifferentTypes: 1_090,
@@ -2906,12 +2924,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.dependencyMockCannotBuildReceivedBeneathItsOwner: 245,
 		.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner: 64,
 		.dependencyMockCannotBuildLazilyInstantiatedReceivedAsOtherKindBesideItsMockedOwner: 9,
-		.sendableAndNonSendableWrappers: 475,
+		.sendableAndNonSendableWrappers: 490,
 		.mockedTypeOnLazyCycle: 487,
 		.typesReceivingEachOtherOnlyIfAvailable: 244,
 		.labelReceivedAsInstanceAndAsInstantiator: 124,
 		.sameLabelReceivedAsDifferentUnbuildableWrappers: 113,
-		.receivedErasedInstantiator: 469,
+		.receivedErasedInstantiator: 738,
 		.forwardedErasedInstantiator: 138,
 		.defaultValuedInstantiateParameter: 549,
 		.nonSendableValuesInsideSendableBuilder: 132,
@@ -2988,10 +3006,10 @@ struct SafeDIToolGraphFuzzerTests {
 	static let corpusValueOracleCounts = GraphFuzzerValueOracleCounts(
 		rootPairCount: 4_520,
 		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x097611BDF9745C69),
-		mirroredPairCount: 2_107,
-		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0x4614AAD20D1C015E),
+		mirroredPairCount: 2_288,
+		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0xAE722ADA95FBE8D0),
 		skipCounts: [
-			.requiredParameter: 1_855,
+			.requiredParameter: 2_099,
 			.twoFormsOfOneLabel: 22,
 			.requiredOptionalReceiveOfNonOptionalDeclaration: 8,
 			.requiredReceiveOfUncreatedAlias: 10,
@@ -3006,7 +3024,7 @@ struct SafeDIToolGraphFuzzerTests {
 			.instanceOfPromotedWrapperPassedToMockedType: 1,
 			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 173,
 		],
-		drawnMocksMatchingOnlyAfterNormalizationCount: 487,
+		drawnMocksMatchingOnlyAfterNormalizationCount: 598,
 	)
 
 	/// The seeds of `knownIssues` whose value-oracle fixture is known not to compile.

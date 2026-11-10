@@ -5900,10 +5900,11 @@ public actor DependencyTreeGenerator {
 	/// that is handed the forwarded values, so a mock cannot build a constant of that type, or lazily
 	/// instantiate one: as in production, where such a property is never `@Instantiated`, it must be received.
 	/// Nor can it build an erased instantiator whose first generic argument is not the type's `@Forwarded`
-	/// properties. Such a received property stays a `mock()` parameter; an `@Instantiated` declaration of the
-	/// mismatched type is reported where a tree builds that declaration.
+	/// properties, or is a tuple of them whose elements are not each one bare name (`Property.mockBuildsFirstGeneric(of:)`).
+	/// Such a received property stays a `mock()` parameter; an `@Instantiated` declaration of a mismatched type is reported
+	/// where a tree builds that declaration, and the tuple is built where a tree declares it.
 	private static func mockCanBuild(_ property: Property, from scope: Scope) -> Bool {
-		guard property.firstGenericMatchesForwardedProperties(of: scope.instantiable) else { return false }
+		guard property.mockBuildsFirstGeneric(of: scope.instantiable) else { return false }
 		return !(property.propertyType.isConstant || property.propertyType.isLazilyInstantiated)
 			|| !scope.instantiable.dependencies.contains(where: \.isForwarded)
 	}
@@ -8191,7 +8192,7 @@ public actor DependencyTreeGenerator {
 			return .simple(
 				name: propertyType.isSendable ? Dependency.sendableErasedInstantiatorType : Dependency.erasedInstantiatorType,
 				generics: [
-					forwardedProperties.asForwardedPropertiesType.typeDescription,
+					forwardedProperties.asForwardedPropertiesTypeDescription,
 					builtType,
 				],
 			)
