@@ -1,0 +1,25 @@
+name: Spike Seam Nested
+
+# Runs the hand-written seam builder spike under Spikes/seam-nested on Swift 6.2. It lives on this branch only.
+on:
+  push:
+    branches: [dfed--claude/spike-nested-seam-builders]
+
+jobs:
+  spike:
+    name: Seam Builder Spike on Linux
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Run Spike
+        run: |
+          {
+            echo '```'
+            bash Spikes/seam-nested/run.sh
+            echo '```'
+          } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
