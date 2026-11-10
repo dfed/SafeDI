@@ -1213,6 +1213,12 @@ enum GraphFuzzerForwardedTupleElement: CaseIterable {
 	case existential
 	case optionalExistential
 	case tuple
+	case typedThrowsClosure
+	case variadicClosure
+	case conventionClosure
+	case isolatedAnyClosure
+	case qualifiedGlobalActorClosure
+	case nonisolatedNonsendingClosure
 
 	/// The labels of the tuple's elements, which no other pass draws. The elements are declared in this order, which is
 	/// not the order the tuple lists them in.
@@ -1250,6 +1256,18 @@ enum GraphFuzzerForwardedTupleElement: CaseIterable {
 			"(any \(prefix)ForwardedTupleProtocol)?"
 		case .tuple:
 			"(x: Int?, y: String)"
+		case .typedThrowsClosure:
+			"\(sendable)() throws(\(prefix)ForwardedTupleError) -> Void"
+		case .variadicClosure:
+			"\(sendable)(Int...) -> Void"
+		case .conventionClosure:
+			"@convention(c) () -> Void"
+		case .isolatedAnyClosure:
+			"@isolated(any) \(sendable)() -> Void"
+		case .qualifiedGlobalActorClosure:
+			"@\(prefix)ForwardedTupleActors.Act () -> Void"
+		case .nonisolatedNonsendingClosure:
+			"nonisolated(nonsending) \(sendable)() async -> Void"
 		}
 	}
 
@@ -1264,7 +1282,11 @@ enum GraphFuzzerForwardedTupleElement: CaseIterable {
 			"public struct \(prefix)ForwardedTupleBox<Element>\(sendable) {\n\tpublic init() {}\n}"
 		case .existential, .optionalExistential:
 			"public protocol \(prefix)ForwardedTupleProtocol\(sendable) {}"
-		case .optional, .genericSpelledWithAngleBrackets, .array, .dictionary, .closure, .sendableClosure, .optionalClosure, .tuple:
+		case .typedThrowsClosure:
+			"public struct \(prefix)ForwardedTupleError: Error {\n\tpublic init() {}\n}"
+		case .qualifiedGlobalActorClosure:
+			"public enum \(prefix)ForwardedTupleActors {\n\t@globalActor public actor Act {\n\t\tpublic static let shared = Act()\n\t}\n}"
+		case .optional, .genericSpelledWithAngleBrackets, .array, .dictionary, .closure, .sendableClosure, .optionalClosure, .tuple, .variadicClosure, .conventionClosure, .isolatedAnyClosure, .nonisolatedNonsendingClosure:
 			nil
 		}
 	}
@@ -1284,6 +1306,12 @@ enum GraphFuzzerForwardedTupleElement: CaseIterable {
 		case .existential: .forwardedTupleExistentialElement
 		case .optionalExistential: .forwardedTupleOptionalExistentialElement
 		case .tuple: .forwardedTupleTupleElement
+		case .typedThrowsClosure: .forwardedTupleTypedThrowsClosureElement
+		case .variadicClosure: .forwardedTupleVariadicClosureElement
+		case .conventionClosure: .forwardedTupleConventionClosureElement
+		case .isolatedAnyClosure: .forwardedTupleIsolatedAnyClosureElement
+		case .qualifiedGlobalActorClosure: .forwardedTupleQualifiedGlobalActorClosureElement
+		case .nonisolatedNonsendingClosure: .forwardedTupleNonisolatedNonsendingClosureElement
 		}
 	}
 
@@ -1291,6 +1319,18 @@ enum GraphFuzzerForwardedTupleElement: CaseIterable {
 	static func element(ofType type: String) -> GraphFuzzerForwardedTupleElement? {
 		if type.hasSuffix("?") {
 			type.contains("->") ? .optionalClosure : type.contains("any ") ? .optionalExistential : .optional
+		} else if type.contains("throws(") {
+			.typedThrowsClosure
+		} else if type.contains("...") {
+			.variadicClosure
+		} else if type.contains("@convention(") {
+			.conventionClosure
+		} else if type.contains("@isolated(") {
+			.isolatedAnyClosure
+		} else if type.contains("ForwardedTupleActors.Act") {
+			.qualifiedGlobalActorClosure
+		} else if type.contains("nonisolated(") {
+			.nonisolatedNonsendingClosure
 		} else if type.contains("->") {
 			type.contains("(Int)") ? .sendableClosure : .closure
 		} else if type.hasPrefix("(") {
@@ -1490,9 +1530,21 @@ enum GraphFuzzerSpelling: CaseIterable {
 
 	/// Whether `type` is a function type – after its attributes, a parenthesized parameter list followed by ` -> ` –
 	/// rather than a type merely holding one, such as an optional closure or a tuple.
+	static func escapingType(of type: String) -> String {
+		let nonisolatedSpecifier = "nonisolated(nonsending) "
+		return if !isFunctionType(type) {
+			type
+		} else if type.hasPrefix(nonisolatedSpecifier) {
+			// Swift reads this specifier only before the attributes.
+			"\(nonisolatedSpecifier)@escaping \(type.dropFirst(nonisolatedSpecifier.count))"
+		} else {
+			"@escaping \(type)"
+		}
+	}
+
 	static func isFunctionType(_ type: String) -> Bool {
 		var remainder = Substring(type)
-		while remainder.hasPrefix("@") {
+		while remainder.hasPrefix("@") || remainder.hasPrefix("nonisolated(") {
 			remainder = remainder.drop { $0 != " " }.dropFirst()
 		}
 		guard remainder.hasPrefix("(") else { return false }
@@ -1504,7 +1556,8 @@ enum GraphFuzzerSpelling: CaseIterable {
 			case ")":
 				depth -= 1
 				if depth == 0 {
-					return remainder[remainder.index(after: index)...].hasPrefix(" -> ")
+					let afterParameters = remainder[remainder.index(after: index)...]
+					return afterParameters.hasPrefix(" -> ") || afterParameters.hasPrefix(" async ") || afterParameters.hasPrefix(" throws")
 				}
 			default:
 				break
@@ -5460,7 +5513,7 @@ enum GraphFuzzerGenerator {
 			let conformances = ([baseConformances] + declaration.additionalConformances).joined(separator: ", ")
 			var lines = [instantiableAttribute, "\(declaration.access.modifier)final class \(declaration.name): \(conformances) {"]
 			// A function-typed parameter is stored, so it escapes.
-			let parameters = (declaration.properties.map { "\($0.label): \(GraphFuzzerSpelling.isFunctionType($0.type) ? "@escaping " : "")\($0.type)" } + declaration.defaultValuedParameters.map(\.declaration)).joined(separator: ", ")
+			let parameters = (declaration.properties.map { "\($0.label): \(GraphFuzzerSpelling.escapingType(of: $0.type))" } + declaration.defaultValuedParameters.map(\.declaration)).joined(separator: ", ")
 			// The initializer is no wider, once its type caps it, than the narrowest type it names, so that the fixture
 			// compiles; a spelled access its type already caps is kept.
 			let spelledInitializerAccess = declaration.initializerAccess ?? declaration.access
@@ -5638,6 +5691,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case forwardedTupleExistentialElement
 	case forwardedTupleOptionalExistentialElement
 	case forwardedTupleTupleElement
+	case forwardedTupleTypedThrowsClosureElement
+	case forwardedTupleVariadicClosureElement
+	case forwardedTupleConventionClosureElement
+	case forwardedTupleIsolatedAnyClosureElement
+	case forwardedTupleQualifiedGlobalActorClosureElement
+	case forwardedTupleNonisolatedNonsendingClosureElement
 	/// Such a property labeled as a keyword.
 	case forwardedTupleKeywordLabel
 	/// An erased instantiator whose first generic argument names the `ForwardedProperties` typealias of the type it

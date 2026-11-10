@@ -218,7 +218,7 @@ extension DependencyTreeGenerator {
 		switch dependency.asInstantiatedType {
 		case .simple, .nested, .any, .composition:
 			true
-		case .void, .optional, .implicitlyUnwrappedOptional, .some, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown:
+		case .void, .optional, .implicitlyUnwrappedOptional, .some, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .unknown, .variadic:
 			false
 		}
 	}

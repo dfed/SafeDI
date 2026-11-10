@@ -113,27 +113,11 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 					baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource)),
 				),
 			)
-		case let .attributed(typeDescription, _, attributes):
+		case .attributed:
 			FunctionParameterSyntax(
 				firstName: .identifier(label),
 				colon: .colonToken(trailingTrivia: .space),
-				type: AttributedTypeSyntax(
-					// It is not possible for a property declaration to have specifiers today.
-					specifiers: [],
-					attributes: AttributeListSyntax {
-						AttributeSyntax(attributeName: IdentifierTypeSyntax(
-							name: "escaping",
-							trailingTrivia: .space,
-						))
-						for attribute in attributes {
-							AttributeSyntax(
-								attributeName: IdentifierTypeSyntax(name: .identifier(attribute)),
-								trailingTrivia: .space,
-							)
-						}
-					},
-					baseType: IdentifierTypeSyntax(name: .identifier(typeDescription.asSource)),
-				),
+				type: IdentifierTypeSyntax(name: .identifier(typeDescription.asFunctionParameter.asSource)),
 			)
 		case .simple,
 		     .nested,
@@ -147,6 +131,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		     .dictionary,
 		     .tuple,
 		     .unknown,
+		     .variadic,
 		     .void:
 			FunctionParameterSyntax(
 				firstName: .identifier(label),

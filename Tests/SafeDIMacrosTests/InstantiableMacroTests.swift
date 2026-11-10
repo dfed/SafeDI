@@ -3035,6 +3035,118 @@ import Testing
 		}
 
 		@Test
+		func declaration_fixit_generatesRequiredInitializerKeepingSpecifierAndAttributeArguments_whenForwardedClosuresSpellThem() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    @Forwarded let first: nonisolated(nonsending) () async -> Void
+				    @Forwarded let second: @convention(c) () -> Void
+				    @Forwarded let third: @Space.Act () -> Void
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    let first: nonisolated(nonsending) () async -> Void
+				    let second: @convention(c) () -> Void
+				    let third: @Space.Act () -> Void
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 44,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				public init(
+				first: nonisolated(nonsending) @escaping () async -> Void,
+				second: @escaping @convention(c) () -> Void,
+				third: @escaping @Space.Act () -> Void
+				) {
+				self.first = first
+				self.second = second
+				self.third = third
+				}
+
+				    @Forwarded let first: nonisolated(nonsending) () async -> Void
+				    @Forwarded let second: @convention(c) () -> Void
+				    @Forwarded let third: @Space.Act () -> Void
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_generatesForwardedPropertiesTypealias_whenInitializerSpellsThrowsAndPropertySpellsThrownAnyError() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(first: @escaping (Int) throws -> String) {
+				        self.first = first
+				    }
+
+				    @Forwarded let first: (Int) throws(any Error) -> String
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(first: @escaping (Int) throws -> String) {
+				        self.first = first
+				    }
+
+				    let first: (Int) throws(any Error) -> String
+
+				    public typealias ForwardedProperties = (Int) throws(any Error) -> String
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_generatesForwardedPropertiesTypealias_whenForwardedClosureSpellsThrownTypeAndVariadicParameter() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(first: @escaping () throws(Failure) -> Void, second: @escaping (Int...) -> Void) {
+				        self.first = first
+				        self.second = second
+				    }
+				    @Forwarded let first: () throws(Failure) -> Void
+				    @Forwarded let second: (Int...) -> Void
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(first: @escaping () throws(Failure) -> Void, second: @escaping (Int...) -> Void) {
+				        self.first = first
+				        self.second = second
+				    }
+				    let first: () throws(Failure) -> Void
+				    let second: (Int...) -> Void
+
+				    public typealias ForwardedProperties = (first: () throws(Failure) -> Void, second: (Int...) -> Void)
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func declaration_fixit_generatesRequiredInitializerWhenInstantiatorDependencyMissingFromInitializer() {
 			assertMacroExpansion(
 				"""

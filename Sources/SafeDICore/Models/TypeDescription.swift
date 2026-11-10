@@ -49,7 +49,10 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	/// A tuple. e.g. (Int, string: String)
 	indirect case tuple([TupleElement])
 	/// A closure. e.g. (Int, Double) throws -> String
-	indirect case closure(arguments: [TypeDescription], isAsync: Bool, doesThrow: Bool, returnType: TypeDescription)
+	/// `thrownType` is the type a closure that throws names in `throws(E)`, and `nil` for a bare `throws`.
+	indirect case closure(arguments: [TypeDescription], isAsync: Bool, doesThrow: Bool, thrownType: TypeDescription? = nil, returnType: TypeDescription)
+	/// A variadic parameter of a closure. e.g. the `Int...` of (Int...) -> Void
+	indirect case variadic(TypeDescription)
 	/// A type that can't be represented by the above cases.
 	case unknown(text: String)
 
@@ -185,8 +188,15 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 				}
 			}.joined(separator: ", ")))
 			"""
-		case let .closure(arguments, isAsync, doesThrow, returnType):
-			return "(\(arguments.map(\.asSource).joined(separator: ", ")))\([isAsync ? " async" : "", doesThrow ? " throws" : ""].removingEmpty().joined()) -> \(returnType.asSource)"
+		case let .closure(arguments, isAsync, doesThrow, thrownType, returnType):
+			let throwsClause = if doesThrow {
+				thrownType.map { " throws(\($0.asSource))" } ?? " throws"
+			} else {
+				""
+			}
+			return "(\(arguments.map(\.asSource).joined(separator: ", ")))\([isAsync ? " async" : "", throwsClause].removingEmpty().joined()) -> \(returnType.asSource)"
+		case let .variadic(type):
+			return "\(type.wrappedIfAmbiguous.asSource)..."
 		case let .unknown(text):
 			return text
 		}
@@ -231,8 +241,10 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			.dictionary(key: key.withoutAny, value: value.withoutAny)
 		case let .tuple(elements):
 			.tuple(elements.map { TupleElement(label: $0.label, $0.typeDescription.withoutAny) })
-		case let .closure(arguments, isAsync, doesThrow, returnType):
-			.closure(arguments: arguments.map(\.withoutAny), isAsync: isAsync, doesThrow: doesThrow, returnType: returnType.withoutAny)
+		case let .closure(arguments, isAsync, doesThrow, thrownType, returnType):
+			.closure(arguments: arguments.map(\.withoutAny), isAsync: isAsync, doesThrow: doesThrow, thrownType: thrownType?.withoutAny, returnType: returnType.withoutAny)
+		case let .variadic(type):
+			.variadic(type.withoutAny)
 		}
 	}
 
@@ -248,6 +260,14 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		} else {
 			lhs.isSameType(asTypeNotSpelledWithAny: rhs)
 		}
+	}
+
+	/// The type a closure's `throws(E)` names, or `nil` when it names `any Error`: Swift reads `throws(any Error)` and
+	/// `throws` as one type, so neither `==` nor `hash` tells them apart, while `asSource` keeps each spelling.
+	private static func thrownTypeBeyondAnyError(_ thrownType: TypeDescription?) -> TypeDescription? {
+		thrownType == .simple(name: "Error") || thrownType == .nested(name: "Error", parentType: .simple(name: "Swift"))
+			? nil
+			: thrownType
 	}
 
 	/// Whether the receiver is the same type as `other`, which is not spelled with `any` at its top level.
@@ -292,12 +312,16 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		case let .tuple(elements):
 			guard case let .tuple(otherElements) = other else { return false }
 			return elements == otherElements
-		case let .closure(arguments, isAsync, doesThrow, returnType):
-			guard case let .closure(otherArguments, otherIsAsync, otherDoesThrow, otherReturnType) = other else { return false }
+		case let .closure(arguments, isAsync, doesThrow, thrownType, returnType):
+			guard case let .closure(otherArguments, otherIsAsync, otherDoesThrow, otherThrownType, otherReturnType) = other else { return false }
 			return arguments == otherArguments
 				&& isAsync == otherIsAsync
 				&& doesThrow == otherDoesThrow
+				&& Self.thrownTypeBeyondAnyError(thrownType) == Self.thrownTypeBeyondAnyError(otherThrownType)
 				&& returnType == otherReturnType
+		case let .variadic(type):
+			guard case let .variadic(otherType) = other else { return false }
+			return type == otherType
 		case let .unknown(text):
 			guard case let .unknown(otherText) = other else { return false }
 			return text == otherText
@@ -354,15 +378,19 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		case let .tuple(elements):
 			hasher.combine(11)
 			hasher.combine(elements)
-		case let .closure(arguments, isAsync, doesThrow, returnType):
+		case let .closure(arguments, isAsync, doesThrow, thrownType, returnType):
 			hasher.combine(12)
 			hasher.combine(arguments)
 			hasher.combine(isAsync)
 			hasher.combine(doesThrow)
+			hasher.combine(Self.thrownTypeBeyondAnyError(thrownType))
 			hasher.combine(returnType)
 		case let .unknown(text):
 			hasher.combine(13)
 			hasher.combine(text)
+		case let .variadic(type):
+			hasher.combine(14)
+			hasher.combine(type)
 		}
 	}
 
@@ -373,7 +401,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		switch instanceType {
 		case .any:
 			false
-		case .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .optional, .simple, .some, .tuple, .unknown, .void:
+		case .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .optional, .simple, .some, .tuple, .unknown, .variadic, .void:
 			isType
 		}
 	}
@@ -436,7 +464,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			let .optional(type),
 			let .implicitlyUnwrappedOptional(type):
 			type.propertyType
-		case .any, .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .some, .tuple, .unknown, .void:
+		case .any, .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .some, .tuple, .unknown, .variadic, .void:
 			.constant
 		}
 	}
@@ -458,7 +486,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		case let .optional(type),
 		     let .implicitlyUnwrappedOptional(type):
 			type.lazilyInstantiatedInstanceType.map { .optional($0) }
-		case .any, .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .some, .tuple, .unknown, .void:
+		case .any, .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .some, .tuple, .unknown, .variadic, .void:
 			nil
 		}
 	}
@@ -477,6 +505,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		     .some,
 		     .tuple,
 		     .unknown,
+		     .variadic,
 		     .void:
 			self
 		case .closure:
@@ -509,6 +538,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		     .some,
 		     .tuple,
 		     .unknown,
+		     .variadic,
 		     .void:
 			false
 		}
@@ -533,6 +563,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		     .some,
 		     .tuple,
 		     .unknown,
+		     .variadic,
 		     .void:
 			false
 		}
@@ -552,7 +583,8 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		     .dictionary,
 		     .tuple,
 		     .closure,
-		     .unknown:
+		     .unknown,
+		     .variadic:
 			self
 		case let .optional(type):
 			type.simplified
@@ -602,7 +634,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		case let .attributed(type, specifiers, attributes):
 			let prefix = [
 				specifiers.isEmpty ? nil : specifiers.joined(separator: "_"),
-				attributes.isEmpty ? nil : attributes.joined(separator: "_"),
+				attributes.isEmpty ? nil : attributes.map { $0.filter { $0.isLetter || $0.isNumber || $0 == "_" } }.joined(separator: "_"),
 			].compactMap(\.self).joined(separator: "_")
 			return "\(prefix)_\(type.asIdentifier)"
 		case let .array(element):
@@ -611,11 +643,18 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			return "Dictionary_\(key.asIdentifier)_\(value.asIdentifier)"
 		case let .tuple(elements):
 			return elements.isEmpty ? "Void" : elements.map(\.typeDescription.asIdentifier).joined(separator: "_and_")
-		case let .closure(arguments, isAsync, doesThrow, returnType):
+		case let .closure(arguments, isAsync, doesThrow, thrownType, returnType):
 			let args = arguments.isEmpty ? "Void" : arguments.map(\.asIdentifier).joined(separator: "_")
-			let modifiers = [isAsync ? "async" : nil, doesThrow ? "throws" : nil].compactMap(\.self)
+			let throwsModifier = if doesThrow {
+				thrownType.map { "throws_\($0.asIdentifier)" } ?? "throws"
+			} else {
+				String?.none
+			}
+			let modifiers = [isAsync ? "async" : nil, throwsModifier].compactMap(\.self)
 			let parts = [args] + modifiers + ["to", returnType.asIdentifier]
 			return parts.joined(separator: "_")
+		case let .variadic(type):
+			return "\(type.asIdentifier)_Variadic"
 		case let .unknown(text):
 			return text.filter(\.isLetter)
 		}
@@ -624,7 +663,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	/// The type of the value an `@autoclosure` parameter of this type takes: the closure's return type (`Int` for
 	/// `@autoclosure () -> Int`, `@escaping` or not), or `nil` for a type that is not an `@autoclosure`.
 	public var autoclosureValueType: TypeDescription? {
-		guard case let .attributed(.closure(_, _, _, returnType), _, attributes) = self,
+		guard case let .attributed(.closure(_, _, _, _, returnType), _, attributes) = self,
 		      attributes.contains("autoclosure")
 		else { return nil }
 		return returnType
@@ -656,6 +695,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		     .some,
 		     .tuple,
 		     .unknown,
+		     .variadic,
 		     .void:
 			return self
 		}
@@ -676,6 +716,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		     .some,
 		     .tuple,
 		     .unknown,
+		     .variadic,
 		     .void:
 			false
 		case .optional:
@@ -698,6 +739,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		     .some,
 		     .tuple,
 		     .unknown,
+		     .variadic,
 		     .void:
 			self
 		case let .optional(unwrapped):
@@ -725,7 +767,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			.simple(name: name)
 		case let .nested(name, parentType, _):
 			parentType.withoutGenericArguments.map { .nested(name: name, parentType: $0) }
-		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
+		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .variadic, .void:
 			nil
 		}
 	}
@@ -738,7 +780,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			.simple(name: name, generics: generics)
 		case let .nested(name, parentType, generics):
 			parentType.droppingOutermostType.map { .nested(name: name, parentType: $0, generics: generics) }
-		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .simple, .some, .tuple, .unknown, .void:
+		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .simple, .some, .tuple, .unknown, .variadic, .void:
 			nil
 		}
 	}
@@ -747,7 +789,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		switch self {
 		case let .nested(_, parentType, _):
 			parentType
-		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .simple, .some, .tuple, .unknown, .void:
+		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .simple, .some, .tuple, .unknown, .variadic, .void:
 			nil
 		}
 	}
@@ -758,7 +800,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			.simple(name: name, generics: [])
 		case let .nested(name, parentType, _):
 			.nested(name: name, parentType: parentType, generics: [])
-		case .array, .attributed, .any, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
+		case .array, .attributed, .any, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .variadic, .void:
 			self
 		}
 	}
@@ -781,7 +823,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		     let .optional(typeDescription),
 		     let .some(typeDescription):
 			typeDescription.asInstantiatedType
-		case .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown, .void:
+		case .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown, .variadic, .void:
 			self
 		}
 	}
@@ -819,7 +861,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			return typeDescription.replacingInstantiatedType(replacement).map { .optional($0) }
 		case let .some(typeDescription):
 			return typeDescription.replacingInstantiatedType(replacement).map { .some($0) }
-		case .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown, .void:
+		case .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown, .variadic, .void:
 			return replacement(self)
 		}
 	}
@@ -860,6 +902,23 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// The spelling that constructs this wrapper type in an expression, such as `ErasedInstantiator<Int, Screen> { … }`.
+	/// Swift's expression parser does not read a `nonisolated(nonsending)` specifier in a generic argument, though its
+	/// type parser does: for such a type this is the wrapper's name alone, whose generic arguments come from the type
+	/// annotation `isConstructedByAnnotation` then calls for.
+	var spelledForConstruction: String {
+		if isConstructedByAnnotation, let name = simpleNameAndGenerics?.name {
+			name
+		} else {
+			asSource
+		}
+	}
+
+	/// Whether a binding of this wrapper type must state the type in an annotation. See `spelledForConstruction`.
+	var isConstructedByAnnotation: Bool {
+		simpleNameAndGenerics != nil && asSource.contains("nonisolated(")
+	}
+
 	/// Whether `Self` appears anywhere inside this type. Walks recursively
 	/// into generics, wrappers, and composed sub-types. Used by the
 	/// `@Instantiable` macro to diagnose default expressions whose type
@@ -897,8 +956,12 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			elements.contains(where: { $0.typeDescription.namesType(where: predicate) })
 		case let .composition(elements):
 			elements.contains(where: { $0.namesType(where: predicate) })
-		case let .closure(arguments, _, _, returnType):
-			arguments.contains(where: { $0.namesType(where: predicate) }) || returnType.namesType(where: predicate)
+		case let .closure(arguments, _, _, thrownType, returnType):
+			arguments.contains(where: { $0.namesType(where: predicate) })
+				|| (thrownType?.namesType(where: predicate) ?? false)
+				|| returnType.namesType(where: predicate)
+		case let .variadic(wrapped):
+			wrapped.namesType(where: predicate)
 		case let .metatype(wrapped, _):
 			wrapped.namesType(where: predicate)
 		case let .attributed(wrapped, _, _):
@@ -962,19 +1025,44 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 					element.typeDescription.nestingOutermostNamesIfAny(in: enclosingType).map { TupleElement(label: element.label, $0) }
 				}
 				.map { .tuple($0) }
-		case let .closure(arguments, isAsync, doesThrow, returnType):
-			let nestedArguments = arguments.replacingElementsIfAny { $0.nestingOutermostNamesIfAny(in: enclosingType) }
-			let nestedReturnType = returnType.nestingOutermostNamesIfAny(in: enclosingType)
-			guard nestedArguments != nil || nestedReturnType != nil else { return nil }
-			return .closure(
-				arguments: nestedArguments ?? arguments,
+		case let .closure(arguments, isAsync, doesThrow, thrownType, returnType):
+			return Self.closureNestingOutermostNamesIfAny(
+				arguments: arguments,
 				isAsync: isAsync,
 				doesThrow: doesThrow,
-				returnType: nestedReturnType ?? returnType,
+				thrownType: thrownType,
+				returnType: returnType,
+				in: enclosingType,
 			)
+		case let .variadic(type):
+			return type.nestingOutermostNamesIfAny(in: enclosingType).map { .variadic($0) }
 		case .unknown, .void:
 			return nil
 		}
+	}
+
+	/// The closure with these parts, with each type it names nested as `nestingOutermostNames(in:)` nests it, or `nil` when
+	/// that nests nothing. It is apart from `nestingOutermostNamesIfAny(in:)` so that its locals do not add to the frame
+	/// of each level of a deeply nested type, which a debug build's task stack holds at most 128 of (`BinaryReader`).
+	private static func closureNestingOutermostNamesIfAny(
+		arguments: [TypeDescription],
+		isAsync: Bool,
+		doesThrow: Bool,
+		thrownType: TypeDescription?,
+		returnType: TypeDescription,
+		in enclosingType: (String) -> TypeDescription?,
+	) -> TypeDescription? {
+		let nestedArguments = arguments.replacingElementsIfAny { $0.nestingOutermostNamesIfAny(in: enclosingType) }
+		let nestedThrownType = thrownType?.nestingOutermostNamesIfAny(in: enclosingType)
+		let nestedReturnType = returnType.nestingOutermostNamesIfAny(in: enclosingType)
+		guard nestedArguments != nil || nestedThrownType != nil || nestedReturnType != nil else { return nil }
+		return .closure(
+			arguments: nestedArguments ?? arguments,
+			isAsync: isAsync,
+			doesThrow: doesThrow,
+			thrownType: nestedThrownType ?? thrownType,
+			returnType: nestedReturnType ?? returnType,
+		)
 	}
 
 	/// The names of a simple or nested type from the outermost, such as `["Child", "Config"]` for `Child.Config`, or
@@ -985,7 +1073,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			[name]
 		case let .nested(name, parentType, _):
 			parentType.namePath.map { $0 + [name] }
-		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
+		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .variadic, .void:
 			nil
 		}
 	}
@@ -996,7 +1084,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		case let .simple(name, generics),
 		     let .nested(name, _, generics):
 			(name, generics)
-		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
+		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .variadic, .void:
 			nil
 		}
 	}
@@ -1009,7 +1097,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	/// A representation of this type that may be wrapped in a single element tuple to ensure cohesiveness of the type description.
 	private var wrappedIfAmbiguous: Self {
 		switch self {
-		case .void, .simple, .optional, .implicitlyUnwrappedOptional, .metatype, .nested, .array, .dictionary, .tuple, .unknown:
+		case .void, .simple, .optional, .implicitlyUnwrappedOptional, .metatype, .nested, .array, .dictionary, .tuple, .unknown, .variadic:
 			// These types contain no spaces, and are therefore unambiguous without being wrapped.
 			self
 		case .composition, .some, .any, .attributed, .closure:
@@ -1072,12 +1160,14 @@ extension TypeSyntax {
 			)
 
 		} else if let typeIdentifier = AttributedTypeSyntax(self) {
+			// An attribute is kept as its tokens spell it, without the `@`: `Sendable`, `Space.Act`, `convention(c)`.
 			let attributes: [String] = typeIdentifier.attributes.compactMap {
-				(AttributeSyntax($0)?.attributeName).map(IdentifierTypeSyntax.init(_:))??.name.text
+				AttributeSyntax($0)?.tokens(viewMode: .sourceAccurate).dropFirst().map(\.text).joined()
 			}
 			return .attributed(
 				typeIdentifier.baseType.typeDescription,
-				specifiers: typeIdentifier.specifiers.textRepresentation ?? [],
+				// A specifier that follows the attributes, such as `nonisolated(nonsending)`, also parses before them.
+				specifiers: (typeIdentifier.specifiers.textRepresentation ?? []) + (typeIdentifier.lateSpecifiers.textRepresentation ?? []),
 				attributes: attributes,
 			)
 
@@ -1114,9 +1204,12 @@ extension TypeSyntax {
 
 		} else if let typeIdentifier = FunctionTypeSyntax(self) {
 			return .closure(
-				arguments: typeIdentifier.parameters.map(\.type.typeDescription),
+				arguments: typeIdentifier.parameters.map { parameter in
+					parameter.ellipsis == nil ? parameter.type.typeDescription : .variadic(parameter.type.typeDescription)
+				},
 				isAsync: typeIdentifier.effectSpecifiers?.asyncSpecifier != nil,
 				doesThrow: typeIdentifier.effectSpecifiers?.throwsClause?.throwsSpecifier != nil,
+				thrownType: typeIdentifier.effectSpecifiers?.throwsClause?.type?.typeDescription,
 				returnType: typeIdentifier.returnClause.type.typeDescription,
 			)
 
@@ -1209,11 +1302,14 @@ extension ExprSyntax {
 					arguments: arguments.elements.map(\.expression.typeDescription),
 					isAsync: arrow.effectSpecifiers?.asyncSpecifier != nil,
 					doesThrow: arrow.effectSpecifiers?.throwsClause?.throwsSpecifier != nil,
+					thrownType: arrow.effectSpecifiers?.throwsClause?.type?.typeDescription,
 					returnType: returnType.typeDescription,
 				)
 			}
 		} else if let optionalChainingExpr = OptionalChainingExprSyntax(self) {
 			return .optional(optionalChainingExpr.expression.typeDescription)
+		} else if let postfixOperatorExpr = PostfixOperatorExprSyntax(self), postfixOperatorExpr.operator.text == "..." {
+			return .variadic(postfixOperatorExpr.expression.typeDescription)
 		} else if let arrayExpr = ArrayExprSyntax(self),
 		          arrayExpr.elements.count == 1,
 		          let onlyElement = arrayExpr.elements.first
@@ -1241,6 +1337,9 @@ private final class GenericArgumentVisitor: SyntaxVisitor {
 	override func visit(_ node: GenericArgumentSyntax) -> SyntaxVisitorContinueKind {
 		if let typeSyntax = TypeSyntax(node.argument) {
 			genericArguments.append(typeSyntax.typeDescription)
+		} else {
+			// A value generic argument, such as the `3` of `InlineArray<3, Int>`.
+			genericArguments.append(.unknown(text: node.argument.trimmedDescription))
 		}
 		return .skipChildren
 	}

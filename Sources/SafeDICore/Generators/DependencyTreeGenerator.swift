@@ -10026,6 +10026,7 @@ extension TypeDescription {
 		     .simple,
 		     .tuple,
 		     .unknown,
+		     .variadic,
 		     .void:
 			self
 		}
