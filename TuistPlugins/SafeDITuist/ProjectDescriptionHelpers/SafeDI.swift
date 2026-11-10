@@ -233,7 +233,7 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 		for dependency_name in "$@"; do
 			dependency_path="$shared_safedi_dir/$dependency_name.safedi"
 			if [ ! -f "$dependency_path" ]; then
-				echo "error: SafeDI plugin: $dependency_name.safedi not found at $dependency_path. The dependencies of SafeDI.preCompileScript list module names (PRODUCT_MODULE_NAME). Add the target of module $dependency_name to this target's dependencies so it builds first, and check that it also runs SafeDI.preCompileScript." >&2
+				echo "error: SafeDI plugin: $dependency_name.safedi not found at $dependency_path. The dependencies of SafeDI.preCompileScript list module names (PRODUCT_MODULE_NAME values). Check that $dependency_name is the module name of a target, that the target runs SafeDI.preCompileScript, and that it is in this target's dependencies, so that it builds first." >&2
 				exit 1
 			fi
 			if [ "$first" = 1 ]; then

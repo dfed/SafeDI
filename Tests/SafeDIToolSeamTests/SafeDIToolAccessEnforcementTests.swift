@@ -4279,7 +4279,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	/// which says that `reachedDeclaration`, the first declaration in source order in the tree that the target cannot
 	/// reach, keeps the tree from compiling, and leads with the remedy every build can apply.
 	private static func inlineSeamMessage(reaching reachedDeclaration: String) -> String {
-		"`FeatureView` is declared with `generateDependencyTree: true`, but SafeDI does not know which module declares `FeatureView`, so this run builds `FeatureView`'s tree inline. \(reachedDeclaration), so that tree cannot be built here. Make the types in `FeatureView`'s tree `public`, or, in a build that can name modules, declare `FeatureView` in a module whose SafeDITool run is given its name (`--module-name`, Bazel's `module_name`), so that this module calls the initializer SafeDI generates for `FeatureView`."
+		"`FeatureView` is declared with `generateDependencyTree: true`, but SafeDI does not know which module declares `FeatureView`, so this run builds `FeatureView`'s tree inline. \(reachedDeclaration), so that tree cannot be built here. Make the types in `FeatureView`'s tree and their initializers `package`, or `public` where their module and this one are in different packages. For this module to call the initializer SafeDI generates for `FeatureView` instead, SafeDI must know `FeatureView`'s module: the Xcode project plugin cannot name modules, so move the modules and the root into a local Swift package that the app target depends on; a SafeDITool run by hand needs the module info of `FeatureView`'s module, written with `--module-name`."
 	}
 
 	/// `Core`, in its own package, declaring with `serviceAttribute` the `public` `Service`, whose `package` initializer
