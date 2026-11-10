@@ -209,7 +209,6 @@ public actor DependencyTreeGenerator {
 		try Self.validateFills(
 			inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator),
 			callerModule: seams.currentModule,
-			seamModule: { [seams] seamType in seams.foreignSeams[seamType]?.declaringModule ?? seams.currentModule },
 		)
 		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: rootScopeGenerators.map { ($0.instantiable, $0.scopeGenerator) })
 		try await validateNoSeamTierOmitsProvidedValue(inTreesRootedAt: rootScopeGenerators)

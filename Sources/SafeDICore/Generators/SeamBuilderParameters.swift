@@ -47,7 +47,8 @@ extension DependencyTreeGenerator {
 		guard generator.containsBuildSite || generator.passesUpBuilder else { return [] }
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
 		let sites = buildSites(in: generator)
-		let (passedUpHoles, ownSiteAdditions) = holesPassedUp(in: generator, seamType: seam.concreteInstantiable, ownSitePaths: sites.map(\.sitePath))
+		let seamModule = ModuleIdentity(moduleName: seam.moduleName, packageName: seam.packageName)
+		let (passedUpHoles, ownSiteAdditions) = holesPassedUp(in: generator, seamType: seam.concreteInstantiable, seamModule: seamModule, ownSitePaths: sites.map(\.sitePath))
 
 		// Every site's fields, stages and what it does not carry.
 		struct SiteContent {
@@ -158,7 +159,8 @@ extension DependencyTreeGenerator {
 				builderLabel: builderLabels[index],
 				internalName: internalName(ofBuilderLabeled: builderLabels[index]),
 				scopeSeamType: seam.concreteInstantiable,
-				scopeSeamModuleName: seam.moduleName,
+				scopeSeamModule: seamModule,
+				typesToOwner: content.site.typesToOwner,
 				scopeTypeName: scopeTypeName,
 				stages: content.stages,
 				stageBoundaryDepths: content.stageBoundaryDepths,
@@ -193,7 +195,8 @@ extension DependencyTreeGenerator {
 				builderLabel: builderLabel,
 				internalName: internalName(ofBuilderLabeled: builderLabel),
 				scopeSeamType: inner.scopeSeamType,
-				scopeSeamModuleName: inner.scopeSeamModuleName,
+				scopeSeamModule: inner.scopeSeamModule,
+				typesToOwner: passedUp.typesToCall + inner.typesToOwner,
 				scopeTypeName: inner.scopeTypeName,
 				stages: inner.stages,
 				stageBoundaryDepths: [],
@@ -270,6 +273,11 @@ extension DependencyTreeGenerator {
 			return locations
 		}
 
+		/// The types from the seam, itself excluded, to the hole's owner.
+		var typesToOwner: [SeamSignature.Hole.PathType] {
+			frames.dropFirst().flatMap { SeamSignature.Hole.PathType.pathTypes(through: $0.generator) }
+		}
+
 		/// The labels of the properties from the root to the owner's property, joined with `_`.
 		var pathLabels: String {
 			SeamSignature.Hole.pathLabels(of: sitePath)
@@ -314,19 +322,20 @@ extension DependencyTreeGenerator {
 	private static func holesPassedUp(
 		in generator: ScopeGenerator,
 		seamType: TypeDescription,
+		seamModule: ModuleIdentity,
 		ownSitePaths: [[Property]],
-	) -> (passedUpHoles: [(innerSeamType: TypeDescription, hole: SeamSignature.Hole)], ownSiteAdditions: [[Property]: SiteAdditions]) {
-		var passedUpHoles = [(innerSeamType: TypeDescription, hole: SeamSignature.Hole)]()
+	) -> (passedUpHoles: [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], hole: SeamSignature.Hole)], ownSiteAdditions: [[Property]: SiteAdditions]) {
+		var passedUpHoles = [(innerSeamType: TypeDescription, typesToCall: [SeamSignature.Hole.PathType], hole: SeamSignature.Hole)]()
 		var takenSites = Set(ownSitePaths.map { SeamSignature.Hole.Site(seamType: seamType, path: $0) })
 		var additionsBySite = [SeamSignature.Hole.Site: SiteAdditions]()
-		var generatorsToVisit = [(generator: generator, pathDeclarations: [SeamSignature.Hole.UncarriedDeclaration](), isInSendableFunction: false)]
-		while let (visited, pathDeclarations, isInSendableFunction) = generatorsToVisit.popLast() {
+		var generatorsToVisit = [(generator: generator, typesToCall: [SeamSignature.Hole.PathType](), pathDeclarations: [SeamSignature.Hole.UncarriedDeclaration](), isInSendableFunction: false)]
+		while let (visited, typesToCall, pathDeclarations, isInSendableFunction) = generatorsToVisit.popLast() {
 			// The call is made in its scope's builder function, inside every builder function above it.
 			let callIsInSendableFunction = isInSendableFunction || visited.buildsInSendableFunction
 			if let innerSeamType = visited.builtInstantiable?.concreteInstantiable {
 				for hole in visited.passedUpHoles {
 					if takenSites.insert(hole.site).inserted {
-						passedUpHoles.append((innerSeamType, hole))
+						passedUpHoles.append((innerSeamType, typesToCall, hole))
 					}
 					// The call captures the builder when it is made in a `@Sendable` builder function, and takes it `@Sendable`
 					// when the presented copy is.
@@ -334,18 +343,18 @@ extension DependencyTreeGenerator {
 				}
 			}
 			// The seam's own forwarded properties come from its caller, which fills the builder.
-			let childPathDeclarations = pathDeclarations + declarationsBound(by: visited, includingForwardedProperties: visited !== generator, reason: .boundByPassingUpSeam(seam: seamType))
+			let childPathDeclarations = pathDeclarations + declarationsBound(by: visited, includingForwardedProperties: visited !== generator, reason: .boundByPassingUpSeam(seam: seamType, module: seamModule))
 			let children = visited.children.filter(\.passesUpBuilder)
-			generatorsToVisit.append(contentsOf: children.reversed().map { ($0, childPathDeclarations, callIsInSendableFunction) })
+			generatorsToVisit.append(contentsOf: children.reversed().map { ($0, typesToCall + SeamSignature.Hole.PathType.pathTypes(through: $0), childPathDeclarations, callIsInSendableFunction) })
 		}
 		var ownSiteAdditions = [[Property]: SiteAdditions]()
 		for path in ownSitePaths {
 			ownSiteAdditions[path] = additionsBySite[SeamSignature.Hole.Site(seamType: seamType, path: path)]
 		}
 		return (
-			passedUpHoles.map { innerSeamType, hole in
+			passedUpHoles.map { innerSeamType, typesToCall, hole in
 				let additions = additionsBySite[hole.site, default: SiteAdditions()]
-				return (innerSeamType, hole.addingUncarriedDeclarations(additions.declarations(besides: hole.uncarriedDeclarations), isSendable: additions.isSendable))
+				return (innerSeamType, typesToCall, hole.addingUncarriedDeclarations(additions.declarations(besides: hole.uncarriedDeclarations), isSendable: additions.isSendable))
 			},
 			ownSiteAdditions,
 		)
@@ -616,13 +625,22 @@ extension SeamSignature.Hole {
 	}
 }
 
+extension SeamSignature.Hole.PathType {
+	/// What `generator`, a generator on the way to a hole's owner, adds to the path: the type it builds, or, for a fill,
+	/// the way from the seam it fills to the hole it fills.
+	static func pathTypes(through generator: ScopeGenerator) -> [SeamSignature.Hole.PathType] {
+		generator.fillHole?.typesToOwner ?? generator.builtInstantiable.map { [SeamSignature.Hole.PathType(type: $0.concreteInstantiable, moduleName: $0.moduleName)] } ?? []
+	}
+}
+
 // MARK: - Unfilled holes
 
 extension DependencyTreeGenerator {
 	/// Throws `unfilledHoles` for every hole a root's tree calls a seam with and cannot fill – no production declaration
-	/// the root's module sees fulfills it, so the seam call would pass the builder up, which a root cannot – once per
-	/// declaration of the hole's property per root, naming the first chain a declaration-order walk of the root's tree
-	/// meets, the fills the root's module generates included.
+	/// the root's module sees fulfills it, or the one that does is out of the tree's reach because the root's module does
+	/// not list a module on the way to the hole, so the seam call would pass the builder up, which a root cannot – once
+	/// per declaration of the hole's property per root, naming the first chain a declaration-order walk of the root's
+	/// tree meets, the fills the root's module generates included.
 	static func validateRootsFillEveryHole(
 		roots: [Scope],
 		callerModuleName: String?,
@@ -643,14 +661,18 @@ extension DependencyTreeGenerator {
 					let childChain = chain + [childScope.instantiable.concreteInstantiable]
 					for holeArgument in childScope.holeArguments {
 						let hole = holeArgument.hole
-						let holeChain = childChain
-							+ (hole.innerSeamType == nil ? [] : [hole.scopeSeamType])
-							+ hole.sitePath.dropLast().map(\.typeDescription.asInstantiatedType)
+						let holeChain = childChain + hole.typesToOwner.map(\.type)
 						switch holeArgument {
 						case let .fill(_, fulfillingScope):
 							childrenToVisit.append((fulfillingScope, holeChain + [fulfillingScope.instantiable.concreteInstantiable], childRootDependency))
 						case .passUp:
 							guard reportedDeclarations.insert(HoleDeclaration(owner: hole.ownerType, property: hole.property)).inserted else { continue }
+							// The tree reaches only what the root's module lists, so a module on the way to the hole that it does not
+							// list stops the walk before it meets the hole's type, and a declaration of that type gets no scope.
+							let unlistedModuleNames = hole.typesToOwner
+								.filter { instantiables[$0.type]?.moduleName != $0.moduleName }
+								.compactMap(\.moduleName)
+								.uniqued()
 							unfilledHoles.append(DependencyTreeGeneratorError.UnfilledHole(
 								hole: hole,
 								rootType: root.instantiable.concreteInstantiable,
@@ -658,7 +680,8 @@ extension DependencyTreeGenerator {
 								location: childRootDependency?.declarationLocation,
 								noteLocation: hole.declarationLocation.flatMap { location in isReadableFile.map { $0(location.filePath) } ?? true ? location : nil },
 								callerModuleName: callerModuleName,
-								isSeamModuleListed: instantiables[hole.scopeSeamType]?.moduleName == hole.scopeSeamModuleName,
+								unlistedModuleNames: unlistedModuleNames,
+								unreachedFulfillingType: unlistedModuleNames.isEmpty ? nil : fulfillingInstantiable(of: hole, in: instantiables)?.concreteInstantiable,
 								fulfilledByMockOnlyDeclaration: instantiables[hole.instantiatedType]?.mockOnly == true,
 							))
 						}
@@ -683,7 +706,8 @@ extension DependencyTreeGenerator {
 }
 
 extension DependencyTreeGenerator.DependencyTreeGeneratorError {
-	/// A hole whose builder a root's tree cannot fill: no production declaration the root's module sees fulfills it.
+	/// A hole whose builder a root's tree cannot fill: no production declaration the root's module sees fulfills it, or the
+	/// one that does is out of the tree's reach.
 	struct UnfilledHole {
 		let hole: SeamSignature.Hole
 		let rootType: TypeDescription
@@ -694,9 +718,13 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 		/// The hole's declaration, where its file can be read.
 		let noteLocation: Dependency.DeclarationLocation?
 		let callerModuleName: String?
-		/// Whether the root's module reads the declarations of the module that declares the seam whose tree holds the hole.
-		/// The seam's own module is a fact of the hole, so no order among modules decides which one the error names.
-		let isSeamModuleListed: Bool
+		/// The modules that declare a type on the way from the seam the tree calls to the hole's owner, which the root's
+		/// module does not read the declarations of, in chain order, each once. Each is a fact of the hole, so no order among
+		/// modules decides which one the error names.
+		let unlistedModuleNames: [String]
+		/// The type that fulfills the hole among the declarations the root's module reads, when `unlistedModuleNames` is
+		/// why the tree never reached it, so listing them is the whole fix.
+		let unreachedFulfillingType: TypeDescription?
 		let fulfilledByMockOnlyDeclaration: Bool
 
 		var sourceDiagnostics: [SourceDiagnostic] {
@@ -704,18 +732,18 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			let seamName = "`\(hole.scopeSeamType.asSource)`"
 			let callerModule = callerModuleName.map { "module `\($0)`" } ?? "this module"
 			let reference = "\(typeName), which @\(Dependency.Source.instantiatedRawValue) property `\(hole.property.asSource)` instantiates in chain: \(chain.map(\.asSource).joined(separator: " -> "))"
-			let seamModule = if let seamModuleName = hole.scopeSeamModuleName, seamModuleName != callerModuleName {
+			let seamModule = if let seamModuleName = hole.scopeSeamModule.moduleName, seamModuleName != callerModuleName {
 				"in module `\(seamModuleName)`, which cannot see one either"
 			} else {
 				"in this module"
 			}
-			let listSeamModule = if let seamModuleName = hole.scopeSeamModuleName, !isSeamModuleListed {
-				" A module that declares a root lists every module beneath it, and \(callerModule) does not list `\(seamModuleName)`: \(DependencyTreeGenerator.DependencyTreeGeneratorError.listModuleRemedy) That does not fill the builder by itself."
-			} else {
-				""
-			}
-			let fill = "\(seamName) generates its dependency tree \(seamModule), so the initializer SafeDI generated for it takes a builder for `\(hole.property.label)`, and `\(rootType.asSource)`, a root, must fill it.\(listSeamModule)"
-			let message = if fulfilledByMockOnlyDeclaration {
+			let unlistedModules = (unlistedModuleNames.count > 1 ? unlistedModuleNames.dropLast().map { "`\($0)`" }.joined(separator: ", ") + " or " : "") + "`\(unlistedModuleNames.last ?? "")`"
+			let listRemedy = (unlistedModuleNames.count > 1 ? "for each, " : "") + DependencyTreeGenerator.DependencyTreeGeneratorError.listModuleRemedy
+			let listUnlistedModules = unlistedModuleNames.isEmpty ? "" : " A module that declares a root lists every module beneath it, and \(callerModule) does not list \(unlistedModules): \(listRemedy) That does not fill the builder by itself."
+			let fill = "\(seamName) generates its dependency tree \(seamModule), so the initializer SafeDI generated for it takes a builder for `\(hole.property.label)`, and `\(rootType.asSource)`, a root, must fill it.\(listUnlistedModules)"
+			let message = if let unreachedFulfillingType {
+				"`\(unreachedFulfillingType.asSource)` fulfills \(reference), but SafeDI cannot follow that chain, because \(callerModule) does not list \(unlistedModules). A module that declares a root lists every module beneath it: \(listRemedy)"
+			} else if fulfilledByMockOnlyDeclaration {
 				"No production @\(InstantiableVisitor.macroName) declaration that \(callerModule) can see fulfills \(reference). \(fill) A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills \(typeName)."
 			} else {
 				"No @\(InstantiableVisitor.macroName) type or extension that \(callerModule) can see fulfills \(reference). \(fill) Decorate \(typeName), or an extension of it, with @\(InstantiableVisitor.macroName); list \(typeName) in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it; \(DependencyTreeGenerator.DependencyTreeGeneratorError.fulfillingDeclarationInAnotherModuleRemedy)"
@@ -737,7 +765,6 @@ extension DependencyTreeGenerator {
 	static func validateFills(
 		inTreesRootedAt generators: [ScopeGenerator],
 		callerModule: ModuleIdentity,
-		seamModule: (TypeDescription) -> ModuleIdentity,
 	) throws {
 		var findings = [DependencyTreeGeneratorError.FillFinding]()
 		var findingKeys = Set<String>()
@@ -751,8 +778,7 @@ extension DependencyTreeGenerator {
 			var generatorsToVisit = [(generator: root, hidden: FillReentryHidings?.none)]
 			while let (generator, hidden) = generatorsToVisit.popLast() {
 				if let hole = generator.fillHole, let child = generator.children.first {
-					let module = seamModule(hole.scopeSeamType)
-					findingsOfFill(of: hole, child: child, hidden: hidden ?? FillReentryHidings(), requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: module, isOwnFile: false), callerModule: callerModule, seamModule: module, moduleOfSeam: seamModule).forEach(record)
+					findingsOfFill(of: hole, child: child, hidden: hidden ?? FillReentryHidings(), requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule).forEach(record)
 				}
 				// A seam call's children are its fills, which are judged against the calls inside any of them.
 				let hiddenByFillKey = generator.seamCall == nil ? [:] : hiddenByReenteringCalls(ofFillsOf: generator)
@@ -777,10 +803,10 @@ extension DependencyTreeGenerator {
 		hidden: FillReentryHidings,
 		requirement: AccessRequirement,
 		callerModule: ModuleIdentity,
-		seamModule: ModuleIdentity,
-		moduleOfSeam: (TypeDescription) -> ModuleIdentity,
 	) -> [DependencyTreeGeneratorError.FillFinding] {
 		var findings = [DependencyTreeGeneratorError.FillFinding]()
+		// The hole says which module declares each seam: this run may know a seam only through a module that calls it.
+		let seamModule = hole.scopeSeamModule
 		let fields = Array(hole.stages.joined())
 		let seamPathProperties = Set(hole.fillPropertyStack)
 		typealias Frame = (generator: ScopeGenerator, parent: Instantiable?, providedProperties: Set<Property>, fillAncestors: [DependencyTreeGeneratorError.FillFinding.FillAncestor])
@@ -807,8 +833,8 @@ extension DependencyTreeGenerator {
 				// which does not carry what that seam binds on its path to the call presenting the site.
 				?? hidden.calledCopyDeclarations[property.label]
 			{
-				let module = if case let .boundByPassingUpSeam(passingUpSeam) = declaration.reason {
-					moduleOfSeam(passingUpSeam)
+				let module = if case let .boundByPassingUpSeam(_, passingUpSeamModule) = declaration.reason {
+					passingUpSeamModule
 				} else {
 					seamModule
 				}
@@ -1038,7 +1064,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				let note = SourceDiagnostic(severity: .note, location: declaration.declarationLocation, message: "`\(declaration.declaringType.asSource)` declares `\(declaration.property.asSource)` here.")
 				let pathScope = "`\(declaration.builtAfter?.label ?? "")`"
 				let message = switch declaration.reason {
-				case let .boundByPassingUpSeam(seam):
+				case let .boundByPassingUpSeam(seam, _):
 					// The seam that holds the site binds the label on a path to a call that hands its builder back to it.
 					(seam == hole.scopeSeamType
 						? "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(seamName)'s tree builds where it instantiates \(seamName) again, but that call passes the builder \(seamName) takes for `\(hole.ownerType.asSource)`'s `\(hole.property.asSource)` on unchanged, so the caller that fills it cannot hand it those values."
@@ -1102,7 +1128,8 @@ extension SeamSignature.Hole {
 			builderLabel: builderLabel,
 			internalName: internalName,
 			scopeSeamType: scopeSeamType,
-			scopeSeamModuleName: scopeSeamModuleName,
+			scopeSeamModule: scopeSeamModule,
+			typesToOwner: typesToOwner,
 			scopeTypeName: scopeTypeName,
 			stages: stages,
 			stageBoundaryDepths: stageBoundaryDepths,

@@ -285,9 +285,9 @@ public struct SeamSignature: Sendable {
 				case requiresOtherCarrier(type: TypeDescription, carrier: Property)
 				/// It is the scope on the site's path, still being built, or the hole itself.
 				case other
-				/// `seam`'s tree binds it on a path to a call of the seam whose hole `seam` passes up: inline, a receive
-				/// of its label would read it, and `seam`'s caller, which fills the builder, does not hold it.
-				case boundByPassingUpSeam(seam: TypeDescription)
+				/// `seam`, declared in `module`, binds it in its tree on a path to a call of the seam whose hole `seam` passes up:
+				/// inline, a receive of its label would read it, and `seam`'s caller, which fills the builder, does not hold it.
+				case boundByPassingUpSeam(seam: TypeDescription, module: ModuleIdentity)
 			}
 
 			public let property: Property
@@ -296,6 +296,17 @@ public struct SeamSignature: Sendable {
 			/// The property of the scope on the site's path that the declaration's scope builds before it, or `nil`.
 			public let builtAfter: Property?
 			public let reason: Reason
+		}
+
+		/// A type on the way from the seam that takes a hole's builder to the hole's owner, with the module that declares it.
+		public struct PathType: Sendable {
+			public init(type: TypeDescription, moduleName: String?) {
+				self.type = type
+				self.moduleName = moduleName
+			}
+
+			public let type: TypeDescription
+			public let moduleName: String?
 		}
 
 		public init(
@@ -310,7 +321,8 @@ public struct SeamSignature: Sendable {
 			builderLabel: String,
 			internalName: String,
 			scopeSeamType: TypeDescription,
-			scopeSeamModuleName: String?,
+			scopeSeamModule: ModuleIdentity,
+			typesToOwner: [PathType],
 			scopeTypeName: String,
 			stages: [[Field]],
 			stageBoundaryDepths: [Int],
@@ -331,7 +343,8 @@ public struct SeamSignature: Sendable {
 			self.builderLabel = builderLabel
 			self.internalName = internalName
 			self.scopeSeamType = scopeSeamType
-			self.scopeSeamModuleName = scopeSeamModuleName
+			self.scopeSeamModule = scopeSeamModule
+			self.typesToOwner = typesToOwner
 			self.scopeTypeName = scopeTypeName
 			self.stages = stages
 			self.stageBoundaryDepths = stageBoundaryDepths
@@ -369,7 +382,11 @@ public struct SeamSignature: Sendable {
 		/// The seam whose extension declares the scope struct: this seam, or the inner seam a passed-up hole is from.
 		public let scopeSeamType: TypeDescription
 		/// The module that declares `scopeSeamType`, which a module the hole reaches through a view knows only from here.
-		public let scopeSeamModuleName: String?
+		public let scopeSeamModule: ModuleIdentity
+		/// The types from the seam that takes this builder, itself excluded, to the hole's owner, outermost first: for a
+		/// passed-up hole, every seam it passes through on the way to `scopeSeamType`. Empty when that seam owns the hole.
+		/// Each type's module is a fact of the hole, so no order among modules decides which one a diagnostic names.
+		public let typesToOwner: [PathType]
 		/// The name of the scope struct, or, for a staged builder, of the enum holding one struct per stage.
 		public let scopeTypeName: String
 		/// The fields of each stage's struct: one stage, unless `@Sendable` builder functions lie between the seam and
@@ -421,7 +438,8 @@ public struct SeamSignature: Sendable {
 				builderLabel: parameterName,
 				internalName: internalName,
 				scopeSeamType: scopeSeamType,
-				scopeSeamModuleName: scopeSeamModuleName,
+				scopeSeamModule: scopeSeamModule,
+				typesToOwner: typesToOwner,
 				scopeTypeName: scopeTypeName,
 				stages: stages,
 				stageBoundaryDepths: stageBoundaryDepths,
