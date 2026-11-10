@@ -73,6 +73,10 @@ public actor DependencyTreeGenerator {
 		self.emittingModule = emittingModule
 		self.seams = seams
 		self.plainTypeDeclarations = plainTypeDeclarations
+		declaredTypeNames = Self.namesOfTypesDeclaredAtFileScope(
+			instantiables: Array(typeDescriptionToFulfillingInstantiableMap.values) + viewInstantiables,
+			plainTypeDeclarations: plainTypeDeclarations + viewPlainTypeDeclarations,
+		)
 		extendedTypeDeclarations = ExtendedTypeDeclarations(
 			instantiables: typeDescriptionToFulfillingInstantiableMap,
 			plainTypeDeclarations: plainTypeDeclarations,
@@ -2865,6 +2869,8 @@ public actor DependencyTreeGenerator {
 	/// The declarations of types that are not `@Instantiable` this generator was given, which a generator computing
 	/// another module's view is given too.
 	private let plainTypeDeclarations: [PlainTypeDeclaration]
+	/// The names the modules SafeDI read declare types by at file scope (`namesOfTypesDeclaredAtFileScope`).
+	private let declaredTypeNames: Set<String>
 	/// See `init`'s `viewDeclaringModules`.
 	private let viewDeclaringModules: [TypeDescription: ViewDeclaringModule]
 	/// The declarations among which the declaration of a type an extension extends bounds the types declared in or by
@@ -2939,6 +2945,7 @@ public actor DependencyTreeGenerator {
 								propertyStack: [],
 								lazilyInstantiatedInstanceProperties: [],
 								erasedToConcreteExistential: false,
+								declaredTypeNames: declaredTypeNames,
 							),
 						)
 					}
@@ -4195,6 +4202,7 @@ public actor DependencyTreeGenerator {
 					propertyStack: [],
 					lazilyInstantiatedInstanceProperties: [],
 					erasedToConcreteExistential: false,
+					declaredTypeNames: declaredTypeNames,
 				),
 			)
 		}
@@ -4209,6 +4217,7 @@ public actor DependencyTreeGenerator {
 					rootScope: seamRootScope,
 					seamRoot: seamRoot,
 					startsCodeGeneration: true,
+					declaredTypeNames: declaredTypeNames,
 				),
 			))
 		}
@@ -4333,6 +4342,7 @@ public actor DependencyTreeGenerator {
 		let proof = TypeAccessProof(instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, isOwnFile: isOwnFile)
 		guard !seamInstantiables.isEmpty else { return SeamSignatureComputation(seamRoots: [:], errors: [], failedSeams: [], proof: proof) }
 		let ownSeamTypes = Set(seamInstantiables.map(\.concreteInstantiable))
+		let declaredTypeNames = namesOfTypesDeclaredAtFileScope(instantiables: Array(instantiables.values), plainTypeDeclarations: plainTypeDeclarations)
 		func initialSeamRoot(of seam: Instantiable) -> ScopeGenerator.SeamRoot {
 			let parameters = Self.ownParameters(of: seam, proof: proof)
 			return ScopeGenerator.SeamRoot(
@@ -4394,6 +4404,7 @@ public actor DependencyTreeGenerator {
 							rootScope: rootScope,
 							seamRoot: previousSeamRoot ?? initialSeamRoot(of: seam),
 							startsCodeGeneration: false,
+							declaredTypeNames: declaredTypeNames,
 						)
 						let seamRoot = try Self.seamRoot(of: seam, generator: generator, proof: proof, instantiables: instantiables)
 						if seamRoot?.signature.settledContent != previousSeamRoot?.signature.settledContent {
@@ -4785,6 +4796,7 @@ public actor DependencyTreeGenerator {
 		rootScope: Scope,
 		seamRoot: ScopeGenerator.SeamRoot,
 		startsCodeGeneration: Bool,
+		declaredTypeNames: Set<String>,
 	) throws -> ScopeGenerator {
 		var nearestDeclarations = NearestDeclarations()
 		var lazilyInstantiatedInstanceProperties = Set<Property>()
@@ -4815,6 +4827,7 @@ public actor DependencyTreeGenerator {
 			seamRoot: seamRoot,
 			erasedToConcreteExistential: false,
 			startsCodeGeneration: startsCodeGeneration,
+			declaredTypeNames: declaredTypeNames,
 		)
 	}
 
@@ -5869,6 +5882,7 @@ public actor DependencyTreeGenerator {
 				mockHoles: holes,
 				erasedToConcreteExistential: false,
 				forMockGeneration: true,
+				declaredTypeNames: declaredTypeNames,
 			)
 		}
 		let generator = try mockRootGenerator(holes: [])
@@ -5885,6 +5899,24 @@ public actor DependencyTreeGenerator {
 			scopeTypeNamePrefix: "SafeDIMockScope",
 		)
 		return try mockRootGenerator(holes: holes)
+	}
+
+	/// The names `instantiables` and `plainTypeDeclarations` declare types by at file scope. A type of such a name hides the
+	/// standard library's type or the module of that name, so comparing an erased instantiator's first generic argument with
+	/// a built type's forwarded properties does not see through it. An extension declares no type of the name it extends.
+	private static func namesOfTypesDeclaredAtFileScope(instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration]) -> Set<String> {
+		var names = Set<String>()
+		for instantiable in instantiables where !instantiable.declarationType.isExtension {
+			if case let .simple(name, _) = instantiable.concreteInstantiable {
+				names.insert(name)
+			}
+		}
+		for declaration in plainTypeDeclarations where declaration.extendedType == nil {
+			if case let .simple(name, _) = declaration.typeDescription {
+				names.insert(name)
+			}
+		}
+		return names
 	}
 
 	/// The concrete type a mock builds `property` from when no `@Instantiable` fulfills its type, or `nil` when

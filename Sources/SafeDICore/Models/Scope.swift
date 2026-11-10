@@ -380,6 +380,7 @@ final class Scope: Hashable {
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,
 		startsCodeGeneration: Bool = true,
+		declaredTypeNames: Set<String>,
 	) throws -> ScopeGenerator {
 		var previousPassGenerator: ScopeGenerator?
 		var scopeGenerator: ScopeGenerator
@@ -394,6 +395,7 @@ final class Scope: Hashable {
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				forMockGeneration: forMockGeneration,
 				startsCodeGeneration: startsCodeGeneration,
+				declaredTypeNames: declaredTypeNames,
 				previousPassGenerator: previousPassGenerator,
 			)
 			previousPassGenerator = scopeGenerator
@@ -413,6 +415,7 @@ final class Scope: Hashable {
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool,
 		startsCodeGeneration: Bool,
+		declaredTypeNames: Set<String>,
 		previousPassGenerator: ScopeGenerator?,
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
@@ -429,6 +432,7 @@ final class Scope: Hashable {
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
 			startsCodeGeneration: startsCodeGeneration,
+			declaredTypeNames: declaredTypeNames,
 			previousPassGenerator: previousPassGenerator,
 			cycleParameterContexts: [:],
 		)]
@@ -495,6 +499,7 @@ private struct ScopeGeneratorUnderConstruction {
 		startsCodeGeneration: Bool,
 		fill: Fill? = nil,
 		buildsWithHandWrittenMocks: Bool = false,
+		declaredTypeNames: Set<String>,
 		previousPassGenerator: ScopeGenerator?,
 		cycleParameterContexts: [ScopeGenerator.BuiltDeclaration: CycleParameterContext],
 	) {
@@ -648,6 +653,7 @@ private struct ScopeGeneratorUnderConstruction {
 		self.childCycleParameterContexts = childCycleParameterContexts
 		self.seamRoot = seamRoot
 		self.seamHoles = seamHoles
+		self.declaredTypeNames = declaredTypeNames
 		// The path is kept only where a hole needs it: a site, and the stage calls of a staged builder, are found by it.
 		self.sitePath = seamHoles.isEmpty ? [] : sitePath + (property.map { [$0] } ?? [])
 		self.fill = fill
@@ -754,6 +760,7 @@ private struct ScopeGeneratorUnderConstruction {
 			fill: fill,
 			// A fill a mock declares builds the hole's tree as the mock's tree built inline would.
 			buildsWithHandWrittenMocks: forMockGeneration,
+			declaredTypeNames: declaredTypeNames,
 			// The pass before created a fill's generator around the generator of the property it builds. A fill is a
 			// function of its own, declared where the seam is called, so no function enclosing the call that a lazy cycle
 			// closes on encloses a cycle-closing scope in the fill. The fill's own built scope takes the parameters the
@@ -784,6 +791,7 @@ private struct ScopeGeneratorUnderConstruction {
 			declarationLocation: self.scope.instantiable.dependencies.first(where: { $0.property == property })?.declarationLocation,
 			parent: self.scope.instantiable.concreteInstantiable,
 			builtInstantiable: scope.instantiable,
+			declaredTypeNames: declaredTypeNames,
 		) {
 			throw error
 		} else {
@@ -802,6 +810,7 @@ private struct ScopeGeneratorUnderConstruction {
 				forMockGeneration: forMockGeneration,
 				startsCodeGeneration: startsCodeGeneration,
 				buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
+				declaredTypeNames: declaredTypeNames,
 				previousPassGenerator: previousPassChildGenerator,
 				cycleParameterContexts: childCycleParameterContexts,
 			)
@@ -974,6 +983,9 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The holes of the seam whose tree is generated, by site, which the sites and the stage calls of staged builders
 	/// read. Empty outside a seam's tree, and in a seam's tree without holes.
 	private let seamHoles: SeamHoles
+	/// The names the modules SafeDI read declare types by at file scope, which
+	/// `ErasedInstantiatorForwardedPropertiesMismatchError` reads.
+	private let declaredTypeNames: Set<String>
 	/// The properties from the root of the tree down to this scope's, when `seamHoles` is not empty; otherwise empty.
 	private let sitePath: [Property]
 	/// For a scope a fill builds the property of, the fill's hole, its key (see `ScopeGenerator.fillKey(of:)`), and the
@@ -1060,8 +1072,9 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 		declarationLocation: Dependency.DeclarationLocation?,
 		parent: TypeDescription,
 		builtInstantiable: Instantiable,
+		declaredTypeNames: Set<String>,
 	) {
-		guard !property.firstGenericMatchesForwardedProperties(of: builtInstantiable) else { return nil }
+		guard !property.firstGenericMatchesForwardedProperties(of: builtInstantiable, declaredTypeNames: declaredTypeNames) else { return nil }
 		self.property = property
 		self.declarationLocation = declarationLocation
 		self.parent = parent
@@ -1091,19 +1104,25 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 extension Property {
 	/// Whether the property, when it is an `ErasedInstantiator` or `SendableErasedInstantiator` that builds
 	/// `builtInstantiable`, has the `@Forwarded` properties of `builtInstantiable` as its first generic argument.
-	/// Any other property matches, as does one that builds a type with no `@Forwarded` properties. Whether a mock builds
-	/// a received property that matches is narrower: see `mockBuildsFirstGeneric(of:)`.
-	func firstGenericMatchesForwardedProperties(of builtInstantiable: Instantiable) -> Bool {
+	/// Any other property matches, as does one that builds a type with no `@Forwarded` properties. The comparison sees
+	/// through what a declaration's spelling alone shows to be the same type
+	/// (`TypeDescription.withoutSpellingDifferences(qualifiedByModulesNamed:declaredTypeNames:)`), since the generated code
+	/// reads the elements by label; it does not resolve a typealias, so a spelling only the compiler can see through is
+	/// rejected, with an error that names a spelling it accepts. Whether a mock builds a received property that matches is
+	/// narrower: see `mockBuildsFirstGeneric(of:)`.
+	func firstGenericMatchesForwardedProperties(of builtInstantiable: Instantiable, declaredTypeNames: Set<String>) -> Bool {
 		let forwardedProperties = builtInstantiable.forwardedProperties
 		guard propertyType.isErasedInstantiator,
 		      !forwardedProperties.isEmpty,
 		      let forwardedArgument = generics?.first
 		else { return true }
+		let modulesNames = ["Swift"] + (builtInstantiable.moduleName.map { [$0] } ?? [])
 		// The forwarded argument is the same as `InstantiableName.ForwardedProperties`.
 		return forwardedArgument == .nested(name: "ForwardedProperties", parentType: builtInstantiable.concreteInstantiable)
 			// The forwarded argument is the same as the type the macro generates for `InstantiableName.ForwardedProperties`:
 			// the type of the only `@Forwarded` property, or the tuple of all of them.
-			|| forwardedArgument == forwardedProperties.asForwardedPropertiesTypeDescription
+			|| forwardedArgument.withoutSpellingDifferences(qualifiedByModulesNamed: modulesNames, declaredTypeNames: declaredTypeNames)
+			== forwardedProperties.asForwardedPropertiesTypeDescription.withoutSpellingDifferences(qualifiedByModulesNamed: modulesNames, declaredTypeNames: declaredTypeNames)
 	}
 
 	/// Whether a mock that receives the property can build it, for an `ErasedInstantiator` or

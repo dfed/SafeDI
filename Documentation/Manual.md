@@ -479,7 +479,7 @@ An `Instantiator` is not `Sendable`. To share one across concurrency domains, us
 
 ### ErasedInstantiator
 
-For deferred instantiation of a type-erased dependency, use an [`ErasedInstantiator`](../Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift), which combines the deferred construction of [`Instantiator`](#instantiator) with the `fulfilledByType` and `erasedToConcreteExistential` parameters covered in [Making protocols `@Instantiable`](#making-protocols-instantiable). `ErasedInstantiator` has two generics: the first must match the built type’s `ForwardedProperties` typealias, and the second matches the type of the to-be-instantiated instance.
+For deferred instantiation of a type-erased dependency, use an [`ErasedInstantiator`](../Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift), which combines the deferred construction of [`Instantiator`](#instantiator) with the `fulfilledByType` and `erasedToConcreteExistential` parameters covered in [Making protocols `@Instantiable`](#making-protocols-instantiable). `ErasedInstantiator` has two generics: the first must match the built type’s `ForwardedProperties` typealias, and the second matches the type of the to-be-instantiated instance. Spell the first with the typealias or with the type it stands for: the property’s type when the built type has one `@Forwarded` property, and a tuple of them, ordered by label, when it has several. A `@Received` property spells it as the declaration it receives does. SafeDI does not resolve other typealiases, so spell each element as the `@Forwarded` property does, or with `Optional<T>`, `Array<T>`, or `Dictionary<K, V>` for its sugar, unless your modules declare a type of that name.
 
 ```swift
 import SwiftUI

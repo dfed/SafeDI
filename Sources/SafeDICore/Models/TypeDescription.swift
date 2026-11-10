@@ -248,6 +248,69 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// This type with the differences removed that a declaration's spelling alone shows do not change the type, at every
+	/// depth: `Optional<Int>` is `Int?`, `Array<Int>` is `[Int]`, `Dictionary<String, Int>` is `[String: Int]`, a type
+	/// qualified by one of `moduleNames` is the type without that qualifier, and a type's attributes are in sorted order. A
+	/// name in `declaredTypeNames` is a type a module declares, which hides the standard library's type or the module of
+	/// that name, so neither is seen through.
+	/// Compare two of these to ask whether two spellings name one type; never spell a type with one.
+	func withoutSpellingDifferences(qualifiedByModulesNamed moduleNames: [String], declaredTypeNames: Set<String>) -> TypeDescription {
+		func withoutDifferences(_ type: TypeDescription) -> TypeDescription {
+			type.withoutSpellingDifferences(qualifiedByModulesNamed: moduleNames, declaredTypeNames: declaredTypeNames)
+		}
+		switch self {
+		case .void, .unknown:
+			return self
+		case let .simple(name, generics):
+			let generics = generics.map(withoutDifferences)
+			guard !declaredTypeNames.contains(name) else {
+				return .simple(name: name, generics: generics)
+			}
+			return switch (name, generics.count) {
+			case ("Void", 0):
+				.void(.identifier)
+			case ("Optional", 1):
+				.optional(generics[0])
+			case ("Array", 1):
+				.array(element: generics[0])
+			case ("Dictionary", 2):
+				.dictionary(key: generics[0], value: generics[1])
+			default:
+				.simple(name: name, generics: generics)
+			}
+		case let .nested(name, parentType, generics):
+			if case let .simple(parentName, parentGenerics) = parentType, parentGenerics.isEmpty, moduleNames.contains(parentName), !declaredTypeNames.contains(parentName) {
+				return withoutDifferences(.simple(name: name, generics: generics))
+			} else {
+				return .nested(name: name, parentType: withoutDifferences(parentType), generics: generics.map(withoutDifferences))
+			}
+		case let .composition(types):
+			return .composition(UnorderedEquatingCollection(types.map(withoutDifferences)))
+		case let .optional(type):
+			return .optional(withoutDifferences(type))
+		case let .implicitlyUnwrappedOptional(type):
+			return .implicitlyUnwrappedOptional(withoutDifferences(type))
+		case let .some(type):
+			return .some(withoutDifferences(type))
+		case let .any(type):
+			return .any(withoutDifferences(type))
+		case let .metatype(type, isType):
+			return .metatype(withoutDifferences(type), isType: isType)
+		case let .attributed(type, specifiers, attributes):
+			return .attributed(withoutDifferences(type), specifiers: specifiers, attributes: attributes.sorted())
+		case let .array(element):
+			return .array(element: withoutDifferences(element))
+		case let .dictionary(key, value):
+			return .dictionary(key: withoutDifferences(key), value: withoutDifferences(value))
+		case let .tuple(elements):
+			return .tuple(elements.map { TupleElement(label: $0.label, withoutDifferences($0.typeDescription)) })
+		case let .closure(arguments, isAsync, doesThrow, thrownType, returnType):
+			return .closure(arguments: arguments.map(withoutDifferences), isAsync: isAsync, doesThrow: doesThrow, thrownType: thrownType.map(withoutDifferences), returnType: withoutDifferences(returnType))
+		case let .variadic(type):
+			return .variadic(withoutDifferences(type))
+		}
+	}
+
 	// MARK: Equatable
 
 	/// Whether the two types are the same type. A protocol spelled with `any` is the same existential type as the
