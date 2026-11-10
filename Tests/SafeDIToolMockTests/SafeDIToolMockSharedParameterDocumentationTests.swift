@@ -25,7 +25,7 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// When several types in a mock's tree create a dependency the mock cannot build, `mock()` takes one value and hands it
-/// to each, which its documentation says at that parameter: the types that create the dependency, and how to give one
+/// to each, which its documentation says at that parameter: the types that create the dependency, and how to give each
 /// its own instance.
 struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 	// MARK: Initialization
@@ -99,7 +99,7 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
 		    ///   `Zebra.userService` and `Apple.userService`. The app creates one for each.
-		    ///   To give one its own, override that type in `safeDIOverrides`, or declare a `mockOnly` fake.
+		    ///   To give each its own, declare a `mockOnly` fake.
 		    static func mock(
 		        userService: AnyUserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
@@ -213,7 +213,7 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
 		    ///   `Mango.userService`, `Apple.userService`, `Zebra.userService`, `Kiwi.userService`, `Banana.userService`, and `Lime.userService`. The app creates one for each.
-		    ///   To give one its own, override that type in `safeDIOverrides`, or declare a `mockOnly` fake.
+		    ///   To give each its own, declare a `mockOnly` fake.
 		    static func mock(
 		        userService: AnyUserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
@@ -296,7 +296,7 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
 		    ///   `Screen.userService`, `Zebra.userService`, `Deep.userService`, and `Apple.userService`. The app creates one for each.
-		    ///   To give one its own, override that type in `safeDIOverrides`, or declare a `mockOnly` fake.
+		    ///   To give each its own, declare a `mockOnly` fake.
 		    static func mock(
 		        userService: AnyUserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
@@ -371,7 +371,7 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
 		    ///   `Zebra.userService` and `Apple.userService`. The app creates one for each.
-		    ///   To give one its own, override that type in `safeDIOverrides`, or declare a `mockOnly` fake.
+		    ///   To give each its own, declare a `mockOnly` fake.
 		    static func mock(
 		        userService: AnyUserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
@@ -459,7 +459,7 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
 		    ///   `Profile.userService` and `Settings.userService`. The app creates one for each.
-		    ///   To give one its own, override that type in `safeDIOverrides`, or declare a `mockOnly` fake.
+		    ///   To give each its own, declare a `mockOnly` fake.
 		    static func mock(
 		        userService: AnyUserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
@@ -629,10 +629,10 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
 		    ///   `Zebra.userService` and `Apple.userService`. The app creates one for each.
-		    ///   To give one its own, override that type in `safeDIOverrides`, or declare a `mockOnly` fake.
+		    ///   To give each its own, declare a `mockOnly` fake.
 		    /// - Parameter analytics: Passed to every type that creates this dependency:
 		    ///   `Zebra.analytics` and `Apple.analytics`. The app creates one for each.
-		    ///   To give one its own, override that type in `safeDIOverrides`, or declare a `mockOnly` fake.
+		    ///   To give each its own, declare a `mockOnly` fake.
 		    static func mock(
 		        userService: AnyUserService,
 		        analytics: AnyAnalytics,
@@ -782,7 +782,7 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 
 		    /// - Parameter class: Passed to every type that creates this dependency:
 		    ///   `Zebra.class` and `Apple.class`. The app creates one for each.
-		    ///   To give one its own, override that type in `safeDIOverrides`, or declare a `mockOnly` fake.
+		    ///   To give each its own, declare a `mockOnly` fake.
 		    static func mock(
 		        `class`: AnyUserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
@@ -854,7 +854,7 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 
 		    /// - Parameter userService_AnyUserService: Passed to every type that creates this dependency:
 		    ///   `Zebra.userService` and `Apple.userService`. The app creates one for each.
-		    ///   To give one its own, override that type in `safeDIOverrides`, or declare a `mockOnly` fake.
+		    ///   To give each its own, declare a `mockOnly` fake.
 		    static func mock(
 		        userService: String,
 		        userService_AnyUserService: AnyUserService,
@@ -922,7 +922,7 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 
 		    /// - Parameter engine: Passed to every type that creates this dependency:
 		    ///   `Zebra.engine` and `Apple.engine`. The app creates one for each.
-		    ///   To give one its own, override that type in `safeDIOverrides`, or declare a `mockOnly` fake.
+		    ///   To give each its own, declare a `mockOnly` fake.
 		    static func mock(
 		        engine: LazilyInstantiated<Engine>,
 		        safeDIOverrides: SafeDIOverrides = .init()
@@ -993,7 +993,7 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
 		    ///   `Feature.Zebra.userService` and `Feature.Apple.userService`. The app creates one for each.
-		    ///   To give one its own, override that type in `safeDIOverrides`, or declare a `mockOnly` fake.
+		    ///   To give each its own, declare a `mockOnly` fake.
 		    static func mock(
 		        userService: AnyUserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
@@ -1090,6 +1090,273 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_pointsOnlyAtFake_whenTypeBeneathCreatingTypeReceivesDependencyMockCannotBuild() async throws {
+		// An override of `Apple` would leave `reader` holding the parameter where the app hands it `Apple`'s own, so the
+		// documentation does not offer one.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public struct Engine {
+				    public init() {}
+				}
+				@Instantiable(generateMock: true)
+				public struct Screen: Instantiable {
+				    public init(zebra: Zebra, apple: Apple) { self.zebra = zebra; self.apple = apple }
+				    @Instantiated let zebra: Zebra
+				    @Instantiated let apple: Apple
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Zebra: Instantiable {
+				    public init(engine: Engine) { self.engine = engine }
+				    @Instantiated let engine: Engine
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Apple: Instantiable {
+				    public init(engine: Engine, reader: Reader) { self.engine = engine; self.reader = reader }
+				    @Instantiated let engine: Engine
+				    @Instantiated let reader: Reader
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Reader: Instantiable {
+				    public init(engine: Engine) { self.engine = engine }
+				    @Received let engine: Engine
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            zebra: ((Engine) -> Zebra)? = nil,
+		            apple: Apple.SafeDIMockConfiguration = .init()
+		        ) {
+		            self.zebra = zebra
+		            self.apple = apple
+		        }
+
+		        let zebra: ((Engine) -> Zebra)?
+		        let apple: Apple.SafeDIMockConfiguration
+		    }
+
+		    /// - Parameter engine: Passed to every type that creates this dependency:
+		    ///   `Zebra.engine` and `Apple.engine`. The app creates one for each.
+		    ///   To give each its own, declare a `mockOnly` fake.
+		    static func mock(
+		        engine: Engine,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let zebra = if let safeDIBuilder = safeDIOverrides.zebra { safeDIBuilder(engine) } else { Zebra(engine: engine) }
+		        func __safeDI_apple() -> Apple {
+		            let reader = if let safeDIBuilder = safeDIOverrides.apple.reader { safeDIBuilder(engine) } else { Reader(engine: engine) }
+		            return if let safeDIBuilder = safeDIOverrides.apple.safeDIBuilder { safeDIBuilder(engine, reader) } else { Apple(engine: engine, reader: reader) }
+		        }
+		        let apple: Apple = __safeDI_apple()
+		        return Screen(zebra: zebra, apple: apple)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_pointsOnlyAtFake_whenCreatingTypeIsBuiltWhereDependencyCycleLeavesNoOverride() async throws {
+		// `B.SafeDIMockConfiguration` has no entry for `y`, the dependency that closes the cycle, so nothing in
+		// `safeDIOverrides` reaches `A`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public struct Engine {
+				    public init() {}
+				}
+				@Instantiable(generateMock: true)
+				public struct Screen: Instantiable {
+				    public init(b: Instantiator<B>, kiwi: Kiwi) { self.b = b; self.kiwi = kiwi }
+				    @Instantiated let b: Instantiator<B>
+				    @Instantiated let kiwi: Kiwi
+				}
+				""",
+				"""
+				@Instantiable
+				public struct B: Instantiable {
+				    public init(y: Instantiator<A>) { self.y = y }
+				    @Instantiated let y: Instantiator<A>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct A: Instantiable {
+				    public init(z: Instantiator<B>, engine: Engine) { self.z = z; self.engine = engine }
+				    @Instantiated let z: Instantiator<B>
+				    @Instantiated let engine: Engine
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Kiwi: Instantiable {
+				    public init(engine: Engine) { self.engine = engine }
+				    @Instantiated let engine: Engine
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            b: B.SafeDIMockConfiguration = .init(),
+		            kiwi: ((Engine) -> Kiwi)? = nil
+		        ) {
+		            self.b = b
+		            self.kiwi = kiwi
+		        }
+
+		        let b: B.SafeDIMockConfiguration
+		        let kiwi: ((Engine) -> Kiwi)?
+		    }
+
+		    /// - Parameter engine: Passed to every type that creates this dependency:
+		    ///   `A.engine` and `Kiwi.engine`. The app creates one for each.
+		    ///   To give each its own, declare a `mockOnly` fake.
+		    static func mock(
+		        engine: Engine,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_b() -> B {
+		            func __safeDI_y() -> A {
+		                func __safeDI_z() -> B {
+		                    let y = Instantiator<A>(__safeDI_y)
+		                    return B(y: y)
+		                }
+		                let z = Instantiator<B>(__safeDI_z)
+		                return A(z: z, engine: engine)
+		            }
+		            let y = Instantiator<A>(__safeDI_y)
+		            return if let safeDIBuilder = safeDIOverrides.b.safeDIBuilder { safeDIBuilder(y) } else { B(y: y) }
+		        }
+		        let b = Instantiator<B>(__safeDI_b)
+		        let kiwi = if let safeDIBuilder = safeDIOverrides.kiwi { safeDIBuilder(engine) } else { Kiwi(engine: engine) }
+		        return Screen(b: b, kiwi: kiwi)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_handsEachCreatingTypesFakeToTypesBeneathIt_whenMockOnlyFakeFulfillsDependencyMockedTypeAlsoCreates() async throws {
+		// The route the documentation offers holds where an override does not: the mocked type's own fake can be replaced,
+		// and `reader` is handed the fake of the `Apple` it is built inside, as the app hands it `Apple`'s own.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol UserService {}
+				public struct AnyUserService: UserService {
+				    public init(_ service: some UserService) {}
+				}
+				@Instantiable(generateMock: true)
+				public struct Screen: Instantiable {
+				    public init(userService: AnyUserService, zebra: Zebra, apple: Apple) { self.userService = userService; self.zebra = zebra; self.apple = apple }
+				    @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) let userService: AnyUserService
+				    @Instantiated let zebra: Zebra
+				    @Instantiated let apple: Apple
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Zebra: Instantiable {
+				    public init(userService: AnyUserService) { self.userService = userService }
+				    @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) let userService: AnyUserService
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Apple: Instantiable {
+				    public init(userService: AnyUserService, reader: Reader) { self.userService = userService; self.reader = reader }
+				    @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) let userService: AnyUserService
+				    @Instantiated let reader: Reader
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Reader: Instantiable {
+				    public init(userService: AnyUserService) { self.userService = userService }
+				    @Received let userService: AnyUserService
+				}
+				""",
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [AnyUserService.self], mockOnly: true)
+				public struct FakeUserService: UserService {
+				    public static func mock() -> FakeUserService { FakeUserService() }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            userService: (() -> AnyUserService)? = nil,
+		            zebra: Zebra.SafeDIMockConfiguration = .init(),
+		            apple: Apple.SafeDIMockConfiguration = .init()
+		        ) {
+		            self.userService = userService
+		            self.zebra = zebra
+		            self.apple = apple
+		        }
+
+		        let userService: (() -> AnyUserService)?
+		        let zebra: Zebra.SafeDIMockConfiguration
+		        let apple: Apple.SafeDIMockConfiguration
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let userService = if let safeDIBuilder = safeDIOverrides.userService { safeDIBuilder() } else { AnyUserService(FakeUserService.mock()) }
+		        func __safeDI_zebra() -> Zebra {
+		            let userService = if let safeDIBuilder = safeDIOverrides.zebra.userService { safeDIBuilder() } else { AnyUserService(FakeUserService.mock()) }
+		            return if let safeDIBuilder = safeDIOverrides.zebra.safeDIBuilder { safeDIBuilder(userService) } else { Zebra(userService: userService) }
+		        }
+		        let zebra: Zebra = __safeDI_zebra()
+		        func __safeDI_apple() -> Apple {
+		            let userService = if let safeDIBuilder = safeDIOverrides.apple.userService { safeDIBuilder() } else { AnyUserService(FakeUserService.mock()) }
+		            let reader = if let safeDIBuilder = safeDIOverrides.apple.reader { safeDIBuilder(userService) } else { Reader(userService: userService) }
+		            return if let safeDIBuilder = safeDIOverrides.apple.safeDIBuilder { safeDIBuilder(userService, reader) } else { Apple(userService: userService, reader: reader) }
+		        }
+		        let apple: Apple = __safeDI_apple()
+		        return Screen(userService: userService, zebra: zebra, apple: apple)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func publicMock_documentsParameterOnEachTier_whenSeveralTypesCreateDependencyMockCannotBuild() async throws {
 		// A public mock takes a builder for each site of a type nothing fulfills, which shares nothing; a dependency of a
 		// type only hand-written code could build, such as an array, is still one value. A public mock declares a `mock()`
@@ -1145,7 +1412,7 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 
 		    /// - Parameter tags: Passed to every type that creates this dependency:
 		    ///   `Zebra.tags` and `Apple.tags`. The app creates one for each.
-		    ///   To give one its own, override that type in `safeDIOverrides`, or declare a `mockOnly` fake.
+		    ///   To give each its own, declare a `mockOnly` fake.
 		    public static func mock(
 		        tags: [String],
 		        safeDIOverrides: SafeDIOverrides = .init()
@@ -1155,7 +1422,7 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 
 		    /// - Parameter tags: Passed to every type that creates this dependency:
 		    ///   `Zebra.tags` and `Apple.tags`. The app creates one for each.
-		    ///   To give one its own, override that type in `safeDIOverrides`, or declare a `mockOnly` fake.
+		    ///   To give each its own, declare a `mockOnly` fake.
 		    static func mock(
 		        tags: [String],
 		        token: Token? = nil,

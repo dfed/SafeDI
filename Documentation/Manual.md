@@ -932,7 +932,9 @@ Screen.mock(
 )
 ```
 
-To give every type its own instance, as the app does, declare a [`mockOnly`](#the-mockonly-parameter) fake that fulfills the dependency’s type. The parameter goes away, the mock builds one fake for each type that creates the dependency, and you can replace each at its place in the tree, as in `safeDIOverrides: .init(settings: .init(userService: { spy }))`. A `@Sendable` autoclosure parameter shares nothing to begin with: each of those types calls it, so its documentation lists none of them.
+An override replaces only the value that type is built with. A type beneath it that receives the dependency is still handed the parameter, where the app hands it the overridden type’s own, so override that type too. The mocked type has no entry: to give it its own instance, pass that as the parameter and override the others. Neither does anything built through the one dependency of each [dependency cycle](#instantiator) that the mock leaves without an entry.
+
+To give every type its own instance, as the app does, declare a [`mockOnly`](#the-mockonly-parameter) fake that fulfills the dependency’s type. The parameter goes away, the mock builds one fake for each type that creates the dependency and hands it to the types beneath that receive it, and `safeDIOverrides` can replace each one the tree has an entry for, as in `safeDIOverrides: .init(settings: .init(userService: { spy }))`. A `@Sendable` autoclosure parameter shares nothing to begin with: each of those types calls it, so its documentation lists none of them.
 
 A flat `mock()` parameter for a value the mock does not build defaults to the type’s hand-written mock when that mock takes no required argument and this module can call it, which it cannot when the mock is `internal` to another module. The mock is the one the mock’s tree builds a property of the type with – the type’s own, or a [`mockOnly`](#the-mockonly-parameter) declaration’s, such as a fake that fulfills a protocol – so a forwarded `service: Service` whose fake is `FakeService` makes `mock(service: Service = FakeService.mock())`.
 

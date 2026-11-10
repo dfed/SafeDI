@@ -3597,7 +3597,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			/// The lines that document, above `mock()`, a parameter whose one value is handed to several types that each
 			/// create the dependency in the app; none for a parameter that one type creates, or for a `@Sendable`
 			/// autoclosure, which each type calls for a value of its own. Swift reads a parameter's documented name as
-			/// plain text and a code span ends at a backtick, so neither name is spelled with backticks.
+			/// plain text and a code span ends at a backtick, so neither name is spelled with backticks. The lines offer only
+			/// a `mockOnly` fake: `safeDIOverrides` has no entry for the mocked type or for a type built beneath a `cycleEdges`
+			/// edge, and an override of a type leaves the types beneath it that receive the dependency holding this parameter.
 			var sharedValueDocumentation: [String] {
 				guard !isSendableAutoclosure, creatingTypes.count > 1 else { return [] }
 				let creatingProperties = creatingTypes.map { creatingType in
@@ -3606,7 +3608,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				return [
 					"/// - Parameter \(label.spelledWithoutBackticks): Passed to every type that creates this dependency:",
 					"///   \(creatingProperties.joinedAsList). The app creates one for each.",
-					"///   To give one its own, override that type in `\(ReservedName.mockOverridesParameterName)`, or declare a `mockOnly` fake.",
+					"///   To give each its own, declare a `mockOnly` fake.",
 				]
 			}
 		}

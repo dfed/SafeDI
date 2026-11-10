@@ -15497,7 +15497,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 		    /// - Parameter engine: Passed to every type that creates this dependency:
 		    ///   `ChildA.engine` and `ChildB.engine`. The app creates one for each.
-		    ///   To give one its own, override that type in `safeDIOverrides`, or declare a `mockOnly` fake.
+		    ///   To give each its own, declare a `mockOnly` fake.
 		    static func mock(
 		        engine: Engine,
 		        safeDIOverrides: SafeDIOverrides = .init()
