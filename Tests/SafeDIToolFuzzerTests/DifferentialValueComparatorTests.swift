@@ -2617,7 +2617,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			}), probes)
 		}
 		let knownRight = try await path(of: fixture, replacingDefault: false)
-		#expect(knownRight.probes == [DifferentialValueProbe("S0_Root0()"), DifferentialValueProbe("S0_Root1()"), DifferentialValueProbe("S0_Root2()"), DifferentialValueProbe("S0_Ext.mock()")])
+		#expect(knownRight.probes == [DifferentialValueProbe("S0_Root0()"), DifferentialValueProbe("S0_Root1()"), DifferentialValueProbe("S0_Root2()"), DifferentialValueProbe("S0_Ext.mock()"), DifferentialValueProbe("S0_TupleHost.mock()")])
 
 		let blindComparison = try await DifferentialValueOracle.compare(
 			feature: try path(of: fixture, replacingDefault: true).path,

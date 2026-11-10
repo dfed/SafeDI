@@ -92,6 +92,9 @@ enum GraphFuzzerMirrorTypes {
 			case "<", "(":
 				depth += 1
 				current.append(character)
+			case ">" where current.hasSuffix("-"):
+				// A function type's arrow closes nothing.
+				current.append(character)
 			case ">", ")":
 				depth -= 1
 				current.append(character)
@@ -104,6 +107,16 @@ enum GraphFuzzerMirrorTypes {
 		}
 		arguments.append(current.trimmingCharacters(in: .whitespaces))
 		return (String(type[..<open]), arguments)
+	}
+
+	/// The label and type of each element of `tuple`, a tuple type whose every element is labeled.
+	static func tupleElements(of tuple: String) -> [(label: String, type: String)] {
+		// The same split as of generic arguments, inside parentheses rather than angle brackets.
+		guard let elements = generic("<\(tuple.dropFirst().dropLast())>")?.arguments else { return [] }
+		return elements.compactMap { element in
+			guard let colon = element.firstIndex(of: ":") else { return nil }
+			return (String(element[..<colon]), element[element.index(after: colon)...].trimmingCharacters(in: .whitespaces))
+		}
 	}
 
 	/// The type the property builds, as `TypeDescription.asInstantiatedType`: without its optional, and the generic
@@ -606,9 +619,13 @@ struct GraphFuzzerMockMirrorModel {
 		guard let scope, let builtType = types[scope.scopeTypeName] else { return nil }
 		let builtTypeForwardedProperties = builtType.dependencies.filter { $0.source == .forwarded }
 		if GraphFuzzerMirrorTypes.isErasedInstantiator(property.type), !builtTypeForwardedProperties.isEmpty {
-			// The first generic argument of an erased instantiator must be the built type's forwarded properties.
+			// A mock builds an erased instantiator whose first generic argument is the type of the only forwarded property
+			// or names the typealias. The tuples the fuzzer draws have elements that are not one bare name, and a mock takes
+			// an erased instantiator of such a tuple as a parameter.
 			guard let firstArgument = GraphFuzzerMirrorTypes.generic(property.unwrapped.type)?.arguments.first,
-			      builtTypeForwardedProperties.count == 1, firstArgument == builtTypeForwardedProperties[0].property.type
+			      builtTypeForwardedProperties.count == 1
+			      ? firstArgument == builtTypeForwardedProperties[0].property.type
+			      : firstArgument == "\(scope.scopeTypeName).ForwardedProperties"
 			else { return nil }
 		}
 		guard !GraphFuzzerMirrorTypes.isConstantOrLazilyInstantiated(property.type) || builtTypeForwardedProperties.isEmpty else { return nil }

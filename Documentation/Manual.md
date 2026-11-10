@@ -956,7 +956,7 @@ public struct SettingsView: View, Instantiable {
 SettingsView.mock(userService: AnyUserService(StubUserService()))
 ```
 
-The same matching applies to a received erased instantiator: a mock builds a received `childViewBuilder: ErasedInstantiator<(), AnyView>` from a property of that type, such as `ParentView`’s in [ErasedInstantiator](#erasedinstantiator).
+The same matching applies to a received erased instantiator: a mock builds a received `childViewBuilder: ErasedInstantiator<(), AnyView>` from a property of that type, such as `ParentView`’s in [ErasedInstantiator](#erasedinstantiator). When the type it builds has several `@Forwarded` properties, the mock builds it only if its first generic names the `ForwardedProperties` typealias or spells a tuple whose element types are each one bare name; otherwise, as for `ErasedInstantiator<(count: Int?, name: String), AnyView>`, the mock takes it as a parameter.
 
 ### Hand-written mocks
 

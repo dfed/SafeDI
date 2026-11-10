@@ -44,16 +44,28 @@ extension Collection<Property> {
 		return tuple
 	}
 
-	var asTupleTypeDescription: TypeDescription {
+	/// The macro's tuple of these properties read back as a type, with each element's whole spelling as one simple type.
+	/// A declared tuple equals it only when the type of every element is one bare name, which is what
+	/// `Property.mockBuildsFirstGeneric(of:)` asks.
+	var asTupleTypeDescriptionOfBareElements: TypeDescription {
 		TypeSyntax(asTuple).typeDescription
 	}
 
 	/// The type of the `ForwardedProperties` typealias that the `@Instantiable` macro generates for a type whose
-	/// `@Forwarded` properties are these: the type of the only one, or a tuple of all of them, in order. Generated
-	/// code and diagnostics spell the forwarded properties with this, so neither can disagree with the typealias.
-	/// Use it only for spelling: the `typeDescription` of the type it returns names a nested type such as
-	/// `Feature.Configuration` as one simple type, so it does not equal the properties' own type descriptions.
-	/// Compare a declared type with those instead.
+	/// `@Forwarded` properties are these: the type of the only one, or a tuple of all of them, in order. It is built
+	/// from the properties' own type descriptions, so it equals what a declaration that spells the same type parses
+	/// to, whatever the elements' types are. Compare a declared type with this, and spell the type with it.
+	var asForwardedPropertiesTypeDescription: TypeDescription {
+		if count == 1, let forwardedProperty = first {
+			forwardedProperty.typeDescription
+		} else {
+			.tuple(sorted().map { TypeDescription.TupleElement(label: $0.label, $0.typeDescription) })
+		}
+	}
+
+	/// The syntax of the `ForwardedProperties` typealias that the `@Instantiable` macro generates for a type whose
+	/// `@Forwarded` properties are these, which `asForwardedPropertiesTypeDescription` describes. Each element's type
+	/// is one token that spells the whole type, so never read this back with `typeDescription`.
 	public var asForwardedPropertiesType: TypeSyntax {
 		if count == 1, let forwardedProperty = first {
 			TypeSyntax(IdentifierTypeSyntax(name: .identifier(forwardedProperty.typeDescription.asSource)))

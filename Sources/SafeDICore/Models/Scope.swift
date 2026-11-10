@@ -1068,7 +1068,7 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 		builtType = builtInstantiable.concreteInstantiable
 		// The forwarded properties are spelled out rather than as `ForwardedProperties` on the built type, which the
 		// module that declares the property may not be able to see.
-		forwardedPropertiesType = builtInstantiable.forwardedProperties.asForwardedPropertiesType.typeDescription
+		forwardedPropertiesType = builtInstantiable.forwardedProperties.asForwardedPropertiesTypeDescription
 	}
 
 	var sourceDiagnostics: [SourceDiagnostic] {
@@ -1091,19 +1091,40 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 extension Property {
 	/// Whether the property, when it is an `ErasedInstantiator` or `SendableErasedInstantiator` that builds
 	/// `builtInstantiable`, has the `@Forwarded` properties of `builtInstantiable` as its first generic argument.
-	/// Any other property matches, as does one that builds a type with no `@Forwarded` properties.
+	/// Any other property matches, as does one that builds a type with no `@Forwarded` properties. Whether a mock builds
+	/// a received property that matches is narrower: see `mockBuildsFirstGeneric(of:)`.
 	func firstGenericMatchesForwardedProperties(of builtInstantiable: Instantiable) -> Bool {
 		let forwardedProperties = builtInstantiable.forwardedProperties
 		guard propertyType.isErasedInstantiator,
 		      !forwardedProperties.isEmpty,
 		      let forwardedArgument = generics?.first
 		else { return true }
-		// The forwarded argument is the same type as the only `@Forwarded` property.
-		return (forwardedProperties.count == 1 && forwardedArgument == forwardedProperties[0].typeDescription)
-			// The forwarded argument is the same as `InstantiableName.ForwardedProperties`.
-			|| forwardedArgument == .nested(name: "ForwardedProperties", parentType: builtInstantiable.concreteInstantiable)
-			// The forwarded argument is the same as the tuple the macro generates for `InstantiableName.ForwardedProperties`.
-			|| forwardedArgument == forwardedProperties.asTupleTypeDescription
+		// The forwarded argument is the same as `InstantiableName.ForwardedProperties`.
+		return forwardedArgument == .nested(name: "ForwardedProperties", parentType: builtInstantiable.concreteInstantiable)
+			// The forwarded argument is the same as the type the macro generates for `InstantiableName.ForwardedProperties`:
+			// the type of the only `@Forwarded` property, or the tuple of all of them.
+			|| forwardedArgument == forwardedProperties.asForwardedPropertiesTypeDescription
+	}
+
+	/// Whether a mock that receives the property can build it, for an `ErasedInstantiator` or
+	/// `SendableErasedInstantiator` that builds `builtInstantiable`: its first generic argument names
+	/// `InstantiableName.ForwardedProperties`, or is the type of the only `@Forwarded` property, or a tuple of the
+	/// `@Forwarded` properties whose every element's type is one bare name. Any other property can be built, as can one
+	/// that builds a type with no `@Forwarded` properties.
+	///
+	/// A deliberate gap beside `firstGenericMatchesForwardedProperties(of:)`, which also accepts a tuple whose elements
+	/// are not one bare name: a mock takes a received property of such a tuple as a `mock()` parameter, as it did when
+	/// SafeDI rejected a declaration of that tuple. Building it would remove the parameter that callers of the mock pass,
+	/// and bring the built type's tree into the mock, whose cycles, hidden labels, and access no tree had to pass.
+	func mockBuildsFirstGeneric(of builtInstantiable: Instantiable) -> Bool {
+		let forwardedProperties = builtInstantiable.forwardedProperties
+		guard propertyType.isErasedInstantiator,
+		      !forwardedProperties.isEmpty,
+		      let forwardedArgument = generics?.first
+		else { return true }
+		return forwardedArgument == .nested(name: "ForwardedProperties", parentType: builtInstantiable.concreteInstantiable)
+			|| (forwardedProperties.count == 1 && forwardedArgument == forwardedProperties[0].typeDescription)
+			|| forwardedArgument == forwardedProperties.asTupleTypeDescriptionOfBareElements
 	}
 }
 
