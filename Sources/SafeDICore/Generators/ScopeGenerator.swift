@@ -3591,6 +3591,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			/// (`sendableAutoclosureBindings(for:parameters:indent:)`), which creates the value once per
 			/// construction, as production does. The caller still passes a value.
 			let isSendableAutoclosure: Bool
+			/// The types that create the dependency, each once (`typesCreatingDependencies`).
+			let creatingTypes: [TypeDescription]
+
+			/// The lines that document, above `mock()`, a parameter whose one value is handed to several types that each
+			/// create the dependency in the app; none for a parameter that one type creates, or for a `@Sendable`
+			/// autoclosure, which each type calls for a value of its own. Swift reads a parameter's documented name as
+			/// plain text and a code span ends at a backtick, so neither name is spelled with backticks.
+			var sharedValueDocumentation: [String] {
+				guard !isSendableAutoclosure, creatingTypes.count > 1 else { return [] }
+				let creatingProperties = creatingTypes.map { creatingType in
+					"`\("\(creatingType.asSource).\(property.label)".spelledWithoutBackticks)`"
+				}
+				return [
+					"/// - Parameter \(label.spelledWithoutBackticks): Passed to every type that creates this dependency:",
+					"///   \(creatingProperties.joinedAsList). The app creates one for each.",
+					"///   To give one its own, override that type in `\(ReservedName.mockOverridesParameterName)`, or declare a `mockOnly` fake.",
+				]
+			}
 		}
 	}
 
@@ -3939,6 +3957,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.union(onlyIfAvailableReceivedProperties.map(\.label)),
 			hiddenEntries: uncoveredDependencies.indicesHiddenWhereReferenced,
 		)
+		let creatingTypesByProperty = uncoveredDependencies.properties.isEmpty
+			? [:]
+			: Self.typesCreatingDependencies(
+				ofMockedType: instantiable,
+				mockedTypeDependencies: mockedTypeUncoveredDependencies,
+				treePropertyNodes: treePropertyNodes,
+			)
 		let flatUncoveredParameters = uncoveredDependencies.properties.indices.map { index in
 			MockRootParameters.UncoveredParameter(
 				property: uncoveredDependencies.properties[index],
@@ -3946,6 +3971,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				typeSource: uncoveredDependencies.typeSources[index],
 				instantiatedType: uncoveredDependencies.instantiatedTypes[index],
 				isSendableAutoclosure: uncoveredDependencies.indicesInstantiatedInSendableFunction.contains(index),
+				creatingTypes: creatingTypesByProperty[uncoveredDependencies.properties[index]] ?? [],
 			)
 		}
 
@@ -4260,6 +4286,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// A public mock's tiers are emitted around its body once the body is generated.
 		if publicMockPlan == nil {
+			lines.append(contentsOf: flatUncoveredParameters.flatMap(\.sharedValueDocumentation).map { "\(indent)\($0)" })
 			lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
 			lines.append(mockParameters.joined(separator: ",\n"))
 			lines.append("\(indent)) -> \(mockMethodReturnType) {")
@@ -5647,6 +5674,45 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				false
 			}
 		}
+	}
+
+	/// The types that create each dependency the mock cannot build, each type once however many places in the tree build
+	/// it: the mocked type, then the types of its tree depth first, each type's children in the order it declares them
+	/// rather than the order they are built in, followed at the mock root by the dependencies the mock promotes. The tree
+	/// is walked with a stack, since it can be as deep as the module has types.
+	private static func typesCreatingDependencies(
+		ofMockedType instantiable: Instantiable,
+		mockedTypeDependencies: [Dependency],
+		treePropertyNodes: [MockParameterNode],
+	) -> [Property: [TypeDescription]] {
+		var typesByProperty = [Property: [TypeDescription]]()
+		for dependency in mockedTypeDependencies {
+			typesByProperty[dependency.property, default: []].append(instantiable.concreteInstantiable)
+		}
+		var nodesToVisit = Array(inDeclarationOrder(treePropertyNodes, declaredBy: instantiable.dependencies).reversed())
+		while let node = nodesToVisit.popLast() {
+			for dependency in uncoveredInstantiatedDependencies(of: node)
+				where typesByProperty[dependency.property]?.contains(node.concreteType) != true
+			{
+				typesByProperty[dependency.property, default: []].append(node.concreteType)
+			}
+			// As `collectUncoveredDependenciesFromTree` does, whose parameters these are.
+			let nonCycleChildren = node.propertyChildren.filter { !$0.isPropertyCycle }
+			nodesToVisit.append(contentsOf: inDeclarationOrder(nonCycleChildren, declaredBy: node.dependencies).reversed())
+		}
+		return typesByProperty
+	}
+
+	/// `nodes`, the children of a type that declares `dependencies`, in the order it declares them; any it does not
+	/// declare, which the mock promotes to its root, stay in their order after those.
+	private static func inDeclarationOrder(_ nodes: [MockParameterNode], declaredBy dependencies: [Dependency]) -> [MockParameterNode] {
+		var declarationIndexByLabel = [String: Int]()
+		for (index, dependency) in dependencies.enumerated() where declarationIndexByLabel[dependency.property.label] == nil {
+			declarationIndexByLabel[dependency.property.label] = index
+		}
+		return nodes.indices
+			.sorted { (declarationIndexByLabel[nodes[$0].propertyLabel] ?? dependencies.count, $0) < (declarationIndexByLabel[nodes[$1].propertyLabel] ?? dependencies.count, $1) }
+			.map { nodes[$0] }
 	}
 
 	/// `disambiguationMap` for the scopes built where the type that instantiates `uncoveredDependencies`, which the

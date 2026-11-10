@@ -624,6 +624,9 @@ struct PublicMockParameter: Sendable {
 	/// For the builder of a hole in the mock's tree, the hole, which a module calling the mock that sees a type that
 	/// fulfills it fills.
 	var hole: SeamSignature.Hole?
+	/// The lines that document the parameter above each tier that takes it
+	/// (`MockRootParameters.UncoveredParameter.sharedValueDocumentation`).
+	var sharedValueDocumentation = [String]()
 
 	/// What a parameter of a public mock stands for.
 	enum Role: Sendable {
@@ -891,7 +894,7 @@ extension ScopeGenerator {
 		}
 		for uncovered in flatUncoveredParameters {
 			let typeSource = uncovered.isSendableAutoclosure ? "@autoclosure @escaping @Sendable () -> \(uncovered.typeSource)" : uncovered.typeSource
-			leadingParameters.append(PublicMockParameter(name: uncovered.label, type: uncovered.property.typeDescription, typeSource: typeSource, defaultSource: nil, defaultKind: .none, access: access(of: uncovered.property.typeDescription, receivedAs: uncovered.property.label), role: .received(uncovered.property, isRequired: true)))
+			leadingParameters.append(PublicMockParameter(name: uncovered.label, type: uncovered.property.typeDescription, typeSource: typeSource, defaultSource: nil, defaultKind: .none, access: access(of: uncovered.property.typeDescription, receivedAs: uncovered.property.label), role: .received(uncovered.property, isRequired: true), sharedValueDocumentation: uncovered.sharedValueDocumentation))
 		}
 		// Each hole's builder, required: what fills the hole takes the values in scope at its site. The tree calls each
 		// builder by the name the sites call it by, bound before anything else, in builder-label order.
@@ -1019,6 +1022,7 @@ extension ScopeGenerator {
 			) {
 				lines.append(marker)
 			}
+			lines.append(contentsOf: parameters.flatMap(\.sharedValueDocumentation).map { "\(indent)\($0)" })
 			let declarationPrefix = "\(indent)\(attributesPrefix)\(tier == .internal ? "" : "\(tier.spelledOnGeneratedDeclaration) ")static func mock("
 			// Only the `public` tier can take nothing, when every parameter is narrower: each narrower tier takes a parameter
 			// of its own level.
