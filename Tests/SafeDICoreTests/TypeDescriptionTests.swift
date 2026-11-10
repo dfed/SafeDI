@@ -2027,6 +2027,47 @@ struct TypeDescriptionTests {
 		#expect(nested.asSource == "(Child.Config...) throws(Child.Config) -> Void")
 	}
 
+	@Test(arguments: [
+		("Optional<Int>", "Int?"),
+		("Swift.Optional<Int>", "Int?"),
+		("Array<Int>", "[Int]"),
+		("Dictionary<String, Int>", "[String: Int]"),
+		("Array<Optional<Int>>", "[Int?]"),
+		("Swift.Int", "Int"),
+		("Swift.Void", "()"),
+		("Feature.Config", "Config"),
+		("(Feature.Config) -> Swift.Int", "(Config) -> Int"),
+		("() throws(Feature.Failure) -> Void", "() throws(Failure) -> Void"),
+		("(Array<Int>...) -> Void", "([Int]...) -> Void"),
+		("@Sendable @MainActor () -> Void", "@MainActor @Sendable () -> Void"),
+		("(first: Optional<Int>, second: Swift.String)", "(first: Int?, second: String)"),
+		("(any Feature.Config)?", "(any Config)?"),
+		("some Feature.Config", "some Config"),
+		("Feature.Config.Type", "Config.Type"),
+		("Feature.Config & Swift.Sendable", "Config & Sendable"),
+		("Feature.Config!", "Config!"),
+		("Feature.Config.Nested<Array<Int>>", "Config.Nested<[Int]>"),
+	])
+	func withoutSpellingDifferences_returnsSameType_whenSpellingsNameOneType(lhs: String, rhs: String) {
+		let moduleNames = ["Swift", "Feature"]
+		#expect(TypeSyntax(stringLiteral: lhs).typeDescription.withoutSpellingDifferences(qualifiedByModulesNamed: moduleNames, declaredTypeNames: [])
+			== TypeSyntax(stringLiteral: rhs).typeDescription.withoutSpellingDifferences(qualifiedByModulesNamed: moduleNames, declaredTypeNames: []))
+	}
+
+	@Test(arguments: [
+		("Other.Config", "Config"),
+		("Optional<Int, Int>", "Int?"),
+		("Array<Int>", "Int"),
+		("(first: Int, second: String)", "(second: String, first: Int)"),
+		("@MainActor () -> Void", "() -> Void"),
+		("Optional<Int>", "Int"),
+	])
+	func withoutSpellingDifferences_returnsDifferentTypes_whenSpellingsNameDifferentTypes(lhs: String, rhs: String) {
+		let moduleNames = ["Swift", "Feature"]
+		#expect(TypeSyntax(stringLiteral: lhs).typeDescription.withoutSpellingDifferences(qualifiedByModulesNamed: moduleNames, declaredTypeNames: [])
+			!= TypeSyntax(stringLiteral: rhs).typeDescription.withoutSpellingDifferences(qualifiedByModulesNamed: moduleNames, declaredTypeNames: []))
+	}
+
 	@Test
 	func withoutAny_stripsAnyFromThrownTypeAndVariadicArgument() {
 		let type = TypeSyntax(stringLiteral: "((any Service)...) throws(any Other) -> Void").typeDescription
