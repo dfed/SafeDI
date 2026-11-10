@@ -1898,9 +1898,11 @@ public actor DependencyTreeGenerator {
 			/// module the tree is generated in, at `referenceLocation`, where this module refers to what leads to the seam,
 			/// naming the declaration this construction needs to widen and the level it has, in a sentence of its own, since
 			/// the declaration's subject phrase can be an enclosing type's or an extension's. It leads with the remedy every
-			/// build can apply, making the tree's types `public`, and then, for a build that can name modules, declaring the
-			/// seam in a module whose run is given its name, since a tree builds a seam inline only where SafeDI does not
-			/// know the seam's module – a `.safedi` written without a name, or a directory a `#SafeDIConfiguration` adds. A
+			/// such run can apply, widening the tree's declarations as the error at each declaration says, and then says how
+			/// SafeDI comes to know the seam's module. Only a run that names no module reports this, which is one of the Xcode
+			/// project plugin or a SafeDITool run by hand: the Swift package plugin's target graph, Bazel's required
+			/// `module_name`, and the Tuist script's `--module-name` name every module. A run by hand needs only the seam's
+			/// module named, since a run that names no module calls the initializer of a seam a module info file records. A
 			/// single `error:` line, since Xcode drops notes from build-tool output.
 			private func inlineSeamDiagnostic(
 				of seamType: TypeDescription,
@@ -1911,7 +1913,7 @@ public actor DependencyTreeGenerator {
 				return SourceDiagnostic(
 					severity: .error,
 					location: referenceLocation,
-					message: "\(seamName) is declared with `generateDependencyTree: true`, but SafeDI does not know which module declares \(seamName), so this run builds \(seamName)'s tree inline. \(reachedDeclaration) Make the types in \(seamName)'s tree `public`, or, in a build that can name modules, declare \(seamName) in a module whose SafeDITool run is given its name (`--module-name`, Bazel's `module_name`), so that this module calls the initializer SafeDI generates for \(seamName).",
+					message: "\(seamName) is declared with `generateDependencyTree: true`, but SafeDI does not know which module declares \(seamName), so this run builds \(seamName)'s tree inline. \(reachedDeclaration) Make the types in \(seamName)'s tree and their initializers `\(AccessLevel.package.spelling)`, or `\(AccessLevel.public.spelling)` where their module and this one are in different packages. For this module to call the initializer SafeDI generates for \(seamName) instead, SafeDI must know \(seamName)'s module: \(DependencyTreeGenerator.DependencyTreeGeneratorError.xcodeProjectPluginCannotNameModules); a SafeDITool run by hand needs the module info of \(seamName)'s module, written with `--module-name`.",
 				)
 			}
 

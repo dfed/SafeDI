@@ -1106,11 +1106,16 @@ extension SeamSignature.Hole {
 }
 
 extension DependencyTreeGenerator.DependencyTreeGeneratorError {
+	/// What a target the Xcode project plugin builds does for SafeDI to know its modules, in both errors that a run that
+	/// names no module reports about a seam, so the two read alike.
+	static let xcodeProjectPluginCannotNameModules = "the Xcode project plugin cannot name modules, so move the modules and the root into a local Swift package that the app target depends on"
+
 	/// A hole in the tree of a seam whose module SafeDI does not know – a run without a module name, as a target the
 	/// Xcode project plugin builds is – so the initializer it generates cannot take a builder: what the module's callers
-	/// see is unknown, and they build the seam inline. The message leads with the remedies every build can apply, and
-	/// names the module last, for a build that can name it. It never suggests reading a module that depends on this
-	/// one, whose files the generated code could not see.
+	/// see is unknown, and they build the seam inline. The message leads with the remedies every such run can apply, and
+	/// then says how SafeDI comes to know the module, under the Xcode project plugin and in a run by hand, the only runs
+	/// that name no module. It never suggests reading a module that depends on this one, whose files the generated code
+	/// could not see.
 	struct HoleInSeamOfUnnamedModule {
 		let seam: TypeDescription
 		let owner: TypeDescription
@@ -1123,7 +1128,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			return SourceDiagnostic(
 				severity: .error,
 				location: dependency.declarationLocation,
-				message: "\(seamName) generates its dependency tree, and `\(owner.asSource)`'s @\(Dependency.Source.instantiatedRawValue) property `\(dependency.property.asSource)` in it instantiates \(typeName), which no @\(InstantiableVisitor.macroName) declaration this module reads fulfills. SafeDI does not know which module declares \(seamName), so it cannot know what that module's callers see, and the initializer it generates cannot take a builder for \(label). Declare an @\(InstantiableVisitor.macroName) type that fulfills \(typeName) in this module or in a module it depends on, declare \(seamName) without `generateDependencyTree: true`, or, in a build that can name this module, run SafeDITool with its name (`--module-name`, Bazel's `module_name`).",
+				message: "\(seamName) generates its dependency tree, and `\(owner.asSource)`'s @\(Dependency.Source.instantiatedRawValue) property `\(dependency.property.asSource)` in it instantiates \(typeName), which no @\(InstantiableVisitor.macroName) declaration this module reads fulfills. SafeDI does not know which module declares \(seamName), so it cannot know what that module's callers see, and the initializer it generates cannot take a builder for \(label). Declare an @\(InstantiableVisitor.macroName) type that fulfills \(typeName) in this module or in a module it depends on, or declare \(seamName) without `generateDependencyTree: true`. For the initializer to take a builder instead, SafeDI must know \(seamName)'s module: \(DependencyTreeGenerator.DependencyTreeGeneratorError.xcodeProjectPluginCannotNameModules); a SafeDITool run by hand names this module with `--module-name`.",
 			)
 		}
 	}
