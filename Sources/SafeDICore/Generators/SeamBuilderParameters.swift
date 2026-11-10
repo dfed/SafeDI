@@ -641,10 +641,13 @@ extension DependencyTreeGenerator {
 	/// not list a module on the way to the hole, so the seam call would pass the builder up, which a root cannot – once
 	/// per declaration of the hole's property per root, naming the first chain a declaration-order walk of the root's
 	/// tree meets, the fills the root's module generates included.
+	/// - Parameter viewInstantiablesByModuleName: The declarations of the modules the root's module reads only through
+	///   module info views, by module, among which a module on the way to the hole may fulfill it.
 	static func validateRootsFillEveryHole(
 		roots: [Scope],
 		callerModuleName: String?,
 		instantiables: [TypeDescription: Instantiable],
+		viewInstantiablesByModuleName: [String: [Instantiable]],
 		isReadableFile: (@Sendable (String) -> Bool)?,
 	) throws {
 		var unfilledHoles = [DependencyTreeGeneratorError.UnfilledHole]()
@@ -681,7 +684,7 @@ extension DependencyTreeGenerator {
 								noteLocation: hole.declarationLocation.flatMap { location in isReadableFile.map { $0(location.filePath) } ?? true ? location : nil },
 								callerModuleName: callerModuleName,
 								unlistedModuleNames: unlistedModuleNames,
-								unreachedFulfillingType: unlistedModuleNames.isEmpty ? nil : fulfillingInstantiable(of: hole, in: instantiables)?.concreteInstantiable,
+								unreachedFulfillingType: unlistedModuleNames.isEmpty ? nil : fulfillingType(of: hole, seenThroughListing: unlistedModuleNames, in: instantiables, viewInstantiablesByModuleName: viewInstantiablesByModuleName),
 								fulfilledByMockOnlyDeclaration: instantiables[hole.instantiatedType]?.mockOnly == true,
 							))
 						}
@@ -696,6 +699,22 @@ extension DependencyTreeGenerator {
 		if !unfilledHoles.isEmpty {
 			throw DependencyTreeGeneratorError.unfilledHoles(unfilledHoles)
 		}
+	}
+
+	/// The type that fulfills `hole` once the root's module lists `unlistedModuleNames`: one among the declarations it
+	/// reads, or else one of those modules declares, the first in chain order. A module on the way to a hole can declare a
+	/// fulfilling type its own run did not use: it need not list a module beneath the seam it calls, so its walk stops
+	/// before the hole, which it passes up. `nil` when none does, and listing those modules alone leaves the builder unfilled.
+	private static func fulfillingType(
+		of hole: SeamSignature.Hole,
+		seenThroughListing unlistedModuleNames: [String],
+		in instantiables: [TypeDescription: Instantiable],
+		viewInstantiablesByModuleName: [String: [Instantiable]],
+	) -> TypeDescription? {
+		fulfillingInstantiable(of: hole, in: instantiables)?.concreteInstantiable
+			?? unlistedModuleNames.lazy
+			.compactMap { viewInstantiablesByModuleName[$0]?.first { !$0.mockOnly && $0.instantiableTypes.contains(hole.instantiatedType) } }
+			.first?.concreteInstantiable
 	}
 
 	/// The declaration of a hole's property, by which a hole is reported once however many sites it has.
@@ -722,8 +741,9 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 		/// module does not read the declarations of, in chain order, each once. Each is a fact of the hole, so no order among
 		/// modules decides which one the error names.
 		let unlistedModuleNames: [String]
-		/// The type that fulfills the hole among the declarations the root's module reads, when `unlistedModuleNames` is
-		/// why the tree never reached it, so listing them is the whole fix.
+		/// The type that fulfills the hole among the declarations the root's module reads or the modules of
+		/// `unlistedModuleNames` declare, when `unlistedModuleNames` is why the tree never reached it, so listing them is
+		/// the whole fix.
 		let unreachedFulfillingType: TypeDescription?
 		let fulfilledByMockOnlyDeclaration: Bool
 

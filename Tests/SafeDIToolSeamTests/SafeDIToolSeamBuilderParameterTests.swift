@@ -375,6 +375,121 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingFulfillingTypeOfUnlistedModule_whenModuleRootDoesNotListDeclaresFulfillingTypeOfPassedUpHole() async {
+		// `Mid` declares `DefaultUserService`, but passes the hole up, since it need not list `Deep`, which holds `Profile`.
+		// `App` does not list `Mid`, so listing it is the whole fix, and nothing tells `App` to write a declaration.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):9:5: error: `DefaultUserService` fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Top -> Shell -> Service -> Profile, but SafeDI cannot follow that chain, because module `App` does not list `Mid`. A module that declares a root lists every module beneath it: \(Self.listModuleRemedy)
+			\(fixtures["Deep"]!["Profile.swift"]):7:5: note: `Profile` instantiates `userService: any UserService` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.fulfillingTypeInMidModules(midDeclarations: [Self.defaultUserService], appDependencies: ["Deep", "Feature", "Outer"]),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingFulfillingTypeOfUnlistedModule_whenRootsModuleListsOnlyOutermostSeamsModule() async {
+		// `App` lists `Outer` alone, so `Mid`'s declaration reaches it in a view only, and all three modules must be listed.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):9:5: error: `DefaultUserService` fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Top -> Shell -> Service -> Profile, but SafeDI cannot follow that chain, because module `App` does not list `Mid`, `Feature` or `Deep`. A module that declares a root lists every module beneath it: for each, \(Self.listModuleRemedy)
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.fulfillingTypeInMidModules(midDeclarations: [Self.defaultUserService], appDependencies: ["Outer"]),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsHoleWithDeclarationOfModuleTheErrorNamed_whenRootsModuleListsThatModule() async throws {
+		// The input of the test above that names `Mid`, with `Mid` listed, and nothing else changed.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.fulfillingTypeInMidModules(midDeclarations: [Self.defaultUserService], appDependencies: ["Deep", "Feature", "Mid", "Outer"]),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Deep", "Feature", "Mid", "Outer"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        func __safeDI_top() -> Top {
+		            _ = Top.__safeDI_Top_ABDD1BE1007005BC.self // If this line does not compile, compile the code SafeDI generates for module Outer into Outer: under Bazel, add Outer's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let userService: any UserService = DefaultUserService()
+		                return userService
+		            }
+		            return Top(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let top: Top = __safeDI_top()
+		        self.init(top: top)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorSayingListingFillsNothing_whenUnlistedModuleDeclaresOnlyMockOnlyFulfillingDeclaration() async {
+		// A `mockOnly` declaration fills no builder, so listing `Mid` would leave the hole unfilled.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Top -> Shell -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes a builder for `userService`, and `Root`, a root, must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Mid`: \(Self.listModuleRemedy) That does not fill the builder by itself. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["Deep"]!["Profile.swift"]):7:5: note: `Profile` instantiates `userService: any UserService` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.fulfillingTypeInMidModules(
+					midDeclarations: [
+						"""
+						import Deep
+
+						@Instantiable(fulfillingAdditionalTypes: [UserService.self], mockOnly: true)
+						public struct FakeUserService: UserService, Instantiable {
+						    public static func mock() -> FakeUserService {
+						        FakeUserService()
+						    }
+						}
+						""",
+					],
+					appDependencies: ["Deep", "Feature", "Outer"],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorSayingListingFillsNothing_whenFulfillingTypeIsInModuleOffTheChainToTheHole() async {
+		// `Impl` declares the type, and a view carries it, but `Impl` declares nothing on the way to the hole: listing `Mid`,
+		// the module the error names, would leave the hole unfilled.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Top -> Shell -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes a builder for `userService`, and `Root`, a root, must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Mid`: \(Self.listModuleRemedy) That does not fill the builder by itself. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["Deep"]!["Profile.swift"]):7:5: note: `Profile` instantiates `userService: any UserService` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.fulfillingTypeInMidModules(midDeclarations: [], impl: [Self.defaultUserService], appDependencies: ["Deep", "Feature", "Outer"]),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorWithChainThroughFill_whenSeamCalledInsideFillPassesHoleUp() async {
 		// `Top`'s tree fills `Inner1`'s hole with `DefaultGadget`, which calls `Inner2`, whose hole `Top` passes up: the chain
 		// goes through the fill that makes the call.
@@ -4337,6 +4452,24 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			], dependencies: appDependencies),
 		]
 	}
+
+	/// `Deep`, which holds the hole's owner; `Feature`, whose seam `Service` holds the hole; `Mid`, whose seam `Shell` calls
+	/// `Service`, and which holds `midDeclarations` but does not list `Deep`; `Impl`, holding `impl`, when `impl` is not
+	/// empty; `Outer`, whose seam `Top` calls `Shell`, and which lists `Impl`; and `App`, whose root calls `Top`.
+	private static func fulfillingTypeInMidModules(midDeclarations: [String], impl: [String] = [], appDependencies: [String]) -> [ModuleFixture] {
+		let implModuleNames = impl.isEmpty ? [] : ["Impl"]
+		return [
+			ModuleFixture(name: "Deep", packageName: "Shop", swiftFileContent: [userServiceProtocol, seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"])]),
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: ["import Deep\n\n" + seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let profile: Profile"])], dependencies: ["Deep"]),
+			ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: midDeclarations + ["import Feature\n\n" + seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let service: Service"])], dependencies: ["Feature"]),
+		] + implModuleNames.map { ModuleFixture(name: $0, packageName: "Other", swiftFileContent: impl, dependencies: ["Deep"]) } + [
+			ModuleFixture(name: "Outer", packageName: "Other", swiftFileContent: ["import Mid\n\n" + seamFixtureType(named: "Top", isSeam: true, declarations: ["@Instantiated let shell: Shell"])], dependencies: ["Mid"] + implModuleNames),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Outer\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let top: Top"])], dependencies: appDependencies),
+		]
+	}
+
+	/// A declaration, for a module whose compile can import `Deep`, that fulfills the hole of `fulfillingTypeInMidModules`.
+	private static let defaultUserService = "import Deep\n\n" + fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: [])
 
 	/// How the error at a root's module tells it to list a module, under each build system that lists modules by hand.
 	private static let listModuleRemedy = "list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` with `--dependent-module-info-file-path` in another build."
