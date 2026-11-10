@@ -158,6 +158,7 @@ extension DependencyTreeGenerator {
 				builderLabel: builderLabels[index],
 				internalName: internalName(ofBuilderLabeled: builderLabels[index]),
 				scopeSeamType: seam.concreteInstantiable,
+				scopeSeamModuleName: seam.moduleName,
 				scopeTypeName: scopeTypeName,
 				stages: content.stages,
 				stageBoundaryDepths: content.stageBoundaryDepths,
@@ -192,6 +193,7 @@ extension DependencyTreeGenerator {
 				builderLabel: builderLabel,
 				internalName: internalName(ofBuilderLabeled: builderLabel),
 				scopeSeamType: inner.scopeSeamType,
+				scopeSeamModuleName: inner.scopeSeamModuleName,
 				scopeTypeName: inner.scopeTypeName,
 				stages: inner.stages,
 				stageBoundaryDepths: [],
@@ -656,7 +658,7 @@ extension DependencyTreeGenerator {
 								location: childRootDependency?.declarationLocation,
 								noteLocation: hole.declarationLocation.flatMap { location in isReadableFile.map { $0(location.filePath) } ?? true ? location : nil },
 								callerModuleName: callerModuleName,
-								seamModuleName: instantiables[hole.scopeSeamType]?.moduleName,
+								isSeamModuleListed: instantiables[hole.scopeSeamType]?.moduleName == hole.scopeSeamModuleName,
 								fulfilledByMockOnlyDeclaration: instantiables[hole.instantiatedType]?.mockOnly == true,
 							))
 						}
@@ -692,7 +694,9 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 		/// The hole's declaration, where its file can be read.
 		let noteLocation: Dependency.DeclarationLocation?
 		let callerModuleName: String?
-		let seamModuleName: String?
+		/// Whether the root's module reads the declarations of the module that declares the seam whose tree holds the hole.
+		/// The seam's own module is a fact of the hole, so no order among modules decides which one the error names.
+		let isSeamModuleListed: Bool
 		let fulfilledByMockOnlyDeclaration: Bool
 
 		var sourceDiagnostics: [SourceDiagnostic] {
@@ -700,12 +704,17 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			let seamName = "`\(hole.scopeSeamType.asSource)`"
 			let callerModule = callerModuleName.map { "module `\($0)`" } ?? "this module"
 			let reference = "\(typeName), which @\(Dependency.Source.instantiatedRawValue) property `\(hole.property.asSource)` instantiates in chain: \(chain.map(\.asSource).joined(separator: " -> "))"
-			let seamModule = if let seamModuleName, seamModuleName != callerModuleName {
+			let seamModule = if let seamModuleName = hole.scopeSeamModuleName, seamModuleName != callerModuleName {
 				"in module `\(seamModuleName)`, which cannot see one either"
 			} else {
 				"in this module"
 			}
-			let fill = "\(seamName) generates its dependency tree \(seamModule), so the initializer SafeDI generated for it takes a builder for `\(hole.property.label)`, and `\(rootType.asSource)`, a root, must fill it."
+			let listSeamModule = if let seamModuleName = hole.scopeSeamModuleName, !isSeamModuleListed {
+				" A module that declares a root lists every module beneath it, and \(callerModule) does not list `\(seamModuleName)`: \(DependencyTreeGenerator.DependencyTreeGeneratorError.listModuleRemedy) That does not fill the builder by itself."
+			} else {
+				""
+			}
+			let fill = "\(seamName) generates its dependency tree \(seamModule), so the initializer SafeDI generated for it takes a builder for `\(hole.property.label)`, and `\(rootType.asSource)`, a root, must fill it.\(listSeamModule)"
 			let message = if fulfilledByMockOnlyDeclaration {
 				"No production @\(InstantiableVisitor.macroName) declaration that \(callerModule) can see fulfills \(reference). \(fill) A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills \(typeName)."
 			} else {
@@ -1093,6 +1102,7 @@ extension SeamSignature.Hole {
 			builderLabel: builderLabel,
 			internalName: internalName,
 			scopeSeamType: scopeSeamType,
+			scopeSeamModuleName: scopeSeamModuleName,
 			scopeTypeName: scopeTypeName,
 			stages: stages,
 			stageBoundaryDepths: stageBoundaryDepths,

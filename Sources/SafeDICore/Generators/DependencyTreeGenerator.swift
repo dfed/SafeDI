@@ -1601,6 +1601,9 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
+		/// What each integration whose modules are listed by hand does to list a module an error has just named.
+		static let listModuleRemedy = "list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` with `--dependent-module-info-file-path` in another build."
+
 		/// The last remedy for a type no `@Instantiable` declaration this module reads fulfills: what each integration
 		/// does to read the module that declares one.
 		static let fulfillingDeclarationInAnotherModuleRemedy = "or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target's `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist."
@@ -1642,7 +1645,7 @@ public actor DependencyTreeGenerator {
 			let reference = "`\(typeName)`, which @\(Dependency.Source.instantiatedRawValue) property `\(referencingProperty.asSource)` instantiates"
 			if let viewDeclaringModule {
 				// A module info's view names the module, though it fulfills no type of this module's trees: list it.
-				return "No @\(InstantiableVisitor.macroName) declaration of a module this module lists fulfills \(reference). `\(typeName)` is declared in `\(viewDeclaringModule.moduleName)`, which this module depends on through `\(viewDeclaringModule.throughModuleName)` but does not list; list `\(viewDeclaringModule.moduleName)` where this module lists `\(viewDeclaringModule.throughModuleName)`: list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` with `--dependent-module-info-file-path` in another build."
+				return "No @\(InstantiableVisitor.macroName) declaration of a module this module lists fulfills \(reference). `\(typeName)` is declared in `\(viewDeclaringModule.moduleName)`, which this module depends on through `\(viewDeclaringModule.throughModuleName)` but does not list; list `\(viewDeclaringModule.moduleName)` where this module lists `\(viewDeclaringModule.throughModuleName)`: \(listModuleRemedy)"
 			} else if fulfilledByMockOnlyDeclaration {
 				return "No production @\(InstantiableVisitor.macroName) declaration fulfills \(reference). A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills `\(typeName)`."
 			} else {

@@ -310,6 +310,7 @@ public struct SeamSignature: Sendable {
 			builderLabel: String,
 			internalName: String,
 			scopeSeamType: TypeDescription,
+			scopeSeamModuleName: String?,
 			scopeTypeName: String,
 			stages: [[Field]],
 			stageBoundaryDepths: [Int],
@@ -330,6 +331,7 @@ public struct SeamSignature: Sendable {
 			self.builderLabel = builderLabel
 			self.internalName = internalName
 			self.scopeSeamType = scopeSeamType
+			self.scopeSeamModuleName = scopeSeamModuleName
 			self.scopeTypeName = scopeTypeName
 			self.stages = stages
 			self.stageBoundaryDepths = stageBoundaryDepths
@@ -366,6 +368,8 @@ public struct SeamSignature: Sendable {
 		public let internalName: String
 		/// The seam whose extension declares the scope struct: this seam, or the inner seam a passed-up hole is from.
 		public let scopeSeamType: TypeDescription
+		/// The module that declares `scopeSeamType`, which a module the hole reaches through a view knows only from here.
+		public let scopeSeamModuleName: String?
 		/// The name of the scope struct, or, for a staged builder, of the enum holding one struct per stage.
 		public let scopeTypeName: String
 		/// The fields of each stage's struct: one stage, unless `@Sendable` builder functions lie between the seam and
@@ -417,6 +421,7 @@ public struct SeamSignature: Sendable {
 				builderLabel: parameterName,
 				internalName: internalName,
 				scopeSeamType: scopeSeamType,
+				scopeSeamModuleName: scopeSeamModuleName,
 				scopeTypeName: scopeTypeName,
 				stages: stages,
 				stageBoundaryDepths: stageBoundaryDepths,

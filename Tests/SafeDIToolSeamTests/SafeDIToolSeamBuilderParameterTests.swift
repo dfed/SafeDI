@@ -194,6 +194,78 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingSeamsModuleToList_whenRootsModuleDoesNotListModuleOfSeamWhoseHolePassesUp() async {
+		// `Shell` passes up `Service`'s builder, and `App` lists only `Mid`, so `Service`'s module is known only from `Mid`'s
+		// view: the error names it, as the module `App` must list, and says that listing it fills nothing by itself.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Shell -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes a builder for `userService`, and `Root`, a root, must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Feature`: \(Self.listModuleRemedy) That does not fill the builder by itself. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: Self.canonicalFeature),
+					ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let service: Service"])], dependencies: ["Feature"]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Mid\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shell: Shell"])], dependencies: ["Mid"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingModuleOfSeamHoldingHole_whenHolePassesUpThroughTwoSeamsOfUnlistedModules() async {
+		// The builder passes up from `Service` through `Shell` and `Top`, and `App` lists only `Outer`: the module named is
+		// the one that declares the seam whose tree holds the hole, a fact of the hole and no choice among unlisted modules.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Top -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes a builder for `userService`, and `Root`, a root, must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Feature`: \(Self.listModuleRemedy) That does not fill the builder by itself. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: Self.canonicalFeature),
+					ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let service: Service"])], dependencies: ["Feature"]),
+					ModuleFixture(name: "Outer", packageName: "Other", swiftFileContent: ["import Mid\n\n" + seamFixtureType(named: "Top", isSeam: true, declarations: ["@Instantiated let shell: Shell"])], dependencies: ["Mid"]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Outer\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let top: Top"])], dependencies: ["Outer"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingSeamsOwnModule_whenUnlistedModulesSortingBeforeAndAfterItDeclareTypesOfSeamsName() async {
+		// `Aardvark` and `Zebra`, which only views carry too, each declare a `Service` of their own. The hole's module is the
+		// one its signature was computed from, whichever way the other modules' names sort around it.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):11:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Shell -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes a builder for `userService`, and `Root`, a root, must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Feature`: \(Self.listModuleRemedy) That does not fill the builder by itself. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			"""
+		}) {
+			let otherService = seamFixtureType(named: "Service", declarations: [])
+			return try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Aardvark", packageName: "Shop", swiftFileContent: [otherService]),
+					ModuleFixture(name: "Zebra", packageName: "Shop", swiftFileContent: [otherService]),
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: Self.canonicalFeature),
+					ModuleFixture(name: "AardvarkSeam", packageName: "Other", swiftFileContent: ["import Aardvark\n\n" + seamFixtureType(named: "FirstSeam", isSeam: true, declarations: ["@Instantiated let service: Service"])], dependencies: ["Aardvark"]),
+					ModuleFixture(name: "ZebraSeam", packageName: "Other", swiftFileContent: ["import Zebra\n\n" + seamFixtureType(named: "LastSeam", isSeam: true, declarations: ["@Instantiated let service: Service"])], dependencies: ["Zebra"]),
+					ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let service: Service"])], dependencies: ["Feature"]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import AardvarkSeam\nimport Mid\nimport ZebraSeam\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shell: Shell"])], dependencies: ["AardvarkSeam", "Mid", "ZebraSeam"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Where the hole sits
 
 	@Test
@@ -4001,6 +4073,9 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Feature\nimport Mid\n\n" + $0 }, dependencies: ["Feature", "Mid"]),
 		]
 	}
+
+	/// How the error at a root's module tells it to list a module, under each build system that lists modules by hand.
+	private static let listModuleRemedy = "list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` with `--dependent-module-info-file-path` in another build."
 
 	/// The source of `UserService`, a public protocol.
 	private static let userServiceProtocol = "public protocol UserService {}"
