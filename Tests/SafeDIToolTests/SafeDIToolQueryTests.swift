@@ -2391,8 +2391,8 @@ struct SafeDIToolQueryTests: ~Copyable {
 			_ = try await QueryNeeds.parse(["Feature", "--include", beta.directory.path, "--include", alpha.directory.path]).query()
 		} throws: { error in
 			"\(error)" == """
-			\(alpha.file.path):1:1: error: `Feature` is declared in modules `Alpha` and `Beta`. SafeDI tells @Instantiable types apart by name across every module a run reads. Rename one.
-			\(beta.file.path):1:1: error: `Feature` is declared in modules `Alpha` and `Beta`. SafeDI tells @Instantiable types apart by name across every module a run reads. Rename one.
+			\(alpha.file.path):1:1: error: `Feature` is declared in modules `Alpha` and `Beta`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one.
+			\(beta.file.path):1:1: error: `Feature` is declared in modules `Alpha` and `Beta`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one.
 			"""
 		}
 	}
@@ -2423,7 +2423,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 		}
 		let sortedModuleNames = moduleNames.sorted()
 		let modules = "\(sortedModuleNames.dropLast().map { "`\($0)`" }.joined(separator: ", ")), and `\(sortedModuleNames[23])`"
-		let message = "error: `Feature` is declared in modules \(modules), and more than once in \(modules). SafeDI tells @Instantiable types apart by name across every module a run reads, and reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`. If they are one type that differs by platform, declare it with one @Instantiable declaration, in one of these modules and outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. If they are different types, declare it once in each of \(modules), with any platform difference inside its body or its `instantiate(…)` method, then rename all but one."
+		let message = "error: `Feature` is declared in modules \(modules), and more than once in \(modules). SafeDI tells apart by name the @Instantiable types a module can name, and reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`. If they are one type that differs by platform, declare it with one @Instantiable declaration, in one of these modules and outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. If they are different types, declare it once in each of \(modules), with any platform difference inside its body or its `instantiate(…)` method, then rename all but one."
 		let expectedDiagnostics = files
 			.flatMap { file in
 				[2, 7].map { line in "\(file.path):\(line):1: \(message)" }

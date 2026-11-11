@@ -1272,6 +1272,7 @@ Under the Xcode project plugin:
 - A seam’s tree may not instantiate a type that no `@Instantiable` declaration its target reads fulfills, such as a protocol only the app implements. The error at the property leads with declaring a type that fulfills the property in the target or in one it depends on, or declaring the seam without `generateDependencyTree: true`.
 - A mock tree builds the type, another target’s `generateMock: .public` type included, inline where its tree is visible, and otherwise generation fails, saying to build the mocks in a Swift package target or to give the run module info that names the declaring module. The target’s tests and previews still call the `public` `mock()` the declaring target generates.
 - A type of another target that the target reads no declaration of counts as `public` (see [Access of generated parameters](#access-of-generated-parameters)). Hand the target the declaring target’s directory with `additionalDirectoriesToInclude`, whose `package` declarations then count at their level, or declare the seam or mock `package`.
+- Two `@Instantiable` declarations of one name the target reads are an error, whatever their access, since SafeDI cannot tell which of them the target can name ([Which modules to list](#which-modules-to-list)).
 - The plugin cannot tell whether another target applies it, so a hand-written call of a generated initializer or of `mock()` fails with the compiler’s errors alone when the declaring target lacks the plugin.
 - A target that reads, through `additionalDirectoriesToInclude`, a file that imports the target itself gets the compiler’s “ignoring import” warning in generated code.
 - A generated file does not import the module of a type it builds through a `fulfilledByType` string or a `fulfillingAdditionalTypes` entry: list that module in `additionalImportedModules`, as [Generated imports](#generated-imports) describes.
@@ -1381,6 +1382,10 @@ Only SafeDI notices a missing entry; the compiler and the build system do not as
 - When a generated mock’s tree reaches such a type, `mock()` takes it as a required parameter, as [Dependency kinds in the generated mock](#dependency-kinds-in-the-generated-mock) describes, and SafeDI reports nothing.
 
 A module that uses types another module re-exports with `@_exported import` lists the module that declares them too: SafeDI does not follow the re-export to find a module to read. Under Bazel a tree needs no such entry, since the rule collects the declaring module beneath the one that re-exports it. The [Swift package](#swift-package) plugin needs no list: it reads the modules the target depends on itself.
+
+Two modules can each keep an `@Instantiable` type of one name. Each module’s run tells apart by name only the types that module can name: its own, the `public` types of the modules it reads, and the `package` types of those in its own package. So an app that reaches two modules’ `internal` `Store` types through their seams builds, and a bare `Store` in the app means the one the app can name, if any. SafeDI still checks a type the app cannot name wherever a tree reaches it, and an error about one spells it with its module, as `ModA.Store`.
+
+A name the module can name in two modules is an error, whether or not a tree needs that type: rename one. So is a name when one of the declarations the module cannot name is a seam or has a [public mock](#public-mocks), or when `ModA.Store` already names another `@Instantiable` type.
 
 #### Tuist
 

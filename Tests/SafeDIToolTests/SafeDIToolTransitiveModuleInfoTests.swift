@@ -1256,9 +1256,9 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
-					ModuleFixture(name: "Deep", packageName: "Base", swiftFileContent: [Self.clock, Self.internalHelper]),
+					ModuleFixture(name: "Deep", packageName: "Base", swiftFileContent: [Self.clock, Self.publicHelper]),
 					ModuleFixture(name: "Mid", packageName: "Base", swiftFileContent: ["import Deep\n\n" + seamFixtureType(named: "MidThing", declarations: ["@Instantiated let clock: Clock"])], dependencies: ["Deep"]),
-					ModuleFixture(name: "SeamModule", packageName: "App", swiftFileContent: [Self.internalHelper, "import Mid\n\n" + seamFixtureType(named: "Seam", isSeam: true, declarations: ["@Instantiated let midThing: MidThing"])], dependencies: seamModuleDependencies),
+					ModuleFixture(name: "SeamModule", packageName: "App", swiftFileContent: [Self.publicHelper, "import Mid\n\n" + seamFixtureType(named: "Seam", isSeam: true, declarations: ["@Instantiated let midThing: MidThing"])], dependencies: seamModuleDependencies),
 				],
 				integration: .moduleInfo,
 				compileVerification: .skipped,
@@ -1331,10 +1331,10 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
-					ModuleFixture(name: "Deep", packageName: "Base", swiftFileContent: [seamFixtureType(named: "DeepThing", declarations: []), Self.internalHelper]),
+					ModuleFixture(name: "Deep", packageName: "Base", swiftFileContent: [seamFixtureType(named: "DeepThing", declarations: []), Self.publicHelper]),
 					ModuleFixture(name: "M2", packageName: "Base", swiftFileContent: [seamFixtureType(named: "Thing", declarations: []), "import Deep\n\n" + seamFixtureType(named: "OtherRoot", isRoot: true, declarations: ["@Instantiated let deepThing: DeepThing"])], dependencies: ["Deep"]),
 					ModuleFixture(name: "Middle", packageName: "Base", swiftFileContent: ["import M2\n\n" + seamFixtureType(named: "Screen", declarations: ["@Instantiated let thing: Thing"])], dependencies: ["M2", "Deep"]),
-					ModuleFixture(name: "App", packageName: "App", swiftFileContent: [Self.internalHelper, "import Middle\n\n" + seamFixtureType(named: "Top", isSeam: true, declarations: ["@Instantiated let screen: Screen"])], dependencies: appDependencies),
+					ModuleFixture(name: "App", packageName: "App", swiftFileContent: [Self.publicHelper, "import Middle\n\n" + seamFixtureType(named: "Top", isSeam: true, declarations: ["@Instantiated let screen: Screen"])], dependencies: appDependencies),
 				],
 				integration: .moduleInfo,
 				compileVerification: .skipped,
@@ -1448,7 +1448,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: moduleIndices.flatMap { index in
 					[
-						ModuleFixture(name: "Deep\(index)", packageName: "Base", swiftFileContent: [seamFixtureType(named: "Value\(index)", declarations: []), Self.internalHelper]),
+						ModuleFixture(name: "Deep\(index)", packageName: "Base", swiftFileContent: [seamFixtureType(named: "Value\(index)", declarations: []), Self.publicHelper]),
 						ModuleFixture(name: "Middle\(index)", packageName: "Base", swiftFileContent: ["import Deep\(index)\n\n" + seamFixtureType(named: "Owner\(index)", declarations: ["@Instantiated let value: Value\(index)"])], dependencies: ["Deep\(index)"]),
 					]
 				} + [
@@ -1826,6 +1826,9 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 	}
 	"""
 
+	/// A type every module that reads its module can name, so two modules' declarations of it collide wherever a run reads both.
+	private static let publicHelper = seamFixtureType(named: "Helper", declarations: [])
+
 	/// A `mockOnly` declaration of `Clock`.
 	private static let mockOnlyClock = """
 	@Instantiable(mockOnly: true)
@@ -1891,7 +1894,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 	/// The error `generate` reports at each declaration of a type named `typeName`, when the modules `modules` spells each declare one.
 	private static func duplicateDeclarationMessage(of typeName: String, inModules modules: String, remedy: String = "Rename one") -> String {
-		"error: `\(typeName)` is declared in modules \(modules). SafeDI tells @Instantiable types apart by name across every module a run reads. \(remedy)."
+		"error: `\(typeName)` is declared in modules \(modules). SafeDI tells apart by name the @Instantiable types a module can name. \(remedy)."
 	}
 
 	/// `App`, whose root builds `Middle`'s seam `FeedScreen`, whose tree builds `Inner`'s `InnerScreen` and `Deep`'s `Clock`.

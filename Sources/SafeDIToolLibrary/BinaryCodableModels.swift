@@ -479,7 +479,8 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
 				BinaryLayoutField("isInsideCompilerDecidedBlock", \.isInsideCompilerDecidedBlock),
 			],
-			unwrittenProperties: ["instantiableTypes"],
+			// `declaredName` is what one run makes of the declaration, so no file records it.
+			unwrittenProperties: ["instantiableTypes", "declaredName"],
 		)
 	}
 

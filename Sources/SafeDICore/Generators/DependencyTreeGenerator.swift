@@ -1851,6 +1851,10 @@ public actor DependencyTreeGenerator {
 		struct InaccessibleConstruction: Hashable {
 			/// The type the generated code constructs.
 			let constructedType: TypeDescription
+			/// The name the declaring module gives `constructedType`, when this run spells it with the module's name because
+			/// another module declares a type of that name (`Instantiable.declaredName`). Widening such a type can make the
+			/// two compete in this module, so the error leads with a remedy that keeps it from this module, when there is one.
+			let constructedTypeDeclaredName: TypeDescription?
 			/// The declaration that must widen, with the level it has.
 			let accessNeed: AccessNeed
 			/// What the generated code needs of the declaration.
@@ -2032,7 +2036,7 @@ public actor DependencyTreeGenerator {
 				let fixedDeclaration: String
 				switch accessNeed.declaration {
 				case let .type(type):
-					if type == constructedType {
+					if type == constructedType || type == constructedTypeDeclaredName {
 						subject = constructedTypeName
 						inability = "construct it"
 						fixedDeclaration = constructedTypeName
@@ -2087,16 +2091,27 @@ public actor DependencyTreeGenerator {
 				// Reported in this module, the error names the module whose declaration must change.
 				let declaringModuleName = readableDeclarationLocation == nil ? declaringModule.moduleName.map { " in module `\($0)`" } ?? "" : ""
 				// A type another module declares could have that module build its tree, which reaches the declaration.
-				let seamRemedyText = seamRemedy.map { ", or declare `\($0.type.asSource)` with `generateDependencyTree: true`, so that module `\($0.moduleName)` generates its tree and this module calls the initializer it generates" } ?? ""
+				let seamRemedyClause = seamRemedy.map { "declare `\($0.type.asSource)` with `generateDependencyTree: true`, so that module `\($0.moduleName)` generates its tree and this module calls the initializer it generates" }
+				let seamRemedyText = seamRemedyClause.map { ", or \($0)" } ?? ""
 				// A mock could call a public mock of the type another module declares instead of building its tree.
-				let publicMockRemedy = if case let .withoutMock(type, declaringModuleName, needsPublicDeclaration, isSeam)? = publicMockCandidate {
+				let publicMockRemedyClause: String? = if case let .withoutMock(type, declaringModuleName, needsPublicDeclaration, isSeam)? = publicMockCandidate {
 					(needsPublicDeclaration
-						? ", or declare `\(type.asSource)` `public` with `generateMock: .public`"
-						: ", or give `\(type.asSource)` a public mock: `generateMock: .public`, or a hand-written public `mock`")
+						? "declare `\(type.asSource)` `public` with `generateMock: .public`"
+						: "give `\(type.asSource)` a public mock: `generateMock: .public`, or a hand-written public `mock`")
 						// A seam's tree is one a mock builds inline, which the user may not expect.
 						+ (isSeam ? ": mocks build a seam's tree inline, and this mock would call the mock \(declaringModuleName.map { "`\($0)`" } ?? "its module") generates instead" : "")
 				} else {
-					""
+					nil
+				}
+				let publicMockRemedy = publicMockRemedyClause.map { ", or \($0)" } ?? ""
+				// Widening one of several types of a name lets the module name it, and widening a second makes them
+				// compete, so the remedy that keeps the type out of this module comes first, and no fix-it widens it.
+				if let constructedTypeDeclaredName, let leadingRemedy = publicMockRemedyClause ?? seamRemedyClause {
+					return SourceDiagnostic(
+						severity: .error,
+						location: readableDeclarationLocation ?? referenceLocation,
+						message: "\(subject) is `\(accessNeed.level.spelling)`\(declaringModuleName), so \(reason). \(leadingRemedy.prefix(1).uppercased())\(leadingRemedy.dropFirst()). Making \(fixedDeclaration) `\(level)` instead also needs a new name, if \(module) can then name another type called `\(constructedTypeDeclaredName.asSource)`.",
+					)
 				}
 				if case let .publicMockOfUnknownModule(type, emittingModuleIsUnknown)? = publicMockCandidate {
 					// `publicMockNotCallableFromThisView`: the type's public mock is the fix, which SafeDI cannot call here.
@@ -3787,6 +3802,7 @@ public actor DependencyTreeGenerator {
 				guard !accessNeed.level.satisfies(requirement) else { continue }
 				inaccessibleConstructions.append(DependencyTreeGeneratorError.InaccessibleConstruction(
 					constructedType: instantiable.concreteInstantiable,
+					constructedTypeDeclaredName: instantiable.declaredName,
 					accessNeed: accessNeed,
 					requirement: requirement,
 					emittingModule: emittingModule.identity,
@@ -10134,10 +10150,12 @@ extension Instantiable {
 	/// its file, which is directly inside the extension – or, for an `@Instantiable` extension, the type it declares; `nil`
 	/// for a declaration outside every extension.
 	fileprivate var extendedType: TypeDescription? {
-		if declarationType.isExtension {
-			concreteInstantiable
+		// The extended type is the one the declaring module's declarations name, as its own name there records it.
+		let declaredType = declaredName ?? concreteInstantiable
+		return if declarationType.isExtension {
+			declaredType
 		} else if enclosingExtensionAccess != nil {
-			(0...enclosingTypeAccess.count).reduce(concreteInstantiable as TypeDescription?) { type, _ in type?.popNested }
+			(0...enclosingTypeAccess.count).reduce(declaredType as TypeDescription?) { type, _ in type?.popNested }
 		} else {
 			nil
 		}

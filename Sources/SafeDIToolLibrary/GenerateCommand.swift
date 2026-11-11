@@ -318,11 +318,23 @@ public struct Generate: AsyncParsableCommand {
 			ownModuleDeclaresSeamOrPublicMock: module.instantiables.contains { $0.generatesDependencyTree || $0.generateMock == .public },
 		)
 
+		// The modules each module of the module infos this run reads depends on directly, which that module's run read:
+		// the module graph the views carry, which names every module of the closure once.
+		let dependencyModuleNamesByModuleName = moduleInfoView.identitiesByModuleName.mapValues(\.dependencyModuleNames)
+
 		// Each module's instantiables are already ordered by `parseSwiftFiles`, so the
 		// combined order depends only on the caller's dependent-module list.
-		let normalizedInstantiables = normalizingInstantiableTypes(
-			of: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables,
-			plainTypeDeclarations: dependentModuleInfo.flatMap(\.plainTypeDeclarations) + module.plainTypeDeclarations,
+		let plainTypeDeclarationsReadByThisRun = dependentModuleInfo.flatMap(\.plainTypeDeclarations) + module.plainTypeDeclarations
+		let normalizedInstantiables = distinguishingTypesUnnameable(
+			from: ModuleIdentity(moduleName: module.moduleName, packageName: module.packageName),
+			among: normalizingInstantiableTypes(
+				of: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables,
+				plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
+			),
+			plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
+			moduleNamesRead: { moduleName in
+				Self.moduleNamesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
+			},
 		)
 		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
 		let listedModuleNames = Set(listedModuleInfoFiles.map(\.file.moduleName))
@@ -356,9 +368,6 @@ public struct Generate: AsyncParsableCommand {
 		} else {
 			[]
 		}
-		// The modules each module of the module infos this run reads depends on directly, which that module's run read:
-		// the module graph the views carry, which names every module of the closure once.
-		let dependencyModuleNamesByModuleName = moduleInfoView.identitiesByModuleName.mapValues(\.dependencyModuleNames)
 		let seamResolution = try seamResolution(
 			normalizedInstantiables: normalizedInstantiables,
 			ownFilePaths: ownFilePaths,
@@ -1022,6 +1031,16 @@ public struct Generate: AsyncParsableCommand {
 				directModulesByName[moduleName] = dependentModule
 			}
 		}
+		let dependencyModuleNamesByModuleName = moduleInfoView.identitiesByModuleName.mapValues(\.dependencyModuleNames)
+		/// `instantiables` as the module named `moduleName` resolves them, and `plainTypeDeclarations` that they read.
+		func resolved(_ instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration], fromModuleNamed moduleName: String) throws -> [TypeDescription: Instantiable] {
+			try resolveSafeDIFulfilledTypes(instantiables: distinguishingTypesUnnameable(
+				from: ModuleIdentity(moduleName: moduleName, packageName: instantiables.first { $0.moduleName == moduleName }?.packageName),
+				among: normalizingInstantiableTypes(of: instantiables, plainTypeDeclarations: plainTypeDeclarations),
+				plainTypeDeclarations: plainTypeDeclarations,
+				moduleNamesRead: { Self.moduleNamesRead(byRunOfModuleNamed: $0, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership) },
+			))
+		}
 		var generatedSeams = Set<TypeDescription>()
 		var foreignSeams = [TypeDescription: SeamResolution.ForeignSeam]()
 		var foreignPublicMocks = [TypeDescription: SeamResolution.ForeignPublicMock]()
@@ -1054,7 +1073,7 @@ public struct Generate: AsyncParsableCommand {
 				}
 				// A module info holds the module's declarations as the module read them, and the condition it read them under.
 				visible = try VisibleDeclarations(
-					instantiables: resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables, plainTypeDeclarations: visiblePlainTypeDeclarations)),
+					instantiables: resolved(instantiables, plainTypeDeclarations: visiblePlainTypeDeclarations, fromModuleNamed: moduleName),
 					plainTypeDeclarations: visiblePlainTypeDeclarations,
 					readFromModuleInfo: true,
 					mockCondition: MockCondition(identity.mockConditionalCompilation),
@@ -1072,7 +1091,7 @@ public struct Generate: AsyncParsableCommand {
 				}
 				let visiblePlainTypeDeclarations = plainTypeDeclarations.filter { $0.moduleName.map(visibleModuleNames.contains) == true }
 				visible = try VisibleDeclarations(
-					instantiables: resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables, plainTypeDeclarations: visiblePlainTypeDeclarations)),
+					instantiables: resolved(instantiables, plainTypeDeclarations: visiblePlainTypeDeclarations, fromModuleNamed: moduleName),
 					plainTypeDeclarations: visiblePlainTypeDeclarations,
 					readFromModuleInfo: false,
 					mockCondition: Self.mockCondition(of: moduleConfiguration),
@@ -1128,10 +1147,11 @@ public struct Generate: AsyncParsableCommand {
 		{
 			let callersVisibleModuleNames = Self.visibleModuleNames(from: moduleName, in: membership)
 			callersVisiblePlainTypeDeclarations = plainTypeDeclarations.filter { $0.moduleName.map(callersVisibleModuleNames.contains) == true }
-			callersVisibleInstantiables = try resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(
-				of: unnormalizedInstantiables.filter { $0.moduleName.map(callersVisibleModuleNames.contains) == true },
+			callersVisibleInstantiables = try resolved(
+				unnormalizedInstantiables.filter { $0.moduleName.map(callersVisibleModuleNames.contains) == true },
 				plainTypeDeclarations: callersVisiblePlainTypeDeclarations,
-			))
+				fromModuleNamed: moduleName,
+			)
 		} else {
 			callersVisibleInstantiables = nil
 		}

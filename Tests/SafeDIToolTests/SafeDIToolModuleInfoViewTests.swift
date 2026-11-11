@@ -763,8 +763,8 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 				let appSettingsPath = NormalizedFilePath(fixtures["App"]!.compilerPath(of: "Settings.swift")).path
 				let sessionSettingsPath = NormalizedFilePath(fixtures["Session"]!.compilerPath(of: "Settings.swift")).path
 				return """
-				\(appSettingsPath):3:1: error: `Settings` is declared in modules `App` and `Session`. SafeDI tells @Instantiable types apart by name across every module a run reads. Rename one.
-				\(sessionSettingsPath):1:1: error: `Settings` is declared in modules `App` and `Session`. SafeDI tells @Instantiable types apart by name across every module a run reads. Rename one.
+				\(appSettingsPath):3:1: error: `Settings` is declared in modules `App` and `Session`. SafeDI tells apart by name the @Instantiable types a module can name, and every seam and public mock a run reads. Rename one.
+				\(sessionSettingsPath):1:1: error: `Settings` is declared in modules `App` and `Session`. SafeDI tells apart by name the @Instantiable types a module can name, and every seam and public mock a run reads. Rename one.
 				"""
 			}) {
 				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: integration, filesToDelete: &filesToDelete)
