@@ -558,31 +558,28 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_treatsMentionByModulesItReads_whenModuleReadsPackageTypeOnlyBeneathFacade(integration: MultiModuleIntegration) async throws {
-		// `Feature` depends only on `Lib`, whose public `Store` it means. The Swift package plugin reads `ModA` for it too, so
-		// `Feature` could mean either there.
-		func modules(secondStoreName: String) -> [ModuleFixture] {
-			[
-				ModuleFixture(name: "ModA", packageName: "Shop", swiftFileContentByFilePath: ["Store.swift": Self.store("package"), "SeamA.swift": Self.seam("SeamA")]),
-				Self.libWithPublicStore(dependencies: ["ModA"]),
-				ModuleFixture(name: "ModB", packageName: "Other", swiftFileContentByFilePath: ["Store.swift": Self.store("package", named: secondStoreName), "SeamB.swift": Self.seam("SeamB", holding: secondStoreName)]),
-				Self.featureForwardingStore(dependencies: ["Lib"], importsModA: false),
-				ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Root.swift": Self.root(holding: ["seamA: SeamA", "seamB: SeamB", "makeDetail: Instantiator<Detail>"], importing: ["ModA", "ModB", "Feature"])], dependencies: ["ModA", "ModB", "Feature"]),
-			]
-		}
-
-		switch integration {
-		case .moduleInfo:
-			try await expectAppMatchesBuildWithDistinctNames(hidden: modules(secondStoreName: "Store"), visible: modules(secondStoreName: "OtherStore"), integration: integration)
-		case .swiftPackagePlugin:
-			await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-				"""
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				"""
-			}) {
-				try await executeSafeDIToolMultiModuleTest(modules: modules(secondStoreName: "Store"), integration: integration, compileVerification: .skipped, filesToDelete: &filesToDelete)
-			}
+	mutating func generate_reportsDuplicateName_whenModuleThatMentionsNameReadsPackageTypeOnlyBeneathModuleItLists(integration: MultiModuleIntegration) async {
+		// `Feature` lists only `Lib`, whose public `Store` it means, and can import `ModA`, beneath `Lib`. Under module info,
+		// SafeDI is not told that `Feature` cannot name `ModA`'s `package` `Store`; the Swift package plugin reads `ModA` for
+		// `Feature`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "ModA", packageName: "Shop", swiftFileContentByFilePath: ["Store.swift": Self.store("package"), "SeamA.swift": Self.seam("SeamA")]),
+					Self.libWithPublicStore(dependencies: ["ModA"]),
+					ModuleFixture(name: "ModB", packageName: "Other", swiftFileContentByFilePath: ["Store.swift": Self.store("package"), "SeamB.swift": Self.seam("SeamB")]),
+					Self.featureForwardingStore(dependencies: ["Lib"], importsModA: false),
+					ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Root.swift": Self.root(holding: ["seamA: SeamA", "seamB: SeamB", "makeDetail: Instantiator<Detail>"], importing: ["ModA", "ModB", "Feature"])], dependencies: ["ModA", "ModB", "Feature"]),
+				],
+				integration: integration,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
 		}
 	}
 
@@ -842,30 +839,11 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		try await expectAppMatchesBuildWithDistinctNames(hidden: modules(secondProtocolName: "Store"), visible: modules(secondProtocolName: "OtherStore"), integration: integration)
 	}
 
-	@Test(arguments: MultiModuleIntegration.allCases, [false, true])
+	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_reportsDuplicateName_whenThirdModuleThatCanNameHiddenFulfillerOfProtocolInstantiatesOrMocksIt(integration: MultiModuleIntegration, declaresMockOnlyFake: Bool) async {
-		// `Feature` can name `ModA`'s `package` fulfiller of `Lib`'s `Store`, so what its instantiation or its fake of `Store`
-		// fulfills or mocks is undetermined.
-		let featureFiles = declaresMockOnlyFake
-			? [
-				"FakeStore.swift": """
-				import Lib
-
-				public struct FakeStore: Store {
-				    public init() {}
-				}
-
-				@Instantiable(fulfillingAdditionalTypes: [Store.self], mockOnly: true)
-				extension FakeStore {
-				    public static func mock() -> FakeStore {
-				        FakeStore()
-				    }
-				}
-				""",
-				"UsesModA.swift": "import ModA\n\nenum UsesModA {}",
-			]
-			: ["SeamF.swift": "import Lib\nimport ModA\n\n" + Self.seam("SeamF")]
+	mutating func generate_reportsDuplicateName_whenThirdModuleThatCanNameHiddenFulfillerOfProtocolInstantiatesIt(integration: MultiModuleIntegration) async {
+		// `Feature` can name `ModA`'s `package` fulfiller of `Lib`'s `Store`, so what its instantiation of `Store` fulfills is
+		// undetermined.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(Self.path(of: "Memory.swift", in: "ModB", fixtures: fixtures, integration: integration)):3:1: \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
@@ -873,18 +851,115 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					Self.checkoutLib(declaring: "public protocol Store {}"),
-					ModuleFixture(name: "ModA", packageName: "Shop", swiftFileContentByFilePath: ["Disk.swift": "import Lib\n\n" + Self.fulfiller("Disk", of: "Store", access: "package"), "SeamA.swift": "import Lib\n\n" + Self.seam("SeamA")], dependencies: ["Lib"]),
-					ModuleFixture(name: "ModB", packageName: "Other", swiftFileContentByFilePath: ["Memory.swift": "import Lib\n\n" + Self.fulfiller("Memory", of: "Store", access: "package"), "SeamB.swift": "import Lib\n\n" + Self.seam("SeamB")], dependencies: ["Lib"]),
-					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: featureFiles, dependencies: ["Lib", "ModA"]),
-					ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Root.swift": Self.root(holding: declaresMockOnlyFake ? ["seamA: SeamA", "seamB: SeamB"] : ["seamA: SeamA", "seamB: SeamB", "seamF: SeamF"], importing: ["ModA", "ModB", "Feature"])], dependencies: ["Lib", "ModA", "ModB", "Feature"]),
-				],
+				modules: Self.modulesBesideThirdModuleOfFulfillersPackage(secondProtocolName: "Store", featureFiles: ["SeamF.swift": "import Lib\nimport ModA\n\n" + Self.seam("SeamF")], appHolds: ["seamF: SeamF"]),
 				integration: integration,
 				compileVerification: .skipped,
 				filesToDelete: &filesToDelete,
 			)
 		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsAppAsIfClaimsHadDifferentNames_whenThirdModuleThatCanNameHiddenFulfillerHoldsMockOnlyFakeOfProtocol(integration: MultiModuleIntegration) async throws {
+		// `Feature`'s fake of `Lib`'s `Store` mocks `FakeStore`, never `ModA`'s `Disk`: a `mockOnly` declaration provides the mock
+		// of the production declaration of its own type.
+		let fakeStore = """
+		import Lib
+
+		public struct FakeStore: Store {
+		    public init() {}
+		}
+
+		@Instantiable(fulfillingAdditionalTypes: [Store.self], mockOnly: true)
+		extension FakeStore {
+		    public static func mock() -> FakeStore {
+		        FakeStore()
+		    }
+		}
+		"""
+		func modules(secondProtocolName: String) -> [ModuleFixture] {
+			Self.modulesBesideThirdModuleOfFulfillersPackage(secondProtocolName: secondProtocolName, featureFiles: ["FakeStore.swift": fakeStore, "UsesModA.swift": "import ModA\n\nenum UsesModA {}"], appHolds: [])
+		}
+
+		try await expectAppMatchesBuildWithDistinctNames(hidden: modules(secondProtocolName: "Store"), visible: modules(secondProtocolName: "OtherStore"), integration: integration)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsDuplicateName_whenThirdModuleThatCanNameHiddenFulfillerHoldsMockOnlyDeclarationOfIt(integration: MultiModuleIntegration) async {
+		// `Feature`'s `mockOnly` declaration of `ModA`'s `Disk` claims `Store`, which `Disk` fulfills.
+		let diskMock = """
+		import Lib
+		import ModA
+
+		@Instantiable(fulfillingAdditionalTypes: [Store.self], mockOnly: true)
+		extension Disk {
+		    package static func mock() -> Disk {
+		        Disk()
+		    }
+		}
+		"""
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Memory.swift", in: "ModB", fixtures: fixtures, integration: integration)):3:1: \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
+			\(Self.path(of: "Disk.swift", in: "ModA", fixtures: fixtures, integration: integration)):3:1: \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesBesideThirdModuleOfFulfillersPackage(secondProtocolName: "Store", featureFiles: ["DiskMock.swift": diskMock], appHolds: []),
+				integration: integration,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases, [["Lib", "ModA"], ["ModA", "Lib"]])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsAppAsIfTypesHadDifferentNames_whenThirdModulesSeamReceivesUnreadTypeOfNameOtherPackagesHide(integration: MultiModuleIntegration, readOrder: [String]) async throws {
+		// `Feature` cannot name `ModA`'s or `ModB`'s `package` `Store`, of other packages, so its seam receives `Lib`'s.
+		func modules(secondStoreName: String) -> [ModuleFixture] {
+			[
+				Self.checkoutLib(declaring: "public struct Store {\n    public init() {}\n}"),
+				ModuleFixture(name: "ModA", packageName: "PackageA", swiftFileContentByFilePath: ["Store.swift": Self.store("package"), "SeamA.swift": Self.seam("SeamA")]),
+				ModuleFixture(name: "ModB", packageName: "PackageB", swiftFileContentByFilePath: ["Store.swift": Self.store("package", named: secondStoreName), "SeamB.swift": Self.seam("SeamB", holding: secondStoreName)]),
+				ModuleFixture(
+					name: "Feature",
+					packageName: "Shop",
+					swiftFileContentByFilePath: [
+						"SeamF.swift": """
+						import Lib
+
+						@Instantiable(generateDependencyTree: true)
+						public final class SeamF: Instantiable {
+						    init(store: Store, inner: Inner) {
+						        self.store = store
+						        self.inner = inner
+						    }
+
+						    @Received public let store: Store
+						    @Instantiated let inner: Inner
+						}
+						""",
+						"Inner.swift": "import Lib\n\n@Instantiable\nstruct Inner: Instantiable {\n    init(store: Store) { self.store = store }\n    @Received let store: Store\n}",
+						"UsesModA.swift": "import ModA\n\nenum UsesModA {}",
+					],
+					dependencies: readOrder,
+				),
+				ModuleFixture(
+					name: "App",
+					packageName: "AppPackage",
+					swiftFileContentByFilePath: [
+						"Holder.swift": "import Feature\nimport Lib\n\n@Instantiable\npublic struct Holder: Instantiable {\n    public init(store: Store, seamF: SeamF) {\n        self.store = store\n        self.seamF = seamF\n    }\n\n    @Forwarded let store: Store\n    @Instantiated let seamF: SeamF\n}",
+						"Root.swift": Self.root(holding: ["seamA: SeamA", "seamB: SeamB", "makeHolder: Instantiator<Holder>"], importing: ["ModA", "ModB", "Feature"]),
+					],
+					dependencies: ["Lib", "ModA", "ModB", "Feature"],
+				),
+			]
+		}
+
+		try await expectAppMatchesBuildWithDistinctNames(hidden: modules(secondStoreName: "Store"), visible: modules(secondStoreName: "OtherStore"), integration: integration)
 	}
 
 	@Test(arguments: 0..<6)
@@ -1896,6 +1971,20 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 			))
 		}
 		return modules
+	}
+
+	/// `Lib`, a package SwiftPM fetched, which declares the `public` protocols `Store` and `OtherStore`; `ModA`, of package
+	/// `Shop`, whose `package` `Disk` fulfills `Store` and whose seam instantiates it; `ModB`, of package `Other`, whose
+	/// `package` `Memory` fulfills `secondProtocolName` and whose seam instantiates it; `Feature`, of `ModA`'s package, which
+	/// reads `Lib` and `ModA` and holds `featureFiles`; and `App`, whose root holds both seams and `appHolds`.
+	private static func modulesBesideThirdModuleOfFulfillersPackage(secondProtocolName: String, featureFiles: [String: String], appHolds: [String]) -> [ModuleFixture] {
+		[
+			checkoutLib(declaring: "public protocol Store {}\npublic protocol OtherStore {}"),
+			ModuleFixture(name: "ModA", packageName: "Shop", swiftFileContentByFilePath: ["Disk.swift": "import Lib\n\n" + fulfiller("Disk", of: "Store", access: "package"), "SeamA.swift": "import Lib\n\n" + seam("SeamA")], dependencies: ["Lib"]),
+			ModuleFixture(name: "ModB", packageName: "Other", swiftFileContentByFilePath: ["Memory.swift": "import Lib\n\n" + fulfiller("Memory", of: secondProtocolName, access: "package"), "SeamB.swift": "import Lib\n\n" + seam("SeamB", holding: secondProtocolName)], dependencies: ["Lib"]),
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: featureFiles, dependencies: ["Lib", "ModA"]),
+			ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Root.swift": root(holding: ["seamA: SeamA", "seamB: SeamB"] + appHolds, importing: ["ModA", "ModB", "Feature"])], dependencies: ["Lib", "ModA", "ModB", "Feature"]),
+		]
 	}
 
 	/// `Lib`, a package SwiftPM fetched, whose one file is `content`: SafeDI reads none of it, and under Bazel or Tuist, a
