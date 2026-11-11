@@ -1992,8 +1992,8 @@ struct SafeDIToolGraphFuzzerTests {
 			knownIssue: knownIssue,
 		)
 
-		guard case let .failure(failure) = try #require(findings.first), findings.count == 1 else {
-			Issue.record("Expected one failure, got \(findings)")
+		guard case let .failure(failure) = try #require(findings.first), findings.dropFirst().elementsEqual([.staleRenamedGraphDifference(knownIssue, .mockCode)]) else {
+			Issue.record("Expected a failure and the difference its entry lists and it does not show, got \(findings)")
 			return
 		}
 		#expect(failure.renamedGraphDifference == .mockConfigurationCode)
@@ -2069,6 +2069,195 @@ struct SafeDIToolGraphFuzzerTests {
 			"Reversing its type names changes its generated mock configuration code, in SafeDIMockConfiguration.swift.",
 			"Reversing its type names changes its warnings.",
 		])
+	}
+
+	/// A type prefix that names no corpus graph, for the fixtures of the tests of a renamed graph's mock difference.
+	private static let mockDifferencePrefix = GraphFuzzerFixture.typeNamePrefix(forSeed: 1_000_000_011)
+
+	private static func mockedType(_ name: String, instantiating dependencies: [(label: String, type: String)], receivingOnlyIfAvailable receives: [(label: String, type: String)] = []) -> String {
+		let parameters = (dependencies + receives).map { "\($0.label): \($0.type)" }.joined(separator: ", ")
+		let assignments = (dependencies + receives).map { "\t\tself.\($0.label) = \($0.label)\n" }.joined()
+		let instantiated = dependencies.map { "\t@Instantiated let \($0.label): \($0.type)\n" }.joined()
+		let received = receives.map { "\t@Received(onlyIfAvailable: true) let \($0.label): \($0.type)\n" }.joined()
+		return "@Instantiable(generateMock: true)\npublic final class \(mockDifferencePrefix)\(name): Instantiable {\n\tpublic init(\(parameters)) {\n\(assignments)\t}\n\(instantiated)\(received)}\n"
+	}
+
+	private static func plainType(_ name: String) -> String {
+		"@Instantiable\npublic final class \(mockDifferencePrefix)\(name): Instantiable {\n\tpublic init() {}\n}\n"
+	}
+
+	/// A mocked type whose mock takes two values only if available, in the order of their labels.
+	private static var mockWithTwoLabelsFixture: GraphFuzzerFixture {
+		GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			mockedType("T3", instantiating: [], receivingOnlyIfAvailable: [("t4", "\(mockDifferencePrefix)T4?"), ("t5", "\(mockDifferencePrefix)T5?")]),
+			plainType("T4"),
+			plainType("T5"),
+		])
+	}
+
+	/// A lazy cycle of two mocked types, whose mocks each drop the back-edge's override, chosen by type name.
+	private static var lazyCycleFixture: GraphFuzzerFixture {
+		GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			mockedType("T7", instantiating: [("t8Builder", "Instantiator<\(mockDifferencePrefix)T8>")]),
+			mockedType("T8", instantiating: [("t7Builder", "Instantiator<\(mockDifferencePrefix)T7>")]),
+		])
+	}
+
+	/// A lazy cycle whose first mocked type also takes two values only if available, in the order of their labels.
+	private static var lazyCycleWithTwoLabelsFixture: GraphFuzzerFixture {
+		GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			mockedType("T7", instantiating: [("t8Builder", "Instantiator<\(mockDifferencePrefix)T8>")], receivingOnlyIfAvailable: [("t4", "\(mockDifferencePrefix)T4?"), ("t5", "\(mockDifferencePrefix)T5?")]),
+			mockedType("T8", instantiating: [("t7Builder", "Instantiator<\(mockDifferencePrefix)T7>")]),
+			plainType("T4"),
+			plainType("T5"),
+		])
+	}
+
+	/// The differences between `outcome` and the code `edit` makes of its file named `fileName`.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func differences(of outcome: GraphFuzzerToolOutcome, editingFileNamed fileName: String, by edit: (String) -> String) -> [GraphFuzzerOutcomeDifference] {
+		guard case let .accepted(generatedFiles, warnings) = outcome else {
+			Issue.record("The fixture's graph is rejected: \(outcome.description)")
+			return []
+		}
+		var editedFiles = generatedFiles
+		editedFiles[fileName] = edit(generatedFiles[fileName, default: ""])
+		return GraphFuzzerToolOutcome.differences(between: outcome, and: .accepted(generatedFiles: editedFiles, warnings: warnings), comparingCode: .inAnyOrderOfExtensions)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func renamedGraphFailures_nameTheOrderOfAMocksParametersAndFields_whenReversingLabelsReordersThem() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.mockWithTwoLabelsFixture, multiModuleRenamings: [])
+
+		#expect(Set(toolRuns.renamedGraphFailures.map(\.renamedGraphDifference)) == [.mockParameterAndFieldOrder])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func renamedGraphFailures_nameThePresenceOfAConfigurationField_whenALazyCycleDropsAFieldByTypeName() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, multiModuleRenamings: [])
+
+		#expect(Set(toolRuns.renamedGraphFailures.map(\.renamedGraphDifference)) == [.mockConfigurationFieldPresence])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func renamedGraphFailures_nameBothReasonsForOneFile_whenAReversalOfEveryOrderShowsBoth() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleWithTwoLabelsFixture, multiModuleRenamings: [])
+		let reversalOfEveryOrder = try #require(toolRuns.renamedOutcomes.first { $0.renaming.reversesTypeNames && $0.renaming.reversesLabels })
+
+		let differences = GraphFuzzerToolOutcome.differences(between: toolRuns.firstOutcome, and: reversalOfEveryOrder.outcome, comparingCode: .inAnyOrderOfExtensions)
+
+		#expect(differences.filter { $0.fileName == "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift" }.map(\.aspect) == [.mockParameterAndFieldOrder, .mockConfigurationFieldPresence])
+		#expect(Set(toolRuns.renamedGraphFailures.map(\.renamedGraphDifference)) == [.mockParameterAndFieldOrder, .mockConfigurationFieldPresence])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenAMockPassesAnotherValueUnderTheSameLabels() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.mockWithTwoLabelsFixture, renamings: [], multiModuleRenamings: [])
+		let construction = "\(Self.mockDifferencePrefix)T3(t4: t4, t5: t5)"
+
+		let differences = Self.differences(of: toolRuns.firstOutcome, editingFileNamed: "\(Self.mockDifferencePrefix)T3+SafeDIMock.swift") { code in
+			#expect(code.contains(construction))
+			return code.replacingOccurrences(of: construction, with: "\(Self.mockDifferencePrefix)T3(t4: t5, t5: t4)")
+		}
+
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenAFieldThatHoldsNoConfigurationIsAbsent() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.mockWithTwoLabelsFixture, renamings: [], multiModuleRenamings: [])
+		let linesOfTheField = ["t5: \(Self.mockDifferencePrefix)T5? = nil,", "t5: \(Self.mockDifferencePrefix)T5? = nil", "self.t5 = t5", "let t5: \(Self.mockDifferencePrefix)T5?"]
+
+		let differences = Self.differences(of: toolRuns.firstOutcome, editingFileNamed: "\(Self.mockDifferencePrefix)T3+SafeDIMock.swift") { code in
+			code.split(separator: "\n", omittingEmptySubsequences: false)
+				.filter { !linesOfTheField.contains($0.trimmingCharacters(in: .whitespaces)) }
+				.joined(separator: "\n")
+		}
+
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenAConfigurationFieldChangesItsType() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, renamings: [], multiModuleRenamings: [])
+		let fileName = "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift"
+		let fieldType = "\(Self.mockDifferencePrefix)T8.SafeDIMockConfiguration"
+
+		let differences = Self.differences(of: toolRuns.firstOutcome, editingFileNamed: fileName) { code in
+			#expect(code.contains(fieldType))
+			return code.replacingOccurrences(of: fieldType, with: "\(Self.mockDifferencePrefix)T7.SafeDIMockConfiguration")
+		}
+
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenStatementsThatAreNotParameterBindingsChangePlaces() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, renamings: [], multiModuleRenamings: [])
+		let binding = "        let t8Builder = Instantiator<\(Self.mockDifferencePrefix)T8>(__safeDI_t8Builder)"
+		let construction = "        return \(Self.mockDifferencePrefix)T7(t8Builder: t8Builder)"
+		var originalLines = [Substring]()
+		var editedLines = [Substring]()
+
+		let differences = Self.differences(of: toolRuns.firstOutcome, editingFileNamed: "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift") { code in
+			#expect(code.contains("\(binding)\n\(construction)"))
+			let edited = code.replacingOccurrences(of: "\(binding)\n\(construction)", with: "\(construction)\n\(binding)")
+			originalLines = code.split(separator: "\n")
+			editedLines = edited.split(separator: "\n")
+			return edited
+		}
+
+		// A sort of the lines would call this a reorder of the same content.
+		#expect(originalLines.sorted() == editedLines.sorted())
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenTheConstructionOfADroppedOverridesElseAlsoDiffers() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, multiModuleRenamings: [])
+		let reversalOfTypeNames = try #require(toolRuns.renamedOutcomes.first { $0.renaming.reversesTypeNames && !$0.renaming.reversesLabels && !$0.renaming.reversesFileNames })
+		guard case let .accepted(generatedFiles, warnings) = toolRuns.firstOutcome, case var .accepted(renamedFiles, renamedWarnings) = reversalOfTypeNames.outcome else {
+			Issue.record("The fixture's graph is rejected.")
+			return
+		}
+		let fileName = try #require(renamedFiles.keys.sorted().first { renamedFiles[$0]?.contains("{ safeDIBuilder(") == true && $0.hasSuffix("+SafeDIMock.swift") })
+		let elseBranch = "} else { \(Self.mockDifferencePrefix)T"
+		var editedRenamedFiles = renamedFiles
+		#expect(renamedFiles[fileName]?.contains(elseBranch) == true)
+		editedRenamedFiles[fileName] = renamedFiles[fileName]?.replacingOccurrences(of: elseBranch, with: "} else { Other\(Self.mockDifferencePrefix)T")
+		renamedFiles = editedRenamedFiles
+
+		let differences = GraphFuzzerToolOutcome.differences(between: .accepted(generatedFiles: generatedFiles, warnings: warnings), and: .accepted(generatedFiles: renamedFiles, warnings: renamedWarnings), comparingCode: .inAnyOrderOfExtensions)
+
+		#expect(differences.filter { $0.fileName == fileName }.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	func findings_reportEachListedRenamedGraphDifference_whenTheGraphDoesNotShowIt() {
+		let knownIssue = GraphFuzzerKnownIssue(reason: "Both reasons", signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)], seeds: [12])
+		let order = GraphFuzzerFailure(seed: 12, kind: .renamedGraphDiffers, details: "Reversing its labels changes \(GraphFuzzerOutcomeDifference.Aspect.mockParameterAndFieldOrder.rawValue), in S12_T0+SafeDIMock.swift.\nThis graph:\n…", renamedGraphDifference: .mockParameterAndFieldOrder)
+
+		let findings = GraphFuzzerFinding.findings(failure: order, laterFailures: [], knownIssue: knownIssue)
+
+		#expect(findings == [.knownIssue(knownIssue, order), .staleRenamedGraphDifference(knownIssue, .mockConfigurationFieldPresence)])
+		#expect(findings.last?.reportLine(seed: 12) == "stale 12 Both reasons: the renamed graph does not show which configuration fields its generated mock has; list the seed under the entry that names exactly what it shows")
+	}
+
+	@Test
+	func findings_reportNoStaleDifference_whenTheGraphShowsEveryDifferenceItsEntryLists() {
+		let knownIssue = GraphFuzzerKnownIssue(reason: "Both reasons", signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)], seeds: [12])
+		let order = GraphFuzzerFailure(seed: 12, kind: .renamedGraphDiffers, details: "A", renamedGraphDifference: .mockParameterAndFieldOrder)
+		let field = GraphFuzzerFailure(seed: 12, kind: .renamedGraphDiffers, details: "B", renamedGraphDifference: .mockConfigurationFieldPresence)
+
+		#expect(GraphFuzzerFinding.findings(failure: order, laterFailures: [field], knownIssue: knownIssue) == [.knownIssue(knownIssue, order)])
 	}
 
 	@Test
@@ -3139,7 +3328,7 @@ struct SafeDIToolGraphFuzzerTests {
 									knownIssueCount += 1
 								case .failure:
 									failureCount += 1
-								case .passed, .staleKnownIssue:
+								case .passed, .staleKnownIssue, .staleRenamedGraphDifference:
 									break
 								}
 								Self.record(finding, fixture: result.fixture)
@@ -3262,13 +3451,13 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 12, 14, 18, 25, 40, 59, 62, 70, 97, 99, 133, 161, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x657C616408552C34
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xD2251D57BFB55ACE
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x4C0D2C1C6738551B
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x8430001C5373C403
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -3522,7 +3711,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// seam tests' draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 151, 153, 163, 180, 196, 277, 298, 326, 605, 609, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xB14D159EE69AAB11
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x193806AE4DD87E1B
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -3724,14 +3913,14 @@ struct SafeDIToolGraphFuzzerTests {
 		),
 		GraphFuzzerKnownIssue(
 			reason: labelSortedPassThroughAndMockParametersReason,
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockCode)],
+			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
 			seeds: labelSortedPassThroughSeedsWhoseMockParametersAlsoChange,
 		),
 		// Seeds `knownIssues` lists under another shape, whose graphs the seam's draw changes so that they fail this one:
 		// a configuration field follows the order of type names and of type names against wrappers' names.
 		GraphFuzzerKnownIssue(
-			reason: "A mock's API follows the order of type names or labels, and one field of a lazy cycle's SafeDIMockConfiguration follows the order of type names: which back-edge of the cycle loses its override, which promoted sibling is passed nil, and the order of overrides, in a graph the base corpus lists under another shape",
-			signatures: [.renamedGraphDiffers(.mockCode), .renamedGraphDiffers(.mockConfigurationCode)],
+			reason: "\(lazyCycleConfigurationFieldReason), in a graph the base corpus lists under another shape",
+			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [311, 383, 390, 431, 448, 836, 886, 912, 940],
 		),
 	]
@@ -3748,7 +3937,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
 	private static let seamCorpusSeedsAddedToInheritedShapes: [String: [UInt64]] = [
-		"A mock's API follows the order of type names or labels, and one field of a lazy cycle's SafeDIMockConfiguration follows the order of type names: which back-edge of the cycle loses its override, which promoted sibling is passed nil, and the order of overrides": [135],
+		lazyCycleConfigurationFieldReason: [135],
 	]
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order
@@ -3865,14 +4054,14 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockKnownIssues: [GraphFuzzerKnownIssue] = [
 		GraphFuzzerKnownIssue(
 			reason: "A public mock's parameters are sorted by label (decision 27), so reversing the labels reorders a `.public` consumer's `mock()` and the parameters it surfaces from its leaves",
-			signatures: [.renamedGraphDiffers(.mockCode)],
+			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
 			seeds: [12, 65, 103, 106, 167, 251, 351, 407, 433, 528, 562, 708, 771, 947],
 		),
 		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
 		// cycle through it.
 		GraphFuzzerKnownIssue(
-			reason: "A mock's API follows the order of type names or labels, and one field of a lazy cycle's SafeDIMockConfiguration follows the order of type names: which back-edge of the cycle loses its override, which promoted sibling is passed nil, and the order of overrides",
-			signatures: [.renamedGraphDiffers(.mockCode), .renamedGraphDiffers(.mockConfigurationCode)],
+			reason: lazyCycleConfigurationFieldReason,
+			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [33, 301, 697, 832],
 		),
 		// A shape the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
@@ -3991,14 +4180,20 @@ struct SafeDIToolGraphFuzzerTests {
 		.typeInExtensionOfInstantiable: 219,
 	]
 
+	private static let mockParameterAndFieldOrderReason = "A mock's parameters and fields are sorted by label, so a renaming that reorders labels reorders them"
+
+	private static let lazyCycleConfigurationFieldReason = "Which back-edge of a lazy cycle loses its override follows the order of type names, so one field of a configuration struct, with the reads of it, is present under one naming and absent under another"
+
+	private static let mockParameterAndFieldOrderAndLazyCycleConfigurationFieldReason = "\(mockParameterAndFieldOrderReason), and which back-edge of a lazy cycle loses its override follows the order of type names, so one field of a configuration struct is present under one naming and absent under another"
+
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
 	static let knownIssues: [GraphFuzzerKnownIssue] = [
 		GraphFuzzerKnownIssue(
-			reason: "A mock's API follows the order of type names or labels: which back-edge of a lazy cycle loses its override, which promoted sibling is passed nil, and the order of overrides",
-			signatures: [.renamedGraphDiffers(.mockCode)],
+			reason: mockParameterAndFieldOrderReason,
+			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
 			seeds: [
-				3, 6, 36, 45, 55, 77, 131, 157, 209, 281, 300, 311, 371, 380, 381, 383,
+				3, 6, 36, 45, 55, 131, 157, 209, 281, 300, 311, 371, 380, 381, 383,
 				390, 431, 434, 448, 450, 476, 515, 541, 545, 548, 593, 630, 680, 714, 728, 774,
 				785, 786, 808, 836, 840, 847, 886, 903, 912, 940, 975, 1_029, 1_035, 1_042, 1_044, 1_061,
 				1_064, 1_072, 1_084, 1_092, 1_139, 1_140, 1_147, 1_185, 1_215, 1_217, 1_236, 1_300, 1_322, 1_329, 1_335, 1_352,
@@ -4006,7 +4201,7 @@ struct SafeDIToolGraphFuzzerTests {
 				1_646, 1_664, 1_675, 1_708, 1_742, 1_781, 1_784, 1_795, 1_804, 1_817, 1_853, 1_867, 1_896, 1_938, 2_017, 2_051,
 				2_057, 2_083, 2_084, 2_123, 2_149, 2_152, 2_165, 2_211, 2_234, 2_277, 2_296, 2_316, 2_325, 2_335, 2_337, 2_389,
 				2_432, 2_437, 2_444, 2_484, 2_553, 2_555, 2_577, 2_637, 2_741, 2_742, 2_791, 2_808, 2_841, 2_845, 2_914, 2_916,
-				3_023, 3_064, 3_074, 3_075, 3_091, 3_160, 3_183, 3_225, 3_241, 3_252, 3_306, 3_329, 3_344, 3_361, 3_430, 3_439,
+				3_064, 3_074, 3_075, 3_091, 3_160, 3_183, 3_225, 3_241, 3_252, 3_306, 3_329, 3_344, 3_361, 3_430, 3_439,
 				3_470, 3_491, 3_504, 3_506, 3_513, 3_533, 3_534, 3_537, 3_577, 3_582, 3_584, 3_588, 3_589, 3_596, 3_600, 3_602,
 				3_620, 3_648, 3_661, 3_699, 3_707, 3_715, 3_750, 3_823, 3_843, 3_994, 4_015, 4_044, 4_068, 4_090, 4_102, 4_107,
 				4_110, 4_125, 4_156, 4_191, 4_192, 4_196, 4_213, 4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344,
@@ -4014,10 +4209,9 @@ struct SafeDIToolGraphFuzzerTests {
 				4_716, 4_729, 4_775, 4_834, 4_857, 4_859, 4_865, 4_891, 4_904, 4_922, 4_944, 4_947, 4_955, 4_963, 4_996,
 			],
 		),
-		// The same choices, seen as well in the configuration struct the back-edge's field is dropped from.
 		GraphFuzzerKnownIssue(
-			reason: "A mock's API follows the order of type names or labels, and one field of a lazy cycle's SafeDIMockConfiguration follows the order of type names: which back-edge of the cycle loses its override, which promoted sibling is passed nil, and the order of overrides",
-			signatures: [.renamedGraphDiffers(.mockCode), .renamedGraphDiffers(.mockConfigurationCode)],
+			reason: lazyCycleConfigurationFieldReason,
+			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [
 				35, 107, 114, 168, 223, 241, 338, 364, 473, 525, 567, 595, 617, 632, 732, 735,
 				751, 768, 948, 987, 991, 1_004, 1_075, 1_145, 1_244, 1_289, 1_531, 1_602, 1_695, 1_857, 1_970, 1_972,
@@ -4026,6 +4220,12 @@ struct SafeDIToolGraphFuzzerTests {
 				3_894, 3_915, 4_117, 4_122, 4_177, 4_206, 4_396, 4_428, 4_549, 4_567, 4_640, 4_642, 4_666, 4_717, 4_776, 4_781,
 				4_783, 4_786, 4_795, 4_918,
 			],
+		),
+		// A graph that shows both reasons, under one renaming or across them, is documented only by the shape that names both.
+		GraphFuzzerKnownIssue(
+			reason: mockParameterAndFieldOrderAndLazyCycleConfigurationFieldReason,
+			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
+			seeds: [77, 3_023],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree",
@@ -4037,9 +4237,14 @@ struct SafeDIToolGraphFuzzerTests {
 		),
 		// A known rejection masks no later failure, so a graph that also changes under a renaming documents both.
 		GraphFuzzerKnownIssue(
-			reason: "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree, in a graph that also changes its generated mock code under a renaming",
-			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(.mockCode)],
-			seeds: [309, 2_201, 3_132, 3_692],
+			reason: "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree, in a graph whose mock's parameters and fields also reorder under a renaming",
+			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
+			seeds: [309, 3_132, 3_692],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree, in a graph whose lazy cycle also drops another configuration field under a renaming",
+			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
+			seeds: [2_201],
 		),
 	]
 
@@ -4194,6 +4399,8 @@ struct SafeDIToolGraphFuzzerTests {
 			}
 		case let .staleKnownIssue(knownIssue):
 			withKnownIssue("Seed \(fixture.seed) no longer fails, so \(Self.corpus(for: GraphFuzzerGeneratorFeature.features(drawnIn: fixture)).staleSeedRemedy(knownIssue, fixture.seed)): \(knownIssue.reason)") {}
+		case let .staleRenamedGraphDifference(knownIssue, aspect):
+			Issue.record("Seed \(fixture.seed) sits on \"\(knownIssue.reason)\", which lists \(aspect.rawValue), but its renamed graphs do not show it: list the seed under the entry that names exactly what it shows.")
 		case let .failure(failure):
 			Issue.record(failure.issueComment(fixture: fixture))
 		}

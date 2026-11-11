@@ -7206,14 +7206,22 @@ enum GraphFuzzerSourceLine: Equatable {
 /// One way two outcomes of the tool differ.
 struct GraphFuzzerOutcomeDifference: Equatable {
 	/// What differs, which is how a known issue names a difference. A generated file's code is classified in one place,
-	/// `aspect(ofCodeInFileNamed:)`, so a finer shape of a file's difference is one more case and one more branch there.
+	/// `aspects(ofCodeInFileNamed:code:otherCode:comparedBy:)`, so a finer shape of a file's difference is one more case
+	/// and one more branch there.
 	enum Aspect: String, Equatable {
 		case verdict = "its verdict"
 		case diagnostics = "its diagnostics"
 		case generatedFileNames = "the names of its generated files"
 		case unreadTypeComments = "the comments naming the types it counts as `public` because it reads no declaration of them"
+		/// A generated mock file's code differs, in a way neither of the two known reasons explains.
 		case mockCode = "its generated mock code"
+		/// The generated configuration file's code differs, in a way neither of the two known reasons explains.
 		case mockConfigurationCode = "its generated mock configuration code"
+		/// A mock's parameters or fields hold the same content in another order, in a mock's file or the configuration file.
+		case mockParameterAndFieldOrder = "the order of its generated mock's parameters and fields"
+		/// A configuration struct's field is present in one outcome and absent from the other, in a mock's file or the
+		/// configuration file, along with the reads of it.
+		case mockConfigurationFieldPresence = "which configuration fields its generated mock has"
 		case dependencyTreeCode = "its generated dependency tree code"
 		case warnings = "its warnings"
 	}
@@ -7232,15 +7240,27 @@ struct GraphFuzzerOutcomeDifference: Equatable {
 		}
 	}
 
-	/// The aspect of a difference in the code of the generated file named `fileName`.
-	static func aspect(ofCodeInFileNamed fileName: String) -> Aspect {
-		if fileName.hasSuffix("+SafeDIMock.swift") {
+	/// The aspects of the difference between `code` and `otherCode`, the code of the generated file named `fileName` in
+	/// each outcome: one for each known reason a mock file's difference shows, or, when anything else differs, the
+	/// aspect of the file's code as a whole, which no shape that names a reason documents.
+	static func aspects(ofCodeInFileNamed fileName: String, code: String, otherCode: String, comparedBy mockDifference: GraphFuzzerMockDifference) -> [Aspect] {
+		let codeAspect: Aspect = if fileName.hasSuffix("+SafeDIMock.swift") {
 			.mockCode
 		} else if fileName.hasSuffix("SafeDIMockConfiguration.swift") {
 			.mockConfigurationCode
 		} else {
 			.dependencyTreeCode
 		}
+		guard codeAspect != .dependencyTreeCode else { return [codeAspect] }
+		let reasons = mockDifference.reasons(forDifferenceBetween: code, and: otherCode).map { reason -> Aspect in
+			switch reason {
+			case .orderOfParametersAndFields:
+				.mockParameterAndFieldOrder
+			case .presenceOfConfigurationFields:
+				.mockConfigurationFieldPresence
+			}
+		}
+		return reasons.isEmpty ? [codeAspect] : reasons
 	}
 }
 
@@ -7293,6 +7313,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 			return diagnosticEntries(of: reduce(diagnostics)) == diagnosticEntries(of: reduce(otherDiagnostics)) ? [] : [GraphFuzzerOutcomeDifference(aspect: .diagnostics)]
 		case let (.accepted(generatedFiles, warnings), .accepted(otherGeneratedFiles, otherWarnings)):
 			var differences = [GraphFuzzerOutcomeDifference]()
+			lazy var mockDifference = GraphFuzzerMockDifference(generatedFiles: generatedFiles, otherGeneratedFiles: otherGeneratedFiles)
 			if Set(generatedFiles.keys) != Set(otherGeneratedFiles.keys) {
 				differences.append(GraphFuzzerOutcomeDifference(aspect: .generatedFileNames))
 			}
@@ -7306,7 +7327,9 @@ enum GraphFuzzerToolOutcome: Equatable {
 				guard !code.utf8.elementsEqual(otherCode.utf8) else { continue }
 				let differsOnlyInOrderOfExtensions = GraphFuzzerExtensionOrder.sortingExtensionsWithinTheirPlaces(in: code) == GraphFuzzerExtensionOrder.sortingExtensionsWithinTheirPlaces(in: otherCode)
 				guard codeComparison == .byteForByte || !differsOnlyInOrderOfExtensions else { continue }
-				differences.append(GraphFuzzerOutcomeDifference(aspect: GraphFuzzerOutcomeDifference.aspect(ofCodeInFileNamed: fileName), fileName: fileName, differsOnlyInOrderOfExtensions: differsOnlyInOrderOfExtensions))
+				differences += GraphFuzzerOutcomeDifference.aspects(ofCodeInFileNamed: fileName, code: code, otherCode: otherCode, comparedBy: mockDifference).map { aspect in
+					GraphFuzzerOutcomeDifference(aspect: aspect, fileName: fileName, differsOnlyInOrderOfExtensions: differsOnlyInOrderOfExtensions)
+				}
 			}
 			if warnings.sorted() != otherWarnings.sorted() {
 				differences.append(GraphFuzzerOutcomeDifference(aspect: .warnings))
@@ -7758,6 +7781,9 @@ enum GraphFuzzerFinding: Equatable {
 	case knownIssue(GraphFuzzerKnownIssue, GraphFuzzerFailure)
 	/// The graph's seed is a known issue, but the graph no longer fails.
 	case staleKnownIssue(GraphFuzzerKnownIssue)
+	/// The graph's seed is a known issue, and the issue lists this difference of a renamed graph, which the graph does not
+	/// show: a seed sits on an entry only for what its difference shows, so it belongs on the entry that names exactly that.
+	case staleRenamedGraphDifference(GraphFuzzerKnownIssue, GraphFuzzerOutcomeDifference.Aspect)
 	/// The graph fails, and no known issue documents that failure: either its seed is not a known issue, or
 	/// it fails another way than its known issue documents.
 	case failure(GraphFuzzerFailure)
@@ -7788,16 +7814,24 @@ enum GraphFuzzerFinding: Equatable {
 
 	/// What the fuzzer concludes about one graph: the finding `init` makes, then each other difference of a renamed
 	/// graph that the known issue does not document, as a finding of its own, so that a graph's every undocumented
-	/// difference is reported at once.
+	/// difference is reported at once, and, when the graph fails at all, each difference of a renamed graph its known
+	/// issue lists and it does not show.
 	static func findings(failure: GraphFuzzerFailure?, laterFailures: [GraphFuzzerFailure] = [], knownIssue: GraphFuzzerKnownIssue?) -> [GraphFuzzerFinding] {
 		let finding = GraphFuzzerFinding(failure: failure, laterFailures: laterFailures, knownIssue: knownIssue)
 		var reportedFailure: GraphFuzzerFailure?
 		if case let .failure(failure) = finding {
 			reportedFailure = failure
 		}
-		return [finding] + laterFailures
+		var findings = [finding] + laterFailures
 			.filter { $0.kind == .renamedGraphDiffers && $0 != reportedFailure && knownIssue?.matches($0) != true }
 			.map(GraphFuzzerFinding.failure)
+		if let knownIssue, let failure {
+			let shownAspects = Set(([failure] + laterFailures).filter { $0.kind == .renamedGraphDiffers }.compactMap(\.renamedGraphDifference))
+			for case let .renamedGraphDiffers(aspect) in knownIssue.signatures where !shownAspects.contains(aspect) {
+				findings.append(.staleRenamedGraphDifference(knownIssue, aspect))
+			}
+		}
+		return findings
 	}
 
 	/// The line the long run appends to its report, which `graph-fuzzer.yml` reads.
@@ -7809,6 +7843,8 @@ enum GraphFuzzerFinding: Equatable {
 			"known \(seed) \(knownIssue.reason)"
 		case let .staleKnownIssue(knownIssue):
 			"stale \(seed) \(knownIssue.reason)"
+		case let .staleRenamedGraphDifference(knownIssue, aspect):
+			"stale \(seed) \(knownIssue.reason): the renamed graph does not show \(aspect.rawValue); list the seed under the entry that names exactly what it shows"
 		case let .failure(failure) where failure.kind == .renamedGraphDiffers:
 			// Each difference of a graph is a finding, so its line says which, without the sentence's period.
 			"failure \(seed) \(failure.kind.rawValue): \(failure.details.prefix { $0 != "\n" }.dropLast())"
