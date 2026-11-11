@@ -189,6 +189,430 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		try await expectAppMatchesBuildWithDistinctNames(hidden: modules(secondProtocolName: "Storing"), visible: modules(secondProtocolName: "OtherStoring"), integration: integration)
 	}
 
+	// MARK: Tests – A claimed name the app can write
+
+	@Test(arguments: MultiModuleIntegration.allCases, ["Logger", "Logger?", "any Logger", "[Logger]"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsPublicProtocolAsWritten_whenPublicTypeForwardsProtocolItsModuleKeepsAFulfillerOf(integration: MultiModuleIntegration, loggerType: String) async throws {
+		func modules(secondProtocolName: String) -> [ModuleFixture] {
+			[
+				Self.loggerCore,
+				Self.moduleKeepingLogger(named: "ModA", fulfiller: "ALogger", seam: "SeamA", protocolName: "Logger", additionalFiles: ["DetailA.swift": Self.detail(named: "DetailA", attribute: "Forwarded", loggerType: loggerType)]),
+				Self.moduleKeepingLogger(named: "ModB", fulfiller: "BLogger", seam: "SeamB", protocolName: secondProtocolName),
+				ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Root.swift": Self.root(holding: ["seamA: SeamA", "seamB: SeamB", "makeDetail: Instantiator<DetailA>"], importing: ["Core", "ModA", "ModB"])], dependencies: ["Core", "ModA", "ModB"]),
+			]
+		}
+
+		try await expectAppMatchesBuildWithDistinctNames(hidden: modules(secondProtocolName: "Logger"), visible: modules(secondProtocolName: "OtherLogger"), integration: integration)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsSeamWithPublicProtocol_whenSeamForwardsProtocolItsModuleKeepsAFulfillerOf(integration: MultiModuleIntegration) async throws {
+		func modules(secondProtocolName: String) -> [ModuleFixture] {
+			[
+				Self.loggerCore,
+				ModuleFixture(name: "ModA", packageName: "ModAPackage", swiftFileContentByFilePath: ["ALogger.swift": "import Core\n\n" + Self.fulfiller("ALogger", of: "Logger"), "Inner.swift": Self.innerHoldingLogger, "SeamA.swift": Self.seamBeside(attribute: "Forwarded")], dependencies: ["Core"]),
+				Self.moduleKeepingLogger(named: "ModB", fulfiller: "BLogger", seam: "SeamB", protocolName: secondProtocolName),
+				ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Root.swift": Self.root(holding: ["makeSeamA: Instantiator<SeamA>", "seamB: SeamB"], importing: ["Core", "ModA", "ModB"])], dependencies: ["Core", "ModA", "ModB"]),
+			]
+		}
+
+		try await expectAppMatchesBuildWithDistinctNames(hidden: modules(secondProtocolName: "Logger"), visible: modules(secondProtocolName: "OtherLogger"), integration: integration)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesAppsValue_whenPublicTypeReceivesProtocolItsModuleKeepsAFulfillerOf(integration: MultiModuleIntegration) async throws {
+		func modules(secondProtocolName: String) -> [ModuleFixture] {
+			[
+				Self.loggerCore,
+				Self.moduleKeepingLogger(named: "ModA", fulfiller: "ALogger", seam: "SeamA", protocolName: "Logger", additionalFiles: ["DetailA.swift": Self.detail(named: "DetailA", attribute: "Received")]),
+				Self.moduleKeepingLogger(named: "ModB", fulfiller: "BLogger", seam: "SeamB", protocolName: secondProtocolName),
+				ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["AppLogger.swift": "import Core\n\n" + Self.fulfiller("AppLogger", of: "Logger", access: "public"), "Root.swift": Self.root(holding: ["logger: Logger", "seamA: SeamA", "seamB: SeamB", "detail: DetailA"], importing: ["Core", "ModA", "ModB"])], dependencies: ["Core", "ModA", "ModB"]),
+			]
+		}
+
+		try await expectAppMatchesBuildWithDistinctNames(hidden: modules(secondProtocolName: "Logger"), visible: modules(secondProtocolName: "OtherLogger"), integration: integration)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesAppsValueToSeam_whenSeamReceivesProtocolItsModuleKeepsAFulfillerOf(integration: MultiModuleIntegration) async throws {
+		func modules(secondProtocolName: String) -> [ModuleFixture] {
+			[
+				Self.loggerCore,
+				ModuleFixture(name: "ModA", packageName: "ModAPackage", swiftFileContentByFilePath: ["ALogger.swift": "import Core\n\n" + Self.fulfiller("ALogger", of: "Logger"), "Inner.swift": Self.innerHoldingLogger, "SeamA.swift": Self.seamBeside(attribute: "Received")], dependencies: ["Core"]),
+				Self.moduleKeepingLogger(named: "ModB", fulfiller: "BLogger", seam: "SeamB", protocolName: secondProtocolName),
+				ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["AppLogger.swift": "import Core\n\n" + Self.fulfiller("AppLogger", of: "Logger", access: "public"), "Root.swift": Self.root(holding: ["logger: Logger", "seamA: SeamA", "seamB: SeamB"], importing: ["Core", "ModA", "ModB"])], dependencies: ["Core", "ModA", "ModB"]),
+			]
+		}
+
+		try await expectAppMatchesBuildWithDistinctNames(hidden: modules(secondProtocolName: "Logger"), visible: modules(secondProtocolName: "OtherLogger"), integration: integration)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesModulesOwnValue_whenDependencyReceivesProtocolThatTwoModulesBeneathKeepFulfillersOf(integration: MultiModuleIntegration) async throws {
+		func modules(modulesBeneathClaim claimedProtocolName: String) -> [ModuleFixture] {
+			[
+				Self.loggerCore,
+				Self.moduleKeepingLogger(named: "Feature", fulfiller: "FLogger", seam: "SeamF", protocolName: claimedProtocolName, additionalFiles: ["Detail.swift": Self.detail(named: "Detail", attribute: "Received")]),
+				Self.moduleKeepingLogger(named: "Other", fulfiller: "OLogger", seam: "SeamO", protocolName: claimedProtocolName),
+				ModuleFixture(
+					name: "ModA",
+					packageName: "ModAPackage",
+					swiftFileContentByFilePath: [
+						"ALogger.swift": "import Core\n\n" + Self.fulfiller("ALogger", of: "Logger"),
+						"SeamA.swift": "import Core\nimport Feature\nimport Other\n\n" + Self.seam("SeamA", holding: "Logger", label: "logger", andHolding: "detail: Detail"),
+					],
+					dependencies: ["Core", "Feature", "Other"],
+				),
+				ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Root.swift": Self.root(holding: ["seamA: SeamA"], importing: ["ModA"])], dependencies: ["Core", "ModA"]),
+			]
+		}
+
+		let hidden = try await executeSafeDIToolMultiModuleTest(modules: modules(modulesBeneathClaim: "Logger"), integration: integration, filesToDelete: &filesToDelete)
+		let visible = try await executeSafeDIToolMultiModuleTest(modules: modules(modulesBeneathClaim: "OtherLogger"), integration: integration, compileVerification: .skipped, filesToDelete: &filesToDelete)
+
+		#expect(hidden.modules["ModA"]?.generatedFiles == visible.modules["ModA"]?.generatedFiles)
+	}
+
+	// `Instantiator` requires an `Instantiable` type, which a protocol's existential is not.
+	@Test(arguments: MultiModuleIntegration.allCases, [HiddenReachForm.erasedFulfilledByType, .alias, .lazilyInstantiated])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsAppAsIfClaimsHadDifferentNames_whenSeamReachesPublicProtocolThroughForm(integration: MultiModuleIntegration, form: HiddenReachForm) async throws {
+		func modules(secondProtocolName: String) -> [ModuleFixture] {
+			[
+				Self.loggerCore,
+				ModuleFixture(name: "ModA", packageName: "ModAPackage", swiftFileContentByFilePath: ["ALogger.swift": "import Core\n\n" + Self.fulfiller("ALogger", of: "Logger"), "SeamA.swift": "import Core\n\n" + form.seam(named: "SeamA", storeName: "Logger")], dependencies: ["Core"]),
+				ModuleFixture(name: "ModB", packageName: "ModBPackage", swiftFileContentByFilePath: ["BLogger.swift": "import Core\n\n" + Self.fulfiller("BLogger", of: secondProtocolName), "SeamB.swift": "import Core\n\n" + form.seam(named: "SeamB", storeName: secondProtocolName)], dependencies: ["Core"]),
+				ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Root.swift": Self.root(holding: ["seamA: SeamA", "seamB: SeamB"], importing: ["ModA", "ModB"])], dependencies: ["Core", "ModA", "ModB"]),
+			]
+		}
+
+		try await expectAppMatchesBuildWithDistinctNames(hidden: modules(secondProtocolName: "Logger"), visible: modules(secondProtocolName: "OtherLogger"), integration: integration)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsAppAsIfClaimsHadDifferentNames_whenSeamHoldsProtocolSpelledWithAny(integration: MultiModuleIntegration) async throws {
+		func modules(secondProtocolName: String) -> [ModuleFixture] {
+			[
+				Self.loggerCore,
+				ModuleFixture(name: "ModA", packageName: "ModAPackage", swiftFileContentByFilePath: ["ALogger.swift": "import Core\n\n" + Self.fulfiller("ALogger", of: "Logger"), "SeamA.swift": "import Core\n\n" + Self.seam("SeamA", holding: "any Logger", label: "logger")], dependencies: ["Core"]),
+				Self.moduleKeepingLogger(named: "ModB", fulfiller: "BLogger", seam: "SeamB", protocolName: secondProtocolName),
+				ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Root.swift": Self.root(holding: ["seamA: SeamA", "seamB: SeamB"], importing: ["ModA", "ModB"])], dependencies: ["Core", "ModA", "ModB"]),
+			]
+		}
+
+		try await expectAppMatchesBuildWithDistinctNames(hidden: modules(secondProtocolName: "Logger"), visible: modules(secondProtocolName: "OtherLogger"), integration: integration)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsPublicProtocolAsWritten_whenFulfillersModuleDeclaresTheProtocol(integration: MultiModuleIntegration) async throws {
+		// `ModB`'s protocol of the name is `internal`, so only `ModA`'s is one the app can write.
+		func modules(secondProtocolName: String) -> [ModuleFixture] {
+			[
+				ModuleFixture(name: "ModA", packageName: "ModAPackage", swiftFileContentByFilePath: ["Logger.swift": "public protocol Logger {}", "ALogger.swift": Self.fulfiller("ALogger", of: "Logger"), "SeamA.swift": Self.seam("SeamA", holding: "Logger", label: "logger"), "DetailA.swift": Self.detail(named: "DetailA", attribute: "Forwarded", imports: "")]),
+				ModuleFixture(name: "ModB", packageName: "ModBPackage", swiftFileContentByFilePath: ["\(secondProtocolName).swift": "protocol \(secondProtocolName) {}", "BLogger.swift": Self.fulfiller("BLogger", of: secondProtocolName), "SeamB.swift": Self.seam("SeamB", holding: secondProtocolName, label: "logger")]),
+				ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Root.swift": Self.root(holding: ["seamA: SeamA", "seamB: SeamB", "makeDetail: Instantiator<DetailA>"], importing: ["ModA", "ModB"])], dependencies: ["ModA", "ModB"]),
+			]
+		}
+
+		try await expectAppMatchesBuildWithDistinctNames(hidden: modules(secondProtocolName: "Logger"), visible: modules(secondProtocolName: "OtherLogger"), integration: integration)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsPackageProtocolAsWritten_whenAppIsInThePackageThatDeclaresIt(integration: MultiModuleIntegration) async throws {
+		func modules(secondProtocolName: String) -> [ModuleFixture] {
+			func module(named moduleName: String, fulfiller fulfillerName: String, seam seamName: String, protocolName: String, additionalFiles: [String: String] = [:]) -> ModuleFixture {
+				var files = ["\(fulfillerName).swift": "import Core\n\n" + Self.fulfiller(fulfillerName, of: protocolName), "\(seamName).swift": "import Core\n\n" + Self.seam(seamName, holding: protocolName, label: "logger")]
+				files.merge(additionalFiles) { _, additional in additional }
+				return ModuleFixture(name: moduleName, packageName: "Shop", swiftFileContentByFilePath: files, dependencies: ["Core"])
+			}
+			return [
+				ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: ["Logger.swift": "package protocol Logger {}\npackage protocol OtherLogger {}"]),
+				module(named: "ModA", fulfiller: "ALogger", seam: "SeamA", protocolName: "Logger", additionalFiles: ["DetailA.swift": Self.detail(named: "DetailA", attribute: "Forwarded", access: "package")]),
+				module(named: "ModB", fulfiller: "BLogger", seam: "SeamB", protocolName: secondProtocolName),
+				ModuleFixture(name: "App", packageName: "Shop", swiftFileContentByFilePath: ["Root.swift": Self.root(holding: ["seamA: SeamA", "seamB: SeamB", "makeDetail: Instantiator<DetailA>"], importing: ["Core", "ModA", "ModB"], access: "package")], dependencies: ["Core", "ModA", "ModB"]),
+			]
+		}
+
+		try await expectAppMatchesBuildWithDistinctNames(hidden: modules(secondProtocolName: "Logger"), visible: modules(secondProtocolName: "OtherLogger"), integration: integration)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsProtocolAsWritten_whenNoModuleSafeDIReadsDeclaresIt(integration: MultiModuleIntegration) async throws {
+		func modules(secondProtocolName: String) -> [ModuleFixture] {
+			[
+				ModuleFixture(name: "ModA", packageName: "ModAPackage", swiftFileContentByFilePath: ["Disk.swift": Self.fulfiller("Disk", of: "Sendable"), "SeamA.swift": Self.seam("SeamA", holding: "Sendable", label: "logger"), "DetailA.swift": Self.detail(named: "DetailA", attribute: "Forwarded", imports: "", loggerType: "Sendable")]),
+				ModuleFixture(name: "ModB", packageName: "ModBPackage", swiftFileContentByFilePath: ["Memory.swift": Self.fulfiller("Memory", of: secondProtocolName), "SeamB.swift": Self.seam("SeamB", holding: secondProtocolName, label: "logger")]),
+				ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Root.swift": Self.root(holding: ["seamA: SeamA", "seamB: SeamB", "makeDetail: Instantiator<DetailA>"], importing: ["ModA", "ModB"])], dependencies: ["ModA", "ModB"]),
+			]
+		}
+
+		try await expectAppMatchesBuildWithDistinctNames(hidden: modules(secondProtocolName: "Sendable"), visible: modules(secondProtocolName: "Error"), integration: integration)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_leavesAppUnchanged_whenModuleHoldsMockOnlyDeclarationOfProtocolItsTypeFulfills(integration: MultiModuleIntegration) async throws {
+		// A `mockOnly` declaration left under the bare name would be the mock of `Logger` in the app, which cannot build it.
+		func modules(additionalFiles: [String: String]) -> [ModuleFixture] {
+			[
+				Self.loggerCore,
+				Self.moduleKeepingLogger(named: "ModA", fulfiller: "ALogger", seam: "SeamA", protocolName: "Logger", additionalFiles: additionalFiles),
+				Self.moduleKeepingLogger(named: "ModB", fulfiller: "BLogger", seam: "SeamB", protocolName: "Logger"),
+				ModuleFixture(
+					name: "App",
+					packageName: "AppPackage",
+					swiftFileContentByFilePath: [
+						"Thing.swift": "import Core\n\n" + Self.detail(named: "Thing", attribute: "Received", imports: "", attributes: "generateMock: true"),
+						"Root.swift": Self.root(holding: ["seamA: SeamA", "seamB: SeamB"], importing: ["ModA", "ModB"]),
+					],
+					dependencies: ["Core", "ModA", "ModB"],
+				),
+			]
+		}
+		let fakeLogger = """
+		import Core
+
+		struct FakeLogger: Logger {}
+
+		@Instantiable(fulfillingAdditionalTypes: [Logger.self], mockOnly: true)
+		extension FakeLogger {
+		    static func mock() -> FakeLogger {
+		        FakeLogger()
+		    }
+		}
+		"""
+
+		try await expectAppMatchesBuildWithDistinctNames(hidden: modules(additionalFiles: ["FakeLogger.swift": fakeLogger]), visible: modules(additionalFiles: [:]), integration: integration)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsMissingDependency_whenTypeTheAppCannotNameFulfillsPublicProtocolAndReceivesIt(integration: MultiModuleIntegration) async {
+		// The tree beneath the fulfiller is still checked, though the name it claims is left as written.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "ALogger.swift", in: "ModA", fixtures: fixtures, integration: integration)):7:5: \(Self.missingDatabaseMessage(chain: "Root -> SeamA -> ALogger"))
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.loggerCore,
+					ModuleFixture(
+						name: "ModA",
+						packageName: "ModAPackage",
+						swiftFileContentByFilePath: [
+							"Database.swift": Self.database,
+							"ALogger.swift": """
+							import Core
+
+							@Instantiable(fulfillingAdditionalTypes: [Logger.self])
+							struct ALogger: Logger, Instantiable {
+							    init(database: Database) { self.database = database }
+
+							    @Received let database: Database
+							}
+							""",
+							"SeamA.swift": "import Core\n\n" + Self.seam("SeamA", holding: "Logger", label: "logger"),
+						],
+						dependencies: ["Core"],
+					),
+					Self.moduleKeepingLogger(named: "ModB", fulfiller: "BLogger", seam: "SeamB", protocolName: "Logger"),
+					ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Root.swift": Self.root(holding: ["seamA: SeamA", "seamB: SeamB"], importing: ["ModA", "ModB"])], dependencies: ["Core", "ModA", "ModB"]),
+				],
+				integration: integration,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	// MARK: Tests – A mention that means another type
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_spellsModulesOwnTypeAsWritten_whenModuleDeclaresPlainTypeOfNameItsPackageHides(integration: MultiModuleIntegration) async throws {
+		func modules(secondStoreName: String) -> [ModuleFixture] {
+			[
+				ModuleFixture(name: "ModA", packageName: "Shop", swiftFileContentByFilePath: ["Store.swift": Self.store("package"), "SeamA.swift": Self.seam("SeamA")]),
+				ModuleFixture(name: "ModB", packageName: "Other", swiftFileContentByFilePath: ["Store.swift": Self.store("internal", named: secondStoreName), "SeamB.swift": Self.seam("SeamB", holding: secondStoreName)]),
+				ModuleFixture(
+					name: "Feature",
+					packageName: "Shop",
+					swiftFileContentByFilePath: [
+						"Store.swift": "import ModA\n\npublic struct Store {\n    public init() {}\n}",
+						"Detail.swift": Self.detail(named: "Detail", attribute: "Forwarded", imports: "", loggerType: "Store"),
+					],
+					dependencies: ["ModA"],
+				),
+				ModuleFixture(name: "App", packageName: "Elsewhere", swiftFileContentByFilePath: ["Root.swift": Self.root(holding: ["seamA: SeamA", "seamB: SeamB", "makeDetail: Instantiator<Detail>"], importing: ["ModA", "ModB", "Feature"])], dependencies: ["ModA", "ModB", "Feature"]),
+			]
+		}
+
+		try await expectAppMatchesBuildWithDistinctNames(hidden: modules(secondStoreName: "Store"), visible: modules(secondStoreName: "OtherStore"), integration: integration)
+	}
+
+	// MARK: Tests – Different types of a name the app can write
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsDuplicateName_whenAppsTypeSharesNameOfPublicProtocolAThirdModuleReceives(integration: MultiModuleIntegration) async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.baseWithPublicStore(),
+					Self.midReceivingStore(),
+					ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Store.swift": Self.store("public"), "Root.swift": Self.root(holding: ["store: Store", "seamBase: SeamBase", "feature: Feature"], importing: ["Base", "Mid"])], dependencies: ["Base", "Mid"]),
+				],
+				integration: integration,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsDuplicateName_whenAppsTypeSharesNameOfPublicProtocolAThirdModuleProvidesAMockOf(integration: MultiModuleIntegration) async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.baseWithPublicStore(),
+					ModuleFixture(
+						name: "Mid",
+						packageName: "Shop",
+						swiftFileContentByFilePath: [
+							"FakeStore.swift": """
+							import Base
+
+							public struct FakeStore: Store {
+							    public init() {}
+							}
+
+							@Instantiable(fulfillingAdditionalTypes: [Store.self], mockOnly: true)
+							extension FakeStore {
+							    public static func mock() -> FakeStore {
+							        FakeStore()
+							    }
+							}
+							""",
+						],
+						dependencies: ["Base"],
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "AppPackage",
+						swiftFileContentByFilePath: [
+							"Store.swift": Self.store("public"),
+							"Thing.swift": """
+							@Instantiable(generateMock: true)
+							public struct Thing: Instantiable {
+							    public init(store: Store) { self.store = store }
+							    @Received let store: Store
+							}
+							""",
+							"Root.swift": Self.root(holding: ["store: Store", "thing: Thing"], importing: ["Base", "Mid"]),
+						],
+						dependencies: ["Base", "Mid"],
+					),
+				],
+				integration: integration,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsDuplicateName_whenAppsTypeSharesNameOfPublicProtocolItsFulfillersModuleReceives(integration: MultiModuleIntegration) async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.baseWithPublicStore(additionalFiles: [
+						"Feature.swift": """
+						@Instantiable(generateDependencyTree: true)
+						public final class Feature: Instantiable {
+						    init(store: Store) { self.store = store }
+						    @Received let store: Store
+						}
+						""",
+					]),
+					ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Store.swift": Self.store("public"), "Root.swift": Self.root(holding: ["store: Store", "seamBase: SeamBase", "feature: Feature"], importing: ["Base"])], dependencies: ["Base"]),
+				],
+				integration: integration,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsDuplicateName_whenModuleTheAppReadsDeclaresPublicTypeOfNameOfPublicProtocol(integration: MultiModuleIntegration) async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Store.swift", in: "ModZ", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`Base` and `ModZ`"))
+			\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`Base` and `ModZ`"))
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.baseWithPublicStore(),
+					ModuleFixture(name: "ModZ", packageName: "Elsewhere", swiftFileContentByFilePath: ["Store.swift": Self.store("public")]),
+					ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Root.swift": Self.root(holding: ["seamBase: SeamBase"], importing: ["Base", "ModZ"])], dependencies: ["Base", "ModZ"]),
+				],
+				integration: integration,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsDuplicateName_whenAppsTypeClaimsAppsOwnProtocolOfNameOfPublicProtocol(integration: MultiModuleIntegration) async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Cloud.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.baseWithPublicStore(),
+					ModuleFixture(name: "App", packageName: "AppPackage", swiftFileContentByFilePath: ["Store.swift": "public protocol Store {}", "Cloud.swift": Self.fulfiller("Cloud", of: "Store", access: "public"), "Root.swift": Self.root(holding: ["store: Store", "seamBase: SeamBase"], importing: ["Base"])], dependencies: ["Base"]),
+				],
+				integration: integration,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Tests – Ways of reaching a type
 
 	@Test(arguments: MultiModuleIntegration.allCases, HiddenReachForm.allCases)
@@ -845,6 +1269,94 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	}
 
 	private static let duplicateNameMessage = "error: `Store` is declared in modules `ModA` and `ModB`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one."
+
+	/// The error for a `Store` that `modules` each fulfill, which cannot be told apart since the app can name both.
+	private static func claimedNameMessage(modules: String) -> String {
+		"error: Found multiple @Instantiable types or extensions that fulfill `Store`, in modules \(modules). Each type can be fulfilled by only one @Instantiable declaration a module can name. If `Store` names different types, rename one. If it names one type, keep one, and remove `Store` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
+	}
+
+	/// `Core`, which declares the `public` protocols `ModA` and `ModB` fulfill with types they keep.
+	private static let loggerCore = ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: ["Logger.swift": "public protocol Logger {}\npublic protocol OtherLogger {}"])
+
+	/// A module, in a package of its own, that keeps a fulfiller of `protocolName`, and a seam that holds it.
+	private static func moduleKeepingLogger(named moduleName: String, fulfiller fulfillerName: String, seam seamName: String, protocolName: String, additionalFiles: [String: String] = [:]) -> ModuleFixture {
+		var files = [
+			"\(fulfillerName).swift": "import Core\n\n" + fulfiller(fulfillerName, of: protocolName),
+			"\(seamName).swift": "import Core\n\n" + seam(seamName, holding: protocolName, label: "logger"),
+		]
+		files.merge(additionalFiles) { _, additional in additional }
+		return ModuleFixture(name: moduleName, packageName: "\(moduleName)Package", swiftFileContentByFilePath: files, dependencies: ["Core"])
+	}
+
+	/// A type at `access` that holds `logger: loggerType` under `@attribute`.
+	private static func detail(named name: String, attribute: String, imports: String = "import Core\n\n", loggerType: String = "Logger", access: String = "public", attributes: String? = nil) -> String {
+		"""
+		\(imports)@Instantiable\(attributes.map { "(\($0))" } ?? "")
+		\(access) struct \(name): Instantiable {
+		    \(access) init(logger: \(loggerType)) { self.logger = logger }
+		    @\(attribute) \(access) let logger: \(loggerType)
+		}
+		"""
+	}
+
+	private static let innerHoldingLogger = """
+	import Core
+
+	@Instantiable
+	struct Inner: Instantiable {
+	    init(logger: Logger) { self.logger = logger }
+	    @Instantiated let logger: Logger
+	}
+	"""
+
+	/// A seam that holds `logger: Logger` under `@attribute`, beside a dependency that makes SafeDI generate its tree.
+	private static func seamBeside(attribute: String) -> String {
+		"""
+		import Core
+
+		@Instantiable(generateDependencyTree: true)
+		public struct SeamA: Instantiable {
+		    init(logger: Logger, inner: Inner) {
+		        self.logger = logger
+		        self.inner = inner
+		    }
+
+		    @\(attribute) public let logger: Logger
+		    @Instantiated let inner: Inner
+		}
+		"""
+	}
+
+	/// `Base`, which declares a `public` protocol `Store`, an `internal` type that fulfills it, and a seam that holds it.
+	private static func baseWithPublicStore(additionalFiles: [String: String] = [:]) -> ModuleFixture {
+		var files = [
+			"Store.swift": "public protocol Store {}",
+			"Disk.swift": fulfiller("Disk", of: "Store"),
+			"SeamBase.swift": seam("SeamBase", holding: "Store"),
+		]
+		files.merge(additionalFiles) { _, additional in additional }
+		return ModuleFixture(name: "Base", packageName: "Shop", swiftFileContentByFilePath: files)
+	}
+
+	/// A module of `Base`'s package with a `public` type that receives `Base`'s `Store`.
+	private static func midReceivingStore() -> ModuleFixture {
+		ModuleFixture(
+			name: "Mid",
+			packageName: "Shop",
+			swiftFileContentByFilePath: [
+				"Feature.swift": """
+				import Base
+
+				@Instantiable
+				public struct Feature: Instantiable {
+				    public init(store: Store) { self.store = store }
+				    @Received let store: Store
+				}
+				""",
+			],
+			dependencies: ["Base"],
+		)
+	}
 
 	private static let database = """
 	public final class Database {

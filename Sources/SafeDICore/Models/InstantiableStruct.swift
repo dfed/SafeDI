@@ -244,8 +244,13 @@ public struct Instantiable: Codable, Hashable, Sendable {
 
 	/// Returns a copy of this Instantiable that fulfills `instantiableTypes` in place of the types it fulfills, its first
 	/// entry remaining the concrete type, with each type `mentions` holds replaced wherever a member of the declaration
-	/// spells it. See `declaredName`.
-	public func distinguished(asFulfilling instantiableTypes: [TypeDescription], replacingMentions mentions: [TypeDescription: TypeDescription]) -> Instantiable {
+	/// spells it, and each dependency that instantiates a type `instantiations` holds fulfilled by the type it holds there,
+	/// its property and everything else spelled as written. See `declaredName`.
+	public func distinguished(
+		asFulfilling instantiableTypes: [TypeDescription],
+		replacingMentions mentions: [TypeDescription: TypeDescription],
+		fulfillingInstantiationsOf instantiations: [TypeDescription: TypeDescription],
+	) -> Instantiable {
 		func replacedType(_ typeDescription: TypeDescription) -> TypeDescription {
 			typeDescription.replacingTypes(mentions) ?? typeDescription
 		}
@@ -260,7 +265,10 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		instantiable.dependencies = dependencies.map { dependency in
 			let source: Dependency.Source = switch dependency.source {
 			case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
-				.instantiated(fulfillingTypeDescription: fulfillingTypeDescription.map(replacedType), erasedToConcreteExistential: erasedToConcreteExistential)
+				.instantiated(
+					fulfillingTypeDescription: instantiations[dependency.asInstantiatedType] ?? fulfillingTypeDescription.map(replacedType),
+					erasedToConcreteExistential: erasedToConcreteExistential,
+				)
 			case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
 				.aliased(
 					fulfillingProperty: fulfillingProperty.withUpdatedTypeDescription(replacedType(fulfillingProperty.typeDescription)),

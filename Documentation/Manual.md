@@ -1387,6 +1387,8 @@ Two modules can each keep an `@Instantiable` type of one name. Each module’s r
 
 A name the module can name in two modules is an error, whether or not a tree needs that type: rename one. So is a name when one of the declarations the module cannot name is a seam or has a [public mock](#public-mocks), or when `ModA.Store` already names another `@Instantiable` type.
 
+A type that lists a `public` protocol in `fulfillingAdditionalTypes` is one more such declaration when the module cannot name that type: two modules can each keep a fulfiller of `Logger` to themselves, and a module that reaches both through their seams still writes, forwards and receives the one `Logger`. If the module can also name a different type called `Logger`, such as its own `@Instantiable` type of that name, the name is an error: rename one.
+
 #### Tuist
 
 SafeDI’s `SafeDITuist` plugin runs `SafeDITool` in a script phase of each target, before the target compiles. Declare the plugin in `Tuist.swift`, at the commit of the SafeDI version you depend on, which `git ls-remote https://github.com/dfed/SafeDI refs/tags/<version>` prints:
