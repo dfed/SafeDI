@@ -3,7 +3,8 @@
 #
 # Writes a Markdown summary of the graph fuzzer's long-run report to SUMMARY
 # and appends it to the job summary. Exits non-zero when a graph failed, a
-# known issue went stale, the run reported a problem with itself, the long run
+# known issue went stale, a seed is misfiled under an entry that names more
+# than its graph shows, the run reported a problem with itself, the long run
 # checked no graphs (it was skipped, renamed, or never built), or the process
 # crashed, so the fuzzer cannot go quiet without the job turning red.
 set -euo pipefail
@@ -47,9 +48,12 @@ fi
     echo "Completed $(grep '^completed ' "$report" | sed 's/^completed //')."
   fi
   echo
-  { grep -E '^(failure|stale) ' "$report" || true; } | while read -r kind seed reason; do
+  { grep -E '^(failure|stale|misfiled) ' "$report" || true; } | while read -r kind seed reason; do
     if [ "$kind" = failure ]; then
       echo "- **Seed $seed**: $reason. Reproduce with \`$(reproduce "$seed")\`"
+    elif [ "$kind" = misfiled ]; then
+      # The graph still fails; its entry names a difference it does not show, and the line says where it belongs.
+      echo "- **Seed $seed** is listed under an entry that names more than its graph shows ($reason). Reproduce with \`$(reproduce "$seed")\`"
     else
       # The long run writes the remedy after the reason, chosen by the stale issue's shape.
       echo "- **Seed $seed** is a known issue that no longer fails ($reason). Reproduce with \`$(reproduce "$seed")\`"
@@ -61,6 +65,6 @@ fi
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   cat "$summary" >> "$GITHUB_STEP_SUMMARY"
 fi
-if [ "$graph_count" -eq 0 ] || ! grep -q '^completed ' "$report" || grep -qE '^(failure|stale|problem) ' "$report"; then
+if [ "$graph_count" -eq 0 ] || ! grep -q '^completed ' "$report" || grep -qE '^(failure|stale|misfiled|problem) ' "$report"; then
   exit 1
 fi

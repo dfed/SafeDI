@@ -23,25 +23,38 @@ import SwiftParser
 import SwiftSyntax
 
 /// Reads the generated mock code of two outcomes of the tool, each read with SwiftParser, to say which of the two known
-/// reasons a difference in one of their files shows.
+/// reasons a difference in one of their files shows. Each reason explains only what the renaming between the two outcomes
+/// can cause; two outcomes no renaming separates are explained by neither.
 ///
 /// - The order of a mock's parameters and fields: a mock's parameters, the fields of its configuration structs, and the
-///   statements that copy them are sorted by label, so a renaming that reorders labels reorders them. Those elements are
+///   statements that copy them are sorted by label, so a renaming that reverses labels reorders them. Those elements are
 ///   sorted among the places they hold, each list on its own and each element whole, and everything else stays where it
-///   is, so a value that moved to another scope or to another label still differs.
+///   is, so a value that moved to another scope or to another label still differs, as does the builder that always comes
+///   last, or the overrides.
 /// - Which configuration fields exist: which back-edge of a lazy cycle loses its override follows the order of type
-///   names, so a field of a configuration struct can be present in one outcome and absent from the other, along with
-///   the reads of it, in this file or in another. A field counts only when no field of its owner and label exists on the
-///   other side, and its type is a configuration, so a field whose type changed, or a plain parameter's field, still differs.
+///   names, so under a renaming that changes that order a field of a configuration struct can be present in one outcome
+///   and absent from the other, along with the reads of it, in this file or in another. A field counts only when it lies
+///   on a cycle of configuration structs, the two outcomes' fields taken together, since neither outcome alone holds a
+///   whole cycle, and when no field of its owner has its label or its type on the other side, so a field outside a
+///   cycle, a plain parameter's field, or a field whose label or type changed still differs.
 struct GraphFuzzerMockDifference: Sendable {
 	enum Reason: Equatable, Sendable {
 		case orderOfParametersAndFields
 		case presenceOfConfigurationFields
 	}
 
-	init(generatedFiles: [String: String], otherGeneratedFiles: [String: String]) {
+	/// - Parameter renaming: The renaming that separates the two outcomes, or `nil` when none does.
+	init(generatedFiles: [String: String], otherGeneratedFiles: [String: String], renaming: GraphFuzzerRenaming?) {
 		fields = Self.configurationFields(in: generatedFiles)
 		otherFields = Self.configurationFields(in: otherGeneratedFiles)
+		sortsParametersAndFields = renaming?.reversesLabels == true
+		if renaming?.changesOrderOfTypeNames == true {
+			droppedFields = Self.droppedFields(of: fields, absentFrom: otherFields)
+			otherDroppedFields = Self.droppedFields(of: otherFields, absentFrom: fields)
+		} else {
+			droppedFields = []
+			otherDroppedFields = []
+		}
 	}
 
 	/// The reasons the difference between `code` and `otherCode`, a file of the first and of the other outcome, shows:
@@ -52,8 +65,6 @@ struct GraphFuzzerMockDifference: Sendable {
 		let file = Parser.parse(source: code)
 		let otherFile = Parser.parse(source: otherCode)
 		guard !file.hasError, !otherFile.hasError else { return [] }
-		let dropped = Set(fields.values.flatMap(\.values)).subtracting(Self.sameFields(in: fields, as: otherFields))
-		let otherDropped = Set(otherFields.values.flatMap(\.values)).subtracting(Self.sameFields(in: otherFields, as: fields))
 
 		func form(of file: SourceFileSyntax, in fields: Fields, dropping droppedFields: Set<ConfigurationField>, sorted: Bool) -> [UInt8] {
 			let text = Rendering(fields: fields, droppedFields: droppedFields, sortsParametersAndFields: sorted).text(of: Syntax(file), in: Rendering.Scope())
@@ -61,10 +72,10 @@ struct GraphFuzzerMockDifference: Sendable {
 		}
 		let unchanged = form(of: file, in: fields, dropping: [], sorted: false)
 		let otherUnchanged = form(of: otherFile, in: otherFields, dropping: [], sorted: false)
-		let withoutFields = form(of: file, in: fields, dropping: dropped, sorted: false)
-		let otherWithoutFields = form(of: otherFile, in: otherFields, dropping: otherDropped, sorted: false)
-		let withoutFieldsSorted = form(of: file, in: fields, dropping: dropped, sorted: true)
-		let otherWithoutFieldsSorted = form(of: otherFile, in: otherFields, dropping: otherDropped, sorted: true)
+		let withoutFields = form(of: file, in: fields, dropping: droppedFields, sorted: false)
+		let otherWithoutFields = form(of: otherFile, in: otherFields, dropping: otherDroppedFields, sorted: false)
+		let withoutFieldsSorted = form(of: file, in: fields, dropping: droppedFields, sorted: sortsParametersAndFields)
+		let otherWithoutFieldsSorted = form(of: otherFile, in: otherFields, dropping: otherDroppedFields, sorted: sortsParametersAndFields)
 
 		guard withoutFieldsSorted == otherWithoutFieldsSorted else { return [] }
 		var reasons = [Reason]()
@@ -77,7 +88,7 @@ struct GraphFuzzerMockDifference: Sendable {
 		return reasons
 	}
 
-	/// A field of a configuration struct, which holds the overrides of a child of a mock's tree.
+	/// A stored field of a configuration struct, which holds the overrides of a child of a mock's tree.
 	fileprivate struct ConfigurationField: Hashable, Sendable {
 		let owner: String
 		let label: String
@@ -89,11 +100,36 @@ struct GraphFuzzerMockDifference: Sendable {
 
 	private let fields: Fields
 	private let otherFields: Fields
+	private let droppedFields: Set<ConfigurationField>
+	private let otherDroppedFields: Set<ConfigurationField>
+	private let sortsParametersAndFields: Bool
 
-	/// The fields of `fields` that have the same owner and label in `otherFields`, whatever their type, so that a field
-	/// counts as dropped only when its label is gone. A field that changed type is no dropped field.
-	private static func sameFields(in fields: Fields, as otherFields: Fields) -> Set<ConfigurationField> {
-		Set(fields.values.flatMap(\.values).filter { otherFields[$0.owner]?[$0.label] != nil })
+	/// The fields of `fields` that a lazy cycle's back-edge explains `otherFields` not having. A field whose owner on the
+	/// other side has its label or its type is the same field changed, since a back-edge takes every field of an owner
+	/// that holds the configuration of a type.
+	private static func droppedFields(of fields: Fields, absentFrom otherFields: Fields) -> Set<ConfigurationField> {
+		Set(fields.values.flatMap(\.values).filter { field in
+			let otherFieldsOfOwner = otherFields[field.owner, default: [:]]
+			return otherFieldsOfOwner[field.label] == nil
+				&& !otherFieldsOfOwner.values.contains { $0.type == field.type }
+				&& isOnCycleOfConfigurations(field, in: [fields, otherFields])
+		})
+	}
+
+	/// Whether `field`'s struct is reached from the struct it holds, through the fields of any of `outcomes`. A back-edge is
+	/// what keeps a struct from containing itself, so no one outcome holds a whole cycle, and the two together do. A field
+	/// whose type is no configuration names no struct, so it lies on no cycle.
+	private static func isOnCycleOfConfigurations(_ field: ConfigurationField, in outcomes: [Fields]) -> Bool {
+		var visitedTypes = Set<String>()
+		var typesToVisit = [field.type]
+		while let type = typesToVisit.popLast() {
+			guard type != field.owner else { return true }
+			guard visitedTypes.insert(type).inserted else { continue }
+			for fields in outcomes {
+				typesToVisit += fields[type, default: [:]].values.map(\.type)
+			}
+		}
+		return false
 	}
 
 	private static func configurationFields(in generatedFiles: [String: String]) -> Fields {
@@ -145,7 +181,7 @@ private final class ConfigurationFieldCollector: SyntaxVisitor {
 		}
 		let owner = configurationOwner(named: node.name.text, extendedType: extendedType)
 		for member in node.memberBlock.members {
-			guard let field = storedField(of: member), field.type.hasSuffix("SafeDIMockConfiguration") || field.type.hasSuffix("_MockConfiguration") else { continue }
+			guard let field = storedField(of: member) else { continue }
 			fields[owner, default: [:]][field.label] = GraphFuzzerMockDifference.ConfigurationField(owner: owner, label: field.label, type: field.type)
 		}
 		return .skipChildren
@@ -239,7 +275,7 @@ private struct Rendering {
 
 	private func parametersText(of list: FunctionParameterListSyntax, in scope: Scope) -> String {
 		joined(list.filter { !isDroppedField(labeled: $0.firstName.text, in: scope) }.map {
-			Place(text: elementText(of: $0, in: scope, omittingTrailingComma: $0.trailingComma), isMovable: true)
+			Place(text: elementText(of: $0, in: scope, omittingTrailingComma: $0.trailingComma), isMovable: !Self.namesOutsideLabelOrder.contains(($0.secondName ?? $0.firstName).text))
 		}, separator: ", ")
 	}
 
@@ -249,7 +285,7 @@ private struct Rendering {
 			if let field, isDroppedField(labeled: field.label, in: scope) {
 				return nil
 			} else {
-				return Place(text: elementText(of: member, in: scope), isMovable: field != nil)
+				return Place(text: elementText(of: member, in: scope), isMovable: field.map { !Self.namesOutsideLabelOrder.contains($0.label) } ?? false)
 			}
 		}, separator: "\n")
 	}
@@ -262,7 +298,8 @@ private struct Rendering {
 			} else if isBindingOfDroppedOverride(statement, in: scope) {
 				return nil
 			} else {
-				return Place(text: elementText(of: statement, in: scope), isMovable: assignedField != nil || isParameterBinding(statement, in: scope))
+				let assignsFieldInLabelOrder = assignedField.map { !Self.namesOutsideLabelOrder.contains($0) } ?? false
+				return Place(text: elementText(of: statement, in: scope), isMovable: assignsFieldInLabelOrder || isParameterBinding(statement, in: scope))
 			}
 		}, separator: "\n")
 	}
@@ -318,16 +355,53 @@ private struct Rendering {
 	}
 
 	/// The statements of the `else` of `if let safeDIBuilder = <read> { … } else { … }` when `<read>`, directly or through
-	/// a local binding, reads an override through a dropped field: the mock's code had no field to read in the other outcome.
+	/// a local binding, reads an override through a dropped field, which the mock's code had no field to read in the other
+	/// outcome, and the `if` hands the builder what the `else` constructs with: what the `if` discards is then only the override.
 	private func elseStatementsOfDroppedOverride(_ expression: IfExprSyntax, in scope: Scope) -> CodeBlockItemListSyntax? {
 		guard expression.conditions.count == 1,
 		      case let .optionalBinding(condition) = expression.conditions.first?.condition,
 		      condition.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == Self.overrideBuilderName,
 		      let value = condition.initializer?.value,
 		      case let .codeBlock(elseBody) = expression.elseBody,
-		      readsDroppedField(boundValue(of: value) ?? value, in: scope)
+		      readsDroppedField(boundValue(of: value) ?? value, in: scope),
+		      let call = onlyCall(in: expression.body.statements),
+		      let construction = onlyCall(in: elseBody.statements),
+		      callsBuilderAs(call, construction: construction)
 		else { return nil }
 		return elseBody.statements
+	}
+
+	/// The one call `statements` hold, or `nil` when they hold anything else.
+	private func onlyCall(in statements: CodeBlockItemListSyntax) -> FunctionCallExprSyntax? {
+		guard statements.count == 1, let statement = statements.first else { return nil }
+		return FunctionCallExprSyntax(statement.item)
+	}
+
+	/// Whether `call` is an override's call of its builder that passes what `construction` passes, in order. An erased node
+	/// with a configuration struct erases both; a leaf's builder returns the erased type, so only its construction erases.
+	private func callsBuilderAs(_ call: FunctionCallExprSyntax, construction: FunctionCallExprSyntax) -> Bool {
+		if isBuilderCall(call) {
+			[construction, wrappedCall(of: construction)].contains { $0.map(arguments(of:)) == arguments(of: call) }
+		} else if let builderCall = wrappedCall(of: call), let wrappedConstruction = wrappedCall(of: construction), isBuilderCall(builderCall) {
+			call.calledExpression.trimmedDescription == construction.calledExpression.trimmedDescription && arguments(of: builderCall) == arguments(of: wrappedConstruction)
+		} else {
+			false
+		}
+	}
+
+	private func isBuilderCall(_ call: FunctionCallExprSyntax) -> Bool {
+		call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == Self.overrideBuilderName
+	}
+
+	/// The call `call` takes as its only, unlabeled argument, as an eraser takes what it erases.
+	private func wrappedCall(of call: FunctionCallExprSyntax) -> FunctionCallExprSyntax? {
+		guard call.arguments.count == 1, let argument = call.arguments.first, argument.label == nil else { return nil }
+		return argument.expression.as(FunctionCallExprSyntax.self)
+	}
+
+	/// What `call` passes, without its labels: a builder takes no labels where a construction does.
+	private func arguments(of call: FunctionCallExprSyntax) -> [String] {
+		call.arguments.map(\.expression.trimmedDescription)
 	}
 
 	/// The value a local `let` in an enclosing block gives the name `expression` refers to, or `nil` when it is no such name.
@@ -366,4 +440,6 @@ private struct Rendering {
 
 	private static let overridesParameterName = "safeDIOverrides"
 	private static let overrideBuilderName = "safeDIBuilder"
+	/// The elements that hold one place whatever the labels: a configuration's builder and a mock's overrides are always last.
+	private static let namesOutsideLabelOrder: Set<String> = [overridesParameterName, overrideBuilderName]
 }

@@ -427,6 +427,11 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 	let reversesFileNames: Bool
 	let movesTypeNamesAcrossWrapperNames: Bool
 
+	/// Whether this renaming changes the order of type names, against each other or against wrappers' names.
+	var changesOrderOfTypeNames: Bool {
+		reversesTypeNames || movesTypeNamesAcrossWrapperNames
+	}
+
 	/// Every renaming the oracle runs. A seed's first renamed failure is the one its known issue matches, so a new
 	/// renaming goes last: the seeds the earlier ones already list keep their entries.
 	static let all = [
@@ -7283,8 +7288,10 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// says), and their warnings in any order, each a difference of its own. Paths to fixture files are compared by file
 	/// name, and the suggestions a diagnostic lists ("Did you mean one of …"), and the declarations it lists as proving
 	/// a type's access, in any order: the order inside a message is presentation and changes nothing a user does.
+	/// - Parameter renaming: The renaming that separates the two outcomes, which decides which known reason can explain a
+	///   mock's difference (`GraphFuzzerMockDifference`). With none, neither can, and the difference is the file's code.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	static func differences(between outcome: GraphFuzzerToolOutcome, and otherOutcome: GraphFuzzerToolOutcome, comparingCode codeComparison: CodeComparison = .byteForByte) -> [GraphFuzzerOutcomeDifference] {
+	static func differences(between outcome: GraphFuzzerToolOutcome, and otherOutcome: GraphFuzzerToolOutcome, comparingCode codeComparison: CodeComparison = .byteForByte, renaming: GraphFuzzerRenaming? = nil) -> [GraphFuzzerOutcomeDifference] {
 		// A seam's guard enum is named after a hash of its signature, which names its parameters' types, so a
 		// renaming changes it as it changes the types: a hash restored textually cannot match, and is reduced away, to
 		// what is still an identifier, so that the code still parses.
@@ -7313,7 +7320,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 			return diagnosticEntries(of: reduce(diagnostics)) == diagnosticEntries(of: reduce(otherDiagnostics)) ? [] : [GraphFuzzerOutcomeDifference(aspect: .diagnostics)]
 		case let (.accepted(generatedFiles, warnings), .accepted(otherGeneratedFiles, otherWarnings)):
 			var differences = [GraphFuzzerOutcomeDifference]()
-			lazy var mockDifference = GraphFuzzerMockDifference(generatedFiles: generatedFiles, otherGeneratedFiles: otherGeneratedFiles)
+			lazy var mockDifference = GraphFuzzerMockDifference(generatedFiles: generatedFiles, otherGeneratedFiles: otherGeneratedFiles, renaming: renaming)
 			if Set(generatedFiles.keys) != Set(otherGeneratedFiles.keys) {
 				differences.append(GraphFuzzerOutcomeDifference(aspect: .generatedFileNames))
 			}
@@ -7783,6 +7790,7 @@ enum GraphFuzzerFinding: Equatable {
 	case staleKnownIssue(GraphFuzzerKnownIssue)
 	/// The graph's seed is a known issue, and the issue lists this difference of a renamed graph, which the graph does not
 	/// show: a seed sits on an entry only for what its difference shows, so it belongs on the entry that names exactly that.
+	/// The graph still fails, so the report calls the seed misfiled, not stale.
 	case staleRenamedGraphDifference(GraphFuzzerKnownIssue, GraphFuzzerOutcomeDifference.Aspect)
 	/// The graph fails, and no known issue documents that failure: either its seed is not a known issue, or
 	/// it fails another way than its known issue documents.
@@ -7844,7 +7852,7 @@ enum GraphFuzzerFinding: Equatable {
 		case let .staleKnownIssue(knownIssue):
 			"stale \(seed) \(knownIssue.reason)"
 		case let .staleRenamedGraphDifference(knownIssue, aspect):
-			"stale \(seed) \(knownIssue.reason): the renamed graph does not show \(aspect.rawValue); list the seed under the entry that names exactly what it shows"
+			"misfiled \(seed) \(knownIssue.reason): the renamed graph does not show \(aspect.rawValue); list the seed under the entry that names exactly what it shows"
 		case let .failure(failure) where failure.kind == .renamedGraphDiffers:
 			// Each difference of a graph is a finding, so its line says which, without the sentence's period.
 			"failure \(seed) \(failure.kind.rawValue): \(failure.details.prefix { $0 != "\n" }.dropLast())"
@@ -8243,7 +8251,7 @@ struct GraphFuzzerToolRuns {
 	/// differs by more than the order of its extensions.
 	var renamedGraphFailures: [GraphFuzzerFailure] {
 		renamedOutcomes.flatMap { renaming, outcome in
-			GraphFuzzerToolOutcome.differences(between: firstOutcome, and: outcome, comparingCode: .inAnyOrderOfExtensions).map { difference in
+			GraphFuzzerToolOutcome.differences(between: firstOutcome, and: outcome, comparingCode: .inAnyOrderOfExtensions, renaming: renaming).map { difference in
 				GraphFuzzerFailure(
 					seed: fixture.seed,
 					kind: .renamedGraphDiffers,

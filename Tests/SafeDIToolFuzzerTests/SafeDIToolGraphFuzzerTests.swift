@@ -2113,16 +2113,70 @@ struct SafeDIToolGraphFuzzerTests {
 		])
 	}
 
-	/// The differences between `outcome` and the code `edit` makes of its file named `fileName`.
+	/// A lazy cycle of two mocked types erased where they are instantiated, the second of which also instantiates an erased leaf.
+	private static var lazyCycleOfErasedTypesFixture: GraphFuzzerFixture {
+		let prefix = mockDifferencePrefix
+		return GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			"@Instantiable(generateMock: true)\npublic final class \(prefix)T7: Instantiable {\n\tpublic init(anyT8Builder: ErasedInstantiator<(), \(prefix)AnyT8>) {\n\t\tself.anyT8Builder = anyT8Builder\n\t}\n\t@Instantiated(fulfilledByType: \"\(prefix)T8\", erasedToConcreteExistential: true) let anyT8Builder: ErasedInstantiator<(), \(prefix)AnyT8>\n}\n",
+			"@Instantiable(generateMock: true)\npublic final class \(prefix)T8: Instantiable {\n\tpublic init(anyT7Builder: ErasedInstantiator<(), \(prefix)AnyT7>, anyT4: \(prefix)AnyT4) {\n\t\tself.anyT7Builder = anyT7Builder\n\t\tself.anyT4 = anyT4\n\t}\n\t@Instantiated(fulfilledByType: \"\(prefix)T7\", erasedToConcreteExistential: true) let anyT7Builder: ErasedInstantiator<(), \(prefix)AnyT7>\n\t@Instantiated(fulfilledByType: \"\(prefix)T4\", erasedToConcreteExistential: true) let anyT4: \(prefix)AnyT4\n}\n",
+			plainType("T4"),
+			"public struct \(prefix)AnyT7 {\n\tpublic init(_ value: some AnyObject) {}\n}\n",
+			"public struct \(prefix)AnyT8 {\n\tpublic init(_ value: some AnyObject) {}\n}\n",
+			"public struct \(prefix)AnyT4 {\n\tpublic init(_ value: some AnyObject) {}\n}\n",
+		])
+	}
+
+	/// A tree of mocked types with no cycle: `T0` instantiates `T1` and `T2`, each of which instantiates `T3`.
+	private static var plainTreeFixture: GraphFuzzerFixture {
+		GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			mockedType("T0", instantiating: [("t1", "\(mockDifferencePrefix)T1"), ("t2", "\(mockDifferencePrefix)T2")]),
+			mockedType("T1", instantiating: [("t3", "\(mockDifferencePrefix)T3")]),
+			mockedType("T2", instantiating: [("t3", "\(mockDifferencePrefix)T3")]),
+			mockedType("T3", instantiating: []),
+		])
+	}
+
+	/// A mocked type whose mock takes a forwarded value before its overrides.
+	private static var mockWithForwardedValueFixture: GraphFuzzerFixture {
+		GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			"@Instantiable(generateMock: true)\npublic final class \(mockDifferencePrefix)T6: Instantiable {\n\tpublic init(name: String, t1: \(mockDifferencePrefix)T1) {\n\t\tself.name = name\n\t\tself.t1 = t1\n\t}\n\t@Forwarded let name: String\n\t@Instantiated let t1: \(mockDifferencePrefix)T1\n}\n",
+			mockedType("T1", instantiating: [("t3", "\(mockDifferencePrefix)T3")]),
+			mockedType("T3", instantiating: []),
+		])
+	}
+
+	/// A renaming that reorders everything a known reason of a mock's difference depends on, so that it rules neither out.
+	private static let reversalOfEveryOrder = GraphFuzzerRenaming(reversesTypeNames: true, reversesLabels: true, reversesFileNames: true)
+
+	/// The differences between `outcome` and the code `edit` makes of its file named `fileName`, as if `renaming` had made them.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private static func differences(of outcome: GraphFuzzerToolOutcome, editingFileNamed fileName: String, by edit: (String) -> String) -> [GraphFuzzerOutcomeDifference] {
+	private static func differences(of outcome: GraphFuzzerToolOutcome, editingFileNamed fileName: String, under renaming: GraphFuzzerRenaming = reversalOfEveryOrder, by edit: (String) -> String) -> [GraphFuzzerOutcomeDifference] {
 		guard case let .accepted(generatedFiles, warnings) = outcome else {
 			Issue.record("The fixture's graph is rejected: \(outcome.description)")
 			return []
 		}
 		var editedFiles = generatedFiles
 		editedFiles[fileName] = edit(generatedFiles[fileName, default: ""])
-		return GraphFuzzerToolOutcome.differences(between: outcome, and: .accepted(generatedFiles: editedFiles, warnings: warnings), comparingCode: .inAnyOrderOfExtensions)
+		return GraphFuzzerToolOutcome.differences(between: outcome, and: .accepted(generatedFiles: editedFiles, warnings: warnings), comparingCode: .inAnyOrderOfExtensions, renaming: renaming)
+	}
+
+	/// `code` with each `if let safeDIBuilder = <read>… { … } else { <construction> }` replaced by its construction.
+	private static func constructingWithoutOverridesRead(by read: String, in code: String) -> String {
+		code.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
+			guard let condition = line.range(of: "if let safeDIBuilder = \(read)"),
+			      let elseBranch = line.range(of: " } else { ", range: condition.upperBound..<line.endIndex)
+			else { return String(line) }
+			return "\(line[..<condition.lowerBound])\(line[elseBranch.upperBound...].dropLast(2))"
+		}.joined(separator: "\n")
+	}
+
+	/// `code` with its text from the declaration of its `SafeDIMockConfiguration` on edited by `edit`.
+	private static func editingConfigurationStruct(in code: String, by edit: (String) -> String) -> String {
+		guard let declaration = code.range(of: "struct SafeDIMockConfiguration") else {
+			Issue.record("The code declares no configuration struct: \(code)")
+			return code
+		}
+		return "\(code[..<declaration.lowerBound])\(edit(String(code[declaration.lowerBound...])))"
 	}
 
 	@Test
@@ -2147,7 +2201,7 @@ struct SafeDIToolGraphFuzzerTests {
 		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleWithTwoLabelsFixture, multiModuleRenamings: [])
 		let reversalOfEveryOrder = try #require(toolRuns.renamedOutcomes.first { $0.renaming.reversesTypeNames && $0.renaming.reversesLabels })
 
-		let differences = GraphFuzzerToolOutcome.differences(between: toolRuns.firstOutcome, and: reversalOfEveryOrder.outcome, comparingCode: .inAnyOrderOfExtensions)
+		let differences = GraphFuzzerToolOutcome.differences(between: toolRuns.firstOutcome, and: reversalOfEveryOrder.outcome, comparingCode: .inAnyOrderOfExtensions, renaming: reversalOfEveryOrder.renaming)
 
 		#expect(differences.filter { $0.fileName == "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift" }.map(\.aspect) == [.mockParameterAndFieldOrder, .mockConfigurationFieldPresence])
 		#expect(Set(toolRuns.renamedGraphFailures.map(\.renamedGraphDifference)) == [.mockParameterAndFieldOrder, .mockConfigurationFieldPresence])
@@ -2171,10 +2225,12 @@ struct SafeDIToolGraphFuzzerTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_nameNeitherReason_whenAFieldThatHoldsNoConfigurationIsAbsent() async throws {
 		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.mockWithTwoLabelsFixture, renamings: [], multiModuleRenamings: [])
-		let linesOfTheField = ["t5: \(Self.mockDifferencePrefix)T5? = nil,", "t5: \(Self.mockDifferencePrefix)T5? = nil", "self.t5 = t5", "let t5: \(Self.mockDifferencePrefix)T5?"]
+		let linesOfTheField = ["t5: \(Self.mockDifferencePrefix)T5? = nil,", "t5: \(Self.mockDifferencePrefix)T5? = nil", "self.t5 = t5", "let t5: \(Self.mockDifferencePrefix)T5?", "let t5: \(Self.mockDifferencePrefix)T5? = safeDIOverrides.t5"]
 
 		let differences = Self.differences(of: toolRuns.firstOutcome, editingFileNamed: "\(Self.mockDifferencePrefix)T3+SafeDIMock.swift") { code in
-			code.split(separator: "\n", omittingEmptySubsequences: false)
+			// The binding that reads the field goes too, or its read alone would differ.
+			#expect(code.contains("let t5: \(Self.mockDifferencePrefix)T5? = safeDIOverrides.t5"))
+			return code.split(separator: "\n", omittingEmptySubsequences: false)
 				.filter { !linesOfTheField.contains($0.trimmingCharacters(in: .whitespaces)) }
 				.joined(separator: "\n")
 		}
@@ -2224,20 +2280,331 @@ struct SafeDIToolGraphFuzzerTests {
 	func differences_nameNeitherReason_whenTheConstructionOfADroppedOverridesElseAlsoDiffers() async throws {
 		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, multiModuleRenamings: [])
 		let reversalOfTypeNames = try #require(toolRuns.renamedOutcomes.first { $0.renaming.reversesTypeNames && !$0.renaming.reversesLabels && !$0.renaming.reversesFileNames })
-		guard case let .accepted(generatedFiles, warnings) = toolRuns.firstOutcome, case var .accepted(renamedFiles, renamedWarnings) = reversalOfTypeNames.outcome else {
+		guard case let .accepted(renamedFiles, renamedWarnings) = reversalOfTypeNames.outcome else {
 			Issue.record("The fixture's graph is rejected.")
 			return
 		}
-		let fileName = try #require(renamedFiles.keys.sorted().first { renamedFiles[$0]?.contains("{ safeDIBuilder(") == true && $0.hasSuffix("+SafeDIMock.swift") })
-		let elseBranch = "} else { \(Self.mockDifferencePrefix)T"
+		let fileName = "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift"
+		let condition = "if let safeDIBuilder = safeDIOverrides.t8Builder.t7Builder.safeDIBuilder { safeDIBuilder(t8Builder) } else"
+		let construction = "\(Self.mockDifferencePrefix)T7(t8Builder: t8Builder)"
 		var editedRenamedFiles = renamedFiles
-		#expect(renamedFiles[fileName]?.contains(elseBranch) == true)
-		editedRenamedFiles[fileName] = renamedFiles[fileName]?.replacingOccurrences(of: elseBranch, with: "} else { Other\(Self.mockDifferencePrefix)T")
-		renamedFiles = editedRenamedFiles
+		#expect(renamedFiles[fileName]?.contains("\(condition) { \(construction) }") == true)
+		// Only the `else` of the override the first outcome has no field for: the file's other override exists in both outcomes.
+		editedRenamedFiles[fileName] = renamedFiles[fileName]?.replacingOccurrences(of: "\(condition) { \(construction) }", with: "\(condition) { Other\(construction) }")
 
-		let differences = GraphFuzzerToolOutcome.differences(between: .accepted(generatedFiles: generatedFiles, warnings: warnings), and: .accepted(generatedFiles: renamedFiles, warnings: renamedWarnings), comparingCode: .inAnyOrderOfExtensions)
+		let differences = GraphFuzzerToolOutcome.differences(between: toolRuns.firstOutcome, and: .accepted(generatedFiles: editedRenamedFiles, warnings: renamedWarnings), comparingCode: .inAnyOrderOfExtensions, renaming: reversalOfTypeNames.renaming)
 
 		#expect(differences.filter { $0.fileName == fileName }.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenAConfigurationFieldOutsideAnyCycleIsAbsent() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.plainTreeFixture, renamings: [], multiModuleRenamings: [])
+		let fieldType = "\(Self.mockDifferencePrefix)T2.SafeDIMockConfiguration"
+		let otherParameter = "            t1: \(Self.mockDifferencePrefix)T1.SafeDIMockConfiguration = .init()"
+
+		let differences = Self.differences(of: toolRuns.firstOutcome, editingFileNamed: "\(Self.mockDifferencePrefix)T0+SafeDIMock.swift") { code in
+			#expect(code.contains("\(otherParameter),\n            t2: \(fieldType) = .init()\n"))
+			return Self.constructingWithoutOverridesRead(by: "safeDIOverrides.t2", in: code)
+				.replacingOccurrences(of: "\(otherParameter),\n            t2: \(fieldType) = .init()\n", with: "\(otherParameter)\n")
+				.replacingOccurrences(of: "            self.t2 = t2\n", with: "")
+				.replacingOccurrences(of: "        let t2: \(fieldType)\n", with: "")
+		}
+
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenAConfigurationFieldChangesItsLabel() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.plainTreeFixture, renamings: [], multiModuleRenamings: [])
+		let fieldType = "\(Self.mockDifferencePrefix)T2.SafeDIMockConfiguration"
+
+		let differences = Self.differences(of: toolRuns.firstOutcome, editingFileNamed: "\(Self.mockDifferencePrefix)T0+SafeDIMock.swift") { code in
+			#expect(code.contains("t2: \(fieldType)"))
+			return code
+				.replacingOccurrences(of: "t2: \(fieldType)", with: "renamedLabel: \(fieldType)")
+				.replacingOccurrences(of: "self.t2 = t2", with: "self.renamedLabel = renamedLabel")
+				.replacingOccurrences(of: "safeDIOverrides.t2.", with: "safeDIOverrides.renamedLabel.")
+		}
+
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenAFieldIsReplacedByOneThatConfiguresAnotherChild() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.plainTreeFixture, renamings: [], multiModuleRenamings: [])
+		let fieldType = "\(Self.mockDifferencePrefix)T2.SafeDIMockConfiguration"
+		let otherFieldType = "\(Self.mockDifferencePrefix)T3.SafeDIMockConfiguration"
+
+		let differences = Self.differences(of: toolRuns.firstOutcome, editingFileNamed: "\(Self.mockDifferencePrefix)T0+SafeDIMock.swift") { code in
+			#expect(code.contains("t2: \(fieldType)"))
+			return Self.constructingWithoutOverridesRead(by: "safeDIOverrides.t2", in: code)
+				.replacingOccurrences(of: "t2: \(fieldType)", with: "otherChild: \(otherFieldType)")
+				.replacingOccurrences(of: "self.t2 = t2", with: "self.otherChild = otherChild")
+		}
+
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenAFieldOfALazyCycleChangesItsLabel() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, renamings: [], multiModuleRenamings: [])
+		guard case let .accepted(generatedFiles, warnings) = toolRuns.firstOutcome else {
+			Issue.record("The fixture's graph is rejected.")
+			return
+		}
+		let t7FileName = "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift"
+		let t8FileName = "\(Self.mockDifferencePrefix)T8+SafeDIMock.swift"
+		let t7Configuration = "\(Self.mockDifferencePrefix)T7.SafeDIMockConfiguration"
+		let t8Configuration = "\(Self.mockDifferencePrefix)T8.SafeDIMockConfiguration"
+		var editedFiles = generatedFiles
+		editedFiles[t7FileName] = Self.editingConfigurationStruct(in: generatedFiles[t7FileName, default: ""]) { configuration in
+			configuration
+				.replacingOccurrences(of: "t8Builder: \(t8Configuration)", with: "renamedLabel: \(t8Configuration)")
+				.replacingOccurrences(of: "self.t8Builder = t8Builder", with: "self.renamedLabel = renamedLabel")
+		}
+		// The other direction of the cycle, so that the two outcomes' structs hold a cycle the renamed field lies on.
+		editedFiles[t8FileName] = Self.editingConfigurationStruct(in: generatedFiles[t8FileName, default: ""]) { configuration in
+			configuration
+				.replacingOccurrences(of: "init(\n            _ safeDIBuilder", with: "init(\n            t7Builder: \(t7Configuration) = .init(),\n            _ safeDIBuilder")
+				.replacingOccurrences(of: "            self.safeDIBuilder = safeDIBuilder\n", with: "            self.t7Builder = t7Builder\n            self.safeDIBuilder = safeDIBuilder\n")
+				.replacingOccurrences(of: "        /// Overrides how this type", with: "        let t7Builder: \(t7Configuration)\n        /// Overrides how this type")
+		}.replacingOccurrences(of: "safeDIOverrides.t7Builder.t8Builder.", with: "safeDIOverrides.t7Builder.renamedLabel.")
+
+		let differences = GraphFuzzerToolOutcome.differences(between: toolRuns.firstOutcome, and: .accepted(generatedFiles: editedFiles, warnings: warnings), comparingCode: .inAnyOrderOfExtensions, renaming: Self.reversalOfEveryOrder)
+
+		#expect(differences.map(\.aspect) == [.mockCode, .mockCode])
+	}
+
+	/// The aspects of the difference in `T7`'s mock between the graph of `lazyCycleWithTwoLabelsFixture` and its reversal of
+	/// type names, with the body of the reversal's override of the field the graph drops replaced by `body`.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func aspectsOfT7sMockWithDroppedOverride(editedTo body: String) async throws -> [GraphFuzzerOutcomeDifference.Aspect] {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: lazyCycleWithTwoLabelsFixture, multiModuleRenamings: [])
+		let reversalOfTypeNames = try #require(toolRuns.renamedOutcomes.first { $0.renaming.reversesTypeNames && !$0.renaming.reversesLabels && !$0.renaming.reversesFileNames })
+		guard case let .accepted(renamedFiles, renamedWarnings) = reversalOfTypeNames.outcome else {
+			Issue.record("The fixture's graph is rejected.")
+			return []
+		}
+		let fileName = "\(mockDifferencePrefix)T7+SafeDIMock.swift"
+		let builderCall = "{ safeDIBuilder(t8Builder, t4, t5) }"
+		var editedFiles = renamedFiles
+		#expect(renamedFiles[fileName]?.contains(builderCall) == true)
+		editedFiles[fileName] = renamedFiles[fileName]?.replacingOccurrences(of: builderCall, with: body)
+		return GraphFuzzerToolOutcome.differences(between: toolRuns.firstOutcome, and: .accepted(generatedFiles: editedFiles, warnings: renamedWarnings), comparingCode: .inAnyOrderOfExtensions, renaming: reversalOfTypeNames.renaming)
+			.filter { $0.fileName == fileName }
+			.map(\.aspect)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_namePresence_whenADroppedOverridesBuilderTakesTheArgumentsOfItsConstruction() async throws {
+		#expect(try await Self.aspectsOfT7sMockWithDroppedOverride(editedTo: "{ safeDIBuilder(t8Builder, t4, t5) }") == [.mockConfigurationFieldPresence])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenADroppedOverridesBuilderTakesItsArgumentsInAnotherOrder() async throws {
+		#expect(try await Self.aspectsOfT7sMockWithDroppedOverride(editedTo: "{ safeDIBuilder(t8Builder, t5, t4) }") == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenADroppedOverrideDoesNotCallItsBuilder() async throws {
+		#expect(try await Self.aspectsOfT7sMockWithDroppedOverride(editedTo: "{ fatalError() }") == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_namePresence_whenALazyCycleOfErasedTypesDropsAField() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleOfErasedTypesFixture, multiModuleRenamings: [])
+		let reversalOfTypeNames = try #require(toolRuns.renamedOutcomes.first { $0.renaming.reversesTypeNames && !$0.renaming.reversesLabels && !$0.renaming.reversesFileNames })
+		let fileName = "\(Self.mockDifferencePrefix)T8+SafeDIMock.swift"
+		guard case let .accepted(generatedFiles, _) = toolRuns.firstOutcome else {
+			Issue.record("The fixture's graph is rejected.")
+			return
+		}
+
+		// Beneath the dropped field, an erased node with a configuration struct and an erased leaf.
+		#expect(generatedFiles[fileName]?.contains("safeDIOverrides.anyT7Builder.anyT8Builder.safeDIBuilder { \(Self.mockDifferencePrefix)AnyT8(safeDIBuilder(anyT7Builder, anyT4)) }") == true)
+		#expect(generatedFiles[fileName]?.contains("safeDIOverrides.anyT7Builder.anyT8Builder.anyT4 { safeDIBuilder() } else { \(Self.mockDifferencePrefix)AnyT4(\(Self.mockDifferencePrefix)T4()) }") == true)
+		#expect(Set(GraphFuzzerToolOutcome.differences(between: toolRuns.firstOutcome, and: reversalOfTypeNames.outcome, comparingCode: .inAnyOrderOfExtensions, renaming: reversalOfTypeNames.renaming).map(\.aspect)) == [.mockConfigurationFieldPresence])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenADroppedOverrideErasesItsBuilderWithAnotherEraser() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleOfErasedTypesFixture, multiModuleRenamings: [])
+		let reversalOfTypeNames = try #require(toolRuns.renamedOutcomes.first { $0.renaming.reversesTypeNames && !$0.renaming.reversesLabels && !$0.renaming.reversesFileNames })
+		guard case let .accepted(generatedFiles, warnings) = toolRuns.firstOutcome else {
+			Issue.record("The fixture's graph is rejected.")
+			return
+		}
+		let fileName = "\(Self.mockDifferencePrefix)T8+SafeDIMock.swift"
+		let condition = "if let safeDIBuilder = safeDIOverrides.anyT7Builder.anyT8Builder.safeDIBuilder { "
+		var editedFiles = generatedFiles
+		#expect(generatedFiles[fileName]?.contains("\(condition)\(Self.mockDifferencePrefix)AnyT8(safeDIBuilder(") == true)
+		editedFiles[fileName] = generatedFiles[fileName]?.replacingOccurrences(of: "\(condition)\(Self.mockDifferencePrefix)AnyT8(safeDIBuilder(", with: "\(condition)Other\(Self.mockDifferencePrefix)AnyT8(safeDIBuilder(")
+
+		let differences = GraphFuzzerToolOutcome.differences(between: .accepted(generatedFiles: editedFiles, warnings: warnings), and: reversalOfTypeNames.outcome, comparingCode: .inAnyOrderOfExtensions, renaming: reversalOfTypeNames.renaming)
+
+		#expect(differences.filter { $0.fileName == fileName }.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenAConfigurationInitializersBuilderParameterMovesFirst() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, renamings: [], multiModuleRenamings: [])
+		let child = "t8Builder: \(Self.mockDifferencePrefix)T8.SafeDIMockConfiguration = .init()"
+		let builder = "_ safeDIBuilder: ((Instantiator<\(Self.mockDifferencePrefix)T8>) -> \(Self.mockDifferencePrefix)T7)? = nil"
+
+		let differences = Self.differences(of: toolRuns.firstOutcome, editingFileNamed: "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift") { code in
+			#expect(code.contains("\(child),\n            \(builder)\n"))
+			return code.replacingOccurrences(of: "\(child),\n            \(builder)\n", with: "\(builder),\n            \(child)\n")
+		}
+
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenAConfigurationStructsBuilderFieldMovesFirst() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, renamings: [], multiModuleRenamings: [])
+		let child = "        let t8Builder: \(Self.mockDifferencePrefix)T8.SafeDIMockConfiguration\n"
+		let builder = "        let safeDIBuilder: ((Instantiator<\(Self.mockDifferencePrefix)T8>) -> \(Self.mockDifferencePrefix)T7)?\n"
+
+		let differences = Self.differences(of: toolRuns.firstOutcome, editingFileNamed: "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift") { code in
+			Self.editingConfigurationStruct(in: code) { configuration in
+				guard let childRange = configuration.range(of: child), let builderRange = configuration.range(of: builder, range: childRange.upperBound..<configuration.endIndex) else {
+					Issue.record("The fields are not where the test expects them: \(configuration)")
+					return configuration
+				}
+				let documentedBuilder = configuration[childRange.upperBound..<builderRange.upperBound]
+				return configuration.replacingCharacters(in: childRange.lowerBound..<builderRange.upperBound, with: "\(documentedBuilder)\(child)")
+			}
+		}
+
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenAConfigurationInitializersBuilderAssignmentMovesFirst() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, renamings: [], multiModuleRenamings: [])
+		let assignments = "            self.t8Builder = t8Builder\n            self.safeDIBuilder = safeDIBuilder\n"
+
+		let differences = Self.differences(of: toolRuns.firstOutcome, editingFileNamed: "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift") { code in
+			#expect(code.contains(assignments))
+			return code.replacingOccurrences(of: assignments, with: "            self.safeDIBuilder = safeDIBuilder\n            self.t8Builder = t8Builder\n")
+		}
+
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenAMocksOverridesParameterMovesFirst() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.mockWithForwardedValueFixture, renamings: [], multiModuleRenamings: [])
+		let parameters = "        name: String,\n        safeDIOverrides: SafeDIOverrides = .init()\n"
+
+		let differences = Self.differences(of: toolRuns.firstOutcome, editingFileNamed: "\(Self.mockDifferencePrefix)T6+SafeDIMock.swift") { code in
+			#expect(code.contains(parameters))
+			return code.replacingOccurrences(of: parameters, with: "        safeDIOverrides: SafeDIOverrides = .init(),\n        name: String\n")
+		}
+
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	/// The runs of `mockWithTwoLabelsFixture`, given as `toolRuns`, as if `renaming` had swapped the parameters of `T3`'s overrides.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func runsSwappingParametersOfOverrides(of toolRuns: GraphFuzzerToolRuns, under renaming: GraphFuzzerRenaming) -> GraphFuzzerToolRuns {
+		guard case let .accepted(generatedFiles, warnings) = toolRuns.firstOutcome else {
+			Issue.record("The fixture's graph is rejected.")
+			return toolRuns
+		}
+		let fileName = "\(mockDifferencePrefix)T3+SafeDIMock.swift"
+		let t4 = "t4: \(mockDifferencePrefix)T4? = nil"
+		let t5 = "t5: \(mockDifferencePrefix)T5? = nil"
+		var editedFiles = generatedFiles
+		#expect(generatedFiles[fileName]?.contains("\(t4),\n            \(t5)\n") == true)
+		editedFiles[fileName] = generatedFiles[fileName]?.replacingOccurrences(of: "\(t4),\n            \(t5)\n", with: "\(t5),\n            \(t4)\n")
+		return GraphFuzzerToolRuns(fixture: toolRuns.fixture, firstOutcome: toolRuns.firstOutcome, secondOutcome: toolRuns.firstOutcome, renamedOutcomes: [(renaming, .accepted(generatedFiles: editedFiles, warnings: warnings))])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func renamedGraphFailures_nameTheOrderOfParameters_whenARenamingThatReversesLabelsReordersThem() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.mockWithTwoLabelsFixture, renamings: [], multiModuleRenamings: [])
+
+		for renaming in GraphFuzzerRenaming.all where renaming.reversesLabels {
+			#expect(Self.runsSwappingParametersOfOverrides(of: toolRuns, under: renaming).renamedGraphFailures.map(\.renamedGraphDifference) == [.mockParameterAndFieldOrder])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func renamedGraphFailures_nameNeitherReason_whenARenamingThatKeepsLabelsReordersParameters() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.mockWithTwoLabelsFixture, renamings: [], multiModuleRenamings: [])
+
+		for renaming in GraphFuzzerRenaming.all where !renaming.reversesLabels {
+			#expect(Self.runsSwappingParametersOfOverrides(of: toolRuns, under: renaming).renamedGraphFailures.map(\.renamedGraphDifference) == [.mockCode])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func renamedGraphFailures_nameThePresenceOfAConfigurationField_whenARenamingThatChangesTypeNamesDropsIt() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, multiModuleRenamings: [])
+		let reversalOfTypeNames = try #require(toolRuns.renamedOutcomes.first { $0.renaming.reversesTypeNames && !$0.renaming.reversesLabels && !$0.renaming.reversesFileNames })
+
+		for renaming in GraphFuzzerRenaming.all where renaming.reversesTypeNames || renaming.movesTypeNamesAcrossWrapperNames {
+			let runs = GraphFuzzerToolRuns(fixture: toolRuns.fixture, firstOutcome: toolRuns.firstOutcome, secondOutcome: toolRuns.firstOutcome, renamedOutcomes: [(renaming, reversalOfTypeNames.outcome)])
+			#expect(Set(runs.renamedGraphFailures.map(\.renamedGraphDifference)) == [.mockConfigurationFieldPresence])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func renamedGraphFailures_nameNeitherReason_whenARenamingThatKeepsTypeNamesChangesAConfigurationField() async throws {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, multiModuleRenamings: [])
+		let reversalOfTypeNames = try #require(toolRuns.renamedOutcomes.first { $0.renaming.reversesTypeNames && !$0.renaming.reversesLabels && !$0.renaming.reversesFileNames })
+
+		for renaming in GraphFuzzerRenaming.all where !renaming.reversesTypeNames && !renaming.movesTypeNamesAcrossWrapperNames {
+			let runs = GraphFuzzerToolRuns(fixture: toolRuns.fixture, firstOutcome: toolRuns.firstOutcome, secondOutcome: toolRuns.firstOutcome, renamedOutcomes: [(renaming, reversalOfTypeNames.outcome)])
+			#expect(Set(runs.renamedGraphFailures.map(\.renamedGraphDifference)) == [.mockCode])
+		}
+	}
+
+	@Test
+	func summaryOfReport_saysTheSeedIsMisfiled_whenAnEntryListsADifferenceItsGraphDoesNotShow() throws {
+		let knownIssue = GraphFuzzerKnownIssue(reason: "Both reasons", signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)], seeds: [12])
+		let reportLine = try #require(GraphFuzzerFinding.staleRenamedGraphDifference(knownIssue, .mockConfigurationFieldPresence).reportLine(seed: 12))
+		let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+		defer { try? FileManager.default.removeItem(at: directory) }
+		let report = directory.appendingPathComponent("report")
+		let summary = directory.appendingPathComponent("summary")
+		try "seed 12\nfinished 12\n\(reportLine)\ncompleted 1 graphs\n".write(to: report, atomically: true, encoding: .utf8)
+		let script = URL(fileURLWithPath: #filePath)
+			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+			.appendingPathComponent(".github/scripts/summarize-graph-fuzzer-report.sh")
+		let process = Process()
+		process.executableURL = URL(fileURLWithPath: "/bin/bash")
+		process.arguments = [script.path, report.path, summary.path, "12", "1"]
+		// The job summary of a CI run of this suite is not this test's to write to.
+		process.environment = ProcessInfo.processInfo.environment.filter { $0.key != "GITHUB_STEP_SUMMARY" }
+
+		try process.run()
+		process.waitUntilExit()
+
+		let text = try String(contentsOf: summary, encoding: .utf8)
+		#expect(process.terminationStatus == 1)
+		#expect(text.contains("- **Seed 12** is listed under an entry that names more than its graph shows (Both reasons: the renamed graph does not show which configuration fields its generated mock has; list the seed under the entry that names exactly what it shows)."))
+		#expect(!text.contains("no longer fails"))
 	}
 
 	@Test
@@ -2248,7 +2615,7 @@ struct SafeDIToolGraphFuzzerTests {
 		let findings = GraphFuzzerFinding.findings(failure: order, laterFailures: [], knownIssue: knownIssue)
 
 		#expect(findings == [.knownIssue(knownIssue, order), .staleRenamedGraphDifference(knownIssue, .mockConfigurationFieldPresence)])
-		#expect(findings.last?.reportLine(seed: 12) == "stale 12 Both reasons: the renamed graph does not show which configuration fields its generated mock has; list the seed under the entry that names exactly what it shows")
+		#expect(findings.last?.reportLine(seed: 12) == "misfiled 12 Both reasons: the renamed graph does not show which configuration fields its generated mock has; list the seed under the entry that names exactly what it shows")
 	}
 
 	@Test
@@ -4441,7 +4808,7 @@ struct GraphFuzzerLongRunConfiguration {
 	let features: Set<GraphFuzzerGeneratorFeature>?
 	/// A file the run appends its progress to, which `graph-fuzzer.yml` reads: `seed <n>` before the tool first
 	/// runs each graph; `failure <seed> <kind>`, with a renamed graph's difference after the kind, `known <seed> <reason>`,
-	/// or `stale <seed> <reason>` for each finding; `renamed <seed> <summary>` and `multimodule <seed> <summary>` for each renamed or partitioned run
+	/// `stale <seed> <reason>`, or `misfiled <seed> <reason>` for each finding; `renamed <seed> <summary>` and `multimodule <seed> <summary>` for each renamed or partitioned run
 	/// that gives other results, whether or not the graph fails another way; `problem <text>` for anything wrong
 	/// with the run itself; `partitions …` with how many base corpus graphs are split into each number of modules and
 	/// how many have a `Delta` depending on `Gamma`, whose two integrations combine declarations in different orders; and
