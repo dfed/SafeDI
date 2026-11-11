@@ -763,8 +763,8 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 				let appSettingsPath = NormalizedFilePath(fixtures["App"]!.compilerPath(of: "Settings.swift")).path
 				let sessionSettingsPath = NormalizedFilePath(fixtures["Session"]!.compilerPath(of: "Settings.swift")).path
 				return """
-				\(appSettingsPath):3:1: error: Found multiple @Instantiable types or extensions that fulfill `Settings`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Settings` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
-				\(sessionSettingsPath):1:1: error: Found multiple @Instantiable types or extensions that fulfill `Settings`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Settings` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(appSettingsPath):3:1: error: `Settings` is declared in modules `App` and `Session`. SafeDI tells @Instantiable types apart by name across every module a run reads. Rename one.
+				\(sessionSettingsPath):1:1: error: `Settings` is declared in modules `App` and `Session`. SafeDI tells @Instantiable types apart by name across every module a run reads. Rename one.
 				"""
 			}) {
 				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: integration, filesToDelete: &filesToDelete)

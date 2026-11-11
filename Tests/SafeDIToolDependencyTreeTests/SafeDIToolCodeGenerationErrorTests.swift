@@ -169,8 +169,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File_2.swift"]):1:1: error: Found multiple @Instantiable types or extensions that fulfill `Container<Int>`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Container<Int>` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
-				\(fixtures["File_3.swift"]):1:1: error: Found multiple @Instantiable types or extensions that fulfill `Container<Int>`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Container<Int>` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["File_2.swift"]):1:1: error: Found multiple @Instantiable types or extensions that fulfill `Container<Int>`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If `Container<Int>` names different types, rename one. If it names one type, keep one, and remove `Container<Int>` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["File_3.swift"]):1:1: error: Found multiple @Instantiable types or extensions that fulfill `Container<Int>`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If `Container<Int>` names different types, rename one. If it names one type, keep one, and remove `Container<Int>` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {
@@ -208,8 +208,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File_2.swift"]):1:1: error: Found multiple @Instantiable types or extensions that fulfill `Container<Int>`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Container<Int>` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
-				\(fixtures["File_3.swift"]):1:1: error: Found multiple @Instantiable types or extensions that fulfill `Container<Int>`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Container<Int>` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["File_2.swift"]):1:1: error: Found multiple @Instantiable types or extensions that fulfill `Container<Int>`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If `Container<Int>` names different types, rename one. If it names one type, keep one, and remove `Container<Int>` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["File_3.swift"]):1:1: error: Found multiple @Instantiable types or extensions that fulfill `Container<Int>`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If `Container<Int>` names different types, rename one. If it names one type, keep one, and remove `Container<Int>` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {
@@ -2489,8 +2489,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
-				\(fixtures["RootViewController_2.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If they are different types, rename one. If they are one type, keep one, and remove the others’ @Instantiable.
+				\(fixtures["RootViewController_2.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If they are different types, rename one. If they are one type, keep one, and remove the others’ @Instantiable.
 				"""
 			},
 		) {
@@ -2521,8 +2521,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
-				\(fixtures["RootViewController_2.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If they are different types, rename one. If they are one type, keep one, and remove the others’ @Instantiable.
+				\(fixtures["RootViewController_2.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If they are different types, rename one. If they are one type, keep one, and remove the others’ @Instantiable.
 				"""
 			},
 		) {
@@ -2553,8 +2553,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
-				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["File.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If `RootViewController` names different types, rename one. If it names one type, keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If `RootViewController` names different types, rename one. If it names one type, keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {
@@ -2589,8 +2589,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
-				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["File.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If `RootViewController` names different types, rename one. If it names one type, keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If `RootViewController` names different types, rename one. If it names one type, keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {
@@ -2625,8 +2625,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
-				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["File.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If `RootViewController` names different types, rename one. If it names one type, keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If `RootViewController` names different types, rename one. If it names one type, keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {
@@ -2661,8 +2661,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `UserDefaults`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `UserDefaults` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
-				\(fixtures["File_2.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `UserDefaults`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `UserDefaults` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["File.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `UserDefaults`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If `UserDefaults` names different types, rename one. If it names one type, keep one, and remove `UserDefaults` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["File_2.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `UserDefaults`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If `UserDefaults` names different types, rename one. If it names one type, keep one, and remove `UserDefaults` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {
@@ -2701,8 +2701,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `UIViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `UIViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
-				\(fixtures["SplashViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `UIViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `UIViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `UIViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If `UIViewController` names different types, rename one. If it names one type, keep one, and remove `UIViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["SplashViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `UIViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If `UIViewController` names different types, rename one. If it names one type, keep one, and remove `UIViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {

@@ -3231,7 +3231,7 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 	mutating func run_throwsErrorNamingCompilerDecidedClauses_whenEachClauseOfPlatformBlockDeclaresType() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
-				let message = "Found multiple @Instantiable types or extensions that fulfill `Haptics`. Each is declared inside an `#if` that only the compiler decides, such as `#if os(iOS)`, and SafeDI reads every clause. If no build compiles more than one of them, fulfill `Haptics` with one @Instantiable declaration outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. Otherwise, keep one, and remove `Haptics` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
+				let message = "Found multiple @Instantiable types or extensions that fulfill `Haptics`. Each is declared inside an `#if` that only the compiler decides, such as `#if os(iOS)`, and SafeDI reads every clause. If they are one type that differs by platform, fulfill `Haptics` with one @Instantiable declaration outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. If they are different types, rename one. Otherwise, keep one, and remove the others’ @Instantiable."
 				return """
 				\(fixtures["Haptics.swift"]):2:1: error: \(message)
 				\(fixtures["Haptics.swift"]):7:1: error: \(message)
@@ -3265,7 +3265,7 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 		// Both declarations compile on iOS, so this is a plain duplicate: the message must still offer keeping one.
 		await assertThrowsError(
 			diagnostics: { fixtures in
-				let message = "Found multiple @Instantiable types or extensions that fulfill `Haptics`. Each is declared inside an `#if` that only the compiler decides, such as `#if os(iOS)`, and SafeDI reads every clause. If no build compiles more than one of them, fulfill `Haptics` with one @Instantiable declaration outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. Otherwise, keep one, and remove `Haptics` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
+				let message = "Found multiple @Instantiable types or extensions that fulfill `Haptics`. Each is declared inside an `#if` that only the compiler decides, such as `#if os(iOS)`, and SafeDI reads every clause. If `Haptics` names one type that differs by platform, fulfill `Haptics` with one @Instantiable declaration outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. If it names different types, rename one. Otherwise, keep one, and remove `Haptics` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
 				return """
 				\(fixtures["FeedbackHaptics.swift"]):2:1: error: \(message)
 				\(fixtures["ImpactHaptics.swift"]):2:1: error: \(message)
@@ -3300,10 +3300,10 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsErrorKeepingOneDeclaration_whenOnlyOneDuplicateIsInsidePlatformBlock() async {
+	mutating func run_throwsErrorOfferingRenameAndKeepingOne_whenOnlyOneDuplicateIsInsidePlatformBlock() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
-				let message = "Found multiple @Instantiable types or extensions that fulfill `Haptics`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Haptics` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
+				let message = "Found multiple @Instantiable types or extensions that fulfill `Haptics`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. If they are different types, rename one. If they are one type, keep one, and remove the others’ @Instantiable."
 				return """
 				\(fixtures["Haptics.swift"]):2:1: error: \(message)
 				\(fixtures["Haptics_2.swift"]):1:1: error: \(message)

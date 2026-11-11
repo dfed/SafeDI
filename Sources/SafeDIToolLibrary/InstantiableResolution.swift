@@ -241,12 +241,7 @@ func resolveSafeDIFulfilledTypes(instantiables: [Instantiable]) throws -> [TypeD
 						typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
 					}
 				case (false, false):
-					let productionDeclarations = productionDeclarations(fulfilling: instantiableType)
-					errorByInstantiableType[instantiableType] = .foundDuplicateInstantiable(
-						instantiableType,
-						declaredAt: productionDeclarations.map(\.declarationLocation),
-						isEachInsideCompilerDecidedBlock: productionDeclarations.allSatisfy(\.isInsideCompilerDecidedBlock),
-					)
+					errorByInstantiableType[instantiableType] = .duplicate(of: instantiableType, declaredBy: productionDeclarations(fulfilling: instantiableType))
 				}
 			} else {
 				typeDescriptionToFulfillingInstantiableMap[instantiableType] = instantiable
@@ -289,9 +284,64 @@ private enum CollectInstantiablesError: SourceLocatedError {
 	/// flag does not say whether the blocks exclude one another (two files may each guard the type with `#if os(iOS)`),
 	/// so the message offers both remedies.
 	case foundDuplicateInstantiable(TypeDescription, declaredAt: [Dependency.DeclarationLocation?], isEachInsideCompilerDecidedBlock: Bool)
+	/// Each declaration is a type of this name, and at least one is in a module SafeDI does not know, which may or may not
+	/// be another's. The message offers renaming, for types that have nothing to do with each other, beside keeping one.
+	case foundTypesOfOneNameInUnknownModules(TypeDescription, declaredAt: [Dependency.DeclarationLocation?], isEachInsideCompilerDecidedBlock: Bool)
+	/// Each of the two or more modules `moduleNames` lists, in sorted order, declares a type of this name, and those
+	/// `repeatingModuleNames` lists, in sorted order, declare it more than once.
+	/// `isEachInsideCompilerDecidedBlock` is as for `foundDuplicateInstantiable`: SafeDI cannot tell one type split by
+	/// platform across modules from two types that have nothing to do with each other, so the message offers both remedies.
+	case foundTypesOfOneNameInSeveralModules(TypeDescription, moduleNames: [String], repeatingModuleNames: [String], declaredAt: [Dependency.DeclarationLocation?], isEachInsideCompilerDecidedBlock: Bool)
+	/// At least one declaration is an extension or a `fulfillingAdditionalTypes` claim of this name, and the declarations are
+	/// in the two or more modules `moduleNames` lists, in sorted order, or, when `moduleNames` is `nil`, at least one is in a
+	/// module SafeDI does not know. SafeDI reads only `@Instantiable` declarations here, so it cannot tell one type of this
+	/// name from a type of the name in each module, and the message offers renaming beside keeping one. Those
+	/// `repeatingModuleNames` lists, in sorted order, fulfill it more than once.
+	case foundClaimsOfOneName(TypeDescription, moduleNames: [String]?, repeatingModuleNames: [String], declaredAt: [Dependency.DeclarationLocation?], isEachInsideCompilerDecidedBlock: Bool)
+	/// One declaration fulfills this type twice: its `fulfillingAdditionalTypes` names its own type, or repeats an entry.
+	case foundRepeatedClaim(TypeDescription, declaredAt: [Dependency.DeclarationLocation?])
 	case duplicateMockProvider(TypeDescription, declaredAt: [Dependency.DeclarationLocation?])
 	/// The errors of different types, each reported as it would be alone, in source order.
 	case independentErrors([CollectInstantiablesError])
+
+	/// The error for `declarations`, two or more production declarations that fulfill `type`.
+	static func duplicate(of type: TypeDescription, declaredBy declarations: [Instantiable]) -> CollectInstantiablesError {
+		let isEachInsideCompilerDecidedBlock = declarations.allSatisfy(\.isInsideCompilerDecidedBlock)
+		let declaredAt = declarations.map(\.declarationLocation)
+		let moduleNames = declarations.compactMap(\.moduleName)
+		// Sorted, so the message does not depend on the order the modules were read in.
+		let distinctModuleNames = Set(moduleNames).sorted()
+		let isEachInKnownModule = moduleNames.count == declarations.count
+		guard declarations.count > 1 else {
+			return .foundRepeatedClaim(type, declaredAt: declaredAt)
+		}
+		// A module's own duplicates are one type, so keeping one is the remedy.
+		guard !isEachInKnownModule || distinctModuleNames.count > 1 else {
+			return .foundDuplicateInstantiable(type, declaredAt: declaredAt, isEachInsideCompilerDecidedBlock: isEachInsideCompilerDecidedBlock)
+		}
+		let repeatingModuleNames = distinctModuleNames.filter { moduleName in
+			moduleNames.count(where: { $0 == moduleName }) > 1
+		}
+		guard declarations.allSatisfy({ !$0.declarationType.isExtension && $0.concreteInstantiable == type }) else {
+			return .foundClaimsOfOneName(
+				type,
+				moduleNames: isEachInKnownModule ? distinctModuleNames : nil,
+				repeatingModuleNames: repeatingModuleNames,
+				declaredAt: declaredAt,
+				isEachInsideCompilerDecidedBlock: isEachInsideCompilerDecidedBlock,
+			)
+		}
+		guard isEachInKnownModule else {
+			return .foundTypesOfOneNameInUnknownModules(type, declaredAt: declaredAt, isEachInsideCompilerDecidedBlock: isEachInsideCompilerDecidedBlock)
+		}
+		return .foundTypesOfOneNameInSeveralModules(
+			type,
+			moduleNames: distinctModuleNames,
+			repeatingModuleNames: repeatingModuleNames,
+			declaredAt: declaredAt,
+			isEachInsideCompilerDecidedBlock: isEachInsideCompilerDecidedBlock,
+		)
+	}
 
 	var sourceDiagnostics: [SourceDiagnostic] {
 		switch self {
@@ -299,8 +349,42 @@ private enum CollectInstantiablesError: SourceLocatedError {
 			Self.sourceDiagnostics(
 				message: "Found multiple @\(InstantiableVisitor.macroName) types or extensions that fulfill `\(duplicateInstantiable.asSource)`. "
 					+ (isEachInsideCompilerDecidedBlock
-						? "Each is declared inside an `#if` that only the compiler decides, such as `#if os(iOS)`, and SafeDI reads every clause. If no build compiles more than one of them, fulfill `\(duplicateInstantiable.asSource)` with one @\(InstantiableVisitor.macroName) declaration outside the `#if`, and put the platform difference inside its body or its `\(InstantiableVisitor.instantiateMethodName)(…)` method. Otherwise, keep one, and remove `\(duplicateInstantiable.asSource)` from the others’ `fulfillingAdditionalTypes` or remove their @\(InstantiableVisitor.macroName)."
+						? "Each is declared inside an `#if` that only the compiler decides, such as `#if os(iOS)`, and SafeDI reads every clause. If no build compiles more than one of them, fulfill `\(duplicateInstantiable.asSource)` with one @\(InstantiableVisitor.macroName) declaration outside the `#if`, and put the platform difference \(Self.placeOfPlatformDifference). Otherwise, keep one, and remove `\(duplicateInstantiable.asSource)` from the others’ `fulfillingAdditionalTypes` or remove their @\(InstantiableVisitor.macroName)."
 						: "Each type can be fulfilled by only one @\(InstantiableVisitor.macroName) declaration, across all modules. Keep one, and remove `\(duplicateInstantiable.asSource)` from the others’ `fulfillingAdditionalTypes` or remove their @\(InstantiableVisitor.macroName)."),
+				declaredAt: declaredAt,
+			)
+		case let .foundTypesOfOneNameInUnknownModules(type, declaredAt, isEachInsideCompilerDecidedBlock):
+			Self.sourceDiagnostics(
+				message: "Found multiple @\(InstantiableVisitor.macroName) types or extensions that fulfill `\(type.asSource)`. "
+					+ (isEachInsideCompilerDecidedBlock
+						? "Each is declared inside an `#if` that only the compiler decides, such as `#if os(iOS)`, and SafeDI reads every clause. If they are one type that differs by platform, fulfill `\(type.asSource)` with one @\(InstantiableVisitor.macroName) declaration outside the `#if`, and put the platform difference \(Self.placeOfPlatformDifference). If they are different types, \(Self.renameRemedy(forTypeCount: declaredAt.count)). Otherwise, keep one, and remove the others’ @\(InstantiableVisitor.macroName)."
+						: "Each type can be fulfilled by only one @\(InstantiableVisitor.macroName) declaration, across all modules. If they are different types, \(Self.renameRemedy(forTypeCount: declaredAt.count)). If they are one type, keep one, and remove the others’ @\(InstantiableVisitor.macroName)."),
+				declaredAt: declaredAt,
+			)
+		case let .foundTypesOfOneNameInSeveralModules(type, moduleNames, repeatingModuleNames, declaredAt, isEachInsideCompilerDecidedBlock):
+			Self.sourceDiagnostics(
+				message: Self.severalModulesMessage(
+					for: type,
+					moduleNames: moduleNames,
+					repeatingModuleNames: repeatingModuleNames,
+					isEachInsideCompilerDecidedBlock: isEachInsideCompilerDecidedBlock,
+				),
+				declaredAt: declaredAt,
+			)
+		case let .foundClaimsOfOneName(type, moduleNames, repeatingModuleNames, declaredAt, isEachInsideCompilerDecidedBlock):
+			Self.sourceDiagnostics(
+				message: Self.claimsMessage(
+					for: type,
+					moduleNames: moduleNames,
+					repeatingModuleNames: repeatingModuleNames,
+					declarationCount: declaredAt.count,
+					isEachInsideCompilerDecidedBlock: isEachInsideCompilerDecidedBlock,
+				),
+				declaredAt: declaredAt,
+			)
+		case let .foundRepeatedClaim(type, declaredAt):
+			Self.sourceDiagnostics(
+				message: "`fulfillingAdditionalTypes` repeats `\(type.asSource)`, which this @\(InstantiableVisitor.macroName) declaration already fulfills. Remove the repeat.",
 				declaredAt: declaredAt,
 			)
 		case let .duplicateMockProvider(duplicateInstantiable, declaredAt):
@@ -310,6 +394,53 @@ private enum CollectInstantiablesError: SourceLocatedError {
 			)
 		case let .independentErrors(errors):
 			SourceDiagnostic.joiningInSourceOrder(errors.map(\.sourceDiagnostics))
+		}
+	}
+
+	private static let nameRule = "SafeDI tells @\(InstantiableVisitor.macroName) types apart by name across every module a run reads"
+	private static let placeOfPlatformDifference = "inside its body or its `\(InstantiableVisitor.instantiateMethodName)(…)` method"
+
+	private static func severalModulesMessage(for type: TypeDescription, moduleNames: [String], repeatingModuleNames: [String], isEachInsideCompilerDecidedBlock: Bool) -> String {
+		let declaredIn = "`\(type.asSource)` is declared in modules \(listed(moduleNames))"
+			+ (repeatingModuleNames.isEmpty ? ". " : ", and more than once in \(listed(repeatingModuleNames)). ")
+		let reason = nameRule + (isEachInsideCompilerDecidedBlock ? ", and reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`. " : ". ")
+		// A module's duplicates share a name whichever other module is renamed, so they are resolved first.
+		let rename = renameRemedy(forTypeCount: moduleNames.count)
+		let remedy = repeatingModuleNames.isEmpty
+			? rename
+			: "declare it once in \(repeatingModuleNames.count == 1 ? "" : "each of ")\(listed(repeatingModuleNames)), with any platform difference \(placeOfPlatformDifference), then \(rename)"
+		return declaredIn + reason + (isEachInsideCompilerDecidedBlock
+			? "If they are one type that differs by platform, declare it with one @\(InstantiableVisitor.macroName) declaration, in one of these modules and outside the `#if`, and put the platform difference \(placeOfPlatformDifference). If they are different types, \(remedy)."
+			: "\(remedy.prefix(1).uppercased())\(remedy.dropFirst()).")
+	}
+
+	private static func claimsMessage(for type: TypeDescription, moduleNames: [String]?, repeatingModuleNames: [String], declarationCount: Int, isEachInsideCompilerDecidedBlock: Bool) -> String {
+		let declaredIn = moduleNames.map { moduleNames in
+			", in modules \(listed(moduleNames))" + (repeatingModuleNames.isEmpty ? "" : ", and more than once in \(listed(repeatingModuleNames))")
+		} ?? ""
+		// A module's own repeats fulfill the name whichever other module renames it, so they are resolved first.
+		let rename = renameRemedy(forTypeCount: moduleNames?.count ?? declarationCount)
+		let remedy = repeatingModuleNames.isEmpty
+			? rename
+			: "fulfill it once in \(repeatingModuleNames.count == 1 ? "" : "each of ")\(listed(repeatingModuleNames)), with any platform difference \(placeOfPlatformDifference), then \(rename)"
+		let keepOne = "keep one, and remove `\(type.asSource)` from the others’ `fulfillingAdditionalTypes` or remove their @\(InstantiableVisitor.macroName)."
+		return "Found multiple @\(InstantiableVisitor.macroName) types or extensions that fulfill `\(type.asSource)`\(declaredIn). " + (isEachInsideCompilerDecidedBlock
+			? "Each is declared inside an `#if` that only the compiler decides, such as `#if os(iOS)`, and SafeDI reads every clause. If `\(type.asSource)` names one type that differs by platform, fulfill `\(type.asSource)` with one @\(InstantiableVisitor.macroName) declaration outside the `#if`, and put the platform difference \(placeOfPlatformDifference). If it names different types, \(remedy). Otherwise, \(keepOne)"
+			: "Each type can be fulfilled by only one @\(InstantiableVisitor.macroName) declaration, across all modules. If `\(type.asSource)` names different types, \(remedy). If it names one type, \(keepOne)")
+	}
+
+	/// How to tell apart `typeCount` types, two or more, that share a name, as the end of a sentence without its period.
+	private static func renameRemedy(forTypeCount typeCount: Int) -> String {
+		typeCount == 2 ? "rename one" : "rename all but one"
+	}
+
+	/// `moduleNames`, one or more, in the given order, each in backticks: "`A`", "`A` and `B`", or "`A`, `B`, and `C`".
+	private static func listed(_ moduleNames: [String]) -> String {
+		let spelledNames = moduleNames.map { "`\($0)`" }
+		return if spelledNames.count <= 2 {
+			spelledNames.joined(separator: " and ")
+		} else {
+			"\(spelledNames.dropLast().joined(separator: ", ")), and \(spelledNames[spelledNames.count - 1])"
 		}
 	}
 
