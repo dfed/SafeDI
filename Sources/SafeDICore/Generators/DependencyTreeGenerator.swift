@@ -37,6 +37,9 @@ public actor DependencyTreeGenerator {
 	///     apart from its dependencies', which decide the level each generated import spells.
 	///   - unreadImports: What the run knows of the modules a file imports that it read nothing of, or `nil` when it
 	///     cannot tell which modules it could have read.
+	///   - readOwnFiles: Reads what the module's own files say that decides an import added for a fulfiller, or `nil` when
+	///     the run cannot read them. Called at most once, the first time a generated file would gain such an import apart
+	///     from a type of the module that shadows the fulfiller, which only what this reads can find.
 	///   - viewInstantiablesByModuleName: The declarations the module infos this run was given carry of modules whose
 	///     module info it was not given, by module, which a seam or public mock of another module is computed from. They
 	///     never fulfill a type of this module's trees: they attribute the types generated code names to the modules that
@@ -54,6 +57,7 @@ public actor DependencyTreeGenerator {
 		plainTypeDeclarations: [PlainTypeDeclaration] = [],
 		writtenImportAccessLevels: GeneratedImportAccess.WrittenLevels = .none,
 		unreadImports: UnreadImports? = nil,
+		readOwnFiles: (@Sendable () async -> FulfillerImports.OwnFiles)? = nil,
 		viewInstantiablesByModuleName: [String: [Instantiable]] = [:],
 		viewPlainTypeDeclarations: [PlainTypeDeclaration] = [],
 		viewDeclaringModules: [TypeDescription: ViewDeclaringModule] = [:],
@@ -64,13 +68,18 @@ public actor DependencyTreeGenerator {
 		let viewInstantiables = Array(viewInstantiablesByModuleName.values.joined())
 		self.importStatements = importStatements
 		self.mockImportStatements = mockImportStatements
-		importAccess = GeneratedImportAccess(
-			writtenLevels: writtenImportAccessLevels,
-			instantiables: Array(typeDescriptionToFulfillingInstantiableMap.values) + viewInstantiables,
-			plainTypeDeclarations: plainTypeDeclarations + viewPlainTypeDeclarations,
-			emittingModuleName: emittingModule?.identity.moduleName,
-			isOwnFile: emittingModule?.isOwnFile,
-		)
+		let importAccessSpellingOwnLevels: @Sendable ([String: Set<AccessLevel>]) -> GeneratedImportAccess = { ownLevelsByModuleName in
+			GeneratedImportAccess(
+				writtenLevels: writtenImportAccessLevels.addingOwnLevels(ownLevelsByModuleName),
+				instantiables: Array(typeDescriptionToFulfillingInstantiableMap.values) + viewInstantiables,
+				plainTypeDeclarations: plainTypeDeclarations + viewPlainTypeDeclarations,
+				emittingModuleName: emittingModule?.identity.moduleName,
+				isOwnFile: emittingModule?.isOwnFile,
+			)
+		}
+		self.importAccessSpellingOwnLevels = importAccessSpellingOwnLevels
+		importAccess = importAccessSpellingOwnLevels([:])
+		self.readOwnFiles = readOwnFiles
 		self.typeDescriptionToFulfillingInstantiableMap = typeDescriptionToFulfillingInstantiableMap
 		self.aliasDeclarationReferences = aliasDeclarationReferences
 		self.emittingModule = emittingModule
@@ -168,11 +177,16 @@ public actor DependencyTreeGenerator {
 		public let sourceFilePath: String?
 		/// The generated extension code for this root, without the file header.
 		public let code: String
+		/// The types `code` builds that the properties it builds them for do not name, whose modules the header can need.
+		public let fulfillers: Set<FulfillerImports.Fulfiller>
 	}
 
 	public struct MockGenerationResult: Sendable {
 		public let generatedRoots: [GeneratedRoot]
 		public let mockConfigurationCode: String?
+		/// The types whose configurations `mockConfigurationCode` declares that the properties they are built for do not
+		/// name, whose modules the header can need.
+		public let mockConfigurationFulfillers: Set<FulfillerImports.Fulfiller>
 	}
 
 	/// The code a generated file holds, which decides what its header imports.
@@ -188,21 +202,22 @@ public actor DependencyTreeGenerator {
 
 	/// The file header to prepend to a generated file whose code is `content`: the imports `content` needs, each spelling
 	/// the access level the file's declarations need where they compile (`GeneratedImportAccess`).
-	public func fileHeader(for content: GeneratedFileContent) -> String {
+	/// - Parameter fulfillers: The types the trees the file holds build that the properties they are built for do not name.
+	public func fileHeader(for content: GeneratedFileContent, building fulfillers: Set<FulfillerImports.Fulfiller>) async -> String {
 		switch content {
 		case let .dependencyTree(code):
-			Self.fileHeader(importing: imports(importStatements, forUnconditionalCode: code, mockCode: nil))
+			await Self.fileHeader(importing: imports(importStatements, building: fulfillers, forUnconditionalCode: code, mockCode: nil))
 		case let .mock(code, mockConditionalCompilation):
 			if let mockConditionalCompilation {
-				Self.fileHeader(importing: imports(mockImportStatements, forUnconditionalCode: "", mockCode: (code, mockConditionalCompilation)))
+				await Self.fileHeader(importing: imports(mockImportStatements, building: fulfillers, forUnconditionalCode: "", mockCode: (code, mockConditionalCompilation)))
 			} else {
-				Self.fileHeader(importing: imports(mockImportStatements, forUnconditionalCode: code, mockCode: nil))
+				await Self.fileHeader(importing: imports(mockImportStatements, building: fulfillers, forUnconditionalCode: code, mockCode: nil))
 			}
 		case let .dependencyTreeAndMock(dependencyTreeCode, mockCode, mockConditionalCompilation):
 			if let mockConditionalCompilation {
-				Self.fileHeader(importing: imports(importStatements + mockImportStatements, forUnconditionalCode: dependencyTreeCode, mockCode: (mockCode, mockConditionalCompilation)))
+				await Self.fileHeader(importing: imports(importStatements + mockImportStatements, building: fulfillers, forUnconditionalCode: dependencyTreeCode, mockCode: (mockCode, mockConditionalCompilation)))
 			} else {
-				Self.fileHeader(importing: imports(importStatements + mockImportStatements, forUnconditionalCode: dependencyTreeCode + "\n\n" + mockCode, mockCode: nil))
+				await Self.fileHeader(importing: imports(importStatements + mockImportStatements, building: fulfillers, forUnconditionalCode: dependencyTreeCode + "\n\n" + mockCode, mockCode: nil))
 			}
 		}
 	}
@@ -223,10 +238,11 @@ public actor DependencyTreeGenerator {
 			for rootInfo in rootScopeGenerators {
 				taskGroup.addTask {
 					let code = try await rootInfo.scopeGenerator.generateCode()
-					return GeneratedRoot(
+					return await GeneratedRoot(
 						typeDescription: rootInfo.typeDescription,
 						sourceFilePath: rootInfo.sourceFilePath,
 						code: code,
+						fulfillers: rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false),
 					)
 				}
 			}
@@ -251,6 +267,7 @@ public actor DependencyTreeGenerator {
 				code: root.dependencies.isEmpty
 					? ""
 					: "// SafeDI generates \(rootType)'s init() only in \(declaringModule). If \(rootType)() does not compile, add the SafeDI plugin to the target that declares \(rootType).",
+				fulfillers: [],
 			)
 		}
 	}
@@ -455,11 +472,13 @@ public actor DependencyTreeGenerator {
 						)),
 					)
 					async let configurationTypes = mockRoot.collectConfigurationTypes()
+					async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
 					return try await GeneratedMockRoot(
 						root: GeneratedRoot(
 							typeDescription: instantiable.concreteInstantiable,
 							sourceFilePath: instantiable.sourceFilePath,
 							code: code,
+							fulfillers: fulfillers,
 						),
 						configurationTypes: configurationTypes,
 						isPublicMock: instantiable.generateMock == .public,
@@ -491,6 +510,23 @@ public actor DependencyTreeGenerator {
 		// generated from the first public mock root that reaches the type, in type order, as the internal structs are.
 		var seenPublicConfigurationTypes = Set<TypeDescription>()
 		var publicConfigurationDeclarations = [String]()
+		// The shared file extends each configured type, which the property it is built for need not name.
+		var mockConfigurationFulfillers = Set<FulfillerImports.Fulfiller>()
+		func recordFulfillers(configuredBy structNode: ScopeGenerator.MockParameterNode, inMockOf mockedType: TypeDescription) {
+			if let instantiable = typeDescriptionToFulfillingInstantiableMap[structNode.concreteType] {
+				mockConfigurationFulfillers.formUnion(FulfillerImports.Fulfiller.fulfillers(
+					building: instantiable,
+					forPropertyOfType: structNode.instantiatedTypeDescription,
+					// The struct's parameters default to what the hand-written mock's do.
+					callingHandWrittenMock: !handWrittenMockDefaultParameters[structNode.concreteType, default: []].isEmpty,
+				))
+			}
+			// A mock listed in `additionalMocksToGenerate` extends a type of another module, whose other types its tree
+			// configures, and no file of this module need import that module.
+			if let fulfiller = typeDescriptionToFulfillingInstantiableMap[mockedType].flatMap(FulfillerImports.Fulfiller.init(instantiable:)) {
+				mockConfigurationFulfillers.insert(fulfiller)
+			}
+		}
 		for result in generatedRoots.sorted(by: { $0.root.typeDescription < $1.root.typeDescription }) where result.isPublicMock {
 			guard let publicMockContext else { continue }
 			for configurationType in result.configurationTypes where seenPublicConfigurationTypes.insert(configurationType.concreteType).inserted {
@@ -506,6 +542,7 @@ public actor DependencyTreeGenerator {
 					requiresSendable: sendableConfigurationTypeNames.contains(configurationType.concreteType.asSource),
 					handWrittenMockDefaultParameters: handWrittenMockDefaultParameters[configurationType.concreteType, default: []],
 				))
+				recordFulfillers(configuredBy: structNode, inMockOf: result.root.typeDescription)
 			}
 		}
 		for result in generatedRoots.sorted(by: { $0.root.typeDescription < $1.root.typeDescription }) where !result.isPublicMock {
@@ -527,6 +564,7 @@ public actor DependencyTreeGenerator {
 						rootedConfigurationExtensions[typeName] = structCode
 					} else {
 						sharedConfigurationExtensions.append(ConfigurationExtension(typeName: typeName, structCode: structCode))
+						recordFulfillers(configuredBy: structNode, inMockOf: result.root.typeDescription)
 					}
 				}
 			}
@@ -548,6 +586,7 @@ public actor DependencyTreeGenerator {
 				typeDescription: result.root.typeDescription,
 				sourceFilePath: result.root.sourceFilePath,
 				code: code,
+				fulfillers: result.root.fulfillers,
 			)
 		}
 
@@ -564,6 +603,7 @@ public actor DependencyTreeGenerator {
 		return MockGenerationResult(
 			generatedRoots: mergedGeneratedRoots,
 			mockConfigurationCode: mockConfigurationCode,
+			mockConfigurationFulfillers: mockConfigurationFulfillers,
 		)
 	}
 
@@ -992,6 +1032,9 @@ public actor DependencyTreeGenerator {
 				concreteType: instantiable.concreteInstantiable,
 				methodName: instantiable.customMockName ?? InstantiableVisitor.mockMethodName,
 				mockFilePath: instantiable.mockDeclarationLocation?.filePath,
+				fulfillers: FulfillerImports.Fulfiller
+					.fulfillers(building: instantiable, forPropertyOfType: type, callingHandWrittenMock: true)
+					.filter { $0.moduleName != emittingModule?.identity.moduleName },
 			)
 		}
 		return flatParameterMockDefaults
@@ -2864,6 +2907,12 @@ public actor DependencyTreeGenerator {
 	private let mockImportStatements: [ImportStatement]
 	/// How the imports of each generated file spell their access levels.
 	private let importAccess: GeneratedImportAccess
+	/// How the imports of a generated file spell their access levels once the module's own files are known to spell the
+	/// given ones, which `importAccess` is without any.
+	private let importAccessSpellingOwnLevels: @Sendable ([String: Set<AccessLevel>]) -> GeneratedImportAccess
+	private let readOwnFiles: (@Sendable () async -> FulfillerImports.OwnFiles)?
+	/// What the first generated file that would gain an import had read, since every later one asks the same.
+	private var ownFilesRead: OwnFilesRead?
 	private let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
 	private let aliasDeclarationReferences: AliasDeclarationReferences
 	private let emittingModule: EmittingModule?
@@ -5447,14 +5496,23 @@ public actor DependencyTreeGenerator {
 	/// `importAccess` decides.
 	private func imports(
 		_ importStatements: [ImportStatement],
+		building fulfillers: Set<FulfillerImports.Fulfiller>,
 		forUnconditionalCode unconditionalCode: String,
 		mockCode: (code: String, condition: String)?,
-	) -> String {
+	) async -> String {
+		let fulfillersToImport = FulfillerImports.fulfillers(among: fulfillers, notMadeVisibleBy: importStatements, emittingModuleName: emittingModule?.identity.moduleName)
+		let ownFilesRead = fulfillersToImport.isEmpty ? nil : await readOwnFilesOnce()
+		let fulfillerImportStatements = ownFilesRead.map { FulfillerImports.importStatements(for: fulfillersToImport, ownFiles: $0.ownFiles) } ?? []
+		let moduleNamesImportedForFulfillers = Set(fulfillerImportStatements.map(\.moduleName))
+		// The compiler compares each import with those of every file of the module, including the files SafeDI read nothing
+		// of, so an import added for a fulfiller takes account of what those spell. Only that import does: nothing else
+		// about the generated file changes for what a file that declares no SafeDI content spells.
+		let moduleNamesSpellingOwnFilesLevels = moduleNamesImportedForFulfillers.filter { ownFilesRead?.ownFiles.levelsByModuleName[$0] != nil }
 		// An import's level is the generated file's to decide, so imports that differ only in level are one.
-		let importStatementsByModuleName = importStatements.reduce(into: [String: Set<ImportStatement>]()) { partialResult, importStatement in
+		let importStatementsByModuleName = (importStatements + fulfillerImportStatements).reduce(into: [String: Set<ImportStatement>]()) { partialResult, importStatement in
 			partialResult[importStatement.moduleName, default: []].insert(importStatement.withoutAccessLevel)
 		}
-		let namedTypes: GeneratedImportAccess.FileNamedTypes? = if importAccess.spellsAccessLevels {
+		let namedTypes: GeneratedImportAccess.FileNamedTypes? = if importAccess.spellsAccessLevels || !moduleNamesSpellingOwnFilesLevels.isEmpty {
 			GeneratedImportAccess.FileNamedTypes(
 				unconditional: importAccess.namedTypes(inGeneratedCode: unconditionalCode),
 				underMockCondition: mockCode.map { mockCode in (mockCode.condition, importAccess.namedTypes(inGeneratedCode: mockCode.code)) },
@@ -5468,27 +5526,52 @@ public actor DependencyTreeGenerator {
 				// A module imported whole in several ways is imported the way that asks for least: without
 				// attributes if any file imports it so, and otherwise with the attributes that sort first,
 				// which puts `@testable`, an error where the module is not built for testing, after the others.
-				let writtenImportStatements = if let wholeModuleImport = importStatements
-					.filter({ $0.kind.isEmpty && $0.type.isEmpty })
-					.min(by: { $0.attributeToGenerate < $1.attributeToGenerate })
+				// A whole-module import added for a fulfiller stands beside the by-type imports files spell, whose
+				// attributes it lacks, and which can tell their types from those of the same names in other modules.
+				let writtenImportStatements = if !moduleNamesImportedForFulfillers.contains(moduleName),
+				                                 let wholeModuleImport = importStatements
+				                                 	.filter({ $0.kind.isEmpty && $0.type.isEmpty })
+				                                 	.min(by: { $0.attributeToGenerate < $1.attributeToGenerate })
 				{
 					[wholeModuleImport]
 				} else {
 					Array(importStatements)
 				}
+				let moduleImportAccess = moduleNamesSpellingOwnFilesLevels.contains(moduleName) ? ownFilesRead?.importAccess ?? importAccess : importAccess
 				// Every import of one module in a file spells the same level, as the compiler requires.
-				let spelling = namedTypes.map { namedTypes in
-					importAccess.spelling(
+				let spelling: GeneratedImportAccess.Spelling = if moduleImportAccess.spellsAccessLevels, let namedTypes {
+					moduleImportAccess.spelling(
 						ofImportOf: moduleName,
 						isExported: writtenImportStatements.contains(where: \.isExported),
 						namedTypes: namedTypes,
 						importedModuleNames: importedModuleNames,
 					)
-				} ?? .noLevel
+				} else {
+					.noLevel
+				}
 				return writtenImportStatements.map(spelling.source(of:))
 			}
 			.sorted()
 			.joined(separator: "\n")
+	}
+
+	/// What the module's own files say, and how an import added for a fulfiller spells its level given that.
+	private struct OwnFilesRead {
+		let ownFiles: FulfillerImports.OwnFiles
+		let importAccess: GeneratedImportAccess
+	}
+
+	/// What the module's own files say, read the first time a generated file would gain an import apart from a type of the
+	/// module that shadows the fulfiller, which only this read can find, and kept for the next.
+	private func readOwnFilesOnce() async -> OwnFilesRead {
+		if let ownFilesRead {
+			return ownFilesRead
+		} else {
+			let ownFiles = await readOwnFiles?() ?? FulfillerImports.OwnFiles(typeNames: [], importStatements: [])
+			let ownFilesRead = OwnFilesRead(ownFiles: ownFiles, importAccess: importAccessSpellingOwnLevels(ownFiles.levelsByModuleName))
+			self.ownFilesRead = ownFilesRead
+			return ownFilesRead
+		}
 	}
 
 	/// Creates a mock-root ScopeGenerator using the production Scope tree.

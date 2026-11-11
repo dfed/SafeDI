@@ -430,6 +430,12 @@ public struct Generate: AsyncParsableCommand {
 				comparisonFilePaths: comparisonFilePaths,
 				conditionalCompilation: evaluator,
 			),
+			readOwnFiles: Self.ownFilesReader(
+				manifest: manifest,
+				inputFilePaths: inputFilePaths,
+				comparisonFilePaths: comparisonFilePaths,
+				conditionalCompilation: evaluator,
+			),
 			viewInstantiablesByModuleName: Dictionary(grouping: viewOnlyDeclarations, by: \.moduleName).mapValues { $0.flatMap(\.instantiables) },
 			viewPlainTypeDeclarations: viewOnlyDeclarations.flatMap(\.plainTypeDeclarations),
 			viewDeclaringModules: Self.viewDeclaringModules(of: viewOnlyDeclarations, in: moduleInfoView),
@@ -465,11 +471,11 @@ public struct Generate: AsyncParsableCommand {
 				// whose compiler disagrees fails here with a message naming the condition.
 				let compileTimeAssertions = ConditionalCompilationDecision.compileTimeAssertions(for: module.conditionalCompilationDecisions)
 
-				// Build a map from source file path → extension code(s).
-				var sourceFileToExtensions = [String: [String]]()
+				// Build a map from source file path → the roots whose extension code it holds.
+				var sourceFileToExtensions = [String: [DependencyTreeGenerator.GeneratedRoot]]()
 				for root in generatedRoots {
 					if let sourceFilePath = root.sourceFilePath, !root.code.isEmpty {
-						sourceFileToExtensions[sourceFilePath, default: []].append(root.code)
+						sourceFileToExtensions[sourceFilePath, default: []].append(root)
 					}
 				}
 
@@ -586,7 +592,15 @@ public struct Generate: AsyncParsableCommand {
 				// made from its body. Generated mocks compile only where the
 				// mock condition is active, so they import what the module's
 				// `#if` blocks select there.
-				var writes: [(destination: URL?, holdsMockCode: Bool, body: String)] = []
+				var writes: [(destination: URL?, holdsMockCode: Bool, body: String, fulfillers: Set<FulfillerImports.Fulfiller>)] = []
+				func appendWrite(destination: URL?, holdsMockCode: Bool, roots: [DependencyTreeGenerator.GeneratedRoot]) {
+					writes.append((
+						destination: destination,
+						holdsMockCode: holdsMockCode,
+						body: roots.map(\.code).sorted().joined(separator: "\n\n"),
+						fulfillers: Set(roots.flatMap(\.fulfillers)),
+					))
+				}
 
 				// ---- Dependency tree ----
 				let dependencyTreeDestinationsBySource: [String: URL]
@@ -613,11 +627,11 @@ public struct Generate: AsyncParsableCommand {
 					).sorted()
 				}
 				for sourceFile in dependencyTreeSourcesInOrder {
-					writes.append((
+					appendWrite(
 						destination: dependencyTreeDestinationsBySource[sourceFile],
 						holdsMockCode: false,
-						body: sourceFileToExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? "",
-					))
+						roots: sourceFileToExtensions[sourceFile, default: []],
+					)
 				}
 
 				// ---- Mocks ----
@@ -655,13 +669,13 @@ public struct Generate: AsyncParsableCommand {
 						additionalMocksToGenerate: Set(additionalMocksToGenerate),
 					)
 
-					var sourceFileToMockExtensions = [String: [String]]()
-					var typeNameToMockExtensions = [String: [String]]()
+					var sourceFileToMockExtensions = [String: [DependencyTreeGenerator.GeneratedRoot]]()
+					var typeNameToMockExtensions = [String: [DependencyTreeGenerator.GeneratedRoot]]()
 					for mock in mockResult.generatedRoots {
 						if let sourceFilePath = mock.sourceFilePath {
-							sourceFileToMockExtensions[sourceFilePath, default: []].append(mock.code)
+							sourceFileToMockExtensions[sourceFilePath, default: []].append(mock)
 						}
-						typeNameToMockExtensions[mock.typeDescription.asSource, default: []].append(mock.code)
+						typeNameToMockExtensions[mock.typeDescription.asSource, default: []].append(mock)
 					}
 					// A type declared here with `generateMock: true` and also listed in
 					// `additionalMocksToGenerate` gets its mock only once, where its source file's
@@ -676,16 +690,16 @@ public struct Generate: AsyncParsableCommand {
 					if let manifest {
 						let additionalMockTypeNames = Set(manifest.additionalMocksToGenerate)
 						for entry in manifest.mockGeneration {
-							let extensions: [String]? = if additionalMockTypeNames.contains(entry.inputFilePath) {
+							let extensions: [DependencyTreeGenerator.GeneratedRoot]? = if additionalMockTypeNames.contains(entry.inputFilePath) {
 								typeNamesEmittedBySource.contains(entry.inputFilePath) ? nil : typeNameToMockExtensions[entry.inputFilePath]
 							} else {
 								sourceFileToMockExtensions[entry.inputFilePath]
 							}
-							writes.append((
+							appendWrite(
 								destination: URL(fileURLWithPath: entry.outputFilePath),
 								holdsMockCode: true,
-								body: extensions?.sorted().joined(separator: "\n\n") ?? "",
-							))
+								roots: extensions ?? [],
+							)
 						}
 						// Shared mock-configuration file. Declared even
 						// when empty — the build system expects the
@@ -695,32 +709,25 @@ public struct Generate: AsyncParsableCommand {
 								destination: URL(fileURLWithPath: mockConfigurationOutputFilePath),
 								holdsMockCode: true,
 								body: mockResult.mockConfigurationCode ?? "",
+								fulfillers: mockResult.mockConfigurationFulfillers,
 							))
 						}
 					} else {
 						// Combined mode: per-source mocks sorted, then
 						// per-type-name additional mocks sorted.
 						for sourceFile in currentModuleMockSourceFiles {
-							writes.append((
-								destination: nil,
-								holdsMockCode: true,
-								body: sourceFileToMockExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? "",
-							))
+							appendWrite(destination: nil, holdsMockCode: true, roots: sourceFileToMockExtensions[sourceFile, default: []])
 						}
 						// Skip types already emitted via the per-source loop.
 						for typeName in Set(additionalMocksToGenerate).sorted()
 							where !typeNamesEmittedBySource.contains(typeName)
 						{
-							writes.append((
-								destination: nil,
-								holdsMockCode: true,
-								body: typeNameToMockExtensions[typeName]?.sorted().joined(separator: "\n\n") ?? "",
-							))
+							appendWrite(destination: nil, holdsMockCode: true, roots: typeNameToMockExtensions[typeName, default: []])
 						}
 						if let mockConfigurationCode = mockResult.mockConfigurationCode,
 						   !mockConfigurationCode.isEmpty
 						{
-							writes.append((destination: nil, holdsMockCode: true, body: mockConfigurationCode))
+							writes.append((destination: nil, holdsMockCode: true, body: mockConfigurationCode, fulfillers: mockResult.mockConfigurationFulfillers))
 						}
 					}
 				}
@@ -747,7 +754,7 @@ public struct Generate: AsyncParsableCommand {
 					} else {
 						.dependencyTree(code: combinedBody)
 					}
-					let code = await generator.fileHeader(for: combinedContent) + compileTimeAssertions + combinedBody
+					let code = await generator.fileHeader(for: combinedContent, building: Set(writes.flatMap(\.fulfillers))) + compileTimeAssertions + combinedBody
 					// Written only when its bytes change, so a build that compares modification times, as Xcode does for a
 					// script phase's outputs, recompiles the module only when its generated code changed. Bazel removes an
 					// action's outputs before it runs, so every Bazel run writes the file it declares.
@@ -760,7 +767,7 @@ public struct Generate: AsyncParsableCommand {
 						} else {
 							.dependencyTree(code: write.body)
 						}
-						let content = await generator.fileHeader(for: fileContent) + compileTimeAssertions + write.body
+						let content = await generator.fileHeader(for: fileContent, building: write.fulfillers) + compileTimeAssertions + write.body
 						let existingContent = try? String(contentsOf: destination, encoding: .utf8)
 						if existingContent != content {
 							try content.write(to: destination, atomically: true, encoding: .utf8)
@@ -930,6 +937,20 @@ public struct Generate: AsyncParsableCommand {
 	) -> @Sendable (String) -> Bool {
 		let ownFilePaths = ownProjectFilePaths(manifest: manifest, inputFilePaths: inputFilePaths, comparisonFilePaths: comparisonFilePaths)
 		return { filePath in ownFilePaths.contains(comparisonFilePaths.projectFilePath(of: filePath)) }
+	}
+
+	/// What the module's own files (see `ownProjectFilePaths`) say that decides an import added for a fulfiller. A build
+	/// system reruns `generate` when one of them changes, as it declares them inputs of the command that reads them.
+	private static func ownFilesReader(
+		manifest: SafeDIToolManifest?,
+		inputFilePaths: Set<String>,
+		comparisonFilePaths: ProjectFilePaths,
+		conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+	) -> @Sendable () async -> FulfillerImports.OwnFiles {
+		let filePaths = ownProjectFilePaths(manifest: manifest, inputFilePaths: inputFilePaths, comparisonFilePaths: comparisonFilePaths).map(\.path)
+		return {
+			await ownFiles(at: filePaths, conditionalCompilation: evaluator)
+		}
 	}
 
 	/// The files of the module this run generates code for, spelled as the declarations read from them spell

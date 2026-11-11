@@ -182,7 +182,7 @@ public struct NotesApp: App, Instantiable {
 }
 ```
 
-`fulfilledByType` takes a string literal naming the concrete type to construct — here, `"DefaultUserService"`. Representing the type as a string allows for dependency inversion: the consuming module does not need to import the module that declares the fulfiller. `erasedToConcreteExistential: true` tells SafeDI that the constructed value must be wrapped via the property type’s initializer — here, `AnyUserService(_:)` — rather than assigned directly:
+`fulfilledByType` takes a string literal naming the concrete type to construct — here, `"DefaultUserService"`. Representing the type as a string allows for dependency inversion: none of the consuming module’s files needs to import the module that declares the fulfiller, though the consuming module must still depend on that module, and the code SafeDI generates [imports it](#generated-imports). `erasedToConcreteExistential: true` tells SafeDI that the constructed value must be wrapped via the property type’s initializer — here, `AnyUserService(_:)` — rather than assigned directly:
 
 | Parameter | Logic | Example |
 | --------- | ----- | ------- |
@@ -1274,6 +1274,7 @@ Under the Xcode project plugin:
 - A type of another target that the target reads no declaration of counts as `public` (see [Access of generated parameters](#access-of-generated-parameters)). Hand the target the declaring target’s directory with `additionalDirectoriesToInclude`, whose `package` declarations then count at their level, or declare the seam or mock `package`.
 - The plugin cannot tell whether another target applies it, so a hand-written call of a generated initializer or of `mock()` fails with the compiler’s errors alone when the declaring target lacks the plugin.
 - A target that reads, through `additionalDirectoriesToInclude`, a file that imports the target itself gets the compiler’s “ignoring import” warning in generated code.
+- A generated file does not import the module of a type it builds through a `fulfilledByType` string or a `fulfillingAdditionalTypes` entry: list that module in `additionalImportedModules`, as [Generated imports](#generated-imports) describes.
 
 A public mock’s hole builders work under the plugin, but per-module trees, builders in a seam’s generated initializer, and generated calls of public mocks need a build that names each module: the Swift package plugin, Bazel, or Tuist. A multi-module Xcode project gets them by moving its modules into a local Swift package that the app target depends on, declaring the root there, and calling the root’s `init()` from the app; the package then adopts SafeDI as [Adopting SafeDI in a large codebase](#adopting-safedi-in-a-large-codebase) describes.
 
@@ -1718,7 +1719,11 @@ A hole’s implementation that reads a value a generated call defers, where the 
 
 ### Generated imports
 
-The files SafeDI generates import the modules that your files declaring `@Instantiable` types or a `#SafeDIConfiguration` import, with no access level unless one of your module’s files gives an import one (`internal import Foundation`). Then every generated file gives each of its imports the level its own declarations need, and compiles with or without the `InternalImportsByDefault` upcoming feature:
+The files SafeDI generates import the modules that your files declaring `@Instantiable` types or a `#SafeDIConfiguration` import. A generated file that builds a type through a [`fulfilledByType`](#making-protocols-instantiable) string or a `fulfillingAdditionalTypes` entry also imports the module that declares the type, when no import in those files makes the type visible, so that your files can leave that module out. A generated mock does the same for a type a flat `mock()` parameter defaults to and for the type an `additionalMocksToGenerate` entry names, and imports the module of a `mockOnly` declaration whose hand-written mock it calls. Where SafeDI knows no module for the declaration, as under the [Xcode project plugin](#limits-of-the-xcode-project-plugin) and for a file read through `additionalDirectoriesToInclude`, it cannot add that import: list the module in [`additionalImportedModules`](#safediconfiguration), or import it in one of those files.
+
+An import added this way agrees with how any file of your module imports that module, whether or not the file declares SafeDI content. When one of them imports that module at a level below `public`, the added import has an access level, by the rules below; a `public import` elsewhere needs none, so the added import then has one only if the file’s own declarations need it. The added import is `@_implementationOnly` when one of them is. SafeDI adds no such import when your module declares a type of the same name that other files can see, since that is the type the generated code finds. The added import is of the whole module, so its other public names come in too. If those files import the whole of another module that declares a type of the same name as the one built, or as any other name the file uses, the compiler reports that name as ambiguous: rename one of the types, or stop importing the other module in those files.
+
+Apart from those added imports, a generated import has no access level unless one of your files declaring SafeDI content gives an import one (`internal import Foundation`). Then every generated file gives each of its imports the level its own declarations need, and compiles with or without the `InternalImportsByDefault` upcoming feature:
 
 - `public` when a `public` declaration of the file, such as a seam’s initializer or a public mock, names one of the module’s types, or when the import is `@_exported`;
 - `package` when a `package` declaration names one – but where your files import that module at no level below `public`, only under `InternalImportsByDefault`, and with no level otherwise;

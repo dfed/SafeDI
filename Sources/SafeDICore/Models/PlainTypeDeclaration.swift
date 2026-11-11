@@ -107,7 +107,7 @@ extension TypeDescription {
 	/// What a plain declaration of this type, which names no generic arguments, is recorded and looked up by: its
 	/// spelling without the backticks it was written with, since Swift reads `` `Token` `` and `Token` as one name, so a
 	/// declaration and a mention that spell it differently find each other.
-	var plainDeclarationKey: String {
+	public var plainDeclarationKey: String {
 		asSource.spelledWithoutBackticks
 	}
 }

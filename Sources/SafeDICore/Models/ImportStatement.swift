@@ -90,6 +90,15 @@ public struct ImportStatement: Codable, Hashable, Sendable {
 		attributeToGenerate.contains("@_exported")
 	}
 
+	/// Whether the import keeps its module out of the module's interface, which the compiler warns about unless every
+	/// import of the module in the module's files does.
+	var isImplementationOnly: Bool {
+		attributeToGenerate.contains(Self.implementationOnlyAttribute)
+	}
+
+	/// The attribute that makes an import implementation-only.
+	static let implementationOnlyAttribute = "@_implementationOnly"
+
 	/// This import without its access level and the file that spells it: what a generated file's import of the module is
 	/// written from, with the level the generated file decides.
 	var withoutAccessLevel: ImportStatement {

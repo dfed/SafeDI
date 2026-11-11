@@ -2393,6 +2393,8 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
+				import NetworkingModule
+
 				@Instantiable(generateMock: true)
 				public struct ProfileView: Instantiable {
 				    public init(network: Network) { self.network = network }
@@ -2414,6 +2416,9 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 
 		#if canImport(NetworkingMocks)
 		import NetworkingMocks
+		#endif
+		#if canImport(NetworkingModule)
+		import NetworkingModule
 		#endif
 
 		#if DEBUG
