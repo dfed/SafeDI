@@ -1021,6 +1021,49 @@ extension TypeAccessProof {
 	}
 }
 
+// MARK: - TypeAccessProof.MentionedDeclarations
+
+extension TypeAccessProof {
+	/// The type declarations of one run, plain and `@Instantiable`, and which of them a mention of a type's name in a module
+	/// names, by the rule the proof reads a plain declaration by.
+	public struct MentionedDeclarations: Sendable {
+		/// - Parameters:
+		///   - instantiables: The declarations of the run. An `@Instantiable` type declaration is no plain declaration and is
+		///     one a mention can name; an extension declares no type, and a `mockOnly` declaration names one declared elsewhere.
+		///   - plainTypeDeclarations: The plain declarations of the run, each with its module.
+		public init(instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration]) {
+			let instantiableTypeDeclarations = instantiables
+				.filter { !$0.mockOnly && !$0.declarationType.isExtension }
+				.map {
+					PlainTypeDeclaration(
+						typeDescription: $0.concreteInstantiable,
+						access: $0.access,
+						enclosingTypeAccess: $0.enclosingTypeAccess,
+						enclosingExtensionAccess: $0.enclosingExtensionAccess,
+						moduleName: $0.moduleName,
+						packageName: $0.packageName,
+						sourceFilePath: $0.sourceFilePath,
+					)
+				}
+			declarations = PlainTypeDeclarations(
+				plainTypeDeclarations + instantiableTypeDeclarations,
+				entryTypes: Set(instantiables.map(\.concreteInstantiable)),
+				moduleNames: Set(instantiables.compactMap(\.moduleName)),
+				isOwnFile: nil,
+			)
+		}
+
+		/// The declarations a mention of `type` in `mentioningModule` names, as `PlainTypeDeclarations.candidates(named:mentionedFrom:)`
+		/// finds them: the module's own, or else those of `package` level or wider. Which of those the module can reach
+		/// depends on what it reads, which is the caller's to ask.
+		public func named(_ type: TypeDescription, mentionedFrom mentioningModule: MentioningModule) -> [PlainTypeDeclaration] {
+			declarations.candidates(named: type, mentionedFrom: mentioningModule)
+		}
+
+		private let declarations: PlainTypeDeclarations
+	}
+}
+
 // MARK: - TypeAccessProof.PlainTypeDeclarations
 
 extension TypeAccessProof {

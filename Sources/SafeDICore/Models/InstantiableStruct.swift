@@ -242,6 +242,32 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		return dependencies.filter { $0.source != .forwarded && !argumentLabels.contains($0.property.label) }
 	}
 
+	/// Each type a member of the declaration spells, which `distinguished(asFulfilling:replacingMentions:fulfillingInstantiationsOf:)`
+	/// replaces wherever it sits inside them.
+	public var typesMembersSpell: [TypeDescription] {
+		var types = [TypeDescription]()
+		for dependency in dependencies {
+			types.append(dependency.property.typeDescription)
+			switch dependency.source {
+			case let .instantiated(fulfillingTypeDescription, _):
+				if let fulfillingTypeDescription {
+					types.append(fulfillingTypeDescription)
+				}
+			case let .aliased(fulfillingProperty, _, _):
+				types.append(fulfillingProperty.typeDescription)
+			case .forwarded, .received:
+				break
+			}
+		}
+		for memberInitializer in [initializer, mockInitializer].compactMap(\.self) + otherInitializers {
+			types.append(contentsOf: memberInitializer.arguments.map(\.typeDescription))
+		}
+		if let mockReturnType {
+			types.append(mockReturnType)
+		}
+		return types
+	}
+
 	/// Returns a copy of this Instantiable that fulfills `instantiableTypes` in place of the types it fulfills, its first
 	/// entry remaining the concrete type, with each type `mentions` holds replaced wherever a member of the declaration
 	/// spells it, and each dependency that instantiates a type `instantiations` holds fulfilled by the type it holds there,
@@ -321,7 +347,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 
 	/// The name the declaring module gives this declaration's concrete type, when the run that read it spells the type
 	/// with the module's name, as `ModA.Store`, because another module also declares a type of that name and the module the
-	/// run looks from cannot name this one (`distinguishingTypesUnnameable(from:among:plainTypeDeclarations:moduleNamesRead:)`).
+	/// run looks from cannot name this one (`distinguishingTypesUnnameable(from:among:plainTypeDeclarations:moduleNamesRead:mayReadUnrecordedPublicType:)`).
 	/// `nil` otherwise. Never recorded in a `.safedi` file or scan's cache: it describes one run's view of the declaration.
 	public var declaredName: TypeDescription?
 
