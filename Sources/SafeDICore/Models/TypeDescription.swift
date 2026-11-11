@@ -1037,11 +1037,11 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	public func qualified(byModuleNamed moduleName: String) -> TypeDescription? {
 		switch self {
 		case let .simple(name, generics):
-			return .nested(name: name, parentType: .simple(name: moduleName), generics: generics)
+			.nested(name: name, parentType: .simple(name: moduleName), generics: generics)
 		case let .nested(name, parentType, generics):
-			return parentType.qualified(byModuleNamed: moduleName).map { .nested(name: name, parentType: $0, generics: generics) }
+			parentType.qualified(byModuleNamed: moduleName).map { .nested(name: name, parentType: $0, generics: generics) }
 		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .variadic, .void:
-			return nil
+			nil
 		}
 	}
 
