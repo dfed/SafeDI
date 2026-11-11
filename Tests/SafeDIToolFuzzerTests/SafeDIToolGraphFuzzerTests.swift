@@ -862,11 +862,11 @@ struct SafeDIToolGraphFuzzerTests {
 	func finding_isKnownIssue_whenKnownIssueDocumentsTheValueOracleRejectionAndTheRenameFailure() {
 		let knownIssue = GraphFuzzerKnownIssue(
 			reason: "A root's mock rejects a receive of a hidden label, in a graph whose mock code changes under a renaming",
-			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(containing: "changes its generated mock code")],
+			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(.mockCode)],
 			seeds: [47],
 		)
 		let rejection = Self.valueOracleRejection(errorLines: [Self.hiddenInChainError])
-		let renamed = GraphFuzzerFailure(seed: 47, kind: .renamedGraphDiffers, details: "Reversing its labels changes its generated mock code, in S47_Root0+SafeDIMock.swift.\nThis graph:\n…")
+		let renamed = GraphFuzzerFailure(seed: 47, kind: .renamedGraphDiffers, details: "Reversing its labels changes its generated mock code, in S47_Root0+SafeDIMock.swift.\nThis graph:\n…", renamedGraphDifference: .mockCode)
 
 		#expect(GraphFuzzerFinding(failure: rejection, laterFailures: [renamed], knownIssue: knownIssue) == .knownIssue(knownIssue, rejection))
 	}
@@ -1735,6 +1735,415 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func differences_reportEveryGeneratedFileThatDiffers_whenMoreThanOneFileDiffers() {
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S12_Root0+SafeDI.swift": "let a = 1\n", "S12_T0+SafeDIMock.swift": "let b = 1\n", "S12_T1+SafeDIMock.swift": "let c = 1\n", "SafeDIMockConfiguration.swift": "let d = 1\n"], warnings: [])
+		let otherOutcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S12_Root0+SafeDI.swift": "let a = 2\n", "S12_T0+SafeDIMock.swift": "let b = 2\n", "S12_T1+SafeDIMock.swift": "let c = 1\n", "SafeDIMockConfiguration.swift": "let d = 2\n"], warnings: [])
+
+		#expect(GraphFuzzerToolOutcome.differences(between: outcome, and: otherOutcome) == [
+			GraphFuzzerOutcomeDifference(aspect: .dependencyTreeCode, fileName: "S12_Root0+SafeDI.swift"),
+			GraphFuzzerOutcomeDifference(aspect: .mockCode, fileName: "S12_T0+SafeDIMock.swift"),
+			GraphFuzzerOutcomeDifference(aspect: .mockConfigurationCode, fileName: "SafeDIMockConfiguration.swift"),
+		])
+	}
+
+	@Test
+	func differences_reportWarnings_whenAGeneratedFileAlsoDiffers() {
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S12_T0+SafeDIMock.swift": "let a = 1\n"], warnings: ["first"])
+		let otherOutcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S12_T0+SafeDIMock.swift": "let a = 2\n"], warnings: ["second"])
+
+		#expect(GraphFuzzerToolOutcome.differences(between: outcome, and: otherOutcome) == [
+			GraphFuzzerOutcomeDifference(aspect: .mockCode, fileName: "S12_T0+SafeDIMock.swift"),
+			GraphFuzzerOutcomeDifference(aspect: .warnings),
+		])
+	}
+
+	@Test
+	func differences_compareFilesBothOutcomesGenerate_whenTheirFileNamesDiffer() {
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S12_T0+SafeDIMock.swift": "let a = 1\n", "S12_T1+SafeDIMock.swift": "let b = 1\n"], warnings: [])
+		let otherOutcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S12_T0+SafeDIMock.swift": "let a = 2\n", "S12_T2+SafeDIMock.swift": "let b = 1\n"], warnings: [])
+
+		#expect(GraphFuzzerToolOutcome.differences(between: outcome, and: otherOutcome) == [
+			GraphFuzzerOutcomeDifference(aspect: .generatedFileNames),
+			GraphFuzzerOutcomeDifference(aspect: .mockCode, fileName: "S12_T0+SafeDIMock.swift"),
+		])
+	}
+
+	@Test
+	func differences_isEmpty_whenAGeneratedFileDiffersOnlyInTheOrderOfItsExtensions() {
+		let first = "extension S12_T0 {\n    static let a = 1\n}\n"
+		let second = "extension S12_T1 {\n    static let b = 1\n}\n"
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["SafeDIMockConfiguration.swift": "#if DEBUG\n\(first)\n\(second)#endif\n"], warnings: [])
+		let otherOutcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["SafeDIMockConfiguration.swift": "#if DEBUG\n\(second)\n\(first)#endif\n"], warnings: [])
+
+		#expect(GraphFuzzerToolOutcome.differences(between: outcome, and: otherOutcome, comparingCode: .inAnyOrderOfExtensions) == [])
+	}
+
+	@Test
+	func differences_reportFile_whenExtensionsInAnotherOrderAlsoDifferInTheirContents() {
+		let first = "extension S12_T0 {\n    static let a = 1\n}\n"
+		let second = "extension S12_T1 {\n    static let b = 1\n}\n"
+		let changedFirst = "extension S12_T0 {\n    static let a = 2\n}\n"
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["SafeDIMockConfiguration.swift": "\(first)\n\(second)"], warnings: [])
+		let otherOutcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["SafeDIMockConfiguration.swift": "\(second)\n\(changedFirst)"], warnings: [])
+
+		#expect(GraphFuzzerToolOutcome.differences(between: outcome, and: otherOutcome, comparingCode: .inAnyOrderOfExtensions) == [GraphFuzzerOutcomeDifference(aspect: .mockConfigurationCode, fileName: "SafeDIMockConfiguration.swift")])
+	}
+
+	@Test
+	func differences_reportFile_whenAnExtensionMovesAcrossAConditionalCompilationBlock() {
+		let first = "extension S12_T0 {\n    static let a = 1\n}\n"
+		let second = "extension S12_T1 {\n    static let b = 1\n}\n"
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["SafeDIMockConfiguration.swift": "#if DEBUG\n\(first)#endif\n\(second)"], warnings: [])
+		let otherOutcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["SafeDIMockConfiguration.swift": "#if DEBUG\n\(second)#endif\n\(first)"], warnings: [])
+
+		#expect(GraphFuzzerToolOutcome.differences(between: outcome, and: otherOutcome, comparingCode: .inAnyOrderOfExtensions) == [GraphFuzzerOutcomeDifference(aspect: .mockConfigurationCode, fileName: "SafeDIMockConfiguration.swift")])
+	}
+
+	@Test
+	func renamedGraphFailures_isEmpty_whenOneLineExtensionsDifferOnlyInTheirOrder() {
+		#expect(Self.renamedGraphDifferences(betweenCode: "extension S12_T0 {}\n\nextension S12_T1 {}\n", and: "extension S12_T1 {}\n\nextension S12_T0 {}\n") == [])
+	}
+
+	@Test
+	func renamedGraphFailures_isEmpty_whenPublicConfigurationsDifferOnlyInTheirOrderAndOneHasForwarders() {
+		// A public mock's configuration is a struct, a blank line, an extension, and the forwarders right after the extension.
+		let withForwarders = "/// Configuration for how `S12_T0` is constructed within the public mock trees of this module.\npublic struct S12_T0Configuration {\n}\n\nextension S12_T0 {\n    static func make() {}\n}\n@usableFromInline nonisolated func first() -> Int? { nil }\n@usableFromInline nonisolated func second() -> Int? { nil }"
+		let withoutForwarders = "/// Configuration for how `S12_T1` is constructed within the public mock trees of this module.\npublic struct S12_T1Configuration {\n}\n\nextension S12_T1 {\n    static func make() {}\n}"
+
+		#expect(Self.renamedGraphDifferences(betweenCode: "\(withForwarders)\n\n\(withoutForwarders)\n", and: "\(withoutForwarders)\n\n\(withForwarders)\n") == [])
+	}
+
+	@Test
+	func renamedGraphFailures_reportFile_whenADeclarationAfterAnExtensionMovesWithItToAnotherPlaceAmongTheExtensions() {
+		let first = "extension S12_T0 {\n    static let a = 1\n}\n"
+		let second = "extension S12_T1 {\n    static let b = 1\n}\n"
+
+		#expect(Self.renamedGraphDifferences(betweenCode: "\(first)struct Top {}\n\(second)", and: "\(second)\(first)struct Top {}\n") == [.mockConfigurationCode])
+	}
+
+	@Test
+	func renamedGraphFailures_reportFile_whenACommentAfterAnExtensionMovesWithItToAnotherPlaceAmongTheExtensions() {
+		let first = "extension S12_T0 {\n    static let a = 1\n}\n"
+		let second = "extension S12_T1 {\n    static let b = 1\n}\n"
+
+		#expect(Self.renamedGraphDifferences(betweenCode: "\(first)// c\n\(second)", and: "\(second)\(first)// c\n") == [.mockConfigurationCode])
+	}
+
+	@Test(arguments: [
+		("#if DEBUG\nimport A\nimport B\n#endif\n", "#if DEBUG\nimport A\n\nimport B\n#endif\n"),
+		("let x = 1\nlet y = 2\n", "let x = 1\n\n\n\nlet y = 2\n"),
+		("extension S12_T0 {\n}\n", "extension S12_T0 {\n}   \n"),
+		("extension S12_T0 {\n}\n\nextension S12_T1 {\n}\n", "extension S12_T0 {\n}\n\n\n\nextension S12_T1 {\n}\n"),
+		("extension S12_T0 {\n}\n", "extension S12_T0 {\n}\n\n"),
+	])
+	func renamedGraphFailures_reportFile_whenFilesDifferOnlyInBlankLinesOrTrailingWhitespace(code: String, otherCode: String) {
+		#expect(Self.renamedGraphDifferences(betweenCode: code, and: otherCode) == [.mockConfigurationCode])
+	}
+
+	@Test
+	func renamedGraphFailures_isEmpty_whenAPublicConfigurationAndAnExtensionTakeEachOthersPlaces() {
+		#expect(Self.renamedGraphDifferences(betweenCode: "\(PublicConfiguration.first)\n\n\(GeneratedExtension.second)", and: "\(GeneratedExtension.second)\n\(PublicConfiguration.first)\n") == [])
+	}
+
+	@Test
+	func renamedGraphFailures_isEmpty_whenStructsOfPublicConfigurationsWithoutTheirExtensionsDifferOnlyInTheirOrder() {
+		// A module's combined output is decomposed into one file per type, which leaves each struct in the configurations' file.
+		#expect(Self.renamedGraphDifferences(betweenCode: "\(PublicConfiguration.firstStruct)\n\n\(PublicConfiguration.secondStruct)\n", and: "\(PublicConfiguration.secondStruct)\n\n\(PublicConfiguration.firstStruct)\n") == [])
+	}
+
+	@Test(arguments: [
+		// A configuration's struct that takes the place of an extension.
+		("\(PublicConfiguration.firstStruct)\n\n\(GeneratedExtension.first)", "\(GeneratedExtension.first)\n\(PublicConfiguration.firstStruct)\n"),
+		// Each configuration's struct above the other's extension.
+		("\(PublicConfiguration.firstStruct)\n\n\(PublicConfiguration.firstExtension)\n\n\(PublicConfiguration.secondStruct)\n\n\(PublicConfiguration.secondExtension)\n", "\(PublicConfiguration.firstStruct)\n\n\(PublicConfiguration.secondExtension)\n\n\(PublicConfiguration.secondStruct)\n\n\(PublicConfiguration.firstExtension)\n"),
+	])
+	func renamedGraphFailures_reportFile_whenAPublicConfigurationDoesNotMoveAsOneUnitWithItsExtension(code: String, otherCode: String) {
+		#expect(Self.renamedGraphDifferences(betweenCode: code, and: otherCode) == [.mockConfigurationCode])
+	}
+
+	@Test(arguments: [
+		// A block nested in another with no space after its directive.
+		("#if DEBUG\n#if(TEST)\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n#endif\n", "#if DEBUG\n#if(TEST)\n\(GeneratedExtension.second)#endif\n\n#if DEBUG\n\(GeneratedExtension.first)#endif\n#endif\n"),
+		// A block nested in another with only its `#if` indented.
+		("#if DEBUG\n  #if TEST\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n#endif\n", "#if DEBUG\n  #if TEST\n\(GeneratedExtension.second)#endif\n\n#if DEBUG\n\(GeneratedExtension.first)#endif\n#endif\n"),
+		// A block nested in another with its directives indented.
+		("#if DEBUG\n  #if TEST\n\(GeneratedExtension.first)  #endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n#endif\n", "#if DEBUG\n  #if TEST\n\(GeneratedExtension.second)  #endif\n\n#if DEBUG\n\(GeneratedExtension.first)#endif\n#endif\n"),
+	])
+	func renamedGraphFailures_reportFile_whenExtensionsMoveBetweenBlocksOfOtherConditionsHoweverTheirDirectivesAreSpelled(code: String, otherCode: String) {
+		#expect(Self.renamedGraphDifferences(betweenCode: code, and: otherCode) == [.mockConfigurationCode])
+	}
+
+	@Test(arguments: [
+		// An extension on one line with trailing whitespace.
+		"extension S12_T0 {}  ",
+		// An extension on one line with a trailing comment.
+		"extension S12_T0 {} // c",
+		// An extension whose closing brace is indented.
+		"extension S12_T0 {\n  }",
+		// Documentation like a public configuration's, on a declaration that is no struct.
+		"/// Configuration for how X",
+	])
+	func renamedGraphFailures_reportFile_whenADeclarationMovesWithAnExtensionItFollows(firstLines: String) {
+		let code = "\(firstLines)\nlet moved = 1\n\(GeneratedExtension.second)\nextension S12_T2 {}\n"
+		let otherCode = "extension S12_T2 {}\n\n\(firstLines)\nlet moved = 1\n\(GeneratedExtension.second)"
+
+		#expect(Self.renamedGraphDifferences(betweenCode: code, and: otherCode) == [.mockConfigurationCode])
+	}
+
+	@Test
+	func renamedGraphFailures_reportFile_whenAnExtensionMovesIntoAnExtensionWhoseFirstLineEndsInABrace() {
+		let code = "extension S12_T1 {}\n\nextension S12_T0 { var x: Int { 1 }\n}\n"
+		let otherCode = "extension S12_T0 { var x: Int { 1 }\n\nextension S12_T1 {}\n}\n"
+
+		#expect(Self.renamedGraphDifferences(betweenCode: code, and: otherCode) == [.mockConfigurationCode])
+	}
+
+	@Test(arguments: [
+		("let s = \"\"\"\nextension S12_T0 {}\n\nextension S12_T1 {}\n\"\"\"\n", "let s = \"\"\"\nextension S12_T1 {}\n\nextension S12_T0 {}\n\"\"\"\n"),
+		("/*\nextension S12_T0 {}\n\nextension S12_T1 {}\n*/\n", "/*\nextension S12_T1 {}\n\nextension S12_T0 {}\n*/\n"),
+	])
+	func renamedGraphFailures_reportFile_whenLinesThatReadAsExtensionsMoveInsideAStringOrAComment(code: String, otherCode: String) {
+		#expect(Self.renamedGraphDifferences(betweenCode: code, and: otherCode) == [.mockConfigurationCode])
+	}
+
+	@Test(arguments: [
+		("let caf\u{E9} = 1\n", "let cafe\u{301} = 1\n"),
+		("extension S12_T0 {\n    static let caf\u{E9} = 1\n}\n", "extension S12_T0 {\n    static let cafe\u{301} = 1\n}\n"),
+	])
+	func renamedGraphFailures_reportFile_whenCodeDiffersOnlyBetweenCanonicallyEquivalentSpellings(code: String, otherCode: String) {
+		#expect(Self.renamedGraphDifferences(betweenCode: code, and: otherCode) == [.mockConfigurationCode])
+	}
+
+	@Test
+	func renamedGraphFailures_reportFile_whenExtensionsMoveInAFileThatDoesNotParse() {
+		#expect(Self.renamedGraphDifferences(betweenCode: "#if DEBUG\n\(GeneratedExtension.first)\n\(GeneratedExtension.second)", and: "#if DEBUG\n\(GeneratedExtension.second)\n\(GeneratedExtension.first)") == [.mockConfigurationCode])
+	}
+
+	@Test(arguments: [
+		// Two blocks of one condition, each with one extension, as a module's combined output holds two roots' configurations.
+		("#if DEBUG\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n", "#if DEBUG\n\(GeneratedExtension.second)#endif\n\n#if DEBUG\n\(GeneratedExtension.first)#endif\n"),
+		// The same two blocks with no blank line between them.
+		("#if DEBUG\n\(GeneratedExtension.first)#endif\n#if DEBUG\n\(GeneratedExtension.second)#endif\n", "#if DEBUG\n\(GeneratedExtension.second)#endif\n#if DEBUG\n\(GeneratedExtension.first)#endif\n"),
+		// Each root's block, then the block of the configurations roots share, of which one takes a root's place.
+		("#if DEBUG\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n\n#if DEBUG\n\(GeneratedExtension.third)\n\(GeneratedExtension.fourth)#endif\n", "#if DEBUG\n\(GeneratedExtension.third)#endif\n\n#if DEBUG\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.fourth)\n\(GeneratedExtension.second)#endif\n"),
+		// Other content a block holds before its extension stays where it is.
+		("#if DEBUG\nlet x = 1\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n", "#if DEBUG\nlet x = 1\n\(GeneratedExtension.second)#endif\n\n#if DEBUG\n\(GeneratedExtension.first)#endif\n"),
+		// The first clause of a next block with another clause, which is under the same condition as the block before it.
+		("#if DEBUG\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#else\nlet x = 1\n#endif\n", "#if DEBUG\n\(GeneratedExtension.second)#endif\n\n#if DEBUG\n\(GeneratedExtension.first)#else\nlet x = 1\n#endif\n"),
+		("#if DEBUG\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#elseif TEST\nlet x = 1\n#endif\n", "#if DEBUG\n\(GeneratedExtension.second)#endif\n\n#if DEBUG\n\(GeneratedExtension.first)#elseif TEST\nlet x = 1\n#endif\n"),
+		// Blocks of one condition with no space after the directive.
+		("#if(DEBUG)\n\(GeneratedExtension.first)#endif\n\n#if(DEBUG)\n\(GeneratedExtension.second)#endif\n", "#if(DEBUG)\n\(GeneratedExtension.second)#endif\n\n#if(DEBUG)\n\(GeneratedExtension.first)#endif\n"),
+	])
+	func renamedGraphFailures_isEmpty_whenExtensionsTakeEachOthersPlacesInBlocksOfOneCondition(code: String, otherCode: String) {
+		#expect(Self.renamedGraphDifferences(betweenCode: code, and: otherCode) == [])
+	}
+
+	@Test(arguments: [
+		// Blocks with different conditions.
+		("#if DEBUG\n\(GeneratedExtension.first)#endif\n\n#if TEST\n\(GeneratedExtension.second)#endif\n", "#if DEBUG\n\(GeneratedExtension.second)#endif\n\n#if TEST\n\(GeneratedExtension.first)#endif\n"),
+		// A block and outside any block, after it and before it.
+		("#if DEBUG\n\(GeneratedExtension.first)#endif\n\n\(GeneratedExtension.second)", "#if DEBUG\n\(GeneratedExtension.second)#endif\n\n\(GeneratedExtension.first)"),
+		("\(GeneratedExtension.first)\n#if DEBUG\n\(GeneratedExtension.second)#endif\n", "\(GeneratedExtension.second)\n#if DEBUG\n\(GeneratedExtension.first)#endif\n"),
+		// A block's clauses.
+		("#if DEBUG\n\(GeneratedExtension.first)#else\n\(GeneratedExtension.second)#endif\n", "#if DEBUG\n\(GeneratedExtension.second)#else\n\(GeneratedExtension.first)#endif\n"),
+		("#if DEBUG\n\(GeneratedExtension.first)#elseif TEST\n\(GeneratedExtension.second)#endif\n", "#if DEBUG\n\(GeneratedExtension.second)#elseif TEST\n\(GeneratedExtension.first)#endif\n"),
+		// A block with a clause and the next block of its condition, from the clause and from before it.
+		("#if DEBUG\n\(GeneratedExtension.first)#else\n\(GeneratedExtension.second)#endif\n\n#if DEBUG\n\(GeneratedExtension.third)#endif\n", "#if DEBUG\n\(GeneratedExtension.first)#else\n\(GeneratedExtension.third)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n"),
+		("#if DEBUG\n\(GeneratedExtension.first)#else\nlet x = 1\n#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n", "#if DEBUG\n\(GeneratedExtension.second)#else\nlet x = 1\n#endif\n\n#if DEBUG\n\(GeneratedExtension.first)#endif\n"),
+		// A block whose other content differs.
+		("#if DEBUG\nlet x = 1\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n", "#if DEBUG\nlet x = 2\n\(GeneratedExtension.second)#endif\n\n#if DEBUG\n\(GeneratedExtension.first)#endif\n"),
+		// A block's other content that moves with an extension.
+		("#if DEBUG\n\(GeneratedExtension.first)// c\n#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n", "#if DEBUG\n\(GeneratedExtension.second)#endif\n\n#if DEBUG\n\(GeneratedExtension.first)// c\n#endif\n"),
+		// A change inside an extension.
+		("#if DEBUG\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n", "#if DEBUG\n\(GeneratedExtension.second)#endif\n\n#if DEBUG\n\(GeneratedExtension.changedFirst)#endif\n"),
+		// A change to a block's condition line.
+		("#if DEBUG\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n", "#if DEBUG\n\(GeneratedExtension.second)#endif\n\n#if TEST\n\(GeneratedExtension.first)#endif\n"),
+		// A block nested in a block of the next block's condition.
+		("#if DEBUG\n#if TEST\n\(GeneratedExtension.first)#endif\n#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n", "#if DEBUG\n#if TEST\n\(GeneratedExtension.second)#endif\n#endif\n\n#if DEBUG\n\(GeneratedExtension.first)#endif\n"),
+		// A declaration between two blocks of one condition.
+		("#if DEBUG\n\(GeneratedExtension.first)#endif\nlet x = 1\n#if DEBUG\n\(GeneratedExtension.second)#endif\n", "#if DEBUG\n\(GeneratedExtension.second)#endif\nlet x = 1\n#if DEBUG\n\(GeneratedExtension.first)#endif\n"),
+		// Other blank lines between two blocks of one condition.
+		("#if DEBUG\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n", "#if DEBUG\n\(GeneratedExtension.second)#endif\n\n\n#if DEBUG\n\(GeneratedExtension.first)#endif\n"),
+		// A clause after the first of the next block, which is not under that block's condition.
+		("#if DEBUG\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#else\n\(GeneratedExtension.third)#endif\n", "#if DEBUG\n\(GeneratedExtension.third)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#else\n\(GeneratedExtension.first)#endif\n"),
+	])
+	func renamedGraphFailures_reportFile_whenExtensionsMoveOtherwiseThanBetweenBlocksOfOneCondition(code: String, otherCode: String) {
+		#expect(Self.renamedGraphDifferences(betweenCode: code, and: otherCode) == [.mockConfigurationCode])
+	}
+
+	@Test
+	func findings_reportKnownIssueStale_whenAListedGraphOnlyMovesAnExtensionBetweenBlocksOfOneCondition() {
+		let knownIssue = GraphFuzzerKnownIssue(reason: "An order", signatures: [.renamedGraphDiffers(.mockConfigurationCode)], seeds: [12])
+
+		#expect(Self.findings(
+			betweenCode: "#if DEBUG\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n",
+			and: "#if DEBUG\n\(GeneratedExtension.second)#endif\n\n#if DEBUG\n\(GeneratedExtension.first)#endif\n",
+			knownIssue: knownIssue,
+		) == [.staleKnownIssue(knownIssue)])
+	}
+
+	@Test
+	func findings_reportDifference_whenAnExtensionMovesBetweenBlocksOfOtherConditionsAndNoKnownIssueListsIt() throws {
+		let knownIssue = GraphFuzzerKnownIssue(reason: "An order", signatures: [.renamedGraphDiffers(.mockCode)], seeds: [12])
+
+		let findings = Self.findings(
+			betweenCode: "#if DEBUG\n\(GeneratedExtension.first)#endif\n\n#if TEST\n\(GeneratedExtension.second)#endif\n",
+			and: "#if DEBUG\n\(GeneratedExtension.second)#endif\n\n#if TEST\n\(GeneratedExtension.first)#endif\n",
+			knownIssue: knownIssue,
+		)
+
+		guard case let .failure(failure) = try #require(findings.first), findings.count == 1 else {
+			Issue.record("Expected one failure, got \(findings)")
+			return
+		}
+		#expect(failure.renamedGraphDifference == .mockConfigurationCode)
+	}
+
+	@Test
+	func findings_reportKnownIssue_whenAMoveBetweenBlocksOfOneConditionComesWithAChangeAnEntryDocuments() throws {
+		let knownIssue = GraphFuzzerKnownIssue(reason: "A lazy cycle's field", signatures: [.renamedGraphDiffers(.mockConfigurationCode)], seeds: [12])
+
+		let findings = Self.findings(
+			betweenCode: "#if DEBUG\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n",
+			and: "#if DEBUG\n\(GeneratedExtension.second)#endif\n\n#if DEBUG\n\(GeneratedExtension.changedFirst)#endif\n",
+			knownIssue: knownIssue,
+		)
+
+		guard case .knownIssue = try #require(findings.first), findings.count == 1 else {
+			Issue.record("Expected the known issue, got \(findings)")
+			return
+		}
+	}
+
+	/// What the fuzzer concludes about a renamed graph that generates `otherCode` where the graph generates `code`.
+	private static func findings(betweenCode code: String, and otherCode: String, knownIssue: GraphFuzzerKnownIssue?) -> [GraphFuzzerFinding] {
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["SafeDIMockConfiguration.swift": code], warnings: [])
+		let renamedOutcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["SafeDIMockConfiguration.swift": otherCode], warnings: [])
+		let failures = GraphFuzzerToolRuns(fixture: GraphFuzzerFixture(seed: 12, swiftFileContent: []), firstOutcome: outcome, secondOutcome: outcome, renamedOutcomes: [(GraphFuzzerRenaming.all[0], renamedOutcome)]).renamedGraphFailures
+		return GraphFuzzerFinding.findings(failure: failures.first, laterFailures: Array(failures.dropFirst()), knownIssue: knownIssue)
+	}
+
+	/// The aspects in which a renamed graph that generates `otherCode` differs from a graph that generates `code`.
+	private static func renamedGraphDifferences(betweenCode code: String, and otherCode: String) -> [GraphFuzzerOutcomeDifference.Aspect?] {
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["SafeDIMockConfiguration.swift": code], warnings: [])
+		let renamedOutcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["SafeDIMockConfiguration.swift": otherCode], warnings: [])
+		return GraphFuzzerToolRuns(fixture: GraphFuzzerFixture(seed: 12, swiftFileContent: []), firstOutcome: outcome, secondOutcome: outcome, renamedOutcomes: [(GraphFuzzerRenaming.all[0], renamedOutcome)])
+			.renamedGraphFailures.map(\.renamedGraphDifference)
+	}
+
+	@Test
+	func readTwinDifference_namesOrderOfExtensions_whenAGeneratedFileDiffersOnlyInTheOrderOfItsExtensions() {
+		#expect(Self.readTwinDifference(betweenCode: "extension A {\n}\n\nextension B {\n}\n", and: "extension B {\n}\n\nextension A {\n}\n") == "its generated mock configuration code (the order of its extensions only), in SafeDIMockConfiguration.swift")
+	}
+
+	@Test
+	func readTwinDifference_namesOrderOfExtensions_whenAnExtensionMovesBetweenBlocksOfOneCondition() {
+		#expect(Self.readTwinDifference(betweenCode: "#if DEBUG\n\(GeneratedExtension.first)#endif\n\n#if DEBUG\n\(GeneratedExtension.second)#endif\n", and: "#if DEBUG\n\(GeneratedExtension.second)#endif\n\n#if DEBUG\n\(GeneratedExtension.first)#endif\n") == "its generated mock configuration code (the order of its extensions only), in SafeDIMockConfiguration.swift")
+	}
+
+	@Test
+	func readTwinDifference_namesFile_whenAGeneratedFileDiffersOnlyInBlankLines() {
+		#expect(Self.readTwinDifference(betweenCode: "extension A {\n}\n\nextension B {\n}\n", and: "extension A {\n}\n\n\n\nextension B {\n}\n") == "its generated mock configuration code, in SafeDIMockConfiguration.swift")
+	}
+
+	/// How a read twin that generates `twinCode` differs from a graph that generates `code`, or `nil` when it does not.
+	private static func readTwinDifference(betweenCode code: String, and twinCode: String) -> String? {
+		GraphFuzzerReadTwin(fixture: GraphFuzzerFixture(seed: 12, swiftFileContent: []), declaringModule: nil, unreadTypes: []).difference(
+			between: .accepted(generatedFiles: ["SafeDIMockConfiguration.swift": code], warnings: []),
+			and: .accepted(generatedFiles: ["SafeDIMockConfiguration.swift": twinCode], warnings: []),
+		)
+	}
+
+	@Test
+	func renamedGraphFailures_reportEachDifferenceAsItsOwnFailure_whenASecondFileAndWarningsDiffer() {
+		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [])
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S12_T0+SafeDIMock.swift": "let a = 1\n", "SafeDIMockConfiguration.swift": "let b = 1\n"], warnings: ["first"])
+		let renamedOutcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S12_T0+SafeDIMock.swift": "let a = 2\n", "SafeDIMockConfiguration.swift": "let b = 2\n"], warnings: ["second"])
+
+		let failures = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome, renamedOutcomes: [(GraphFuzzerRenaming.all[0], renamedOutcome)]).renamedGraphFailures
+
+		#expect(failures.map(\.kind) == [.renamedGraphDiffers, .renamedGraphDiffers, .renamedGraphDiffers])
+		#expect(failures.map(\.renamedGraphDifference) == [.mockCode, .mockConfigurationCode, .warnings])
+		#expect(failures.map { $0.details.prefix { $0 != "\n" } } == [
+			"Reversing its type names changes its generated mock code, in S12_T0+SafeDIMock.swift.",
+			"Reversing its type names changes its generated mock configuration code, in SafeDIMockConfiguration.swift.",
+			"Reversing its type names changes its warnings.",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func results_carryEveryRenamedGraphDifference_whenEachRenamingDiffersInAnotherFile() throws {
+		// One small type, so the compile this takes stays cheap, as in `compilationFailures_reportEachBrokenGraph…`.
+		let seed: UInt64 = 1_000_000_009
+		let prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
+		let fixture = GraphFuzzerFixture(seed: seed, swiftFileContent: [
+			"@Instantiable\npublic final class \(prefix)Probe: Instantiable {\n\tpublic init() {}\n}\n",
+		])
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["\(prefix)Probe+SafeDIMock.swift": "// mock\n", "SafeDIMockConfiguration.swift": "// configuration\n"], warnings: [])
+		let otherMock = GraphFuzzerToolOutcome.accepted(generatedFiles: ["\(prefix)Probe+SafeDIMock.swift": "// other\n", "SafeDIMockConfiguration.swift": "// configuration\n"], warnings: [])
+		let otherConfiguration = GraphFuzzerToolOutcome.accepted(generatedFiles: ["\(prefix)Probe+SafeDIMock.swift": "// mock\n", "SafeDIMockConfiguration.swift": "// other\n"], warnings: [])
+		let toolRuns = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome, renamedOutcomes: [(GraphFuzzerRenaming.all[0], otherMock), (GraphFuzzerRenaming.all[1], otherConfiguration)])
+
+		let result = try #require(try GraphFuzzerOracle.results(of: [toolRuns]).first)
+
+		#expect(result.failure?.renamedGraphDifference == .mockCode)
+		#expect(result.laterFailures.map(\.renamedGraphDifference) == [.mockConfigurationCode])
+	}
+
+	@Test
+	func knownIssue_matchesRenamedGraphDifference_onlyInTheAspectItNames() {
+		let knownIssue = GraphFuzzerKnownIssue(reason: "An order", signatures: [.renamedGraphDiffers(.mockCode)], seeds: [12])
+		// A failure's text holds the graph's generated code, which can say anything; only the aspect it reports counts.
+		let configuration = GraphFuzzerFailure(seed: 12, kind: .renamedGraphDiffers, details: "Reversing its labels changes its generated mock configuration code, in SafeDIMockConfiguration.swift, not its generated mock code.\nThis graph:\n…", renamedGraphDifference: .mockConfigurationCode)
+		let mock = GraphFuzzerFailure(seed: 12, kind: .renamedGraphDiffers, details: "Reversing its labels changes its generated mock code, in S12_T0+SafeDIMock.swift.\nThis graph:\n…", renamedGraphDifference: .mockCode)
+
+		#expect(!knownIssue.matches(configuration))
+		#expect(knownIssue.matches(mock))
+	}
+
+	@Test
+	func findings_reportEachRenamedGraphDifferenceTheKnownIssueDoesNotList_whenTheFirstIsListed() {
+		let knownIssue = GraphFuzzerKnownIssue(reason: "An order", signatures: [.renamedGraphDiffers(.mockCode)], seeds: [12])
+		func failure(_ aspect: GraphFuzzerOutcomeDifference.Aspect, in file: String) -> GraphFuzzerFailure {
+			GraphFuzzerFailure(seed: 12, kind: .renamedGraphDiffers, details: "Reversing its labels changes \(aspect.rawValue), in \(file).\nThis graph:\n…", renamedGraphDifference: aspect)
+		}
+		let listed = failure(.mockCode, in: "S12_T0+SafeDIMock.swift")
+		let listedInAnotherFile = failure(.mockCode, in: "S12_T1+SafeDIMock.swift")
+		let secondFile = failure(.dependencyTreeCode, in: "S12_Root0+SafeDI.swift")
+		let warnings = failure(.warnings, in: "the tool's output")
+
+		#expect(GraphFuzzerFinding.findings(failure: listed, laterFailures: [listedInAnotherFile, secondFile, warnings], knownIssue: knownIssue) == [.failure(secondFile), .failure(warnings)])
+		#expect(GraphFuzzerFinding.findings(failure: listed, laterFailures: [listedInAnotherFile], knownIssue: knownIssue) == [.knownIssue(knownIssue, listed)])
+	}
+
+	@Test
+	func findings_reportEachRenamedGraphDifference_whenNoKnownIssueListsTheSeed() {
+		let mock = GraphFuzzerFailure(seed: 12, kind: .renamedGraphDiffers, details: "Reversing its labels changes its generated mock code, in S12_T0+SafeDIMock.swift.\nThis graph:\n…", renamedGraphDifference: .mockCode)
+		let warnings = GraphFuzzerFailure(seed: 12, kind: .renamedGraphDiffers, details: "Reversing its labels changes its warnings.\nThis graph:\n…", renamedGraphDifference: .warnings)
+
+		#expect(GraphFuzzerFinding.findings(failure: mock, laterFailures: [warnings], knownIssue: nil) == [.failure(mock), .failure(warnings)])
+	}
+
+	@Test
+	func findings_reportRenamedGraphDifference_whenAKnownCompilerFailureComesFirst() {
+		// What the tool generates under a renaming says nothing about what the compiler made of the graph, so a known
+		// compiler failure documents no difference.
+		let knownIssue = GraphFuzzerKnownIssue(reason: "A mock that does not compile", signatures: [.compilerError(containing: "invalid redeclaration")], seeds: [12])
+		let compilation = GraphFuzzerFailure(seed: 12, kind: .generatedCodeDoesNotCompile, details: "error: invalid redeclaration of `a`")
+		let renamed = GraphFuzzerFailure(seed: 12, kind: .renamedGraphDiffers, details: "Reversing its labels changes its warnings.\nThis graph:\n…", renamedGraphDifference: .warnings)
+
+		#expect(GraphFuzzerFinding.findings(failure: compilation, laterFailures: [renamed], knownIssue: knownIssue) == [.failure(renamed)])
+	}
+
+	@Test
+	func reportLine_namesTheDifference_whenRenamedGraphDiffers() {
+		let failure = GraphFuzzerFailure(seed: 12, kind: .renamedGraphDiffers, details: "Reversing its labels changes its generated mock code, in S12_T0+SafeDIMock.swift.\nThis graph:\n…", renamedGraphDifference: .mockCode)
+
+		#expect(GraphFuzzerFinding.failure(failure).reportLine(seed: 12) == "failure 12 the graph renamed to change an order gives other results: Reversing its labels changes its generated mock code, in S12_T0+SafeDIMock.swift")
+	}
+
+	@Test
 	func toolOutcome_throwsHarnessError_whenHarnessWritesNoFileOfTheFixturesFirstName() async {
 		// The fixture names its file `Elsewhere.swift`, while the harness names it after `Root`, its `@Instantiable` type, so
 		// the fixture directory of the graph, which the tool rejects since nothing builds `Missing`, cannot be found: the
@@ -1804,18 +2213,20 @@ struct SafeDIToolGraphFuzzerTests {
 	func finding_isKnownIssue_whenRenamedGraphDiffersAsDocumented() {
 		let knownIssue = GraphFuzzerKnownIssue(
 			reason: "A shape whose mock follows the order of names",
-			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
+			signatures: [.renamedGraphDiffers(.mockCode)],
 			seeds: [12],
 		)
 		let failure = GraphFuzzerFailure(
 			seed: 12,
 			kind: .renamedGraphDiffers,
 			details: "Reversing its labels changes its generated mock code, in S12_T0+SafeDIMock.swift.\nThis graph:\n…",
+			renamedGraphDifference: .mockCode,
 		)
 		let diagnosticsFailure = GraphFuzzerFailure(
 			seed: 12,
 			kind: .renamedGraphDiffers,
 			details: "Reversing its labels changes its diagnostics.\nThis graph:\nchanges its generated mock code",
+			renamedGraphDifference: .diagnostics,
 		)
 
 		#expect(GraphFuzzerFinding(failure: failure, knownIssue: knownIssue) == .knownIssue(knownIssue, failure))
@@ -2714,24 +3125,25 @@ struct SafeDIToolGraphFuzzerTests {
 							for multiModuleFailure in result.multiModuleFailures {
 								report.append("multimodule \(seed) \(multiModuleFailure.details.prefix { $0 != "\n" })")
 							}
-							let finding = GraphFuzzerFinding(failure: result.failure, laterFailures: result.laterFailures, knownIssue: knownIssuesBySeed[seed])
-							if let reportLine = finding.reportLine(seed: seed) {
-								// A stale line carries the remedy, chosen by the stale issue's shape, for the summary.
-								if case let .staleKnownIssue(knownIssue) = finding {
-									report.append("\(reportLine); \(corpus.staleSeedRemedy(knownIssue, seed))")
-								} else {
-									report.append(reportLine)
+							for finding in GraphFuzzerFinding.findings(failure: result.failure, laterFailures: result.laterFailures, knownIssue: knownIssuesBySeed[seed]) {
+								if let reportLine = finding.reportLine(seed: seed) {
+									// A stale line carries the remedy, chosen by the stale issue's shape, for the summary.
+									if case let .staleKnownIssue(knownIssue) = finding {
+										report.append("\(reportLine); \(corpus.staleSeedRemedy(knownIssue, seed))")
+									} else {
+										report.append(reportLine)
+									}
 								}
+								switch finding {
+								case .knownIssue:
+									knownIssueCount += 1
+								case .failure:
+									failureCount += 1
+								case .passed, .staleKnownIssue:
+									break
+								}
+								Self.record(finding, fixture: result.fixture)
 							}
-							switch finding {
-							case .knownIssue:
-								knownIssueCount += 1
-							case .failure:
-								failureCount += 1
-							case .passed, .staleKnownIssue:
-								break
-							}
-							Self.record(finding, fixture: result.fixture)
 						}
 					}
 				}
@@ -2850,13 +3262,13 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 12, 14, 18, 25, 40, 59, 62, 70, 97, 99, 133, 161, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x01E85C379CD27E45
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x657C616408552C34
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xA2E6B426A73E49DB
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x4C0D2C1C6738551B
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -3061,6 +3473,8 @@ struct SafeDIToolGraphFuzzerTests {
 		staleSeedRemedy: { knownIssue, seed in
 			if knownIssue.reason == labelSortedPassThroughReason {
 				"remove it from `labelSortedPassThroughSeeds`"
+			} else if knownIssue.reason == labelSortedPassThroughAndMockParametersReason {
+				"remove it from `labelSortedPassThroughSeedsWhoseMockParametersAlsoChange`"
 			} else if seamCorpusSeedsAddedToInheritedShapes[knownIssue.reason]?.contains(seed) == true {
 				"remove it from `seamCorpusSeedsAddedToInheritedShapes`"
 			} else {
@@ -3108,7 +3522,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// seam tests' draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 151, 153, 163, 180, 196, 277, 298, 326, 605, 609, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x1DE5E808D91F3FDB
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xB14D159EE69AAB11
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -3305,40 +3719,45 @@ struct SafeDIToolGraphFuzzerTests {
 	} + [
 		GraphFuzzerKnownIssue(
 			reason: labelSortedPassThroughReason,
-			signatures: [.renamedGraphDiffers(containing: "changes its generated dependency tree code")],
+			signatures: [.renamedGraphDiffers(.dependencyTreeCode)],
 			seeds: labelSortedPassThroughSeeds,
 		),
-		// A seed `knownIssues` lists under another shape, whose graph the seam's draw changes so that it fails this one, or
-		// whose base entry also documents a failure of the base corpus's value oracle, which the seam corpus does not run
-		// (471).
 		GraphFuzzerKnownIssue(
-			reason: "SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them, in a graph the base corpus lists under another shape",
-			signatures: [.renamedGraphDiffers(containing: "changes its generated mock configuration code")],
-			seeds: [311, 471],
+			reason: labelSortedPassThroughAndMockParametersReason,
+			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockCode)],
+			seeds: labelSortedPassThroughSeedsWhoseMockParametersAlsoChange,
+		),
+		// Seeds `knownIssues` lists under another shape, whose graphs the seam's draw changes so that they fail this one:
+		// a configuration field follows the order of type names and of type names against wrappers' names.
+		GraphFuzzerKnownIssue(
+			reason: "A mock's API follows the order of type names or labels, and one field of a lazy cycle's SafeDIMockConfiguration follows the order of type names: which back-edge of the cycle loses its override, which promoted sibling is passed nil, and the order of overrides, in a graph the base corpus lists under another shape",
+			signatures: [.renamedGraphDiffers(.mockCode), .renamedGraphDiffers(.mockConfigurationCode)],
+			seeds: [311, 383, 390, 431, 448, 836, 886, 912, 940],
 		),
 	]
 
 	private static let labelSortedPassThroughReason = "A seam's pass-through parameters are sorted by label, so reversing the labels reorders its generated initializer and the calls of it"
 
+	private static let labelSortedPassThroughAndMockParametersReason = "\(labelSortedPassThroughReason), and a mock's parameters and fields are sorted by label, so reversing the labels reorders them too"
+
 	/// Seeds of `knownIssues` that the seam corpus's run observed failing with the seam's own shape, or not failing
-	/// at all, since the seam's draw changed their graphs, and 471, whose base entry also documents a failure of the base
-	/// corpus's value oracle, which the seam corpus does not run, so the seam's own shape lists it; the inherited lists
-	/// leave them out. Observed, not derived: a seed here that a run finds failing its inherited shape again is a new
-	/// failure, and goes back.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 309, 310, 311, 364, 371, 381, 393, 434, 471, 476, 525, 545, 632, 714, 728, 735, 768, 774, 786, 808, 840, 847, 903]
+	/// at all, since the seam's draw changed their graphs; the inherited lists leave them out. Observed, not derived: a
+	/// seed here that a run finds failing its inherited shape again is a new failure, and goes back.
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 309, 311, 364, 371, 381, 383, 390, 431, 434, 448, 476, 525, 545, 632, 714, 728, 735, 768, 774, 786, 808, 836, 840, 847, 886, 903, 912, 940]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
 	private static let seamCorpusSeedsAddedToInheritedShapes: [String: [UInt64]] = [
-		"A mock's API follows the order of type names or labels: which back-edge of a lazy cycle loses its override, which promoted sibling is passed nil, and the order of overrides": [135],
-		"SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them": [78, 93, 378, 594, 794],
+		"A mock's API follows the order of type names or labels, and one field of a lazy cycle's SafeDIMockConfiguration follows the order of type names: which back-edge of the cycle loses its override, which promoted sibling is passed nil, and the order of overrides": [135],
 	]
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order
 	/// that follows label order is how mocks and initializers already work – so the oracle's label reversal
 	/// reorders them, which is expected, not a defect, as the mock's label-sorted parameters are in `knownIssues`.
-	/// A seed whose type-name reversal changes its mock code first fails the inherited shape and stays listed there.
-	private static let labelSortedPassThroughSeeds: [UInt64] = [371, 381, 604, 788, 809, 816, 928]
+	private static let labelSortedPassThroughSeeds: [UInt64] = [604, 788, 809, 816, 928]
+
+	/// Seeds of the same shape whose generated mock also lists label-sorted parameters, so that it changes too.
+	private static let labelSortedPassThroughSeedsWhoseMockParametersAlsoChange: [UInt64] = [371, 381]
 
 	/// The corpus drawn with `features`: the base corpus when there are none, and a feature's corpus for that
 	/// feature. Every feature has a corpus, so the two are the only ones.
@@ -3432,54 +3851,29 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (seed 211); a consumer in another package only and a differing mock condition (seed 253); a configuration's
 	/// module-level forwarder of a default's provider, and a hole's builder passed up into a `@Sendable` builder function
 	/// (seed 551); a third tier (seed 215); the comment naming a type SafeDI reads no declaration of (seed 10) – a graph the
-	/// public tier rejects (seed 7), and a graph of the configuration order's known issue (seed 23); declarations moved
+	/// public tier rejects (seed 7), and a graph whose configurations a renaming only reorders (seed 23); declarations moved
 	/// beneath the declaring module (seed 98) and a chain of public mocks through the three modules beneath it (seed 208),
 	/// which a consumer computes from the declaring module's view (`GraphFuzzerSeamDependencyDraw`). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
 	/// which `publicMockSmokeSeeds_exercisePublicMockFeature_inGraphsTheToolAccepts` checks. Pinned by
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 98, 142, 151, 197, 208, 211, 215, 253, 551]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x848065BF8D2618E0
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x61DDE7E57FB4CF74
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
 	static let publicMockKnownIssues: [GraphFuzzerKnownIssue] = [
 		GraphFuzzerKnownIssue(
-			reason: "SafeDIMockConfiguration.swift declares its configurations (public mocks' module-level structs among them) in the order of the roots that reach them",
-			signatures: [.renamedGraphDiffers(containing: "changes its generated mock configuration code")],
-			seeds: [
-				2, 5, 8, 16, 21, 22, 23, 25, 26, 28, 29, 31, 42, 48, 50, 56,
-				58, 59, 63, 64, 65, 70, 71, 79, 88, 90, 99, 101, 103, 110, 111, 115,
-				129, 131, 133, 136, 137, 146, 148, 150, 152, 157, 158, 164, 168, 175, 178, 192,
-				198, 199, 204, 209, 214, 219, 220, 225, 231, 233, 240, 241, 242, 247, 248, 256,
-				257, 259, 264, 267, 269, 270, 271, 274, 275, 276, 282, 289, 295, 297, 299, 301,
-				306, 308, 309, 310, 313, 314, 325, 326, 333, 336, 338, 349, 351, 360, 365, 367,
-				368, 369, 374, 378, 380, 381, 389, 390, 398, 402, 405, 412, 414, 415, 417, 419,
-				421, 425, 426, 428, 429, 433, 435, 436, 441, 451, 453, 456, 459, 469, 475, 477,
-				479, 482, 492, 496, 497, 498, 504, 508, 511, 515, 523, 525, 526, 527, 529, 530,
-				537, 542, 543, 545, 549, 553, 554, 555, 562, 564, 580, 581, 584, 586, 587, 592,
-				595, 597, 598, 600, 603, 607, 608, 610, 611, 613, 614, 615, 618, 619, 623, 624,
-				625, 627, 632, 635, 637, 638, 639, 642, 643, 645, 651, 652, 662, 668, 671, 672,
-				673, 681, 683, 684, 691, 693, 697, 699, 700, 706, 709, 714, 716, 721, 723,
-				726, 727, 732, 735, 738, 740, 744, 745, 747, 748, 751, 753, 754, 755, 756, 759,
-				760, 762, 765, 772, 773, 774, 777, 783, 784, 790, 792, 793, 798, 805, 807, 817,
-				818, 821, 825, 827, 828, 837, 845, 846, 848, 851, 854, 857, 862, 866, 868, 872,
-				873, 878, 879, 880, 881, 886, 889, 891, 895, 896, 901, 904, 907, 909, 911, 912,
-				923, 925, 930, 932, 936, 937, 943, 945, 946, 958, 959, 964, 968, 970, 976, 978,
-				979, 984, 985, 991, 993, 995,
-			],
-		),
-		GraphFuzzerKnownIssue(
 			reason: "A public mock's parameters are sorted by label (decision 27), so reversing the labels reorders a `.public` consumer's `mock()` and the parameters it surfaces from its leaves",
-			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
-			seeds: [12, 106, 167, 251, 407, 528, 708, 771, 947],
+			signatures: [.renamedGraphDiffers(.mockCode)],
+			seeds: [12, 65, 103, 106, 167, 251, 351, 407, 433, 528, 562, 708, 771, 947],
 		),
 		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
 		// cycle through it.
 		GraphFuzzerKnownIssue(
-			reason: "A mock's API follows the order of type names or labels: which back-edge of a lazy cycle loses its override, which promoted sibling is passed nil, and the order of overrides",
-			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
-			seeds: [33, 832],
+			reason: "A mock's API follows the order of type names or labels, and one field of a lazy cycle's SafeDIMockConfiguration follows the order of type names: which back-edge of the cycle loses its override, which promoted sibling is passed nil, and the order of overrides",
+			signatures: [.renamedGraphDiffers(.mockCode), .renamedGraphDiffers(.mockConfigurationCode)],
+			seeds: [33, 301, 697, 832],
 		),
 		// A shape the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
 		// before, a consumer held a holder the public tier omitted, which the tool rejected; now `Dock`'s own declaration
@@ -3602,57 +3996,50 @@ struct SafeDIToolGraphFuzzerTests {
 	static let knownIssues: [GraphFuzzerKnownIssue] = [
 		GraphFuzzerKnownIssue(
 			reason: "A mock's API follows the order of type names or labels: which back-edge of a lazy cycle loses its override, which promoted sibling is passed nil, and the order of overrides",
-			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
+			signatures: [.renamedGraphDiffers(.mockCode)],
 			seeds: [
-				3, 6, 35, 36, 45, 55, 77, 107, 114, 131, 157, 168, 209, 223, 241,
-				281, 300, 311, 338, 364, 371, 380, 381, 383, 390, 431, 448, 450, 473, 476,
-				515, 525, 541, 545, 548, 567, 593, 617, 630, 632, 680, 714, 728, 732, 735, 751,
-				768, 774, 785, 786, 808, 836, 840, 847, 886, 903, 912, 940, 948, 975, 987, 991,
-				1_004, 1_029, 1_035, 1_042, 1_044, 1_061, 1_064, 1_072, 1_075, 1_084, 1_092, 1_139, 1_140, 1_145, 1_147, 1_215,
-				1_217, 1_236, 1_244, 1_289, 1_300, 1_322, 1_329, 1_335, 1_352, 1_362, 1_369, 1_372, 1_432, 1_433, 1_441, 1_453,
-				1_464, 1_492, 1_496, 1_504, 1_524, 1_531, 1_535, 1_563, 1_567, 1_602, 1_633, 1_646, 1_664, 1_675, 1_695,
-				1_708, 1_742, 1_781, 1_784, 1_795, 1_804, 1_817, 1_853, 1_857, 1_867, 1_896, 1_938, 1_970, 1_972, 2_013, 2_017,
-				2_051, 2_057, 2_083, 2_084, 2_123, 2_149, 2_152, 2_165, 2_211, 2_234, 2_249, 2_270, 2_277, 2_282, 2_287, 2_296,
-				2_316, 2_325, 2_335, 2_337, 2_348, 2_389, 2_403, 2_430, 2_432, 2_437, 2_444, 2_456, 2_484, 2_518, 2_553, 2_555,
-				2_577, 2_630, 2_637, 2_667, 2_704, 2_732, 2_741, 2_742, 2_791, 2_808, 2_835, 2_841, 2_845, 2_874, 2_914, 2_916,
-				3_023, 3_064, 3_074, 3_075, 3_091, 3_134, 3_160, 3_180, 3_183, 3_215, 3_221, 3_225, 3_241, 3_252, 3_298,
-				3_306, 3_329, 3_344, 3_345, 3_361, 3_430, 3_439, 3_470, 3_491, 3_504, 3_506, 3_513, 3_526, 3_533, 3_534,
-				3_537, 3_577, 3_582, 3_584, 3_588, 3_589, 3_596, 3_600, 3_602, 3_620, 3_645, 3_648, 3_661, 3_699, 3_707, 3_715,
-				3_723, 3_741, 3_750, 3_775, 3_776, 3_805, 3_823, 3_826, 3_843, 3_850, 3_894, 3_915, 3_994, 4_015, 4_044, 4_068,
-				4_090, 4_102, 4_107, 4_110, 4_117, 4_122, 4_125, 4_156, 4_177, 4_191, 4_192, 4_196, 4_206, 4_213, 4_215, 4_217,
-				4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_371, 4_393, 4_396, 4_404, 4_420, 4_428, 4_496, 4_515,
-				4_534, 4_541, 4_545, 4_549, 4_567, 4_619, 4_634, 4_637, 4_640, 4_642, 4_648, 4_664, 4_666, 4_707, 4_716, 4_717,
-				4_729, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_834, 4_857, 4_859, 4_891, 4_904, 4_918, 4_922, 4_944, 4_947,
-				4_955, 4_963, 4_996,
+				3, 6, 36, 45, 55, 77, 131, 157, 209, 281, 300, 311, 371, 380, 381, 383,
+				390, 431, 434, 448, 450, 476, 515, 541, 545, 548, 593, 630, 680, 714, 728, 774,
+				785, 786, 808, 836, 840, 847, 886, 903, 912, 940, 975, 1_029, 1_035, 1_042, 1_044, 1_061,
+				1_064, 1_072, 1_084, 1_092, 1_139, 1_140, 1_147, 1_185, 1_215, 1_217, 1_236, 1_300, 1_322, 1_329, 1_335, 1_352,
+				1_362, 1_369, 1_372, 1_432, 1_433, 1_441, 1_453, 1_464, 1_492, 1_496, 1_504, 1_524, 1_535, 1_563, 1_567, 1_633,
+				1_646, 1_664, 1_675, 1_708, 1_742, 1_781, 1_784, 1_795, 1_804, 1_817, 1_853, 1_867, 1_896, 1_938, 2_017, 2_051,
+				2_057, 2_083, 2_084, 2_123, 2_149, 2_152, 2_165, 2_211, 2_234, 2_277, 2_296, 2_316, 2_325, 2_335, 2_337, 2_389,
+				2_432, 2_437, 2_444, 2_484, 2_553, 2_555, 2_577, 2_637, 2_741, 2_742, 2_791, 2_808, 2_841, 2_845, 2_914, 2_916,
+				3_023, 3_064, 3_074, 3_075, 3_091, 3_160, 3_183, 3_225, 3_241, 3_252, 3_306, 3_329, 3_344, 3_361, 3_430, 3_439,
+				3_470, 3_491, 3_504, 3_506, 3_513, 3_533, 3_534, 3_537, 3_577, 3_582, 3_584, 3_588, 3_589, 3_596, 3_600, 3_602,
+				3_620, 3_648, 3_661, 3_699, 3_707, 3_715, 3_750, 3_823, 3_843, 3_994, 4_015, 4_044, 4_068, 4_090, 4_102, 4_107,
+				4_110, 4_125, 4_156, 4_191, 4_192, 4_196, 4_213, 4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344,
+				4_371, 4_393, 4_404, 4_420, 4_496, 4_515, 4_534, 4_541, 4_545, 4_613, 4_619, 4_634, 4_637, 4_648, 4_664, 4_707,
+				4_716, 4_729, 4_775, 4_834, 4_857, 4_859, 4_865, 4_891, 4_904, 4_922, 4_944, 4_947, 4_955, 4_963, 4_996,
+			],
+		),
+		// The same choices, seen as well in the configuration struct the back-edge's field is dropped from.
+		GraphFuzzerKnownIssue(
+			reason: "A mock's API follows the order of type names or labels, and one field of a lazy cycle's SafeDIMockConfiguration follows the order of type names: which back-edge of the cycle loses its override, which promoted sibling is passed nil, and the order of overrides",
+			signatures: [.renamedGraphDiffers(.mockCode), .renamedGraphDiffers(.mockConfigurationCode)],
+			seeds: [
+				35, 107, 114, 168, 223, 241, 338, 364, 473, 525, 567, 595, 617, 632, 732, 735,
+				751, 768, 948, 987, 991, 1_004, 1_075, 1_145, 1_244, 1_289, 1_531, 1_602, 1_695, 1_857, 1_970, 1_972,
+				2_013, 2_249, 2_270, 2_282, 2_287, 2_348, 2_403, 2_430, 2_456, 2_518, 2_630, 2_667, 2_704, 2_732, 2_835, 2_874,
+				2_902, 3_134, 3_180, 3_215, 3_221, 3_298, 3_345, 3_526, 3_645, 3_723, 3_741, 3_775, 3_776, 3_805, 3_826, 3_850,
+				3_894, 3_915, 4_117, 4_122, 4_177, 4_206, 4_396, 4_428, 4_549, 4_567, 4_640, 4_642, 4_666, 4_717, 4_776, 4_781,
+				4_783, 4_786, 4_795, 4_918,
 			],
 		),
 		GraphFuzzerKnownIssue(
-			reason: "SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them",
-			signatures: [.renamedGraphDiffers(containing: "changes its generated mock configuration code")],
-			seeds: [
-				69, 170, 173, 310, 348, 393, 434, 497, 595, 790, 929, 1_185, 1_202, 1_400, 1_560,
-				1_571, 1_650, 1_660, 1_691, 1_730, 1_769, 1_786, 1_790, 1_836, 1_992, 2_011, 2_054, 2_254, 2_902, 2_937,
-				3_028, 3_482, 3_510, 3_702, 3_789, 3_847, 3_931, 3_966, 4_535, 4_602, 4_613, 4_631, 4_643, 4_865, 4_974, 4_975,
-			],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "A root with generateMock: true has its mock's tree rejected for a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree",
+			reason: "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree",
 			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain")],
 			seeds: [
-				47, 598, 939, 1_028, 1_116, 1_278, 1_499, 1_614, 1_687, 1_793, 2_147, 2_775, 3_089, 3_208, 3_698,
+				47, 471, 598, 939, 1_028, 1_116, 1_278, 1_499, 1_614, 1_687, 1_793, 2_147, 2_775, 3_089, 3_208, 3_698,
 				3_761, 3_813, 4_388,
 			],
 		),
 		// A known rejection masks no later failure, so a graph that also changes under a renaming documents both.
 		GraphFuzzerKnownIssue(
-			reason: "A root with generateMock: true has its mock's tree rejected for a receive, only if available, of a label a closer declaration holds with another type, in a graph that also changes its generated mock code under a renaming (listed under that shape once the rejection is fixed)",
-			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(containing: "changes its generated mock code")],
+			reason: "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree, in a graph that also changes its generated mock code under a renaming",
+			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(.mockCode)],
 			seeds: [309, 2_201, 3_132, 3_692],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "A root with generateMock: true has its mock's tree rejected for a receive, only if available, of a label a closer declaration holds with another type, in a graph that also changes its generated mock configuration code under a renaming (listed under that shape once the rejection is fixed)",
-			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(containing: "changes its generated mock configuration code")],
-			seeds: [471],
 		),
 	]
 
@@ -3846,8 +4233,8 @@ struct GraphFuzzerLongRunConfiguration {
 	/// `SAFEDI_GRAPH_FUZZER_FEATURES` names a feature that does not exist, which the run reports.
 	let features: Set<GraphFuzzerGeneratorFeature>?
 	/// A file the run appends its progress to, which `graph-fuzzer.yml` reads: `seed <n>` before the tool first
-	/// runs each graph; `failure <seed> <kind>`, `known <seed> <reason>`, or `stale <seed> <reason>` for each
-	/// finding; `renamed <seed> <summary>` and `multimodule <seed> <summary>` for each renamed or partitioned run
+	/// runs each graph; `failure <seed> <kind>`, with a renamed graph's difference after the kind, `known <seed> <reason>`,
+	/// or `stale <seed> <reason>` for each finding; `renamed <seed> <summary>` and `multimodule <seed> <summary>` for each renamed or partitioned run
 	/// that gives other results, whether or not the graph fails another way; `problem <text>` for anything wrong
 	/// with the run itself; `partitions …` with how many base corpus graphs are split into each number of modules and
 	/// how many have a `Delta` depending on `Gamma`, whose two integrations combine declarations in different orders; and
@@ -3899,4 +4286,21 @@ final class GraphFuzzerReport: Sendable {
 
 private enum GraphFuzzerTestError: Error {
 	case noSmokeGraphPassesValueForOnlyIfAvailableParameter
+}
+
+/// Extensions a generated configuration file might hold, for the tests of how a renamed graph's files are compared.
+private enum PublicConfiguration {
+	static let firstStruct = "/// Configuration for how `S12_T0` is constructed within the public mock trees of this module.\npublic struct S12_T0Configuration {\n}"
+	static let firstExtension = "extension S12_T0 {\n    static func make() {}\n}"
+	static let first = "\(firstStruct)\n\n\(firstExtension)"
+	static let secondStruct = "/// Configuration for how `S12_T1` is constructed within the public mock trees of this module.\npublic struct S12_T1Configuration {\n}"
+	static let secondExtension = "extension S12_T1 {\n    static func make() {}\n}"
+}
+
+private enum GeneratedExtension {
+	static let first = "extension S12_T0 {\n    static let a = 1\n}\n"
+	static let changedFirst = "extension S12_T0 {\n    static let a = 2\n}\n"
+	static let second = "extension S12_T1 {\n    static let b = 1\n}\n"
+	static let third = "extension S12_T2 {\n    static let c = 1\n}\n"
+	static let fourth = "extension S12_T3 {\n    static let d = 1\n}\n"
 }
