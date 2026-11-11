@@ -24,8 +24,8 @@ import Testing
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
-/// SafeDI tells `@Instantiable` types apart by name across every module a run reads, so two unrelated types of one name
-/// in two modules are an error whose remedy is to tell them apart. Keeping one is the only remedy offered for declarations
+/// SafeDI tells apart by name the `@Instantiable` types a module can name, so two unrelated types of one name in two
+/// modules that one module can name are an error whose remedy is to tell them apart. Keeping one is the only remedy offered for declarations
 /// known to be in one module, which holds one type of a name.
 struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 	// MARK: Initialization
