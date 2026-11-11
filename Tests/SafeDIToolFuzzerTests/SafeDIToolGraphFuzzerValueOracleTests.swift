@@ -353,7 +353,7 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 	func isolatedValueOracleSeeds_listSeedsOfShapesWhoseValueOracleFixtureDoesNotCompile() {
 		let doesNotCompile = GraphFuzzerKnownIssue(reason: "A root mock reproduces a mock shape", signatures: [.valueOracleFixtureDoesNotCompile(containing: "cannot convert value of type")], seeds: [3, 8])
 		let rejected = GraphFuzzerKnownIssue(reason: "A fixture the tool rejects", signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain")], seeds: [5])
-		let renamed = GraphFuzzerKnownIssue(reason: "An order", signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")], seeds: [7])
+		let renamed = GraphFuzzerKnownIssue(reason: "An order", signatures: [.renamedGraphDiffers(.mockCode)], seeds: [7])
 
 		#expect(SafeDIToolGraphFuzzerTests.isolatedValueOracleSeeds(of: [doesNotCompile, rejected, renamed]) == [3, 8])
 	}
@@ -361,12 +361,11 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 	@Test
 	func seamKnownIssues_inheritNoBaseCorpusValueOracleShape() {
 		// A shape only the base corpus's value oracle shows is not inherited; one that also documents another failure is,
-		// and the seam corpus inherits none of its seeds below its size (`seamCorpusSeedsOfOtherShapes`); the one of them
-		// the seam corpus still fails, 471, is listed under a shape of the seam's own.
+		// and the seam corpus inherits none of its seeds below its size (`seamCorpusSeedsOfOtherShapes`).
 		let doesNotCompile = GraphFuzzerKnownIssue(reason: "A root mock reproduces a mock shape", signatures: [.valueOracleFixtureDoesNotCompile(containing: "cannot convert value of type")], seeds: [3, 8])
 		let rejected = GraphFuzzerKnownIssue(reason: "A fixture the tool rejects", signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain")], seeds: [5])
-		let rejectedAndRenamed = GraphFuzzerKnownIssue(reason: "A fixture the tool rejects, in a graph whose order changes", signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(containing: "changes its generated mock code")], seeds: [6])
-		let renamed = GraphFuzzerKnownIssue(reason: "An order", signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")], seeds: [7])
+		let rejectedAndRenamed = GraphFuzzerKnownIssue(reason: "A fixture the tool rejects, in a graph whose order changes", signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(.mockCode)], seeds: [6])
+		let renamed = GraphFuzzerKnownIssue(reason: "An order", signatures: [.renamedGraphDiffers(.mockCode)], seeds: [7])
 
 		#expect([doesNotCompile, rejected, rejectedAndRenamed, renamed].map(\.isBaseCorpusValueOracleShape) == [true, true, false, false])
 		#expect(SafeDIToolGraphFuzzerTests.seamKnownIssues.allSatisfy { knownIssue in

@@ -395,7 +395,8 @@ enum GraphFuzzerModule: String, CaseIterable, Comparable {
 /// of its type names, of its property labels, of its file names, or all three at once, or where its type names sort
 /// among the names of the wrappers SafeDI provides. The rename-invariance oracle runs each graph under every renaming
 /// and requires the same results once the renaming is undone: the same verdict, the same diagnostics in any order
-/// (each list of suggestions in a diagnostic in any order, too), and byte-identical generated files.
+/// (each list of suggestions in a diagnostic in any order, too), and generated files identical byte for byte
+/// but for the order of their extensions.
 ///
 /// Type names `<prefix>T<i>`, `<prefix>AnyT<i>`, `<prefix>Root<i>`, and `<prefix>Missing<i>` – with any suffix, such
 /// as `Protocol` – and labels `t<i>`, `anyT<i>`, `lazyT<i>`, `lazyAnyT<i>`, and `missing<i>` – with any suffix, such
@@ -7202,23 +7203,74 @@ enum GraphFuzzerSourceLine: Equatable {
 
 // MARK: - Oracle
 
+/// One way two outcomes of the tool differ.
+struct GraphFuzzerOutcomeDifference: Equatable {
+	/// What differs, which is how a known issue names a difference. A generated file's code is classified in one place,
+	/// `aspect(ofCodeInFileNamed:)`, so a finer shape of a file's difference is one more case and one more branch there.
+	enum Aspect: String, Equatable {
+		case verdict = "its verdict"
+		case diagnostics = "its diagnostics"
+		case generatedFileNames = "the names of its generated files"
+		case unreadTypeComments = "the comments naming the types it counts as `public` because it reads no declaration of them"
+		case mockCode = "its generated mock code"
+		case mockConfigurationCode = "its generated mock configuration code"
+		case dependencyTreeCode = "its generated dependency tree code"
+		case warnings = "its warnings"
+	}
+
+	let aspect: Aspect
+	/// The generated file whose code differs, when `aspect` is the code of a file.
+	var fileName: String?
+	/// Whether the file's code, compared byte for byte, differs in nothing but the order of its extensions.
+	var differsOnlyInOrderOfExtensions = false
+
+	var description: String {
+		if let fileName {
+			"\(aspect.rawValue)\(differsOnlyInOrderOfExtensions ? " (the order of its extensions only)" : ""), in \(fileName)"
+		} else {
+			aspect.rawValue
+		}
+	}
+
+	/// The aspect of a difference in the code of the generated file named `fileName`.
+	static func aspect(ofCodeInFileNamed fileName: String) -> Aspect {
+		if fileName.hasSuffix("+SafeDIMock.swift") {
+			.mockCode
+		} else if fileName.hasSuffix("SafeDIMockConfiguration.swift") {
+			.mockConfigurationCode
+		} else {
+			.dependencyTreeCode
+		}
+	}
+}
+
 /// What one run of SafeDITool did with a graph, with the per-run fixture directory replaced by a placeholder so
 /// two runs compare equal exactly when they produced the same diagnostics and code.
 enum GraphFuzzerToolOutcome: Equatable {
 	case rejected(diagnostics: String)
 	case accepted(generatedFiles: [String: String], warnings: [String])
 
-	/// The first aspect in which two outcomes differ, or `nil` when they agree: their verdict, their diagnostics
-	/// or warnings in any order, the names of their generated files, or one file's code, byte for byte. Paths to
-	/// fixture files are compared by file name, and the suggestions a diagnostic lists ("Did you mean one of …"), and
-	/// the declarations it lists as proving a type's access, in any order: the order inside a message is presentation and changes nothing a user does.
+	/// How the code of a file both outcomes generated is compared.
+	enum CodeComparison {
+		case byteForByte
+		/// Byte for byte, but for the order of the file's extensions, across `#if` blocks of exactly one condition too: the
+		/// order a renamed graph may change, which is presentation and changes nothing a user does.
+		case inAnyOrderOfExtensions
+	}
+
+	/// Every aspect in which two outcomes differ, or nothing when they agree: their verdict or their diagnostics in any
+	/// order; or the names of their generated files, the code of each file both generated (compared as `codeComparison`
+	/// says), and their warnings in any order, each a difference of its own. Paths to fixture files are compared by file
+	/// name, and the suggestions a diagnostic lists ("Did you mean one of …"), and the declarations it lists as proving
+	/// a type's access, in any order: the order inside a message is presentation and changes nothing a user does.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	static func difference(between outcome: GraphFuzzerToolOutcome, and otherOutcome: GraphFuzzerToolOutcome) -> String? {
+	static func differences(between outcome: GraphFuzzerToolOutcome, and otherOutcome: GraphFuzzerToolOutcome, comparingCode codeComparison: CodeComparison = .byteForByte) -> [GraphFuzzerOutcomeDifference] {
 		// A seam's guard enum is named after a hash of its signature, which names its parameters' types, so a
-		// renaming changes it as it changes the types: a hash restored textually cannot match, and is reduced away.
+		// renaming changes it as it changes the types: a hash restored textually cannot match, and is reduced away, to
+		// what is still an identifier, so that the code still parses.
 		let reduce = { (text: String) in
 			GraphFuzzerRenaming.reducingFixturePathsToFileNames(in: text)
-				.replacingOccurrences(of: #"(__safeDI_[A-Za-z0-9_]+_)[0-9A-F]{16}\b"#, with: "$1<hash>", options: .regularExpression)
+				.replacingOccurrences(of: #"(__safeDI_[A-Za-z0-9_]+_)[0-9A-F]{16}\b"#, with: "$1hash", options: .regularExpression)
 		}
 		// A run without a target graph writes one comment per combined output, above the first `public` declaration that
 		// names a type SafeDI counts as `public` because it reads no declaration of it. Which declaration is first follows
@@ -7227,42 +7279,49 @@ enum GraphFuzzerToolOutcome: Equatable {
 		func isUnreadTypeComment(_ line: Substring) -> Bool {
 			line.trimmingCharacters(in: .whitespaces).hasPrefix(GraphFuzzerOracle.unreadTypeCommentPrefix)
 		}
+		// A module with no such comment has no count, so a file only one outcome generates is only a difference in names.
 		func unreadTypeCommentCountsByModule(_ generatedFiles: [String: String]) -> [Substring: Int] {
-			generatedFiles.reduce(into: [:]) { counts, file in
+			generatedFiles.reduce(into: [Substring: Int]()) { counts, file in
 				counts[file.key.prefix { $0 != "/" }, default: 0] += file.value.split(separator: "\n").filter(isUnreadTypeComment).count
-			}
+			}.filter { $0.value > 0 }
 		}
 		func withoutUnreadTypeComments(_ code: String) -> String {
 			code.split(separator: "\n", omittingEmptySubsequences: false).filter { !isUnreadTypeComment($0) }.joined(separator: "\n")
 		}
 		switch (outcome, otherOutcome) {
 		case let (.rejected(diagnostics), .rejected(otherDiagnostics)):
-			return diagnosticEntries(of: reduce(diagnostics)) == diagnosticEntries(of: reduce(otherDiagnostics)) ? nil : "its diagnostics"
+			return diagnosticEntries(of: reduce(diagnostics)) == diagnosticEntries(of: reduce(otherDiagnostics)) ? [] : [GraphFuzzerOutcomeDifference(aspect: .diagnostics)]
 		case let (.accepted(generatedFiles, warnings), .accepted(otherGeneratedFiles, otherWarnings)):
+			var differences = [GraphFuzzerOutcomeDifference]()
 			if Set(generatedFiles.keys) != Set(otherGeneratedFiles.keys) {
-				return "the names of its generated files"
+				differences.append(GraphFuzzerOutcomeDifference(aspect: .generatedFileNames))
 			}
 			if unreadTypeCommentCountsByModule(generatedFiles) != unreadTypeCommentCountsByModule(otherGeneratedFiles) {
-				return "the comments naming the types it counts as `public` because it reads no declaration of them"
+				differences.append(GraphFuzzerOutcomeDifference(aspect: .unreadTypeComments))
 			}
-			for fileName in generatedFiles.keys.sorted() {
+			for fileName in Set(generatedFiles.keys).intersection(otherGeneratedFiles.keys).sorted() {
 				let code = reduce(withoutUnreadTypeComments(generatedFiles[fileName, default: ""]))
 				let otherCode = reduce(withoutUnreadTypeComments(otherGeneratedFiles[fileName, default: ""]))
-				guard code != otherCode else { continue }
-				let kind = if fileName.hasSuffix("+SafeDIMock.swift") {
-					"its generated mock code"
-				} else if fileName.hasSuffix("SafeDIMockConfiguration.swift") {
-					"its generated mock configuration code"
-				} else {
-					"its generated dependency tree code"
-				}
-				let orderOnly = declarationsInAnyOrder(code) == declarationsInAnyOrder(otherCode) ? " (the order of its extensions only)" : ""
-				return "\(kind)\(orderOnly), in \(fileName)"
+				// By their UTF-8, since `String`'s `!=` calls canonically equivalent spellings equal while Swift reads them as two names.
+				guard !code.utf8.elementsEqual(otherCode.utf8) else { continue }
+				let differsOnlyInOrderOfExtensions = GraphFuzzerExtensionOrder.sortingExtensionsWithinTheirPlaces(in: code) == GraphFuzzerExtensionOrder.sortingExtensionsWithinTheirPlaces(in: otherCode)
+				guard codeComparison == .byteForByte || !differsOnlyInOrderOfExtensions else { continue }
+				differences.append(GraphFuzzerOutcomeDifference(aspect: GraphFuzzerOutcomeDifference.aspect(ofCodeInFileNamed: fileName), fileName: fileName, differsOnlyInOrderOfExtensions: differsOnlyInOrderOfExtensions))
 			}
-			return warnings.sorted() == otherWarnings.sorted() ? nil : "its warnings"
+			if warnings.sorted() != otherWarnings.sorted() {
+				differences.append(GraphFuzzerOutcomeDifference(aspect: .warnings))
+			}
+			return differences
 		case (.accepted, .rejected), (.rejected, .accepted):
-			return "its verdict"
+			return [GraphFuzzerOutcomeDifference(aspect: .verdict)]
 		}
+	}
+
+	/// The first of `differences(between:and:comparingCode:)`, with code compared byte for byte, described, or `nil` when
+	/// the outcomes agree.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	static func difference(between outcome: GraphFuzzerToolOutcome, and otherOutcome: GraphFuzzerToolOutcome) -> String? {
+		differences(between: outcome, and: otherOutcome).first?.description
 	}
 
 	/// The diagnostics, each with the notes after it and with its suggestions sorted, sorted.
@@ -7296,41 +7355,6 @@ enum GraphFuzzerToolOutcome: Equatable {
 			location = match.range.location + match.range.length
 		}
 		return result + source.substring(from: location)
-	}
-
-	/// `code` with each run of consecutive top-level extensions sorted, which says whether two files differ only
-	/// in the order they declare their extensions.
-	private static func declarationsInAnyOrder(_ code: String) -> String {
-		var lines = [String]()
-		var extensions = [String]()
-		var currentExtension: [Substring]?
-		func endExtension() {
-			if let currentExtension {
-				extensions.append(currentExtension.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines))
-			}
-			currentExtension = nil
-		}
-		func endExtensions() {
-			endExtension()
-			lines += extensions.sorted()
-			extensions = []
-		}
-		for line in code.split(separator: "\n", omittingEmptySubsequences: false) {
-			// A public mock's module-level configuration and a forwarder of its default are declarations of their own.
-			if line.hasPrefix("extension ") || line.hasPrefix("/// Configuration for how ") || line.hasPrefix("@usableFromInline ") {
-				endExtension()
-				currentExtension = [line]
-			} else if line.hasPrefix("#") {
-				endExtensions()
-				lines.append(String(line))
-			} else if currentExtension != nil {
-				currentExtension?.append(line)
-			} else if !line.isEmpty {
-				lines.append(String(line))
-			}
-		}
-		endExtensions()
-		return lines.joined(separator: "\n")
 	}
 
 	var description: String {
@@ -7440,6 +7464,9 @@ struct GraphFuzzerFailure: Equatable {
 	/// For `valueOracleFixtureRejected`, each line of the tool's diagnostics that reports an error: a known issue of that
 	/// kind documents the failure only when every one of them contains the text of one of its rejection signatures.
 	var rejectionErrorLines: [String] = []
+	/// For `renamedGraphDiffers`, what differs: a known issue of that kind documents the failure only when one of its
+	/// signatures names exactly this.
+	var renamedGraphDifference: GraphFuzzerOutcomeDifference.Aspect?
 
 	static func reproductionCommand(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>) -> String {
 		let featuresVariable = features.isEmpty ? "" : "SAFEDI_GRAPH_FUZZER_FEATURES=\(features.sorted().map(\.rawValue).joined(separator: ",")) "
@@ -7493,11 +7520,11 @@ struct GraphFuzzerResult {
 	/// modules gives other results under one multi-module integration than under the other, or, failing none of those
 	/// ways, a renamed graph gives other results.
 	let failure: GraphFuzzerFailure?
-	/// The ways the graph fails after `failure` in the oracle's chain, which a known value failure, or a known failure
-	/// of a base corpus graph's value-oracle fixture, does not mask.
+	/// The ways the graph fails after `failure` in the oracle's chain, every difference of a renamed graph among them,
+	/// which a known value failure, or a known failure of a base corpus graph's value-oracle fixture, does not mask.
 	let laterFailures: [GraphFuzzerFailure]
-	/// How each renamed graph that gives other results differs, in the order of `GraphFuzzerRenaming.all`, whether
-	/// or not the graph also fails another way.
+	/// Each way a renamed graph gives other results, a failure per difference, in the order of
+	/// `GraphFuzzerRenaming.all`, whether or not the graph also fails another way.
 	let renamedGraphFailures: [GraphFuzzerFailure]
 	/// What the two multi-module integrations produced for the graph split across modules, in the order of
 	/// `GraphFuzzerOracle.multiModuleRenamings`.
@@ -7546,8 +7573,9 @@ struct GraphFuzzerKnownIssue: Equatable {
 		case compilerWarning(containing: String)
 		/// The Swift compiler crashes while compiling a generated mock.
 		case compilerCrashInGeneratedMock
-		/// A renamed graph gives other results, in the aspect whose description contains this text.
-		case renamedGraphDiffers(containing: String)
+		/// A renamed graph gives other results, in exactly this aspect. Each difference is its own failure, so a graph
+		/// that differs in two aspects is documented only by a shape that lists both.
+		case renamedGraphDiffers(GraphFuzzerOutcomeDifference.Aspect)
 		/// The fixture itself fails to compile, with an error whose message contains this text: the macro rejects
 		/// a shape the generator emits before the macro accepts it.
 		case macroRejectsFixture(containing: String)
@@ -7618,8 +7646,8 @@ struct GraphFuzzerKnownIssue: Equatable {
 				failure.kind == .generatedCodeDrawsWarning && failure.details.contains(text)
 			case .compilerCrashInGeneratedMock:
 				failure.kind == .compilerCrashedOnGeneratedCode && failure.details.contains("+SafeDIMock.swift")
-			case let .renamedGraphDiffers(text):
-				failure.kind == .renamedGraphDiffers && failure.details.prefix { $0 != "\n" }.contains(text)
+			case let .renamedGraphDiffers(aspect):
+				failure.kind == .renamedGraphDiffers && failure.renamedGraphDifference == aspect
 			case let .macroRejectsFixture(text):
 				failure.kind == .fixtureDoesNotCompile && failure.details.contains(text)
 			case let .integrationsDiffer(text):
@@ -7738,7 +7766,8 @@ enum GraphFuzzerFinding: Equatable {
 	///   failure masks none of them: the first the known issue does not document is the finding. Nor does a known
 	///   rejection of a base corpus graph's value-oracle fixture, or a known failure of it to compile, of each of which
 	///   every later failure is independent: the value comparison does not run, and the wrapper, multi-module and
-	///   rename oracles judge the drawn graph.
+	///   rename oracles judge the drawn graph. No known failure masks a renamed graph's difference, which judges only
+	///   what the tool generates.
 	init(failure: GraphFuzzerFailure?, laterFailures: [GraphFuzzerFailure] = [], knownIssue: GraphFuzzerKnownIssue?) {
 		switch (failure, knownIssue) {
 		case (nil, nil):
@@ -7746,7 +7775,8 @@ enum GraphFuzzerFinding: Equatable {
 		case let (nil, knownIssue?):
 			self = .staleKnownIssue(knownIssue)
 		case let (failure?, knownIssue?) where knownIssue.matches(failure):
-			if [.seamBuildsOtherValuesThanInline, .publicMockBuildsOtherValuesThanKnownRight, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile].contains(failure.kind), let unmasked = laterFailures.first(where: { !knownIssue.matches($0) }) {
+			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .publicMockBuildsOtherValuesThanKnownRight, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile].contains(failure.kind)
+			if let unmasked = laterFailures.first(where: { (masksNoLaterFailure || $0.kind == .renamedGraphDiffers) && !knownIssue.matches($0) }) {
 				self = .failure(unmasked)
 			} else {
 				self = .knownIssue(knownIssue, failure)
@@ -7754,6 +7784,20 @@ enum GraphFuzzerFinding: Equatable {
 		case let (failure?, _):
 			self = .failure(failure)
 		}
+	}
+
+	/// What the fuzzer concludes about one graph: the finding `init` makes, then each other difference of a renamed
+	/// graph that the known issue does not document, as a finding of its own, so that a graph's every undocumented
+	/// difference is reported at once.
+	static func findings(failure: GraphFuzzerFailure?, laterFailures: [GraphFuzzerFailure] = [], knownIssue: GraphFuzzerKnownIssue?) -> [GraphFuzzerFinding] {
+		let finding = GraphFuzzerFinding(failure: failure, laterFailures: laterFailures, knownIssue: knownIssue)
+		var reportedFailure: GraphFuzzerFailure?
+		if case let .failure(failure) = finding {
+			reportedFailure = failure
+		}
+		return [finding] + laterFailures
+			.filter { $0.kind == .renamedGraphDiffers && $0 != reportedFailure && knownIssue?.matches($0) != true }
+			.map(GraphFuzzerFinding.failure)
 	}
 
 	/// The line the long run appends to its report, which `graph-fuzzer.yml` reads.
@@ -7765,6 +7809,9 @@ enum GraphFuzzerFinding: Equatable {
 			"known \(seed) \(knownIssue.reason)"
 		case let .staleKnownIssue(knownIssue):
 			"stale \(seed) \(knownIssue.reason)"
+		case let .failure(failure) where failure.kind == .renamedGraphDiffers:
+			// Each difference of a graph is a finding, so its line says which, without the sentence's period.
+			"failure \(seed) \(failure.kind.rawValue): \(failure.details.prefix { $0 != "\n" }.dropLast())"
 		case let .failure(failure):
 			"failure \(seed) \(failure.kind.rawValue)"
 		}
@@ -8154,18 +8201,20 @@ struct GraphFuzzerToolRuns {
 		)
 	}
 
-	/// The failure of each renamed graph that, with its renaming undone, gives another verdict, other
-	/// diagnostics or warnings in any order (the tool sorts them by file, and the files are renamed), each
-	/// diagnostic's suggestions in any order, other generated file names, or generated code that is not
-	/// byte-identical.
+	/// A failure for each way a renamed graph, with its renaming undone, differs, in the order of the renamings: another
+	/// verdict, other diagnostics or warnings in any order (the tool sorts them by file, and the files are renamed),
+	/// each diagnostic's suggestions in any order, other generated file names, or the code of each generated file that
+	/// differs by more than the order of its extensions.
 	var renamedGraphFailures: [GraphFuzzerFailure] {
-		renamedOutcomes.compactMap { renaming, outcome in
-			guard let difference = GraphFuzzerToolOutcome.difference(between: firstOutcome, and: outcome) else { return nil }
-			return GraphFuzzerFailure(
-				seed: fixture.seed,
-				kind: .renamedGraphDiffers,
-				details: "\(renaming.description.prefix(1).uppercased())\(renaming.description.dropFirst()) changes \(difference).\nThis graph:\n\(firstOutcome.description)\nThe renamed graph, with its renaming undone:\n\(outcome.description)",
-			)
+		renamedOutcomes.flatMap { renaming, outcome in
+			GraphFuzzerToolOutcome.differences(between: firstOutcome, and: outcome, comparingCode: .inAnyOrderOfExtensions).map { difference in
+				GraphFuzzerFailure(
+					seed: fixture.seed,
+					kind: .renamedGraphDiffers,
+					details: "\(renaming.description.prefix(1).uppercased())\(renaming.description.dropFirst()) changes \(difference.description).\nThis graph:\n\(firstOutcome.description)\nThe renamed graph, with its renaming undone:\n\(outcome.description)",
+					renamedGraphDifference: difference.aspect,
+				)
+			}
 		}
 	}
 
@@ -8271,7 +8320,7 @@ enum GraphFuzzerOracle {
 		let valueComparisons = try valueComparisons(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil }, isolatingValueOracleGraphsOf: isolatedValueOracleSeeds)
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.readTwinFailure, runs.multiModuleFailures.first, renamedGraphFailures.first].compactMap(\.self)
+			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.readTwinFailure, runs.multiModuleFailures.first].compactMap(\.self) + renamedGraphFailures
 			// A base corpus graph is compared once its value-oracle graph is.
 			let isValueOracleGraphCompared = runs.valueOracle == nil || valueComparisons.comparedValueOracleSeeds.contains(runs.fixture.seed)
 			return GraphFuzzerResult(

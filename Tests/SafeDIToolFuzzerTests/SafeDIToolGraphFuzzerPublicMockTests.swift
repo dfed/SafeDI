@@ -34,14 +34,15 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		// of each shape it shows, which must fail exactly as listed, and graphs that must pass.
 		let knownIssuesBySeed = Dictionary(uniqueKeysWithValues: SafeDIToolGraphFuzzerTests.publicMockKnownIssues.flatMap { knownIssue in knownIssue.seeds.map { ($0, knownIssue) } })
 		for result in try await publicMockSmokeResults.value {
-			let finding = GraphFuzzerFinding(failure: result.failure, laterFailures: result.laterFailures, knownIssue: knownIssuesBySeed[result.fixture.seed])
-			switch finding {
-			case .passed, .knownIssue:
-				break
-			case let .staleKnownIssue(knownIssue):
-				Issue.record("Seed \(result.fixture.seed) no longer fails: \(knownIssue.reason)")
-			case let .failure(failure):
-				Issue.record(failure.issueComment(fixture: result.fixture))
+			for finding in GraphFuzzerFinding.findings(failure: result.failure, laterFailures: result.laterFailures, knownIssue: knownIssuesBySeed[result.fixture.seed]) {
+				switch finding {
+				case .passed, .knownIssue:
+					break
+				case let .staleKnownIssue(knownIssue):
+					Issue.record("Seed \(result.fixture.seed) no longer fails: \(knownIssue.reason)")
+				case let .failure(failure):
+					Issue.record(failure.issueComment(fixture: result.fixture))
+				}
 			}
 		}
 	}
