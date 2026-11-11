@@ -40,7 +40,9 @@ public struct Generate: AsyncParsableCommand {
 
 	@Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project’s non-root module. Must have a `.safedi` suffix. Requires '--module-name': a module info file names the module it describes. Written only when the run succeeds, and only when its bytes change.") var moduleInfoOutput: String?
 
-	@Option(help: "A path to a CSV file containing paths of SafeDI representations of other modules to parse: the `.safedi` file of each module this module depends on – each module whose types this module or the code SafeDI generates for its roots and mocks uses, so a module that declares a root lists every module beneath it. Each carries what a seam or public mock of a module it depends on needs, so a module is never listed only for another module's seam or public mock.") var dependentModuleInfoFilePath: String?
+	@Option(help: "A path to a CSV file containing paths of SafeDI representations of other modules to parse: the `.safedi` file of each module this module depends on – each module whose types this module or the code SafeDI generates for its roots and mocks uses, so a module that declares a root lists every module beneath it, except those '--transitive-module-info-file-path' names that its dependency trees need. Each carries what a seam or public mock of a module it depends on needs, so a module is never listed only for another module's seam or public mock.") var dependentModuleInfoFilePath: String?
+
+	@Option(help: "A path to a CSV file containing paths of the `.safedi` file of every module beneath this one, directly or through another, as SafeDI's Bazel rule collects them. A file '--dependent-module-info-file-path' lists too is read once. Dependency trees alone ask for these modules: when this module declares a root (`isRoot: true`) or a seam (`generateDependencyTree: true`), every module one of these files describes that declares a type its dependency trees need, and that nothing read declares, is read as though listed, and the generated code imports it. A generated mock asks for none of them: it builds a deeper type only when a dependency tree of this module uses that type's module or the module is listed, and otherwise takes the type as a parameter. In a module that declares neither a root nor a seam, this run does not open the file, so a module with no dependency tree generates what the modules it lists give it.") var transitiveModuleInfoFilePath: String?
 
 	@Option(help: "A path to the JSON manifest `scan` writes, describing the desired Swift output files. A manifest written by hand is deprecated, and SafeDI 3.0 rejects one: pass `--output-directory`, which runs `scan` for you, or `--combined-output`, which writes every output to one file.") var swiftManifest: String?
 
@@ -60,7 +62,7 @@ public struct Generate: AsyncParsableCommand {
 
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
 
-	@Option(help: "The name of the module this run generates code for: the module that compiles the files the input CSV and '--include' name. Each of those files' declarations, and the '--module-info-output' file, record it, so a module that reads the file knows which module declares each type. Files reached through a #SafeDIConfiguration's additionalDirectoriesToInclude belong to another module. Without this option and '--package-name', a run with '--swift-manifest' or '--output-directory' reads the module of each file from the target graph the SafeDIGenerator plugin writes beside its input CSV. Either way, the '--module-info-output' file also records, as modules this one depends on, the module each '--dependent-module-info-file-path' file records.") var moduleName: String?
+	@Option(help: "The name of the module this run generates code for: the module that compiles the files the input CSV and '--include' name. Each of those files' declarations, and the '--module-info-output' file, record it, so a module that reads the file knows which module declares each type. Files reached through a #SafeDIConfiguration's additionalDirectoriesToInclude belong to another module. Without this option and '--package-name', a run with '--swift-manifest' or '--output-directory' reads the module of each file from the target graph the SafeDIGenerator plugin writes beside its input CSV. Either way, the '--module-info-output' file also records, as modules this one depends on, the module each '--dependent-module-info-file-path' file, and each '--transitive-module-info-file-path' file this run reads, records.") var moduleName: String?
 
 	@Option(help: "The package of the module this run generates code for, as the compiler's '-package-name' names it, recorded as '--module-name' is. Omit it when the compiler receives no '-package-name'.") var packageName: String?
 
@@ -228,8 +230,9 @@ public struct Generate: AsyncParsableCommand {
 		let suppliedCompilationConditions = buildSettingConditions
 			?? Set(activeCompilationConditions).union(manifest?.activeCompilationConditions ?? [])
 
-		let (dependentModuleInfoFiles, parsed) = try await (
-			loadSafeDIModuleInfo(),
+		let listedModuleInfoPaths = try moduleInfoPaths(listedIn: dependentModuleInfoFilePath)
+		let (listedModuleInfoFiles, parsed) = try await (
+			loadSafeDIModuleInfo(at: listedModuleInfoPaths),
 			parsedModule(
 				inputFilePaths: inputFilePaths,
 				manifestPath: resolvedSwiftManifest,
@@ -284,9 +287,15 @@ public struct Generate: AsyncParsableCommand {
 		} else {
 			parsedModuleInfo = initialModule
 		}
+		let dependentModuleInfoFiles = try await moduleInfoFilesIncludingThoseBeneath(
+			listedFiles: listedModuleInfoFiles,
+			listedPaths: listedModuleInfoPaths,
+			ownModule: parsedModuleInfo,
+		)
 		// Each declaration with the module that declares its file, as the build system tells this run, if it does. The
-		// modules whose module info this run reads are ones this module depends on directly, as the build system lists
-		// them, named as each file records its module, however this run learns which module its own files belong to.
+		// modules whose module info this run reads are ones this module depends on, directly as the build system lists
+		// them or beneath those for what its trees need, named as each file records its module, however this run learns
+		// which module its own files belong to.
 		let membership = try moduleMembership(
 			// Only a run with a manifest, which each of the SafeDIGenerator plugin's runs is, reads a target graph.
 			targetGraphInputSourcesFilePath: resolvedSwiftManifest != nil ? swiftSourcesFilePath : nil,
@@ -316,6 +325,17 @@ public struct Generate: AsyncParsableCommand {
 			plainTypeDeclarations: dependentModuleInfo.flatMap(\.plainTypeDeclarations) + module.plainTypeDeclarations,
 		)
 		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
+		let listedModuleNames = Set(listedModuleInfoFiles.map(\.file.moduleName))
+		let moduleNamesReadFromBeneath = dependentModuleInfoFiles.map(\.file.moduleName).filter { !listedModuleNames.contains($0) }
+		// Generated code names the types of a module read from beneath, and the files that import that module can be in a
+		// module no tree needs, which this run does not read. Where a file the run reads imports the module, the import
+		// stays that file's, as for a listed module: a plain import beside it would replace an `@_spi` import in the header.
+		func importingModulesReadFromBeneath(_ importStatements: [ImportStatement]) -> [ImportStatement] {
+			let importedModuleNames = Set(importStatements.map(\.moduleName))
+			return importStatements + moduleNamesReadFromBeneath
+				.filter { !importedModuleNames.contains($0) }
+				.map { ImportStatement(moduleName: $0) }
+		}
 		let typeDescriptionToFulfillingInstantiableMap = try resolveSafeDIFulfilledTypes(instantiables: normalizedInstantiables)
 		// Generated code never imports the module it compiles in, which the compiler warns at: a file read from a module
 		// above this one, through `additionalDirectoriesToInclude`, can import it. The `.safedi` keeps every import,
@@ -357,9 +377,9 @@ public struct Generate: AsyncParsableCommand {
 			comparisonFilePaths: comparisonFilePaths,
 		)
 		let generator = DependencyTreeGenerator(
-			importStatements: importingOtherModules(dependentModuleInfo.flatMap(\.imports) + viewOnlyDeclarations.flatMap(\.imports) + additionalImportStatements + module.imports),
+			importStatements: importingOtherModules(importingModulesReadFromBeneath(dependentModuleInfo.flatMap(\.imports) + viewOnlyDeclarations.flatMap(\.imports) + additionalImportStatements + module.imports)),
 			// A dependent module's mock-only declarations reach this module's mocks, so its mock imports do too.
-			mockImportStatements: importingOtherModules(dependentModuleInfo.flatMap(\.mockImports) + viewOnlyDeclarations.flatMap(\.mockImports) + additionalImportStatements + module.mockImports),
+			mockImportStatements: importingOtherModules(importingModulesReadFromBeneath(dependentModuleInfo.flatMap(\.mockImports) + viewOnlyDeclarations.flatMap(\.mockImports) + additionalImportStatements + module.mockImports)),
 			typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
 			aliasDeclarationReferences: AliasDeclarationReferences(
 				declarationFilePaths: Set(normalizedInstantiables.flatMap { instantiable in
@@ -1637,30 +1657,25 @@ public struct Generate: AsyncParsableCommand {
 		}
 	}
 
-	/// The dependent modules' info files, each listed once, in path order. Their order is the order in which
-	/// their declarations are combined, which decides which duplicate declaration is reported and the order of
-	/// the files with errors that generated code lists. Path order is the order in which a module's own files
-	/// are combined, and it does not change when a build system lists a target's dependencies in another order.
-	private var moduleInfoURLs: [URL] {
-		get throws {
-			if let dependentModuleInfoFilePath {
-				try Set(
-					String(contentsOfFile: dependentModuleInfoFilePath, encoding: .utf8)
-						.parsedPathListCSV(),
-				)
-				.sorted()
-				.map(\.asFileURL)
-			} else {
-				[]
-			}
+	/// The paths the CSV file at `csvPath` lists, each once, in path order. Their order is the order in which their
+	/// module info files' declarations are combined, which decides which duplicate declaration is reported and the order
+	/// of the files with errors that generated code lists. Path order is the order in which a module's own files are
+	/// combined, and it does not change when a build system lists a target's dependencies in another order.
+	private func moduleInfoPaths(listedIn csvPath: String?) throws -> [String] {
+		if let csvPath {
+			try Set(String(contentsOfFile: csvPath, encoding: .utf8).parsedPathListCSV()).sorted()
+		} else {
+			[]
 		}
 	}
 
-	/// The dependent modules' info files, each with the path it was read from, in the order of `moduleInfoURLs` whatever
-	/// order the parallel reads finish in.
+	/// The module info files at `paths`, each with the path it was read from, in the order of `paths` whatever order the
+	/// parallel reads finish in.
+	/// - Parameter readingViews: Whether to read each file's view, which grows with the modules beneath the file's module.
+	///   `false` leaves every view empty.
 	/// - Throws: When a file cannot be read.
-	private func loadSafeDIModuleInfo() async throws -> [(file: ModuleInfoFile, path: String)] {
-		let moduleInfoURLs = try moduleInfoURLs
+	private func loadSafeDIModuleInfo(at paths: [String], readingViews: Bool = true) async throws -> [(file: ModuleInfoFile, path: String)] {
+		let moduleInfoURLs = paths.map(\.asFileURL)
 		return try await withThrowingTaskGroup(
 			of: (index: Int, file: ModuleInfoFile).self,
 			returning: [(file: ModuleInfoFile, path: String)].self,
@@ -1668,7 +1683,8 @@ public struct Generate: AsyncParsableCommand {
 			for (index, moduleInfoURL) in moduleInfoURLs.enumerated() {
 				taskGroup.addTask {
 					do {
-						return try (index: index, file: ModuleInfoFile(moduleInfoData: Data(contentsOf: moduleInfoURL)))
+						let data = try Data(contentsOf: moduleInfoURL)
+						return try (index: index, file: readingViews ? ModuleInfoFile(moduleInfoData: data) : ModuleInfoFile(moduleInfoDataWithoutView: data))
 					} catch let error as BinaryFileReadError {
 						throw UnreadableModuleInfoError(path: moduleInfoURL.path, reason: error)
 					}
@@ -1682,6 +1698,28 @@ public struct Generate: AsyncParsableCommand {
 				.sorted { $0.index < $1.index }
 				.map { (file: $0.file, path: moduleInfoURLs[$0.index].path) }
 		}
+	}
+
+	/// `listedFiles`, read from `listedPaths`, with those of the files `--transitive-module-info-file-path` lists that
+	/// `ModulesBeneathSelection` picks, in the order of the paths of them all. Opens the files only when the module's trees
+	/// reach a type that the module and `listedFiles` do not declare.
+	/// - Throws: When a file cannot be read.
+	private func moduleInfoFilesIncludingThoseBeneath(
+		listedFiles: [(file: ModuleInfoFile, path: String)],
+		listedPaths: [String],
+		ownModule: ModuleInfo,
+	) async throws -> [(file: ModuleInfoFile, path: String)] {
+		var selection = ModulesBeneathSelection(ownModule: ownModule, listedFiles: listedFiles.map(\.file))
+		guard transitiveModuleInfoFilePath != nil, selection.reachesTypeNothingReadDeclares() else {
+			return listedFiles
+		}
+		let otherPaths = try Set(moduleInfoPaths(listedIn: transitiveModuleInfoFilePath)).subtracting(listedPaths).sorted()
+		let otherFiles = try await loadSafeDIModuleInfo(at: otherPaths, readingViews: false)
+		let pathsToRead = selection.indicesOfFilesToRead(among: otherFiles.map(\.file)).sorted().map { otherPaths[$0] }
+		let filesToRead = try await loadSafeDIModuleInfo(at: pathsToRead)
+		return zip(listedPaths + pathsToRead, listedFiles + filesToRead)
+			.sorted { $0.0 < $1.0 }
+			.map(\.1)
 	}
 
 	/// Where `--module-info-output` writes the module's info, and the module it names, or `nil` when the run writes none.

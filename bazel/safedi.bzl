@@ -28,13 +28,17 @@ two artifacts:
     on this one lists this rule's label in its own `safedi_compile`'s
     `deps` (or `safedi_swift_library`'s `safedi_deps`) to reach
     `@Instantiable` types declared in this module without re-parsing
-    the sources. A module lists each module whose types it or the code
-    SafeDI generates for its roots and mocks uses, so a module that
-    declares a root lists every module beneath it. The artifact also
-    carries what a seam or public mock of a module this one depends on
-    needs, so a module is never listed only for another module's seam
-    or public mock. The SafeDI manual's "Which modules to list" says
-    more.
+    the sources. A module lists the modules it depends on directly.
+    The rule collects the rest of the modules beneath them in
+    `SafeDIInfo.transitive_module_infos`, as rules_swift collects
+    `SwiftInfo.transitive_modules`. SafeDITool reads one of those only
+    in a module that declares a root or a seam, and only when it
+    declares a type the module's dependency trees need, so a mock
+    builds a deeper type only if a tree of its module uses that module
+    or the module is listed. The artifact also carries what a seam or
+    public mock of a module this one depends on needs, so a module is
+    never listed only for another module's seam or public mock. The
+    SafeDI manual's "Which modules to list" says more.
 
 This rule mirrors the Tuist plugin's `SafeDI.preCompileScript`
 helper, which writes the same two artifacts in one invocation. Doing
@@ -103,7 +107,9 @@ module's package (`package_name`, which the compiler receives as
 `-package-name`). SafeDITool records them in the `.safedi` artifact,
 so a consumer knows which module and package declare each
 `@Instantiable` type, and records the module each `deps` entry's
-`.safedi` names as one of the module's dependencies.
+`.safedi` names as one of the module's dependencies, along with the
+modules beneath them that a module that declares a root or a seam
+reads.
 `safedi_swift_library` passes the module name its `swift_library`
 compiles: the `module_name` attribute, or the name rules_swift derives
 from the library's label. Give `safedi_swift_library` a `package_name`
@@ -130,6 +136,9 @@ SafeDIInfo = provider(
     doc = "Module info artifact (`.safedi`) emitted by `safedi_compile`.",
     fields = {
         "module_info": "The `.safedi` file describing this module's @Instantiable surface.",
+        "transitive_module_infos": """A depset of this module's `.safedi`
+file and that of every module beneath it, collected through `deps` as
+rules_swift collects `SwiftInfo.transitive_modules`.""",
     },
 )
 
@@ -176,6 +185,15 @@ def _safedi_compile_impl(ctx):
         dependency[SafeDIInfo].module_info
         for dependency in ctx.attr.deps
     ]
+    module_infos_of_dependencies = [
+        dependency[SafeDIInfo].transitive_module_infos
+        for dependency in ctx.attr.deps
+    ]
+
+    # Every module beneath this one, whichever of them `deps` lists. Which
+    # of them SafeDITool reads depends on this module's sources, which
+    # analysis cannot see, so every action gets them all as inputs.
+    module_infos_beneath = depset(transitive = module_infos_of_dependencies)
 
     arguments = [
         input_csv.path,
@@ -230,12 +248,22 @@ def _safedi_compile_impl(ctx):
             dependency_module_info_files,
         )
         arguments += ["--dependent-module-info-file-path", dependency_csv.path]
-        extra_inputs = [dependency_csv] + dependency_module_info_files
+        extra_inputs = [dependency_csv]
+
+        # An `Args` object, so that analysis never flattens the depset:
+        # flattening it per target would be quadratic in the module graph.
+        module_infos_beneath_paths = ctx.actions.args()
+        module_infos_beneath_paths.set_param_file_format("multiline")
+        module_infos_beneath_paths.add_joined(module_infos_beneath, join_with = ",")
+        module_infos_beneath_csv = ctx.actions.declare_file(ctx.label.name + "_transitive_module_infos.csv")
+        ctx.actions.write(output = module_infos_beneath_csv, content = module_infos_beneath_paths)
+        arguments += ["--transitive-module-info-file-path", module_infos_beneath_csv.path]
+        extra_inputs.append(module_infos_beneath_csv)
 
     ctx.actions.run(
         executable = ctx.toolchains[_SAFEDITOOL_TOOLCHAIN_TYPE].safeditool,
         toolchain = _SAFEDITOOL_TOOLCHAIN_TYPE,
-        inputs = ctx.files.srcs + [input_csv] + extra_inputs,
+        inputs = depset(ctx.files.srcs + [input_csv] + extra_inputs, transitive = [module_infos_beneath]),
         outputs = [combined, module_info],
         arguments = arguments,
         mnemonic = "SafeDI",
@@ -248,7 +276,10 @@ def _safedi_compile_impl(ctx):
         # source. The `.safedi` rides through `SafeDIInfo` so other
         # `safedi_compile` rules can list this label in `deps`.
         DefaultInfo(files = depset([combined])),
-        SafeDIInfo(module_info = module_info),
+        SafeDIInfo(
+            module_info = module_info,
+            transitive_module_infos = depset([module_info], transitive = module_infos_of_dependencies),
+        ),
     ]
 
 safedi_compile = rule(
@@ -269,14 +300,15 @@ Prefer `safedi_swift_library`, which declares this target and the
             providers = [SafeDIInfo],
             default = [],
             doc = """The `safedi_compile` labels of the modules this
-module depends on, whose `.safedi` module-info artifacts this rule
-consumes for cross-module `@Instantiable` type resolution: each module
-whose types this module or the code SafeDI generates for its roots and
-mocks uses, so a module that declares a root lists every module beneath
-it. Each `.safedi` carries what a seam or public mock of a module it
-depends on needs, so a module is never listed only for another module's
-seam or public mock. The SafeDI manual's "Which modules to list" says
-more.""",
+module depends on directly, whose `.safedi` module-info artifacts this
+rule consumes for cross-module `@Instantiable` type resolution. A module
+that declares a root or a seam also reads the modules beneath them
+that its dependency trees need, which the rule collects. A module also
+lists each deeper module whose types the mocks SafeDI generates for it
+should build and no dependency tree of the module uses. Each
+`.safedi` carries what a seam or public mock of a module it depends on
+needs, so a module is never listed only for another module's seam or
+public mock. The SafeDI manual's "Which modules to list" says more.""",
         ),
         "defines": attr.string_list(
             default = [],
@@ -346,14 +378,16 @@ def safedi_swift_library(
         name: The name of the `swift_library`.
         srcs: Swift sources in this module.
         safedi_deps: The `<name>_safedi` (or `safedi_compile`) labels of
-            the modules this module depends on: each module whose types
-            this module or the code SafeDI generates for its roots and
-            mocks uses, so a module that declares a root lists every
-            module beneath it. Each module's `.safedi` carries what a
-            seam or public mock of a module it depends on needs, so a
-            module is never listed only for another module's seam or
-            public mock. The SafeDI manual's "Which modules to list"
-            says more. List the libraries themselves in `deps`.
+            the modules this module depends on directly. A module that
+            declares a root or a seam also reads the modules beneath
+            them that its dependency trees need, which the rule
+            collects. A module also lists each deeper module whose
+            types the mocks SafeDI generates for it should build and
+            no dependency tree of the module uses. Each module's `.safedi`
+            carries what a seam or public mock of a module it depends on
+            needs, so a module is never listed only for another module's
+            seam or public mock. The SafeDI manual's "Which modules to
+            list" says more. List the libraries themselves in `deps`.
         defines: Passed to both targets.
         copts: Passed to both targets. `safedi_compile` reads only the
             `-D` flags.

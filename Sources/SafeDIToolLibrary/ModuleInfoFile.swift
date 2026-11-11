@@ -25,8 +25,9 @@ import SafeDICore
 /// and its view of the modules it depends on.
 ///
 /// Under every integration that runs `generate` once per module, a module is given the `.safedi` of each module it
-/// depends on – each module whose types its own trees build, so a module that declares a root lists every module
-/// beneath it – and never one only for another module's seam or public mock. A seam or public mock another module
+/// depends on – each module whose types its own trees build, so a module that declares a root is given every module
+/// beneath it, which the Bazel rule collects (`--transitive-module-info-file-path`, of which the module reads what its
+/// trees need), any other build lists, and a custom build may pass the same way – and never one only for another module's seam or public mock. A seam or public mock another module
 /// declares is called with the signature that module's run computed, from the declarations it read, so each file
 /// carries in its `view` what a module that depends on it needs to compute any such signature in its closure: the
 /// name, package, dependencies and mock condition of every module in the closure, and the declarations – without
@@ -168,7 +169,8 @@ public struct ModuleInfoView: Codable, Sendable {
 struct ViewedModuleIdentity: Codable {
 	let moduleName: String
 	let packageName: String?
-	/// The modules the module depends on directly, whose module info its run read.
+	/// The modules whose module info the module's run read: those it depends on directly and, in a module that generates
+	/// a dependency tree under the Bazel rule, those beneath them that its trees need.
 	let dependencyModuleNames: [String]
 	/// The condition the module guards its mocks and mock-only declarations with, `nil` for a module whose mocks no
 	/// condition guards.
@@ -203,6 +205,13 @@ extension ModuleInfoFile {
 	/// Reads the module info file `data` holds.
 	public init(moduleInfoData data: Data) throws(BinaryFileReadError) {
 		self = try BinaryFile.value(.moduleInfo, from: data)
+	}
+
+	/// Reads the module info file `data` holds without its view, which is left empty.
+	init(moduleInfoDataWithoutView data: Data) throws(BinaryFileReadError) {
+		self = try BinaryFile.value(.moduleInfo, from: data) { (reader: inout BinaryReader) throws(BinaryDecodingError) in
+			try ModuleInfoFile(readingAllButViewFrom: &reader)
+		}
 	}
 
 	/// This module as a module info file.

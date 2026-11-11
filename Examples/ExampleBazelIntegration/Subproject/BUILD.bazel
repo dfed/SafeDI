@@ -7,7 +7,7 @@ load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
 #
 # `Subproject` and `Models` belong to one package, `package_name`, so
 # `Subproject` can name `Models`' `package` types, and lists
-# `Models_safedi`, since it imports `Models`: see `Models/BUILD.bazel`.
+# `Models_safedi`, since it imports `Models`.
 safedi_swift_library(
     name = "Subproject",
     srcs = glob(["*.swift"]),

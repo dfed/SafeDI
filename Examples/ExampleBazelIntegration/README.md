@@ -2,11 +2,13 @@
 
 A Bazel port of `ExampleTuistIntegration`, demonstrating SafeDI's
 cross-module `.safedi` artifact handoff in a Bazel-native way. The
-Swift source code (types, mocks, previews) is byte-for-byte identical
-to the Tuist example — the differences are entirely in the build
-system — except for the `Models` module and `Subproject`'s seam
-`WindowTitle`, which the Tuist example, built with SafeDI's latest
-release, adopts once a release ships seams.
+Swift source code (types, mocks, previews) is the Tuist example's,
+except for the `Models` module, `Subproject`'s seam `WindowTitle`, the
+`TitleFormatter` it builds, and what uses it, `NoteStorage`'s
+`NoteFormatter`, `EventLogger`, which also checks `NDEBUG` and logs its
+own example's name, and a comment in `NameEntryView` on how a mismatch
+is reported. The Tuist example, built with SafeDI's latest release,
+adopts the seam once a release ships seams.
 
 **Supported host:** macOS arm64 only (matches the
 [`rules_apple`](https://github.com/bazelbuild/rules_apple) macOS
@@ -18,21 +20,24 @@ toolchain). The SafeDI rules themselves are platform-agnostic.
   `//Subproject:Subproject`,
   `//ExampleBazelIntegration:ExampleBazelIntegration`) that compile
   separately.
-- **A module that declares no `@Instantiable` type runs SafeDI too.**
-  `Subproject`'s seam `WindowTitle` (`generateDependencyTree: true`)
-  receives `Models`' `package` type `NoteTheme` only if available, so
-  the initializer `Subproject` generates for it is `public` without
-  `theme` and `package` with it. SafeDI counts a type it reads no
-  declaration of as `public`, so `Models` is a `safedi_swift_library`
-  and its `Models_safedi` is in the `safedi_deps` of `Subproject`, which
-  imports it: without it, the `public` initializer would take a `package`
-  type and fail to compile. The app declares the root, which calls the
-  seam, so it lists every module beneath it, `Models_safedi` and
-  `Subproject_safedi`: a root's tree can build a type any of them
-  declares. `Subproject`'s `.safedi` also carries what `WindowTitle`'s
-  signature needs of `Models`, so a module that only calls the seam
-  would not list `Models` for it.
-  All three modules set the same `package_name`.
+- **Each module lists the modules it depends on directly.** `Subproject`
+  imports `Models`, so its `safedi_deps` lists `Models_safedi`. The app
+  imports only `Subproject`, so its `safedi_deps` lists only
+  `Subproject_safedi`. The app's root builds `NoteStorage`, which builds
+  `Models`' `NoteFormatter`, and that works because `safedi_swift_library`
+  collects the modules beneath the ones a module lists, and SafeDI reads
+  every one of them that declares a type a dependency tree of the module
+  needs. A mock asks for none: it builds a deeper type only if a tree of
+  its module uses that module or the module is listed.
+- **A seam reaches across a `package` type.** `Subproject`'s seam
+  `WindowTitle` (`generateDependencyTree: true`) receives `Models`'
+  `package` type `NoteTheme` only if available, so the initializer
+  `Subproject` generates for it is `public` without `theme` and `package`
+  with it. SafeDI counts a type it reads no declaration of as `public`, so
+  without `Models_safedi` in `Subproject`'s `safedi_deps` the `public`
+  initializer would take a `package` type and fail to compile.
+  `Subproject`'s `.safedi` also carries what `WindowTitle`'s signature
+  needs of `Models`. All three modules set the same `package_name`.
 - **`safedi_swift_library` macro** — `load("@safedi//bazel:safedi.bzl", "safedi_swift_library")`. It takes a `swift_library`'s attributes and declares two targets from them:
   - `<name>`, the `swift_library`, which compiles `srcs` together with the generated code.
   - `<name>_safedi`, a `safedi_compile` target that runs SafeDITool once over the same `srcs` and writes two outputs:
@@ -40,7 +45,7 @@ toolchain). The SafeDI rules themselves are platform-agnostic.
     - `<name>_safedi.swift` — combined dependency-tree + mocks + mock configuration source.
   With the manifest `scan` plans, as the SPM plugin uses, SafeDITool writes one generated `.swift` per source file that declares a root, one per source file that declares a `generateMock: true` type, one per `additionalMocksToGenerate` entry, and, when there are mocks, the shared mock configuration. `--combined-output` concatenates them into one statically-declared output instead — no hand-maintained output list regardless of how many `@Instantiable(isRoot:)` / `generateMock: true` types the module declares.
 - **One set of compilation conditions.** Both targets receive the same `defines` and `copts`, so SafeDITool scans the `#if` clauses the compiler compiles. SafeDITool also sees `DEBUG` in `dbg`/`fastbuild` builds, `NDEBUG` in `opt` builds, and every `-D` passed with `--@rules_swift//swift:copt`.
-- **Cross-module type resolution via `.safedi`.** The host target reaches the subproject and `Models` via `safedi_deps = ["//Models:Models_safedi", "//Subproject:Subproject_safedi"]` and never re-parses their sources.
+- **Cross-module type resolution via `.safedi`.** The host target reaches the subproject via `safedi_deps = ["//Subproject:Subproject_safedi"]` and `Models` through it, and never re-parses their sources.
 - **SafeDI consumed via `bazel_dep`.** MODULE.bazel declares
   `bazel_dep(name = "safedi", ...)`. In this repo the dep is resolved
   via `local_path_override` to the workspace root so the example
@@ -77,7 +82,7 @@ no bump needed — just `git pull` the outer repo.
 | | Tuist | Bazel |
 |---|---|---|
 | Codegen entry point | `SafeDI.preCompileScript(module:dependencies:)` Tuist plugin helper | `safedi_swift_library` macro, which declares a `safedi_compile` rule and a `swift_library` |
-| Cross-module handoff | `Subproject.safedi` in `$(BUILT_PRODUCTS_DIR)` consumed via script-phase input | `safedi_compile`'s `SafeDIInfo` provider; downstream modules list the producer's `<name>_safedi` label in `safedi_deps` |
+| Cross-module handoff | `Subproject.safedi` in `$(BUILT_PRODUCTS_DIR)` consumed via script-phase input; a target that declares a root names every target beneath it in `dependencies:`, and one that declares a seam each target whose types its tree builds | `safedi_compile`'s `SafeDIInfo` provider; downstream modules list the producer's `<name>_safedi` label in `safedi_deps`, and the rule collects the modules beneath it |
 | Input enumeration | `FileListGlob` in `Project.swift` | `glob()` in `BUILD.bazel` |
 | Output enumeration | `SafeDITool scan` at `tuist generate` time → `.generated(…)` per-file entries | Single concatenated output file per module — no per-file enumeration needed |
 | SafeDITool acquisition | `tuist install` pulls via SafeDI's `prebuilt` trait | A toolchain: the release's prebuilt binary, or, for this example's `local_path_override`, built from source by Bazel |

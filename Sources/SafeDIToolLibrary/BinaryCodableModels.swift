@@ -1237,6 +1237,26 @@ extension ModuleInfoFile: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		let fileWithoutView = try ModuleInfoFile(readingAllButViewFrom: &reader)
+		try self.init(
+			moduleName: fileWithoutView.moduleName,
+			packageName: fileWithoutView.packageName,
+			dependencyModuleNames: fileWithoutView.dependencyModuleNames,
+			imports: fileWithoutView.imports,
+			mockImports: fileWithoutView.mockImports,
+			instantiables: fileWithoutView.instantiables,
+			configurations: fileWithoutView.configurations,
+			filesWithUnexpectedNodes: fileWithoutView.filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: fileWithoutView.conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: fileWithoutView.instantiableTypeNamesInAnyClause,
+			plainTypeDeclarations: fileWithoutView.plainTypeDeclarations,
+			view: reader.read(),
+		)
+	}
+
+	/// The file as far as its view, which is written last, with an empty view: a run reads its view only of the files whose
+	/// modules it reads, and a file's view grows with the modules beneath the file's module.
+	init(readingAllButViewFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
 			moduleName: reader.read(),
 			packageName: reader.read() as String?,
@@ -1249,7 +1269,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 			conditionalCompilationDecisions: reader.read(),
 			instantiableTypeNamesInAnyClause: reader.read(),
 			plainTypeDeclarations: reader.read(),
-			view: reader.read(),
+			view: .empty,
 		)
 	}
 

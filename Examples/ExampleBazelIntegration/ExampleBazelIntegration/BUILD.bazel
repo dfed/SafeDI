@@ -17,16 +17,16 @@ safedi_swift_library(
     # The package `Subproject` and `Models` belong to, so the code SafeDI
     # generates here may call `package` initializers it generates there.
     package_name = "ExampleBazelIntegration",
-    # This module declares the root, so it lists every module beneath it:
-    # the root's tree can build a type any of them declares, and this
-    # module is rebuilt whenever one of them changes anyway.
+    # This module lists the module it depends on directly. It declares the
+    # root, so SafeDI also reads every module beneath `Subproject` that
+    # declares a type the root's tree needs, `Models` among them, which the
+    # rule collects. Its mocks build a deeper type only if such a tree uses
+    # that type's module or this list names it.
     safedi_deps = [
-        "//Models:Models_safedi",
         "//Subproject:Subproject_safedi",
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//Models",
         "//Subproject:Subproject",
         "@safedi//:SafeDI",
     ],

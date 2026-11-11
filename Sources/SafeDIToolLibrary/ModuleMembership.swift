@@ -148,8 +148,8 @@ extension ModuleInfo {
 	/// for, and each declaration with the module that declares its file – depending on the modules `membership` names
 	/// and on `dependencyModuleNames`, whatever `membership` is. Without a membership the declarations are left as read.
 	/// - Parameter dependencyModuleNames: The modules the dependent module info `generate` reads records, which are the
-	///   direct dependencies a build system that runs `generate` once per module lists, however it names this
-	///   module's own files.
+	///   direct dependencies a build system that runs `generate` once per module lists and the modules beneath them it
+	///   read (`--transitive-module-info-file-path`), however it names this module's own files.
 	func declared(by membership: ModuleMembership?, dependingOn dependencyModuleNames: [String]) -> ModuleInfo {
 		guard let membership else {
 			return replacing(

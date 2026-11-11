@@ -160,7 +160,8 @@ enum MultiModuleIntegration: CaseIterable {
 	/// Bazel's invocation of `generate` (`bazel/safedi.bzl`): one run per module, with no `scan`, reading a CSV
 	/// of the module's own files, writing one combined file and the module's `.safedi`, reading the `.safedi` of
 	/// each module in its `dependencies` (Bazel's rule lists a target's direct `deps`; a Tuist user lists modules
-	/// by name), naming the module and its package with `--module-name` and `--package-name`, and passing
+	/// by name) and, when a test passes `modulesBeneath`, as Bazel's rule always does, told of the rest of the modules
+	/// beneath it, naming the module and its package with `--module-name` and `--package-name`, and passing
 	/// `--compiler-receives-input-paths-unchanged`. Tuist differs only by
 	/// omitting that flag and passing `$SRCROOT`-relative paths. The harness names the combined file `<module name>.swift`, where
 	/// Bazel names both outputs after the rule label and Tuist writes `SafeDIGenerated.swift`, and its CSV names
@@ -326,6 +327,10 @@ struct MultiModuleFixtureError: Error, CustomStringConvertible {
 ///     them. Such a run is not compiled.
 ///   - writesDOTTrees: Whether `.moduleInfo` has `generate` write each module's DOT tree (`--dot-file-output`), which
 ///     `ModuleTestOutput.dotTree` holds.
+///   - modulesBeneath: Under `.moduleInfo`, the order in which `generate` is told, with
+///     `--transitive-module-info-file-path`, of the `.safedi` of every module the module depends on, directly or not, as
+///     the Bazel rule tells it of the set it collects. `nil` passes no such option, as the Tuist plugin does and a
+///     custom script may.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func executeSafeDIToolMultiModuleTest(
 	modules: [ModuleFixture],
@@ -335,6 +340,7 @@ func executeSafeDIToolMultiModuleTest(
 	scansDuringGenerate: Bool = false,
 	moduleInfoOverrides: [String: String] = [:],
 	writesDOTTrees: Bool = false,
+	modulesBeneath: ((_ moduleNames: [String]) -> [String])? = nil,
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) async throws -> MultiModuleTestOutput {
@@ -457,6 +463,14 @@ func executeSafeDIToolMultiModuleTest(
 					.joined(separator: ",")
 					.write(to: dependentModuleInfoFileCSV, atomically: true, encoding: .utf8)
 				arguments += ["--dependent-module-info-file-path", dependentModuleInfoFileCSV.path]
+				if let modulesBeneath {
+					let modulesBeneathCSV = moduleInfoDirectory.appendingPathComponent("\(moduleName)-beneath.csv")
+					try modulesBeneath(module.transitiveDependencies.filter { writtenModulesByName[$0]?.fixture.runsSafeDI != false })
+						.map { moduleInfoDirectory.appendingPathComponent("\($0).safedi").path }
+						.joined(separator: ",")
+						.write(to: modulesBeneathCSV, atomically: true, encoding: .utf8)
+					arguments += ["--transitive-module-info-file-path", modulesBeneathCSV.path]
+				}
 			}
 			generateArguments = arguments
 		case .swiftPackagePlugin:
