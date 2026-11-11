@@ -2352,11 +2352,7 @@ public actor DependencyTreeGenerator {
 					let handWrittenSignature = "init(\(handWrittenInitializer.arguments.map { "\($0.label):" }.joined()))"
 					let generatedSignature = "init(\((parameters.map(\.property.label) + builderLabels).map { "\($0):" }.joined()))"
 					let location = handWrittenInitializer.access.declarationStartLocation.map { " at line \($0.line)" } ?? ""
-					let deferredLabels = parameters.filter(\.isDeferred).map { "`\($0.property.label)`" }
-					let deferredClause = deferredLabels.isEmpty
-						? ""
-						: ", which takes \(deferredLabels.joined(separator: ", ")) as an `@autoclosure`"
-					message = "SafeDI cannot generate the dependency tree of \(seamName): it declares `\(handWrittenSignature)`\(location), which can be called with the argument labels of its generated initializer, `\(generatedSignature)`\(deferredClause). A call with those labels would resolve to the hand-written initializer or be ambiguous. Rename the hand-written initializer's argument labels, or remove it."
+					message = "SafeDI cannot generate the dependency tree of \(seamName): it declares `\(handWrittenSignature)`\(location), which can be called with the argument labels of its generated initializer, `\(generatedSignature)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename the hand-written initializer's argument labels, or remove it."
 				}
 				// The notes follow the receivers in the order the tree declares them, which no name decides.
 				return [SourceDiagnostic(severity: .error, location: location, message: message)]
@@ -4701,6 +4697,7 @@ public actor DependencyTreeGenerator {
 						unreachableTierIsReported: unreachableTierIsReported,
 						omittedParameters: signature.parameters.filter { $0.tierAccess < tier },
 						noTierParameters: signature.noTierParameters,
+						typesDeclaredEscaping: signature.typesDeclaredEscaping,
 						tier: tier,
 						requirement: requirement,
 						seamModuleName: instantiable.moduleName,
@@ -5275,9 +5272,11 @@ public actor DependencyTreeGenerator {
 			errors.append(.seam(.init(seam: seam, kind: .tierOmitsBuilder(hole: hole, tier: tier))))
 		}
 		// A hand-written initializer that a call with a tier's argument labels can reach – its labels hold the tier's in
-		// order, and every other argument has a default value – takes that call or makes it ambiguous, whatever the
-		// types: beside a deferred parameter, an existential, generic, defaulted or `Any` twin takes the call from a
-		// caller holding the value, and no comparison of types SafeDI can make tells it from one that loses.
+		// order, and every other argument has a default value – is rejected whatever its types: because the labels match,
+		// a call meant for one initializer can run the other instead, or the code can fail to compile. Beside a
+		// non-optional generated parameter, a twin taking `Any`, an existential, a generic, a defaulted parameter or a
+		// closure loses to the generated initializer; beside an optional parameter, the twin takes the call from a caller
+		// holding the value. No comparison of types SafeDI can make tells a twin that takes a call from one that loses it.
 		let builderLabels = holes.map(\.builderLabel)
 		for tier in tiers {
 			let tierParameters = parameters.filter { $0.tierAccess >= tier }
@@ -5292,7 +5291,14 @@ public actor DependencyTreeGenerator {
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
 			throw error
 		}
-		return ScopeGenerator.SeamRoot(signature: SeamSignature(seamType: seam.concreteInstantiable, parameters: parameters, tiers: tiers, noTierParameters: noTierParameters, holes: holes))
+		return ScopeGenerator.SeamRoot(signature: SeamSignature(
+			seamType: seam.concreteInstantiable,
+			parameters: parameters,
+			tiers: tiers,
+			noTierParameters: noTierParameters,
+			holes: holes,
+			typesDeclaredEscaping: generator.typesDeclaredEscaping.intersection(parameters.map(\.property.typeDescription)),
+		))
 	}
 
 	/// Whether a call of `initializer` can pass exactly `labels`, in order: they match its arguments' labels in order,
@@ -5382,9 +5388,11 @@ public actor DependencyTreeGenerator {
 				access: initializerAccess,
 				// Spelled as a parsed initializer, and the generated tier, spell each parameter – a closure `@escaping` –
 				// so a dependency matches it as it matches a hand-written initializer's argument. The dependencies keep
-				// the property as declared.
+				// the property as declared. A generated call of a tier that defers a parameter calls the initializer only
+				// generated code calls, under its prefixed labels.
 				arguments: parameters.map { parameter in
 					Initializer.Argument(
+						outerLabel: SeamSignature.tierHasGeneratedOnlyInitializer(taking: parameters) ? parameter.generatedOnlyArgumentLabel : nil,
 						innerLabel: parameter.property.label,
 						typeDescription: parameter.property.asFunctionParamter.typeDescription,
 						defaultValueExpression: nil,

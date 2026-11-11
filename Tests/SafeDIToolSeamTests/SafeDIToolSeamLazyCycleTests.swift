@@ -180,7 +180,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_top() -> Top {
 			            _ = Top.__safeDI_Top_4D7DF7CAE6B5A7D3.self
-			            return Top(x: nil)
+			            return Top(__safeDI_x: nil)
 			        }
 			        let top: Top = __safeDI_top()
 			        self.init(top: top)
@@ -189,7 +189,11 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			""",
 			"Top+SafeDI.swift": generatedFileHeader + """
 			extension Top {
-			    public convenience init(x __safeDI_x_: @autoclosure @escaping () -> X?) {
+			    public convenience init(x: X?) {
+			        self.init(__safeDI_x: x)
+			    }
+
+			    public convenience init(__safeDI_x __safeDI_x_: @autoclosure @escaping () -> X?) {
 			        let x = LazilyInstantiated<X?>(__safeDI_x_)
 			        func __safeDI_aBuilder(x: X?) -> A {
 			            func __safeDI_midBuilder() -> Mid {

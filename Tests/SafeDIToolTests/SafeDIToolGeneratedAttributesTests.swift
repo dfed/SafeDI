@@ -598,7 +598,7 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			    @MainActor public init() {
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_58FC2EE92E8FE413.self
-			            return Screen(token: nil)
+			            return Screen(__safeDI_token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(screen: screen)
@@ -608,10 +608,14 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
 			    @MainActor public init() {
-			        self.init(token: nil)
+			        self.init(__safeDI_token: nil)
 			    }
 
-			    @MainActor internal init(token __safeDI_token: @autoclosure @escaping () -> Token?) {
+			    @MainActor internal init(token: Token?) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    @MainActor internal init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        let presenter = Presenter()
 			        let detail = Detail(token: token.instance)

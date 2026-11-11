@@ -75,7 +75,11 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window"], tiers: """
-		    public init(window __safeDI_window: @autoclosure @escaping () -> Window) {
+		    public init(window: Window) {
+		        self.init(__safeDI_window: window)
+		    }
+
+		    public init(__safeDI_window: @autoclosure @escaping () -> Window) {
 		        let window = LazilyInstantiated<Window>(__safeDI_window)
 		        let badge = Badge(window: window.instance)
 		        let cache = Cache()
@@ -343,7 +347,8 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        internal let cache: Cache
 		    }
 
-		    public init(image: Image, serviceBuilder __safeDI_serviceBuilder: @escaping (SafeDIScope_Screen_service) -> any UserService) {
+		    public init(image: Image, serviceBuilder: @escaping (SafeDIScope_Screen_service) -> any UserService) {
+		        let __safeDI_serviceBuilder = serviceBuilder
 		        let cache = Cache()
 		        let service: any UserService = __safeDI_serviceBuilder(SafeDIScope_Screen_service(image: image, cache: cache))
 		        self.init(image: image, service: service, cache: cache)
@@ -372,7 +377,8 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    {COMMENT}
-		    public init(rendererBuilder __safeDI_rendererBuilder: @escaping (SafeDIScope_Screen_renderer) -> any Renderer) {
+		    public init(rendererBuilder: @escaping (SafeDIScope_Screen_renderer) -> any Renderer) {
+		        let __safeDI_rendererBuilder = rendererBuilder
 		        let cache = Cache()
 		        let renderer: any Renderer = __safeDI_rendererBuilder(SafeDIScope_Screen_renderer(cache: cache))
 		        self.init(renderer: renderer, cache: cache)
@@ -1647,7 +1653,11 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#expect(output.modules["Shell"]?.generatedFiles == ["Shell.swift": generatedFileHeader + Self.importLines(["Feature", "Kit"]) + """
 		extension Frame {
 		    \(Self.comment(["Window"]))
-		    public init(window __safeDI_window: @autoclosure @escaping () -> Window) {
+		    public init(window: Window) {
+		        self.init(__safeDI_window: window)
+		    }
+
+		    public init(__safeDI_window: @autoclosure @escaping () -> Window) {
 		        let window = LazilyInstantiated<Window>(__safeDI_window)
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_564C5E6539CF6AA0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
@@ -2023,7 +2033,11 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], tiers: """
-		    public init(buffer __safeDI_buffer: @autoclosure @escaping () -> [3 of Int]) {
+		    public init(buffer: [3 of Int]) {
+		        self.init(__safeDI_buffer: buffer)
+		    }
+
+		    public init(__safeDI_buffer: @autoclosure @escaping () -> [3 of Int]) {
 		        let buffer = LazilyInstantiated<[3 of Int]>(__safeDI_buffer)
 		        let badge = Badge(buffer: buffer.instance)
 		        let cache = Cache()

@@ -701,7 +701,11 @@ SafeDI generates, in `Feature`:
 
 ```swift
 extension Screen {
-    public init(user: User, database __safeDI_database: @autoclosure @escaping () -> Database, logger __safeDI_logger: @autoclosure @escaping () -> Logger?) {
+    public init(user: User, database: Database, logger: Logger?) {
+        self.init(__safeDI_user: user, __safeDI_database: database, __safeDI_logger: logger)
+    }
+
+    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping () -> Database, __safeDI_logger: @autoclosure @escaping () -> Logger?) {
         let database = LazilyInstantiated<Database>(__safeDI_database)
         let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
         let cache = Cache(database: database.instance, logger: logger.instance)
@@ -719,16 +723,18 @@ The generated initializer takes:
 1. The seam’s own `@Received` and `@Forwarded` properties, in declaration order and as the seam declares them.
 2. Then, by label, every property the tree receives that nothing inside the tree provides: required where some receiver requires it, keeping an optional type a receiver declares (`session: Session?`), and optional (`logger: Logger?`) where every receiver receives it only if available, as the seam’s own receive only if available is too.
 3. No parameter has a default.
-4. A property the tree receives by value is an `@autoclosure`, read at most once, when the tree first needs it, so a `LazilyInstantiated` the caller holds is instantiated where it would be inline. A wrapper the tree receives as itself, and the seam’s own properties, are taken by value.
-5. So a hand-written call passes a local, not a property of `self`: the closure holds `self` until the tree first reads the value, a retain cycle when `self` stores the seam.
+4. Every parameter is a plain value. Your call evaluates its arguments when it is made, in order, as any call does, whether or not the tree ever reads them, and the seam keeps nothing of the caller.
+5. To keep a value lazy from a hand-written call, receive it inside the seam as `LazilyInstantiated<X>`, which the initializer then takes as the wrapper.
 
-A tree that reaches the seam calls the generated initializer as it calls any other, passing a property received only if available by the usual [availability rule](#conditionally-receiving-dependencies): `nil` where its own tree does not provide it, as for `logger` here. Receivers get the values they would get inline, except as [Where a seam differs from building its tree inline](#where-a-seam-differs-from-building-its-tree-inline) lists:
+Beside it, when the tree receives a property from outside it by value, SafeDI generates a second initializer whose labels start with `__safeDI_`. Only generated code calls it. It takes each such property as an `@autoclosure`, read at most once, when the tree first needs it, so a `LazilyInstantiated` a generated caller holds is instantiated where it would be inline; a wrapper the tree receives as itself, and the seam’s own properties, are taken by value. Do not call it by hand: its shape can change in any release, and its closures hold whatever your arguments capture until the tree reads them.
+
+A tree that reaches the seam calls the `__safeDI_` initializer if one takes its arguments, and otherwise the generated initializer above. Either way it passes a property received only if available by the usual [availability rule](#conditionally-receiving-dependencies): `nil` where its own tree does not provide it, as for `logger` here. Receivers get the values they would get inline, except as [Where a seam differs from building its tree inline](#where-a-seam-differs-from-building-its-tree-inline) lists:
 
 ```swift
 // Generated in module App, whose root instantiates Screen.
 func __safeDI_screen() -> Screen {
     _ = Screen.__safeDI_Screen_3192EA1C03ABD98F.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
-    return Screen(user: user, database: database, logger: nil)
+    return Screen(__safeDI_user: user, __safeDI_database: database, __safeDI_logger: nil)
 }
 ```
 
@@ -736,11 +742,15 @@ Each generated call names the enum generated beside the initializer, and adding 
 
 The seam’s module and each caller compute the initializer from the same declarations, those of the seam’s module and the modules it depends on: under the `SafeDIGenerator` plugin from its target graph, and otherwise from the `.safedi` files a [custom build](#custom-build-system-integration) describes. The plugin cannot tell whether the seam’s target applies it, so under the plugin each generated call of another module’s seam carries the comment above. Under Bazel, Tuist or a custom build, the comment says instead to compile the code SafeDI generated for the seam’s module into it: its `safedi_compile` rule in its library’s `srcs`, `SafeDI.generatedSource` in its target’s `sources`, or the file its `generate` run writes. A seam whose module SafeDI does not know is built inline, as [Limits of the Xcode project plugin](#limits-of-the-xcode-project-plugin) describes. A seam whose initializer, or a [public mock](#public-mocks) whose signature, would depend on a declaration its callers cannot see, such as one in its own module’s `additionalDirectoriesToInclude`, is an error when that changes what a call depends on, reported at the seam for a seam. That holds whether the declaration is in the tree or outside it, with an initializer, `instantiate(…)` or mock method that takes a parameter’s type as a dependency.
 
-The seam’s widest initializer has the seam’s access, as its enclosing types limit it. Each parameter is as visible as the types it names, with a narrower initializer, a tier, for each narrower level among them, and each tree calls the narrowest tier it can reach, which SafeDI checks as it checks a root’s tree ([Access levels](#access-levels)). A required parameter narrower than the seam’s type is an error at the seam that says what to narrow or widen; where the seam’s `generateMock: .public` requires it to be `public`, the error leads with the cheapest fixes, such as declaring the parameter’s type `public` or receiving it only if available. A caller whose tree holds a value for a parameter its tier omits is an error too. A seam with no `@Instantiated` or renamed dependency and nothing to pass through gets no generated initializer; its callers call its own. [Access of generated parameters](#access-of-generated-parameters) says how SafeDI counts each type’s level. Here, a public `Analytics` that a type with a `package` initializer receives inside the tree is a parameter of the seam’s `public` initializer:
+The seam’s widest initializer has the seam’s access, as its enclosing types limit it. Each parameter is as visible as the types it names, with a narrower initializer, a tier, for each narrower level among them, and each tree calls the narrowest tier it can reach, which SafeDI checks as it checks a root’s tree ([Access levels](#access-levels)). A required parameter narrower than the seam’s type is an error at the seam that says what to narrow or widen; where the seam’s `generateMock: .public` requires it to be `public`, the error leads with the cheapest fixes, such as declaring the parameter’s type `public` or receiving it only if available. A caller whose tree holds a value for a parameter its tier omits is an error too. A seam with no `@Instantiated` or renamed dependency and nothing to pass through gets no generated initializer; its callers call its own. [Access of generated parameters](#access-of-generated-parameters) says how SafeDI counts each type’s level. Here, a public `Analytics` that a type with a `package` initializer receives inside the tree is a parameter of the seam’s `public` initializer, and of the `__safeDI_` initializer beside it:
 
 ```swift
 extension Service {
-    public init(analytics __safeDI_analytics: @autoclosure @escaping () -> Analytics) {
+    public init(analytics: Analytics) {
+        self.init(__safeDI_analytics: analytics)
+    }
+
+    public init(__safeDI_analytics: @autoclosure @escaping () -> Analytics) {
         let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
         let badge = Badge(analytics: analytics.instance)
         self.init(badge: badge)
@@ -754,7 +764,7 @@ A type the seam’s tree instantiates that no `@Instantiable` declaration its mo
 
 A module that can see an implementation fills the builder in the code it generates, building the implementation from the struct’s fields and from its own tree, whose types and initializers must be visible there, as a root’s are; a value the implementation receives must be in the struct, or come from that module. A seam that cannot fill the builder passes it up through its own initializer; a root that cannot is an error, as is a hole in a seam’s tree under the [Xcode project plugin](#limits-of-the-xcode-project-plugin). [Where a seam differs from building its tree inline](#where-a-seam-differs-from-building-its-tree-inline) covers a seam built again inside the tree that fills it.
 
-For a value the seam takes as an `@autoclosure`, a hand-written implementation creates the value when it first reads the struct’s property, as inline. The implementation SafeDI generates reads the caller’s own declaration instead, as the inline tree does, so a `@Sendable` function in it – a `SendableInstantiator`, or a later stage of a staged builder – that reads a `LazilyInstantiated` the caller holds is the error the inline tree gets: declare it `SendableLazilyInstantiated`, which needs the deployment targets [Sendable wrappers](#sendable-wrappers) states.
+For a value a generated call defers, a hand-written implementation creates the value when it first reads the struct’s property, as inline. The implementation SafeDI generates reads the caller’s own declaration instead, as the inline tree does, so a `@Sendable` function in it – a `SendableInstantiator`, or a later stage of a staged builder – that reads a `LazilyInstantiated` the caller holds is the error the inline tree gets: declare it `SendableLazilyInstantiated`, which needs the deployment targets [Sendable wrappers](#sendable-wrappers) states.
 
 ```swift
 // Generated in module Feature, where `Profile` instantiates `userService: any UserService`.
@@ -763,7 +773,8 @@ extension Service {
         public let analytics: Analytics
     }
 
-    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+    public init(userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+        let __safeDI_userServiceBuilder = userServiceBuilder
         let analytics = Analytics()
         func __safeDI_profile() -> Profile {
             let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(analytics: analytics))
@@ -802,7 +813,8 @@ public struct SafeDIScope_ExportFeature_uploader {
 let feature = ExportFeature(exportService: exportService, uploaderBuilder: { scope in
     DefaultUploader(jobBuilder: Instantiator { UploadJob(exportService: scope.exportService) })
 })
-// The service is created when the first `UploadJob` is built, as it would be inline.
+// `exportService` exists before this call, as every argument of a hand-written call does, whether or not an `UploadJob` is ever built.
+// A generated call from a tree that holds the service as a `LazilyInstantiated` creates it when the first `UploadJob` is built, as inline.
 ```
 
 ## Mock generation
@@ -1194,7 +1206,7 @@ func makeFeedScreen() -> FeedScreen {
 A mock another module generates builds a type it cannot construct – one whose tree names a declaration that module cannot reach – by calling the type’s public mock at the narrowest tier the module can reach, passing what its own tree provides for that tier’s parameters, `nil` for the rest, and its overrides of the type as `safeDIOverrides`. A type it can construct is built inline. So a value the calling tree provides is shared with the public mock’s tree, as inline. A call in the tree of a received dependency the mock builds beside the mocked type shares the same way: it is passed what the mocked type creates. A dependency the called mocks build that the calling module can construct is built once by the calling mock – a lazily instantiated one as its wrapper – and passed to every call, each call an `Instantiator` makes included. Two kinds are not shared:
 
 - A dependency the calling module cannot construct – one it cannot name, or whose tree reaches a construction it cannot – is built by each public mock that builds it, and is `nil` in one that receives it only if available. To share one of a `public` type, declare it with `generateMock: .public` too: the calling mock then builds it once, through its public mock, and passes it to every call that receives it.
-- A lazily instantiated dependency the caller holds, or builds for the call, is created when the public mock is built, unlike one a seam’s generated initializer takes, which it defers.
+- A lazily instantiated dependency the caller holds, or builds for the call, is created when the public mock is built, unlike one a generated call of a seam passes, which it defers.
 
 Also:
 
@@ -1667,7 +1679,7 @@ In an `#if` block, a type counts at the level the clause the reported conditions
 
 A type whose spelling SafeDI cannot read counts as `internal`, unless an initializer, `instantiate(…)` method or mock method in the seam’s module, or on a type that receives the parameter, takes it as a dependency at a wider level; a mention elsewhere does not count. The type of an `@Instantiable` extension, `mockOnly` or not, counts as its declaration does. A nested type an `@Instantiable` extension declares, and SafeDI reads no declaration of, counts at the level the extension spells, capped by the type directly enclosing it, or as `internal` when the extension spells none, raised by any initializer, `instantiate(…)` method or mock method SafeDI records that takes it as a dependency at a wider level. The spelled level counts only where SafeDI reads that enclosing type’s declaration.
 
-Where the parameters differ in access, SafeDI generates one declaration for each level, a tier: the narrowest tier builds the tree, and each wider tier takes the parameters code at its level can name and calls the next narrower tier, passing `nil` for the rest. A seam’s own initializer and the types its tree builds keep their access; only the types a tier’s parameters name, and the fields of a builder’s struct that the filling module reads, must be as visible as the tier. A seam reached through another seam passes the inner seam’s parameters on, each as visible as its types prove in the outer seam’s module; a parameter the outer seam’s module cannot pass on is taken by none of its initializers, and a caller holding a value for it is told so.
+Where the parameters differ in access, SafeDI generates a tier for each level: one declaration, beside which a seam’s tier that defers a parameter has the [second initializer](#generating-a-dependency-tree-per-module) only generated code calls. The narrowest tier builds the tree, and each wider tier takes the parameters code at its level can name and calls the next narrower tier, passing `nil` for the rest. A seam’s own initializer and the types its tree builds keep their access; only the types a tier’s parameters name, and the fields of a builder’s struct that the filling module reads, must be as visible as the tier. A seam reached through another seam passes the inner seam’s parameters on, each as visible as its types prove in the outer seam’s module; a parameter the outer seam’s module cannot pass on is taken by none of its initializers, and a caller holding a value for it is told so.
 
 The compiler reports, in the generated file, a tier made wider than it accepts by:
 
@@ -1687,16 +1699,18 @@ The generated initializer takes one parameter for each name the tree receives fr
 SafeDI reports each of these, saying what to change:
 
 - **One name received in two forms that one parameter cannot carry.** One type receives `session: Session` and another `session: LazilyInstantiated<Session>?`: the initializer has one `session` parameter, and no one value is both. Receive the name one way, or declare it on the seam in a form that provides the others. As inline, a required, non-optional `LazilyInstantiated` or `SendableLazilyInstantiated` provides its instance and its own optional form, and a value provides its optional form. Two wrapper kinds under one name, or the seam’s own receive beside a form it does not provide, are the same error. So are two unrelated types under one name, such as `token: Token` and `token: String`: rename one, or instantiate one inside the tree.
-- **A `Sendable` builder inside the seam that reads a wrapper that is not `Sendable`.** It applies to a `Sendable` wrapper inside the seam, such as a `SendableInstantiator`, whose tree receives an `Instantiator`, `ErasedInstantiator` or `LazilyInstantiated` the seam takes as a parameter, even where inline would pass `nil`. The parameter is declared outside the wrapper’s `@Sendable` builder, which can capture only a `Sendable` value, and SafeDI never marks generated code `@unchecked Sendable` to get around that. Receive the name inside the seam as the `Sendable` wrapper of that kind, and declare it so where the caller declares it. A value the seam takes as an `@autoclosure` that such a builder reads is held in a `SendableLazilyInstantiated`, which needs the deployment targets [Sendable wrappers](#sendable-wrappers) states, and a caller that would hand it the instance of a wrapper that is not `Sendable` is an error, as the same capture is inline.
+- **A `Sendable` builder inside the seam that reads a wrapper that is not `Sendable`.** It applies to a `Sendable` wrapper inside the seam, such as a `SendableInstantiator`, whose tree receives an `Instantiator`, `ErasedInstantiator` or `LazilyInstantiated` the seam takes as a parameter, even where inline would pass `nil`. The parameter is declared outside the wrapper’s `@Sendable` builder, which can capture only a `Sendable` value, and SafeDI never marks generated code `@unchecked Sendable` to get around that. Receive the name inside the seam as the `Sendable` wrapper of that kind, and declare it so where the caller declares it. A value a generated call defers that such a builder reads is held in a `SendableLazilyInstantiated`, which needs the deployment targets [Sendable wrappers](#sendable-wrappers) states, and a caller that would hand it the instance of a wrapper that is not `Sendable` is an error, as the same capture is inline.
 - **A name hidden from its receiver.** A type between the seam and the receiver, the seam included, declares the name with a property that does not provide it: the error the tree gets inline once a caller provides the property.
 - **An initializer the generated one would collide with.** An initializer in the seam’s body that a call with the generated initializer’s argument labels can reach: its labels hold those in order, and every other parameter has a default value.
 - **A value a hole’s implementation reads, bound on the way to the seam built again.** A seam whose tree instantiates the seam again, directly or through another seam of its module, hands the builders it took on to that call, so the caller that fills a builder cannot hand its implementation a value the tree declares on that path. Receive the value on the seam, so the builder carries it, or make an `@Instantiable` declaration that fulfills the hole’s type one the seam’s module reads, so the seam fills the builder itself.
 
 #### Trees a seam builds differently
 
+A hand-written call of a seam’s initializer creates every argument at the call. A generated call passes each value the tree receives so that it is created where it would be inline.
+
 A rename declared `onlyIfAvailable` inside the seam, of one of its parameters, is bound from that parameter and is `nil` where the caller passes `nil`, so every type beneath reads the value it reads inline. When a type in the seam’s tree requires such a rename, the caller builds its dependency before the seam, as inline builds it before that type’s branch.
 
-A hole’s implementation that reads a value the seam takes as an `@autoclosure`, where the implementation’s own tree builds the seam again beneath another declaration of the value’s label, reads the struct’s property when the implementation is built. Inline, its receiver reads the value when that receiver is built.
+A hole’s implementation that reads a value a generated call defers, where the implementation’s own tree builds the seam again beneath another declaration of the value’s label, reads the struct’s property when the implementation is built. Inline, its receiver reads the value when that receiver is built.
 
 ### Generated imports
 

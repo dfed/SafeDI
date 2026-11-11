@@ -204,7 +204,11 @@ struct SafeDIToolSeamHarnessOptionTests: ~Copyable {
 		#endif
 
 		extension Service {
-		    public init(token __safeDI_token: @autoclosure @escaping () -> Token) {
+		    public init(token: Token) {
+		        self.init(__safeDI_token: token)
+		    }
+
+		    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 		        let token = LazilyInstantiated<Token>(__safeDI_token)
 		        let badge = Badge(token: token.instance)
 		        self.init(badge: badge)

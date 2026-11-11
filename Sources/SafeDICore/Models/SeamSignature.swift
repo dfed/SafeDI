@@ -26,7 +26,9 @@
 /// by the seam's module and by every module that calls the seam alike, so the generated call matches the generated
 /// initializer. `guardTypeName` names an empty enum the seam's module generates beside the initializer and every
 /// generated call refers to, so two computations that disagree fail to compile at the call rather than pass `nil`
-/// where a value was expected.
+/// where a value was expected. That is a different job from the `__safeDI_`-prefixed labels of the initializer only
+/// generated code calls, which keep it apart from the plain initializer people call: labels name no type and no
+/// availability, so a stale call that writes the right labels still compiles without the enum.
 ///
 /// The signature and its parameters and receivers carry diagnostic payload – where each receive is declared – so none
 /// is `Equatable`: a comparison for meaning goes through a projection that states what it compares, `callShape` for
@@ -149,10 +151,11 @@ public struct SeamSignature: Sendable {
 		public let receivers: [Receiver]
 		/// For a parameter on no tier (`SeamSignature.noTierParameters`), the nested seam call that omits it, else `nil`.
 		public let nestedSeamCall: NestedSeamCall?
-		/// Whether the generated initializer takes the parameter by value or defers it: a by-value pass-through – a
-		/// constant, or its optional form – is taken as an `@autoclosure`, which the narrowest tier's body holds in a
-		/// `LazilyInstantiated` under the parameter's label, so the tree reads the caller's value where it would read it
-		/// inline, when a receiver is first built.
+		/// Whether the initializer only generated code calls takes the parameter by value or defers it: a by-value
+		/// pass-through – a constant, or its optional form – is taken as an `@autoclosure`, which the narrowest tier's body
+		/// holds in a `LazilyInstantiated` under the parameter's label, so the tree reads the caller's value where it would
+		/// read it inline, when a receiver is first built. A tier that defers a parameter has a second initializer for
+		/// people, which takes every parameter by value (`plainSpelling`), so a call cannot capture its caller.
 		public let deferral: Deferral
 		/// The name the generated initializer binds a deferred parameter's autoclosure to: `__safeDI_<label>`, renamed
 		/// past every builder function name in the seam's tree, which would shadow it. Unused for a parameter taken by
@@ -163,13 +166,13 @@ public struct SeamSignature: Sendable {
 		public enum Deferral: Hashable, Sendable {
 			/// Taken by value, as spelled.
 			case none
-			/// Taken as `@autoclosure @escaping () -> T`, held in a `LazilyInstantiated<T>` the tree reads where it reads
-			/// the label; `@Sendable`, held in a `SendableLazilyInstantiated<T>`, when a `@Sendable` function inside the
-			/// seam's tree reads it, or a nested seam takes it `@Sendable`.
+			/// Taken by generated code as `@autoclosure @escaping () -> T`, held in a `LazilyInstantiated<T>` the tree reads
+			/// where it reads the label; `@Sendable`, held in a `SendableLazilyInstantiated<T>`, when a `@Sendable` function
+			/// inside the seam's tree reads it, or a nested seam takes it `@Sendable`.
 			case deferred(isSendable: Bool)
 		}
 
-		/// Whether the generated initializer takes the parameter as an `@autoclosure`.
+		/// Whether the initializer only generated code calls takes the parameter as an `@autoclosure`.
 		public var isDeferred: Bool {
 			deferral != .none
 		}
@@ -185,15 +188,36 @@ public struct SeamSignature: Sendable {
 			}
 		}
 
-		/// The parameter as the generated initializer declares it. No parameter has a default, so every call passes a
-		/// deferred one too, `nil` where the caller holds nothing.
-		func generatedSpelling(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
+		/// The parameter as the plain initializer of a tier that defers a parameter, or the one initializer of a tier that
+		/// defers none, declares it: by value, under its label alone. An underscored name would keep the initializer out of
+		/// the module's symbol graph, which is what documentation is generated from. No parameter has a default, so every
+		/// call passes every one.
+		func plainSpelling(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
 			switch deferral {
 			case .none:
 				property.asFunctionParameterSyntax(amongTypesDeclaredEscaping: typesDeclaredEscaping).description
-			case let .deferred(isSendable):
-				"\(property.label.spelledAsArgumentLabel) \(internalName): @autoclosure @escaping\(isSendable ? " @Sendable" : "") () -> \(deferredValueType.asSource)"
+			case .deferred:
+				// The closure of the initializer only generated code calls captures this parameter, so a function type is
+				// `@escaping` here even though that initializer takes it behind an `@autoclosure`.
+				Property(label: property.label, typeDescription: deferredValueType).asFunctionParameterSyntax(amongTypesDeclaredEscaping: typesDeclaredEscaping).description
 			}
+		}
+
+		/// The parameter as the initializer only generated code calls declares it: under `generatedOnlyArgumentLabel`, a
+		/// deferred parameter as an `@autoclosure` bound to `internalName`, which a call passes `nil` for where it holds
+		/// nothing.
+		func generatedOnlySpelling(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
+			switch deferral {
+			case .none:
+				"\(generatedOnlyArgumentLabel) \(property.asFunctionParameterSyntax(amongTypesDeclaredEscaping: typesDeclaredEscaping).description)"
+			case let .deferred(isSendable):
+				"\(internalName == generatedOnlyArgumentLabel ? internalName : "\(generatedOnlyArgumentLabel) \(internalName)"): @autoclosure @escaping\(isSendable ? " @Sendable" : "") () -> \(deferredValueType.asSource)"
+			}
+		}
+
+		/// The argument label of the initializer only generated code calls (`ReservedName.seamGeneratedOnlyArgumentLabel(of:)`).
+		public var generatedOnlyArgumentLabel: String {
+			ReservedName.seamGeneratedOnlyArgumentLabel(of: property.label)
 		}
 
 		/// For one of the seam's own properties, the narrowest access the declarations prove for the types of the seam's
@@ -423,6 +447,12 @@ public struct SeamSignature: Sendable {
 			Site(seamType: scopeSeamType, path: sitePath)
 		}
 
+		/// The label the initializer only generated code calls takes the builder under
+		/// (`ReservedName.seamGeneratedOnlyArgumentLabel(of:)`).
+		public var generatedOnlyArgumentLabel: String {
+			ReservedName.seamGeneratedOnlyArgumentLabel(of: builderLabel)
+		}
+
 		/// This hole as a call of a public mock takes its builder: under `parameterName`, the name the called mock gives
 		/// the builder's parameter, which a mock that passes up the builders of several holes of one label names apart.
 		func takenUnder(parameterName: String) -> Hole {
@@ -483,12 +513,13 @@ public struct SeamSignature: Sendable {
 		}
 	}
 
-	public init(seamType: TypeDescription, parameters: [Parameter], tiers: [AccessLevel], noTierParameters: [Parameter] = [], holes: [Hole] = []) {
+	public init(seamType: TypeDescription, parameters: [Parameter], tiers: [AccessLevel], noTierParameters: [Parameter] = [], holes: [Hole] = [], typesDeclaredEscaping: Set<TypeDescription> = []) {
 		self.seamType = seamType
 		self.parameters = parameters
 		self.tiers = tiers
 		self.noTierParameters = noTierParameters
 		self.holes = holes
+		self.typesDeclaredEscaping = typesDeclaredEscaping
 	}
 
 	/// The seam's concrete type.
@@ -513,9 +544,21 @@ public struct SeamSignature: Sendable {
 	/// passes the nested seam `nil` for it, as the tier it calls does.
 	public let noTierParameters: [Parameter]
 
+	/// The types of `parameters` that the seam's tree declares `@escaping` (`ScopeGenerator.typesDeclaredEscaping`): a
+	/// tree that calls the seam has no scopes for what is beneath it, so `SeamCall.typesDeclaredEscaping` hands them to
+	/// it. No call depends on them, since Swift accepts the same arguments either way, so neither the call shape nor the
+	/// guard holds them.
+	public let typesDeclaredEscaping: Set<TypeDescription>
+
 	/// The parameters the tier at `level` takes.
 	public func parameters(ofTierAt level: AccessLevel) -> [Parameter] {
 		parameters.filter { $0.tierAccess >= level }
+	}
+
+	/// Whether a tier that takes `parameters` has an initializer only generated code calls beside its plain one: it
+	/// defers one of them.
+	public static func tierHasGeneratedOnlyInitializer(taking parameters: [Parameter]) -> Bool {
+		parameters.contains(where: \.isDeferred)
 	}
 
 	/// What a call of the generated initializer depends on: each parameter's label, type spelled without `any`, tier
@@ -577,7 +620,8 @@ public struct SeamSignature: Sendable {
 	}
 
 	/// What settling a module's seams solves for: each parameter – its property, whether it is a pass-through, its
-	/// access, tier access and whether it is received only if available – with its receivers as a set, and the tiers.
+	/// access, tier access and whether it is received only if available – with its receivers as a set, the tiers, and
+	/// the types its tree declares `@escaping`.
 	/// Never the receivers' order, which a seam's tree meets differently on every pass when it carries the receivers of
 	/// a seam that carries its own, nor where a receive is declared, which a diagnostic reads and the declaring type and
 	/// property already decide.
@@ -611,6 +655,7 @@ public struct SeamSignature: Sendable {
 		public let holes: [Hole]
 		public let tiers: [AccessLevel]
 		public let noTierParameters: [Parameter]
+		public let typesDeclaredEscaping: Set<TypeDescription>
 	}
 
 	public var settledContent: SettledContent {
@@ -635,6 +680,7 @@ public struct SeamSignature: Sendable {
 			holes: holes.map { SettledContent.Hole(callShape: CallShape.Hole($0), uncarriedLabels: Set($0.uncarriedDeclarations.map(\.property.label))) },
 			tiers: tiers,
 			noTierParameters: settledContent(of: noTierParameters),
+			typesDeclaredEscaping: typesDeclaredEscaping,
 		)
 	}
 
@@ -721,6 +767,7 @@ public struct SeamCall: Sendable {
 		unreachableTierIsReported: Bool = false,
 		omittedParameters: [SeamSignature.Parameter] = [],
 		noTierParameters: [SeamSignature.Parameter] = [],
+		typesDeclaredEscaping: Set<TypeDescription> = [],
 		tier: AccessLevel = .internal,
 		requirement: AccessRequirement = .internal,
 		seamModuleName: String? = nil,
@@ -735,6 +782,7 @@ public struct SeamCall: Sendable {
 		self.unreachableTierIsReported = unreachableTierIsReported
 		self.omittedParameters = omittedParameters
 		self.noTierParameters = noTierParameters
+		self.typesDeclaredEscaping = typesDeclaredEscaping
 		self.tier = tier
 		self.requirement = requirement
 		self.seamModuleName = seamModuleName
@@ -750,6 +798,12 @@ public struct SeamCall: Sendable {
 	public let holes: [SeamSignature.Hole]
 	/// The `SeamSignature.guardTypeName` of the signature the call was generated from.
 	public let guardTypeName: String
+	/// Whether the call is of the initializer only generated code calls, under its prefixed labels: the tier defers a
+	/// parameter, so a `LazilyInstantiated` the caller holds is created when the seam's tree first reads it.
+	public var callsGeneratedOnlyInitializer: Bool {
+		SeamSignature.tierHasGeneratedOnlyInitializer(taking: parameters)
+	}
+
 	/// The comment the call carries saying what to do when it does not compile.
 	public let comment: SeamCallComment
 	/// The parameters of the seam's signature the called tier does not take, which the call passes `nil` for: a caller
@@ -757,6 +811,8 @@ public struct SeamCall: Sendable {
 	public let omittedParameters: [SeamSignature.Parameter]
 	/// The seam's parameters on no tier (`SeamSignature.noTierParameters`), which the call passes `nil` for too.
 	public let noTierParameters: [SeamSignature.Parameter]
+	/// `SeamSignature.typesDeclaredEscaping` of the seam called.
+	public let typesDeclaredEscaping: Set<TypeDescription>
 	/// The level of the tier called.
 	public let tier: AccessLevel
 	/// What the calling module needs of the seam's declarations.

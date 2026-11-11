@@ -994,7 +994,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesSeamParameterAsAutoclosure_whenOnlyATypeBeneathAnotherModulesSeamDeclaresTypealiasOfClosureEscaping(integration: MultiModuleIntegration) async throws {
+	mutating func generate_takesSeamParameterEscaping_whenOnlyATypeBeneathAnotherModulesSeamDeclaresTypealiasOfClosureEscaping(integration: MultiModuleIntegration) async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.modulesCallingPublicMockOfInner(innerAttributes: "generateDependencyTree: true", middleAttributes: "generateDependencyTree: true"),
 			integration: integration,
@@ -1012,11 +1012,15 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		#endif
 
 		extension Middle {
-		    public convenience init(onTap __safeDI_onTap: @autoclosure @escaping () -> OnTap) {
+		    public convenience init(onTap: @escaping OnTap) {
+		        self.init(__safeDI_onTap: onTap)
+		    }
+
+		    public convenience init(__safeDI_onTap: @autoclosure @escaping () -> OnTap) {
 		        let onTap = LazilyInstantiated<OnTap>(__safeDI_onTap)
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_620B4A759064B3AE.self // \(Self.guardComment(under: integration, moduleName: "Feature", typeName: "Inner"))
-		            return Inner(onTap: onTap.instance)
+		            return Inner(__safeDI_onTap: onTap.instance)
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(inner: inner)

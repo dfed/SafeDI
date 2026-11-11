@@ -53,7 +53,7 @@ SafeDI is a compile-time dependency injection framework for Swift. It uses Swift
 
 1. **Plugin** writes CSV of swift files → runs `SafeDITool scan` to build manifest → runs `SafeDITool generate` to produce code. The Bazel rule (`bazel/safedi.bzl`) and the Tuist plugin (`TuistPlugins/SafeDITuist`) run no `scan`: each runs `generate --combined-output --module-info-output` once per module, passing the `.safedi` files of the modules it lists as dependencies.
 2. **`SafeDITool generate`** parses all files via `FileVisitor` → builds `DependencyTreeGenerator` → generates per-root code + mock code
-3. **DependencyTreeGenerator** creates `ScopeGenerator` trees → each generates its code via `generatePropertyCode`. A seam (`@Instantiable(generateDependencyTree: true)`) is a root of its own module's generation (`generateSeamRootCode`, an initializer per access tier plus a guard enum) and a leaf of every other tree, which calls that initializer; see `.claude/rules/seams.md`.
+3. **DependencyTreeGenerator** creates `ScopeGenerator` trees → each generates its code via `generatePropertyCode`. A seam (`@Instantiable(generateDependencyTree: true)`) is a root of its own module's generation (`generateSeamRootCode`, per access tier a plain initializer and, where the tier defers a parameter, one only generated code calls, plus a guard enum) and a leaf of every other tree, which calls that initializer; see `.claude/rules/seams.md`.
 4. **Mock generation** (`generateMockCode`) creates `mock()` static methods with `@autoclosure @escaping` parameters, `T? = nil` subtree parameters, and `MockContext` for disambiguation
 
 ### Mock generation flow

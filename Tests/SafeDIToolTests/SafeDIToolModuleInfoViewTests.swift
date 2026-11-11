@@ -96,7 +96,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feed"]?.moduleInfoFile?.dependencyModuleNames == ["Core"])
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.appCallingFeedScreen(guardHash: "029593DA1BB2FBD5")])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.appCallingFeedScreen(guardHash: "029593DA1BB2FBD5", tokenLabel: "token")])
 		try expectEveryModuleCompiled(output)
 	}
 
@@ -315,7 +315,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		#expect(viewOutput.modules["App"]?.generatedFiles == directOutput.modules["App"]?.generatedFiles)
 		// `Token` spelled `internal` keeps `CoreScreen`'s `public` tier from taking it; unspelled, it is `public`.
 		let callComment = MultiModuleIntegration.moduleInfo.seamCallComment(type: "FeedScreen", declaringModule: "Feed")
-		let call = spelling == "" ? "FeedScreen.__safeDI_FeedScreen_DD887236DB7407AA.self\(callComment)\n            return FeedScreen(token: nil)" : "FeedScreen.__safeDI_FeedScreen_CBF29CE484222325.self\(callComment)\n            return FeedScreen()"
+		let call = spelling == "" ? "FeedScreen.__safeDI_FeedScreen_DD887236DB7407AA.self\(callComment)\n            return FeedScreen(__safeDI_token: nil)" : "FeedScreen.__safeDI_FeedScreen_CBF29CE484222325.self\(callComment)\n            return FeedScreen()"
 		#expect(viewOutput.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n\n" + """
 		extension Root {
 		    public init() {
@@ -345,7 +345,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		    public init() {
 		        func __safeDI_feedScreen() -> FeedScreen {
 		            _ = FeedScreen.__safeDI_FeedScreen_F046DCFB1718557F.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "FeedScreen", declaringModule: "Feed"))
-		            return FeedScreen(token: nil)
+		            return FeedScreen(__safeDI_token: nil)
 		        }
 		        let feedScreen: FeedScreen = __safeDI_feedScreen()
 		        func __safeDI_session() -> Session {
@@ -409,7 +409,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		    public init() {
 		        func __safeDI_feedScreen() -> FeedScreen {
 		            _ = FeedScreen.__safeDI_FeedScreen_84123128579D77AB.self\(pluginComment)
-		            return FeedScreen(theme: nil)
+		            return FeedScreen(__safeDI_theme: nil)
 		        }
 		        let feedScreen: FeedScreen = __safeDI_feedScreen()
 		        let settings = Settings()
@@ -466,7 +466,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		        func __safeDI_screenBuilder(theme: [3 of Int]) -> Screen {
 		            func __safeDI_service() -> Service {
 		                _ = Service.__safeDI_Service_5B09C61C1791E548.self\(pluginComment)
-		                return Service(theme: theme)
+		                return Service(__safeDI_theme: theme)
 		            }
 		            let service: Service = __safeDI_service()
 		            return Screen(theme: theme, service: service)
@@ -632,7 +632,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		    public init() {
 		        func __safeDI_midScreen() -> MidScreen {
 		            _ = MidScreen.__safeDI_MidScreen_1AE937BC12D77A01.self\(pluginComment)
-		            return MidScreen(token: nil)
+		            return MidScreen(__safeDI_token: nil)
 		        }
 		        let midScreen: MidScreen = __safeDI_midScreen()
 		        self.init(midScreen: midScreen)
@@ -748,7 +748,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			    public init() {
 			        func __safeDI_feedScreen() -> FeedScreen {
 			            _ = FeedScreen.__safeDI_FeedScreen_84123128579D77AB.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "FeedScreen", declaringModule: "Feed"))
-			            return FeedScreen(theme: nil)
+			            return FeedScreen(__safeDI_theme: nil)
 			        }
 			        let feedScreen: FeedScreen = __safeDI_feedScreen()
 			        let settings = Settings()
@@ -960,13 +960,13 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 	/// available beneath it, and `App` passes `nil`; its file imports what the files of `Feed`, `Session` and `Core` do.
 	/// `guardHash` is the guard of a `token` the initializer defers, as a pass-through; one `FeedScreen` receives itself
 	/// is taken by value, and its guard hashes no deferral.
-	private static func appCallingFeedScreen(guardHash: String = "F046DCFB1718557F") -> String {
+	private static func appCallingFeedScreen(guardHash: String = "F046DCFB1718557F", tokenLabel: String = "__safeDI_token") -> String {
 		generatedFileHeader + importBlock("Core") + "\n" + importBlock("Feed") + "\n" + importBlock("Session") + "\n\n" + """
 		extension Root {
 		    public init() {
 		        func __safeDI_feedScreen() -> FeedScreen {
 		            _ = FeedScreen.__safeDI_FeedScreen_\(guardHash).self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "FeedScreen", declaringModule: "Feed"))
-		            return FeedScreen(token: nil)
+		            return FeedScreen(\(tokenLabel): nil)
 		        }
 		        let feedScreen: FeedScreen = __safeDI_feedScreen()
 		        self.init(feedScreen: feedScreen)
@@ -981,7 +981,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 	    public init() {
 	        func __safeDI_feedScreen() -> FeedScreen {
 	            _ = FeedScreen.__safeDI_FeedScreen_F046DCFB1718557F.self // If this line does not compile, add the SafeDI plugin to the target that declares FeedScreen.
-	            return FeedScreen(token: nil)
+	            return FeedScreen(__safeDI_token: nil)
 	        }
 	        let feedScreen: FeedScreen = __safeDI_feedScreen()
 	        self.init(feedScreen: feedScreen)
