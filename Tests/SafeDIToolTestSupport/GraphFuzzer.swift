@@ -224,6 +224,19 @@ struct GraphFuzzerFixture: Equatable {
 
 	/// The same graph renamed by `renaming`, with its files listed in reverse order. A tool whose output depends
 	/// only on what a graph declares gives the renamed graph the output it gives this one, renamed.
+	/// The names of the types this graph declares `Instantiable`, as `computeCycleEdges` reads them.
+	var instantiableTypeNames: Set<String> {
+		var names = Set<String>()
+		let expression = try! NSRegularExpression(pattern: #"(?:class|struct|actor|extension)\s+(S[0-9]+_[A-Za-z0-9_]+)\s*:[^{]*\bInstantiable\b"#)
+		for source in swiftFileContent {
+			let text = source as NSString
+			for match in expression.matches(in: source, range: NSRange(location: 0, length: text.length)) {
+				names.insert(text.substring(with: match.range(at: 1)))
+			}
+		}
+		return names
+	}
+
 	func renamed(by renaming: GraphFuzzerRenaming) -> GraphFuzzerFixture {
 		GraphFuzzerFixture(
 			seed: seed,
@@ -432,6 +445,28 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 		reversesTypeNames || movesTypeNamesAcrossWrapperNames
 	}
 
+	/// Whether this renaming changes the relative order of any two of `typeNames`, each spelled as the original graph
+	/// spells it. A reversal leaves alone a name it does not rename, and a move keeps the order of names given one letter.
+	func changesOrder(ofTypeNames typeNames: Set<String>) -> Bool {
+		let namesInOrder = typeNames.sorted()
+		let renamedNames = namesInOrder.map { name in
+			Self.typeNamePrefix(in: name).map { rename(name, typeNamePrefix: String(name[$0])) } ?? name
+		}
+		return renamedNames != renamedNames.sorted()
+	}
+
+	/// The range of the prefix every type name of a graph begins with, `S<seed>_`, in `name`, which may hold a module's name before it.
+	static func typeNamePrefix(in name: String) -> Range<String.Index>? {
+		name.range(of: "S[0-9]+_", options: .regularExpression)
+	}
+
+	/// `label`, with its name restored, as the graph this renaming renamed spells it.
+	func renamingLabel(_ label: String) -> String {
+		reversesLabels ? Self.reversingIndices(in: label, pattern: Self.renamedLabelPattern) : label
+	}
+
+	private static let renamedLabelPattern = "(?<![A-Za-z0-9])(?:lazyAnyT|lazyT|anyT|t|missing)([0-9])"
+
 	/// Every renaming the oracle runs. A seed's first renamed failure is the one its known issue matches, so a new
 	/// renaming goes last: the seeds the earlier ones already list keep their entries.
 	static let all = [
@@ -499,7 +534,7 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 			text = Self.reversingIndices(in: text, pattern: NSRegularExpression.escapedPattern(for: typeNamePrefix) + "(?:Root|AnyT|T|Missing)([0-9])")
 		}
 		if reversesLabels {
-			text = Self.reversingIndices(in: text, pattern: "(?<![A-Za-z0-9])(?:lazyAnyT|lazyT|anyT|t|missing)([0-9])")
+			text = Self.reversingIndices(in: text, pattern: Self.renamedLabelPattern)
 		}
 		return text
 	}
@@ -7290,8 +7325,10 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// a type's access, in any order: the order inside a message is presentation and changes nothing a user does.
 	/// - Parameter renaming: The renaming that separates the two outcomes, which decides which known reason can explain a
 	///   mock's difference (`GraphFuzzerMockDifference`). With none, neither can, and the difference is the file's code.
+	/// - Parameter fixture: The graph both outcomes are of, whose types can decide which field of a lazy cycle a mock drops
+	///   though no generated code names them.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	static func differences(between outcome: GraphFuzzerToolOutcome, and otherOutcome: GraphFuzzerToolOutcome, comparingCode codeComparison: CodeComparison = .byteForByte, renaming: GraphFuzzerRenaming? = nil) -> [GraphFuzzerOutcomeDifference] {
+	static func differences(between outcome: GraphFuzzerToolOutcome, and otherOutcome: GraphFuzzerToolOutcome, comparingCode codeComparison: CodeComparison = .byteForByte, renaming: GraphFuzzerRenaming? = nil, of fixture: GraphFuzzerFixture? = nil) -> [GraphFuzzerOutcomeDifference] {
 		// A seam's guard enum is named after a hash of its signature, which names its parameters' types, so a
 		// renaming changes it as it changes the types: a hash restored textually cannot match, and is reduced away, to
 		// what is still an identifier, so that the code still parses.
@@ -7320,7 +7357,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 			return diagnosticEntries(of: reduce(diagnostics)) == diagnosticEntries(of: reduce(otherDiagnostics)) ? [] : [GraphFuzzerOutcomeDifference(aspect: .diagnostics)]
 		case let (.accepted(generatedFiles, warnings), .accepted(otherGeneratedFiles, otherWarnings)):
 			var differences = [GraphFuzzerOutcomeDifference]()
-			lazy var mockDifference = GraphFuzzerMockDifference(generatedFiles: generatedFiles, otherGeneratedFiles: otherGeneratedFiles, renaming: renaming)
+			lazy var mockDifference = GraphFuzzerMockDifference(generatedFiles: generatedFiles, otherGeneratedFiles: otherGeneratedFiles, renaming: renaming, instantiableTypeNames: fixture?.instantiableTypeNames ?? [])
 			if Set(generatedFiles.keys) != Set(otherGeneratedFiles.keys) {
 				differences.append(GraphFuzzerOutcomeDifference(aspect: .generatedFileNames))
 			}
@@ -8251,7 +8288,7 @@ struct GraphFuzzerToolRuns {
 	/// differs by more than the order of its extensions.
 	var renamedGraphFailures: [GraphFuzzerFailure] {
 		renamedOutcomes.flatMap { renaming, outcome in
-			GraphFuzzerToolOutcome.differences(between: firstOutcome, and: outcome, comparingCode: .inAnyOrderOfExtensions, renaming: renaming).map { difference in
+			GraphFuzzerToolOutcome.differences(between: firstOutcome, and: outcome, comparingCode: .inAnyOrderOfExtensions, renaming: renaming, of: fixture).map { difference in
 				GraphFuzzerFailure(
 					seed: fixture.seed,
 					kind: .renamedGraphDiffers,

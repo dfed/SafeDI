@@ -2561,7 +2561,7 @@ struct SafeDIToolGraphFuzzerTests {
 		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, multiModuleRenamings: [])
 		let reversalOfTypeNames = try #require(toolRuns.renamedOutcomes.first { $0.renaming.reversesTypeNames && !$0.renaming.reversesLabels && !$0.renaming.reversesFileNames })
 
-		for renaming in GraphFuzzerRenaming.all where renaming.reversesTypeNames || renaming.movesTypeNamesAcrossWrapperNames {
+		for renaming in GraphFuzzerRenaming.all where renaming.reversesTypeNames {
 			let runs = GraphFuzzerToolRuns(fixture: toolRuns.fixture, firstOutcome: toolRuns.firstOutcome, secondOutcome: toolRuns.firstOutcome, renamedOutcomes: [(renaming, reversalOfTypeNames.outcome)])
 			#expect(Set(runs.renamedGraphFailures.map(\.renamedGraphDifference)) == [.mockConfigurationFieldPresence])
 		}
@@ -2577,6 +2577,472 @@ struct SafeDIToolGraphFuzzerTests {
 			let runs = GraphFuzzerToolRuns(fixture: toolRuns.fixture, firstOutcome: toolRuns.firstOutcome, secondOutcome: toolRuns.firstOutcome, renamedOutcomes: [(renaming, reversalOfTypeNames.outcome)])
 			#expect(Set(runs.renamedGraphFailures.map(\.renamedGraphDifference)) == [.mockCode])
 		}
+	}
+
+	// MARK: What each reason of a renamed graph's mock difference has to show
+
+	private static let reversalOfLabels = GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: true, reversesFileNames: false)
+	private static let reversalOfTypeNames = GraphFuzzerRenaming(reversesTypeNames: true, reversesLabels: false, reversesFileNames: false)
+	private static let moveOfTypeNames = GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: false, reversesFileNames: false, movesTypeNamesAcrossWrapperNames: true)
+
+	/// The file of the mock of the type named `name` in the fixtures of these tests.
+	private static func mockFileName(of name: String) -> String {
+		"\(mockDifferencePrefix)\(name)+SafeDIMock.swift"
+	}
+
+	/// `code` with `original` replaced by `replacement`, which the test expects the code to hold.
+	private static func replacing(_ original: String, with replacement: String, in code: String?) -> String {
+		#expect(code?.contains(original) == true, "\(original) is not in \(code ?? "nil")")
+		return (code ?? "").replacingOccurrences(of: original, with: replacement)
+	}
+
+	/// What differs between the outcome of `fixture` and its outcome under `renaming`, each after its own edit of the
+	/// generated files.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func differences(
+		of fixture: GraphFuzzerFixture,
+		under renaming: GraphFuzzerRenaming,
+		editingOutcome editOutcome: (inout [String: String]) -> Void = { _ in },
+		editingRenamedOutcome editRenamedOutcome: (inout [String: String]) -> Void = { _ in },
+	) async throws -> [GraphFuzzerOutcomeDifference] {
+		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [renaming], multiModuleRenamings: [])
+		var files = generatedFiles(of: toolRuns.firstOutcome)
+		var renamedFiles = try generatedFiles(of: #require(toolRuns.renamedOutcomes.first).outcome)
+		editOutcome(&files)
+		editRenamedOutcome(&renamedFiles)
+		return GraphFuzzerToolOutcome.differences(between: .accepted(generatedFiles: files, warnings: []), and: .accepted(generatedFiles: renamedFiles, warnings: []), comparingCode: .inAnyOrderOfExtensions, renaming: renaming, of: fixture)
+	}
+
+	/// The names `T0` to `T9`, in order, with the first letter each takes under `moveOfTypeNames`.
+	private static var lettersOfMovedTypeNames: [(name: String, letter: Character?)] {
+		(0...9).map { index in
+			let name = "T\(index)"
+			return (name, moveOfTypeNames.rename("\(mockDifferencePrefix)\(name)", typeNamePrefix: mockDifferencePrefix).first)
+		}
+	}
+
+	/// The first names among `T0` to `T9`, in their order, that take `letters` under `moveOfTypeNames`.
+	private static func typeNames(takingLetters letters: [Character]) throws -> [String] {
+		var names = [String]()
+		for (name, letter) in lettersOfMovedTypeNames where names.count < letters.count && letter == letters[names.count] {
+			names.append(name)
+		}
+		return try #require(names.count == letters.count ? names : nil)
+	}
+
+	/// A mock with three values only if available, in the order of their labels.
+	private static var mockWithThreeLabelsFixture: GraphFuzzerFixture {
+		GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			mockedType("T3", instantiating: [], receivingOnlyIfAvailable: [("t2", "\(mockDifferencePrefix)T4?"), ("t4", "\(mockDifferencePrefix)T5?"), ("t6", "\(mockDifferencePrefix)T6?")]),
+			plainType("T4"),
+			plainType("T5"),
+			plainType("T6"),
+		])
+	}
+
+	private static func overrideParameters(labeled labels: [String]) -> String {
+		let typeByLabel = ["t2": "\(mockDifferencePrefix)T4", "t4": "\(mockDifferencePrefix)T5", "t6": "\(mockDifferencePrefix)T6"]
+		return labels.map { "            \($0): \(typeByLabel[$0, default: ""])? = nil" }.joined(separator: ",\n")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameOrder_whenReversingLabelsReversesThreeParameters() async throws {
+		let differences = try await Self.differences(of: Self.mockWithThreeLabelsFixture, under: Self.reversalOfLabels)
+
+		#expect(differences.map(\.aspect) == [.mockParameterAndFieldOrder])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenParametersChangePlacesInAnOrderNoReversalMakes() async throws {
+		let differences = try await Self.differences(of: Self.mockWithThreeLabelsFixture, under: Self.reversalOfLabels, editingRenamedOutcome: { files in
+			let fileName = Self.mockFileName(of: "T3")
+			files[fileName] = Self.replacing(Self.overrideParameters(labeled: ["t6", "t4", "t2"]), with: Self.overrideParameters(labeled: ["t4", "t2", "t6"]), in: files[fileName])
+		})
+
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenParametersWhoseLabelsTheRenamingLeavesAloneChangePlaces() async throws {
+		let prefix = Self.mockDifferencePrefix
+		let fixture = GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			Self.mockedType("T3", instantiating: [], receivingOnlyIfAvailable: [("items", "\(prefix)T4?"), ("value", "\(prefix)T5?")]),
+			Self.plainType("T4"),
+			Self.plainType("T5"),
+		])
+		let items = "items: \(prefix)T4? = nil"
+		let value = "value: \(prefix)T5? = nil"
+
+		let differences = try await Self.differences(of: fixture, under: Self.reversalOfLabels, editingRenamedOutcome: { files in
+			let fileName = Self.mockFileName(of: "T3")
+			files[fileName] = Self.replacing("\(items),\n            \(value)\n", with: "\(value),\n            \(items)\n", in: files[fileName])
+		})
+
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenTheChildrenOfAMocksOverridesChangePlaces() async throws {
+		let prefix = Self.mockDifferencePrefix
+		let t1 = "t1: \(prefix)T1.SafeDIMockConfiguration = .init()"
+		let t2 = "t2: \(prefix)T2.SafeDIMockConfiguration = .init()"
+
+		let differences = try await Self.differences(of: Self.plainTreeFixture, under: Self.reversalOfLabels, editingRenamedOutcome: { files in
+			let fileName = Self.mockFileName(of: "T0")
+			files[fileName] = Self.replacing("\(t1),\n            \(t2)\n", with: "\(t2),\n            \(t1)\n", in: files[fileName])
+		})
+
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameOrder_whenAMocksParametersAreForwardedAndReceived() async throws {
+		let prefix = Self.mockDifferencePrefix
+		let fixture = GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			"@Instantiable(generateMock: true)\npublic final class \(prefix)T3: Instantiable {\n\tpublic init(t3: \(prefix)Other, t1: \(prefix)Other, t5: \(prefix)Other) {\n\t\tself.t3 = t3\n\t\tself.t1 = t1\n\t\tself.t5 = t5\n\t}\n\t@Forwarded let t3: \(prefix)Other\n\t@Received let t1: \(prefix)Other\n\t@Received let t5: \(prefix)Other\n}\n",
+			"public final class \(prefix)Other {}\n",
+		])
+
+		let differences = try await Self.differences(of: fixture, under: Self.reversalOfLabels)
+
+		#expect(differences.map(\.aspect) == [.mockParameterAndFieldOrder])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenAMocksReceivedParametersChangePlacesInAnOrderNoReversalMakes() async throws {
+		let prefix = Self.mockDifferencePrefix
+		let parameters = { (labels: [String]) in labels.map { "        \($0): \(prefix)Other" }.joined(separator: ",\n") }
+		let fixture = GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			"@Instantiable(generateMock: true)\npublic final class \(prefix)T3: Instantiable {\n\tpublic init(t2: \(prefix)Other, t4: \(prefix)Other, t6: \(prefix)Other) {\n\t\tself.t2 = t2\n\t\tself.t4 = t4\n\t\tself.t6 = t6\n\t}\n\t@Received let t2: \(prefix)Other\n\t@Received let t4: \(prefix)Other\n\t@Received let t6: \(prefix)Other\n}\n",
+			"public final class \(prefix)Other {}\n",
+		])
+
+		let differences = try await Self.differences(of: fixture, under: Self.reversalOfLabels, editingRenamedOutcome: { files in
+			let fileName = Self.mockFileName(of: "T3")
+			files[fileName] = Self.replacing(parameters(["t6", "t4", "t2"]), with: parameters(["t4", "t6", "t2"]), in: files[fileName])
+		})
+
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameOrder_whenReversingLabelsReordersTheWrappersOfLazilyInstantiatedInstances() async throws {
+		let prefix = Self.mockDifferencePrefix
+		let fixture = GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			"@Instantiable(generateMock: true)\npublic final class \(prefix)T3: Instantiable {\n\tpublic init(t1: LazilyInstantiated<\(prefix)Other>, t5: LazilyInstantiated<\(prefix)Other>) {\n\t\tself.t1 = t1\n\t\tself.t5 = t5\n\t}\n\t@Received let t1: LazilyInstantiated<\(prefix)Other>\n\t@Received let t5: LazilyInstantiated<\(prefix)Other>\n}\n",
+			"public final class \(prefix)Other {}\n",
+		])
+
+		let differences = try await Self.differences(of: fixture, under: Self.reversalOfLabels)
+
+		#expect(differences.map(\.aspect) == [.mockParameterAndFieldOrder])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameOrder_whenReversingTypeNamesReordersOverridesOfOneLabel() async throws {
+		let prefix = Self.mockDifferencePrefix
+		// The same label, received only if available as two types, is two overrides ordered by type.
+		let fixture = GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			Self.mockedType("T3", instantiating: [("child", "\(prefix)T4")], receivingOnlyIfAvailable: [("value", "\(prefix)T1?")]),
+			"@Instantiable\npublic final class \(prefix)T4: Instantiable {\n\tpublic init(value: \(prefix)T2?) {\n\t\tself.value = value\n\t}\n\t@Received(onlyIfAvailable: true) let value: \(prefix)T2?\n}\n",
+			Self.plainType("T1"),
+			Self.plainType("T2"),
+		])
+
+		let differences = try await Self.differences(of: fixture, under: Self.reversalOfTypeNames)
+
+		#expect(differences.map(\.aspect) == [.mockParameterAndFieldOrder])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenOverridesOfDifferentLabelsChangePlacesUnderAReversalOfTypeNames() async throws {
+		let t2 = Self.overrideParameters(labeled: ["t2", "t4", "t6"])
+
+		let differences = try await Self.differences(of: Self.mockWithThreeLabelsFixture, under: Self.reversalOfTypeNames, editingRenamedOutcome: { files in
+			let fileName = Self.mockFileName(of: "T3")
+			files[fileName] = Self.replacing(t2, with: Self.overrideParameters(labeled: ["t4", "t2", "t6"]), in: files[fileName])
+		})
+
+		#expect(differences.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameOrder_whenAWiderTierOfAPublicMockPassesItsParametersToTheNarrowest() async throws {
+		// A graph of the public mock corpus whose `mock()` has a `public` tier and a `package` tier.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 407, features: [.generateMockPublic])
+
+		let differences = try await Self.differences(of: fixture, under: Self.reversalOfLabels)
+
+		#expect(differences.filter { $0.fileName == "FuzzApp/S407_T7+SafeDIMock.swift" }.map(\.aspect) == [.mockParameterAndFieldOrder])
+	}
+
+	/// A chain of three mocked types closed into a cycle, with a chord from the first to the third.
+	private static var lazyCycleWithChordFixture: GraphFuzzerFixture {
+		let prefix = mockDifferencePrefix
+		return GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			mockedType("T7", instantiating: [("t8Builder", "Instantiator<\(prefix)T8>"), ("t9Builder", "Instantiator<\(prefix)T9>")]),
+			mockedType("T8", instantiating: [("t9Builder", "Instantiator<\(prefix)T9>")]),
+			mockedType("T9", instantiating: [("t7Builder", "Instantiator<\(prefix)T7>")]),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_namePresence_whenEveryDroppedFieldClosesACycleInTheOutcomeThatLacksIt() async throws {
+		let differences = try await Self.differences(of: Self.lazyCycleWithChordFixture, under: Self.reversalOfTypeNames)
+
+		#expect(Set(differences.map(\.aspect)) == [.mockConfigurationFieldPresence])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenADroppedFieldClosesNoCycleInTheOutcomeThatLacksIt() async throws {
+		let t8Configuration = "\(Self.mockDifferencePrefix)T8.SafeDIMockConfiguration"
+		let readThroughTheField = try NSRegularExpression(pattern: #"if let safeDIBuilder = [A-Za-z0-9_.]*\.t7Builder\.t8Builder[A-Za-z0-9_.]* \{ .*? \} else \{ (.*) \}$"#, options: [.anchorsMatchLines])
+
+		let differences = try await Self.differences(of: Self.lazyCycleWithChordFixture, under: Self.reversalOfTypeNames, editingRenamedOutcome: { files in
+			// `T7`'s field of `T8`, a tree edge of the search under this naming, goes, and the reads of it across the files with it.
+			let fileName = Self.mockFileName(of: "T7")
+			files[fileName] = Self.editingConfigurationStruct(in: files[fileName, default: ""]) { configuration in
+				Self.replacing("            t8Builder: \(t8Configuration) = .init(),\n", with: "", in: Self.replacing("            self.t8Builder = t8Builder\n", with: "", in: Self.replacing("        let t8Builder: \(t8Configuration)\n", with: "", in: configuration)))
+			}
+			for name in files.keys {
+				let source = files[name, default: ""]
+				files[name] = readThroughTheField.stringByReplacingMatches(in: source, range: NSRange(location: 0, length: (source as NSString).length), withTemplate: "$1")
+			}
+		})
+
+		#expect(differences.filter { $0.fileName == Self.mockFileName(of: "T7") }.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenARenamingKeepsTheOrderOfTheTypesOfACycle() async throws {
+		let reversed = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, renamings: [Self.reversalOfTypeNames], multiModuleRenamings: [])
+		// `T7` and `T8` both take one letter here: the move keeps their order, so it cannot have dropped either field.
+		let letters = Self.lettersOfMovedTypeNames.filter { $0.name == "T7" || $0.name == "T8" }.map(\.letter)
+		#expect(letters.first == letters.last)
+
+		let differences = try GraphFuzzerToolOutcome.differences(between: reversed.firstOutcome, and: #require(reversed.renamedOutcomes.first).outcome, comparingCode: .inAnyOrderOfExtensions, renaming: Self.moveOfTypeNames, of: Self.lazyCycleFixture)
+
+		#expect(differences.map(\.aspect) == [.mockCode, .mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_namePresence_whenAMoveOfTypeNamesChangesTheOrderOfATwoTypeCycle() async throws {
+		let prefix = Self.mockDifferencePrefix
+		let names = try Self.typeNames(takingLetters: ["Z", "A"])
+		let fixture = GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			Self.mockedType(names[0], instantiating: [("nextBuilder", "Instantiator<\(prefix)\(names[1])>")]),
+			Self.mockedType(names[1], instantiating: [("firstBuilder", "Instantiator<\(prefix)\(names[0])>")]),
+		])
+
+		let differences = try await Self.differences(of: fixture, under: Self.moveOfTypeNames)
+
+		#expect(Set(differences.map(\.aspect)) == [.mockConfigurationFieldPresence])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_namePresence_whenAMoveDropsAFieldOfAThreeTypeCycleWhoseTwoTypesKeepTheirOrder() async throws {
+		let prefix = Self.mockDifferencePrefix
+		// The move starts the search at the second type. The field from the third type to the first then appears, though those two keep their order.
+		let names = try Self.typeNames(takingLetters: ["Z", "A", "Z"])
+		let fixture = GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			Self.mockedType(names[0], instantiating: [("secondBuilder", "Instantiator<\(prefix)\(names[1])>")]),
+			Self.mockedType(names[1], instantiating: [("thirdBuilder", "Instantiator<\(prefix)\(names[2])>")]),
+			Self.mockedType(names[2], instantiating: [("firstBuilder", "Instantiator<\(prefix)\(names[0])>")]),
+		])
+
+		let differences = try await Self.differences(of: fixture, under: Self.moveOfTypeNames)
+
+		#expect(Set(differences.map(\.aspect)) == [.mockConfigurationFieldPresence])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_namePresence_whenAMoveChangesOnlyWhereATypeOutsideACycleEntersIt() async throws {
+		let prefix = Self.mockDifferencePrefix
+		// The two types of the cycle keep their order; the move takes the type outside it from before them to between them.
+		let names = try Self.typeNames(takingLetters: ["Z", "A", "Z"])
+		let fixture = GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			Self.mockedType(names[0], instantiating: [("thirdBuilder", "Instantiator<\(prefix)\(names[2])>")]),
+			Self.mockedType(names[1], instantiating: [("thirdBuilder", "Instantiator<\(prefix)\(names[2])>")]),
+			Self.mockedType(names[2], instantiating: [("secondBuilder", "Instantiator<\(prefix)\(names[1])>")]),
+		])
+
+		let differences = try await Self.differences(of: fixture, under: Self.moveOfTypeNames)
+
+		#expect(Set(differences.map(\.aspect)) == [.mockConfigurationFieldPresence])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_namePresence_whenAMoveChangesOnlyWhereATypeNoGeneratedCodeNamesEntersACycle() async throws {
+		let prefix = Self.mockDifferencePrefix
+		// The first type is neither mocked nor reached from a root, so the two outcomes hold no trace of it.
+		let names = try Self.typeNames(takingLetters: ["Z", "A", "Z"])
+		let fixture = GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			"@Instantiable\npublic final class \(prefix)\(names[0]): Instantiable {\n\tpublic init(thirdBuilder: Instantiator<\(prefix)\(names[2])>) {\n\t\tself.thirdBuilder = thirdBuilder\n\t}\n\t@Instantiated let thirdBuilder: Instantiator<\(prefix)\(names[2])>\n}\n",
+			Self.mockedType(names[1], instantiating: [("thirdBuilder", "Instantiator<\(prefix)\(names[2])>")]),
+			Self.mockedType(names[2], instantiating: [("secondBuilder", "Instantiator<\(prefix)\(names[1])>")]),
+		])
+
+		let differences = try await Self.differences(of: fixture, under: Self.moveOfTypeNames)
+
+		#expect(Set(differences.map(\.aspect)) == [.mockConfigurationFieldPresence])
+	}
+
+	/// A lazy cycle whose first mocked type also instantiates two values of one type, and has two default-valued parameters.
+	private static var lazyCycleWithTwoLeavesAndDefaultsFixture: GraphFuzzerFixture {
+		let prefix = mockDifferencePrefix
+		return GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			"@Instantiable(generateMock: true)\npublic final class \(prefix)T7: Instantiable {\n\tpublic init(t8Builder: Instantiator<\(prefix)T8>, t4: \(prefix)T3, t5: \(prefix)T3, theme: Int = 1, size: Int = 2) {\n\t\tself.t8Builder = t8Builder\n\t\tself.t4 = t4\n\t\tself.t5 = t5\n\t}\n\t@Instantiated let t8Builder: Instantiator<\(prefix)T8>\n\t@Instantiated let t4: \(prefix)T3\n\t@Instantiated let t5: \(prefix)T3\n}\n",
+			mockedType("T8", instantiating: [("t7Builder", "Instantiator<\(prefix)T7>")]),
+			plainType("T3"),
+		])
+	}
+
+	/// The aspects of the difference in `T7`'s mock between the graph of `lazyCycleWithTwoLeavesAndDefaultsFixture` and its
+	/// reversal of type names, with the reversal's mock edited by `edit`.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func aspectsOfT7sMockWithDroppedReads(editedBy edit: (String?) -> String) async throws -> [GraphFuzzerOutcomeDifference.Aspect] {
+		try await differences(of: lazyCycleWithTwoLeavesAndDefaultsFixture, under: reversalOfTypeNames, editingRenamedOutcome: { files in
+			let fileName = Self.mockFileName(of: "T7")
+			files[fileName] = edit(files[fileName])
+		}).filter { $0.fileName == mockFileName(of: "T7") }.map(\.aspect)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_namePresence_whenEveryDiscardedReadIsThePathOfItsNode() async throws {
+		#expect(try await Self.aspectsOfT7sMockWithDroppedReads { $0 ?? "" } == [.mockConfigurationFieldPresence])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenADiscardedOverrideReadsAnotherFieldPastADroppedField() async throws {
+		let aspects = try await Self.aspectsOfT7sMockWithDroppedReads {
+			Self.replacing("let t4 = if let safeDIBuilder = safeDIOverrides.t8Builder.t7Builder.t4 {", with: "let t4 = if let safeDIBuilder = safeDIOverrides.t8Builder.t7Builder.t5 {", in: $0)
+		}
+
+		#expect(aspects == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenADiscardedOverrideReadsAFieldNoStructHolds() async throws {
+		let aspects = try await Self.aspectsOfT7sMockWithDroppedReads {
+			Self.replacing("let t4 = if let safeDIBuilder = safeDIOverrides.t8Builder.t7Builder.t4 {", with: "let t4 = if let safeDIBuilder = safeDIOverrides.t8Builder.t7Builder.noSuchField {", in: $0)
+		}
+
+		#expect(aspects == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenADiscardedConstructionPassesOneDefaultTheFieldOfAnother() async throws {
+		let path = "safeDIOverrides.t8Builder.t7Builder"
+		let aspects = try await Self.aspectsOfT7sMockWithDroppedReads { code in
+			Self.replacing("theme: \(path).theme, size: \(path).size", with: "theme: \(path).size, size: \(path).theme", in: Self.replacing("t5, \(path).theme, \(path).size)", with: "t5, \(path).size, \(path).theme)", in: code))
+		}
+
+		#expect(aspects == [.mockCode])
+	}
+
+	/// The aspects of the difference in `T8`'s mock between the graph of `lazyCycleOfErasedTypesFixture`, with the text
+	/// `original` of its mock replaced, and its reversal of type names.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func aspectsOfT8sErasedMock(replacing original: String, with replacement: String) async throws -> [GraphFuzzerOutcomeDifference.Aspect] {
+		try await differences(of: lazyCycleOfErasedTypesFixture, under: reversalOfTypeNames, editingOutcome: { files in
+			let fileName = Self.mockFileName(of: "T8")
+			files[fileName] = Self.replacing(original, with: replacement, in: files[fileName])
+		}).filter { $0.fileName == mockFileName(of: "T8") }.map(\.aspect)
+	}
+
+	private static let erasedNodeOverride = "if let safeDIBuilder = safeDIOverrides.anyT7Builder.anyT8Builder.safeDIBuilder { "
+
+	private static let erasedLeafOverride = "if let safeDIBuilder = safeDIOverrides.anyT7Builder.anyT8Builder.anyT4 { "
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenADiscardedOverrideOfAnErasedNodeDoesNotEraseItsBuilder() async throws {
+		let prefix = Self.mockDifferencePrefix
+		let aspects = try await Self.aspectsOfT8sErasedMock(replacing: "\(Self.erasedNodeOverride)\(prefix)AnyT8(safeDIBuilder(anyT7Builder, anyT4)) }", with: "\(Self.erasedNodeOverride)safeDIBuilder(anyT7Builder, anyT4) }")
+
+		#expect(aspects == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenADiscardedOverrideOfAnErasedLeafErasesItsBuilder() async throws {
+		let prefix = Self.mockDifferencePrefix
+		let aspects = try await Self.aspectsOfT8sErasedMock(replacing: "\(Self.erasedLeafOverride)safeDIBuilder() }", with: "\(Self.erasedLeafOverride)\(prefix)AnyT4(safeDIBuilder()) }")
+
+		#expect(aspects == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenADiscardedOverrideOfAnErasedLeafPassesItsBuilderTheConstruction() async throws {
+		let prefix = Self.mockDifferencePrefix
+		let aspects = try await Self.aspectsOfT8sErasedMock(replacing: "\(Self.erasedLeafOverride)safeDIBuilder() }", with: "\(Self.erasedLeafOverride)safeDIBuilder(\(prefix)T4()) }")
+
+		#expect(aspects == [.mockCode])
+	}
+
+	/// A lazy cycle through `@Sendable` builders whose types each have default-valued parameters.
+	private static var lazyCycleOfSendableBuildersWithDefaultsFixture: GraphFuzzerFixture {
+		let prefix = mockDifferencePrefix
+		return GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			"@Instantiable(generateMock: true)\npublic final class \(prefix)T7: Instantiable, Sendable {\n\tpublic init(t8Builder: SendableInstantiator<\(prefix)T8>, theme: Int = 1) {\n\t\tself.t8Builder = t8Builder\n\t}\n\t@Instantiated let t8Builder: SendableInstantiator<\(prefix)T8>\n}\n",
+			"@Instantiable(generateMock: true)\npublic final class \(prefix)T8: Instantiable, Sendable {\n\tpublic init(t7Builder: SendableInstantiator<\(prefix)T7>, count: Int = 2, size: Int = 3) {\n\t\tself.t7Builder = t7Builder\n\t}\n\t@Instantiated let t7Builder: SendableInstantiator<\(prefix)T7>\n}\n",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_namePresence_whenADroppedConstructionPassesADefaultThroughAnExtractedLocal() async throws {
+		let differences = try await Self.differences(of: Self.lazyCycleOfSendableBuildersWithDefaultsFixture, under: Self.reversalOfTypeNames)
+
+		#expect(Set(differences.map(\.aspect)) == [.mockConfigurationFieldPresence])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenAnExtractedLocalReadsTheFieldOfAnotherDefault() async throws {
+		let differences = try await Self.differences(of: Self.lazyCycleOfSendableBuildersWithDefaultsFixture, under: Self.reversalOfTypeNames, editingOutcome: { files in
+			let fileName = Self.mockFileName(of: "T8")
+			files[fileName] = Self.replacing("__t7Builder_t8Builder_count = safeDIOverrides.t7Builder.t8Builder.count", with: "__t7Builder_t8Builder_count = safeDIOverrides.t7Builder.t8Builder.size", in: files[fileName])
+		})
+
+		#expect(differences.filter { $0.fileName == Self.mockFileName(of: "T8") }.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_namePresence_whenTheBuilderFunctionsOfACycleAreRenamedApart() async throws {
+		let prefix = Self.mockDifferencePrefix
+		// Both types call the other `builder`, so a cycle-closing scope refers to a function a nested one would hide.
+		let fixture = GraphFuzzerFixture(seed: 1_000_000_011, swiftFileContent: [
+			Self.mockedType("T7", instantiating: [("builder", "Instantiator<\(prefix)T8>")]),
+			Self.mockedType("T8", instantiating: [("builder", "Instantiator<\(prefix)T7>")]),
+		])
+
+		let differences = try await Self.differences(of: fixture, under: Self.reversalOfTypeNames)
+
+		#expect(Set(differences.map(\.aspect)) == [.mockConfigurationFieldPresence])
 	}
 
 	@Test
