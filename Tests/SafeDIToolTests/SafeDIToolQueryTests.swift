@@ -2376,6 +2376,70 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_throwsErrorNamingModules_whenTwoIncludedModulesDeclareTypeOfOneName() async throws {
+		let rootDirectory = try temporaryModuleDirectory()
+		func includedModuleFile(named moduleName: String) throws -> (directory: URL, file: URL) {
+			let directory = rootDirectory.appendingPathComponent(moduleName)
+			try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+			let file = try #require(createSwiftFixtureFiles(from: [Self.standaloneFeature], in: directory).first)
+			return (directory, file)
+		}
+		let beta = try includedModuleFile(named: "Beta")
+		let alpha = try includedModuleFile(named: "Alpha")
+
+		await #expect {
+			_ = try await QueryNeeds.parse(["Feature", "--include", beta.directory.path, "--include", alpha.directory.path]).query()
+		} throws: { error in
+			"\(error)" == """
+			\(alpha.file.path):1:1: error: `Feature` is declared in modules `Alpha` and `Beta`. SafeDI tells @Instantiable types apart by name across every module a run reads. Rename one.
+			\(beta.file.path):1:1: error: `Feature` is declared in modules `Alpha` and `Beta`. SafeDI tells @Instantiable types apart by name across every module a run reads. Rename one.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_listsRepeatingModulesInSortedOrder_whenTwentyFourIncludedModulesEachDeclareTypeTwice() async throws {
+		// A query is the run that reads several such modules at once, since a module that declares a type twice fails its
+		// own `generate`. The names are listed neither sorted nor reversed, so an order taken from a set or from the order
+		// the modules were read in fails on nearly every run.
+		let rootDirectory = try temporaryModuleDirectory()
+		let moduleNames = (0..<24).map { index in
+			"Module\(String(format: "%02d", (index * 7) % 24))"
+		}
+		let feature = """
+		@Instantiable
+		public struct Feature: Instantiable {
+		    public init() {}
+		}
+		"""
+		var arguments = ["Feature"]
+		var files = [URL]()
+		for moduleName in moduleNames {
+			let directory = rootDirectory.appendingPathComponent(moduleName)
+			try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+			try files.append(#require(createSwiftFixtureFiles(from: ["#if os(iOS)\n\(feature)\n#else\n\(feature)\n#endif"], in: directory).first))
+			arguments += ["--include", directory.path]
+		}
+		let sortedModuleNames = moduleNames.sorted()
+		let modules = "\(sortedModuleNames.dropLast().map { "`\($0)`" }.joined(separator: ", ")), and `\(sortedModuleNames[23])`"
+		let message = "error: `Feature` is declared in modules \(modules), and more than once in \(modules). SafeDI tells @Instantiable types apart by name across every module a run reads, and reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`. If they are one type that differs by platform, declare it with one @Instantiable declaration, in one of these modules and outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. If they are different types, declare it once in each of \(modules), with any platform difference inside its body or its `instantiate(…)` method, then rename all but one."
+		let expectedDiagnostics = files
+			.flatMap { file in
+				[2, 7].map { line in "\(file.path):\(line):1: \(message)" }
+			}
+			.sorted()
+			.joined(separator: "\n")
+
+		await #expect {
+			_ = try await QueryNeeds.parse(arguments).query()
+		} throws: { error in
+			expectedDiagnostics == "\(error)"
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func errorReport_printsDiagnosticsWithTheirLocations_whenTheErrorIsSourceLocated() async throws {
 		let moduleDirectory = try temporaryModuleDirectory()
 		let files = try createSwiftFixtureFiles(
