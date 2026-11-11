@@ -68,8 +68,8 @@ public struct TypeAccessProof: Sendable {
 	///   - isOwnFile: Whether a file is one of the run's own files, which lets two declarations of a module SafeDI knows
 	///     no name of count as one module's; `nil` where the computation is of another module's seams, whose module is
 	///     named.
-	///   - reach: Which declarations a mention in each module can name (`ModuleReach`), by which a plain declaration
-	///     bounds the mention.
+	///   - reach: Which declarations a mention in each module can name (`ModuleReach`): a plain declaration or an entry
+	///     SafeDI knows a mention cannot name proves nothing about the type it names.
 	public init(instantiables: [TypeDescription: Instantiable], plainTypeDeclarations: [PlainTypeDeclaration], isOwnFile: (@Sendable (String) -> Bool)?, reach: ModuleReach) {
 		self.instantiables = instantiables
 		var entries = [TypeDescription: Instantiable]()
@@ -77,6 +77,12 @@ public struct TypeAccessProof: Sendable {
 			entries[key] = instantiable
 		}
 		self.entries = entries
+		self.reach = reach
+		/// The entry of `type` that a mention in the module named `moduleName` resolves to: `nil` when there is none, or when
+		/// SafeDI knows that module cannot name it, as it drops a plain declaration (`ModuleReach.cannotName(_:from:)`).
+		func nameableEntry(of type: TypeDescription, mentionedFrom moduleName: String?) -> Instantiable? {
+			entries[type].flatMap { reach.cannotName($0, from: moduleName) ? nil : $0 }
+		}
 		// A declaration no other file can name names nothing a seam's generated initializer or a mock can mention.
 		let plainTypeDeclarations = PlainTypeDeclarations(
 			plainTypeDeclarations,
@@ -122,7 +128,7 @@ public struct TypeAccessProof: Sendable {
 				let ownLevel = Self.normalized(AccessLevel.effective(ofTypeDeclaredBy: entry))
 				let candidates = extendedType.map { plainTypeDeclarations.candidates(named: $0, mentionedFrom: .declaration(entry)) } ?? []
 				if let extendedType,
-				   let bounding = entries[extendedType],
+				   let bounding = nameableEntry(of: extendedType, mentionedFrom: entry.moduleName),
 				   let boundingKind = kind(of: extendedType),
 				   let boundingProof = boundingKind.exactProof,
 				   Self.isInSameModule(entry, bounding, isOwnFile: isOwnFile)
@@ -132,11 +138,11 @@ public struct TypeAccessProof: Sendable {
 					// No `@Instantiable` declaration of the extended type bounds the entry, but its plain declaration,
 					// which the compiler caps the entry by, does.
 					entryKind = .exactInExtension(extendedType: extendedType, ownLevel: ownLevel, extendedTypeProof: resolved.level, extendedTypeIsPlain: true)
-				} else if let extendedType, entries[extendedType] == nil, candidates.isEmpty, let enclosing = exactProofOfNearestEnclosingType(of: extendedType, for: entry) {
+				} else if let extendedType, nameableEntry(of: extendedType, mentionedFrom: entry.moduleName) == nil, candidates.isEmpty, let enclosing = exactProofOfNearestEnclosingType(of: extendedType, for: entry) {
 					// SafeDI reads no declaration of the extended type, but one of a type enclosing it, which caps it, as it
 					// caps any type nested in it that SafeDI reads no declaration of.
 					entryKind = .exactInExtension(extendedType: extendedType, ownLevel: ownLevel, extendedTypeProof: enclosing.level, extendedTypeIsPlain: enclosing.isPlain, extendedTypeEnclosingType: enclosing.type)
-				} else if let extendedType, entries[extendedType] == nil, candidates.isEmpty, enclosingTypesAreUnread(of: extendedType, mentionedFrom: .declaration(entry)) {
+				} else if let extendedType, nameableEntry(of: extendedType, mentionedFrom: entry.moduleName) == nil, candidates.isEmpty, enclosingTypesAreUnread(of: extendedType, mentionedFrom: .declaration(entry)) {
 					// No declaration SafeDI reads declares the extended type, which is therefore `public`.
 					unreadExtendedTypesByEntry[type] = extendedType
 					entryKind = .exactInExtension(extendedType: extendedType, ownLevel: ownLevel, extendedTypeProof: .public, extendedTypeIsPlain: false)
@@ -172,7 +178,7 @@ public struct TypeAccessProof: Sendable {
 			let ownLevel = Self.normalized(declaration.levelBeforeExtendedTypeCap)
 			guard let extendedType = declaration.extendedType else { return ownLevel }
 			let mentioningModule = MentioningModule.plainDeclaration(declaration)
-			if entries[extendedType] != nil {
+			if nameableEntry(of: extendedType, mentionedFrom: declaration.moduleName) != nil {
 				return kind(of: extendedType)?.exactProof.map(ownLevel.capped(by:))
 			}
 			let candidates = plainTypeDeclarations.candidates(named: extendedType, mentionedFrom: mentioningModule)
@@ -187,7 +193,7 @@ public struct TypeAccessProof: Sendable {
 		func exactProofOfNearestEnclosingType(of type: TypeDescription, for entry: Instantiable) -> (type: TypeDescription, level: AccessLevel, isPlain: Bool)? {
 			var prefix = type.withoutGenericArguments?.popNested
 			while let enclosingType = prefix {
-				if let enclosingEntry = entries[enclosingType] {
+				if let enclosingEntry = nameableEntry(of: enclosingType, mentionedFrom: entry.moduleName) {
 					guard let enclosingKind = kind(of: enclosingType), let proof = enclosingKind.exactProof, Self.isInSameModule(entry, enclosingEntry, isOwnFile: isOwnFile) else { return nil }
 					return (enclosingType, proof, enclosingKind.isPlainDeclaration)
 				} else {
@@ -204,7 +210,7 @@ public struct TypeAccessProof: Sendable {
 		/// `type` below it, so a type further out never stands in for this one.
 		func exactEnclosingType(of type: TypeDescription, for entry: Instantiable) -> ExactEnclosingType? {
 			type.withoutGenericArguments?.popNested.flatMap { enclosingType -> ExactEnclosingType? in
-				if let enclosingEntry = entries[enclosingType] {
+				if let enclosingEntry = nameableEntry(of: enclosingType, mentionedFrom: entry.moduleName) {
 					guard let proof = kind(of: enclosingType)?.exactProof, Self.isInSameModule(entry, enclosingEntry, isOwnFile: isOwnFile) else { return nil }
 					return ExactEnclosingType(type: enclosingType, proof: proof, declaration: .entry)
 				} else {
@@ -217,7 +223,7 @@ public struct TypeAccessProof: Sendable {
 		func enclosingTypesAreUnread(of type: TypeDescription, mentionedFrom mentioningModule: MentioningModule) -> Bool {
 			var prefix = type.withoutGenericArguments?.popNested
 			while let enclosingType = prefix {
-				guard entries[enclosingType] == nil, plainTypeDeclarations.candidates(named: enclosingType, mentionedFrom: mentioningModule).isEmpty else { return false }
+				guard nameableEntry(of: enclosingType, mentionedFrom: mentioningModule.moduleName) == nil, plainTypeDeclarations.candidates(named: enclosingType, mentionedFrom: mentioningModule).isEmpty else { return false }
 				prefix = enclosingType.popNested
 			}
 			return true
@@ -229,7 +235,8 @@ public struct TypeAccessProof: Sendable {
 		self.unreadExtendedTypesByEntry = unreadExtendedTypesByEntry
 
 		// Every mention, from every member of every entry of the map, under each key it is recorded on: a `mockOnly`
-		// merge carries its mock under the key it merges into.
+		// merge carries its mock under the key it merges into. A member names an entry of the type it mentions only where
+		// its module may name that entry.
 		var mentions = [TypeDescription: [Mention]]()
 		var seenMembers = Set<MemberKey>()
 		for (_, carrier) in instantiables.sorted(by: { $0.key < $1.key }) {
@@ -237,7 +244,7 @@ public struct TypeAccessProof: Sendable {
 			for member in Self.provingMembers(of: carrier) {
 				guard seenMembers.insert(MemberKey(carrier: carrier.concreteInstantiable, member: member.kind, location: member.location)).inserted else { continue }
 				for argument in member.initializer.arguments where dependencyLabels.contains(argument.innerLabel) {
-					for mentionedType in Self.mentionedTypes(in: argument.typeDescription) {
+					for mentionedType in Self.mentionedTypes(in: argument.typeDescription) where entries[mentionedType] == nil || nameableEntry(of: mentionedType, mentionedFrom: member.moduleName) != nil {
 						mentions[mentionedType, default: []].append(Mention(
 							carrier: carrier.concreteInstantiable,
 							member: member.kind,
@@ -412,12 +419,17 @@ public struct TypeAccessProof: Sendable {
 			// The type enclosing an extension-based entry, when SafeDI reads its declaration exactly, caps the entry, and
 			// SafeDI may count it `public` unread: an entry of a type it reads no declaration of, or a plain declaration
 			// in an extension of one. The enclosing type has one component fewer, so the walk ends.
-			if case let .extensionBased(_, _, enclosingType?) = kinds[mentionedType] {
+			let mentionedKind = entryKind(of: mentionedType, mentionedFrom: mentioningModule)
+			if case let .extensionBased(_, _, enclosingType?) = mentionedKind {
 				typesToVisit.append(enclosingType.type)
 			}
 			// An entry is read, as is the plain declaration of the type an extension-based entry declares, but the type
-			// either one is declared in an extension of may not be.
-			if let extendedType = unreadExtendedTypesByEntry[mentionedType] ?? unreadExtendedTypesByEntry[type], !Self.isAllowlisted(extendedType) {
+			// either one is declared in an extension of may not be. An entry the mention cannot name is not what it names.
+			let unreadExtendedType = [mentionedType, type]
+				.filter { entryKind(of: $0, mentionedFrom: mentioningModule) != nil }
+				.compactMap { unreadExtendedTypesByEntry[$0] }
+				.first
+			if let extendedType = unreadExtendedType, !Self.isAllowlisted(extendedType) {
 				unreadTypes.insert(extendedType)
 			}
 			let candidates = plainTypeDeclarations.candidates(named: type, mentionedFrom: mentioningModule)
@@ -425,7 +437,7 @@ public struct TypeAccessProof: Sendable {
 				for extendedType in candidates.compactMap(\.extendedType) where isUnread(extendedType, mentionedFrom: mentioningModule) && !Self.isAllowlisted(extendedType) {
 					unreadTypes.insert(extendedType)
 				}
-			} else if kinds[mentionedType] == nil, isUnread(type, mentionedFrom: mentioningModule) {
+			} else if mentionedKind == nil, isUnread(type, mentionedFrom: mentioningModule) {
 				unreadTypes.insert(type)
 			}
 		}
@@ -505,6 +517,15 @@ public struct TypeAccessProof: Sendable {
 	private let unreadExtendedTypesByEntry: [TypeDescription: TypeDescription]
 	private let mentions: [TypeDescription: [Mention]]
 	private let proofs: [TypeDescription: AccessLevel]
+	private let reach: ModuleReach
+
+	/// The kind of the entry of `type` that a mention in `mentioningModule` resolves to: `nil` when there is none, or when
+	/// SafeDI knows that module cannot name it (`ModuleReach.cannotName(_:from:)`), as it drops a plain declaration, so the
+	/// mention names another type of the name, or one SafeDI does not read.
+	private func entryKind(of type: TypeDescription, mentionedFrom mentioningModule: MentioningModule) -> EntryKind? {
+		guard let entry = entries[type], !reach.cannotName(entry, from: mentioningModule.moduleName) else { return nil }
+		return kinds[type]
+	}
 
 	private enum EntryKind: Sendable {
 		/// Outside every extension: exact at its spelled chain.
@@ -694,16 +715,16 @@ public struct TypeAccessProof: Sendable {
 	private func isUnread(_ type: TypeDescription, mentionedFrom mentioningModule: MentioningModule) -> Bool {
 		var remainingType: TypeDescription? = type.withoutGenericArguments
 		while let checkedType = remainingType {
-			guard kinds[checkedType] == nil, plainTypeDeclarations.candidates(named: checkedType, mentionedFrom: mentioningModule).isEmpty else { return false }
+			guard entryKind(of: checkedType, mentionedFrom: mentioningModule) == nil, plainTypeDeclarations.candidates(named: checkedType, mentionedFrom: mentioningModule).isEmpty else { return false }
 			remainingType = checkedType.popNested
 		}
-		return kinds[type] == nil
+		return entryKind(of: type, mentionedFrom: mentioningModule) == nil
 	}
 
 	/// How `type`, a type a parameter names, is proven, or `nil` for a type no declaration SafeDI reads declares, nor a
 	/// type enclosing it, which is `public`.
 	private func cause(of type: TypeDescription, mentionedFrom mentioningModule: MentioningModule, admittedModules: Set<String?>) -> Cause? {
-		if let kind = kinds[type] {
+		if let kind = entryKind(of: type, mentionedFrom: mentioningModule) {
 			let level = proofs[type] ?? .internal
 			switch kind {
 			case .typeDeclaration:
@@ -767,7 +788,7 @@ public struct TypeAccessProof: Sendable {
 		// A type nested in a type SafeDI reads, which it reads no declaration of, is capped by the nearest such type.
 		var enclosingType = type.withoutGenericArguments?.popNested
 		while let prefix = enclosingType {
-			if kinds[prefix] != nil || !plainTypeDeclarations.candidates(named: prefix, mentionedFrom: mentioningModule).isEmpty {
+			if entryKind(of: prefix, mentionedFrom: mentioningModule) != nil || !plainTypeDeclarations.candidates(named: prefix, mentionedFrom: mentioningModule).isEmpty {
 				return cause(of: prefix, mentionedFrom: mentioningModule, admittedModules: admittedModules).map { .enclosedBy(type: type, enclosingType: prefix, cause: $0) }
 			}
 			enclosingType = prefix.popNested
@@ -1029,26 +1050,34 @@ extension TypeAccessProof {
 // MARK: - TypeAccessProof.ModuleReach
 
 extension TypeAccessProof {
-	/// Which declarations of other modules a mention in a module can name: those of the modules the run of `generate` for
-	/// the mentioning module reads (`Generate.moduleNamesRead(byRunOfModuleNamed:dependencyModuleNamesByModuleName:membership:)`),
-	/// at a level that reaches it (`AccessLevel.required(toConstructFrom:declaredIn:isOwnFile:)`). The module whose view
-	/// the declarations are reads every module of the view. The proof and the names a module cannot name
-	/// (`distinguishingTypesUnnameable`) both read a mention through this one rule (`PlainTypeDeclarations.meaning(of:mentionedFrom:)`).
+	/// Which declarations of other modules a mention in a module can name, which it cannot, and which SafeDI cannot tell. A
+	/// mention can name a declaration of a module the run of `generate` for the mentioning module reads
+	/// (`Generate.modulesRead(byRunOfModuleNamed:dependencyModuleNamesByModuleName:membership:)`) at a level that reaches
+	/// it (`AccessLevel.required(toConstructFrom:declaredIn:isOwnFile:)`); the module whose view the declarations are reads
+	/// every module of the view. It cannot name one too narrow for it – `internal`, or `package` in a package SafeDI knows
+	/// differs – nor one of a module its run does not read when SafeDI knows that run reads every module it can import: the
+	/// target graph lists each module's dependencies, direct or not. Otherwise SafeDI cannot tell: a `package` declaration
+	/// across a package boundary SafeDI is not told of, or one of a module the run did not read, which a module of a run
+	/// given module info files can still import (a module beneath one it lists). The proof and the names a module cannot
+	/// name (`distinguishingTypesUnnameable`) both read a mention through this one rule
+	/// (`PlainTypeDeclarations.meaning(of:mentionedFrom:)`), and each settles what SafeDI cannot tell its own safe way: the
+	/// proof counts such a declaration, since it decides how public a generated parameter may be, and the rename reads it
+	/// as one the mention may name, which keeps the name whole.
 	public struct ModuleReach: Sendable {
 		/// SafeDI is not told what each module reads, as `query needs` is not: a mention can name every declaration of
 		/// `package` level or wider.
-		public static let unknown = ModuleReach(viewerModuleName: nil, moduleNamesReadByModuleName: nil, packageNameByModuleName: [:])
+		public static let unknown = ModuleReach(viewerModuleName: nil, modulesReadByModuleName: nil, packageNameByModuleName: [:])
 
 		/// - Parameters:
 		///   - viewer: The module whose view of the declarations this is, which reads every module of the view.
 		///   - instantiables: The declarations of the view, which name each module's package.
 		///   - plainTypeDeclarations: The plain declarations of the view, which name each module's package too.
-		///   - moduleNamesReadByRunOfModule: The modules the run of `generate` for the named module reads, itself included.
+		///   - modulesReadByRunOfModule: The modules the run of `generate` for the named module reads, itself included.
 		public init(
 			viewer: ModuleIdentity,
 			instantiables: some Sequence<Instantiable>,
 			plainTypeDeclarations: [PlainTypeDeclaration],
-			moduleNamesReadByRunOfModule: (_ moduleName: String) -> Set<String>,
+			modulesReadByRunOfModule: (_ moduleName: String) -> ModulesRead,
 		) {
 			var packageNameByModuleName = [String: String?]()
 			// Every declaration of one module records one package.
@@ -1060,79 +1089,110 @@ extension TypeAccessProof {
 			if let viewerModuleName = viewer.moduleName {
 				packageNameByModuleName[viewerModuleName] = viewer.packageName
 			}
-			var moduleNamesReadByModuleName = [String: Set<String>]()
+			var modulesReadByModuleName = [String: ModulesRead]()
 			for moduleName in packageNameByModuleName.keys where moduleName != viewer.moduleName {
-				moduleNamesReadByModuleName[moduleName] = moduleNamesReadByRunOfModule(moduleName)
+				modulesReadByModuleName[moduleName] = modulesReadByRunOfModule(moduleName)
 			}
-			self.init(viewerModuleName: viewer.moduleName, moduleNamesReadByModuleName: moduleNamesReadByModuleName, packageNameByModuleName: packageNameByModuleName)
+			self.init(viewerModuleName: viewer.moduleName, modulesReadByModuleName: modulesReadByModuleName, packageNameByModuleName: packageNameByModuleName)
 		}
 
-		private init(viewerModuleName: String?, moduleNamesReadByModuleName: [String: Set<String>]?, packageNameByModuleName: [String: String?]) {
+		private init(viewerModuleName: String?, modulesReadByModuleName: [String: ModulesRead]?, packageNameByModuleName: [String: String?]) {
 			self.viewerModuleName = viewerModuleName
-			self.moduleNamesReadByModuleName = moduleNamesReadByModuleName
+			self.modulesReadByModuleName = modulesReadByModuleName
 			self.packageNameByModuleName = packageNameByModuleName
 		}
 
 		/// How a mention in the module named `mentioningModuleName`, or in a module whose name SafeDI does not know, reaches
 		/// the declarations of a type's name in the module named `declaringModuleName`, the narrowest of which is at `level`.
 		public func reach(ofDeclarationsIn declaringModuleName: String, at level: AccessLevel, from mentioningModuleName: String?) -> Reach {
-			guard let moduleNamesReadByModuleName,
+			guard let modulesReadByModuleName,
 			      let mentioningModuleName,
 			      mentioningModuleName != declaringModuleName
 			else { return .nameable }
-			guard mentioningModuleName == viewerModuleName || moduleNamesReadByModuleName[mentioningModuleName]?.contains(declaringModuleName) != false else {
-				return .unreachable
-			}
 			let mentioningModule = ModuleIdentity(moduleName: mentioningModuleName, packageName: packageNameByModuleName[mentioningModuleName] ?? nil)
 			let declaringModule = ModuleIdentity(moduleName: declaringModuleName, packageName: packageNameByModuleName[declaringModuleName] ?? nil)
+			let reachByLevel: Reach
 			if level.satisfies(AccessLevel.required(toConstructFrom: mentioningModule, declaredIn: declaringModule, isOwnFile: false)) {
-				return .nameable
+				reachByLevel = .nameable
 			} else if level.satisfies(.package), mentioningModule.packageName == nil || declaringModule.packageName == nil {
-				return .acrossUnknownPackageBoundary
+				reachByLevel = .undetermined
 			} else {
 				return .unreachable
 			}
+			// The viewer reads every module of its view.
+			guard mentioningModuleName != viewerModuleName,
+			      let modulesRead = modulesReadByModuleName[mentioningModuleName],
+			      !modulesRead.moduleNames.contains(declaringModuleName)
+			else { return reachByLevel }
+			return modulesRead.includesEveryModuleItCanImport ? .unreachable : .undetermined
+		}
+
+		/// Whether SafeDI knows that a mention in the module named `mentioningModuleName` cannot name `entry`, the
+		/// `@Instantiable` declaration of the type the mention names, read as `PlainTypeDeclarations.meaning(of:mentionedFrom:)`
+		/// reads a plain declaration: at the level its type has by itself, which is unknown, so `open`, for an extension's.
+		func cannotName(_ entry: Instantiable, from mentioningModuleName: String?) -> Bool {
+			guard let declaringModuleName = entry.moduleName else { return false }
+			return reach(ofDeclarationsIn: declaringModuleName, at: AccessLevel.effective(ofTypeDeclaredBy: entry), from: mentioningModuleName) == .unreachable
 		}
 
 		/// How a mention reaches the declarations of a module.
 		public enum Reach: Sendable {
 			/// The mention can name them.
 			case nameable
-			/// The mention can name them, which are `package`, if the two modules share a package, which SafeDI is not told.
-			case acrossUnknownPackageBoundary
-			/// The mention cannot name them: the mentioning module does not read their module, or they are too narrow.
+			/// SafeDI cannot tell whether the mention can name them: they are `package`, across a package boundary SafeDI is not
+			/// told of, or the run of the mentioning module does not read their module, which the module may still import.
+			case undetermined
+			/// SafeDI knows the mention cannot name them: they are too narrow, or the mentioning module cannot import their
+			/// module.
 			case unreachable
+		}
+
+		/// The modules the run of `generate` for one module reads, and whether SafeDI knows the module can import no other.
+		public struct ModulesRead: Sendable {
+			public init(moduleNames: Set<String>, includesEveryModuleItCanImport: Bool) {
+				self.moduleNames = moduleNames
+				self.includesEveryModuleItCanImport = includesEveryModuleItCanImport
+			}
+
+			/// The modules the run reads, the module itself included.
+			public let moduleNames: Set<String>
+			/// Whether the module can import no module SafeDI reads but `moduleNames`: true under the target graph, which lists
+			/// the module's dependencies, direct or not; false for a run given module info files, whose module can import a
+			/// module beneath one it lists, and for a module SafeDI is told nothing of.
+			public let includesEveryModuleItCanImport: Bool
 		}
 
 		private let viewerModuleName: String?
 		/// The modules the run of each module other than the viewer reads, or `nil` when SafeDI is not told.
-		private let moduleNamesReadByModuleName: [String: Set<String>]?
+		private let modulesReadByModuleName: [String: ModulesRead]?
 		private let packageNameByModuleName: [String: String?]
 	}
 
 	/// What a mention of a type's name in one module means, by the one rule the proof and `distinguishingTypesUnnameable`
-	/// read (`PlainTypeDeclarations.meaning(of:mentionedFrom:)`).
+	/// read (`PlainTypeDeclarations.meaning(of:mentionedFrom:)`): the declarations it can name, those SafeDI cannot tell it
+	/// can, and, by omission, those SafeDI knows it cannot. Each reader settles what SafeDI cannot tell its own safe way.
 	public struct MentionMeaning: Sendable {
 		/// The declarations the mention may name, in the order of their files and within a file in source order: the
-		/// module's own, or else the declarations `package` or wider of the modules it can reach (`ModuleReach`), and those
-		/// of no known module.
+		/// module's own, or else the declarations `package` or wider of every module but those SafeDI knows it cannot name
+		/// (`ModuleReach.Reach.unreachable`), and those of no known module. The proof counts each: a declaration it drops
+		/// could make a generated parameter wider than the type it takes.
 		public let declarations: [PlainTypeDeclaration]
 		/// The modules whose declaration of the name the mention can name.
 		public let moduleNames: Set<String>
-		/// The modules whose `package` declaration the mention can name if they share a package with the module that writes
-		/// it, which SafeDI is not told.
-		public let moduleNamesAcrossUnknownPackageBoundary: Set<String>
+		/// The modules whose declaration of the name SafeDI cannot tell whether the mention can name
+		/// (`ModuleReach.Reach.undetermined`).
+		public let undeterminedModuleNames: Set<String>
 		/// Whether a declaration of the name is in a file SafeDI knows no module of, which the mention may name.
 		public let mayMeanDeclarationOfUnknownModule: Bool
 
-		/// The modules whose declaration of the name the mention may name.
+		/// The modules whose declaration of the name the mention may name, which the rename reads as named.
 		public var moduleNamesItMayMean: Set<String> {
-			moduleNames.union(moduleNamesAcrossUnknownPackageBoundary)
+			moduleNames.union(undeterminedModuleNames)
 		}
 
 		/// Whether SafeDI records one module's declaration of the name that the mention can certainly name, and no other.
 		public var isSingleKnownDeclaration: Bool {
-			moduleNames.count == 1 && moduleNamesAcrossUnknownPackageBoundary.isEmpty && !mayMeanDeclarationOfUnknownModule
+			moduleNames.count == 1 && undeterminedModuleNames.isEmpty && !mayMeanDeclarationOfUnknownModule
 		}
 	}
 }
@@ -1216,9 +1276,9 @@ extension TypeAccessProof {
 		}
 
 		/// What a mention of `type` in a declaration of the module of `mentioningModule` means: the declarations
-		/// `declarationsNamed(_:mentionedFrom:)` finds by name, less those of another module the mentioning module cannot
-		/// name (`ModuleReach`), with the modules of those it keeps. The declarations of one module are kept or dropped
-		/// together, by the narrowest of them.
+		/// `declarationsNamed(_:mentionedFrom:)` finds by name, less those of another module SafeDI knows the mentioning
+		/// module cannot name (`ModuleReach`), with the modules of those it keeps, apart by whether SafeDI can tell the
+		/// mention names them. The declarations of one module are kept or dropped together, by the narrowest of them.
 		func meaning(of type: TypeDescription, mentionedFrom mentioningModule: MentioningModule) -> MentionMeaning {
 			let declarations = declarationsNamed(type, mentionedFrom: mentioningModule)
 			var levelByModuleName = [String: AccessLevel]()
@@ -1228,23 +1288,23 @@ extension TypeAccessProof {
 				}
 			}
 			var moduleNames = Set<String>()
-			var moduleNamesAcrossUnknownPackageBoundary = Set<String>()
+			var undeterminedModuleNames = Set<String>()
 			for (moduleName, level) in levelByModuleName {
 				switch reach.reach(ofDeclarationsIn: moduleName, at: level, from: mentioningModule.moduleName) {
 				case .nameable:
 					moduleNames.insert(moduleName)
-				case .acrossUnknownPackageBoundary:
-					moduleNamesAcrossUnknownPackageBoundary.insert(moduleName)
+				case .undetermined:
+					undeterminedModuleNames.insert(moduleName)
 				case .unreachable:
 					break
 				}
 			}
 			return MentionMeaning(
 				declarations: declarations.filter { declaration in
-					declaration.moduleName.map { moduleNames.contains($0) || moduleNamesAcrossUnknownPackageBoundary.contains($0) } ?? true
+					declaration.moduleName.map { moduleNames.contains($0) || undeterminedModuleNames.contains($0) } ?? true
 				},
 				moduleNames: moduleNames,
-				moduleNamesAcrossUnknownPackageBoundary: moduleNamesAcrossUnknownPackageBoundary,
+				undeterminedModuleNames: undeterminedModuleNames,
 				mayMeanDeclarationOfUnknownModule: declarations.contains { $0.moduleName == nil },
 			)
 		}

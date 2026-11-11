@@ -347,7 +347,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 
 	/// The name the declaring module gives this declaration's concrete type, when the run that read it spells the type
 	/// with the module's name, as `ModA.Store`, because another module also declares a type of that name and the module the
-	/// run looks from cannot name this one (`distinguishingTypesUnnameable(from:among:plainTypeDeclarations:moduleNamesRead:mayReadUnrecordedPublicType:)`).
+	/// run looks from cannot name this one (`distinguishingTypesUnnameable(from:among:plainTypeDeclarations:modulesRead:)`).
 	/// `nil` otherwise. Never recorded in a `.safedi` file or scan's cache: it describes one run's view of the declaration.
 	public var declaredName: TypeDescription?
 

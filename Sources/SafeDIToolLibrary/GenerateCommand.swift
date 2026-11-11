@@ -327,8 +327,8 @@ public struct Generate: AsyncParsableCommand {
 		let plainTypeDeclarationsReadByThisRun = dependentModuleInfo.flatMap(\.plainTypeDeclarations) + module.plainTypeDeclarations
 		let unnormalizedInstantiablesReadByThisRun = dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
 		let ownModuleIdentity = ModuleIdentity(moduleName: module.moduleName, packageName: module.packageName)
-		func moduleNamesRead(byRunOfModuleNamed moduleName: String) -> Set<String> {
-			Self.moduleNamesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
+		func modulesRead(byRunOfModuleNamed moduleName: String) -> TypeAccessProof.ModuleReach.ModulesRead {
+			Self.modulesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
 		}
 		let normalizedInstantiables = distinguishingTypesUnnameable(
 			from: ownModuleIdentity,
@@ -339,11 +339,11 @@ public struct Generate: AsyncParsableCommand {
 					viewer: ownModuleIdentity,
 					instantiables: unnormalizedInstantiablesReadByThisRun,
 					plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
-					moduleNamesReadByRunOfModule: moduleNamesRead(byRunOfModuleNamed:),
+					modulesReadByRunOfModule: modulesRead(byRunOfModuleNamed:),
 				),
 			),
 			plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
-			moduleNamesRead: moduleNamesRead(byRunOfModuleNamed:),
+			modulesRead: modulesRead(byRunOfModuleNamed:),
 		)
 		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
 		let listedModuleNames = Set(listedModuleInfoFiles.map(\.file.moduleName))
@@ -425,8 +425,8 @@ public struct Generate: AsyncParsableCommand {
 					FileManager.default.isReadableFile(atPath: comparisonFilePaths.projectFilePath(of: filePath).path)
 				},
 				additionalMocksToGenerateLocation: sourceConfiguration?.declarationLocation,
-				moduleNamesReadByRunOfModule: { [membership] moduleName in
-					Self.moduleNamesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
+				modulesReadByRunOfModule: { [membership] moduleName in
+					Self.modulesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
 				},
 			),
 			seams: seamResolution,
@@ -1044,18 +1044,18 @@ public struct Generate: AsyncParsableCommand {
 		/// `instantiables` as the module named `moduleName` resolves them, and `plainTypeDeclarations` that they read.
 		func resolved(_ instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration], fromModuleNamed moduleName: String) throws -> [TypeDescription: Instantiable] {
 			let viewer = ModuleIdentity(moduleName: moduleName, packageName: instantiables.first { $0.moduleName == moduleName }?.packageName)
-			func moduleNamesRead(byRunOfModuleNamed moduleName: String) -> Set<String> {
-				Self.moduleNamesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
+			func modulesRead(byRunOfModuleNamed moduleName: String) -> TypeAccessProof.ModuleReach.ModulesRead {
+				Self.modulesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
 			}
 			return try resolveSafeDIFulfilledTypes(instantiables: distinguishingTypesUnnameable(
 				from: viewer,
 				among: normalizingInstantiableTypes(
 					of: instantiables,
 					plainTypeDeclarations: plainTypeDeclarations,
-					reach: TypeAccessProof.ModuleReach(viewer: viewer, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, moduleNamesReadByRunOfModule: moduleNamesRead(byRunOfModuleNamed:)),
+					reach: TypeAccessProof.ModuleReach(viewer: viewer, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, modulesReadByRunOfModule: modulesRead(byRunOfModuleNamed:)),
 				),
 				plainTypeDeclarations: plainTypeDeclarations,
-				moduleNamesRead: moduleNamesRead(byRunOfModuleNamed:),
+				modulesRead: modulesRead(byRunOfModuleNamed:),
 			))
 		}
 		var generatedSeams = Set<TypeDescription>()
@@ -1278,16 +1278,20 @@ public struct Generate: AsyncParsableCommand {
 	/// module names (`dependencyModuleNamesByModuleName`), or else, under the target graph, every module the module
 	/// depends on, directly or not, whose files that run's input CSV lists (`visibleModuleNames(from:in:)`). These are
 	/// the modules whose declarations `seamResolution` computes the signature of a seam the module declares from
-	/// (`visibleDeclarations(ofModuleNamed:)`).
-	private static func moduleNamesRead(
+	/// (`visibleDeclarations(ofModuleNamed:)`). Only the target graph lists every module the module can import: a module
+	/// of a run given module info files can import a module beneath one it lists, which its run does not read.
+	private static func modulesRead(
 		byRunOfModuleNamed moduleName: String,
 		dependencyModuleNamesByModuleName: [String: [String]],
 		membership: ModuleMembership?,
-	) -> Set<String> {
+	) -> TypeAccessProof.ModuleReach.ModulesRead {
 		if let dependencyModuleNames = dependencyModuleNamesByModuleName[moduleName] {
-			Set([moduleName] + dependencyModuleNames)
+			TypeAccessProof.ModuleReach.ModulesRead(moduleNames: Set([moduleName] + dependencyModuleNames), includesEveryModuleItCanImport: false)
 		} else {
-			visibleModuleNames(from: moduleName, in: membership)
+			TypeAccessProof.ModuleReach.ModulesRead(
+				moduleNames: visibleModuleNames(from: moduleName, in: membership),
+				includesEveryModuleItCanImport: membership?.dependencyModuleNames(ofModuleNamed: moduleName) != nil,
+			)
 		}
 	}
 

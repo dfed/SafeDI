@@ -416,7 +416,7 @@ struct ParsedQueryModule {
 			isOwnFile: { filePath in attributionsByFilePath[filePath]?.moduleName == moduleName },
 			isReadableFile: { _ in false },
 			additionalMocksToGenerateLocation: nil,
-			moduleNamesReadByRunOfModule: nil,
+			modulesReadByRunOfModule: nil,
 		)
 	}
 }
