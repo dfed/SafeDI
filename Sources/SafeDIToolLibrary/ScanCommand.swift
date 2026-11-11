@@ -263,10 +263,12 @@ public func performScan(
 	// Files are parsed in parallel and their scans arrive in the order parsing finished. Ordering them by
 	// path makes the cache the same bytes whenever the inputs are the same.
 	let sortedFileScans = fileScans.sorted { $0.path < $1.path }
+	// SPIKE: see SpikeAccess.swift.
+	let spikeFilter = SpikeAccess.scanCacheFilter(inputSourcesFile: inputSourcesFile)
 	let sortedAdditionalFileScans = additionalFileScans.sorted { $0.fileScan.path < $1.fileScan.path }
 	let cached = CachedScannedModuleInfo(
-		moduleInfo: ModuleInfo(sortedFileScans.filter { !$0.consultsCompilationConditions }.map(normalized)),
-		conditionSensitiveFileScans: sortedFileScans.filter(\.consultsCompilationConditions).map(cached),
+		moduleInfo: ModuleInfo(sortedFileScans.filter { !$0.consultsCompilationConditions }.map(normalized).map(spikeFilter)),
+		conditionSensitiveFileScans: sortedFileScans.filter(\.consultsCompilationConditions).map { CachedFileScan(scannedPath: $0.path, fileScan: spikeFilter(normalized($0))) },
 		additionalModuleInfo: ModuleInfo(sortedAdditionalFileScans.map(\.fileScan).filter { !$0.consultsCompilationConditions }),
 		additionalConditionSensitiveFileScans: sortedAdditionalFileScans.filter(\.fileScan.consultsCompilationConditions),
 		projectRoot: projectFilePaths.reportedProjectRoot,

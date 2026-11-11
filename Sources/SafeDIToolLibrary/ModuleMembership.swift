@@ -193,6 +193,11 @@ extension ModuleInfo {
 	}
 
 	/// This module with `instantiables` and `plainTypeDeclarations`, generated code for the module `moduleName` names.
+	/// SPIKE: see SpikeAccess.swift.
+	func spikeReplacing(instantiables: [Instantiable]) -> ModuleInfo {
+		replacing(instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, moduleName: moduleName, packageName: packageName, dependencyModuleNames: dependencyModuleNames)
+	}
+
 	private func replacing(
 		instantiables: [Instantiable],
 		plainTypeDeclarations: [PlainTypeDeclaration],

@@ -296,13 +296,15 @@ public struct Generate: AsyncParsableCommand {
 		// A module given twice, at two paths, is read once: the merged view below rejects two files of one module whose
 		// declarations differ.
 		var readModuleNames = Set<String>()
-		let dependentModuleInfo = dependentModuleInfoFiles
+		let unprunedDependentModuleInfo = dependentModuleInfoFiles
 			.filter { readModuleNames.insert($0.file.moduleName).inserted }
 			.map(\.file.module)
-		let module = parsedModuleInfo.declared(
+		let unprunedModule = parsedModuleInfo.declared(
 			by: membership,
 			dependingOn: dependentModuleInfoFiles.map(\.file.moduleName),
 		)
+		// SPIKE: see SpikeAccess.swift.
+		let (module, dependentModuleInfo) = SpikeAccess.pruned(module: unprunedModule, dependentModules: unprunedDependentModuleInfo)
 		// The modules the given module info files describe, and the modules their views carry, each once.
 		let moduleInfoView = try MergedModuleInfoView(
 			directModules: dependentModuleInfoFiles,
@@ -317,6 +319,15 @@ public struct Generate: AsyncParsableCommand {
 		)
 		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
 		let typeDescriptionToFulfillingInstantiableMap = try resolveSafeDIFulfilledTypes(instantiables: normalizedInstantiables)
+		// SPIKE: see SpikeAccess.swift.
+		SpikeAccess.record(
+			unnormalized: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables,
+			normalized: normalizedInstantiables,
+			map: typeDescriptionToFulfillingInstantiableMap,
+			emitter: ModuleIdentity(moduleName: module.moduleName, packageName: module.packageName),
+			plainTypeDeclarations: dependentModuleInfo.flatMap(\.plainTypeDeclarations) + module.plainTypeDeclarations,
+			additionalMocksToGenerate: sourceConfiguration?.additionalMocksToGenerate ?? [],
+		)
 		// Generated code never imports the module it compiles in, which the compiler warns at: a file read from a module
 		// above this one, through `additionalDirectoriesToInclude`, can import it. The `.safedi` keeps every import,
 		// since a module that reads it imports this one rightly. A run that names no module keeps the import, so a target
@@ -763,7 +774,9 @@ public struct Generate: AsyncParsableCommand {
 		// read; and only when its bytes change, so a dependent whose build compares modification times reruns only when
 		// what the file describes changed.
 		if let moduleInfoDestination {
-			try ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, view: moduleInfoView.view)
+			// SPIKE: see SpikeAccess.swift.
+			let moduleForFile = SpikeAccess.moduleForFile(module, normalizedOwn: Array(normalizedInstantiables.suffix(module.instantiables.count)), map: typeDescriptionToFulfillingInstantiableMap)
+			try ModuleInfoFile(module: moduleForFile, moduleName: moduleInfoDestination.moduleName, view: moduleInfoView.view)
 				.moduleInfoData
 				.writeIfChanged(toPath: moduleInfoDestination.path)
 		}
@@ -1588,7 +1601,8 @@ public struct Generate: AsyncParsableCommand {
 			let exemptTypeNames = Set((moduleInfo.instantiables + cachedFileScans.flatMap(\.fileScan.instantiables) + refreshedFileScans.flatMap(\.instantiables)).compactMap { instantiable in
 				instantiable.concreteInstantiable.popNested == nil ? instantiable.concreteInstantiable.outermostTypeName : nil
 			}).subtracting(guardedTypeNames)
-			guard mentionedTypeNames(of: moduleInfo.instantiables + refreshedFileScans.flatMap(\.instantiables)).subtracting(exemptTypeNames)
+			// SPIKE: a pruned cache mentions fewer types than scan's walk did, which is no reason to parse again.
+			guard SpikeAccess.prunesScanCache || mentionedTypeNames(of: moduleInfo.instantiables + refreshedFileScans.flatMap(\.instantiables)).subtracting(exemptTypeNames)
 				== keptTypeNames.mentionedTypeNames.subtracting(exemptTypeNames)
 			else {
 				return nil

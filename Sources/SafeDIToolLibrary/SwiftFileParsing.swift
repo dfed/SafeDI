@@ -574,6 +574,26 @@ public struct FileScan: Codable, Sendable {
 		)
 	}
 
+	/// SPIKE: see SpikeAccess.swift. This scan, contributing `instantiables`.
+	func spikeReplacing(instantiables: [Instantiable]) -> FileScan {
+		FileScan(
+			path: path,
+			imports: imports,
+			mockImports: mockImports,
+			instantiables: instantiables,
+			configurations: configurations,
+			encounteredUnexpectedNodes: encounteredUnexpectedNodes,
+			conditionalCompilationDecisions: conditionalCompilationDecisions,
+			consultedCompilationConditions: consultedCompilationConditions,
+			importSegments: importSegments,
+			importOnlyConsultedCompilationConditions: importOnlyConsultedCompilationConditions,
+			outputFileDeclarations: outputFileDeclarations,
+			plainTypeDeclarations: plainTypeDeclarations,
+			plainTypeDeclarationDecisions: plainTypeDeclarationDecisions,
+			keptGuardedPlainTypeNames: keptGuardedPlainTypeNames,
+		)
+	}
+
 	/// This scan, contributing `imports` and `mockImports`.
 	fileprivate func replacingImports(with imports: [ImportStatement], mockImports: [ImportStatement]) -> FileScan {
 		FileScan(
