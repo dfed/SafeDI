@@ -1,0 +1,3 @@
+WHAT="A staged builder's last stage spelled through a generic typealias generated inside the staged scope type, the forwarded type substituted for its parameter: T forwards a function, which is stored past the call and called, and the alias's value is captured by a @Sendable function. Decides whether Instantiator.SeamBuilder and SendableSeamBuilder can go"
+EXPECT=run
+REQUIRED=yes
