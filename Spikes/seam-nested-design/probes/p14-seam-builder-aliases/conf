@@ -1,0 +1,3 @@
+WHAT="The builder aliases on Instantiator, in the spellings generated code uses: each as an escaping initializer parameter, a T that forwards a function which is called and stored past the call, a @Sendable function capturing the Sendable alias's value, and @escaping where a fill writes it"
+EXPECT=run
+REQUIRED=yes

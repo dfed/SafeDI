@@ -26,11 +26,15 @@ jobs:
           } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Run Design Probes
         if: ${{ !cancelled() }}
+        # bash for pipefail: run.sh exits nonzero when a required probe fails, and that status must outlive the pipe to tee.
+        shell: bash
         run: |
           {
             echo '## Design probes'
             echo
             echo '```'
-            bash Spikes/seam-nested-design/run.sh
+            status=0
+            bash Spikes/seam-nested-design/run.sh || status=$?
             echo '```'
+            exit "$status"
           } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
