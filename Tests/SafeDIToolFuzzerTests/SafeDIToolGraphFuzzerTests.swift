@@ -4284,13 +4284,13 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 12, 14, 18, 25, 40, 59, 62, 70, 97, 99, 133, 161, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xD2251D57BFB55ACE
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x7B6CAE54EBE0F468
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x8430001C5373C403
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x379D8405C9FA4FF3
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -4544,7 +4544,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// seam tests' draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 151, 153, 163, 180, 196, 277, 298, 326, 605, 609, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x193806AE4DD87E1B
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x8DAB09C5A80A95D1
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -4749,13 +4749,6 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
 			seeds: labelSortedPassThroughSeedsWhoseMockParametersAlsoChange,
 		),
-		// Seeds `knownIssues` lists under another shape, whose graphs the seam's draw changes so that they fail this one:
-		// a configuration field follows the order of type names and of type names against wrappers' names.
-		GraphFuzzerKnownIssue(
-			reason: "\(lazyCycleConfigurationFieldReason), in a graph the base corpus lists under another shape",
-			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [311, 383, 390, 431, 448, 836, 886, 912, 940],
-		),
 	]
 
 	private static let labelSortedPassThroughReason = "A seam's pass-through parameters are sorted by label, so reversing the labels reorders its generated initializer and the calls of it"
@@ -4765,7 +4758,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Seeds of `knownIssues` that the seam corpus's run observed failing with the seam's own shape, or not failing
 	/// at all, since the seam's draw changed their graphs; the inherited lists leave them out. Observed, not derived: a
 	/// seed here that a run finds failing its inherited shape again is a new failure, and goes back.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 309, 311, 364, 371, 381, 383, 390, 431, 434, 448, 476, 525, 545, 632, 714, 728, 735, 768, 774, 786, 808, 836, 840, 847, 886, 903, 912, 940]
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 309, 364, 371, 381, 434, 476, 525, 545, 632, 714, 728, 735, 768, 774, 786, 808, 840, 847, 903]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
@@ -5026,39 +5019,40 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: mockParameterAndFieldOrderReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
 			seeds: [
-				3, 6, 36, 45, 55, 131, 157, 209, 281, 300, 311, 371, 380, 381, 383,
-				390, 431, 434, 448, 450, 476, 515, 541, 545, 548, 593, 630, 680, 714, 728, 774,
-				785, 786, 808, 836, 840, 847, 886, 903, 912, 940, 975, 1_029, 1_035, 1_042, 1_044, 1_061,
-				1_064, 1_072, 1_084, 1_092, 1_139, 1_140, 1_147, 1_185, 1_215, 1_217, 1_236, 1_300, 1_322, 1_329, 1_335, 1_352,
-				1_362, 1_369, 1_372, 1_432, 1_433, 1_441, 1_453, 1_464, 1_492, 1_496, 1_504, 1_524, 1_535, 1_563, 1_567, 1_633,
-				1_646, 1_664, 1_675, 1_708, 1_742, 1_781, 1_784, 1_795, 1_804, 1_817, 1_853, 1_867, 1_896, 1_938, 2_017, 2_051,
-				2_057, 2_083, 2_084, 2_123, 2_149, 2_152, 2_165, 2_211, 2_234, 2_277, 2_296, 2_316, 2_325, 2_335, 2_337, 2_389,
-				2_432, 2_437, 2_444, 2_484, 2_553, 2_555, 2_577, 2_637, 2_741, 2_742, 2_791, 2_808, 2_841, 2_845, 2_914, 2_916,
-				3_064, 3_074, 3_075, 3_091, 3_160, 3_183, 3_225, 3_241, 3_252, 3_306, 3_329, 3_344, 3_361, 3_430, 3_439,
-				3_470, 3_491, 3_504, 3_506, 3_513, 3_533, 3_534, 3_537, 3_577, 3_582, 3_584, 3_588, 3_589, 3_596, 3_600, 3_602,
-				3_620, 3_648, 3_661, 3_699, 3_707, 3_715, 3_750, 3_823, 3_843, 3_994, 4_015, 4_044, 4_068, 4_090, 4_102, 4_107,
-				4_110, 4_125, 4_156, 4_191, 4_192, 4_196, 4_213, 4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344,
-				4_371, 4_393, 4_404, 4_420, 4_496, 4_515, 4_534, 4_541, 4_545, 4_613, 4_619, 4_634, 4_637, 4_648, 4_664, 4_707,
-				4_716, 4_729, 4_775, 4_834, 4_857, 4_859, 4_865, 4_891, 4_904, 4_922, 4_944, 4_947, 4_955, 4_963, 4_996,
+				6, 36, 45, 55, 157, 209, 281, 300, 371, 380, 381, 434, 476, 541, 548, 593,
+				774, 808, 840, 903, 1_042, 1_140, 1_185, 1_217, 1_300, 1_335, 1_369, 1_432, 1_535, 1_563, 1_646, 1_664,
+				1_675, 1_742, 1_795, 1_817, 1_853, 1_867, 2_051, 2_057, 2_083, 2_149, 2_296, 2_337, 2_484, 2_742, 2_791, 2_841,
+				2_916, 3_160, 3_470, 3_491, 3_513, 3_534, 3_537, 3_589, 3_600, 3_661, 3_843, 3_994, 4_015, 4_090, 4_191, 4_192,
+				4_196, 4_541, 4_613, 4_634, 4_648, 4_664, 4_729, 4_834, 4_857, 4_865, 4_891, 4_947, 4_955,
 			],
 		),
 		GraphFuzzerKnownIssue(
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [
-				35, 107, 114, 168, 223, 241, 338, 364, 473, 525, 567, 595, 617, 632, 732, 735,
-				751, 768, 948, 987, 991, 1_004, 1_075, 1_145, 1_244, 1_289, 1_531, 1_602, 1_695, 1_857, 1_970, 1_972,
-				2_013, 2_249, 2_270, 2_282, 2_287, 2_348, 2_403, 2_430, 2_456, 2_518, 2_630, 2_667, 2_704, 2_732, 2_835, 2_874,
-				2_902, 3_134, 3_180, 3_215, 3_221, 3_298, 3_345, 3_526, 3_645, 3_723, 3_741, 3_775, 3_776, 3_805, 3_826, 3_850,
-				3_894, 3_915, 4_117, 4_122, 4_177, 4_206, 4_396, 4_428, 4_549, 4_567, 4_640, 4_642, 4_666, 4_717, 4_776, 4_781,
-				4_783, 4_786, 4_795, 4_918,
+				3, 35, 107, 114, 131, 168, 223, 241, 311, 338, 364, 383, 390, 431, 448, 450,
+				473, 515, 525, 545, 567, 595, 617, 630, 680, 714, 728, 732, 735, 751, 768, 785,
+				786, 836, 847, 886, 912, 940, 948, 975, 987, 991, 1_004, 1_029, 1_044, 1_061, 1_064, 1_072,
+				1_075, 1_084, 1_092, 1_139, 1_145, 1_147, 1_215, 1_236, 1_244, 1_289, 1_322, 1_329, 1_352, 1_362, 1_372, 1_433,
+				1_441, 1_453, 1_464, 1_492, 1_504, 1_524, 1_531, 1_567, 1_602, 1_633, 1_695, 1_708, 1_781, 1_784, 1_804, 1_857,
+				1_896, 1_938, 1_972, 2_013, 2_017, 2_084, 2_123, 2_152, 2_165, 2_234, 2_249, 2_270, 2_277, 2_282, 2_287, 2_316,
+				2_325, 2_335, 2_348, 2_389, 2_403, 2_430, 2_432, 2_437, 2_444, 2_456, 2_555, 2_577, 2_630, 2_637, 2_732, 2_808,
+				2_835, 2_845, 2_874, 2_914, 3_064, 3_074, 3_075, 3_091, 3_134, 3_180, 3_183, 3_215, 3_221, 3_241, 3_252, 3_298,
+				3_306, 3_329, 3_344, 3_345, 3_361, 3_430, 3_504, 3_506, 3_526, 3_533, 3_577, 3_582, 3_584, 3_588, 3_596, 3_602,
+				3_620, 3_645, 3_648, 3_699, 3_707, 3_715, 3_723, 3_741, 3_750, 3_775, 3_776, 3_805, 3_823, 3_826, 3_850, 3_894,
+				3_915, 4_044, 4_068, 4_102, 4_107, 4_110, 4_117, 4_122, 4_125, 4_156, 4_177, 4_206, 4_213, 4_215, 4_217, 4_227,
+				4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_371, 4_393, 4_396, 4_404, 4_420, 4_428, 4_515, 4_534, 4_545, 4_549,
+				4_567, 4_619, 4_637, 4_640, 4_642, 4_666, 4_707, 4_716, 4_717, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_859,
+				4_904, 4_918, 4_922, 4_944, 4_963, 4_996,
 			],
 		),
 		// A graph that shows both reasons, under one renaming or across them, is documented only by the shape that names both.
 		GraphFuzzerKnownIssue(
 			reason: mockParameterAndFieldOrderAndLazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [77, 3_023],
+			seeds: [
+				77, 632, 1_035, 1_496, 1_970, 2_211, 2_518, 2_553, 2_667, 2_704, 2_741, 2_902, 3_023, 3_225, 3_439, 4_496,
+			],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree",
