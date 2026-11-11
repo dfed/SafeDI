@@ -5,17 +5,26 @@ import SafeDI
 final class Impl: Service {
 	let name: String
 	let maker: ErasedInstantiator<String, any Service>
-	init(name: String, maker: ErasedInstantiator<String, any Service>) { self.name = name; self.maker = maker }
-	var tag: String { name.count < 3 ? maker.instantiate(name + "!").tag : "Impl(\(name))" }
+	init(name: String, maker: ErasedInstantiator<String, any Service>) {
+		self.name = name; self.maker = maker
+	}
+
+	var tag: String {
+		name.count < 3 ? maker.instantiate(name + "!").tag : "Impl(\(name))"
+	}
 }
-struct PairImpl: Service { let name: String; let count: Int; var tag: String { "Pair(\(name),\(count))" } }
+
+struct PairImpl: Service { let name: String; let count: Int; var tag: String {
+	"Pair(\(name),\(count))"
+} }
 struct PlainImpl: Service { let tag: String }
 nonisolated(unsafe) var lazyBuilds = 0
 
-@main struct App {
+@main
+struct App {
 	static func main() {
 		// The generated caller: each fill is the place's builder function as today, called instead of wrapped.
-		func __safeDI_serviceBuilder_Feature_maker(_ scope: Feature.SafeDIScope_Service.maker_Values, _ __safeDI_forwarded: String) -> any Service {
+		func __safeDI_serviceBuilder_Feature_maker(_: Feature.SafeDIScope_Service.maker_Values, _ __safeDI_forwarded: String) -> any Service {
 			func __safeDI_maker(name: String) -> Impl {
 				let maker = ErasedInstantiator<String, any Service> {
 					__safeDI_maker(name: $0)
@@ -24,19 +33,19 @@ nonisolated(unsafe) var lazyBuilds = 0
 			}
 			return __safeDI_maker(name: __safeDI_forwarded)
 		}
-		func __safeDI_serviceBuilder_Feature_pairMaker(_ scope: Feature.SafeDIScope_Service.pairMaker_Values, _ __safeDI_forwarded: (name: String, count: Int)) -> any Service {
+		func __safeDI_serviceBuilder_Feature_pairMaker(_: Feature.SafeDIScope_Service.pairMaker_Values, _ __safeDI_forwarded: (name: String, count: Int)) -> any Service {
 			func __safeDI_pairMaker(name: String, count: Int) -> PairImpl {
 				PairImpl(name: name, count: count)
 			}
 			return __safeDI_pairMaker(name: __safeDI_forwarded.name, count: __safeDI_forwarded.count)
 		}
-		func __safeDI_serviceBuilder_Feature_plainMaker(_ scope: Feature.SafeDIScope_Service.plainMaker_Values) -> any Service {
+		func __safeDI_serviceBuilder_Feature_plainMaker(_: Feature.SafeDIScope_Service.plainMaker_Values) -> any Service {
 			func __safeDI_plainMaker() -> PlainImpl {
 				PlainImpl(tag: "plain")
 			}
 			return __safeDI_plainMaker()
 		}
-		func __safeDI_serviceBuilder_Feature_lazy(_ scope: Feature.SafeDIScope_Service.lazy_Values) -> any Service {
+		func __safeDI_serviceBuilder_Feature_lazy(_: Feature.SafeDIScope_Service.lazy_Values) -> any Service {
 			func __safeDI_lazy() -> PlainImpl {
 				lazyBuilds += 1
 				return PlainImpl(tag: "lazy")

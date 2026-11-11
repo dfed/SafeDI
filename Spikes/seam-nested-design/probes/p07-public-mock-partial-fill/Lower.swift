@@ -2,16 +2,21 @@
 import SafeDI
 
 public protocol Service: Sendable { var tag: String { get } }
-public final class Analytics: Sendable { public let name: String; public init(name: String) { self.name = name } }
+public final class Analytics: Sendable { public let name: String; public init(name: String) {
+	self.name = name
+} }
 
 public final class Q: Instantiable {
 	public let x: any Service
 	public let y: any Service
-	init(x: any Service, y: any Service) { self.x = x; self.y = y }
+	init(x: any Service, y: any Service) {
+		self.x = x; self.y = y
+	}
 }
 
 extension Q {
-	@frozen public enum SafeDIMockScope_Service {
+	@frozen
+	public enum SafeDIMockScope_Service {
 		case x(x_Values)
 		case y(y_Values)
 
@@ -32,7 +37,10 @@ public final class P {
 	public let b: any Service
 	public let q: Q
 	public let qBuilder: SendableInstantiator<Q>
-	init(a: any Service, b: any Service, q: Q, qBuilder: SendableInstantiator<Q>) { self.a = a; self.b = b; self.q = q; self.qBuilder = qBuilder }
+	init(a: any Service, b: any Service, q: Q, qBuilder: SendableInstantiator<Q>) {
+		self.a = a; self.b = b; self.q = q; self.qBuilder = qBuilder
+	}
+
 	public func tags() -> [String] {
 		let built = qBuilder.instantiate()
 		return [a.tag, b.tag, q.x.tag, q.y.tag, built.x.tag, built.y.tag]
@@ -40,7 +48,8 @@ public final class P {
 }
 
 extension P {
-	@frozen public enum SafeDIMockScope_Service {
+	@frozen
+	public enum SafeDIMockScope_Service {
 		case a(a_Values)
 		case b(b_Values)
 		case q(Q.SafeDIMockScope_Service)
@@ -49,7 +58,8 @@ extension P {
 		public struct b_Values {}
 	}
 
-	@frozen public enum SafeDIMockScope_Service_Sendable {
+	@frozen
+	public enum SafeDIMockScope_Service_Sendable {
 		case qBuilder(Q.SafeDIMockScope_Service)
 	}
 
@@ -61,7 +71,8 @@ extension P {
 		let analytics = Analytics(name: "p-an")
 		let a: any Service = serviceBuilder(.a(SafeDIMockScope_Service.a_Values(analytics: analytics)))
 		let q = Q.mock(serviceBuilder: { serviceBuilder(.q($0)) })
-		@Sendable func __safeDI_qBuilder() -> Q {
+		@Sendable
+		func __safeDI_qBuilder() -> Q {
 			Q.mock(serviceBuilder: { serviceSendableBuilder(.qBuilder($0)) })
 		}
 		let qBuilder = SendableInstantiator<Q>(__safeDI_qBuilder)

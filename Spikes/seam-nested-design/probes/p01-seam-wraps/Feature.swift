@@ -2,15 +2,22 @@
 import SafeDI
 
 public protocol Service: Sendable { var tag: String { get } }
-public final class Analytics: Sendable { public let name: String; public init(name: String) { self.name = name } }
+public final class Analytics: Sendable { public let name: String; public init(name: String) {
+	self.name = name
+} }
 /// Not Sendable.
 public final class Config {
 	public let name: String
-	public init(name: String) { self.name = name; Config.created += 1 }
+	public init(name: String) {
+		self.name = name; Config.created += 1
+	}
+
 	nonisolated(unsafe) public static var created = 0
 }
 
-public final class A { public let service: any Service; init(service: any Service) { self.service = service } }
+public final class A { public let service: any Service; init(service: any Service) {
+	self.service = service
+} }
 
 public final class Feature {
 	public let a: A
@@ -24,7 +31,8 @@ public final class Feature {
 }
 
 extension Feature {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case a_service(a_service_Values)
 		case lazy(lazy_Values)
 		/// An instantiator place whose fulfilling type the module cannot see: the forwarded value is the case's second value.
@@ -32,7 +40,10 @@ extension Feature {
 
 		public struct a_service_Values {
 			public let analytics: Analytics
-			public var config: Config { __safeDI_config.instance }
+			public var config: Config {
+				__safeDI_config.instance
+			}
+
 			let __safeDI_config: LazilyInstantiated<Config>
 
 			init(analytics: Analytics, config: LazilyInstantiated<Config>) {
@@ -43,7 +54,7 @@ extension Feature {
 
 		public struct lazy_Values {
 			public let analytics: Analytics
-			internal let a: A
+			let a: A
 		}
 
 		public struct maker_Values {
@@ -109,12 +120,14 @@ extension Feature {
 			__safeDI_maker(__safeDI_forwarded: $0)
 		}
 		let __safeDI_serviceBuilder_job_Inner = __safeDI_serviceBuilder_job(SafeDIScope_Service_job.Outer(analytics: analytics, lazy: lazy, maker: maker))
-		@Sendable func __safeDI_job() -> any Service {
+		@Sendable
+		func __safeDI_job() -> any Service {
 			__safeDI_serviceBuilder_job_Inner(SafeDIScope_Service_job.Inner())
 		}
 		let job = SendableLazilyInstantiated<any Service>(__safeDI_job)
 		let __safeDI_serviceBuilder_jobMaker_Inner = __safeDI_serviceBuilder_jobMaker(SafeDIScope_Service_jobMaker.Outer(analytics: analytics, lazy: lazy, maker: maker, job: job))
-		@Sendable func __safeDI_jobMaker(__safeDI_forwarded: String) -> any Service {
+		@Sendable
+		func __safeDI_jobMaker(__safeDI_forwarded: String) -> any Service {
 			__safeDI_serviceBuilder_jobMaker_Inner(SafeDIScope_Service_jobMaker.Inner(), __safeDI_forwarded)
 		}
 		let jobMaker = SendableErasedInstantiator<String, any Service> {

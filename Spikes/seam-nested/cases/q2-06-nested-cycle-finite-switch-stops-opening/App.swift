@@ -3,7 +3,8 @@ import SafeDI
 
 struct Impl: Service { let tag: String }
 
-@main struct Main {
+@main
+struct Main {
 	static func main() {
 		let seam = SeamA(serviceBuilder: { scope in
 			switch scope {

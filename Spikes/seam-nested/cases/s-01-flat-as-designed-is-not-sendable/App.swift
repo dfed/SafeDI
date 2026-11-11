@@ -1,4 +1,6 @@
 import Feature
 
-func needsSendable<T: Sendable>(_: T.Type) {}
-func probe() { needsSendable(Flat.Scope.self) }
+func needsSendable(_: (some Sendable).Type) {}
+func probe() {
+	needsSendable(Flat.Scope.self)
+}

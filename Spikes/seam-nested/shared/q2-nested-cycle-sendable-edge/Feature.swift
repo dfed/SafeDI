@@ -7,7 +7,9 @@ public protocol Service { var tag: String { get } }
 
 public final class Marker {
 	public let name: String
-	init(name: String) { self.name = name }
+	init(name: String) {
+		self.name = name
+	}
 }
 
 public final class SeamA: Instantiable {
@@ -39,7 +41,8 @@ public final class SeamB: Instantiable {
 }
 
 extension SeamA {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case service(service_Values)
 
 		public struct service_Values {
@@ -47,7 +50,8 @@ extension SeamA {
 		}
 	}
 
-	@frozen public enum SafeDIScope_Service_Sendable {
+	@frozen
+	public enum SafeDIScope_Service_Sendable {
 		indirect case bBuilder(SeamB.SafeDIScope_Service)
 		indirect case bBuilder_Sendable(SeamB.SafeDIScope_Service_Sendable)
 	}
@@ -58,11 +62,14 @@ extension SeamA {
 	) {
 		let marker = Marker(name: "A")
 		let service: any Service = __safeDI_serviceBuilder(.service(SafeDIScope_Service.service_Values(marker: marker)))
-		@Sendable func __safeDI_bBuilder() -> SeamB {
-			@Sendable func __safeDI_serviceBuilder_bBuilder(_ scope: SeamB.SafeDIScope_Service) -> any Service {
+		@Sendable
+		func __safeDI_bBuilder() -> SeamB {
+			@Sendable
+			func __safeDI_serviceBuilder_bBuilder(_ scope: SeamB.SafeDIScope_Service) -> any Service {
 				__safeDI_serviceSendableBuilder(.bBuilder(scope))
 			}
-			@Sendable func __safeDI_serviceSendableBuilder_bBuilder(_ scope: SeamB.SafeDIScope_Service_Sendable) -> any Service {
+			@Sendable
+			func __safeDI_serviceSendableBuilder_bBuilder(_ scope: SeamB.SafeDIScope_Service_Sendable) -> any Service {
 				__safeDI_serviceSendableBuilder(.bBuilder_Sendable(scope))
 			}
 			return SeamB(serviceBuilder: __safeDI_serviceBuilder_bBuilder, serviceSendableBuilder: __safeDI_serviceSendableBuilder_bBuilder)
@@ -73,7 +80,8 @@ extension SeamA {
 }
 
 extension SeamB {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case service(service_Values)
 		indirect case a(SeamA.SafeDIScope_Service)
 
@@ -82,7 +90,8 @@ extension SeamB {
 		}
 	}
 
-	@frozen public enum SafeDIScope_Service_Sendable {
+	@frozen
+	public enum SafeDIScope_Service_Sendable {
 		indirect case a(SeamA.SafeDIScope_Service_Sendable)
 	}
 
@@ -95,7 +104,8 @@ extension SeamB {
 		func __safeDI_serviceBuilder_a(_ scope: SeamA.SafeDIScope_Service) -> any Service {
 			__safeDI_serviceBuilder(.a(scope))
 		}
-		@Sendable func __safeDI_serviceSendableBuilder_a(_ scope: SeamA.SafeDIScope_Service_Sendable) -> any Service {
+		@Sendable
+		func __safeDI_serviceSendableBuilder_a(_ scope: SeamA.SafeDIScope_Service_Sendable) -> any Service {
 			__safeDI_serviceSendableBuilder(.a(scope))
 		}
 		let a = SeamA(serviceBuilder: __safeDI_serviceBuilder_a, serviceSendableBuilder: __safeDI_serviceSendableBuilder_a)

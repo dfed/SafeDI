@@ -3,15 +3,20 @@
 import SafeDI
 
 public protocol Service: Sendable { var tag: String { get } }
-public final class Analytics: Sendable { public let name: String; public init(name: String) { self.name = name } }
+public final class Analytics: Sendable { public let name: String; public init(name: String) {
+	self.name = name
+} }
 
 public final class Job: Instantiable {
 	public let w: any Service
-	init(w: any Service) { self.w = w }
+	init(w: any Service) {
+		self.w = w
+	}
 }
 
 extension Job {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case w(w_Values)
 
 		public struct w_Values {
@@ -28,7 +33,9 @@ extension Job {
 
 public final class Panel: Instantiable {
 	public let service: any Service
-	init(service: any Service) { self.service = service }
+	init(service: any Service) {
+		self.service = service
+	}
 }
 
 public final class Inner: Instantiable {
@@ -39,11 +46,14 @@ public final class Inner: Instantiable {
 		self.x = x; self.jobBuilder = jobBuilder; self.panelBuilder = panelBuilder
 	}
 
-	public func tags() -> [String] { [x.tag, jobBuilder.instantiate().w.tag, panelBuilder.instantiate().service.tag] }
+	public func tags() -> [String] {
+		[x.tag, jobBuilder.instantiate().w.tag, panelBuilder.instantiate().service.tag]
+	}
 }
 
 extension Inner {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case x(x_Values)
 
 		public struct x_Values {
@@ -51,7 +61,8 @@ extension Inner {
 		}
 	}
 
-	@frozen public enum SafeDIScope_Service_Sendable {
+	@frozen
+	public enum SafeDIScope_Service_Sendable {
 		case jobBuilder(Job.SafeDIScope_Service)
 	}
 
@@ -74,12 +85,14 @@ extension Inner {
 		let __safeDI_serviceSendableBuilder = serviceSendableBuilder
 		let __safeDI_serviceBuilder_panelBuilder_service = serviceBuilder_panelBuilder_service
 		let x: any Service = __safeDI_serviceBuilder(.x(SafeDIScope_Service.x_Values(analytics: analytics)))
-		@Sendable func __safeDI_jobBuilder() -> Job {
+		@Sendable
+		func __safeDI_jobBuilder() -> Job {
 			Job(analytics: analytics, serviceBuilder: { __safeDI_serviceSendableBuilder(.jobBuilder($0)) })
 		}
 		let jobBuilder = SendableInstantiator<Job>(__safeDI_jobBuilder)
 		let __safeDI_serviceBuilder_panelBuilder_service_Inner = __safeDI_serviceBuilder_panelBuilder_service(SafeDIScope_Service_panelBuilder_service.Outer(analytics: analytics, x: x))
-		@Sendable func __safeDI_panelBuilder() -> Panel {
+		@Sendable
+		func __safeDI_panelBuilder() -> Panel {
 			let service: any Service = __safeDI_serviceBuilder_panelBuilder_service_Inner(SafeDIScope_Service_panelBuilder_service.Inner())
 			return Panel(service: service)
 		}

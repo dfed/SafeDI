@@ -8,7 +8,9 @@ public protocol Service { var tag: String { get } }
 /// Not Sendable. A value of the seam that the place's payload carries.
 public final class Marker {
 	public let name: String
-	init(name: String) { self.name = name }
+	init(name: String) {
+		self.name = name
+	}
 }
 
 public final class SeamA: Instantiable {
@@ -40,7 +42,8 @@ public final class SeamB: Instantiable {
 }
 
 extension SeamA {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case service(service_Values)
 		indirect case bBuilder(SeamB.SafeDIScope_Service)
 
@@ -64,7 +67,8 @@ extension SeamA {
 }
 
 extension SeamB {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case service(service_Values)
 		indirect case a(SeamA.SafeDIScope_Service)
 

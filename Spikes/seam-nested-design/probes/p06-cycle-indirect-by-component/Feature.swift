@@ -13,15 +13,20 @@
 import SafeDI
 
 public protocol Service: Sendable { var tag: String { get } }
-public final class Marker: Sendable { public let name: String; init(name: String) { self.name = name } }
+public final class Marker: Sendable { public let name: String; init(name: String) {
+	self.name = name
+} }
 
 public final class C: Instantiable {
 	public let service: any Service
-	init(service: any Service) { self.service = service }
+	init(service: any Service) {
+		self.service = service
+	}
 }
 
 extension C {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case service(service_Values)
 
 		public struct service_Values {}
@@ -36,17 +41,22 @@ public final class A: Instantiable {
 	public let service: any Service
 	public let bBuilder: Instantiator<B>
 	public let c: C
-	init(service: any Service, bBuilder: Instantiator<B>, c: C) { self.service = service; self.bBuilder = bBuilder; self.c = c }
+	init(service: any Service, bBuilder: Instantiator<B>, c: C) {
+		self.service = service; self.bBuilder = bBuilder; self.c = c
+	}
 }
 
 public final class B: Instantiable {
 	public let service: any Service
 	public let aBuilder: SendableInstantiator<A>
-	init(service: any Service, aBuilder: SendableInstantiator<A>) { self.service = service; self.aBuilder = aBuilder }
+	init(service: any Service, aBuilder: SendableInstantiator<A>) {
+		self.service = service; self.aBuilder = aBuilder
+	}
 }
 
 extension A {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case service(service_Values)
 		case bBuilder(B.SafeDIScope_Service)
 		case c(C.SafeDIScope_Service)
@@ -56,7 +66,8 @@ extension A {
 		}
 	}
 
-	@frozen public enum SafeDIScope_Service_Sendable {
+	@frozen
+	public enum SafeDIScope_Service_Sendable {
 		indirect case bBuilder_Sendable(B.SafeDIScope_Service_Sendable)
 	}
 
@@ -78,7 +89,8 @@ extension A {
 }
 
 extension B {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case service(service_Values)
 
 		public struct service_Values {
@@ -86,7 +98,8 @@ extension B {
 		}
 	}
 
-	@frozen public enum SafeDIScope_Service_Sendable {
+	@frozen
+	public enum SafeDIScope_Service_Sendable {
 		case aBuilder(A.SafeDIScope_Service)
 		indirect case aBuilder_Sendable(A.SafeDIScope_Service_Sendable)
 	}
@@ -99,7 +112,8 @@ extension B {
 		let __safeDI_serviceSendableBuilder = serviceSendableBuilder
 		let marker = Marker(name: "B")
 		let service: any Service = __safeDI_serviceBuilder(.service(SafeDIScope_Service.service_Values(marker: marker)))
-		@Sendable func __safeDI_aBuilder() -> A {
+		@Sendable
+		func __safeDI_aBuilder() -> A {
 			A(serviceBuilder: { __safeDI_serviceSendableBuilder(.aBuilder($0)) }, serviceSendableBuilder: { __safeDI_serviceSendableBuilder(.aBuilder_Sendable($0)) })
 		}
 		let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
@@ -110,11 +124,14 @@ extension B {
 public final class S: Instantiable {
 	public let service: any Service
 	public let nextBuilder: Instantiator<S>
-	init(service: any Service, nextBuilder: Instantiator<S>) { self.service = service; self.nextBuilder = nextBuilder }
+	init(service: any Service, nextBuilder: Instantiator<S>) {
+		self.service = service; self.nextBuilder = nextBuilder
+	}
 }
 
 extension S {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case service(service_Values)
 		indirect case nextBuilder(SafeDIScope_Service)
 

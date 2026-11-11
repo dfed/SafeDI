@@ -6,7 +6,9 @@ public protocol Service { var tag: String { get } }
 
 public final class Panel: Instantiable {
 	public let service: any Service
-	init(service: any Service) { self.service = service }
+	init(service: any Service) {
+		self.service = service
+	}
 }
 
 public final class Inner {
@@ -19,7 +21,8 @@ public final class Inner {
 }
 
 extension Inner {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case x_service(x_service_Values)
 
 		public struct x_service_Values {}
@@ -36,7 +39,8 @@ extension Inner {
 	) {
 		let x: any Service = __safeDI_serviceBuilder(.x_service(SafeDIScope_Service.x_service_Values()))
 		let __safeDI_stage = __safeDI_serviceBuilder_panelBuilder_service(SafeDIScope_Service_panelBuilder_service.Outer())
-		@Sendable func __safeDI_panelBuilder() -> Panel {
+		@Sendable
+		func __safeDI_panelBuilder() -> Panel {
 			Panel(service: __safeDI_stage(SafeDIScope_Service_panelBuilder_service.Inner()))
 		}
 		self.init(x: x, panelBuilder: SendableInstantiator<Panel>(__safeDI_panelBuilder))
@@ -53,7 +57,8 @@ public final class Outer {
 }
 
 extension Outer {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case own(own_Values)
 		case inner(Inner.SafeDIScope_Service)
 

@@ -27,7 +27,9 @@ func handWritten(ctx: Ctx) -> Feature {
 /// The generated caller: one fill per place, one dispatcher per enum, staged fills as today.
 func generated(ctx: Ctx) -> Feature {
 	let analytics = Analytics(name: "an")
-	func __safeDI_config() -> Config { Config(name: "cfg") }
+	func __safeDI_config() -> Config {
+		Config(name: "cfg")
+	}
 	let config = LazilyInstantiated<Config>(__safeDI_config)
 	func __safeDI_feature() -> Feature {
 		func __safeDI_serviceBuilder_Feature_a_service(_ scope: Feature.SafeDIScope_Service.a_service_Values) -> any Service {
@@ -35,11 +37,11 @@ func generated(ctx: Ctx) -> Feature {
 			builds.append("a")
 			return Impl(tag: "a:\(ctx.name):\(analytics.name):\(config.instance.name)")
 		}
-		func __safeDI_serviceBuilder_Feature_lazy(_ scope: Feature.SafeDIScope_Service.lazy_Values) -> any Service {
+		func __safeDI_serviceBuilder_Feature_lazy(_: Feature.SafeDIScope_Service.lazy_Values) -> any Service {
 			builds.append("lazy")
 			return Impl(tag: "lazy:\(ctx.name)")
 		}
-		func __safeDI_serviceBuilder_Feature_maker(_ scope: Feature.SafeDIScope_Service.maker_Values, _ __safeDI_forwarded: String) -> any Service {
+		func __safeDI_serviceBuilder_Feature_maker(_: Feature.SafeDIScope_Service.maker_Values, _ __safeDI_forwarded: String) -> any Service {
 			let name = __safeDI_forwarded
 			return Impl(tag: "made-\(name):\(ctx.name)")
 		}
@@ -52,7 +54,8 @@ func generated(ctx: Ctx) -> Feature {
 		}
 		func __safeDI_serviceBuilder_Feature_job(_ scope: Feature.SafeDIScope_Service_job.Outer) -> @Sendable (Feature.SafeDIScope_Service_job.Inner) -> any Service {
 			let analytics = scope.analytics
-			@Sendable func __safeDI_serviceBuilder_Feature_job_Inner(_ scope: Feature.SafeDIScope_Service_job.Inner) -> any Service {
+			@Sendable
+			func __safeDI_serviceBuilder_Feature_job_Inner(_: Feature.SafeDIScope_Service_job.Inner) -> any Service {
 				builds.append("job")
 				return Impl(tag: "job:\(analytics.name)")
 			}
@@ -60,7 +63,8 @@ func generated(ctx: Ctx) -> Feature {
 		}
 		func __safeDI_serviceBuilder_Feature_jobMaker(_ scope: Feature.SafeDIScope_Service_jobMaker.Outer) -> @Sendable (Feature.SafeDIScope_Service_jobMaker.Inner, String) -> any Service {
 			let analytics = scope.analytics
-			@Sendable func __safeDI_serviceBuilder_Feature_jobMaker_Inner(_ scope: Feature.SafeDIScope_Service_jobMaker.Inner, _ __safeDI_forwarded: String) -> any Service {
+			@Sendable
+			func __safeDI_serviceBuilder_Feature_jobMaker_Inner(_: Feature.SafeDIScope_Service_jobMaker.Inner, _ __safeDI_forwarded: String) -> any Service {
 				let name = __safeDI_forwarded
 				return Impl(tag: "jobmade-\(name):\(analytics.name)")
 			}
@@ -71,7 +75,8 @@ func generated(ctx: Ctx) -> Feature {
 	return __safeDI_feature()
 }
 
-@main struct Main {
+@main
+struct Main {
 	static func main() {
 		let ctx = Ctx()
 		print(tags(handWritten(ctx: ctx)))

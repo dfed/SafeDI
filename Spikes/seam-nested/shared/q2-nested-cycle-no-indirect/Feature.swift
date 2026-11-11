@@ -3,7 +3,8 @@ public final class SeamA {}
 public final class SeamB {}
 
 extension SeamA {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case service(service_Values)
 		case bBuilder(SeamB.SafeDIScope_Service)
 
@@ -12,7 +13,8 @@ extension SeamA {
 }
 
 extension SeamB {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case service(service_Values)
 		case a(SeamA.SafeDIScope_Service)
 

@@ -3,12 +3,15 @@ public protocol Service: Sendable { var tag: String { get } }
 
 package final class Inner {
 	package let x: any Service
-	init(x: any Service) { self.x = x }
+	init(x: any Service) {
+		self.x = x
+	}
 }
 
 extension Inner {
 	// Spelled `public`, as today's scope structs are: its access is the seam's, `package`.
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case x(x_Values)
 
 		public struct x_Values {}

@@ -29,7 +29,8 @@ struct Root {
 					}
 				}
 			}
-			@Sendable func __safeDI_serviceSendableBuilder(_ scope: Feature.SafeDIScope_Service_Sendable) -> any Service {
+			@Sendable
+			func __safeDI_serviceSendableBuilder(_ scope: Feature.SafeDIScope_Service_Sendable) -> any Service {
 				switch scope {
 				case let .jobBuilder(scope):
 					switch scope {
@@ -39,7 +40,8 @@ struct Root {
 			}
 			func __safeDI_serviceBuilder_panelBuilder_service(_ scope: Feature.SafeDIScope_Service_panelBuilder_service.Outer) -> @Sendable (Feature.SafeDIScope_Service_panelBuilder_service.Inner) -> any Service {
 				let outerName = ctx.name + "+" + scope.analytics.name
-				@Sendable func __safeDI_serviceBuilder_panelBuilder_service_Inner(_ scope: Feature.SafeDIScope_Service_panelBuilder_service.Inner) -> any Service {
+				@Sendable
+				func __safeDI_serviceBuilder_panelBuilder_service_Inner(_: Feature.SafeDIScope_Service_panelBuilder_service.Inner) -> any Service {
 					Impl(tag: "panel:\(outerName):\(region)")
 				}
 				return __safeDI_serviceBuilder_panelBuilder_service_Inner
@@ -50,7 +52,8 @@ struct Root {
 	}
 }
 
-@main struct Main {
+@main
+struct Main {
 	static func main() {
 		print(Root().feature.tags())
 	}

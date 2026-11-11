@@ -10,7 +10,8 @@ final class Ctx {
 	init() {}
 }
 
-@main struct Main {
+@main
+struct Main {
 	static func main() {
 		let ctx = Ctx()
 		let region = "eu"

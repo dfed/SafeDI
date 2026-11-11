@@ -9,7 +9,8 @@ final class Counter {
 	init() {}
 }
 
-@main struct Main {
+@main
+struct Main {
 	static func main() {
 		let counter = Counter()
 		let seam = SeamA(serviceBuilder: { _ in

@@ -7,16 +7,21 @@ public protocol Service { var tag: String { get } }
 
 public final class Analytics {
 	public let name: String
-	public init(name: String) { self.name = name }
+	public init(name: String) {
+		self.name = name
+	}
 }
 
 public final class Deep: Instantiable {
 	public let service: any Service
-	init(service: any Service) { self.service = service }
+	init(service: any Service) {
+		self.service = service
+	}
 }
 
 extension Deep {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case d_service(d_service_Values)
 
 		public struct d_service_Values {
@@ -40,7 +45,8 @@ public final class Mid: Instantiable {
 }
 
 extension Mid {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case m_service(m_service_Values)
 
 		public struct m_service_Values {
@@ -48,7 +54,8 @@ extension Mid {
 		}
 	}
 
-	@frozen public enum SafeDIScope_Service_Sendable {
+	@frozen
+	public enum SafeDIScope_Service_Sendable {
 		case Deep_d_service(Deep.SafeDIScope_Service.d_service_Values)
 	}
 
@@ -57,7 +64,8 @@ extension Mid {
 		serviceSendableBuilder __safeDI_serviceSendableBuilder: @escaping @Sendable (SafeDIScope_Service_Sendable) -> any Service,
 	) {
 		let own: any Service = __safeDI_serviceBuilder(.m_service(SafeDIScope_Service.m_service_Values(analytics: Analytics(name: "mid-analytics"))))
-		@Sendable func __safeDI_deepBuilder() -> Deep {
+		@Sendable
+		func __safeDI_deepBuilder() -> Deep {
 			func __safeDI_serviceBuilder_deepBuilder(_ scope: Deep.SafeDIScope_Service) -> any Service {
 				switch scope {
 				case let .d_service(scope): __safeDI_serviceSendableBuilder(.Deep_d_service(scope))
@@ -87,13 +95,15 @@ public final class Top {
 }
 
 extension Top {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case own(own_Values)
 
 		public struct own_Values {}
 	}
 
-	@frozen public enum SafeDIScope_Service_Sendable {
+	@frozen
+	public enum SafeDIScope_Service_Sendable {
 		case Mid_m_service(Mid.SafeDIScope_Service.m_service_Values)
 		case Mid_Deep_d_service(Deep.SafeDIScope_Service.d_service_Values)
 	}
@@ -103,18 +113,21 @@ extension Top {
 		serviceSendableBuilder __safeDI_serviceSendableBuilder: @escaping @Sendable (SafeDIScope_Service_Sendable) -> any Service,
 	) {
 		let own: any Service = __safeDI_serviceBuilder(.own(SafeDIScope_Service.own_Values()))
-		@Sendable func __safeDI_serviceBuilder_Mid(_ scope: Mid.SafeDIScope_Service) -> any Service {
+		@Sendable
+		func __safeDI_serviceBuilder_Mid(_ scope: Mid.SafeDIScope_Service) -> any Service {
 			switch scope {
 			case let .m_service(scope): __safeDI_serviceSendableBuilder(.Mid_m_service(scope))
 			}
 		}
-		@Sendable func __safeDI_serviceSendableBuilder_Mid(_ scope: Mid.SafeDIScope_Service_Sendable) -> any Service {
+		@Sendable
+		func __safeDI_serviceSendableBuilder_Mid(_ scope: Mid.SafeDIScope_Service_Sendable) -> any Service {
 			switch scope {
 			case let .Deep_d_service(scope): __safeDI_serviceSendableBuilder(.Mid_Deep_d_service(scope))
 			}
 		}
 		let mid = Mid(serviceBuilder: __safeDI_serviceBuilder_Mid, serviceSendableBuilder: __safeDI_serviceSendableBuilder_Mid)
-		@Sendable func __safeDI_midBuilder() -> Mid {
+		@Sendable
+		func __safeDI_midBuilder() -> Mid {
 			Mid(serviceBuilder: __safeDI_serviceBuilder_Mid, serviceSendableBuilder: __safeDI_serviceSendableBuilder_Mid)
 		}
 		self.init(own: own, mid: mid, midBuilder: SendableInstantiator<Mid>(__safeDI_midBuilder))

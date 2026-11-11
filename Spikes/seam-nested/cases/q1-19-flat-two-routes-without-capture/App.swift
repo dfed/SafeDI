@@ -4,7 +4,8 @@ import SafeDI
 struct Impl: Service { let tag: String }
 final class Ctx { let name = "ctx" }
 
-@main struct Main {
+@main
+struct Main {
 	static func main() {
 		let ctx = Ctx()
 		let region = "eu"

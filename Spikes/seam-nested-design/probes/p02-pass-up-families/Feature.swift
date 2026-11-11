@@ -3,7 +3,9 @@
 import Lower
 import SafeDI
 
-public final class A { public let service: any Service; init(service: any Service) { self.service = service } }
+public final class A { public let service: any Service; init(service: any Service) {
+	self.service = service
+} }
 
 public struct Feature {
 	public let a: A
@@ -13,11 +15,14 @@ public struct Feature {
 		self.a = a; self.inner = inner; self.innerBuilder = innerBuilder
 	}
 
-	public func tags() -> [String] { [a.service.tag] + inner.tags() + innerBuilder.instantiate().tags() }
+	public func tags() -> [String] {
+		[a.service.tag] + inner.tags() + innerBuilder.instantiate().tags()
+	}
 }
 
 extension Feature {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case a_service(a_service_Values)
 		/// `Inner`'s plain enum, on the route in plain code.
 		case inner(Inner.SafeDIScope_Service)
@@ -27,7 +32,8 @@ extension Feature {
 		}
 	}
 
-	@frozen public enum SafeDIScope_Service_Sendable {
+	@frozen
+	public enum SafeDIScope_Service_Sendable {
 		/// `Inner`'s @Sendable enum, on the route in plain code: the closure passed for it must be @Sendable.
 		case inner_Sendable(Inner.SafeDIScope_Service_Sendable)
 		/// `Inner`'s plain enum, on the route inside a @Sendable function.
@@ -58,7 +64,8 @@ extension Feature {
 			serviceSendableBuilder: { __safeDI_serviceSendableBuilder(.inner_Sendable($0)) },
 			serviceBuilder_panelBuilder_service: __safeDI_serviceBuilder_Inner_panelBuilder_service,
 		)
-		@Sendable func __safeDI_innerBuilder() -> Inner {
+		@Sendable
+		func __safeDI_innerBuilder() -> Inner {
 			Inner(
 				analytics: analytics,
 				serviceBuilder: { __safeDI_serviceSendableBuilder(.innerBuilder($0)) },

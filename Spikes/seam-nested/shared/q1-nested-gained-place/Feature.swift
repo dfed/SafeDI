@@ -16,7 +16,8 @@ public final class Inner {
 }
 
 extension Inner {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case x_service(x_service_Values)
 		case y_service(y_service_Values)
 		case z_service(z_service_Values)
@@ -45,7 +46,8 @@ public final class Outer {
 }
 
 extension Outer {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case own(own_Values)
 		case inner(Inner.SafeDIScope_Service)
 

@@ -6,7 +6,8 @@ struct Stub: Service { let tag: String }
 /// Not Sendable.
 final class Ctx { let name = "ctx" }
 
-@main struct Main {
+@main
+struct Main {
 	static func main() {
 		let ctx = Ctx()
 		// A test that ignores the scope.

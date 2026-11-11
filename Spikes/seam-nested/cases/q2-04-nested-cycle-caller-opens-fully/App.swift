@@ -23,7 +23,8 @@ func openB(_ scope: SeamB.SafeDIScope_Service, depth: Int) -> any Service {
 	}
 }
 
-@main struct Main {
+@main
+struct Main {
 	static func main() {
 		let counter = Counter()
 		let seam = SeamA(serviceBuilder: { scope in

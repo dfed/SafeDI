@@ -5,20 +5,26 @@ import SafeDI
 
 struct DefaultService: Service {
 	let analytics: Analytics
-	var tag: String { "filled:\(analytics.name)" }
+	var tag: String {
+		"filled:\(analytics.name)"
+	}
 }
 
 public final class M {
 	public let p: P
-	init(p: P) { self.p = p }
+	init(p: P) {
+		self.p = p
+	}
 }
 
 extension M {
-	@frozen public enum SafeDIMockScope_Service {
+	@frozen
+	public enum SafeDIMockScope_Service {
 		case p(P.SafeDIMockScope_Service)
 	}
 
-	@frozen public enum SafeDIMockScope_Service_Sendable {
+	@frozen
+	public enum SafeDIMockScope_Service_Sendable {
 		case p_Sendable(P.SafeDIMockScope_Service_Sendable)
 	}
 
@@ -33,7 +39,8 @@ extension M {
 				let analytics = scope.analytics
 				return DefaultService(analytics: analytics)
 			}
-			@Sendable func __safeDI_serviceBuilder_Q_x(_ scope: Q.SafeDIMockScope_Service.x_Values) -> any Service {
+			@Sendable
+			func __safeDI_serviceBuilder_Q_x(_ scope: Q.SafeDIMockScope_Service.x_Values) -> any Service {
 				let analytics = scope.analytics
 				return DefaultService(analytics: analytics)
 			}
@@ -46,12 +53,14 @@ extension M {
 				case let .q(scope): __safeDI_serviceBuilder_Q(scope, passUp: passUp)
 				}
 			}
-			@Sendable func __safeDI_serviceSendableBuilder_P(_ scope: P.SafeDIMockScope_Service_Sendable, passUp: () -> any Service) -> any Service {
+			@Sendable
+			func __safeDI_serviceSendableBuilder_P(_ scope: P.SafeDIMockScope_Service_Sendable, passUp: () -> any Service) -> any Service {
 				switch scope {
 				case let .qBuilder(scope): __safeDI_serviceBuilder_Q(scope, passUp: passUp)
 				}
 			}
-			@Sendable func __safeDI_serviceBuilder_Q(_ scope: Q.SafeDIMockScope_Service, passUp: () -> any Service) -> any Service {
+			@Sendable
+			func __safeDI_serviceBuilder_Q(_ scope: Q.SafeDIMockScope_Service, passUp: () -> any Service) -> any Service {
 				switch scope {
 				case let .x(scope): __safeDI_serviceBuilder_Q_x(scope)
 				case .y: passUp()

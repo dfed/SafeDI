@@ -10,7 +10,8 @@ final class Ctx {
 	init() {}
 }
 
-@MainActor final class Root {
+@MainActor
+final class Root {
 	let feature: Feature
 
 	init() {
@@ -24,7 +25,7 @@ final class Ctx {
 			func __safeDI_serviceBuilder_inner_x_service(_ scope: Inner.SafeDIScope_Service.x_service_Values) -> any Service {
 				Impl(tag: "x:\(ctx.name):\(scope.analytics.name)")
 			}
-			func __safeDI_serviceBuilder_inner_y_service(_ scope: Inner.SafeDIScope_Service.y_service_Values) -> any Service {
+			func __safeDI_serviceBuilder_inner_y_service(_: Inner.SafeDIScope_Service.y_service_Values) -> any Service {
 				Impl(tag: "y:\(ctx.name)")
 			}
 			func __safeDI_serviceBuilder(_ scope: Feature.SafeDIScope_Service) -> any Service {
@@ -37,10 +38,12 @@ final class Ctx {
 					}
 				}
 			}
-			@Sendable func __safeDI_serviceSendableBuilder_jobBuilder_w_service(_ scope: Job.SafeDIScope_Service.w_service_Values) -> any Service {
+			@Sendable
+			func __safeDI_serviceSendableBuilder_jobBuilder_w_service(_ scope: Job.SafeDIScope_Service.w_service_Values) -> any Service {
 				Impl(tag: "w:\(region):\(scope.analytics.name)")
 			}
-			@Sendable func __safeDI_serviceSendableBuilder(_ scope: Feature.SafeDIScope_Service_Sendable) -> any Service {
+			@Sendable
+			func __safeDI_serviceSendableBuilder(_ scope: Feature.SafeDIScope_Service_Sendable) -> any Service {
 				switch scope {
 				case let .jobBuilder(scope):
 					switch scope {
@@ -50,7 +53,8 @@ final class Ctx {
 			}
 			func __safeDI_serviceBuilder_panelBuilder_service(_ scope: Feature.SafeDIScope_Service_panelBuilder_service.Outer) -> @Sendable (Feature.SafeDIScope_Service_panelBuilder_service.Inner) -> any Service {
 				let outerName = ctx.name + "+" + scope.analytics.name
-				@Sendable func __safeDI_serviceBuilder_panelBuilder_service_Inner(_ scope: Feature.SafeDIScope_Service_panelBuilder_service.Inner) -> any Service {
+				@Sendable
+				func __safeDI_serviceBuilder_panelBuilder_service_Inner(_: Feature.SafeDIScope_Service_panelBuilder_service.Inner) -> any Service {
 					Impl(tag: "panel:\(outerName):\(region)")
 				}
 				return __safeDI_serviceBuilder_panelBuilder_service_Inner
@@ -61,8 +65,10 @@ final class Ctx {
 	}
 }
 
-@main struct Main {
-	@MainActor static func main() {
+@main
+struct Main {
+	@MainActor
+	static func main() {
 		print(Root().feature.tags())
 	}
 }

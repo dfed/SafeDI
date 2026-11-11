@@ -3,11 +3,14 @@ import Lower
 
 public final class Feature {
 	package let inner: Inner
-	init(inner: Inner) { self.inner = inner }
+	init(inner: Inner) {
+		self.inner = inner
+	}
 }
 
 extension Feature {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case inner(Inner.SafeDIScope_Service)
 	}
 

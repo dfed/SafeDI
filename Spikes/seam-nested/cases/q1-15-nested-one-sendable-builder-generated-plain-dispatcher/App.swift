@@ -6,7 +6,7 @@ final class Ctx { let name = "ctx" }
 
 func make() -> Feature {
 	let ctx = Ctx()
-	func __safeDI_serviceBuilder_a_service(_ scope: Feature.SafeDIScope_Service.a_service_Values) -> any Service {
+	func __safeDI_serviceBuilder_a_service(_: Feature.SafeDIScope_Service.a_service_Values) -> any Service {
 		Impl(tag: ctx.name)
 	}
 	func __safeDI_serviceBuilder(_ scope: Feature.SafeDIScope_Service) -> any Service {

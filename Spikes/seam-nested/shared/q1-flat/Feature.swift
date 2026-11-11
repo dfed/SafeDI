@@ -8,17 +8,23 @@ public protocol Service { var tag: String { get } }
 /// Not Sendable, as real dependencies often are not.
 public final class Analytics {
 	public let name: String
-	public init(name: String) { self.name = name }
+	public init(name: String) {
+		self.name = name
+	}
 }
 
 public final class A {
 	public let service: any Service
-	init(service: any Service) { self.service = service }
+	init(service: any Service) {
+		self.service = service
+	}
 }
 
 public final class Panel: Instantiable {
 	public let service: any Service
-	init(service: any Service) { self.service = service }
+	init(service: any Service) {
+		self.service = service
+	}
 }
 
 public final class Inner {
@@ -31,7 +37,8 @@ public final class Inner {
 }
 
 extension Inner {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case x_service(x_service_Values)
 		case y_service(y_service_Values)
 
@@ -41,7 +48,7 @@ extension Inner {
 
 		public struct y_service_Values {
 			public let analytics: Analytics
-			internal let x: any Service
+			let x: any Service
 		}
 	}
 
@@ -54,11 +61,14 @@ extension Inner {
 
 public final class Job: Instantiable {
 	public let w: any Service
-	init(w: any Service) { self.w = w }
+	init(w: any Service) {
+		self.w = w
+	}
 }
 
 extension Job {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case w_service(w_service_Values)
 
 		public struct w_service_Values {
@@ -92,7 +102,8 @@ public final class Feature {
 }
 
 extension Feature {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case a_service(a_service_Values)
 		case Inner_x_service(Inner.SafeDIScope_Service.x_service_Values)
 		case Inner_y_service(Inner.SafeDIScope_Service.y_service_Values)
@@ -102,7 +113,8 @@ extension Feature {
 		}
 	}
 
-	@frozen public enum SafeDIScope_Service_Sendable {
+	@frozen
+	public enum SafeDIScope_Service_Sendable {
 		case Job_w_service(Job.SafeDIScope_Service.w_service_Values)
 	}
 
@@ -132,7 +144,8 @@ extension Feature {
 			}
 		}
 		let inner = Inner(analytics: analytics, serviceBuilder: __safeDI_serviceBuilder_inner)
-		@Sendable func __safeDI_jobBuilder() -> Job {
+		@Sendable
+		func __safeDI_jobBuilder() -> Job {
 			func __safeDI_serviceBuilder_jobBuilder(_ scope: Job.SafeDIScope_Service) -> any Service {
 				switch scope {
 				case let .w_service(scope): __safeDI_serviceSendableBuilder(.Job_w_service(scope))
@@ -142,7 +155,8 @@ extension Feature {
 		}
 		let jobBuilder = SendableInstantiator<Job>(__safeDI_jobBuilder)
 		let __safeDI_serviceBuilder_panelBuilder_service_Inner = __safeDI_serviceBuilder_panelBuilder_service(SafeDIScope_Service_panelBuilder_service.Outer(analytics: analytics))
-		@Sendable func __safeDI_panelBuilder() -> Panel {
+		@Sendable
+		func __safeDI_panelBuilder() -> Panel {
 			let service: any Service = __safeDI_serviceBuilder_panelBuilder_service_Inner(SafeDIScope_Service_panelBuilder_service.Inner())
 			return Panel(service: service)
 		}

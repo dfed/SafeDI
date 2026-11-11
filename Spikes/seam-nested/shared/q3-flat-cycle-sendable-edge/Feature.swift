@@ -7,7 +7,9 @@ public protocol Service { var tag: String { get } }
 
 public final class Marker {
 	public let name: String
-	init(name: String) { self.name = name }
+	init(name: String) {
+		self.name = name
+	}
 }
 
 public final class SeamA: Instantiable {
@@ -39,7 +41,8 @@ public final class SeamB: Instantiable {
 }
 
 extension SeamA {
-	@frozen public enum SafeDIScope_Service_Sendable {
+	@frozen
+	public enum SafeDIScope_Service_Sendable {
 		case service(service_Values)
 		case SeamB_service(SeamB.SafeDIScope_Service_Sendable.service_Values)
 
@@ -51,8 +54,10 @@ extension SeamA {
 	public convenience init(serviceSendableBuilder __safeDI_serviceSendableBuilder: @escaping @Sendable (SafeDIScope_Service_Sendable) -> any Service) {
 		let marker = Marker(name: "A")
 		let service: any Service = __safeDI_serviceSendableBuilder(.service(SafeDIScope_Service_Sendable.service_Values(marker: marker)))
-		@Sendable func __safeDI_bBuilder() -> SeamB {
-			@Sendable func __safeDI_serviceSendableBuilder_SeamB(_ scope: SeamB.SafeDIScope_Service_Sendable) -> any Service {
+		@Sendable
+		func __safeDI_bBuilder() -> SeamB {
+			@Sendable
+			func __safeDI_serviceSendableBuilder_SeamB(_ scope: SeamB.SafeDIScope_Service_Sendable) -> any Service {
 				switch scope {
 				case let .service(scope): __safeDI_serviceSendableBuilder(.SeamB_service(scope))
 				case let .SeamA_service(scope): __safeDI_serviceSendableBuilder(.service(scope))
@@ -66,7 +71,8 @@ extension SeamA {
 }
 
 extension SeamB {
-	@frozen public enum SafeDIScope_Service_Sendable {
+	@frozen
+	public enum SafeDIScope_Service_Sendable {
 		case service(service_Values)
 		case SeamA_service(SeamA.SafeDIScope_Service_Sendable.service_Values)
 
@@ -78,7 +84,8 @@ extension SeamB {
 	public convenience init(serviceSendableBuilder __safeDI_serviceSendableBuilder: @escaping @Sendable (SafeDIScope_Service_Sendable) -> any Service) {
 		let marker = Marker(name: "B")
 		let service: any Service = __safeDI_serviceSendableBuilder(.service(SafeDIScope_Service_Sendable.service_Values(marker: marker)))
-		@Sendable func __safeDI_serviceSendableBuilder_SeamA(_ scope: SeamA.SafeDIScope_Service_Sendable) -> any Service {
+		@Sendable
+		func __safeDI_serviceSendableBuilder_SeamA(_ scope: SeamA.SafeDIScope_Service_Sendable) -> any Service {
 			switch scope {
 			case let .service(scope): __safeDI_serviceSendableBuilder(.SeamA_service(scope))
 			case let .SeamB_service(scope): __safeDI_serviceSendableBuilder(.service(scope))

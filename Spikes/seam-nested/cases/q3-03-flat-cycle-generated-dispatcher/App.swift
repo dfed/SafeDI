@@ -29,7 +29,8 @@ struct Root {
 	}
 }
 
-@main struct Main {
+@main
+struct Main {
 	static func main() {
 		print(Root().seam.walk(4))
 	}

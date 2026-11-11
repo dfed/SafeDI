@@ -7,7 +7,9 @@ public protocol Service { var tag: String { get } }
 
 public final class Marker {
 	public let name: String
-	init(name: String) { self.name = name }
+	init(name: String) {
+		self.name = name
+	}
 }
 
 public final class SeamA: Instantiable {
@@ -39,7 +41,8 @@ public final class SeamB: Instantiable {
 }
 
 extension SeamA {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case service(service_Values)
 		case SeamB_service(SeamB.SafeDIScope_Service.service_Values)
 
@@ -66,7 +69,8 @@ extension SeamA {
 }
 
 extension SeamB {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case service(service_Values)
 		case SeamA_service(SeamA.SafeDIScope_Service.service_Values)
 

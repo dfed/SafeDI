@@ -7,16 +7,21 @@ public protocol Service { var tag: String { get } }
 
 public final class Analytics {
 	public let name: String
-	public init(name: String) { self.name = name }
+	public init(name: String) {
+		self.name = name
+	}
 }
 
 public final class Deep: Instantiable {
 	public let service: any Service
-	init(service: any Service) { self.service = service }
+	init(service: any Service) {
+		self.service = service
+	}
 }
 
 extension Deep {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case d_service(d_service_Values)
 
 		public struct d_service_Values {
@@ -40,7 +45,8 @@ public final class Mid: Instantiable {
 }
 
 extension Mid {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case m_service(m_service_Values)
 
 		public struct m_service_Values {
@@ -48,7 +54,8 @@ extension Mid {
 		}
 	}
 
-	@frozen public enum SafeDIScope_Service_Sendable {
+	@frozen
+	public enum SafeDIScope_Service_Sendable {
 		case deepBuilder(Deep.SafeDIScope_Service)
 	}
 
@@ -57,7 +64,8 @@ extension Mid {
 		serviceSendableBuilder __safeDI_serviceSendableBuilder: @escaping @Sendable (SafeDIScope_Service_Sendable) -> any Service,
 	) {
 		let own: any Service = __safeDI_serviceBuilder(.m_service(SafeDIScope_Service.m_service_Values(analytics: Analytics(name: "mid-analytics"))))
-		@Sendable func __safeDI_deepBuilder() -> Deep {
+		@Sendable
+		func __safeDI_deepBuilder() -> Deep {
 			func __safeDI_serviceBuilder_deepBuilder(_ scope: Deep.SafeDIScope_Service) -> any Service {
 				__safeDI_serviceSendableBuilder(.deepBuilder(scope))
 			}
@@ -85,7 +93,8 @@ public final class Top {
 }
 
 extension Top {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case own(own_Values)
 		case mid(Mid.SafeDIScope_Service)
 
@@ -93,7 +102,8 @@ extension Top {
 	}
 
 	/// An inner seam called inside a @Sendable function needs a case for each of the inner seam's enums.
-	@frozen public enum SafeDIScope_Service_Sendable {
+	@frozen
+	public enum SafeDIScope_Service_Sendable {
 		case mid(Mid.SafeDIScope_Service_Sendable)
 		case midBuilder(Mid.SafeDIScope_Service)
 		case midBuilder_Sendable(Mid.SafeDIScope_Service_Sendable)
@@ -107,15 +117,19 @@ extension Top {
 		func __safeDI_serviceBuilder_mid(_ scope: Mid.SafeDIScope_Service) -> any Service {
 			__safeDI_serviceBuilder(.mid(scope))
 		}
-		@Sendable func __safeDI_serviceSendableBuilder_mid(_ scope: Mid.SafeDIScope_Service_Sendable) -> any Service {
+		@Sendable
+		func __safeDI_serviceSendableBuilder_mid(_ scope: Mid.SafeDIScope_Service_Sendable) -> any Service {
 			__safeDI_serviceSendableBuilder(.mid(scope))
 		}
 		let mid = Mid(serviceBuilder: __safeDI_serviceBuilder_mid, serviceSendableBuilder: __safeDI_serviceSendableBuilder_mid)
-		@Sendable func __safeDI_midBuilder() -> Mid {
-			@Sendable func __safeDI_serviceBuilder_midBuilder(_ scope: Mid.SafeDIScope_Service) -> any Service {
+		@Sendable
+		func __safeDI_midBuilder() -> Mid {
+			@Sendable
+			func __safeDI_serviceBuilder_midBuilder(_ scope: Mid.SafeDIScope_Service) -> any Service {
 				__safeDI_serviceSendableBuilder(.midBuilder(scope))
 			}
-			@Sendable func __safeDI_serviceSendableBuilder_midBuilder(_ scope: Mid.SafeDIScope_Service_Sendable) -> any Service {
+			@Sendable
+			func __safeDI_serviceSendableBuilder_midBuilder(_ scope: Mid.SafeDIScope_Service_Sendable) -> any Service {
 				__safeDI_serviceSendableBuilder(.midBuilder_Sendable(scope))
 			}
 			return Mid(serviceBuilder: __safeDI_serviceBuilder_midBuilder, serviceSendableBuilder: __safeDI_serviceSendableBuilder_midBuilder)

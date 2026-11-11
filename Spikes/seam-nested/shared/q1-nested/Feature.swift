@@ -12,17 +12,23 @@ public protocol Service { var tag: String { get } }
 /// Not Sendable, as real dependencies often are not.
 public final class Analytics {
 	public let name: String
-	public init(name: String) { self.name = name }
+	public init(name: String) {
+		self.name = name
+	}
 }
 
 public final class A {
 	public let service: any Service
-	init(service: any Service) { self.service = service }
+	init(service: any Service) {
+		self.service = service
+	}
 }
 
 public final class Panel: Instantiable {
 	public let service: any Service
-	init(service: any Service) { self.service = service }
+	init(service: any Service) {
+		self.service = service
+	}
 }
 
 // MARK: Inner, a seam called in plain code
@@ -37,7 +43,8 @@ public final class Inner {
 }
 
 extension Inner {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case x_service(x_service_Values)
 		case y_service(y_service_Values)
 
@@ -47,7 +54,7 @@ extension Inner {
 
 		public struct y_service_Values {
 			public let analytics: Analytics
-			internal let x: any Service
+			let x: any Service
 		}
 	}
 
@@ -62,11 +69,14 @@ extension Inner {
 
 public final class Job: Instantiable {
 	public let w: any Service
-	init(w: any Service) { self.w = w }
+	init(w: any Service) {
+		self.w = w
+	}
 }
 
 extension Job {
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case w_service(w_service_Values)
 
 		/// `analytics` is not Sendable, so this payload, and the enum, reach the @Sendable builder as non-Sendable arguments.
@@ -104,7 +114,8 @@ public final class Feature {
 
 extension Feature {
 	/// The plain family: places the seam builds, or passes on, in plain code.
-	@frozen public enum SafeDIScope_Service {
+	@frozen
+	public enum SafeDIScope_Service {
 		case a_service(a_service_Values)
 		case inner(Inner.SafeDIScope_Service)
 
@@ -114,7 +125,8 @@ extension Feature {
 	}
 
 	/// The @Sendable family: places the seam passes on from inside a @Sendable function.
-	@frozen public enum SafeDIScope_Service_Sendable {
+	@frozen
+	public enum SafeDIScope_Service_Sendable {
 		case jobBuilder(Job.SafeDIScope_Service)
 	}
 
@@ -142,7 +154,8 @@ extension Feature {
 			__safeDI_serviceBuilder(.inner(scope))
 		}
 		let inner = Inner(analytics: analytics, serviceBuilder: __safeDI_serviceBuilder_inner)
-		@Sendable func __safeDI_jobBuilder() -> Job {
+		@Sendable
+		func __safeDI_jobBuilder() -> Job {
 			func __safeDI_serviceBuilder_jobBuilder(_ scope: Job.SafeDIScope_Service) -> any Service {
 				__safeDI_serviceSendableBuilder(.jobBuilder(scope))
 			}
@@ -150,7 +163,8 @@ extension Feature {
 		}
 		let jobBuilder = SendableInstantiator<Job>(__safeDI_jobBuilder)
 		let __safeDI_serviceBuilder_panelBuilder_service_Inner = __safeDI_serviceBuilder_panelBuilder_service(SafeDIScope_Service_panelBuilder_service.Outer(analytics: analytics))
-		@Sendable func __safeDI_panelBuilder() -> Panel {
+		@Sendable
+		func __safeDI_panelBuilder() -> Panel {
 			let service: any Service = __safeDI_serviceBuilder_panelBuilder_service_Inner(SafeDIScope_Service_panelBuilder_service.Inner())
 			return Panel(service: service)
 		}

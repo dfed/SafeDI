@@ -12,10 +12,10 @@ struct Root {
 		let ctx = Ctx()
 		let region = "eu"
 		func __safeDI_top() -> Top {
-			func __safeDI_serviceBuilder_own(_ scope: Top.SafeDIScope_Service.own_Values) -> any Service {
+			func __safeDI_serviceBuilder_own(_: Top.SafeDIScope_Service.own_Values) -> any Service {
 				Impl(tag: "own:\(ctx.name)")
 			}
-			func __safeDI_serviceBuilder_mid_m_service(_ scope: Mid.SafeDIScope_Service.m_service_Values) -> any Service {
+			func __safeDI_serviceBuilder_mid_m_service(_: Mid.SafeDIScope_Service.m_service_Values) -> any Service {
 				Impl(tag: "m:\(ctx.name)")
 			}
 			func __safeDI_serviceBuilder(_ scope: Top.SafeDIScope_Service) -> any Service {
@@ -27,16 +27,20 @@ struct Root {
 					}
 				}
 			}
-			@Sendable func __safeDI_serviceSendableBuilder_mid_deepBuilder_d_service(_ scope: Deep.SafeDIScope_Service.d_service_Values) -> any Service {
+			@Sendable
+			func __safeDI_serviceSendableBuilder_mid_deepBuilder_d_service(_: Deep.SafeDIScope_Service.d_service_Values) -> any Service {
 				Impl(tag: "d-via-mid:\(region)")
 			}
-			@Sendable func __safeDI_serviceSendableBuilder_midBuilder_m_service(_ scope: Mid.SafeDIScope_Service.m_service_Values) -> any Service {
+			@Sendable
+			func __safeDI_serviceSendableBuilder_midBuilder_m_service(_: Mid.SafeDIScope_Service.m_service_Values) -> any Service {
 				Impl(tag: "m-via-builder:\(region)")
 			}
-			@Sendable func __safeDI_serviceSendableBuilder_midBuilder_deepBuilder_d_service(_ scope: Deep.SafeDIScope_Service.d_service_Values) -> any Service {
+			@Sendable
+			func __safeDI_serviceSendableBuilder_midBuilder_deepBuilder_d_service(_: Deep.SafeDIScope_Service.d_service_Values) -> any Service {
 				Impl(tag: "d-via-builder:\(region)")
 			}
-			@Sendable func __safeDI_serviceSendableBuilder(_ scope: Top.SafeDIScope_Service_Sendable) -> any Service {
+			@Sendable
+			func __safeDI_serviceSendableBuilder(_ scope: Top.SafeDIScope_Service_Sendable) -> any Service {
 				switch scope {
 				case let .mid(scope):
 					switch scope {
@@ -64,7 +68,8 @@ struct Root {
 	}
 }
 
-@main struct Main {
+@main
+struct Main {
 	static func main() {
 		print(Root().top.tags())
 	}

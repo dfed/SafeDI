@@ -48,10 +48,12 @@ struct Root {
 			func __safeDI_serviceBuilder_Feature_a_service(_ scope: Feature.SafeDIScope_Service.a_service_Values) -> any Service {
 				Impl(tag: "fill a:\(ctx.name):\(scope.analytics.name)")
 			}
-			@Sendable func __safeDI_serviceBuilder_Inner_x(_ scope: Inner.SafeDIScope_Service.x_Values) -> any Service {
+			@Sendable
+			func __safeDI_serviceBuilder_Inner_x(_: Inner.SafeDIScope_Service.x_Values) -> any Service {
 				Impl(tag: "fill x:\(region)")
 			}
-			@Sendable func __safeDI_serviceBuilder_Job_w(_ scope: Job.SafeDIScope_Service.w_Values) -> any Service {
+			@Sendable
+			func __safeDI_serviceBuilder_Job_w(_ scope: Job.SafeDIScope_Service.w_Values) -> any Service {
 				Impl(tag: "fill w:\(region):\(scope.analytics.name)")
 			}
 			func __safeDI_serviceBuilder_Feature(_ scope: Feature.SafeDIScope_Service) -> any Service {
@@ -60,31 +62,37 @@ struct Root {
 				case let .inner(scope): __safeDI_serviceBuilder_Inner(scope)
 				}
 			}
-			@Sendable func __safeDI_serviceSendableBuilder_Feature(_ scope: Feature.SafeDIScope_Service_Sendable) -> any Service {
+			@Sendable
+			func __safeDI_serviceSendableBuilder_Feature(_ scope: Feature.SafeDIScope_Service_Sendable) -> any Service {
 				switch scope {
 				case let .inner_Sendable(scope): __safeDI_serviceSendableBuilder_Inner(scope)
 				case let .innerBuilder(scope): __safeDI_serviceBuilder_Inner(scope)
 				case let .innerBuilder_Sendable(scope): __safeDI_serviceSendableBuilder_Inner(scope)
 				}
 			}
-			@Sendable func __safeDI_serviceBuilder_Inner(_ scope: Inner.SafeDIScope_Service) -> any Service {
+			@Sendable
+			func __safeDI_serviceBuilder_Inner(_ scope: Inner.SafeDIScope_Service) -> any Service {
 				switch scope {
 				case let .x(scope): __safeDI_serviceBuilder_Inner_x(scope)
 				}
 			}
-			@Sendable func __safeDI_serviceSendableBuilder_Inner(_ scope: Inner.SafeDIScope_Service_Sendable) -> any Service {
+			@Sendable
+			func __safeDI_serviceSendableBuilder_Inner(_ scope: Inner.SafeDIScope_Service_Sendable) -> any Service {
 				switch scope {
 				case let .jobBuilder(scope): __safeDI_serviceBuilder_Job(scope)
 				}
 			}
-			@Sendable func __safeDI_serviceBuilder_Job(_ scope: Job.SafeDIScope_Service) -> any Service {
+			@Sendable
+			func __safeDI_serviceBuilder_Job(_ scope: Job.SafeDIScope_Service) -> any Service {
 				switch scope {
 				case let .w(scope): __safeDI_serviceBuilder_Job_w(scope)
 				}
 			}
-			@Sendable func __safeDI_serviceBuilder_Inner_panelBuilder_service(_ scope: Inner.SafeDIScope_Service_panelBuilder_service.Outer) -> @Sendable (Inner.SafeDIScope_Service_panelBuilder_service.Inner) -> any Service {
+			@Sendable
+			func __safeDI_serviceBuilder_Inner_panelBuilder_service(_ scope: Inner.SafeDIScope_Service_panelBuilder_service.Outer) -> @Sendable (Inner.SafeDIScope_Service_panelBuilder_service.Inner) -> any Service {
 				let analytics = scope.analytics
-				@Sendable func __safeDI_serviceBuilder_Inner_panelBuilder_service_Inner(_ scope: Inner.SafeDIScope_Service_panelBuilder_service.Inner) -> any Service {
+				@Sendable
+				func __safeDI_serviceBuilder_Inner_panelBuilder_service_Inner(_: Inner.SafeDIScope_Service_panelBuilder_service.Inner) -> any Service {
 					Impl(tag: "fill panel:\(analytics.name)")
 				}
 				return __safeDI_serviceBuilder_Inner_panelBuilder_service_Inner
@@ -95,7 +103,8 @@ struct Root {
 	}
 }
 
-@main struct Main {
+@main
+struct Main {
 	static func main() {
 		let ctx = Ctx()
 		print(ignoring().tags())
