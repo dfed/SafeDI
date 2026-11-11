@@ -325,19 +325,25 @@ public struct Generate: AsyncParsableCommand {
 		// Each module's instantiables are already ordered by `parseSwiftFiles`, so the
 		// combined order depends only on the caller's dependent-module list.
 		let plainTypeDeclarationsReadByThisRun = dependentModuleInfo.flatMap(\.plainTypeDeclarations) + module.plainTypeDeclarations
+		let unnormalizedInstantiablesReadByThisRun = dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
+		let ownModuleIdentity = ModuleIdentity(moduleName: module.moduleName, packageName: module.packageName)
+		func moduleNamesRead(byRunOfModuleNamed moduleName: String) -> Set<String> {
+			Self.moduleNamesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
+		}
 		let normalizedInstantiables = distinguishingTypesUnnameable(
-			from: ModuleIdentity(moduleName: module.moduleName, packageName: module.packageName),
+			from: ownModuleIdentity,
 			among: normalizingInstantiableTypes(
-				of: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables,
+				of: unnormalizedInstantiablesReadByThisRun,
 				plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
+				reach: TypeAccessProof.ModuleReach(
+					viewer: ownModuleIdentity,
+					instantiables: unnormalizedInstantiablesReadByThisRun,
+					plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
+					moduleNamesReadByRunOfModule: moduleNamesRead(byRunOfModuleNamed:),
+				),
 			),
 			plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
-			moduleNamesRead: { moduleName in
-				Self.moduleNamesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
-			},
-			mayReadUnrecordedPublicType: { mentioningModuleName, declaringModuleName in
-				Self.mayReadUnrecordedPublicType(byRunOfModuleNamed: mentioningModuleName, besidesModuleNamed: declaringModuleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership, configurations: module.configurations)
-			},
+			moduleNamesRead: moduleNamesRead(byRunOfModuleNamed:),
 		)
 		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
 		let listedModuleNames = Set(listedModuleInfoFiles.map(\.file.moduleName))
@@ -1037,14 +1043,19 @@ public struct Generate: AsyncParsableCommand {
 		let dependencyModuleNamesByModuleName = moduleInfoView.identitiesByModuleName.mapValues(\.dependencyModuleNames)
 		/// `instantiables` as the module named `moduleName` resolves them, and `plainTypeDeclarations` that they read.
 		func resolved(_ instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration], fromModuleNamed moduleName: String) throws -> [TypeDescription: Instantiable] {
-			try resolveSafeDIFulfilledTypes(instantiables: distinguishingTypesUnnameable(
-				from: ModuleIdentity(moduleName: moduleName, packageName: instantiables.first { $0.moduleName == moduleName }?.packageName),
-				among: normalizingInstantiableTypes(of: instantiables, plainTypeDeclarations: plainTypeDeclarations),
+			let viewer = ModuleIdentity(moduleName: moduleName, packageName: instantiables.first { $0.moduleName == moduleName }?.packageName)
+			func moduleNamesRead(byRunOfModuleNamed moduleName: String) -> Set<String> {
+				Self.moduleNamesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
+			}
+			return try resolveSafeDIFulfilledTypes(instantiables: distinguishingTypesUnnameable(
+				from: viewer,
+				among: normalizingInstantiableTypes(
+					of: instantiables,
+					plainTypeDeclarations: plainTypeDeclarations,
+					reach: TypeAccessProof.ModuleReach(viewer: viewer, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, moduleNamesReadByRunOfModule: moduleNamesRead(byRunOfModuleNamed:)),
+				),
 				plainTypeDeclarations: plainTypeDeclarations,
-				moduleNamesRead: { Self.moduleNamesRead(byRunOfModuleNamed: $0, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership) },
-				mayReadUnrecordedPublicType: {
-					Self.mayReadUnrecordedPublicType(byRunOfModuleNamed: $0, besidesModuleNamed: $1, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership, configurations: module.configurations)
-				},
+				moduleNamesRead: moduleNamesRead(byRunOfModuleNamed:),
 			))
 		}
 		var generatedSeams = Set<TypeDescription>()
@@ -1277,30 +1288,6 @@ public struct Generate: AsyncParsableCommand {
 			Set([moduleName] + dependencyModuleNames)
 		} else {
 			visibleModuleNames(from: moduleName, in: membership)
-		}
-	}
-
-	/// Whether the run of the module named `moduleName` may read a `public` type that this run records no declaration of,
-	/// though a declaration mentions its name, in a module other than the one named `declaringModuleName`. A module info
-	/// records only the types its own module's declarations mention, so any module read through one may declare such a
-	/// type. Under the target graph, this run parsed the files of every module it lists and recorded each type any of
-	/// them mention, but not the additional directories a module's own configuration names (`configurations`).
-	private static func mayReadUnrecordedPublicType(
-		byRunOfModuleNamed moduleName: String,
-		besidesModuleNamed declaringModuleName: String,
-		dependencyModuleNamesByModuleName: [String: [String]],
-		membership: ModuleMembership?,
-		configurations: [SafeDIConfiguration],
-	) -> Bool {
-		if dependencyModuleNamesByModuleName[moduleName] != nil {
-			!moduleNamesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
-				.subtracting([moduleName, declaringModuleName])
-				.isEmpty
-		} else {
-			configurations.contains { configuration in
-				!configuration.additionalDirectoriesToInclude.isEmpty
-					&& configuration.sourceFilePath.flatMap { membership?.declaringModule(ofFileAt: $0)?.moduleName } == moduleName
-			}
 		}
 	}
 

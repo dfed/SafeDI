@@ -68,7 +68,9 @@ public struct TypeAccessProof: Sendable {
 	///   - isOwnFile: Whether a file is one of the run's own files, which lets two declarations of a module SafeDI knows
 	///     no name of count as one module's; `nil` where the computation is of another module's seams, whose module is
 	///     named.
-	public init(instantiables: [TypeDescription: Instantiable], plainTypeDeclarations: [PlainTypeDeclaration], isOwnFile: (@Sendable (String) -> Bool)?) {
+	///   - reach: Which declarations a mention in each module can name (`ModuleReach`), by which a plain declaration
+	///     bounds the mention.
+	public init(instantiables: [TypeDescription: Instantiable], plainTypeDeclarations: [PlainTypeDeclaration], isOwnFile: (@Sendable (String) -> Bool)?, reach: ModuleReach) {
 		self.instantiables = instantiables
 		var entries = [TypeDescription: Instantiable]()
 		for (key, instantiable) in instantiables where key == instantiable.concreteInstantiable {
@@ -81,6 +83,7 @@ public struct TypeAccessProof: Sendable {
 			entryTypes: Set(entries.keys),
 			moduleNames: Set(instantiables.values.compactMap(\.moduleName)),
 			isOwnFile: isOwnFile,
+			reach: reach,
 		)
 		self.plainTypeDeclarations = plainTypeDeclarations
 
@@ -933,8 +936,9 @@ extension TypeAccessProof {
 		///
 		/// A declaration SafeDI knows no module of is read as being in the module of the declaration that mentions it:
 		/// normalization runs before the run knows its own files, and such a declaration is in one of them, or in a
-		/// directory a configuration adds.
-		public init(instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration]) {
+		/// directory a configuration adds. A declaration of a module the mentioning module cannot name (`reach`) qualifies
+		/// nothing there.
+		public init(instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration], reach: ModuleReach) {
 			let instantiableTypes = Set(instantiables.flatMap(\.instantiableTypes))
 			self.instantiableTypes = instantiableTypes
 			let plainTypeDeclarations = PlainTypeDeclarations(
@@ -942,6 +946,7 @@ extension TypeAccessProof {
 				entryTypes: Set(instantiables.map(\.concreteInstantiable)),
 				moduleNames: Set(instantiables.compactMap(\.moduleName)),
 				isOwnFile: { _ in true },
+				reach: reach,
 			)
 			self.plainTypeDeclarations = plainTypeDeclarations
 			var namesOfNestedInstantiableTypes = Set<String>()
@@ -1021,6 +1026,117 @@ extension TypeAccessProof {
 	}
 }
 
+// MARK: - TypeAccessProof.ModuleReach
+
+extension TypeAccessProof {
+	/// Which declarations of other modules a mention in a module can name: those of the modules the run of `generate` for
+	/// the mentioning module reads (`Generate.moduleNamesRead(byRunOfModuleNamed:dependencyModuleNamesByModuleName:membership:)`),
+	/// at a level that reaches it (`AccessLevel.required(toConstructFrom:declaredIn:isOwnFile:)`). The module whose view
+	/// the declarations are reads every module of the view. The proof and the names a module cannot name
+	/// (`distinguishingTypesUnnameable`) both read a mention through this one rule (`PlainTypeDeclarations.meaning(of:mentionedFrom:)`).
+	public struct ModuleReach: Sendable {
+		/// SafeDI is not told what each module reads, as `query needs` is not: a mention can name every declaration of
+		/// `package` level or wider.
+		public static let unknown = ModuleReach(viewerModuleName: nil, moduleNamesReadByModuleName: nil, packageNameByModuleName: [:])
+
+		/// - Parameters:
+		///   - viewer: The module whose view of the declarations this is, which reads every module of the view.
+		///   - instantiables: The declarations of the view, which name each module's package.
+		///   - plainTypeDeclarations: The plain declarations of the view, which name each module's package too.
+		///   - moduleNamesReadByRunOfModule: The modules the run of `generate` for the named module reads, itself included.
+		public init(
+			viewer: ModuleIdentity,
+			instantiables: some Sequence<Instantiable>,
+			plainTypeDeclarations: [PlainTypeDeclaration],
+			moduleNamesReadByRunOfModule: (_ moduleName: String) -> Set<String>,
+		) {
+			var packageNameByModuleName = [String: String?]()
+			// Every declaration of one module records one package.
+			for (moduleName, packageName) in instantiables.map({ ($0.moduleName, $0.packageName) }) + plainTypeDeclarations.map({ ($0.moduleName, $0.packageName) }) {
+				if let moduleName {
+					packageNameByModuleName[moduleName] = packageName
+				}
+			}
+			if let viewerModuleName = viewer.moduleName {
+				packageNameByModuleName[viewerModuleName] = viewer.packageName
+			}
+			var moduleNamesReadByModuleName = [String: Set<String>]()
+			for moduleName in packageNameByModuleName.keys where moduleName != viewer.moduleName {
+				moduleNamesReadByModuleName[moduleName] = moduleNamesReadByRunOfModule(moduleName)
+			}
+			self.init(viewerModuleName: viewer.moduleName, moduleNamesReadByModuleName: moduleNamesReadByModuleName, packageNameByModuleName: packageNameByModuleName)
+		}
+
+		private init(viewerModuleName: String?, moduleNamesReadByModuleName: [String: Set<String>]?, packageNameByModuleName: [String: String?]) {
+			self.viewerModuleName = viewerModuleName
+			self.moduleNamesReadByModuleName = moduleNamesReadByModuleName
+			self.packageNameByModuleName = packageNameByModuleName
+		}
+
+		/// How a mention in the module named `mentioningModuleName`, or in a module whose name SafeDI does not know, reaches
+		/// the declarations of a type's name in the module named `declaringModuleName`, the narrowest of which is at `level`.
+		public func reach(ofDeclarationsIn declaringModuleName: String, at level: AccessLevel, from mentioningModuleName: String?) -> Reach {
+			guard let moduleNamesReadByModuleName,
+			      let mentioningModuleName,
+			      mentioningModuleName != declaringModuleName
+			else { return .nameable }
+			guard mentioningModuleName == viewerModuleName || moduleNamesReadByModuleName[mentioningModuleName]?.contains(declaringModuleName) != false else {
+				return .unreachable
+			}
+			let mentioningModule = ModuleIdentity(moduleName: mentioningModuleName, packageName: packageNameByModuleName[mentioningModuleName] ?? nil)
+			let declaringModule = ModuleIdentity(moduleName: declaringModuleName, packageName: packageNameByModuleName[declaringModuleName] ?? nil)
+			if level.satisfies(AccessLevel.required(toConstructFrom: mentioningModule, declaredIn: declaringModule, isOwnFile: false)) {
+				return .nameable
+			} else if level.satisfies(.package), mentioningModule.packageName == nil || declaringModule.packageName == nil {
+				return .acrossUnknownPackageBoundary
+			} else {
+				return .unreachable
+			}
+		}
+
+		/// How a mention reaches the declarations of a module.
+		public enum Reach: Sendable {
+			/// The mention can name them.
+			case nameable
+			/// The mention can name them, which are `package`, if the two modules share a package, which SafeDI is not told.
+			case acrossUnknownPackageBoundary
+			/// The mention cannot name them: the mentioning module does not read their module, or they are too narrow.
+			case unreachable
+		}
+
+		private let viewerModuleName: String?
+		/// The modules the run of each module other than the viewer reads, or `nil` when SafeDI is not told.
+		private let moduleNamesReadByModuleName: [String: Set<String>]?
+		private let packageNameByModuleName: [String: String?]
+	}
+
+	/// What a mention of a type's name in one module means, by the one rule the proof and `distinguishingTypesUnnameable`
+	/// read (`PlainTypeDeclarations.meaning(of:mentionedFrom:)`).
+	public struct MentionMeaning: Sendable {
+		/// The declarations the mention may name, in the order of their files and within a file in source order: the
+		/// module's own, or else the declarations `package` or wider of the modules it can reach (`ModuleReach`), and those
+		/// of no known module.
+		public let declarations: [PlainTypeDeclaration]
+		/// The modules whose declaration of the name the mention can name.
+		public let moduleNames: Set<String>
+		/// The modules whose `package` declaration the mention can name if they share a package with the module that writes
+		/// it, which SafeDI is not told.
+		public let moduleNamesAcrossUnknownPackageBoundary: Set<String>
+		/// Whether a declaration of the name is in a file SafeDI knows no module of, which the mention may name.
+		public let mayMeanDeclarationOfUnknownModule: Bool
+
+		/// The modules whose declaration of the name the mention may name.
+		public var moduleNamesItMayMean: Set<String> {
+			moduleNames.union(moduleNamesAcrossUnknownPackageBoundary)
+		}
+
+		/// Whether SafeDI records one module's declaration of the name that the mention can certainly name, and no other.
+		public var isSingleKnownDeclaration: Bool {
+			moduleNames.count == 1 && moduleNamesAcrossUnknownPackageBoundary.isEmpty && !mayMeanDeclarationOfUnknownModule
+		}
+	}
+}
+
 // MARK: - TypeAccessProof.MentionedDeclarations
 
 extension TypeAccessProof {
@@ -1031,7 +1147,8 @@ extension TypeAccessProof {
 		///   - instantiables: The declarations of the run. An `@Instantiable` type declaration is no plain declaration and is
 		///     one a mention can name; an extension declares no type, and a `mockOnly` declaration names one declared elsewhere.
 		///   - plainTypeDeclarations: The plain declarations of the run, each with its module.
-		public init(instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration]) {
+		///   - reach: Which declarations a mention in each module can name.
+		public init(instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration], reach: ModuleReach) {
 			let instantiableTypeDeclarations = instantiables
 				.filter { !$0.mockOnly && !$0.declarationType.isExtension }
 				.map {
@@ -1050,14 +1167,14 @@ extension TypeAccessProof {
 				entryTypes: Set(instantiables.map(\.concreteInstantiable)),
 				moduleNames: Set(instantiables.compactMap(\.moduleName)),
 				isOwnFile: nil,
+				reach: reach,
 			)
 		}
 
-		/// The declarations a mention of `type` in `mentioningModule` names, as `PlainTypeDeclarations.candidates(named:mentionedFrom:)`
-		/// finds them: the module's own, or else those of `package` level or wider. Which of those the module can reach
-		/// depends on what it reads, which is the caller's to ask.
-		public func named(_ type: TypeDescription, mentionedFrom mentioningModule: MentioningModule) -> [PlainTypeDeclaration] {
-			declarations.candidates(named: type, mentionedFrom: mentioningModule)
+		/// What a mention of `type` in `mentioningModule` means, as `PlainTypeDeclarations.meaning(of:mentionedFrom:)` finds
+		/// it for the proof too.
+		public func meaning(of type: TypeDescription, mentionedFrom mentioningModule: MentioningModule) -> MentionMeaning {
+			declarations.meaning(of: type, mentionedFrom: mentioningModule)
 		}
 
 		private let declarations: PlainTypeDeclarations
@@ -1076,7 +1193,8 @@ extension TypeAccessProof {
 		///   - moduleNames: The names of the modules the proof's entries are declared in, which, with those of the
 		///     declarations, a mention can spell before a type's name.
 		///   - isOwnFile: Whether a file is one of the run's own files.
-		init(_ plainTypeDeclarations: [PlainTypeDeclaration], entryTypes: Set<TypeDescription>, moduleNames: Set<String>, isOwnFile: (@Sendable (String) -> Bool)?) {
+		///   - reach: Which declarations of other modules a mention in each module can name.
+		init(_ plainTypeDeclarations: [PlainTypeDeclaration], entryTypes: Set<TypeDescription>, moduleNames: Set<String>, isOwnFile: (@Sendable (String) -> Bool)?, reach: ModuleReach) {
 			var declarationsByType = [String: [PlainTypeDeclaration]]()
 			// A declaration no other file can name is never what a mention in another file names.
 			for declaration in plainTypeDeclarations.sortedByDeclaration() where declaration.isVisibleOutsideItsFile {
@@ -1086,13 +1204,54 @@ extension TypeAccessProof {
 			self.entryTypes = entryTypes
 			self.moduleNames = moduleNames.union(plainTypeDeclarations.compactMap(\.moduleName))
 			self.isOwnFile = isOwnFile
+			self.reach = reach
 		}
 
 		let isOwnFile: (@Sendable (String) -> Bool)?
 
-		/// The plain declarations a mention of `type` in a declaration of the module of `mentioning` names, in the order of
-		/// their files and within a file in source order (two clauses of a platform-conditioned block can each declare it);
-		/// empty when SafeDI records none that module can name. A mention spelled with a module's name before the type's
+		/// The plain declarations a mention of `type` in a declaration of the module of `mentioning` names: those
+		/// `meaning(of:mentionedFrom:)` finds.
+		func candidates(named type: TypeDescription, mentionedFrom mentioningModule: MentioningModule) -> [PlainTypeDeclaration] {
+			meaning(of: type, mentionedFrom: mentioningModule).declarations
+		}
+
+		/// What a mention of `type` in a declaration of the module of `mentioningModule` means: the declarations
+		/// `declarationsNamed(_:mentionedFrom:)` finds by name, less those of another module the mentioning module cannot
+		/// name (`ModuleReach`), with the modules of those it keeps. The declarations of one module are kept or dropped
+		/// together, by the narrowest of them.
+		func meaning(of type: TypeDescription, mentionedFrom mentioningModule: MentioningModule) -> MentionMeaning {
+			let declarations = declarationsNamed(type, mentionedFrom: mentioningModule)
+			var levelByModuleName = [String: AccessLevel]()
+			for declaration in declarations {
+				if let moduleName = declaration.moduleName {
+					levelByModuleName[moduleName] = levelByModuleName[moduleName].map(declaration.levelBeforeExtendedTypeCap.capped(by:)) ?? declaration.levelBeforeExtendedTypeCap
+				}
+			}
+			var moduleNames = Set<String>()
+			var moduleNamesAcrossUnknownPackageBoundary = Set<String>()
+			for (moduleName, level) in levelByModuleName {
+				switch reach.reach(ofDeclarationsIn: moduleName, at: level, from: mentioningModule.moduleName) {
+				case .nameable:
+					moduleNames.insert(moduleName)
+				case .acrossUnknownPackageBoundary:
+					moduleNamesAcrossUnknownPackageBoundary.insert(moduleName)
+				case .unreachable:
+					break
+				}
+			}
+			return MentionMeaning(
+				declarations: declarations.filter { declaration in
+					declaration.moduleName.map { moduleNames.contains($0) || moduleNamesAcrossUnknownPackageBoundary.contains($0) } ?? true
+				},
+				moduleNames: moduleNames,
+				moduleNamesAcrossUnknownPackageBoundary: moduleNamesAcrossUnknownPackageBoundary,
+				mayMeanDeclarationOfUnknownModule: declarations.contains { $0.moduleName == nil },
+			)
+		}
+
+		/// The plain declarations a mention of `type` in a declaration of the module of `mentioning` names by its name, in
+		/// the order of their files and within a file in source order (two clauses of a platform-conditioned block can each
+		/// declare it); empty when SafeDI records none that module can name. A mention spelled with a module's name before the type's
 		/// (`Core.Theme`), where the view holds a module of that name and no type of it, names that module's declarations
 		/// of the rest. Otherwise the mentioning module's own declaration is what Swift resolves the name to, and without
 		/// one, a declaration another module declares `package` or wider: the only kind another module can name, and none
@@ -1102,7 +1261,7 @@ extension TypeAccessProof {
 		/// declaration SafeDI knows no module of that is not in one of the run's own files – read from a directory a
 		/// configuration adds, or by a run of the Xcode project plugin – is taken at its level when that is `package` or
 		/// wider, whichever package it is in. Generic arguments name nothing a declaration records.
-		func candidates(named type: TypeDescription, mentionedFrom mentioningModule: MentioningModule) -> [PlainTypeDeclaration] {
+		private func declarationsNamed(_ type: TypeDescription, mentionedFrom mentioningModule: MentioningModule) -> [PlainTypeDeclaration] {
 			guard let type = type.withoutGenericArguments else { return [] }
 			if let moduleName = type.outermostTypeName,
 			   moduleNames.contains(moduleName),
@@ -1146,6 +1305,7 @@ extension TypeAccessProof {
 		/// The declarations, by the type each declares (`TypeDescription.plainDeclarationKey`).
 		private let declarationsByType: [String: [PlainTypeDeclaration]]
 		private let entryTypes: Set<TypeDescription>
+		private let reach: ModuleReach
 		/// The names of the modules a mention can spell before a type's name.
 		let moduleNames: Set<String>
 	}
