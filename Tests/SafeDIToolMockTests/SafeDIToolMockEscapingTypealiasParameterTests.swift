@@ -842,6 +842,194 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		""", "Unexpected output \(output.mockFiles["Parent+SafeDIMock.swift"] ?? "")")
 	}
 
+	// MARK: Tests – a parameter of another module's public mock
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesParameterEscaping_whenOnlyATypeBeneathAnotherModulesPublicMockDeclaresTypealiasOfClosureEscaping(integration: MultiModuleIntegration) async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesCallingPublicMockOfInner(),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let generatedFiles = try #require(output.modules["Mid"]).generatedFiles
+		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "Mid", imports: ["Feature"], mockedTypeName: "Middle", code: Self.middleMock(under: integration)), "Unexpected output \(generatedFiles)")
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func publicMock_takesParameterEscaping_whenOnlyATypeBeneathAnotherModulesPublicMockDeclaresTypealiasOfClosureEscaping(integration: MultiModuleIntegration) async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesCallingPublicMockOfInner(middleAttributes: "generateMock: .public"),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let generatedFiles = try #require(output.modules["Mid"]).generatedFiles
+		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "Mid", imports: ["Feature"], mockedTypeName: "Middle", code: Self.middleMock(under: integration, isPublic: true)), "Unexpected output \(generatedFiles)")
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesParameterEscaping_whenPublicMockCalledIsOfSeam(integration: MultiModuleIntegration) async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesCallingPublicMockOfInner(innerAttributes: "generateDependencyTree: true, generateMock: .public"),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let generatedFiles = try #require(output.modules["Mid"]).generatedFiles
+		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "Mid", imports: ["Feature"], mockedTypeName: "Middle", code: Self.middleMock(under: integration)), "Unexpected output \(generatedFiles)")
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesParameterEscaping_whenPublicMockIsCalledInsideInstantiator(integration: MultiModuleIntegration) async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesCallingPublicMockOfInner(middleProperty: "innerBuilder: Instantiator<Inner>"),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let generatedFiles = try #require(output.modules["Mid"]).generatedFiles
+		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "Mid", imports: ["Feature"], mockedTypeName: "Middle", code: """
+		#if DEBUG
+		extension Middle {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            innerBuilder: Inner.SafeDIOverrides = .init()
+		        ) {
+		            self.innerBuilder = innerBuilder
+		        }
+
+		        let innerBuilder: Inner.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        onTap: @escaping OnTap,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Middle {
+		        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // \(Self.guardComment(under: integration, moduleName: "Feature", typeName: "Inner"))
+		        func __safeDI_innerBuilder() -> Inner {
+		            Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.innerBuilder)
+		        }
+		        let innerBuilder = Instantiator<Inner>(__safeDI_innerBuilder)
+		        return Middle(innerBuilder: innerBuilder)
+		    }
+		}
+		#endif
+		"""), "Unexpected output \(generatedFiles)")
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesParameterEscaping_whenTypealiasOfClosureIsMemberType(integration: MultiModuleIntegration) async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesCallingPublicMockOfInner(typealiasDeclaration: "public enum Space { public typealias OnTap = (Int) -> Void }", onTapType: "Space.OnTap"),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let generatedFiles = try #require(output.modules["Mid"]).generatedFiles
+		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "Mid", imports: ["Feature"], mockedTypeName: "Middle", code: Self.middleMock(under: integration, onTapType: "Space.OnTap", calledGuardHash: "9E97244FDF6BDF5D")), "Unexpected output \(generatedFiles)")
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesParameterEscaping_whenPublicMockCalledCallsPublicMockOfThirdModule(integration: MultiModuleIntegration) async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesCallingPublicMockOfInner(middleAttributes: "generateMock: .public", middleInitializerAccess: "") + [
+				ModuleFixture(name: "App", packageName: "Third", swiftFileContent: [
+					"""
+					import Feature
+					import Mid
+
+					@Instantiable(generateMock: true)
+					public final class Outer: Instantiable {
+					    public init(middle: Middle) { self.middle = middle }
+					    @Instantiated let middle: Middle
+					}
+					""",
+				], dependencies: ["Feature", "Mid"]),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let generatedFiles = try #require(output.modules["App"]).generatedFiles
+		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "App", imports: ["Feature", "Mid"], mockedTypeName: "Outer", code: """
+		#if DEBUG
+		extension Outer {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            middle: Middle.SafeDIOverrides = .init()
+		        ) {
+		            self.middle = middle
+		        }
+
+		        let middle: Middle.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        onTap: @escaping OnTap,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Outer {
+		        _ = Middle.__safeDI_Middle_mock_DE28F65876F78D79.self // \(Self.guardComment(under: integration, moduleName: "Mid", typeName: "Middle"))
+		        let middle = Middle.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.middle)
+		        return Outer(middle: middle)
+		    }
+		}
+		#endif
+		"""), "Unexpected output \(generatedFiles)")
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesSeamParameterAsAutoclosure_whenOnlyATypeBeneathAnotherModulesSeamDeclaresTypealiasOfClosureEscaping(integration: MultiModuleIntegration) async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesCallingPublicMockOfInner(innerAttributes: "generateDependencyTree: true", middleAttributes: "generateDependencyTree: true"),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let fileName = switch integration {
+		case .moduleInfo: "Mid.swift"
+		case .swiftPackagePlugin: "Middle+SafeDI.swift"
+		}
+		let generatedFiles = try #require(output.modules["Mid"]).generatedFiles
+		#expect(generatedFiles == [fileName: generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Middle {
+		    public convenience init(onTap __safeDI_onTap: @autoclosure @escaping () -> OnTap) {
+		        let onTap = LazilyInstantiated<OnTap>(__safeDI_onTap)
+		        func __safeDI_inner() -> Inner {
+		            _ = Inner.__safeDI_Inner_620B4A759064B3AE.self // \(Self.guardComment(under: integration, moduleName: "Feature", typeName: "Inner"))
+		            return Inner(onTap: onTap.instance)
+		        }
+		        let inner: Inner = __safeDI_inner()
+		        self.init(inner: inner)
+		    }
+		}
+
+		extension Middle {
+		    public enum __safeDI_Middle_620B4A759064B3AE {}
+		}
+		"""], "Unexpected output \(generatedFiles)")
+		try expectEveryModuleCompiled(output)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -849,4 +1037,112 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 	private static let onTapSource = """
 	public typealias OnTap = @MainActor (Int) -> Void
 	"""
+
+	/// `Inner`'s tree, in module `Feature`, holds the only declaration of the closure's parameter that says `@escaping`,
+	/// and `Middle`, in a module of another package, cannot build `Inner`, whose initializer is internal.
+	private static func modulesCallingPublicMockOfInner(
+		typealiasDeclaration: String = "public typealias OnTap = (Int) -> Void",
+		onTapType: String = "OnTap",
+		innerAttributes: String = "generateMock: .public",
+		middleAttributes: String = "generateMock: true",
+		middleProperty: String = "inner: Inner",
+		middleInitializerAccess: String = "public ",
+	) -> [ModuleFixture] {
+		let middleLabel = middleProperty.prefix { $0 != ":" }
+		return [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				typealiasDeclaration,
+				"""
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init(onTap: @escaping \(onTapType)) { self.onTap = onTap }
+				    @Received let onTap: \(onTapType)
+				}
+				""",
+				"""
+				@Instantiable(\(innerAttributes))
+				public final class Inner: Instantiable {
+				    init(leaf: Leaf) { self.leaf = leaf }
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+			]),
+			ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: [
+				"""
+				import Feature
+
+				@Instantiable(\(middleAttributes))
+				public final class Middle: Instantiable {
+				    \(middleInitializerAccess)init(\(middleProperty)) { self.\(middleLabel) = \(middleLabel) }
+				    @Instantiated let \(middleProperty)
+				}
+				""",
+			], dependencies: ["Feature"]),
+		]
+	}
+
+	/// `Middle`'s generated mock, which calls the public mock of `Inner`.
+	private static func middleMock(under integration: MultiModuleIntegration, isPublic: Bool = false, onTapType: String = "OnTap", calledGuardHash: String = "DE28F65876F78D79") -> String {
+		let modifier = isPublic ? "public " : ""
+		let ownGuard = isPublic ? """
+
+
+		extension Middle {
+		    public enum __safeDI_Middle_mock_\(calledGuardHash) {}
+		}
+		""" : ""
+		return """
+		#if DEBUG
+		extension Middle {
+		    /// Overrides for the mock dependency tree.
+		    \(modifier)struct SafeDIOverrides {
+		        \(modifier)init(
+		            inner: Inner.SafeDIOverrides = .init()
+		        ) {
+		            self.inner = inner
+		        }
+
+		        \(modifier)let inner: Inner.SafeDIOverrides
+		    }
+
+		    \(modifier)static func mock(
+		        onTap: @escaping \(onTapType),
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Middle {
+		        _ = Inner.__safeDI_Inner_mock_\(calledGuardHash).self // \(guardComment(under: integration, moduleName: "Feature", typeName: "Inner"))
+		        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+		        return Middle(inner: inner)
+		    }
+		}\(ownGuard)
+		#endif
+		"""
+	}
+
+	/// The comment on a generated line that names the guard enum of `typeName`, declared in module `moduleName`.
+	private static func guardComment(under integration: MultiModuleIntegration, moduleName: String, typeName: String) -> String {
+		switch integration {
+		case .moduleInfo:
+			"If this line does not compile, compile the code SafeDI generates for module \(moduleName) into \(moduleName): under Bazel, add \(moduleName)'s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
+		case .swiftPackagePlugin:
+			"If this line does not compile, add the SafeDI plugin to the target that declares \(typeName)."
+		}
+	}
+
+	private static func mockFiles(under integration: MultiModuleIntegration, moduleName: String, imports: [String], mockedTypeName: String, code: String) -> [String: String] {
+		let header = generatedFileHeader + imports.map { "#if canImport(\($0))\nimport \($0)\n#endif" }.joined(separator: "\n") + "\n\n"
+		return switch integration {
+		case .moduleInfo:
+			["\(moduleName).swift": header + code]
+		case .swiftPackagePlugin:
+			["\(mockedTypeName)+SafeDIMock.swift": header + code, "SafeDIMockConfiguration.swift": header]
+		}
+	}
+
+	/// Expects every module to have compiled, when compile verification runs.
+	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
+		guard compileVerificationIsEnabled else { return }
+		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
+		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
+		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
+	}
 }

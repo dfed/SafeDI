@@ -1349,6 +1349,8 @@ struct OwnPublicMockPlan: Sendable {
 	let plan: PublicMockPlan
 	/// The declarations in the mock's tree that receive each label, in tree order, which a diagnostic notes.
 	let receiversByLabel: [String: [(declaringType: TypeDescription, dependency: Dependency)]]
+	/// `ScopeGenerator.typesDeclaredEscaping` of the mock root.
+	let typesDeclaredEscaping: Set<TypeDescription>
 }
 
 /// How a mock tree calls the public mock another module generated for a type the tree cannot build itself (see
@@ -1392,6 +1394,10 @@ struct PublicMockCall: Sendable {
 	/// The holes whose builders the call fills (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)`); the call passes
 	/// every other builder up, as a dependency the calling tree receives.
 	var filledHoles = [SeamSignature.Hole]()
+	/// The types of the passed parameters that the mock's tree declares `@escaping` (`ScopeGenerator.typesDeclaredEscaping`).
+	/// The calling tree's scope for the type is a leaf, with no scopes for that tree, so a function the calling tree
+	/// declares with such a parameter learns the name here.
+	let typesDeclaredEscaping: Set<TypeDescription>
 }
 
 extension PublicMockCall {

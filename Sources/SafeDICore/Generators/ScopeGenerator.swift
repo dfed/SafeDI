@@ -109,6 +109,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.childrenTakePartInCycle = childrenTakePartInCycle
 		var typesDeclaredEscaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
 		typesDeclaredEscaping.formUnion(instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
+		typesDeclaredEscaping.formUnion(publicMockCall?.typesDeclaredEscaping ?? [])
 		for child in propertiesToGenerate where !child.typesDeclaredEscaping.isEmpty {
 			typesDeclaredEscaping.formUnion(child.typesDeclaredEscaping)
 		}

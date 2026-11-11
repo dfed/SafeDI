@@ -3500,6 +3500,7 @@ public actor DependencyTreeGenerator {
 				declaringModuleMockCondition: foreignPublicMock.declaringModuleMockCondition,
 				callerModuleMockCondition: seams.currentModuleMockCondition,
 				receiversByLabel: ownPlan.receiversByLabel,
+				typesDeclaredEscaping: ownPlan.typesDeclaredEscaping.intersection(tierParameters.map(\.type)),
 			)
 		}
 		return publicMockCalls
@@ -3664,6 +3665,7 @@ public actor DependencyTreeGenerator {
 				context: context,
 			),
 			receiversByLabel: ScopeGenerator.receivers(in: parameters.parameterTree, mockedType: instantiable),
+			typesDeclaredEscaping: parameters.typesDeclaredEscaping,
 		)
 	}
 
