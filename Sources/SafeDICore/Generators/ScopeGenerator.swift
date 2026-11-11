@@ -464,6 +464,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					firstReceives: Self.inOrderTheBodyFirstReceives(
 						ofLabels: receivedLabels,
 						builtProperty: property,
+						builtDeclaration: declaration,
 						builtType: instantiable.concreteInstantiable,
 						ownDependencies: instantiable.dependencies,
 						children: propertiesToGenerate,
@@ -2545,17 +2546,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// The first receive of each of `labels` – labels the body of the builder function of the scope that builds
-	/// `builtType` for `builtProperty` receives from the scopes enclosing it – in the order a walk of the body meets
-	/// them: the type's own dependencies, `ownDependencies`, then each of `children`'s trees, depth first, each scope's
-	/// dependencies (and a cycle-closing scope's parameters, which it receives for the function it refers to, where that
-	/// function's body first receives them) before its children's, all in declaration order. The order depends only on
-	/// where the labels are received, never on how they or their types are named, so renaming a graph never reorders a
-	/// function's parameters. Every label the body receives is met: a receive comes from a dependency of a type the walk
-	/// visits, an alias among the dependencies of the type declaring it, which the walk visits first, or a cycle-closing
-	/// scope's parameter.
+	/// `builtType` for `builtProperty`, the declaration `builtDeclaration`, receives from the scopes enclosing it – in the
+	/// order a walk of the body meets them: the type's own dependencies, `ownDependencies`, then each of `children`'s
+	/// trees, depth first, each scope's dependencies (and a cycle-closing scope's parameters, which it receives for the
+	/// function it refers to, where that function's body first receives them) before its children's, all in declaration
+	/// order. The order depends only on where the labels are received, never on how they or their types are named, so
+	/// renaming a graph never reorders a function's parameters. Every label the body receives is met: a receive comes
+	/// from a dependency of a type the walk visits, an alias among the dependencies of the type declaring it, which the
+	/// walk visits first, or a cycle-closing scope's parameter.
 	private static func inOrderTheBodyFirstReceives(
 		ofLabels labels: Set<String>,
 		builtProperty: Property,
+		builtDeclaration: BuiltDeclaration,
 		builtType: TypeDescription,
 		ownDependencies: [Dependency],
 		children: [ScopeGenerator],
@@ -2607,9 +2609,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			// A cycle-closing scope receives the parameters of the function it refers to, where that function's body does.
 			for parameter in generator.cycleParameters where generator.closesPropertyCycle {
-				meet(parameter.property.label, receiver: generator.property == builtProperty
-					// This function's own parameter, whose receive this walk met where the scope was given the parameter: a
-					// chain through the scope would grow with each pass that finds the parameters, which then never settle.
+				// This function's own parameter, whose receive this walk met where the scope was given the parameter: a chain
+				// through the scope would grow with each pass that finds the parameters, which then never settle. A scope
+				// closes on this function when it repeats its declaration, in either form: a lazily instantiated scope repeats a
+				// constant declaration of its label and instance type, and a constant scope a lazily instantiated one, while
+				// their properties differ. A scope of this function's property that closes on a function built for another
+				// concrete type keeps the receiver it was given too; a chain through it would change only diagnostic text.
+				meet(parameter.property.label, receiver: generator.property == builtProperty || generator.closedOnDeclaration == builtDeclaration
 					? parameter.receiver
 					: .init(declarationLocation: parameter.receiver.declarationLocation, chain: chain(endingAt: parentIndex) + parameter.receiver.chain))
 			}
