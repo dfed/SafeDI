@@ -582,6 +582,43 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// This type as a parameter of a function generated code declares: `asFunctionParameter`, or, for one of
+	/// `typesDeclaredEscaping` (`nameDeclaredEscaping`), `@escaping`, which SafeDI cannot tell a name needs from the name.
+	func asFunctionParameter(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> TypeDescription {
+		typesDeclaredEscaping.contains(self) ? .attributed(self, specifiers: [], attributes: ["escaping"]) : asFunctionParameter
+	}
+
+	/// The name this parameter type declares `@escaping`, or `nil` for any other type. SafeDI cannot see that a name is
+	/// a typealias of a function type, but Swift accepts `@escaping` only on a function type, so a parameter spelled
+	/// `@escaping OnTap` takes a property spelled `OnTap`. Any other attribute or specifier beside it (`@autoclosure`,
+	/// `@Sendable`, `sending`) changes what the parameter takes, or what it can be passed, so that is another type.
+	var nameDeclaredEscaping: TypeDescription? {
+		guard case let .attributed(type, specifiers, attributes) = self,
+		      specifiers.isEmpty,
+		      attributes == ["escaping"]
+		else { return nil }
+		switch type {
+		case .nested,
+		     .simple:
+			return type
+		case .any,
+		     .array,
+		     .attributed,
+		     .closure,
+		     .composition,
+		     .dictionary,
+		     .implicitlyUnwrappedOptional,
+		     .metatype,
+		     .optional,
+		     .some,
+		     .tuple,
+		     .unknown,
+		     .variadic,
+		     .void:
+			return nil
+		}
+	}
+
 	/// Whether this type is a closure (function) type, possibly wrapped in attributes.
 	public var isClosure: Bool {
 		switch self {

@@ -153,6 +153,11 @@ public struct Initializer: Codable, Hashable, Sendable {
 		// We're good!
 	}
 
+	/// The names this initializer's parameters declare `@escaping`, each of which is a function type (`nameDeclaredEscaping`).
+	var typesDeclaredEscaping: [TypeDescription] {
+		arguments.compactMap(\.typeDescription.nameDeclaredEscaping)
+	}
+
 	public func mapArguments(_ transform: (Argument) -> Argument) -> Self? {
 		.init(
 			access: access,
@@ -361,6 +366,15 @@ public struct Initializer: Codable, Hashable, Sendable {
 			)
 		}
 
+		/// The property as `Property.asFunctionParamter` spells it when this argument takes that property: `asProperty`,
+		/// without the `@escaping` of a name, which that spelling does not know a name needs.
+		public var asFunctionParameterProperty: Property {
+			Property(
+				label: innerLabel,
+				typeDescription: typeDescription.nameDeclaredEscaping ?? typeDescription,
+			)
+		}
+
 		public init(_ node: FunctionParameterSyntax) {
 			if let secondName = node.secondName {
 				outerLabel = node.firstName.spelledAsParameterName
@@ -404,9 +418,11 @@ public struct Initializer: Codable, Hashable, Sendable {
 extension TypeDescription {
 	/// Whether a parameter of type `argument` takes a property of this type: the parameter's type is this type as a
 	/// function parameter (`asFunctionParameter`, which spells a closure type `@escaping`), with its attributes in any
-	/// order, since Swift reads `@Sendable @escaping` and `@escaping @Sendable` as one type.
+	/// order, since Swift reads `@Sendable @escaping` and `@escaping @Sendable` as one type. Or the parameter's type is
+	/// this name declared `@escaping` (`nameDeclaredEscaping`).
 	fileprivate func isEqualToFunctionArgument(_ argument: TypeDescription) -> Bool {
 		asFunctionParameter.withAttributesInSortedOrder == argument.withAttributesInSortedOrder
+			|| argument.nameDeclaredEscaping == self
 	}
 
 	/// This type with the attributes that apply to it in sorted order, which Swift accepts in any order.

@@ -700,6 +700,7 @@ extension ScopeGenerator {
 			// A public mock takes each property received only if available as a parameter, so only the tree's nodes make
 			// a `SafeDIOverrides`.
 			hasOverrides: !treePropertyNodes.isEmpty,
+			typesDeclaredEscaping: parameters.typesDeclaredEscaping,
 			context: context,
 		)
 		plan.noTierParameters = noTierParameters(in: parameters.parameterTree, leftOut: parameters.receivedOnlyByPublicMockCallsLeftOut)
@@ -772,6 +773,7 @@ extension ScopeGenerator {
 		passedUpHoles: [Property: SeamSignature.Hole],
 		sendablePassedUpBuilders: Set<Property>,
 		hasOverrides: Bool,
+		typesDeclaredEscaping: Set<TypeDescription>,
 		context: PublicMockContext,
 	) -> PublicMockPlan {
 		let typeName = instantiable.concreteInstantiable.asSource
@@ -835,7 +837,7 @@ extension ScopeGenerator {
 					leadingParameters.append(optionalParameter(named: property.label, type: property.typeDescription.strippingEscaping, resolvedTo: forwardedDefault.expression, role: .forwarded(property)))
 				}
 			} else {
-				leadingParameters.append(PublicMockParameter(name: property.label, type: property.typeDescription, typeSource: property.typeDescription.asFunctionParameter.asSource, defaultSource: nil, defaultKind: .none, access: access(of: property.typeDescription, receivedAs: nil), role: .forwarded(property)))
+				leadingParameters.append(PublicMockParameter(name: property.label, type: property.typeDescription, typeSource: property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource, defaultSource: nil, defaultKind: .none, access: access(of: property.typeDescription, receivedAs: nil), role: .forwarded(property)))
 			}
 		}
 		for rootDefault in rootDefaultParameters {
@@ -889,7 +891,7 @@ extension ScopeGenerator {
 				let optionalProperty = Property(label: property.label, typeDescription: .optional(property.typeDescription))
 				leadingParameters.append(PublicMockParameter(name: name, type: optionalProperty.typeDescription, typeSource: optionalProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: optionalProperty.typeDescription, receivedAs: property.label), accessCause: cause(of: optionalProperty.typeDescription, receivedAs: property.label), role: .received(optionalProperty, isRequired: false), isBuiltWhenNil: true))
 			} else {
-				leadingParameters.append(PublicMockParameter(name: name, type: property.typeDescription, typeSource: property.typeDescription.asFunctionParameter.asSource, defaultSource: nil, defaultKind: .none, access: access(of: property.typeDescription, receivedAs: property.label), role: .received(property, isRequired: true)))
+				leadingParameters.append(PublicMockParameter(name: name, type: property.typeDescription, typeSource: property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource, defaultSource: nil, defaultKind: .none, access: access(of: property.typeDescription, receivedAs: property.label), role: .received(property, isRequired: true)))
 			}
 		}
 		for uncovered in flatUncoveredParameters {
@@ -1347,6 +1349,8 @@ struct OwnPublicMockPlan: Sendable {
 	let plan: PublicMockPlan
 	/// The declarations in the mock's tree that receive each label, in tree order, which a diagnostic notes.
 	let receiversByLabel: [String: [(declaringType: TypeDescription, dependency: Dependency)]]
+	/// `ScopeGenerator.typesDeclaredEscaping` of the mock root.
+	let typesDeclaredEscaping: Set<TypeDescription>
 }
 
 /// How a mock tree calls the public mock another module generated for a type the tree cannot build itself (see
@@ -1390,6 +1394,10 @@ struct PublicMockCall: Sendable {
 	/// The holes whose builders the call fills (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)`); the call passes
 	/// every other builder up, as a dependency the calling tree receives.
 	var filledHoles = [SeamSignature.Hole]()
+	/// The types of the passed parameters that the mock's tree declares `@escaping` (`ScopeGenerator.typesDeclaredEscaping`).
+	/// The calling tree's scope for the type is a leaf, with no scopes for that tree, so a function the calling tree
+	/// declares with such a parameter learns the name here.
+	let typesDeclaredEscaping: Set<TypeDescription>
 }
 
 extension PublicMockCall {

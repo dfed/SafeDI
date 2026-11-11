@@ -187,10 +187,10 @@ public struct SeamSignature: Sendable {
 
 		/// The parameter as the generated initializer declares it. No parameter has a default, so every call passes a
 		/// deferred one too, `nil` where the caller holds nothing.
-		public var generatedSpelling: String {
+		func generatedSpelling(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
 			switch deferral {
 			case .none:
-				property.asFunctionParamterSyntax.description
+				property.asFunctionParameterSyntax(amongTypesDeclaredEscaping: typesDeclaredEscaping).description
 			case let .deferred(isSendable):
 				"\(property.label.spelledAsArgumentLabel) \(internalName): @autoclosure @escaping\(isSendable ? " @Sendable" : "") () -> \(deferredValueType.asSource)"
 			}

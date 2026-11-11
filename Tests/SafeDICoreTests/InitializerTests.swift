@@ -75,6 +75,69 @@ struct InitializerTests {
 		}
 	}
 
+	@Test(arguments: [
+		// A name Swift accepts `@escaping` on is a typealias of a function type, whatever the attribute's spelling around it.
+		("OnTap", "@escaping OnTap"),
+		("Space.OnTap", "@escaping Space.OnTap"),
+		("Callback<String>", "@escaping Callback<String>"),
+		("(OnTap)", "@escaping OnTap"),
+		("OnTap", "@escaping (OnTap)"),
+		("OnTap", "OnTap"),
+		// A closure spelled out is `@escaping` as a parameter, with its attributes in any order.
+		("() -> Void", "@escaping () -> Void"),
+		("(() -> Void)", "@escaping () -> Void"),
+		("@Sendable () -> Void", "@escaping @Sendable () -> Void"),
+		("@Sendable () -> Void", "@Sendable @escaping () -> Void"),
+		("@MainActor () -> Void", "@escaping @MainActor () -> Void"),
+		// An optional closure is already escaping.
+		("OnTap?", "OnTap?"),
+		("(() -> Void)?", "(() -> Void)?"),
+	])
+	func isValid_returnsTrue_whenParameterTakesAPropertyOfItsType(propertyType: String, parameterType: String) throws {
+		try expectParameter(ofType: parameterType, fulfillsProperty: propertyType, isFulfilled: true)
+	}
+
+	@Test(arguments: [
+		// An `@autoclosure` parameter takes the closure's result, not the closure.
+		("OnTap", "@autoclosure OnTap"),
+		("OnTap", "@autoclosure @escaping OnTap"),
+		("() -> Void", "@autoclosure @escaping () -> Void"),
+		// Each of these attributes or specifiers on a name makes the parameter another type than the property's.
+		("OnTap", "@Sendable OnTap"),
+		("OnTap", "@escaping @Sendable OnTap"),
+		("OnTap", "@MainActor OnTap"),
+		("OnTap", "@escaping @MainActor OnTap"),
+		("OnTap", "@escaping @convention(c) OnTap"),
+		("OnTap", "sending @escaping OnTap"),
+		("OnTap", "inout OnTap"),
+		("() -> Void", "@escaping @Sendable () -> Void"),
+		// `@escaping` looks past nothing but itself: not another name, and not an optional, on which Swift rejects it.
+		("OnTap", "@escaping Other"),
+		("Space.OnTap", "@escaping OnTap"),
+		("OnTap?", "@escaping OnTap?"),
+		("OnTap?", "@escaping OnTap"),
+		("OnTap", "@escaping OnTap?"),
+	])
+	func isValid_returnsFalse_whenParameterDoesNotTakeAPropertyOfItsType(propertyType: String, parameterType: String) throws {
+		try expectParameter(ofType: parameterType, fulfillsProperty: propertyType, isFulfilled: false)
+	}
+
+	private func expectParameter(ofType parameterType: String, fulfillsProperty propertyType: String, isFulfilled: Bool) throws {
+		let type = try #require(Parser.parse(source: "let x: \(propertyType)").statements.first?.item.as(VariableDeclSyntax.self)?.bindings.first?.typeAnnotation?.type).typeDescription
+		let initializerSyntax = try #require(Parser.parse(source: "init(x: \(parameterType)) {}").statements.first?.item.as(InitializerDeclSyntax.self))
+		let property = Property(label: "x", typeDescription: type)
+		// The match does not depend on the property's decorator.
+		let sources: [Dependency.Source] = [
+			.instantiated(fulfillingTypeDescription: nil, erasedToConcreteExistential: false),
+			.received(onlyIfAvailable: false),
+			.aliased(fulfillingProperty: Property(label: "y", typeDescription: type), erasedToConcreteExistential: false, onlyIfAvailable: false),
+			.forwarded,
+		]
+		for source in sources {
+			#expect(Initializer(initializerSyntax).isValid(forFulfilling: [Dependency(property: property, source: source)]) == isFulfilled, "`x: \(propertyType)` and `x: \(parameterType)`, \(source)")
+		}
+	}
+
 	@Test
 	func generateSafeDIInitializer_throwsWhenInitializerIsPrivateOrFilePrivate() {
 		for accessLevel in [AccessLevel.private, .fileprivate] {

@@ -417,7 +417,7 @@ public struct InstantiableMacro: MemberMacro {
 						let properties = visitor.dependencies.map(\.property)
 
 						var existingParameters = fixedSyntax.signature.parameterClause.parameters.reduce(into: [Property: FunctionParameterSyntax]()) { partialResult, next in
-							partialResult[Initializer.Argument(next).asProperty] = next
+							partialResult[Initializer.Argument(next).asFunctionParameterProperty] = next
 						}
 						fixedSyntax.signature.parameterClause.parameters = []
 						func normalizeFunctionParameter(_ parameter: FunctionParameterSyntax, for property: Property) -> FunctionParameterSyntax {
@@ -451,7 +451,7 @@ public struct InstantiableMacro: MemberMacro {
 						// Inserted in source order, each parameter lands among those inserted before it.
 						for priorIndex in syntaxToFix.signature.parameterClause.parameters.indices {
 							let existingParameter = syntaxToFix.signature.parameterClause.parameters[priorIndex]
-							if existingParameters[Initializer.Argument(existingParameter).asProperty] == existingParameter {
+							if existingParameters[Initializer.Argument(existingParameter).asFunctionParameterProperty] == existingParameter {
 								fixedSyntax.signature.parameterClause.parameters.insert(
 									existingParameter,
 									at: fixedSyntax.signature.parameterClause.parameters.index(
@@ -1840,7 +1840,7 @@ public struct InstantiableMacro: MemberMacro {
 		var result = original
 		let existingArgumentCount = original.parameters.count
 		var existingParameters = original.parameters.reduce(into: [Property: FunctionParameterSyntax]()) { partialResult, next in
-			partialResult[Initializer.Argument(next).asProperty] = next
+			partialResult[Initializer.Argument(next).asFunctionParameterProperty] = next
 		}
 		result.parameters = []
 		for property in requiredProperties {
@@ -1851,7 +1851,7 @@ public struct InstantiableMacro: MemberMacro {
 			}
 		}
 		// Append remaining non-required parameters (e.g., extra parameters with defaults), in source order.
-		for parameter in original.parameters where existingParameters[Initializer.Argument(parameter).asProperty] == parameter {
+		for parameter in original.parameters where existingParameters[Initializer.Argument(parameter).asFunctionParameterProperty] == parameter {
 			result.parameters.append(parameter)
 		}
 		// Fix up trailing commas.
