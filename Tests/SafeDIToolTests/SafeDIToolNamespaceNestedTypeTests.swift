@@ -1274,7 +1274,11 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 		#expect(output.generatedFiles == [
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Feature.Screen {
-			    public init(mode __safeDI_mode: @autoclosure @escaping () -> Feature.Mode) {
+			    public init(mode: Feature.Mode) {
+			        self.init(__safeDI_mode: mode)
+			    }
+
+			    public init(__safeDI_mode: @autoclosure @escaping () -> Feature.Mode) {
 			        let mode = LazilyInstantiated<Feature.Mode>(__safeDI_mode)
 			        let child = Feature.Child(mode: mode.instance)
 			        self.init(child: child)

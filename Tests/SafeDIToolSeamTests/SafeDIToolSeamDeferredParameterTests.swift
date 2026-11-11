@@ -85,7 +85,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user __safeDI_user: @autoclosure @escaping () -> User) {
+		    public init(user: User) {
+		        self.init(__safeDI_user: user)
+		    }
+
+		    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 		        let user = LazilyInstantiated<User>(__safeDI_user)
 		        func __safeDI_detailBuilder() -> Detail {
 		            Detail(user: user.instance)
@@ -109,7 +113,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		        let user = LazilyInstantiated<User>(__safeDI_user)
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_08AA1A656B91D4BA.self
-		            return Screen(user: user.instance)
+		            return Screen(__safeDI_user: user.instance)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(user: user, screen: screen)
@@ -129,7 +133,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user __safeDI_user: @autoclosure @escaping () -> User?) {
+		    public init(user: User?) {
+		        self.init(__safeDI_user: user)
+		    }
+
+		    public init(__safeDI_user: @autoclosure @escaping () -> User?) {
 		        let user = LazilyInstantiated<User?>(__safeDI_user)
 		        func __safeDI_detailBuilder() -> Detail {
 		            Detail(user: user.instance)
@@ -152,7 +160,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		        let user = LazilyInstantiated<User>(__safeDI_user)
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_B61C3DC8DD996187.self
-		            return Screen(user: user.instance)
+		            return Screen(__safeDI_user: user.instance)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(user: user, screen: screen)
@@ -199,7 +207,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user __safeDI_user: @autoclosure @escaping @Sendable () -> User) {
+		    public init(user: User) {
+		        self.init(__safeDI_user: user)
+		    }
+
+		    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 		        @Sendable func __safeDI_detailBuilder() -> Detail {
 		            Detail(user: user.instance)
@@ -222,7 +234,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_8EFCFC03F02E0CB8.self
-		            return Screen(user: user.instance)
+		            return Screen(__safeDI_user: user.instance)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(user: user, screen: screen)
@@ -272,7 +284,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user __safeDI_user_: @autoclosure @escaping () -> User) {
+		    public init(user: User) {
+		        self.init(__safeDI_user: user)
+		    }
+
+		    public init(__safeDI_user __safeDI_user_: @autoclosure @escaping () -> User) {
 		        let user = LazilyInstantiated<User>(__safeDI_user_)
 		        @Sendable func __safeDI_panelBuilder() -> Panel {
 		            let user = User()
@@ -315,7 +331,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(default __safeDI_default: @autoclosure @escaping () -> User) {
+		    public init(`default`: User) {
+		        self.init(__safeDI_default: `default`)
+		    }
+
+		    public init(__safeDI_default: @autoclosure @escaping () -> User) {
 		        let `default` = LazilyInstantiated<User>(__safeDI_default)
 		        func __safeDI_detailBuilder() -> Detail {
 		            Detail(default: `default`.instance)
@@ -364,7 +384,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(currentUser __safeDI_currentUser: @autoclosure @escaping () -> User?) {
+		    public init(currentUser: User?) {
+		        self.init(__safeDI_currentUser: currentUser)
+		    }
+
+		    public init(__safeDI_currentUser: @autoclosure @escaping () -> User?) {
 		        let currentUser = LazilyInstantiated<User?>(__safeDI_currentUser)
 		        func __safeDI_detailBuilder() -> Detail {
 		            Detail(currentUser: currentUser.instance)
@@ -388,7 +412,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		            #sourceLocation()
 		            func __safeDI_screen() -> Screen {
 		                _ = Screen.__safeDI_Screen_397246C371CF5CDE.self
-		                return Screen(currentUser: currentUser)
+		                return Screen(__safeDI_currentUser: currentUser)
 		            }
 		            let screen: Screen = __safeDI_screen()
 		            return Parent(user: user, currentUser: currentUser, screen: screen)
@@ -434,7 +458,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(token __safeDI_token_: @autoclosure @escaping () -> Secret) {
+		    public init(token: Secret) {
+		        self.init(__safeDI_token: token)
+		    }
+
+		    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret) {
 		        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
 		        let token: any Auth = __safeDI_token_()
 		        #sourceLocation()
@@ -472,7 +500,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		let labels = handWrittenInitializer.contains("flag:") ? "user:flag:" : "user:"
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(\(labels))` at line 7, which can be called with the argument labels of its generated initializer, `init(user:)`, which takes `user` as an `@autoclosure`. A call with those labels would resolve to the hand-written initializer or be ambiguous. Rename the hand-written initializer's argument labels, or remove it.
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(\(labels))` at line 7, which can be called with the argument labels of its generated initializer, `init(user:)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename the hand-written initializer's argument labels, or remove it.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
@@ -507,11 +535,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenSeamDeclaresByValueInitializerBesideOptionalParameter() async {
-		// Beside `init(user: () -> User?)`, a hand-written `init(user: User)` takes every call from a caller holding a
+		// Beside `init(user: User?)`, a hand-written `init(user: User)` takes every call from a caller holding a
 		// `User`, so the seam's tree would silently not be built.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(user:)` at line 7, which can be called with the argument labels of its generated initializer, `init(user:)`, which takes `user` as an `@autoclosure`. A call with those labels would resolve to the hand-written initializer or be ambiguous. Rename the hand-written initializer's argument labels, or remove it.
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(user:)` at line 7, which can be called with the argument labels of its generated initializer, `init(user:)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename the hand-written initializer's argument labels, or remove it.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
@@ -551,7 +579,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		// The generated initializer takes `user`, the seam's own receive, by value, so the error names no autoclosure.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(user:)` at line 8, which can be called with the argument labels of its generated initializer, `init(user:)`. A call with those labels would resolve to the hand-written initializer or be ambiguous. Rename the hand-written initializer's argument labels, or remove it.
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(user:)` at line 8, which can be called with the argument labels of its generated initializer, `init(user:)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename the hand-written initializer's argument labels, or remove it.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
@@ -613,7 +641,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Inner+SafeDI.swift": generatedFileHeader + """
 			extension Inner {
-			    public init(user __safeDI_user: @autoclosure @escaping () -> User) {
+			    public init(user: User) {
+			        self.init(__safeDI_user: user)
+			    }
+
+			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
 			        func __safeDI_detailBuilder() -> Detail {
 			            Detail(user: user.instance)
@@ -636,7 +668,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_08AA1A656B91D4BA.self
-			            return Screen(user: user.instance)
+			            return Screen(__safeDI_user: user.instance)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(user: user, screen: screen)
@@ -645,11 +677,15 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(user __safeDI_user: @autoclosure @escaping () -> User) {
+			    public init(user: User) {
+			        self.init(__safeDI_user: user)
+			    }
+
+			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
 			        func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_08AA1A656B91D4BA.self
-			            return Inner(user: user.instance)
+			            return Inner(__safeDI_user: user.instance)
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        self.init(inner: inner)
@@ -675,7 +711,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Inner+SafeDI.swift": generatedFileHeader + """
 			extension Inner {
-			    public init(user __safeDI_user: @autoclosure @escaping @Sendable () -> User) {
+			    public init(user: User) {
+			        self.init(__safeDI_user: user)
+			    }
+
+			    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 			        @Sendable func __safeDI_detailBuilder() -> Detail {
 			            Detail(user: user.instance)
@@ -698,7 +738,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_8EFCFC03F02E0CB8.self
-			            return Screen(user: user.instance)
+			            return Screen(__safeDI_user: user.instance)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(user: user, screen: screen)
@@ -707,11 +747,15 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(user __safeDI_user: @autoclosure @escaping @Sendable () -> User) {
+			    public init(user: User) {
+			        self.init(__safeDI_user: user)
+			    }
+
+			    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 			        func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_8EFCFC03F02E0CB8.self
-			            return Inner(user: user.instance)
+			            return Inner(__safeDI_user: user.instance)
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        self.init(inner: inner)
@@ -737,7 +781,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Inner+SafeDI.swift": generatedFileHeader + """
 			extension Inner {
-			    public init(user __safeDI_user: @autoclosure @escaping () -> User) {
+			    public init(user: User) {
+			        self.init(__safeDI_user: user)
+			    }
+
+			    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
 			        func __safeDI_detailBuilder() -> Detail {
 			            Detail(user: user.instance)
@@ -760,7 +808,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_8EFCFC03F02E0CB8.self
-			            return Screen(user: user.instance)
+			            return Screen(__safeDI_user: user.instance)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(user: user, screen: screen)
@@ -769,11 +817,15 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(user __safeDI_user: @autoclosure @escaping @Sendable () -> User) {
+			    public init(user: User) {
+			        self.init(__safeDI_user: user)
+			    }
+
+			    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 			        @Sendable func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_08AA1A656B91D4BA.self
-			            return Inner(user: user.instance)
+			            return Inner(__safeDI_user: user.instance)
 			        }
 			        let inner = SendableInstantiator<Inner>(__safeDI_inner)
 			        self.init(inner: inner)
@@ -878,7 +930,8 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 				extension Inner {
 				    public struct SafeDIScope_Inner_panel {}
 
-				    public init(panelBuilder __safeDI_panelBuilder: @escaping (SafeDIScope_Inner_panel) -> SendableLazilyInstantiated<any Panel>) {
+				    public init(panelBuilder: @escaping (SafeDIScope_Inner_panel) -> SendableLazilyInstantiated<any Panel>) {
+				        let __safeDI_panelBuilder = panelBuilder
 				        let panel = __safeDI_panelBuilder(SafeDIScope_Inner_panel())
 				        self.init(panel: panel)
 				    }
@@ -897,7 +950,8 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 				        public struct Inner {}
 				    }
 
-				    public init(panelBuilder __safeDI_panelBuilder: @escaping (SafeDIScope_Detail_panel.Outer) -> @Sendable (SafeDIScope_Detail_panel.Inner) -> any Panel) {
+				    public init(panelBuilder: @escaping (SafeDIScope_Detail_panel.Outer) -> @Sendable (SafeDIScope_Detail_panel.Inner) -> any Panel) {
+				        let __safeDI_panelBuilder = panelBuilder
 				        let __safeDI_panelBuilder_Inner = __safeDI_panelBuilder(SafeDIScope_Detail_panel.Outer())
 				        @Sendable func __safeDI_detailBuilder() -> Detail {
 				            let panel: any Panel = __safeDI_panelBuilder_Inner(SafeDIScope_Detail_panel.Inner())
@@ -977,7 +1031,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		#expect(output.modules["App"]?.generatedFiles == SafeDIToolSeamBuilderParameterTests.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
 			"Outer": """
 			extension Outer {
-			    public init(user __safeDI_user: @autoclosure @escaping @Sendable () -> User) {
+			    public init(user: User) {
+			        self.init(__safeDI_user: user)
+			    }
+
+			    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 			        func __safeDI_inner() -> Inner {
 			            _ = Inner.\(hole.innerGuard).self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Inner"))
@@ -1002,7 +1060,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 			        func __safeDI_outer() -> Outer {
 			            _ = Outer.__safeDI_Outer_8EFCFC03F02E0CB8.self
-			            return Outer(user: user.instance)
+			            return Outer(__safeDI_user: user.instance)
 			        }
 			        let outer: Outer = __safeDI_outer()
 			        self.init(user: user, outer: outer)
@@ -1064,7 +1122,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        }
 			    }
 
-			    public init(token __safeDI_token: @autoclosure @escaping () -> Token, userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+			    public init(token: Token, userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+			        self.init(__safeDI_token: token, __safeDI_userServiceBuilder: userServiceBuilder)
+			    }
+
+			    public init(__safeDI_token: @autoclosure @escaping () -> Token, __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        func __safeDI_profileBuilder() -> Profile {
 			            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(token: token))
@@ -1094,7 +1156,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			                let userService: any UserService = DefaultUserService(token: token.instance)
 			                return userService
 			            }
-			            return Service(token: token.instance, userServiceBuilder: __safeDI_userServiceBuilder)
+			            return Service(__safeDI_token: token.instance, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder)
 			        }
 			        let service: Service = __safeDI_service()
 			        self.init(token: token, service: service)
@@ -1129,7 +1191,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        func __safeDI_t3Builder() -> T3 {
 			            _ = T3.__safeDI_T3_F2F345803C710CE2.self
-			            return T3(token: token.instance)
+			            return T3(__safeDI_token: token.instance)
 			        }
 			        let t3Builder = Instantiator<T3>(__safeDI_t3Builder)
 			        self.init(token: token, t3Builder: t3Builder)
@@ -1138,12 +1200,16 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			""",
 			"T3+SafeDI.swift": generatedFileHeader + """
 			extension T3 {
-			    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Token) {
+			    public convenience init(token: Token) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Token) {
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        func __safeDI_t0Builder() -> T0 {
 			            func __safeDI_t3Builder() -> T3 {
 			                _ = T3.__safeDI_T3_F2F345803C710CE2.self
-			                return T3(token: token.instance)
+			                return T3(__safeDI_token: token.instance)
 			            }
 			            let t3Builder = Instantiator<T3>(__safeDI_t3Builder)
 			            return T0(token: token.instance, t3Builder: t3Builder)
@@ -1203,11 +1269,19 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == SafeDIToolSeamBuilderParameterTests.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"Service": """
 			extension Service {
-			    public convenience init(title __safeDI_title: @autoclosure @escaping () -> Title) {
-			        self.init(theme: nil, title: __safeDI_title())
+			    public convenience init(title: Title) {
+			        self.init(__safeDI_title: title)
 			    }
 
-			    package convenience init(theme __safeDI_theme: @autoclosure @escaping () -> Theme?, title __safeDI_title: @autoclosure @escaping () -> Title) {
+			    public convenience init(__safeDI_title: @autoclosure @escaping () -> Title) {
+			        self.init(__safeDI_theme: nil, __safeDI_title: __safeDI_title())
+			    }
+
+			    package convenience init(theme: Theme?, title: Title) {
+			        self.init(__safeDI_theme: theme, __safeDI_title: title)
+			    }
+
+			    package convenience init(__safeDI_theme: @autoclosure @escaping () -> Theme?, __safeDI_title: @autoclosure @escaping () -> Title) {
 			        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
 			        let title = LazilyInstantiated<Title>(__safeDI_title)
 			        func __safeDI_badgeBuilder() -> Badge {
@@ -1241,7 +1315,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        let title = LazilyInstantiated<Title>(__safeDI_title)
 			        func __safeDI_service() -> Service {
 			            _ = Service.__safeDI_Service_9BAF4200A1BAA28B.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
-			            return Service(theme: theme.instance, title: title.instance)
+			            return Service(__safeDI_theme: theme.instance, __safeDI_title: title.instance)
 			        }
 			        let service: Service = __safeDI_service()
 			        self.init(theme: theme, title: title, service: service)
@@ -1259,7 +1333,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        let title = LazilyInstantiated<Title>(__safeDI_title)
 			        func __safeDI_service() -> Service {
 			            _ = Service.__safeDI_Service_9BAF4200A1BAA28B.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
-			            return Service(title: title.instance)
+			            return Service(__safeDI_title: title.instance)
 			        }
 			        let service: Service = __safeDI_service()
 			        self.init(title: title, service: service)
@@ -1294,7 +1368,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == SafeDIToolSeamBuilderParameterTests.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"Screen": """
 			extension Screen {
-			    public init(user: User, database __safeDI_database: @autoclosure @escaping \(sendableAttribute)() -> Database, logger __safeDI_logger: @autoclosure @escaping \(sendableAttribute)() -> Logger?) {
+			    public init(user: User, database: Database, logger: Logger?) {
+			        self.init(__safeDI_user: user, __safeDI_database: database, __safeDI_logger: logger)
+			    }
+
+			    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping \(sendableAttribute)() -> Database, __safeDI_logger: @autoclosure @escaping \(sendableAttribute)() -> Logger?) {
 			        let database = \(sendablePrefix)LazilyInstantiated<Database>(__safeDI_database)
 			        let logger = \(sendablePrefix)LazilyInstantiated<Logger?>(__safeDI_logger)
 			        \(sendableAttribute)func __safeDI_cacheBuilder() -> Cache {
@@ -1321,7 +1399,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        let database = \(sendablePrefix)LazilyInstantiated<Database>(__safeDI_database)
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.\(guardName).self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Screen"))
-			            return Screen(user: user, database: database.instance, logger: nil)
+			            return Screen(__safeDI_user: user, __safeDI_database: database.instance, __safeDI_logger: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(user: user, database: database, screen: screen)
@@ -1383,7 +1461,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		        let token = LazilyInstantiated<Secret>(__safeDI_token)
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.\(guardName).self
-		            return Screen(token: token.instance)
+		            return Screen(__safeDI_token: token.instance)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(token: token, screen: screen)
@@ -1404,7 +1482,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			"Root+SafeDI.swift": Self.rootPassingTokenInstance(toScreenGuardedBy: "__safeDI_Screen_55AF83B7D12DE285"),
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token __safeDI_token: @autoclosure @escaping () -> Secret) {
+			    public init(token: Secret) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public init(__safeDI_token: @autoclosure @escaping () -> Secret) {
 			        let token = LazilyInstantiated<Secret>(__safeDI_token)
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
 			        let auth: any Auth = token.instance
@@ -1437,7 +1519,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			"Root+SafeDI.swift": Self.rootPassingTokenInstance(toScreenGuardedBy: "__safeDI_Screen_55AF83B7D12DE285"),
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token __safeDI_token_: @autoclosure @escaping () -> Secret) {
+			    public init(token: Secret) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret) {
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
 			        let token: AnyAuth = AnyAuth(__safeDI_token_())
 			        #sourceLocation()
@@ -1481,7 +1567,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        func __safeDI_holderBuilder(token: Secret?) -> Holder {
 			            func __safeDI_screen() -> Screen {
 			                _ = Screen.__safeDI_Screen_C10331417AC12746.self
-			                return Screen(token: token)
+			                return Screen(__safeDI_token: token)
 			            }
 			            let screen: Screen = __safeDI_screen()
 			            return Holder(token: token, screen: screen)
@@ -1495,7 +1581,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
+			    public init(token: Secret?) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
 			        let token: (any Auth)? = __safeDI_token_()
 			        #sourceLocation()
@@ -1530,7 +1620,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			"Root+SafeDI.swift": Self.rootPassingTokenInstance(toScreenGuardedBy: "__safeDI_Screen_8763BEDE3E51EBC4"),
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
+			    public init(token: Secret?) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
 			        let token: \(aliasType) = \(binding)
 			        #sourceLocation()

@@ -307,7 +307,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			        let token = Secret()
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
-			            return Screen(token: token)
+			            return Screen(__safeDI_token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(token: token, screen: screen)
@@ -316,7 +316,11 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
+			    public init(token: Secret?) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token_)
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
@@ -371,7 +375,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init() {
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
-			            return Screen(token: nil)
+			            return Screen(__safeDI_token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(screen: screen)
@@ -380,7 +384,11 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
+			    public init(token: Secret?) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token_)
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
@@ -433,7 +441,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			        let token = Secret()
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_55AF83B7D12DE285.self
-			            return Screen(token: token)
+			            return Screen(__safeDI_token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(token: token, screen: screen)
@@ -442,7 +450,11 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token __safeDI_token_: @autoclosure @escaping () -> Secret) {
+			    public init(token: Secret) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret) {
 			        let token = LazilyInstantiated<Secret>(__safeDI_token_)
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
@@ -498,7 +510,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			        let token = Secret()
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
-			            return Screen(token: token)
+			            return Screen(__safeDI_token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(token: token, screen: screen)
@@ -507,7 +519,11 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+			    public init(token: Secret?) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)

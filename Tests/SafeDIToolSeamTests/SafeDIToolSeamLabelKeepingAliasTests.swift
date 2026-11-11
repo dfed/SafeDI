@@ -59,7 +59,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
-				            return Screen(token: nil)
+				            return Screen(__safeDI_token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(screen: screen)
@@ -68,7 +68,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+				    public convenience init(token: Secret?) {
+				        self.init(__safeDI_token: token)
+				    }
+
+				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
@@ -104,7 +108,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				        let token = Secret()
 				        func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
-				            return Screen(token: token)
+				            return Screen(__safeDI_token: token)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(token: token, screen: screen)
@@ -113,7 +117,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+				    public convenience init(token: Secret?) {
+				        self.init(__safeDI_token: token)
+				    }
+
+				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
@@ -149,7 +157,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				        let authToken = Secret()
 				        func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
-				            return Screen(token: nil)
+				            return Screen(__safeDI_token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(authToken: authToken, screen: screen)
@@ -158,7 +166,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+				    public convenience init(token: Secret?) {
+				        self.init(__safeDI_token: token)
+				    }
+
+				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
@@ -304,7 +316,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			        let authToken = Secret()
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
-			            return Screen(token: nil)
+			            return Screen(__safeDI_token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(authToken: authToken, screen: screen)
@@ -313,7 +325,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+			    public convenience init(token: Secret?) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
@@ -517,7 +533,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			        let authToken = Secret()
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
-			            return Screen(token: nil)
+			            return Screen(__safeDI_token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(authToken: authToken, screen: screen)
@@ -526,7 +542,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+			    public convenience init(token: Secret?) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
@@ -605,7 +625,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			        let authToken = Secret()
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_E9BA667A7B6A8A1B.self
-			            return Screen(authToken: authToken, token: nil)
+			            return Screen(__safeDI_authToken: authToken, __safeDI_token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(authToken: authToken, screen: screen)
@@ -614,7 +634,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(authToken __safeDI_authToken_: @autoclosure @escaping () -> Secret?, token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+			    public convenience init(authToken: Secret?, token: Secret?) {
+			        self.init(__safeDI_authToken: authToken, __safeDI_token: token)
+			    }
+
+			    public convenience init(__safeDI_authToken __safeDI_authToken_: @autoclosure @escaping () -> Secret?, __safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let authToken = LazilyInstantiated<Secret?>(__safeDI_authToken_)
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_reader() -> Reader {
@@ -709,7 +733,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			        let authToken = Secret()
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_063E11C337D62C73.self
-			            return Screen(authToken: authToken, token: nil)
+			            return Screen(__safeDI_authToken: authToken, __safeDI_token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(authToken: authToken, screen: screen)
@@ -718,7 +742,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(authToken: Secret?, token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+			    public convenience init(authToken: Secret?, token: Secret?) {
+			        self.init(__safeDI_authToken: authToken, __safeDI_token: token)
+			    }
+
+			    public convenience init(__safeDI_authToken authToken: Secret?, __safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
@@ -798,7 +826,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			        let authToken = Secret()
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_A9C51D76FF594AA6.self
-			            return Screen(authToken: authToken)
+			            return Screen(__safeDI_authToken: authToken)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(authToken: authToken, screen: screen)
@@ -807,7 +835,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(authToken __safeDI_authToken_: @autoclosure @escaping () -> Secret?) {
+			    public convenience init(authToken: Secret?) {
+			        self.init(__safeDI_authToken: authToken)
+			    }
+
+			    public convenience init(__safeDI_authToken __safeDI_authToken_: @autoclosure @escaping () -> Secret?) {
 			        let authToken = LazilyInstantiated<Secret?>(__safeDI_authToken_)
 			        func __safeDI_left() -> Left {
 			            func __safeDI_sub() -> Sub {
@@ -873,7 +905,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			        let authToken = AnyAuth(Secret())
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_A9C51D76FF594AA6.self
-			            return Screen(authToken: nil)
+			            return Screen(__safeDI_authToken: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(authToken: authToken, screen: screen)
@@ -882,7 +914,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(authToken __safeDI_authToken_: @autoclosure @escaping () -> Secret?) {
+			    public convenience init(authToken: Secret?) {
+			        self.init(__safeDI_authToken: authToken)
+			    }
+
+			    public convenience init(__safeDI_authToken __safeDI_authToken_: @autoclosure @escaping () -> Secret?) {
 			        let authToken = LazilyInstantiated<Secret?>(__safeDI_authToken_)
 			        func __safeDI_left() -> Left {
 			            func __safeDI_sub() -> Sub {
@@ -1048,7 +1084,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			        let authToken = Secret()
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
-			            return Screen(token: nil)
+			            return Screen(__safeDI_token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(authToken: authToken, screen: screen)
@@ -1057,7 +1093,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+			    public convenience init(token: Secret?) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
@@ -1137,7 +1177,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_3D514124C70F64F0.self
-				            return Screen(authToken: nil)
+				            return Screen(__safeDI_authToken: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(screen: screen)
@@ -1146,7 +1186,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(authToken __safeDI_authToken_: @autoclosure @escaping () -> (any Auth)?) {
+				    public convenience init(authToken: (any Auth)?) {
+				        self.init(__safeDI_authToken: authToken)
+				    }
+
+				    public convenience init(__safeDI_authToken __safeDI_authToken_: @autoclosure @escaping () -> (any Auth)?) {
 				        let authToken = LazilyInstantiated<(any Auth)?>(__safeDI_authToken_)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_sub() -> Sub {
@@ -1175,7 +1219,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_F4CB39382F5CBD25.self
-				            return Screen(authToken: nil)
+				            return Screen(__safeDI_authToken: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(screen: screen)
@@ -1184,7 +1228,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(authToken __safeDI_authToken_: @autoclosure @escaping () -> (() -> Void)?) {
+				    public convenience init(authToken: (() -> Void)?) {
+				        self.init(__safeDI_authToken: authToken)
+				    }
+
+				    public convenience init(__safeDI_authToken __safeDI_authToken_: @autoclosure @escaping () -> (() -> Void)?) {
 				        let authToken = LazilyInstantiated<(() -> Void)?>(__safeDI_authToken_)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_sub() -> Sub {
@@ -1213,7 +1261,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_1433A402386E2672.self
-				            return Screen(authToken: nil)
+				            return Screen(__safeDI_authToken: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(screen: screen)
@@ -1222,7 +1270,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(authToken __safeDI_authToken_: @autoclosure @escaping () -> Feature.Secret?) {
+				    public convenience init(authToken: Feature.Secret?) {
+				        self.init(__safeDI_authToken: authToken)
+				    }
+
+				    public convenience init(__safeDI_authToken __safeDI_authToken_: @autoclosure @escaping () -> Feature.Secret?) {
 				        let authToken = LazilyInstantiated<Feature.Secret?>(__safeDI_authToken_)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_sub() -> Sub {
@@ -1251,7 +1303,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_355BAF235B541B43.self
-				            return Screen(authToken: nil)
+				            return Screen(__safeDI_authToken: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(screen: screen)
@@ -1260,7 +1312,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(authToken __safeDI_authToken_: @autoclosure @escaping () -> SecretID?) {
+				    public convenience init(authToken: SecretID?) {
+				        self.init(__safeDI_authToken: authToken)
+				    }
+
+				    public convenience init(__safeDI_authToken __safeDI_authToken_: @autoclosure @escaping () -> SecretID?) {
 				        let authToken = LazilyInstantiated<SecretID?>(__safeDI_authToken_)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_sub() -> Sub {
@@ -1289,7 +1345,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_A9C51D76FF594AA6.self
-				            return Screen(authToken: nil)
+				            return Screen(__safeDI_authToken: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(screen: screen)
@@ -1298,7 +1354,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(authToken __safeDI_authToken_: @autoclosure @escaping () -> Secret?) {
+				    public convenience init(authToken: Secret?) {
+				        self.init(__safeDI_authToken: authToken)
+				    }
+
+				    public convenience init(__safeDI_authToken __safeDI_authToken_: @autoclosure @escaping () -> Secret?) {
 				        let authToken = LazilyInstantiated<Secret?>(__safeDI_authToken_)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_sub() -> Sub {
@@ -1327,7 +1387,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_864A9D5FFC636A83.self
-				            return Screen(authToken: nil)
+				            return Screen(__safeDI_authToken: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(screen: screen)
@@ -1336,7 +1396,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(authToken __safeDI_authToken_: @autoclosure @escaping () -> (@Sendable () -> Void)?) {
+				    public convenience init(authToken: (@Sendable () -> Void)?) {
+				        self.init(__safeDI_authToken: authToken)
+				    }
+
+				    public convenience init(__safeDI_authToken __safeDI_authToken_: @autoclosure @escaping () -> (@Sendable () -> Void)?) {
 				        let authToken = LazilyInstantiated<(@Sendable () -> Void)?>(__safeDI_authToken_)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_sub() -> Sub {
@@ -1365,7 +1429,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_F4CB39382F5CBD25.self
-				            return Screen(authToken: nil)
+				            return Screen(__safeDI_authToken: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(screen: screen)
@@ -1374,7 +1438,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(authToken __safeDI_authToken_: @autoclosure @escaping () -> (() -> Void)?) {
+				    public convenience init(authToken: (() -> Void)?) {
+				        self.init(__safeDI_authToken: authToken)
+				    }
+
+				    public convenience init(__safeDI_authToken __safeDI_authToken_: @autoclosure @escaping () -> (() -> Void)?) {
 				        let authToken = LazilyInstantiated<(() -> Void)?>(__safeDI_authToken_)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_sub() -> Sub {
@@ -1403,7 +1471,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_301BB3464139FD7E.self
-				            return Screen(authToken: nil)
+				            return Screen(__safeDI_authToken: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(screen: screen)
@@ -1412,7 +1480,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(authToken __safeDI_authToken_: @autoclosure @escaping () -> (a: Int, b: String)?) {
+				    public convenience init(authToken: (a: Int, b: String)?) {
+				        self.init(__safeDI_authToken: authToken)
+				    }
+
+				    public convenience init(__safeDI_authToken __safeDI_authToken_: @autoclosure @escaping () -> (a: Int, b: String)?) {
 				        let authToken = LazilyInstantiated<(a: Int, b: String)?>(__safeDI_authToken_)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_sub() -> Sub {
@@ -1441,7 +1513,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_AD12AEFF533729F3.self
-				            return Screen(authToken: nil)
+				            return Screen(__safeDI_authToken: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(screen: screen)
@@ -1450,7 +1522,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(authToken __safeDI_authToken_: @autoclosure @escaping () -> Box<Secret>?) {
+				    public convenience init(authToken: Box<Secret>?) {
+				        self.init(__safeDI_authToken: authToken)
+				    }
+
+				    public convenience init(__safeDI_authToken __safeDI_authToken_: @autoclosure @escaping () -> Box<Secret>?) {
 				        let authToken = LazilyInstantiated<Box<Secret>?>(__safeDI_authToken_)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_sub() -> Sub {
@@ -1490,7 +1566,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			.nothing: [
 				"Inner+SafeDI.swift": generatedFileHeader + """
 				extension Inner {
-				    public convenience init(authToken __safeDI_authToken: @autoclosure @escaping () -> Secret?) {
+				    public convenience init(authToken: Secret?) {
+				        self.init(__safeDI_authToken: authToken)
+				    }
+
+				    public convenience init(__safeDI_authToken: @autoclosure @escaping () -> Secret?) {
 				        let authToken = LazilyInstantiated<Secret?>(__safeDI_authToken)
 				        func __safeDI_sub() -> Sub {
 				            #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 7)
@@ -1512,7 +1592,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
-				            return Screen(token: nil)
+				            return Screen(__safeDI_token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(screen: screen)
@@ -1521,7 +1601,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+				    public convenience init(token: Secret?) {
+				        self.init(__safeDI_token: token)
+				    }
+
+				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
@@ -1530,7 +1614,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				                #sourceLocation()
 				                func __safeDI_inner() -> Inner {
 				                    _ = Inner.__safeDI_Inner_A9C51D76FF594AA6.self
-				                    return Inner(authToken: authToken)
+				                    return Inner(__safeDI_authToken: authToken)
 				                }
 				                let inner: Inner = __safeDI_inner()
 				                return Detail(authToken: authToken, inner: inner)
@@ -1551,7 +1635,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			.token: [
 				"Inner+SafeDI.swift": generatedFileHeader + """
 				extension Inner {
-				    public convenience init(authToken __safeDI_authToken: @autoclosure @escaping () -> Secret?) {
+				    public convenience init(authToken: Secret?) {
+				        self.init(__safeDI_authToken: authToken)
+				    }
+
+				    public convenience init(__safeDI_authToken: @autoclosure @escaping () -> Secret?) {
 				        let authToken = LazilyInstantiated<Secret?>(__safeDI_authToken)
 				        func __safeDI_sub() -> Sub {
 				            #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 7)
@@ -1574,7 +1662,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				        let token = Secret()
 				        func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
-				            return Screen(token: token)
+				            return Screen(__safeDI_token: token)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(token: token, screen: screen)
@@ -1583,7 +1671,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+				    public convenience init(token: Secret?) {
+				        self.init(__safeDI_token: token)
+				    }
+
+				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
@@ -1592,7 +1684,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				                #sourceLocation()
 				                func __safeDI_inner() -> Inner {
 				                    _ = Inner.__safeDI_Inner_A9C51D76FF594AA6.self
-				                    return Inner(authToken: authToken)
+				                    return Inner(__safeDI_authToken: authToken)
 				                }
 				                let inner: Inner = __safeDI_inner()
 				                return Detail(authToken: authToken, inner: inner)
@@ -1613,7 +1705,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			.authToken: [
 				"Inner+SafeDI.swift": generatedFileHeader + """
 				extension Inner {
-				    public convenience init(authToken __safeDI_authToken: @autoclosure @escaping () -> Secret?) {
+				    public convenience init(authToken: Secret?) {
+				        self.init(__safeDI_authToken: authToken)
+				    }
+
+				    public convenience init(__safeDI_authToken: @autoclosure @escaping () -> Secret?) {
 				        let authToken = LazilyInstantiated<Secret?>(__safeDI_authToken)
 				        func __safeDI_sub() -> Sub {
 				            #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 7)
@@ -1636,7 +1732,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				        let authToken = Secret()
 				        func __safeDI_screen() -> Screen {
 				            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
-				            return Screen(token: nil)
+				            return Screen(__safeDI_token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(authToken: authToken, screen: screen)
@@ -1645,7 +1741,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+				    public convenience init(token: Secret?) {
+				        self.init(__safeDI_token: token)
+				    }
+
+				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
@@ -1654,7 +1754,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 				                #sourceLocation()
 				                func __safeDI_inner() -> Inner {
 				                    _ = Inner.__safeDI_Inner_A9C51D76FF594AA6.self
-				                    return Inner(authToken: authToken)
+				                    return Inner(__safeDI_authToken: authToken)
 				                }
 				                let inner: Inner = __safeDI_inner()
 				                return Detail(authToken: authToken, inner: inner)
@@ -1797,7 +1897,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Inner+SafeDI.swift": generatedFileHeader + """
 			extension Inner {
-			    public convenience init(authToken __safeDI_authToken: @autoclosure @escaping () -> Secret?) {
+			    public convenience init(authToken: Secret?) {
+			        self.init(__safeDI_authToken: authToken)
+			    }
+
+			    public convenience init(__safeDI_authToken: @autoclosure @escaping () -> Secret?) {
 			        let authToken = LazilyInstantiated<Secret?>(__safeDI_authToken)
 			        #sourceLocation(file: "\(output.fixtures["Inner.swift"])", line: 7)
 			        let bearer: Secret? = authToken.instance
@@ -1816,7 +1920,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			        let authToken = Secret()
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
-			            return Screen(token: nil)
+			            return Screen(__safeDI_token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(authToken: authToken, screen: screen)
@@ -1825,7 +1929,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+			    public convenience init(token: Secret?) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
@@ -1834,7 +1942,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			                #sourceLocation()
 			                func __safeDI_inner() -> Inner {
 			                    _ = Inner.__safeDI_Inner_A9C51D76FF594AA6.self
-			                    return Inner(authToken: authToken)
+			                    return Inner(__safeDI_authToken: authToken)
 			                }
 			                let inner: Inner = __safeDI_inner()
 			                return Detail(authToken: authToken, inner: inner)
@@ -1903,7 +2011,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			        let token = Secret()
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_2731EA611E5B250D.self
-			            return Screen(token: token)
+			            return Screen(__safeDI_token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(token: token, screen: screen)
@@ -1912,7 +2020,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+			    public convenience init(token: Secret?) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
@@ -2009,7 +2121,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			#endif
 
 			extension Screen {
-			    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+			    public convenience init(token: Secret?) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
@@ -2054,7 +2170,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 		#expect(try #require(output.modules["Core"]).generatedFiles == [
 			integration == .moduleInfo ? "Core.swift" : "Inner+SafeDI.swift": generatedFileHeader + """
 			extension Inner {
-			    public convenience init(authToken __safeDI_authToken: @autoclosure @escaping () -> Secret?) {
+			    public convenience init(authToken: Secret?) {
+			        self.init(__safeDI_authToken: authToken)
+			    }
+
+			    public convenience init(__safeDI_authToken: @autoclosure @escaping () -> Secret?) {
 			        let authToken = LazilyInstantiated<Secret?>(__safeDI_authToken)
 			        func __safeDI_sub() -> Sub {
 			            #sourceLocation(file: "\(subPath)", line: 7)
@@ -2080,7 +2200,11 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			#endif
 
 			extension Screen {
-			    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+			    public convenience init(token: Secret?) {
+			        self.init(__safeDI_token: token)
+			    }
+
+			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
@@ -2089,7 +2213,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			                #sourceLocation()
 			                func __safeDI_inner() -> Inner {
 			                    _ = Inner.__safeDI_Inner_A9C51D76FF594AA6.self\(integration.seamCallComment(type: "Inner", declaringModule: "Core"))
-			                    return Inner(authToken: authToken)
+			                    return Inner(__safeDI_authToken: authToken)
 			                }
 			                let inner: Inner = __safeDI_inner()
 			                return Detail(authToken: authToken, inner: inner)

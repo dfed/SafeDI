@@ -111,7 +111,7 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			        let session = Session()
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_E820B06031D9247B.self
-			            return Screen(session: session, token: nil)
+			            return Screen(__safeDI_session: session, __safeDI_token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(session: session, screen: screen)
@@ -121,10 +121,14 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
 			    public init(session: Session?) {
-			        self.init(session: session, token: nil)
+			        self.init(__safeDI_session: session, __safeDI_token: nil)
 			    }
 
-			    internal init(session: Session?, token __safeDI_token: @autoclosure @escaping () -> Token?) {
+			    internal init(session: Session?, token: Token?) {
+			        self.init(__safeDI_session: session, __safeDI_token: token)
+			    }
+
+			    internal init(__safeDI_session session: Session?, __safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        let detail = Detail(token: token.instance)
 			        self.init(session: session, detail: detail)
@@ -247,7 +251,7 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 		        let database = Database()
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_3192EA1C03ABD98F.self\(callerComment)
-		            return Screen(user: user, database: database, logger: nil)
+		            return Screen(__safeDI_user: user, __safeDI_database: database, __safeDI_logger: nil)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(user: user, database: database, screen: screen)
@@ -313,7 +317,11 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 		#expect(before.modules["Feature"]?.generatedFiles == ["Screen+SafeDI.swift": generatedFileHeader + Self.screenInitializer])
 		#expect(after.modules["Feature"]?.generatedFiles == ["Screen+SafeDI.swift": generatedFileHeader + """
 		extension Screen {
-		    public init(user: User, analytics __safeDI_analytics: @autoclosure @escaping () -> Analytics?, database __safeDI_database: @autoclosure @escaping () -> Database, logger __safeDI_logger: @autoclosure @escaping () -> Logger?) {
+		    public init(user: User, analytics: Analytics?, database: Database, logger: Logger?) {
+		        self.init(__safeDI_user: user, __safeDI_analytics: analytics, __safeDI_database: database, __safeDI_logger: logger)
+		    }
+
+		    public init(__safeDI_user user: User, __safeDI_analytics: @autoclosure @escaping () -> Analytics?, __safeDI_database: @autoclosure @escaping () -> Database, __safeDI_logger: @autoclosure @escaping () -> Logger?) {
 		        let analytics = LazilyInstantiated<Analytics?>(__safeDI_analytics)
 		        let database = LazilyInstantiated<Database>(__safeDI_database)
 		        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
@@ -356,7 +364,11 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 	/// What `Feature` generates for `screen` beside `cache(receivingAnalytics: false)`.
 	private static let screenInitializer = """
 	extension Screen {
-	    public init(user: User, database __safeDI_database: @autoclosure @escaping () -> Database, logger __safeDI_logger: @autoclosure @escaping () -> Logger?) {
+	    public init(user: User, database: Database, logger: Logger?) {
+	        self.init(__safeDI_user: user, __safeDI_database: database, __safeDI_logger: logger)
+	    }
+
+	    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping () -> Database, __safeDI_logger: @autoclosure @escaping () -> Logger?) {
 	        let database = LazilyInstantiated<Database>(__safeDI_database)
 	        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
 	        let cache = Cache(database: database.instance, logger: logger.instance)
@@ -492,7 +504,7 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			        func __safeDI_featureBuilder(session: Session?) -> Feature {
 			            func __safeDI_screen() -> Screen {
 			                _ = Screen.\(guardName).self
-			                return Screen(session: session)
+			                return Screen(__safeDI_session: session)
 			            }
 			            let screen: Screen = __safeDI_screen()
 			            return Feature(session: session, screen: screen)
@@ -506,7 +518,11 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(session __safeDI_session: @autoclosure @escaping () -> Session?) {
+			    public init(session: Session?) {
+			        self.init(__safeDI_session: session)
+			    }
+
+			    public init(__safeDI_session: @autoclosure @escaping () -> Session?) {
 			        let session = LazilyInstantiated<Session?>(__safeDI_session)
 			        let detail = Detail(session: session.instance)
 			        self.init(detail: detail)

@@ -9980,7 +9980,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        internal let store: FeedStore
 		    }
 
-		    public convenience init(shared: SharedThing, serviceBuilder __safeDI_serviceBuilder: @escaping (SafeDIScope_FeedScreen_service) -> FeedService) {
+		    public convenience init(shared: SharedThing, serviceBuilder: @escaping (SafeDIScope_FeedScreen_service) -> FeedService) {
+		        let __safeDI_serviceBuilder = serviceBuilder
 		        let store = FeedStore(shared: shared)
 		        let service: FeedService = __safeDI_serviceBuilder(SafeDIScope_FeedScreen_service(shared: shared, store: store))
 		        self.init(shared: shared, store: store, service: service)

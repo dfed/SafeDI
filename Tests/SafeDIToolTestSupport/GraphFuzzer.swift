@@ -5779,8 +5779,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// lazily instantiated dependency with a tree of its own declares its function just before its binding; an
 	/// instantiator that closes a cycle hands its wrapper the enclosing function as these do, and is `lazyCycle`'s. A
 	/// reserved name that is a value rather than a function – a binding (`let __safeDI_x = …`) or a parameter
-	/// (`__safeDI_x: …`), such as a `@Sendable` autoclosure a mock reads or a builder a seam's initializer takes – is
-	/// never a builder function, and neither is a member called on a type (`X.__safeDI_init(…)`).
+	/// (`__safeDI_x: @…`), such as a `@Sendable` autoclosure a mock reads or a builder a seam's initializer takes – is
+	/// never a builder function, and neither is a member called on a type (`X.__safeDI_init(…)`). A seam's generated-only
+	/// argument label (`__safeDI_x: x`) names no value: a builder function of that name can sit beside it.
 	static func closesCycleWithConstantOrLazilyInstantiatedDependency(_ generatedCode: String) -> Bool {
 		let builderFunctionNamePrefix = "__safeDI_"
 		let lazilyInstantiatedWrapperPrefixes = ["LazilyInstantiated<", "SendableLazilyInstantiated<"]
@@ -5796,7 +5797,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			while let range = rest.range(of: builderFunctionNamePrefix) {
 				let name = builderFunctionName(startingWith: rest[range.lowerBound...]) ?? ""
 				let after = rest[range.lowerBound...].dropFirst(name.count)
-				if after.hasPrefix(":") || after.hasPrefix(" =") && rest[..<range.lowerBound].hasSuffix("let ") {
+				if after.hasPrefix(": @") || after.hasPrefix(" =") && rest[..<range.lowerBound].hasSuffix("let ") {
 					valueNames.insert(name)
 				}
 				rest = after
@@ -6868,7 +6869,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// `generatedFiles`, an accepted graph's output.
 	static func holeOutputFeatures(generatedFiles: [String: String]) -> Set<GraphFuzzerHoleOutputFeature> {
 		var features = Set<GraphFuzzerHoleOutputFeature>()
-		let builderParameter = try! NSRegularExpression(pattern: #"\b\w+Builder\w* __safeDI_\w+: @escaping (@Sendable )?\((\w+\.)?SafeDIScope_"#)
+		let builderParameter = try! NSRegularExpression(pattern: #"\b\w+Builder\w*: @escaping (@Sendable )?\((\w+\.)?SafeDIScope_"#)
 		let otherSeamsStruct = try! NSRegularExpression(pattern: #"@escaping (?:@Sendable )?\((\w+)\.SafeDIScope_"#)
 		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDIScope_"#)
 		func firstMatch(_ expression: NSRegularExpression, in line: String) -> [String]? {
@@ -8078,7 +8079,8 @@ struct GraphFuzzerToolRuns {
 			for module in [GraphFuzzerModule.samePackageCaller, .otherPackageCaller] {
 				for (fileName, contents) in seamFiles.sorted(by: { $0.key < $1.key }) where fileName.hasPrefix(module.name + "/") && !fileName.hasSuffix("+SafeDISeamCaller.swift") {
 					for call in GraphFuzzerOracle.initializerCalls(of: seamName, in: contents) {
-						for label in parameterLabels.subtracting(call.map(\.label)).sorted() where inlinePassesValue(for: label, in: module) {
+						let passedLabels = call.map { $0.label.hasPrefix("__safeDI_") ? String($0.label.dropFirst("__safeDI_".count)) : $0.label }
+						for label in parameterLabels.subtracting(passedLabels).sorted() where inlinePassesValue(for: label, in: module) {
 							findings.append("\(fileName) calls `\(seamName)` without `\(label)`, which the inline build of \(module.name) passes a receiver a value for, and the tool reports no error.")
 						}
 					}
@@ -9092,7 +9094,8 @@ enum GraphFuzzerOracle {
 	/// The generated initializers in `contents` – one seam's generated file, or a module's combined output – of each
 	/// seam whose guard enum the file declares, in the order the file declares them, widest tier first, with each
 	/// tier's access and parameters, each parameter the text of one: every initializer an extension of the seam
-	/// declares as its own member, not a member of a type nested in it.
+	/// declares as its own member, not a member of a type nested in it, and not the one only generated code calls,
+	/// whose labels are prefixed, so each tier appears once.
 	static func seamInitializers(inGeneratedFile contents: String) -> [(seamTypeName: String, access: String, parameters: [String])] {
 		var extendedType: String?
 		var guardedTypes = Set<String>()
@@ -9110,6 +9113,7 @@ enum GraphFuzzerOracle {
 					let modifiers = trimmedLine[..<parametersStart.lowerBound].split(separator: " ")
 					let access = modifiers.first { ["public", "package", "internal", "fileprivate", "private"].contains($0) }.map(String.init) ?? "internal"
 					let parameters = String(trimmedLine[parametersStart.upperBound..<trimmedLine.index(trimmedLine.endIndex, offsetBy: -3)])
+					guard !parameters.hasPrefix("__safeDI_") else { continue }
 					initializers.append((extendedType, access, topLevelParameters(parameters).map { callerSpelling(ofParameter: $0, of: extendedType) }))
 				}
 			}
@@ -9118,24 +9122,12 @@ enum GraphFuzzerOracle {
 	}
 
 	/// `parameter`, a parameter of a generated initializer of `seamTypeName`, as code outside the seam's extension spells
-	/// it: a builder for a hole (`userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService)
-	/// -> any UserService`) without its internal name, and with its scope struct, which the extension names unqualified,
-	/// qualified by the seam; a deferred parameter (`user __safeDI_user: @autoclosure @escaping () -> User`) as the value
-	/// its autoclosure returns, which a caller passes as a local (`user: User`), `@escaping` where that value is a
-	/// closure. Any other parameter as written.
+	/// it: a builder for a hole (`userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService`) with
+	/// its scope struct, which the extension names unqualified, qualified by the seam. Any other parameter as written.
 	static func callerSpelling(ofParameter parameter: String, of seamTypeName: String) -> String {
-		let parameter = parameter.trimmingCharacters(in: .whitespaces)
-		let label = parameter.prefix { $0 != ":" }
-		guard label.contains(" ") else { return parameter }
-		let type = parameter.dropFirst(label.count)
-		let deferredPrefixes = [": @autoclosure @escaping @Sendable () -> ", ": @autoclosure @escaping () -> "]
-		if let deferredPrefix = deferredPrefixes.first(where: { type.hasPrefix($0) }) {
-			let returnedValue = type.dropFirst(deferredPrefix.count)
-			let defaultSuffix = returnedValue.hasSuffix(" = nil") ? " = nil" : ""
-			let valueType = String(returnedValue.dropLast(defaultSuffix.count))
-			return "\(label.prefix { $0 != " " }): \(GraphFuzzerSpelling.isFunctionType(valueType) ? "@escaping " : "")\(valueType)\(defaultSuffix)"
-		}
-		return String(label.prefix { $0 != " " }) + type.replacingOccurrences(of: #"(?<![A-Za-z0-9_.])SafeDIScope_"#, with: "\(seamTypeName).SafeDIScope_", options: .regularExpression)
+		parameter
+			.trimmingCharacters(in: .whitespaces)
+			.replacingOccurrences(of: #"(?<![A-Za-z0-9_.])SafeDIScope_"#, with: "\(seamTypeName).SafeDIScope_", options: .regularExpression)
 	}
 
 	/// `seamInitializers(inGeneratedFile:)` without each tier's access.

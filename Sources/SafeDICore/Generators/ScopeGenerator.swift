@@ -110,6 +110,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var typesDeclaredEscaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
 		typesDeclaredEscaping.formUnion(instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
 		typesDeclaredEscaping.formUnion(publicMockCall?.typesDeclaredEscaping ?? [])
+		typesDeclaredEscaping.formUnion(seamCall?.typesDeclaredEscaping ?? [])
 		for child in propertiesToGenerate where !child.typesDeclaredEscaping.isEmpty {
 			typesDeclaredEscaping.formUnion(child.typesDeclaredEscaping)
 		}
@@ -1981,8 +1982,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The names a parameter of the construction of a type in this subtree declares `@escaping`, each a function type
 	/// (`TypeDescription.nameDeclaredEscaping`). A parameter of a function generated code declares with such a type is
 	/// spelled `@escaping`, or it could not be passed to that construction. Every receiver of a property of such a type
-	/// stores it, so it declares its parameter `@escaping`, which puts the name here wherever the property is passed.
-	fileprivate let typesDeclaredEscaping: Set<TypeDescription>
+	/// stores it, so it declares its parameter `@escaping`, which puts the name here wherever the property is passed. A
+	/// scope that calls another module's public mock, or a seam, has no scopes for what is beneath it, so the call carries
+	/// the names (`PublicMockCall.typesDeclaredEscaping`, `SeamCall.typesDeclaredEscaping`).
+	let typesDeclaredEscaping: Set<TypeDescription>
 	/// Received properties that are optional and not created by a parent.
 	private let unavailableOptionalProperties: Set<Property>
 	/// The `onlyIfAvailable` dependencies of this scope: for a type, those its declaration receives,
@@ -2930,7 +2933,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			// A seam call passes a builder for each of the seam's holes after the tier's parameters; a call of a public
 			// mock passes them among its arguments.
-			let holeArgumentList = publicMockCall == nil ? holeCallArguments.map { "\($0.label.spelledAsArgumentLabel): \($0.value)" } : []
+			let holeArgumentList = publicMockCall == nil
+				? holeCallArguments.map { "\(seamCall?.callsGeneratedOnlyInitializer == true ? $0.hole.generatedOnlyArgumentLabel : $0.label.spelledAsArgumentLabel): \($0.value)" }
+				: []
 			let returnLineSansReturn = holeArgumentList.isEmpty
 				? "\(instantiationDeclaration)(\(argumentList))"
 				: "\(instantiationDeclaration)(\(([argumentList].filter { !$0.isEmpty } + holeArgumentList).joined(separator: ", ")))"
@@ -3209,7 +3214,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// access is the seam's; each field at its own access. A field bound from a deferred parameter holds the seam's
 	/// memo of it and reads the memo's instance when it is read, so a fill creates the value when it uses it, as inline;
 	/// its struct then declares the initializer the seam's tree calls, which takes the memo under the field's label.
-	static func scopeTypeDeclaration(of hole: SeamSignature.Hole) -> String {
+	static func scopeTypeDeclaration(of hole: SeamSignature.Hole, typesDeclaredEscaping: Set<TypeDescription>) -> String {
 		func structDeclaration(named name: String, fields: [SeamSignature.Hole.Field], indent: String) -> String {
 			guard !fields.isEmpty else { return "\(indent)public struct \(name) {}" }
 			let memberIndent = "\(indent)\(standardIndent)"
@@ -3228,7 +3233,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				field.memoType.map { "\(memberIndent)let \(field.memoName): \($0.asSource)" }
 			}
 			let initializerParameters = fields.map { field in
-				"\(field.property.label.spelledAsArgumentLabel): \((field.memoType ?? field.property.typeDescription).asSource)"
+				"\(field.property.label.spelledAsArgumentLabel): \((field.memoType ?? field.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)).asSource)"
 			}
 			let initializerAssignments = fields.map { field in
 				if field.isDeferredParameter {
@@ -3330,9 +3335,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		stageIndex > 0 || isSendable || hole.isSendable
 	}
 
-	/// The initializers a seam's module generates for the seam, one per tier of its signature, followed by the enum
-	/// every generated call refers to. Each tier but the narrowest passes `nil` for the parameters it omits and calls
-	/// the next narrower tier; the narrowest builds the tree and calls the seam's own initializer.
+	/// The initializers a seam's module generates for the seam, followed by the enum every generated call refers to. Each
+	/// tier that defers a parameter has two: a plain one for people, whose parameters are values and whose body forwards
+	/// them, and one only generated code calls, whose labels are prefixed. A tier that defers none has one, under its
+	/// readable labels. The tier's last initializer passes `nil` for the parameters the tier omits and calls the next
+	/// narrower tier; the narrowest builds the tree and calls the seam's own initializer.
 	private func generateSeamRootCode(
 		instantiable: Instantiable,
 		seamRoot: SeamRoot,
@@ -3344,18 +3351,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let typeName = instantiable.concreteInstantiable.asSource
 		let initializerKeyword = "\(instantiable.declarationType == .classType ? "convenience " : "")init"
 		let bodyIndent = "\(Self.standardIndent)\(Self.standardIndent)"
-		// Every tier carries the attributes a root's generated `init()` carries: a caller can reach any tier, and a
-		// wider tier calls the next narrower one.
+		// Every initializer carries the attributes a root's generated `init()` carries: a caller can reach any of them,
+		// and each calls another.
 		let attributesPrefix = instantiable.generatedInitializerAttributes.isEmpty ? "" : "\(instantiable.generatedInitializerAttributes) "
-		// Every tier takes every builder, after its parameters: a hole is required.
-		let builderParameters = signature.holes.map { hole in
-			"\(hole.builderLabel.spelledAsArgumentLabel) \(hole.internalName): \(hole.builderType(qualifiedBy: hole.innerSeamType == nil ? nil : hole.scopeSeamType).asSource)"
+		// Every tier takes every builder, after its parameters: a hole is required. An initializer people call declares no
+		// underscored name, which would keep it out of the module's symbol graph.
+		func builderType(of hole: SeamSignature.Hole) -> String {
+			hole.builderType(qualifiedBy: hole.innerSeamType == nil ? nil : hole.scopeSeamType).asSource
 		}
-		let builderArguments = signature.holes.map { "\($0.builderLabel.spelledAsArgumentLabel): \($0.internalName)" }
+		let plainBuilderParameters = signature.holes.map { "\($0.builderLabel.spelledAsArgumentLabel): \(builderType(of: $0))" }
+		let generatedOnlyBuilderParameters = signature.holes.map { hole in
+			"\(hole.internalName == hole.generatedOnlyArgumentLabel ? hole.internalName : "\(hole.generatedOnlyArgumentLabel) \(hole.internalName)"): \(builderType(of: hole))"
+		}
 		// No parameter has a default: every call writes every argument, so a hand-written call fails to compile when the
 		// tree comes to take another parameter, rather than passing `nil` for it.
-		func parameterList(of parameters: [SeamSignature.Parameter]) -> String {
-			(parameters.map { $0.generatedSpelling(amongTypesDeclaredEscaping: typesDeclaredEscaping) } + builderParameters).joined(separator: ", ")
+		func plainParameterList(of parameters: [SeamSignature.Parameter]) -> String {
+			(parameters.map { $0.plainSpelling(amongTypesDeclaredEscaping: typesDeclaredEscaping) } + plainBuilderParameters).joined(separator: ", ")
+		}
+		func generatedOnlyParameterList(of parameters: [SeamSignature.Parameter]) -> String {
+			(parameters.map { $0.generatedOnlySpelling(amongTypesDeclaredEscaping: typesDeclaredEscaping) } + generatedOnlyBuilderParameters).joined(separator: ", ")
 		}
 		// The narrowest tier holds each deferred parameter in a `LazilyInstantiated` under its label, which the tree reads
 		// wherever it reads the label, in parameter order – except a parameter the seam's own alias of its label reads.
@@ -3372,9 +3386,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var initializers = [String]()
 		for (index, tier) in signature.tiers.enumerated() {
 			let parameters = tierParameters[index]
+			let hasGeneratedOnlyInitializer = SeamSignature.tierHasGeneratedOnlyInitializer(taking: parameters)
 			let body: String
 			if index == signature.tiers.count - 1 {
-				// The narrowest tier builds the tree.
+				// The narrowest tier builds the tree, which reads each builder by its internal name: a parameter under that
+				// name, or, on a tier with one initializer, a binding of the parameter, whose own name has no underscore.
+				let builderBindings = hasGeneratedOnlyInitializer ? [] : signature.holes.map { "\(bodyIndent)let \($0.internalName) = \($0.builderLabel)" }
 				let generatedProperties = try await generateProperties(
 					propertiesGeneratedLater: propertiesGeneratedLater,
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
@@ -3383,41 +3400,61 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let argumentList = try instantiable.generateArgumentList(
 					unavailableProperties: unavailableProperties,
 				)
-				body = (memoLines + generatedProperties + ["\(bodyIndent)self.init(\(argumentList))"]).joined(separator: "\n")
+				body = (builderBindings + memoLines + generatedProperties + ["\(bodyIndent)self.init(\(argumentList))"]).joined(separator: "\n")
 			} else {
 				// A wider tier passes `nil` for each parameter it omits: one whose type the tier's callers cannot
 				// see, which only a parameter received only if available can be. It passes a deferred parameter it takes
 				// as its autoclosure's call, which the narrower tier's autoclosure defers in turn.
 				let tierParameterSet = Set(parameters.map(\.property))
-				let arguments = (tierParameters[index + 1]
-					.map { parameter in
-						let value = if !tierParameterSet.contains(parameter.property) {
-							"nil"
-						} else if parameter.isDeferred {
-							"\(parameter.internalName)()"
-						} else {
-							parameter.property.label
-						}
-						return "\(parameter.property.label.spelledAsArgumentLabel): \(value)"
+				let narrowerTierParameters = tierParameters[index + 1]
+				let callsGeneratedOnlyInitializer = SeamSignature.tierHasGeneratedOnlyInitializer(taking: narrowerTierParameters)
+				let parameterArguments = narrowerTierParameters.map { parameter in
+					let value = if !tierParameterSet.contains(parameter.property) {
+						"nil"
+					} else if parameter.isDeferred {
+						"\(parameter.internalName)()"
+					} else {
+						parameter.property.label
 					}
-					+ builderArguments)
-					.joined(separator: ", ")
-				body = "\(bodyIndent)self.init(\(arguments))"
+					return "\(callsGeneratedOnlyInitializer ? parameter.generatedOnlyArgumentLabel : parameter.property.label.spelledAsArgumentLabel): \(value)"
+				}
+				let builderArguments = signature.holes.map { hole in
+					"\(callsGeneratedOnlyInitializer ? hole.generatedOnlyArgumentLabel : hole.builderLabel.spelledAsArgumentLabel): \(hasGeneratedOnlyInitializer ? hole.internalName : hole.builderLabel)"
+				}
+				body = "\(bodyIndent)self.init(\((parameterArguments + builderArguments).joined(separator: ", ")))"
 			}
 			let marker = tier == .public
 				? seamRoot.unreadTypeComment?.markerLine(namedBy: parameters.map(\.property.typeDescription) + signature.holes.map(\.property.typeDescription), indent: Self.standardIndent).map { "\($0)\n" }
 				: nil
-			initializers.append("""
-			\(marker ?? "")\(Self.standardIndent)\(attributesPrefix)\(tier.spelledOnGeneratedDeclaration) \(initializerKeyword)(\(parameterList(of: parameters))) {
-			\(body)
-			\(Self.standardIndent)}
-			""")
+			let declarationPrefix = "\(Self.standardIndent)\(attributesPrefix)\(tier.spelledOnGeneratedDeclaration) \(initializerKeyword)"
+			if hasGeneratedOnlyInitializer {
+				// The plain initializer forwards its values, so the closures the other one holds capture its own parameters
+				// and never what its caller wrote.
+				let forwardedArguments = parameters.map { "\($0.generatedOnlyArgumentLabel): \($0.property.label)" }
+					+ signature.holes.map { "\($0.generatedOnlyArgumentLabel): \($0.builderLabel)" }
+				initializers.append("""
+				\(marker ?? "")\(declarationPrefix)(\(plainParameterList(of: parameters))) {
+				\(bodyIndent)self.init(\(forwardedArguments.joined(separator: ", ")))
+				\(Self.standardIndent)}
+				""")
+				initializers.append("""
+				\(declarationPrefix)(\(generatedOnlyParameterList(of: parameters))) {
+				\(body)
+				\(Self.standardIndent)}
+				""")
+			} else {
+				initializers.append("""
+				\(marker ?? "")\(declarationPrefix)(\(plainParameterList(of: parameters))) {
+				\(body)
+				\(Self.standardIndent)}
+				""")
+			}
 		}
 		// The scope struct of each site of the seam's own tree, in hole order, before the initializers that build them.
 		// Each `public` declaration that names a type SafeDI reads no declaration of is marked for the file's comment:
 		// a scope struct by its `public` fields, a tier by its parameters and the types its builders return.
 		let scopeTypes = signature.holes.filter { $0.innerSeamType == nil }.map { hole in
-			let declaration = Self.scopeTypeDeclaration(of: hole)
+			let declaration = Self.scopeTypeDeclaration(of: hole, typesDeclaredEscaping: typesDeclaredEscaping)
 			guard let marker = seamRoot.unreadTypeComment?.markerLine(namedBy: hole.stages.flatMap { $0.filter { $0.access == .public }.map(\.property.typeDescription) }, indent: Self.standardIndent) else { return declaration }
 			return "\(marker)\n\(declaration)"
 		}
@@ -4229,7 +4266,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				if let marker = unreadTypeComment?.markerLine(namedBy: hole.stages.flatMap { $0.filter { $0.access == .public }.map(\.property.typeDescription) }, indent: indent) {
 					lines.append(marker)
 				}
-				lines.append(Self.scopeTypeDeclaration(of: hole))
+				lines.append(Self.scopeTypeDeclaration(of: hole, typesDeclaredEscaping: parameters.typesDeclaredEscaping))
 				lines.append("")
 			}
 		}

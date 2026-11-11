@@ -550,7 +550,11 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 				]), bodies: [
 					"""
 					extension Session {
-					    public init(token __safeDI_token: @autoclosure @escaping () -> Token) {
+					    public init(token: Token) {
+					        self.init(__safeDI_token: token)
+					    }
+
+					    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 					        let token = LazilyInstantiated<Token>(__safeDI_token)
 					        let vault = Vault(token: token.instance)
 					        self.init(vault: vault)
@@ -1828,7 +1832,11 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 
 	private static let feedTree = """
 	extension Feed {
-	    public init(url __safeDI_url: @autoclosure @escaping () -> URL) {
+	    public init(url: URL) {
+	        self.init(__safeDI_url: url)
+	    }
+
+	    public init(__safeDI_url: @autoclosure @escaping () -> URL) {
 	        let url = LazilyInstantiated<URL>(__safeDI_url)
 	        let loader = Loader(url: url.instance)
 	        self.init(loader: loader)
@@ -1842,7 +1850,11 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 
 	private static let shelfTree = """
 	extension Shelf {
-	    package init(directory __safeDI_directory: @autoclosure @escaping () -> URL) {
+	    package init(directory: URL) {
+	        self.init(__safeDI_directory: directory)
+	    }
+
+	    package init(__safeDI_directory: @autoclosure @escaping () -> URL) {
 	        let directory = LazilyInstantiated<URL>(__safeDI_directory)
 	        let cache = Cache(directory: directory.instance)
 	        self.init(cache: cache)
@@ -1877,11 +1889,15 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		let unreadTypeComment = integration == .moduleInfo ? "    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n" : ""
 		return """
 		extension Screen {
-		\(unreadTypeComment)    public init(window __safeDI_window: @autoclosure @escaping () -> Window) {
+		\(unreadTypeComment)    public init(window: Window) {
+		        self.init(__safeDI_window: window)
+		    }
+
+		    public init(__safeDI_window: @autoclosure @escaping () -> Window) {
 		        let window = LazilyInstantiated<Window>(__safeDI_window)
 		        func __safeDI_session() -> Session {
 		            _ = Session.__safeDI_Session_48814468D463AD3C.self\(pluginComment)
-		            return Session(window: window.instance)
+		            return Session(__safeDI_window: window.instance)
 		        }
 		        let session: Session = __safeDI_session()
 		        self.init(session: session)
@@ -1940,7 +1956,11 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		}
 		return """
 		extension Session {
-		\(unreadTypeComment)    public init(url __safeDI_url: @autoclosure @escaping () -> URL, window __safeDI_window: @autoclosure @escaping () -> Window) {
+		\(unreadTypeComment)    public init(url: URL, window: Window) {
+		        self.init(__safeDI_url: url, __safeDI_window: window)
+		    }
+
+		    public init(__safeDI_url: @autoclosure @escaping () -> URL, __safeDI_window: @autoclosure @escaping () -> Window) {
 		        let url = LazilyInstantiated<URL>(__safeDI_url)
 		        let window = LazilyInstantiated<Window>(__safeDI_window)
 		        let vault = Vault(window: window.instance)

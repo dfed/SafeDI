@@ -1012,7 +1012,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		extension Service {
 		    public struct SafeDIScope_Service_userService {}
 
-		    public convenience init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Service_userService) -> any UserService) {
+		    public convenience init(userServiceBuilder: @escaping (SafeDIScope_Service_userService) -> any UserService) {
+		        let __safeDI_userServiceBuilder = userServiceBuilder
 		        let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Service_userService())
 		        self.init(userService: userService)
 		    }

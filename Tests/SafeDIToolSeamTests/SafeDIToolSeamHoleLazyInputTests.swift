@@ -67,7 +67,11 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			    }
 
-			    public init(exportService __safeDI_exportService: @autoclosure @escaping () -> ExportService, uploaderBuilder __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			    public init(exportService: ExportService, uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			        self.init(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: uploaderBuilder)
+			    }
+
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance)
@@ -104,7 +108,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                let uploader: any Uploader = __safeDI_uploader()
 			                return uploader
 			            }
-			            return ExportFeature(exportService: exportService.instance, uploaderBuilder: __safeDI_uploaderBuilder)
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder)
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(exportService: exportService, exportFeature: exportFeature)
@@ -138,7 +142,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                let uploader: any Uploader = DefaultUploader()
 			                return uploader
 			            }
-			            return ExportFeature(exportService: exportService.instance, uploaderBuilder: __safeDI_uploaderBuilder)
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder)
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(exportService: exportService, exportFeature: exportFeature)
@@ -179,7 +183,11 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        public struct Inner {}
 			    }
 
-			    public init(exportService __safeDI_exportService: @autoclosure @escaping () -> ExportService, uploaderBuilder __safeDI_uploaderBuilder: @escaping (SafeDIScope_Panel_uploader.Outer) -> @Sendable (SafeDIScope_Panel_uploader.Inner) -> any Uploader) {
+			    public init(exportService: ExportService, uploaderBuilder: @escaping (SafeDIScope_Panel_uploader.Outer) -> @Sendable (SafeDIScope_Panel_uploader.Inner) -> any Uploader) {
+			        self.init(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: uploaderBuilder)
+			    }
+
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Panel_uploader.Outer) -> @Sendable (SafeDIScope_Panel_uploader.Inner) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance)
@@ -224,7 +232,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                }
 			                return __safeDI_uploaderBuilder_Inner
 			            }
-			            return ExportFeature(exportService: exportService.instance, uploaderBuilder: __safeDI_uploaderBuilder)
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder)
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(exportService: exportService, exportFeature: exportFeature)
@@ -287,7 +295,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                let uploader: any Uploader = __safeDI_uploader()
 			                return uploader
 			            }
-			            return ExportFeature(exportService: exportService.instance, uploaderBuilder: __safeDI_uploaderBuilder)
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder)
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(exportService: exportService, exportFeature: exportFeature)
@@ -359,7 +367,11 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			    }
 
-			    public init(exportService __safeDI_exportService: @autoclosure @escaping () -> ExportService, logger __safeDI_logger: @autoclosure @escaping () -> Logger, uploaderBuilder __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			    public init(exportService: ExportService, logger: Logger, uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			        self.init(__safeDI_exportService: exportService, __safeDI_logger: logger, __safeDI_uploaderBuilder: uploaderBuilder)
+			    }
+
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_logger: @autoclosure @escaping () -> Logger, __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
 			        let analytics = Analytics()
@@ -403,7 +415,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                let uploader: any Uploader = __safeDI_uploader()
 			                return uploader
 			            }
-			            return ExportFeature(exportService: exportService.instance, logger: logger.instance, uploaderBuilder: __safeDI_uploaderBuilder)
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: logger.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder)
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(exportService: exportService, logger: logger, exportFeature: exportFeature)
@@ -448,7 +460,11 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			    }
 
-			    public init(exportService __safeDI_exportService: @autoclosure @escaping () -> ExportService, logger __safeDI_logger: @autoclosure @escaping () -> Logger?, uploaderBuilder __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			    public init(exportService: ExportService, logger: Logger?, uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			        self.init(__safeDI_exportService: exportService, __safeDI_logger: logger, __safeDI_uploaderBuilder: uploaderBuilder)
+			    }
+
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_logger: @autoclosure @escaping () -> Logger?, __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
 			        func __safeDI_screenBuilder() -> ExportScreen {
@@ -486,7 +502,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                let uploader: any Uploader = __safeDI_uploader()
 			                return uploader
 			            }
-			            return ExportFeature(exportService: exportService.instance, logger: nil, uploaderBuilder: __safeDI_uploaderBuilder)
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: nil, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder)
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(exportService: exportService, exportFeature: exportFeature)
@@ -517,7 +533,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                let uploader: any Uploader = __safeDI_uploader()
 			                return uploader
 			            }
-			            return ExportFeature(exportService: exportService.instance, logger: logger.instance, uploaderBuilder: __safeDI_uploaderBuilder)
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: logger.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder)
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(exportService: exportService, logger: logger, exportFeature: exportFeature)
@@ -567,7 +583,11 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			    }
 
-			    public init(exportService __safeDI_exportService: @autoclosure @escaping () -> ExportService, logger __safeDI_logger: @autoclosure @escaping () -> Logger?, uploaderBuilder __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			    public init(exportService: ExportService, logger: Logger?, uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			        self.init(__safeDI_exportService: exportService, __safeDI_logger: logger, __safeDI_uploaderBuilder: uploaderBuilder)
+			    }
+
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_logger: @autoclosure @escaping () -> Logger?, __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
 			        func __safeDI_screenBuilder() -> ExportScreen {
@@ -609,7 +629,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                let uploader: any Uploader = __safeDI_uploader()
 			                return uploader
 			            }
-			            return ExportFeature(exportService: exportService.instance, logger: logger, uploaderBuilder: __safeDI_uploaderBuilder)
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: logger, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder)
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(exportService: exportService, currentLogger: currentLogger, logger: logger, exportFeature: exportFeature)
@@ -653,7 +673,11 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			    }
 
-			    public init(exportService __safeDI_exportService: @autoclosure @escaping () -> ExportService, reportBuilder: Instantiator<Report>, uploaderBuilder __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			    public init(exportService: ExportService, reportBuilder: Instantiator<Report>, uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			        self.init(__safeDI_exportService: exportService, __safeDI_reportBuilder: reportBuilder, __safeDI_uploaderBuilder: uploaderBuilder)
+			    }
+
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_reportBuilder reportBuilder: Instantiator<Report>, __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance, reportBuilder: reportBuilder)
@@ -695,7 +719,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                let uploader: any Uploader = __safeDI_uploader()
 			                return uploader
 			            }
-			            return ExportFeature(exportService: exportService.instance, reportBuilder: reportBuilder, uploaderBuilder: __safeDI_uploaderBuilder)
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_reportBuilder: reportBuilder, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder)
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(exportService: exportService, reportBuilder: reportBuilder, exportFeature: exportFeature)
@@ -734,7 +758,11 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			    }
 
-			    public init(exportService __safeDI_exportService: @autoclosure @escaping () -> ExportService, uploaderBuilder __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			    public init(exportService: ExportService, uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			        self.init(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: uploaderBuilder)
+			    }
+
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance)
@@ -771,7 +799,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                let uploader: any Uploader = __safeDI_uploader()
 			                return uploader
 			            }
-			            return ExportFeature(exportService: exportService.instance, uploaderBuilder: __safeDI_uploaderBuilder)
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder)
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(exportService: exportService, exportFeature: exportFeature)
@@ -805,7 +833,11 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        public let screenBuilder: Instantiator<ExportScreen>
 			    }
 
-			    public init(exportService __safeDI_exportService_: @autoclosure @escaping () -> ExportService, uploaderBuilder __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			    public init(exportService: ExportService, uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			        self.init(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: uploaderBuilder)
+			    }
+
+			    public init(__safeDI_exportService __safeDI_exportService_: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
 			        #sourceLocation(file: "\(seamPath)", line: 9)
 			        let exportService: any Exporting = __safeDI_exportService_()
 			        #sourceLocation()
@@ -845,7 +877,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                let uploader: any Uploader = __safeDI_uploader()
 			                return uploader
 			            }
-			            return ExportFeature(exportService: exportService.instance, uploaderBuilder: __safeDI_uploaderBuilder)
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder)
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(exportService: exportService, exportFeature: exportFeature)
@@ -884,7 +916,11 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			    }
 
-			    public init(exportService __safeDI_exportService: @autoclosure @escaping () -> ExportService, uploaderBuilder __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			    public init(exportService: ExportService, uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			        self.init(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: uploaderBuilder)
+			    }
+
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance)
@@ -901,7 +937,11 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			""",
 			"Shell": """
 			extension Shell {
-			    public init(exportService __safeDI_exportService: @autoclosure @escaping () -> ExportService, uploaderBuilder __safeDI_uploaderBuilder: @escaping (ExportFeature.SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			    public init(exportService: ExportService, uploaderBuilder: @escaping (ExportFeature.SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+			        self.init(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: uploaderBuilder)
+			    }
+
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (ExportFeature.SafeDIScope_ExportFeature_uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_headerBuilder() -> Header {
 			            Header(exportService: exportService.instance)
@@ -909,7 +949,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        let headerBuilder = Instantiator<Header>(__safeDI_headerBuilder)
 			        func __safeDI_exportFeature() -> ExportFeature {
 			            _ = ExportFeature.__safeDI_ExportFeature_F057590EF9C3F726.self
-			            return ExportFeature(exportService: exportService.instance, uploaderBuilder: __safeDI_uploaderBuilder)
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder)
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(headerBuilder: headerBuilder, exportFeature: exportFeature)
@@ -942,7 +982,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                let uploader: any Uploader = __safeDI_uploader()
 			                return uploader
 			            }
-			            return Shell(exportService: exportService.instance, uploaderBuilder: __safeDI_uploaderBuilder)
+			            return Shell(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder)
 			        }
 			        let shell: Shell = __safeDI_shell()
 			        self.init(exportService: exportService, shell: shell)
@@ -975,7 +1015,11 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		        }
 		    }
 
-		    public init(exportService __safeDI_exportService: @autoclosure @escaping () -> ExportService, uploaderBuilder __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+		    public init(exportService: ExportService, uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
+		        self.init(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: uploaderBuilder)
+		    }
+
+		    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_ExportFeature_uploader) -> any Uploader) {
 		        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 		        func __safeDI_screenBuilder() -> ExportScreen {
 		            ExportScreen(exportService: exportService.instance)
@@ -1079,7 +1123,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                        let exportService = ExportService()
 			                        func __safeDI_featureBuilder() -> ExportFeature {
 			                            _ = ExportFeature.__safeDI_ExportFeature_F057590EF9C3F726.self\(Self.pluginComment(integration))
-			                            return ExportFeature(exportService: exportService, uploaderBuilder: __safeDI_uploaderBuilder)
+			                            return ExportFeature(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder)
 			                        }
 			                        let featureBuilder = Instantiator<ExportFeature>(__safeDI_featureBuilder)
 			                        return Reentry(exportService: exportService, featureBuilder: featureBuilder)
@@ -1090,7 +1134,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                let uploader: any Uploader = __safeDI_uploader()
 			                return uploader
 			            }
-			            return ExportFeature(exportService: exportService, uploaderBuilder: __safeDI_uploaderBuilder)
+			            return ExportFeature(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder)
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(exportService: exportService, exportFeature: exportFeature)
