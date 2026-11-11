@@ -46,7 +46,7 @@ func valueUnlessCancelled<Value: Sendable>(of operation: sending @escaping () as
 	let (values, continuation) = AsyncThrowingStream.makeStream(of: Value.self)
 	Task {
 		do {
-			try continuation.yield(await operation())
+			try await continuation.yield(operation())
 			continuation.finish()
 		} catch {
 			continuation.finish(throwing: error)
