@@ -94,7 +94,8 @@ public struct ModuleInfo: Codable, Sendable {
 	/// when the build system did not say.
 	let packageName: String?
 	/// The names of the modules the module `generate` generated code for depends on directly, as the build system
-	/// lists them, sorted and without duplicates. Empty when the build system did not say.
+	/// lists them, and, in a module that read some of the modules beneath them (`--transitive-module-info-file-path`), those,
+	/// sorted and without duplicates. Empty when the build system did not say.
 	let dependencyModuleNames: [String]
 	/// The declarations of types that are not `@Instantiable`, outside every `#if` block or in a clause the conditions
 	/// select, directly inside an extension or not, of the types whose declarations SafeDI reads (`parseModule`), in the

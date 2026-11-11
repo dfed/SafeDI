@@ -1,19 +1,22 @@
 load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
 
-# `Models` declares no `@Instantiable` type, but `Subproject`'s seam
-# `WindowTitle` names its `package` type `NoteTheme`, so `Models` runs
-# SafeDI too, and `Subproject`, which imports it, lists `Models_safedi`
-# in `safedi_deps`: SafeDI counts a type it reads no declaration of as
-# `public`, and `WindowTitle`'s generated `public` initializer would then
-# take a `package` type, which does not compile. The app lists
-# `Models_safedi` too, because it declares the root.
+# `Subproject`, which imports `Models`, lists `Models_safedi` in
+# `safedi_deps`. `Subproject`'s `NoteStorage` builds `Models`'
+# `NoteFormatter`, and `Subproject`'s seam `WindowTitle` names `Models`'
+# `package` type `NoteTheme`: SafeDI counts a type it reads no declaration
+# of as `public`, and `WindowTitle`'s generated `public` initializer would
+# then take a `package` type, which does not compile.
+#
+# The app lists only `Subproject`. Its root's tree builds `NoteFormatter`
+# anyway: the rule collects the modules beneath the ones a module lists,
+# and SafeDI reads every one of them that declares a type the module's
+# dependency trees need. A mock asks for none: it builds a deeper type
+# only if a tree of its module uses that module or the module is listed.
 safedi_swift_library(
     name = "Models",
     srcs = glob(["*.swift"]),
     module_name = "Models",
     package_name = "ExampleBazelIntegration",
-    visibility = [
-        "//ExampleBazelIntegration:__pkg__",
-        "//Subproject:__pkg__",
-    ],
+    visibility = ["//Subproject:__pkg__"],
+    deps = ["@safedi//:SafeDI"],
 )

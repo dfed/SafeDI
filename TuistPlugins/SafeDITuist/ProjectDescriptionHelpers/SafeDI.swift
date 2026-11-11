@@ -85,7 +85,9 @@ public enum SafeDI {
 	///     targets this target depends on, whose `.safedi` artifacts it
 	///     consumes: each target whose types this target or the code
 	///     SafeDI generates for its roots and mocks uses, so a target that
-	///     declares a root lists every target beneath it. Each resolves to
+	///     declares a root lists every target beneath it, and one that
+	///     declares a seam lists each target beneath it whose types the
+	///     seam's tree should build. Each resolves to
 	///     `$(BUILT_PRODUCTS_DIR)/SafeDI/<name>.safedi`, and carries what a
 	///     seam or public mock of a module it depends on needs, so a
 	///     target is never listed only for another module's seam or public
@@ -233,7 +235,7 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 		for dependency_name in "$@"; do
 			dependency_path="$shared_safedi_dir/$dependency_name.safedi"
 			if [ ! -f "$dependency_path" ]; then
-				echo "error: SafeDI plugin: $dependency_name.safedi not found at $dependency_path. The dependencies of SafeDI.preCompileScript list module names (PRODUCT_MODULE_NAME values). Check that $dependency_name is the module name of a target, that the target runs SafeDI.preCompileScript, and that it is in this target's dependencies, so that it builds first." >&2
+				echo "error: SafeDI plugin: $dependency_name.safedi not found at $dependency_path. The dependencies of SafeDI.preCompileScript list module names (PRODUCT_MODULE_NAME values). Check that $dependency_name is the module name of a target, that the target runs SafeDI.preCompileScript, and that this target depends on it, directly or through another target, so that it builds first." >&2
 				exit 1
 			fi
 			if [ "$first" = 1 ]; then

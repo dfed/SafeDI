@@ -163,9 +163,18 @@ enum BinaryFile {
 
 	/// The value a file of `kind` holds.
 	static func value<Value: BinaryCodable>(_ kind: Kind, from data: Data) throws(BinaryFileReadError) -> Value {
+		try value(kind, from: data) { (reader: inout BinaryReader) throws(BinaryDecodingError) in
+			let value: Value = try reader.read()
+			try reader.finish()
+			return value
+		}
+	}
+
+	/// What `readBody` reads from the body of a file of `kind`, after the header has been checked.
+	static func value<Value>(_ kind: Kind, from data: Data, readBody: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryFileReadError) -> Value {
 		let result = data.withUnsafeBytes { bytes in
 			Result { () throws(BinaryFileReadError.Reason) in
-				try value(from: bytes, magic: kind.magic) as Value
+				try value(from: bytes, magic: kind.magic, readBody: readBody)
 			}
 		}
 		do throws(BinaryFileReadError.Reason) {
@@ -211,7 +220,7 @@ enum BinaryFile {
 		withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
 	}
 
-	private static func value<Value: BinaryCodable>(from bytes: UnsafeRawBufferPointer, magic: [UInt8]) throws(BinaryFileReadError.Reason) -> Value {
+	private static func value<Value>(from bytes: UnsafeRawBufferPointer, magic: [UInt8], readBody: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryFileReadError.Reason) -> Value {
 		func integer<Integer: FixedWidthInteger>(at offset: Int) -> Integer {
 			Integer(littleEndian: bytes.loadUnaligned(fromByteOffset: offset, as: Integer.self))
 		}
@@ -239,9 +248,7 @@ enum BinaryFile {
 		}
 		do throws(BinaryDecodingError) {
 			var reader = try BinaryReader(bytes: body)
-			let value: Value = try reader.read()
-			try reader.finish()
-			return value
+			return try readBody(&reader)
 		} catch {
 			throw .malformedBody(error)
 		}

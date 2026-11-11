@@ -18,23 +18,26 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Models
 import SafeDI
 
 @Instantiable
 public final class NoteStorage: Instantiable {
-	public init(user: User, stringStorage: StringStorage, defaultNote: String = "") {
+	public init(user: User, stringStorage: StringStorage, noteFormatter: NoteFormatter, defaultNote: String = "") {
 		self.user = user
 		self.stringStorage = stringStorage
+		self.noteFormatter = noteFormatter
 		self.defaultNote = defaultNote
 	}
 
 	public var note: String {
 		get { stringStorage.string(forKey: noteKey) ?? defaultNote }
-		set { stringStorage.setString(newValue, forKey: noteKey) }
+		set { stringStorage.setString(noteFormatter.formatted(newValue), forKey: noteKey) }
 	}
 
 	@Received private let user: User
 	@Received private let stringStorage: StringStorage
+	@Instantiated private let noteFormatter: NoteFormatter
 
 	private let defaultNote: String
 
