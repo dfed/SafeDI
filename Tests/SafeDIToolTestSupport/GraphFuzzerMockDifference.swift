@@ -556,17 +556,17 @@ private struct Rendering {
 	/// lazily instantiated dependency the mock is passed: the mock sorts both by label, each list on its own.
 	private func sortedAs(statement: CodeBlockItemSyntax, assigningField assignedField: String?, in scope: Scope) -> (name: String, kind: MovableLists.List.Kind)? {
 		if let assignedField {
-			return isOverrideOfReceive(labeled: assignedField, in: scope) ? (assignedField, .statements) : nil
+			isOverrideOfReceive(labeled: assignedField, in: scope) ? (assignedField, .statements) : nil
 		} else if scope.isMockMethod, let (name, value) = binding(of: statement) {
 			if isBindingOfReceiveOverride(statement) {
-				return (name, .statements)
+				(name, .statements)
 			} else if name.hasSuffix(Self.lazilyInstantiatedWrapperSuffix) || name.hasSuffix(Self.sendableLazilyInstantiatedWrapperSuffix), value.trimmedDescription.contains("LazilyInstantiated<") {
-				return (name, .lazilyInstantiatedWrappers)
+				(name, .lazilyInstantiatedWrappers)
 			} else {
-				return nil
+				nil
 			}
 		} else {
-			return nil
+			nil
 		}
 	}
 
@@ -583,9 +583,9 @@ private struct Rendering {
 			   let read = droppedRead(of: overridesRead(by: argument.expression), byNodeAt: Syntax(argument), in: scope),
 			   read.endsIn(label == mockOverridesParameterName ? nil : label)
 			{
-				return label == Self.overrideBuilderName ? Place(text: "\(label): nil", sortedAs: nil) : nil
+				label == Self.overrideBuilderName ? Place(text: "\(label): nil", sortedAs: nil) : nil
 			} else {
-				return Place(text: elementText(of: argument, in: scope, omittingTrailingComma: argument.trailingComma), sortedAs: nameSortedBy(argument: argument, of: list, in: scope).map { ($0, .argumentsOfNarrowerTier) })
+				Place(text: elementText(of: argument, in: scope, omittingTrailingComma: argument.trailingComma), sortedAs: nameSortedBy(argument: argument, of: list, in: scope).map { ($0, .argumentsOfNarrowerTier) })
 			}
 		}, separator: ", ", in: scope)
 	}
