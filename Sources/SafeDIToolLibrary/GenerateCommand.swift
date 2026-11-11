@@ -410,7 +410,7 @@ public struct Generate: AsyncParsableCommand {
 				comparisonFilePaths: comparisonFilePaths,
 				conditionalCompilation: evaluator,
 			),
-			viewInstantiables: viewOnlyDeclarations.flatMap(\.instantiables),
+			viewInstantiablesByModuleName: Dictionary(grouping: viewOnlyDeclarations, by: \.moduleName).mapValues { $0.flatMap(\.instantiables) },
 			viewPlainTypeDeclarations: viewOnlyDeclarations.flatMap(\.plainTypeDeclarations),
 			viewDeclaringModules: Self.viewDeclaringModules(of: viewOnlyDeclarations, in: moduleInfoView),
 		)

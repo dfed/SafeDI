@@ -37,9 +37,10 @@ public actor DependencyTreeGenerator {
 	///     apart from its dependencies', which decide the level each generated import spells.
 	///   - unreadImports: What the run knows of the modules a file imports that it read nothing of, or `nil` when it
 	///     cannot tell which modules it could have read.
-	///   - viewInstantiables: The declarations the module infos this run was given carry of modules whose module info it
-	///     was not given, which a seam or public mock of another module is computed from. They never fulfill a type of
-	///     this module's trees: they only attribute the types generated code names to the modules that declare them.
+	///   - viewInstantiablesByModuleName: The declarations the module infos this run was given carry of modules whose
+	///     module info it was not given, by module, which a seam or public mock of another module is computed from. They
+	///     never fulfill a type of this module's trees: they attribute the types generated code names to the modules that
+	///     declare them, and tell an error whether listing a module would fill a builder.
 	///   - viewPlainTypeDeclarations: The plain type declarations of those modules, which attribute types too.
 	///   - viewDeclaringModules: The module each type those declarations fulfill is declared in, with the module this
 	///     module reaches it through, which an error about a type no declaration this module reads fulfills names.
@@ -53,12 +54,14 @@ public actor DependencyTreeGenerator {
 		plainTypeDeclarations: [PlainTypeDeclaration] = [],
 		writtenImportAccessLevels: GeneratedImportAccess.WrittenLevels = .none,
 		unreadImports: UnreadImports? = nil,
-		viewInstantiables: [Instantiable] = [],
+		viewInstantiablesByModuleName: [String: [Instantiable]] = [:],
 		viewPlainTypeDeclarations: [PlainTypeDeclaration] = [],
 		viewDeclaringModules: [TypeDescription: ViewDeclaringModule] = [:],
 	) {
 		self.unreadImports = unreadImports
+		self.viewInstantiablesByModuleName = viewInstantiablesByModuleName
 		self.viewDeclaringModules = viewDeclaringModules
+		let viewInstantiables = Array(viewInstantiablesByModuleName.values.joined())
 		self.importStatements = importStatements
 		self.mockImportStatements = mockImportStatements
 		importAccess = GeneratedImportAccess(
@@ -209,7 +212,6 @@ public actor DependencyTreeGenerator {
 		try Self.validateFills(
 			inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator),
 			callerModule: seams.currentModule,
-			seamModule: { [seams] seamType in seams.foreignSeams[seamType]?.declaringModule ?? seams.currentModule },
 		)
 		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: rootScopeGenerators.map { ($0.instantiable, $0.scopeGenerator) })
 		try await validateNoSeamTierOmitsProvidedValue(inTreesRootedAt: rootScopeGenerators)
@@ -1601,6 +1603,9 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
+		/// What each integration whose modules are listed by hand does to list a module an error has just named.
+		static let listModuleRemedy = "list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` with `--dependent-module-info-file-path` in another build."
+
 		/// The last remedy for a type no `@Instantiable` declaration this module reads fulfills: what each integration
 		/// does to read the module that declares one.
 		static let fulfillingDeclarationInAnotherModuleRemedy = "or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target's `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist."
@@ -1642,7 +1647,7 @@ public actor DependencyTreeGenerator {
 			let reference = "`\(typeName)`, which @\(Dependency.Source.instantiatedRawValue) property `\(referencingProperty.asSource)` instantiates"
 			if let viewDeclaringModule {
 				// A module info's view names the module, though it fulfills no type of this module's trees: list it.
-				return "No @\(InstantiableVisitor.macroName) declaration of a module this module lists fulfills \(reference). `\(typeName)` is declared in `\(viewDeclaringModule.moduleName)`, which this module depends on through `\(viewDeclaringModule.throughModuleName)` but does not list; list `\(viewDeclaringModule.moduleName)` where this module lists `\(viewDeclaringModule.throughModuleName)`: list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` with `--dependent-module-info-file-path` in another build."
+				return "No @\(InstantiableVisitor.macroName) declaration of a module this module lists fulfills \(reference). `\(typeName)` is declared in `\(viewDeclaringModule.moduleName)`, which this module depends on through `\(viewDeclaringModule.throughModuleName)` but does not list; list `\(viewDeclaringModule.moduleName)` where this module lists `\(viewDeclaringModule.throughModuleName)`: \(listModuleRemedy)"
 			} else if fulfilledByMockOnlyDeclaration {
 				return "No production @\(InstantiableVisitor.macroName) declaration fulfills \(reference). A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills `\(typeName)`."
 			} else {
@@ -2873,6 +2878,8 @@ public actor DependencyTreeGenerator {
 	private let plainTypeDeclarations: [PlainTypeDeclaration]
 	/// The names the modules SafeDI read declare types by at file scope (`namesOfTypesDeclaredAtFileScope`).
 	private let declaredTypeNames: Set<String>
+	/// See `init`'s `viewInstantiablesByModuleName`.
+	private let viewInstantiablesByModuleName: [String: [Instantiable]]
 	/// See `init`'s `viewDeclaringModules`.
 	private let viewDeclaringModules: [TypeDescription: ViewDeclaringModule]
 	/// The declarations among which the declaration of a type an extension extends bounds the types declared in or by
@@ -4175,6 +4182,7 @@ public actor DependencyTreeGenerator {
 			roots: rootInstantiables.sorted().compactMap { seamScopeMap[$0] },
 			callerModuleName: seams.currentModule.moduleName,
 			instantiables: typeDescriptionToFulfillingInstantiableMap,
+			viewInstantiablesByModuleName: viewInstantiablesByModuleName,
 			isReadableFile: emittingModule?.isReadableFile,
 		)
 		// A seam whose signature equals its own initializer's generates no code: its file holds the header alone.
