@@ -141,6 +141,17 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// `asFunctionParamterSyntax`, spelling a property of one of `typesDeclaredEscaping` `@escaping`
+	/// (`TypeDescription.asFunctionParameter(amongTypesDeclaredEscaping:)`).
+	func asFunctionParameterSyntax(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> FunctionParameterSyntax {
+		guard typesDeclaredEscaping.contains(typeDescription) else { return asFunctionParamterSyntax }
+		return FunctionParameterSyntax(
+			firstName: .identifier(label),
+			colon: .colonToken(trailingTrivia: .space),
+			type: IdentifierTypeSyntax(name: .identifier(typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)),
+		)
+	}
+
 	public func asPropertyAssignment(withTrailingNewline trailingNewline: Bool = false) -> CodeBlockItemSyntax {
 		.init(
 			item: .expr(ExprSyntax(InfixOperatorExprSyntax(

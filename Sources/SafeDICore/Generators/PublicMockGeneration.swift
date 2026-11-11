@@ -700,6 +700,7 @@ extension ScopeGenerator {
 			// A public mock takes each property received only if available as a parameter, so only the tree's nodes make
 			// a `SafeDIOverrides`.
 			hasOverrides: !treePropertyNodes.isEmpty,
+			typesDeclaredEscaping: parameters.typesDeclaredEscaping,
 			context: context,
 		)
 		plan.noTierParameters = noTierParameters(in: parameters.parameterTree, leftOut: parameters.receivedOnlyByPublicMockCallsLeftOut)
@@ -772,6 +773,7 @@ extension ScopeGenerator {
 		passedUpHoles: [Property: SeamSignature.Hole],
 		sendablePassedUpBuilders: Set<Property>,
 		hasOverrides: Bool,
+		typesDeclaredEscaping: Set<TypeDescription>,
 		context: PublicMockContext,
 	) -> PublicMockPlan {
 		let typeName = instantiable.concreteInstantiable.asSource
@@ -835,7 +837,7 @@ extension ScopeGenerator {
 					leadingParameters.append(optionalParameter(named: property.label, type: property.typeDescription.strippingEscaping, resolvedTo: forwardedDefault.expression, role: .forwarded(property)))
 				}
 			} else {
-				leadingParameters.append(PublicMockParameter(name: property.label, type: property.typeDescription, typeSource: property.typeDescription.asFunctionParameter.asSource, defaultSource: nil, defaultKind: .none, access: access(of: property.typeDescription, receivedAs: nil), role: .forwarded(property)))
+				leadingParameters.append(PublicMockParameter(name: property.label, type: property.typeDescription, typeSource: property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource, defaultSource: nil, defaultKind: .none, access: access(of: property.typeDescription, receivedAs: nil), role: .forwarded(property)))
 			}
 		}
 		for rootDefault in rootDefaultParameters {
@@ -889,7 +891,7 @@ extension ScopeGenerator {
 				let optionalProperty = Property(label: property.label, typeDescription: .optional(property.typeDescription))
 				leadingParameters.append(PublicMockParameter(name: name, type: optionalProperty.typeDescription, typeSource: optionalProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: optionalProperty.typeDescription, receivedAs: property.label), accessCause: cause(of: optionalProperty.typeDescription, receivedAs: property.label), role: .received(optionalProperty, isRequired: false), isBuiltWhenNil: true))
 			} else {
-				leadingParameters.append(PublicMockParameter(name: name, type: property.typeDescription, typeSource: property.typeDescription.asFunctionParameter.asSource, defaultSource: nil, defaultKind: .none, access: access(of: property.typeDescription, receivedAs: property.label), role: .received(property, isRequired: true)))
+				leadingParameters.append(PublicMockParameter(name: name, type: property.typeDescription, typeSource: property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource, defaultSource: nil, defaultKind: .none, access: access(of: property.typeDescription, receivedAs: property.label), role: .received(property, isRequired: true)))
 			}
 		}
 		for uncovered in flatUncoveredParameters {

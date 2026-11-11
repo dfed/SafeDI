@@ -107,6 +107,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			childrenTakePartInCycle = true
 		}
 		self.childrenTakePartInCycle = childrenTakePartInCycle
+		var typesDeclaredEscaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
+		typesDeclaredEscaping.formUnion(instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
+		for child in propertiesToGenerate where !child.typesDeclaredEscaping.isEmpty {
+			typesDeclaredEscaping.formUnion(child.typesDeclaredEscaping)
+		}
+		self.typesDeclaredEscaping = typesDeclaredEscaping
 		declaresBuilderFunction = property != nil && !isPropertyCycle
 		if let closedOnDeclaration {
 			cycleClosedOnDeclarations = [closedOnDeclaration]
@@ -532,6 +538,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		buildsInSendableFunction = false
 		declaresBuilderFunction = false
 		childrenTakePartInCycle = false
+		typesDeclaredEscaping = []
 		cycleParameters = []
 		cycleParameterUnavailableProperties = []
 		callSiteLazilyInstantiatedInstanceProperties = []
@@ -596,6 +603,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		buildsInSendableFunction = false
 		declaresBuilderFunction = false
 		childrenTakePartInCycle = false
+		typesDeclaredEscaping = []
 		cycleParameters = []
 		cycleParameterUnavailableProperties = []
 		callSiteLazilyInstantiatedInstanceProperties = []
@@ -1969,6 +1977,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// a cycle beneath it closes on. Only then can this scope's body need `builderFunctionNames` to
 	/// rename a builder function or to refer to one by a name other than `functionName(toBuild:)`.
 	private let childrenTakePartInCycle: Bool
+	/// The names a parameter of the construction of a type in this subtree declares `@escaping`, each a function type
+	/// (`TypeDescription.nameDeclaredEscaping`). A parameter of a function generated code declares with such a type is
+	/// spelled `@escaping`, or it could not be passed to that construction. Every receiver of a property of such a type
+	/// stores it, so it declares its parameter `@escaping`, which puts the name here wherever the property is passed.
+	fileprivate let typesDeclaredEscaping: Set<TypeDescription>
 	/// Received properties that are optional and not created by a parent.
 	private let unavailableOptionalProperties: Set<Property>
 	/// The `onlyIfAvailable` dependencies of this scope: for a type, those its declaration receives,
@@ -2963,7 +2976,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let functionArguments = if functionParameters.isEmpty {
 					""
 				} else {
-					functionParameters.initializerFunctionParameters.map(\.description).joined()
+					functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
 				}
 				// A cycle-closing scope declares no function: it refers to the enclosing one it closes on.
 				let functionName = if isPropertyCycle {
@@ -3074,7 +3087,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
 				let functionParameters = cycleParameters.map(\.property)
-				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters.map(\.description).joined()
+				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
 
 				return """
 				\(stageCallLines)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
@@ -3109,7 +3122,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
 				let functionParameters = cycleParameters.map(\.property)
-				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters.map(\.description).joined()
+				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
 
 				let nonEmptyGeneratedProperties = generatedProperties.filter { !$0.isEmpty }
 				let hasGeneratedContent = !nonEmptyGeneratedProperties.isEmpty
@@ -3341,7 +3354,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// No parameter has a default: every call writes every argument, so a hand-written call fails to compile when the
 		// tree comes to take another parameter, rather than passing `nil` for it.
 		func parameterList(of parameters: [SeamSignature.Parameter]) -> String {
-			(parameters.map(\.generatedSpelling) + builderParameters).joined(separator: ", ")
+			(parameters.map { $0.generatedSpelling(amongTypesDeclaredEscaping: typesDeclaredEscaping) } + builderParameters).joined(separator: ", ")
 		}
 		// The narrowest tier holds each deferred parameter in a `LazilyInstantiated` under its label, which the tree reads
 		// wherever it reads the label, in parameter order – except a parameter the seam's own alias of its label reads.
@@ -3565,6 +3578,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The properties only the calls of other modules' public mocks in the tree receive that the mock takes no
 		/// parameter or override for (`receivedOnlyByPublicMockCallsLeftOut`).
 		let receivedOnlyByPublicMockCallsLeftOut: Set<Property>
+		/// `ScopeGenerator.typesDeclaredEscaping` of the mock root.
+		let typesDeclaredEscaping: Set<TypeDescription>
 
 		struct RootDefaultParameter {
 			let label: String
@@ -3967,13 +3982,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				treePropertyNodes: treePropertyNodes,
 			)
 		let flatUncoveredParameters = uncoveredDependencies.properties.indices.map { index in
-			MockRootParameters.UncoveredParameter(
-				property: uncoveredDependencies.properties[index],
+			let property = uncoveredDependencies.properties[index]
+			let isSendableAutoclosure = uncoveredDependencies.indicesInstantiatedInSendableFunction.contains(index)
+			return MockRootParameters.UncoveredParameter(
+				property: property,
 				label: uncoveredDependencyNames[index],
-				typeSource: uncoveredDependencies.typeSources[index],
+				// A `@Sendable` autoclosure spells the value it returns, which `@escaping` cannot apply to.
+				typeSource: !isSendableAutoclosure && typesDeclaredEscaping.contains(property.typeDescription)
+					? property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource
+					: uncoveredDependencies.typeSources[index],
 				instantiatedType: uncoveredDependencies.instantiatedTypes[index],
-				isSendableAutoclosure: uncoveredDependencies.indicesInstantiatedInSendableFunction.contains(index),
-				creatingTypes: creatingTypesByProperty[uncoveredDependencies.properties[index]] ?? [],
+				isSendableAutoclosure: isSendableAutoclosure,
+				creatingTypes: creatingTypesByProperty[property] ?? [],
 			)
 		}
 
@@ -3991,6 +4011,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lazilyInstantiatedReceivedProperties: lazilyInstantiatedReceivedProperties,
 			lazilyInstantiatedPropertyByInstanceBesideForwardedProperty: lazilyInstantiatedPropertyByInstanceBesideForwardedProperty,
 			receivedOnlyByPublicMockCallsLeftOut: receivedOnlyByPublicMockCallsLeftOut,
+			typesDeclaredEscaping: typesDeclaredEscaping,
 		)
 	}
 
@@ -4063,7 +4084,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				label: name,
 				typeSource: sendablePassedUpBuilders.contains(property)
 					? TypeDescription.attributed(property.typeDescription, specifiers: [], attributes: ["escaping", "Sendable"]).asSource
-					: property.typeDescription.asFunctionParameter.asSource,
+					: property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: parameters.typesDeclaredEscaping).asSource,
 			)
 		}
 		let onlyIfAvailableOverrides = parameterNames.onlyIfAvailableOverrides
@@ -4235,7 +4256,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Build mock() signature.
 		var mockParameters = [String]()
 		for dependency in forwardedDependencies {
-			let typeSource = dependency.property.typeDescription.asFunctionParameter.asSource
+			let typeSource = dependency.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: parameters.typesDeclaredEscaping).asSource
 			switch parameters.forwardedParameterDefaults[dependency.property.label] {
 			case let .constructionDefault(defaultExpression):
 				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource) = \(defaultExpression)")
@@ -4768,6 +4789,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let referencedFillNames: Set<String>
 		/// Forwarded properties on this type (relevant for Instantiator edges).
 		let forwardedProperties: Set<Property>
+		/// `ScopeGenerator.typesDeclaredEscaping` of the scope this node builds.
+		let typesDeclaredEscaping: Set<TypeDescription>
 		/// Set when this property's label repeats in the ancestor stack during
 		/// scope construction (`Scope.createScopeGenerator`). Per-root and
 		/// syntactic — different roots walking the same underlying cycle can
@@ -5542,6 +5565,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					fillPropertiesGeneratedLater: childBodyPropertiesGeneratedLater,
 					referencedFillNames: Set(childGenerator.referencedFillNamesByKey.values),
 					forwardedProperties: forwardedProperties,
+					typesDeclaredEscaping: childGenerator.typesDeclaredEscaping,
 					isPropertyCycle: isPropertyCycle,
 					closedOnDeclaration: childGenerator.closedOnDeclaration,
 					cycleClosedOnDeclarations: childGenerator.cycleClosedOnDeclarations,
@@ -6523,7 +6547,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						from: lazilyInstantiatedBindingNames,
 					)
 					let functionParameters = ownCycleParameters.map(\.property)
-					let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters.map(\.description).joined()
+					let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: node.typesDeclaredEscaping).map(\.description).joined()
 					let callArguments = mockCycleParameterArguments(
 						for: node,
 						flatParameterDisambiguationMap: flatParameterDisambiguationMap,
@@ -6981,7 +7005,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let functionArguments = if functionParameters.isEmpty {
 			""
 		} else {
-			functionParameters.initializerFunctionParameters.map(\.description).joined()
+			functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: node.typesDeclaredEscaping).map(\.description).joined()
 		}
 
 		// Build the forwarded arguments for the Instantiator closure call, followed by the bindings in scope here of the

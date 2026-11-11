@@ -1327,6 +1327,265 @@ import Testing
 		}
 
 		@Test
+		func declaration_doesNotGenerateRequiredInitializer_whenForwardedTypealiasOfClosureIsDeclaredEscapingInInitializer() {
+			assertMacroExpansion(
+				"""
+				public typealias OnTap = @MainActor (Int) -> Void
+				@Instantiable
+				public final class Screen: Instantiable {
+				    public init(onTap: @escaping OnTap) {
+				        self.onTap = onTap
+				    }
+				    @Forwarded let onTap: OnTap
+				}
+				""",
+				expandedSource: """
+				public typealias OnTap = @MainActor (Int) -> Void
+				public final class Screen: Instantiable {
+				    public init(onTap: @escaping OnTap) {
+				        self.onTap = onTap
+				    }
+				    let onTap: OnTap
+
+				    public typealias ForwardedProperties = OnTap
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_doesNotGenerateRequiredInitializer_whenReceivedTypealiasOfClosureIsDeclaredEscapingInInitializer() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Screen: Instantiable {
+				    public init(onTap: @escaping OnTap) {
+				        self.onTap = onTap
+				    }
+				    @Received let onTap: OnTap
+				}
+				""",
+				expandedSource: """
+				public final class Screen: Instantiable {
+				    public init(onTap: @escaping OnTap) {
+				        self.onTap = onTap
+				    }
+				    let onTap: OnTap
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_doesNotGenerateRequiredInitializer_whenInstantiatedTypealiasOfClosureIsDeclaredEscapingInInitializer() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Screen: Instantiable {
+				    public init(onTap: @escaping OnTap) {
+				        self.onTap = onTap
+				    }
+				    @Instantiated let onTap: OnTap
+				}
+				""",
+				expandedSource: """
+				public final class Screen: Instantiable {
+				    public init(onTap: @escaping OnTap) {
+				        self.onTap = onTap
+				    }
+				    let onTap: OnTap
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_doesNotGenerateRequiredInitializer_whenMemberAndGenericTypealiasesOfClosuresAreDeclaredEscapingInInitializer() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Screen: Instantiable {
+				    public init(onTap: @escaping Space.OnTap, onText: @escaping Callback<String>) {
+				        self.onTap = onTap
+				        self.onText = onText
+				    }
+				    @Received let onTap: Space.OnTap
+				    @Received let onText: Callback<String>
+				}
+				""",
+				expandedSource: """
+				public final class Screen: Instantiable {
+				    public init(onTap: @escaping Space.OnTap, onText: @escaping Callback<String>) {
+				        self.onTap = onTap
+				        self.onText = onText
+				    }
+				    let onTap: Space.OnTap
+				    let onText: Callback<String>
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_fixit_addsRequiredInitializer_whenInitializerDeclaresTypealiasOfClosureAutoclosure() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Screen: Instantiable {
+				    public init(onTap: @autoclosure @escaping OnTap) {
+				        self.onTap = onTap
+				    }
+				    @Received let onTap: OnTap
+				}
+				""",
+				expandedSource: """
+				public final class Screen: Instantiable {
+				    public init(onTap: @autoclosure @escaping OnTap) {
+				        self.onTap = onTap
+				    }
+				    let onTap: OnTap
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 41,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_fixit_keepsEscapingOfTypealiasOfClosure_whenAnotherDependencyIsMissingFromInitializer() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Screen: Instantiable {
+				    public init(onTap: @escaping OnTap) {
+				        self.onTap = onTap
+				    }
+				    @Received let onTap: OnTap
+				    @Received let count: Int
+				}
+				""",
+				expandedSource: """
+				public final class Screen: Instantiable {
+				    public init(onTap: @escaping OnTap) {
+				        self.onTap = onTap
+				    }
+				    let onTap: OnTap
+				    let count: Int
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `count: Int`.",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for count: Int"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for count: Int",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class Screen: Instantiable {
+				    public init(
+				onTap: @escaping OnTap,
+				count: Int
+				) {
+				        self.onTap = onTap
+				        self.count = count
+				    }
+				    @Received let onTap: OnTap
+				    @Received let count: Int
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixit_keepsEscapingOfTypealiasOfClosure_whenAnotherDependencyIsMissingFromMockMethod() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Screen: Instantiable {
+				    public init(onTap: @escaping OnTap, count: Int) {
+				        self.onTap = onTap
+				        self.count = count
+				    }
+				    @Received let onTap: OnTap
+				    @Received let count: Int
+
+				    public static func mock(onTap: @escaping OnTap) -> Screen {
+				        Screen(onTap: onTap, count: 0)
+				    }
+				}
+				""",
+				expandedSource: """
+				public final class Screen: Instantiable {
+				    public init(onTap: @escaping OnTap, count: Int) {
+				        self.onTap = onTap
+				        self.count = count
+				    }
+				    let onTap: OnTap
+				    let count: Int
+
+				    public static func mock(onTap: @escaping OnTap) -> Screen {
+				        Screen(onTap: onTap, count: 0)
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This `mock()` method has no parameter for `count: Int`. A hand-written mock must take a parameter for each @Instantiated, @Received, or @Forwarded-decorated property; extra parameters with default values are allowed.",
+						line: 10,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add `mock()` arguments for count: Int"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `mock()` arguments for count: Int",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class Screen: Instantiable {
+				    public init(onTap: @escaping OnTap, count: Int) {
+				        self.onTap = onTap
+				        self.count = count
+				    }
+				    @Received let onTap: OnTap
+				    @Received let count: Int
+
+				    public static func mock(
+				onTap: @escaping OnTap, count: Int
+				) -> Screen {
+				        Screen(onTap: onTap, count: 0)
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
 		func declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithMultipleForwardedDependencies() {
 			assertMacroExpansion(
 				"""

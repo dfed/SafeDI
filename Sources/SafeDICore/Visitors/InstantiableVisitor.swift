@@ -336,7 +336,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			diagnoseNamesEncodedDifferently(amongParametersOf: node.signature.parameterClause.parameters)
 			let dependencies = dependencyParameters.map { argument, parameter in
 				Dependency(
-					property: argument.asProperty,
+					// `@escaping` is how a parameter is declared, not part of the type it receives.
+					property: Property(label: argument.innerLabel, typeDescription: argument.typeDescription.strippingEscaping),
 					source: .received(onlyIfAvailable: false),
 					declarationLocation: declarationLocation(of: parameter),
 					// The dependency's label is the inner name, so that is the token a rename fix-it replaces.

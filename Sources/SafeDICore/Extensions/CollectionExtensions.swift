@@ -75,7 +75,13 @@ extension Collection<Property> {
 	}
 
 	var initializerFunctionParameters: [FunctionParameterSyntax] {
-		map(\.asFunctionParamterSyntax)
+		initializerFunctionParameters(amongTypesDeclaredEscaping: [])
+	}
+
+	/// The parameters of a function generated code declares, spelling a property of one of `typesDeclaredEscaping`
+	/// `@escaping` (`TypeDescription.asFunctionParameter(amongTypesDeclaredEscaping:)`).
+	func initializerFunctionParameters(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> [FunctionParameterSyntax] {
+		map { $0.asFunctionParameterSyntax(amongTypesDeclaredEscaping: typesDeclaredEscaping) }
 			.transformUntilLast {
 				var node = $0
 				node.trailingComma = .commaToken(trailingTrivia: .space)
