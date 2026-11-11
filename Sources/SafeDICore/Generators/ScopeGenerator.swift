@@ -1375,6 +1375,54 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return concreteTypes
 	}
 
+	/// The types the tree rooted at this scope builds that its declarations do not name: through a `fulfilledByType:`
+	/// string or a `fulfillingAdditionalTypes:` entry, or as what a mock promotes for such a property, and, in a mock, by
+	/// calling a hand-written mock another module merges in. The code generated for the tree names each, while no
+	/// declaration of the property does, so no file SafeDI read need import its module.
+	/// - Parameter buildingMock: Whether the tree is a mock's, which builds a type with its hand-written mock.
+	func fulfillersOfTree(buildingMock: Bool) async -> Set<FulfillerImports.Fulfiller> {
+		var fulfillers = Set<FulfillerImports.Fulfiller>()
+		// A stack of its own, since a tree can be as deep as the module has types.
+		var generatorsToVisit = [self]
+		while let generator = generatorsToVisit.popLast() {
+			if case let .property(instantiable, property, _, _, _, _) = generator.scopeData {
+				let propertyType = property.typeDescription.asInstantiatedType
+				fulfillers.formUnion(FulfillerImports.Fulfiller.fulfillers(
+					building: instantiable,
+					forPropertyOfType: propertyType,
+					callingHandWrittenMock: buildingMock && instantiable.mockReturnTypeIsCompatible(withPropertyType: propertyType),
+				))
+			}
+			generatorsToVisit.append(contentsOf: generator.propertiesToGenerate)
+		}
+		return fulfillers
+	}
+
+	/// The types a mock rooted at this scope names that its declarations do not: those its tree builds, those a flat
+	/// parameter of `mock()` defaults to, which no scope of the tree builds, and the type it extends, which a mock listed
+	/// in `additionalMocksToGenerate` extends from another module.
+	/// - Parameter mockDefaults: The hand-written mock a flat parameter of each type defaults to.
+	func fulfillersOfMock(mockDefaults: [TypeDescription: FlatParameterMockDefault]) async -> Set<FulfillerImports.Fulfiller> {
+		var fulfillers = await fulfillersOfTree(buildingMock: true)
+		guard case let .root(instantiable, _) = scopeData else { return fulfillers }
+		if let fulfiller = FulfillerImports.Fulfiller(instantiable: instantiable) {
+			fulfillers.insert(fulfiller)
+		}
+		// The parameters are worked out again here only for a default that can need an import, which few mocks have.
+		let mockDefaults = mockDefaults.filter { !$0.value.fulfillers.isEmpty }
+		guard !mockDefaults.isEmpty else { return fulfillers }
+		let parameters = await mockRootParameters(instantiable: instantiable, mockDefaults: mockDefaults)
+		for forwardedParameterDefault in parameters.forwardedParameterDefaults.values {
+			if case let .handWrittenMock(mockDefault) = forwardedParameterDefault {
+				fulfillers.formUnion(mockDefault.fulfillers)
+			}
+		}
+		for mockDefault in parameters.flatReceivedParameterMockDefaults.values {
+			fulfillers.formUnion(mockDefault.fulfillers)
+		}
+		return fulfillers
+	}
+
 	// MARK: Private
 
 	/// A property that generated code declares, as `nonSendableWrapperCaptures` sees it.
@@ -3554,6 +3602,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let methodName: String
 		/// The file that declares the hand-written mock.
 		let mockFilePath: String?
+		/// The types the default names that the parameter's declaration does not, in modules other than the one the mock
+		/// compiles in.
+		let fulfillers: Set<FulfillerImports.Fulfiller>
 
 		/// The call of the hand-written mock that takes no argument.
 		var expression: String {

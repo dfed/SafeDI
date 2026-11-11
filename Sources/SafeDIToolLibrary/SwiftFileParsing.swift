@@ -457,6 +457,39 @@ func importedModuleNames(ofFileAt filePath: String, conditionalCompilation evalu
 	}
 }
 
+/// What the files at `filePaths` that can be read say in the clauses `evaluator` selects that decides an import added for a
+/// fulfiller: the imports each spells and the top-level types each declares that code in another file can name. Each file
+/// is read once, in parallel, and what `FulfillerImports.OwnFiles` keeps of them depends on no order, so nothing generated
+/// from it depends on the order the reads finish in.
+func ownFiles(at filePaths: [String], conditionalCompilation evaluator: ConditionalCompilationEvaluator) async -> FulfillerImports.OwnFiles {
+	await withTaskGroup(
+		of: (typeNames: [String], importStatements: [ImportStatement])?.self,
+		returning: FulfillerImports.OwnFiles.self,
+	) { taskGroup in
+		for filePath in filePaths {
+			taskGroup.addTask {
+				(try? String(contentsOfFile: filePath, encoding: .utf8)).map { source in
+					let fileVisitor = FileVisitor(conditionalCompilationEvaluator: evaluator)
+					fileVisitor.walk(Parser.parse(source: source))
+					return (
+						typeNames: fileVisitor.plainTypeDeclarations
+							.filter { $0.enclosingTypeAccess.isEmpty && $0.extendedType == nil && $0.isVisibleOutsideItsFile }
+							.map(\.typeDescription.plainDeclarationKey),
+						importStatements: fileVisitor.imports + fileVisitor.mockImports,
+					)
+				}
+			}
+		}
+		var typeNames = Set<String>()
+		var importStatements = [ImportStatement]()
+		for await case let file? in taskGroup {
+			typeNames.formUnion(file.typeNames)
+			importStatements += file.importStatements
+		}
+		return FulfillerImports.OwnFiles(typeNames: typeNames, importStatements: importStatements)
+	}
+}
+
 /// What one file contributed to the module.
 public struct FileScan: Codable, Sendable {
 	let path: String

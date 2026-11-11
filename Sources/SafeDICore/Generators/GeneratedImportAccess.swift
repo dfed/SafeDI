@@ -190,6 +190,16 @@ public struct GeneratedImportAccess: Sendable {
 		/// No file spells a level.
 		public static let none = WrittenLevels(ownLevelsByModuleName: [:], moduleNamesWithFiles: [], dependencyFileModuleNamesByDeclaringFile: [:], dependencyFileModuleNamesByFilePath: [:])
 
+		/// These levels with `levelsByModuleName` too, which the module's own files spell.
+		func addingOwnLevels(_ levelsByModuleName: [String: Set<AccessLevel>]) -> WrittenLevels {
+			WrittenLevels(
+				ownLevelsByModuleName: ownLevelsByModuleName.merging(levelsByModuleName) { $0.union($1) },
+				moduleNamesWithFiles: moduleNamesWithFiles,
+				dependencyFileModuleNamesByDeclaringFile: dependencyFileModuleNamesByDeclaringFile,
+				dependencyFileModuleNamesByFilePath: dependencyFileModuleNamesByFilePath,
+			)
+		}
+
 		/// A file of a module whose module info SafeDI read.
 		struct DeclaringFile: Hashable {
 			let moduleName: String
