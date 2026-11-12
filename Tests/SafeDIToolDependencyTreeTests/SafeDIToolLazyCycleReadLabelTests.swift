@@ -89,6 +89,29 @@ struct SafeDIToolLazyCycleReadLabelTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHiddenError_whenOnlyReceiveOfLabelIsInTreeOfLazilyInstantiatedChild() async {
+		// `B` declares `x: Y` between `A` and the cycle-closing scope that builds `A` again. Nothing `A` builds directly
+		// receives `x`: only `D` does, which `A` instantiates lazily, so the walk goes on into the tree `d` creates.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let d: LazilyInstantiated<D>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let x: Y", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "D", isFinalClass: true, declarations: ["@Received let x: X"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+		]
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["D.swift"]):7:5: error: @Received property `x: X` is hidden in chain: Root -> Instantiator<A> -> Instantiator<B> -> Instantiator<A> -> D. `B` declares `x: Y` with the same label, so the types below `B` receive `x: Y` instead. Give `x: Y` on `B` a different label to fix.
+			\(fixtures["B.swift"]):8:5: note: `x: Y` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsCycleError_whenByValueReceiveOfLazilyInstantiatedDeclarationStillBeingBuiltIsReadThroughItsLabel() async {
 		// `T3` receives `t1: T1` by value, and the nearest declaration of `t1` above the `T3` built again is `T0`'s
 		// `t1: LazilyInstantiated<T1>`, another property of the label, still being built. `Host` is handed its `t1`, so nothing
