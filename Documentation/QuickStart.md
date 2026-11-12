@@ -245,13 +245,13 @@ SafeDI generates the code that builds `RootView`’s tree in `Root`, and `Profil
 
 - A type declared in the same module can stay `internal`.
 - Within one Swift package, a type from another module needs `package` or `public` access. Here, those types are `public`.
-- Outside a Swift package, `package` access works only when every module is compiled with one package name, which each section of [Other build systems](#other-build-systems) says how to set. Otherwise, use `public`.
+- Outside a Swift package, `package` access works only when every module is compiled with one package name, and each section of [Other build systems](#other-build-systems) says how to set that name. Otherwise, use `public`.
 
 SafeDI reports each type or initializer that needs wider access, and names the change to make.
 
 ## 4. Use mocks in tests and previews
 
-Because `ProfileView` has `generateMock: true`, SafeDI generates `ProfileView.mock(…)`. A mock builds one type and everything below it without a root, so a preview or a test can show `ProfileView` on its own. Pass the mock what it can’t build, here the forwarded `user`. The mock builds the rest, including the `APIClient` that `AvatarLoader` receives, which in the app comes from `RootView`. By default, SafeDI wraps each mock in `#if DEBUG`, so put a preview that calls one inside `#if DEBUG`, as `ProfileView.swift` above does.
+Because `ProfileView` has `generateMock: true`, SafeDI generates `ProfileView.mock(…)`. A mock builds one type and everything below it without a root, so a preview or a test can show `ProfileView` on its own. Pass the mock what it can’t build, here the forwarded `user`. The mock builds the rest, including the `APIClient` that `AvatarLoader` receives (in the app, `RootView` supplies that `APIClient`). By default, SafeDI wraps each mock in `#if DEBUG`, so put a preview that calls one inside `#if DEBUG`, as `ProfileView.swift` above does.
 
 Call `ProfileView.mock(…)` the same way in a test. The mock is `internal`, so import `Profile` with `@testable`:
 
@@ -416,7 +416,7 @@ let project = Project(
         module("Networking"),
         module("Profile", dependencies: ["Networking"]),
         module("Root", dependencies: ["Networking", "Profile"]),
-    ]
+    ],
 )
 ```
 
