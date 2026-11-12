@@ -1010,17 +1010,21 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		)
 		let featureCode = """
 		extension Service {
-		    public struct SafeDIScope_Service_userService {}
+		    @frozen public enum SafeDIScope_UserService {
+		        case userService(userService_Values)
 
-		    public convenience init(userServiceBuilder: @escaping (SafeDIScope_Service_userService) -> any UserService) {
+		        public struct userService_Values {}
+		    }
+
+		    public convenience init(userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
 		        let __safeDI_userServiceBuilder = userServiceBuilder
-		        let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Service_userService())
+		        let userService: any UserService = __safeDI_userServiceBuilder(.userService(SafeDIScope_UserService.userService_Values()))
 		        self.init(userService: userService)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_2567811726D4AD5E {}
+		    public enum __safeDI_Service_F61C88110D16DE79 {}
 		}
 		"""
 		let featureImplCode = """
@@ -1039,16 +1043,19 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_2567811726D4AD5E.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
-		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Service_userService) -> any UserService {
-		                func __safeDI_userService() -> DefaultUserService {
-		                    _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(integration.seamCallComment(type: "DefaultUserService", declaringModule: "FeatureImpl"))
-		                    return DefaultUserService()
+		            _ = Service.__safeDI_Service_F61C88110D16DE79.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
+		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+		                switch scope {
+		                case .userService:
+		                    func __safeDI_userService() -> DefaultUserService {
+		                        _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(integration.seamCallComment(type: "DefaultUserService", declaringModule: "FeatureImpl"))
+		                        return DefaultUserService()
+		                    }
+		                    let userService: any UserService = __safeDI_userService()
+		                    return userService
 		                }
-		                let userService: any UserService = __safeDI_userService()
-		                return userService
 		            }
-		            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		            return Service(userServiceBuilder: __safeDI_userServiceBuilder_Service)
 		        }
 		        let service: Service = __safeDI_service()
 		        self.init(service: service)

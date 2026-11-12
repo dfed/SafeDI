@@ -514,6 +514,12 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 				with: String(typeNamePrefix.prefix(1)),
 				options: .regularExpression,
 			)
+			// A builder's label is the type's name with its leading capitals lowered.
+			text = text.replacingOccurrences(
+				of: "(?<![A-Za-z0-9])[az](?=" + NSRegularExpression.escapedPattern(for: String(typeNamePrefix.dropFirst())) + "[A-Za-z])",
+				with: typeNamePrefix.prefix(1).lowercased(),
+				options: .regularExpression,
+			)
 		}
 		if reversesFileNames {
 			text = text.replacingOccurrences(
@@ -532,6 +538,8 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 		var text = text
 		if reversesTypeNames {
 			text = Self.reversingIndices(in: text, pattern: NSRegularExpression.escapedPattern(for: typeNamePrefix) + "(?:Root|AnyT|T|Missing)([0-9])")
+			// A builder's label is the type's name with its leading capitals lowered.
+			text = Self.reversingIndices(in: text, pattern: NSRegularExpression.escapedPattern(for: typeNamePrefix.prefix(1).lowercased() + typeNamePrefix.dropFirst()) + "(?:Root|AnyT|T|Missing)([0-9])")
 		}
 		if reversesLabels {
 			text = Self.reversingIndices(in: text, pattern: Self.renamedLabelPattern)
@@ -840,8 +848,6 @@ enum GraphFuzzerHoleOutputFeature: String, CaseIterable, Comparable {
 	/// A call inside a fill, of a seam that passes the fill's site up and is neither the site's seam nor the seam the
 	/// fill is declared for, which passes the fill.
 	case fillPassedToSeamPassingItsSiteUp
-	/// A fill named apart from a fill enclosing it, or a builder its seam takes, of the same name (`__safeDI_…_`).
-	case fillNamedApart
 
 	static func < (lhs: GraphFuzzerHoleOutputFeature, rhs: GraphFuzzerHoleOutputFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -6876,7 +6882,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		for (seamTypeName, parameters) in widestTiers {
 			// A builder for a hole is no pass-through: `holeOutputFeatures` reads it.
-			for parameter in parameters where !parameter.contains("SafeDIScope_") {
+			for parameter in parameters where !parameter.contains("SafeDIScope_") && !parameter.contains("SafeDISendableScope_") && !parameter.contains("SafeDIStagedScope_") {
 				let label = parameter.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces)
 				let type = parameter.drop { $0 != ":" }.dropFirst().trimmingCharacters(in: .whitespaces)
 				if parameterKinds.isOnlyIfAvailable(label: label, ofSeam: seamTypeName) {
@@ -6910,9 +6916,15 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// `generatedFiles`, an accepted graph's output.
 	static func holeOutputFeatures(generatedFiles: [String: String]) -> Set<GraphFuzzerHoleOutputFeature> {
 		var features = Set<GraphFuzzerHoleOutputFeature>()
-		let builderParameter = try! NSRegularExpression(pattern: #"\b\w+Builder\w*: @escaping (@Sendable )?\((\w+\.)?SafeDIScope_"#)
-		let otherSeamsStruct = try! NSRegularExpression(pattern: #"@escaping (?:@Sendable )?\((\w+)\.SafeDIScope_"#)
-		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDIScope_"#)
+		let builderParameter = try! NSRegularExpression(pattern: #"\b\w+Builder\w*: @escaping (@Sendable )?\((\w+\.)?SafeDI(?:Sendable|Staged)?Scope_"#)
+		let otherSeamsStruct = try! NSRegularExpression(pattern: #"@escaping (?:@Sendable )?\((\w+)\.SafeDI(?:Sendable|Staged)?Scope_"#)
+		let enumCaseOfInnerSeam = try! NSRegularExpression(pattern: #"^ +(?:indirect )?case \w+\(\w+\.SafeDI(?:Sendable)?Scope_"#)
+		// A fill takes a case's payload or a stage's struct; a dispatcher, the enum, which is no fill.
+		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Scope_\w+\.\w+_Values|StagedScope_\w+\.Stage1)"#)
+		let dispatcherDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+\) -> "#)
+		let enclosingDispatcherDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func __safeDI_\w+\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+\) -> "#)
+		// A case holding its fill's body ends its line at the colon; one that calls a fill or a dispatcher returns on its line.
+		let inlinedFillCase = try! NSRegularExpression(pattern: #"^( *)case (?:let )?\.[^:]+:$"#)
 		func firstMatch(_ expression: NSRegularExpression, in line: String) -> [String]? {
 			let range = NSRange(line.startIndex..., in: line)
 			guard let match = expression.firstMatch(in: line, range: range) else { return nil }
@@ -6923,7 +6935,18 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		for (_, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where !contents.isEmpty {
 			let lines = contents.components(separatedBy: "\n")
 			var extendedType: String?
+			// A call inside a fill passes the seam's dispatcher, which reaches the fill.
+			var dispatcherNamesBySeam = [String: Set<String>]()
+			var currentDispatcher: (indentation: String, isSendable: Bool, seam: String)?
+			for line in lines {
+				if let dispatcher = firstMatch(dispatcherDeclaration, in: line) {
+					dispatcherNamesBySeam[dispatcher[2], default: []].insert(dispatcher[1])
+				}
+			}
 			for (index, line) in lines.enumerated() {
+				if firstMatch(enumCaseOfInnerSeam, in: line) != nil {
+					features.insert(.passedUpBuilder)
+				}
 				if line.hasPrefix("extension "), line.hasSuffix(" {") {
 					extendedType = String(line.dropFirst("extension ".count).dropLast(2))
 				} else if line.hasPrefix("}") {
@@ -6938,25 +6961,50 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 						features.insert(.passedUpBuilder)
 					}
 				}
-				guard let fill = firstMatch(fillDeclaration, in: line) else { continue }
-				features.insert(.fill)
-				if !fill[2].isEmpty {
-					features.insert(.sendableFill)
+				if let dispatcher = firstMatch(enclosingDispatcherDeclaration, in: line) {
+					currentDispatcher = (indentation: dispatcher[1], isSendable: !dispatcher[2].isEmpty, seam: dispatcher[3])
 				}
-				if fill[3].hasSuffix("_") {
-					features.insert(.fillNamedApart)
+				// A fill is a function of its own, or the body of the one dispatcher case that calls it.
+				let indentation: String
+				let fillNames: [String]
+				let scopeSeam: String
+				let callIndentation: String
+				let end: Int
+				if let fill = firstMatch(fillDeclaration, in: line) {
+					features.insert(.fill)
+					if !fill[2].isEmpty {
+						features.insert(.sendableFill)
+					}
+					// The fill's body, up to the line closing it at its indentation, and the call that passes it after it.
+					indentation = fill[1]
+					fillNames = [fill[3]]
+					scopeSeam = fill[4]
+					callIndentation = indentation
+					guard let fillEnd = lines[(index + 1)...].firstIndex(of: indentation + "}") else { continue }
+					end = fillEnd
+				} else if let currentDispatcher, let inlinedCase = firstMatch(inlinedFillCase, in: line), inlinedCase[1] == currentDispatcher.indentation + "    " {
+					features.insert(.fill)
+					if currentDispatcher.isSendable {
+						features.insert(.sendableFill)
+					}
+					indentation = inlinedCase[1]
+					fillNames = []
+					scopeSeam = currentDispatcher.seam
+					callIndentation = currentDispatcher.indentation
+					// The case's body, up to the next case or the end of the switch.
+					guard let caseEnd = lines[(index + 1)...].firstIndex(where: { $0.hasPrefix(indentation) && !$0.dropFirst(indentation.count).hasPrefix(" ") }) else { continue }
+					end = caseEnd
+				} else {
+					continue
 				}
-				// The fill's body, up to the line closing it at its indentation, and the call that passes it after it.
-				let indentation = fill[1]
-				let fillName = fill[3]
-				let scopeSeam = fill[4]
-				guard let end = lines[(index + 1)...].firstIndex(of: indentation + "}") else { continue }
-				let passesFill = { (body: String) in body.contains(": \(fillName))") || body.contains(": \(fillName),") }
+				let namesPassed = fillNames + (dispatcherNamesBySeam[scopeSeam] ?? []).sorted()
+				let passesFill = { (body: String) in namesPassed.contains { body.contains(": \($0))") || body.contains(": \($0),") } }
 				let callsInside = lines[(index + 1)..<end].filter { $0.contains("return ") && passesFill($0) }
 				guard !callsInside.isEmpty else { continue }
 				features.insert(.fillPassedToItsSeam)
 				let calledInside = callsInside.compactMap { call in call.range(of: "return ").map { String(call[$0.upperBound...].prefix { $0 != "(" }) } }
-				let callAfter = lines[(end + 1)...].first { $0.contains("return ") && passesFill($0) }
+				// The call the fill is declared for passes the dispatcher that reaches it, not the fill.
+				let callAfter = lines[(end + 1)...].first { $0.hasPrefix(callIndentation + "return ") && $0.contains(": __safeDI_") }
 				if let callAfter, calledInside.contains(scopeSeam), !callAfter.contains("return \(scopeSeam)(") {
 					features.insert(.fillOfPassedUpBuilderPassedToItsSeam)
 				}
@@ -9257,7 +9305,7 @@ enum GraphFuzzerOracle {
 	static func callerSpelling(ofParameter parameter: String, of seamTypeName: String) -> String {
 		parameter
 			.trimmingCharacters(in: .whitespaces)
-			.replacingOccurrences(of: #"(?<![A-Za-z0-9_.])SafeDIScope_"#, with: "\(seamTypeName).SafeDIScope_", options: .regularExpression)
+			.replacingOccurrences(of: #"(?<![A-Za-z0-9_.])(SafeDI(?:Sendable|Staged)?Scope_)"#, with: "\(seamTypeName).$1", options: .regularExpression)
 	}
 
 	/// `seamInitializers(inGeneratedFile:)` without each tier's access.

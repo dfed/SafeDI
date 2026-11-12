@@ -362,18 +362,22 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Image"], tiers: """
-		    public struct SafeDIScope_Screen_service {
-		        public let image: Image
-		        internal let cache: Cache
+		    @frozen public enum SafeDIScope_UserService {
+		        case service(service_Values)
+
+		        public struct service_Values {
+		            public let image: Image
+		            internal let cache: Cache
+		        }
 		    }
 
-		    public init(image: Image, serviceBuilder: @escaping (SafeDIScope_Screen_service) -> any UserService) {
-		        let __safeDI_serviceBuilder = serviceBuilder
+		    public init(image: Image, userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
+		        let __safeDI_userServiceBuilder = userServiceBuilder
 		        let cache = Cache()
-		        let service: any UserService = __safeDI_serviceBuilder(SafeDIScope_Screen_service(image: image, cache: cache))
+		        let service: any UserService = __safeDI_userServiceBuilder(.service(SafeDIScope_UserService.service_Values(image: image, cache: cache)))
 		        self.init(image: image, service: service, cache: cache)
 		    }
-		""", guardHash: "D84FD5051D793AC9"))
+		""", guardHash: "3EA8086D06C81EDC"))
 		try expectEveryModuleCompiled(output)
 	}
 
@@ -392,18 +396,22 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Renderer"], tiers: """
-		    public struct SafeDIScope_Screen_renderer {
-		        internal let cache: Cache
+		    @frozen public enum SafeDIScope_Renderer {
+		        case renderer(renderer_Values)
+
+		        public struct renderer_Values {
+		            internal let cache: Cache
+		        }
 		    }
 
 		    {COMMENT}
-		    public init(rendererBuilder: @escaping (SafeDIScope_Screen_renderer) -> any Renderer) {
+		    public init(rendererBuilder: @escaping (SafeDIScope_Renderer) -> any Renderer) {
 		        let __safeDI_rendererBuilder = rendererBuilder
 		        let cache = Cache()
-		        let renderer: any Renderer = __safeDI_rendererBuilder(SafeDIScope_Screen_renderer(cache: cache))
+		        let renderer: any Renderer = __safeDI_rendererBuilder(.renderer(SafeDIScope_Renderer.renderer_Values(cache: cache)))
 		        self.init(renderer: renderer, cache: cache)
 		    }
-		""", guardHash: "D8E3A9C04E79DB7D"))
+		""", guardHash: "16232CF7C01DA9E6"))
 		try expectEveryModuleCompiled(output)
 	}
 
@@ -944,7 +952,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// HOLE: the builder of a hole typed by an `internal` closure typealias is as visible as the typealias.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `handlerBuilder: @escaping (Screen.SafeDIScope_Screen_handler) -> Handler`, the builder for `Screen`'s `handler: Handler`, which no @Instantiable declaration that module `Feature` can see fulfills. `Handler` is declared `internal`. Declare `Handler` `public`; declare `Screen` `internal`; make an @Instantiable declaration that fulfills `Handler` one module `Feature` reads, so `Screen`'s tree builds it; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `handlerBuilder: @escaping (SafeDIScope_Handler) -> Handler`, the builder for `Screen`'s `handler: Handler`, which no @Instantiable declaration that module `Feature` can see fulfills. `Handler` is declared `internal`. Declare `Handler` `public`; declare `Screen` `internal`; make an @Instantiable declaration that fulfills `Handler` one module `Feature` reads, so `Screen`'s tree builds it; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Handler.swift"]):1:1: note: `Handler` is declared `internal` here.
 			\(fixtures["Feature"]!["Handler.swift"]):1:1-1:1: fixit: public\(" ")
 			"""
@@ -2862,7 +2870,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		for isReleaseConfiguration in [false, true] {
 			await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 				"""
-				\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `painterBuilder: @escaping (Screen.SafeDIScope_Screen_painter) -> any Painter`, the builder for `Screen`'s `painter: any Painter`, which no @Instantiable declaration that module `Feature` can see fulfills. `Painter` is declared `package`. Declare `Painter` `public`; declare `Screen` `package`; make an @Instantiable declaration that fulfills `Painter` one module `Feature` reads, so `Screen`'s tree builds it; or declare the dependency tree on a `package` type that instantiates `Screen`.
+				\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `painterBuilder: @escaping (SafeDIScope_Painter) -> any Painter`, the builder for `Screen`'s `painter: any Painter`, which no @Instantiable declaration that module `Feature` can see fulfills. `Painter` is declared `package`. Declare `Painter` `public`; declare `Screen` `package`; make an @Instantiable declaration that fulfills `Painter` one module `Feature` reads, so `Screen`'s tree builds it; or declare the dependency tree on a `package` type that instantiates `Screen`.
 				\(fixtures["Feature"]!["Painter.swift"]):13:1: note: `Painter` is declared `package` here.
 				\(fixtures["Feature"]!["Painter.swift"]):13:1-13:8: fixit: public
 				"""

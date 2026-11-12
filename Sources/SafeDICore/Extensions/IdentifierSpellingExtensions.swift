@@ -64,6 +64,32 @@ extension String {
 	}
 }
 
+extension String {
+	/// This name, in `spelledAsIdentifier` spelling, as a type's member declaration spells it: `Type` and `Protocol` in
+	/// backticks too, which Swift rejects as a member's name written bare, since `foo.Type` and `foo.Protocol` are
+	/// metatypes.
+	var spelledAsMemberDeclarationName: String {
+		switch spelledWithoutBackticks {
+		case "Type", "Protocol":
+			"`\(spelledWithoutBackticks)`"
+		default:
+			self
+		}
+	}
+
+	/// This name, in `spelledAsIdentifier` spelling, as an expression spells it after a `.` to read a member: as an
+	/// argument label, except `init` and `self`, which keep their backticks, since `foo.init` and `foo.self` are an
+	/// initializer and the value itself.
+	var spelledAsMemberReference: String {
+		switch spelledWithoutBackticks {
+		case "init", "self":
+			self
+		default:
+			spelledAsArgumentLabel
+		}
+	}
+}
+
 extension TokenSyntax {
 	/// The name this token gives a parameter, in `spelledAsIdentifier` spelling, or `_` for a wildcard.
 	var spelledAsParameterName: String {

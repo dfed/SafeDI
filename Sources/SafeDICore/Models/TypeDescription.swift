@@ -212,6 +212,31 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// This type as a seam names a hole type: without `any` at every depth, each composition's members in the order of their
+	/// identifiers, so spellings of one type name one hole type.
+	var spelledCanonically: TypeDescription {
+		switch withoutAny {
+		case let .simple(name, generics):
+			.simple(name: name, generics: generics.map(\.spelledCanonically))
+		case let .nested(name, parentType, generics):
+			.nested(name: name, parentType: parentType.spelledCanonically, generics: generics.map(\.spelledCanonically))
+		case let .composition(types):
+			.composition(UnorderedEquatingCollection(types.map(\.spelledCanonically).sorted { $0.asIdentifier < $1.asIdentifier }))
+		case let .optional(type):
+			.optional(type.spelledCanonically)
+		case let .implicitlyUnwrappedOptional(type):
+			.implicitlyUnwrappedOptional(type.spelledCanonically)
+		case let .array(element):
+			.array(element: element.spelledCanonically)
+		case let .dictionary(key, value):
+			.dictionary(key: key.spelledCanonically, value: value.spelledCanonically)
+		case let .tuple(elements):
+			.tuple(elements.map { TupleElement(label: $0.label, $0.typeDescription.spelledCanonically) })
+		case let type:
+			type
+		}
+	}
+
 	/// This type with `any` stripped at every depth: the spelling `==` compares, and what the seam guard hashes.
 	var withoutAny: TypeDescription {
 		switch self {
@@ -593,78 +618,13 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
-	/// The type of the builder of a hole held in this wrapper, when it is an instantiator of a type whose
-	/// `ForwardedProperties` code outside that type's module cannot see: runtime's `Instantiator<T>.SeamBuilder<Scope>`.
-	/// That `T.ForwardedProperties` may be a function type, which spelled directly in the builder's parameter list would
-	/// not escape, and which `@escaping` could not be written on where it is not one. `nil` for every other type.
-	func seamBuilderTypeOfWrapper(takingScope scope: TypeDescription) -> TypeDescription? {
-		guard propertyType.forwardsPropertiesOfBuiltType, case let .simple(_, generics) = unwrapped, let builtType = generics.first else { return nil }
-		return .nested(name: Dependency.seamBuilderType, parentType: .simple(name: Dependency.instantiatorType, generics: [builtType]), generics: [scope])
-	}
-
-	/// This function type, `@Sendable`. `@Sendable` cannot be written on a typealias, so a seam builder alias
-	/// (`seamBuilderTypeOfWrapper(takingScope:)`) is spelled by its `@Sendable` form.
+	/// This function type, `@Sendable`.
 	var asSendableFunction: TypeDescription {
-		switch self {
-		case let .nested(_, parentType, generics) where isSeamBuilderAlias:
-			.nested(name: Dependency.sendableSeamBuilderType, parentType: parentType, generics: generics)
-		case .any,
-		     .array,
-		     .attributed,
-		     .closure,
-		     .composition,
-		     .dictionary,
-		     .implicitlyUnwrappedOptional,
-		     .metatype,
-		     .nested,
-		     .optional,
-		     .simple,
-		     .some,
-		     .tuple,
-		     .unknown,
-		     .variadic,
-		     .void:
-			.attributed(self, specifiers: [], attributes: ["Sendable"])
-		}
-	}
-
-	/// Whether this type is `@Sendable`, as `asSendableFunction` spells it.
-	var isSendableFunction: Bool {
-		switch self {
-		case let .attributed(_, _, attributes):
-			attributes.contains("Sendable")
-		case let .nested(name, _, _) where isSeamBuilderAlias:
-			name == Dependency.sendableSeamBuilderType
-		case .any,
-		     .array,
-		     .closure,
-		     .composition,
-		     .dictionary,
-		     .implicitlyUnwrappedOptional,
-		     .metatype,
-		     .nested,
-		     .optional,
-		     .simple,
-		     .some,
-		     .tuple,
-		     .unknown,
-		     .variadic,
-		     .void:
-			false
-		}
-	}
-
-	/// Whether this type is one of the generic function aliases `seamBuilderTypeOfWrapper(takingScope:)` spells, which
-	/// is a function type, as nothing a nested type's spelling shows says.
-	private var isSeamBuilderAlias: Bool {
-		guard case let .nested(name, .simple(Dependency.instantiatorType, _), _) = self else { return false }
-		return name == Dependency.seamBuilderType || name == Dependency.sendableSeamBuilderType
+		.attributed(self, specifiers: [], attributes: ["Sendable"])
 	}
 
 	public var asFunctionParameter: TypeDescription {
 		switch self {
-		case .nested where isSeamBuilderAlias:
-			.attributed(self, specifiers: [], attributes: ["escaping"])
 		case .any,
 		     .array,
 		     .composition,

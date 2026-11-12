@@ -3578,25 +3578,29 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.feedModules(), integration: integration, filesToDelete: &filesToDelete)
 		let feedFile = generatedFileHeader + Self.importLines("SharedModule") + """
 		extension FeedScreen {
-		    public struct SafeDIScope_FeedScreen_service {
-		        package let shared: SharedThing
-		        internal let store: FeedStore
+		    @frozen public enum SafeDIScope_FeedService {
+		        case service(service_Values)
+
+		        public struct service_Values {
+		            package let shared: SharedThing
+		            internal let store: FeedStore
+		        }
 		    }
 
-		    package convenience init(shared: SharedThing, serviceBuilder: @escaping (SafeDIScope_FeedScreen_service) -> FeedService) {
-		        let __safeDI_serviceBuilder = serviceBuilder
+		    package convenience init(shared: SharedThing, feedServiceBuilder: @escaping (SafeDIScope_FeedService) -> FeedService) {
+		        let __safeDI_feedServiceBuilder = feedServiceBuilder
 		        func __safeDI_store() -> FeedStore {
 		            let formatter = FeedFormatter()
 		            return FeedStore(shared: shared, formatter: formatter)
 		        }
 		        let store: FeedStore = __safeDI_store()
-		        let service: FeedService = __safeDI_serviceBuilder(SafeDIScope_FeedScreen_service(shared: shared, store: store))
+		        let service: FeedService = __safeDI_feedServiceBuilder(.service(SafeDIScope_FeedService.service_Values(shared: shared, store: store)))
 		        self.init(shared: shared, store: store, service: service)
 		    }
 		}
 
 		extension FeedScreen {
-		    public enum __safeDI_FeedScreen_4E5235B56C7C511F {}
+		    public enum __safeDI_FeedScreen_3DBB8F75AF60AC87 {}
 		}
 		"""
 		let pluginComment = integration.seamCallComment(type: "FeedScreen", declaringModule: "FeedModule")
@@ -3605,13 +3609,16 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    public convenience init() {
 		        let shared = SharedThing()
 		        func __safeDI_feed() -> FeedScreen {
-		            _ = FeedScreen.__safeDI_FeedScreen_4E5235B56C7C511F.self\(pluginComment)
-		            func __safeDI_serviceBuilder(_ scope: FeedScreen.SafeDIScope_FeedScreen_service) -> FeedService {
-		                let shared = scope.shared
-		                let service: FeedService = AppFeedService(shared: shared)
-		                return service
+		            _ = FeedScreen.__safeDI_FeedScreen_3DBB8F75AF60AC87.self\(pluginComment)
+		            func __safeDI_feedServiceBuilder_FeedScreen(_ scope: FeedScreen.SafeDIScope_FeedService) -> FeedService {
+		                switch scope {
+		                case let .service(scope):
+		                    let shared = scope.shared
+		                    let service: FeedService = AppFeedService(shared: shared)
+		                    return service
+		                }
 		            }
-		            return FeedScreen(shared: shared, serviceBuilder: __safeDI_serviceBuilder)
+		            return FeedScreen(shared: shared, feedServiceBuilder: __safeDI_feedServiceBuilder_FeedScreen)
 		        }
 		        let feed: FeedScreen = __safeDI_feed()
 		        self.init(shared: shared, feed: feed)
@@ -3631,9 +3638,9 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "FeedModule", diagnostics: { fixtures in
 			let feedServicePath = Self.path(of: "FeedService.swift", in: "FeedModule", fixtures, integration)
 			return """
-			\(Self.path(of: "FeedScreen.swift", in: "FeedModule", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `FeedScreen`: its generated `package` initializer, which `FeedScreen`'s `package` access requires, cannot take `serviceBuilder: @escaping (FeedScreen.SafeDIScope_FeedScreen_service) -> FeedService`, the builder for `FeedScreen`'s `service: FeedService`, which no @Instantiable declaration that module `FeedModule` can see fulfills. `FeedService` is declared `internal`. Declare `FeedService` `package`; declare `FeedScreen` `internal`; make an @Instantiable declaration that fulfills `FeedService` one module `FeedModule` reads, so `FeedScreen`'s tree builds it; or declare the dependency tree on an `internal` type that instantiates `FeedScreen`.
+			\(Self.path(of: "FeedScreen.swift", in: "FeedModule", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `FeedScreen`: its generated `package` initializer, which `FeedScreen`'s `package` access requires, cannot take `feedServiceBuilder: @escaping (SafeDIScope_FeedService) -> FeedService`, the builder for `FeedScreen`'s `service: FeedService`, which no @Instantiable declaration that module `FeedModule` can see fulfills. `FeedService` is declared `internal`. Declare `FeedService` `package`; declare `FeedScreen` `internal`; make an @Instantiable declaration that fulfills `FeedService` one module `FeedModule` reads, so `FeedScreen`'s tree builds it; or declare the dependency tree on an `internal` type that instantiates `FeedScreen`.
 			\(feedServicePath):1:1: note: `FeedService` is declared `internal` here.
-			\(feedServicePath):1:1-1:1: fixit: package\(" ")
+			\(feedServicePath):1:1-1:1: fixit: package 
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

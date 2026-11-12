@@ -1107,7 +1107,7 @@ struct GraphFuzzerPublicMockDraw {
 			let scopeType = "\(declaration.name).SafeDIMockScope_\(owner)_\(holeLabel)"
 			let forwardedParameter = spelling == .instantiator ? ", _: \(holeName).ForwardedProperties" : ""
 			let builder = position.isSendable
-				? "{ (_: \(scopeType).Outer) in { (_: \(scopeType).Inner\(forwardedParameter)) in \(value) } }"
+				? "{ (_: \(scopeType).Stage1) in { (_: \(scopeType).Stage2\(forwardedParameter)) in \(value) } }"
 				: "{ (_: \(scopeType)\(forwardedParameter)) in \(value) }"
 			let call = "\(declaration.name).mock(\(holeLabel)Builder: \(builder))"
 			let holeDeclaration = declaration

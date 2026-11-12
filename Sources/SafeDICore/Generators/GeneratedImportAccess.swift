@@ -467,6 +467,25 @@ private final class SignatureTypeNameVisitor: SyntaxVisitor {
 		return .skipChildren
 	}
 
+	/// A case's associated values are spelled at the access of the enum that declares it: a `public` enum of a generated scope
+	/// names the inner seams whose enums it holds.
+	override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+		for member in node.memberBlock.members {
+			guard let enumCase = member.decl.as(EnumCaseDeclSyntax.self) else { continue }
+			for element in enumCase.elements {
+				if let parameterClause = element.parameterClause {
+					record(parameterClause, modifiers: node.modifiers, attributes: node.attributes)
+				}
+			}
+		}
+		return .visitChildren
+	}
+
+	override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+		record(node.initializer.value, modifiers: node.modifiers, attributes: node.attributes)
+		return .skipChildren
+	}
+
 	private func record(_ signature: some SyntaxProtocol, modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax) {
 		let isUsableFromInline = attributes.contains { attribute in
 			attribute.as(AttributeSyntax.self)?.attributeName.trimmedDescription == "usableFromInline"

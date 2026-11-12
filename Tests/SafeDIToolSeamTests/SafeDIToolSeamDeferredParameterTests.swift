@@ -928,17 +928,17 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			case .sendableLazilyInstantiated:
 				"""
 				extension Inner {
-				    public enum SafeDIScope_Inner_panel {
-				        public struct Outer {}
+				    public enum SafeDIStagedScope_Panel_panel {
+				        public struct Stage1 {}
 
-				        public struct Inner {}
+				        public struct Stage2 {}
 				    }
 
-				    public init(panelBuilder: @escaping (SafeDIScope_Inner_panel.Outer) -> @Sendable (SafeDIScope_Inner_panel.Inner) -> any Panel) {
-				        let __safeDI_panelBuilder = panelBuilder
-				        let __safeDI_panelBuilder_Inner = __safeDI_panelBuilder(SafeDIScope_Inner_panel.Outer())
+				    public init(panelBuilder_panel: @escaping (SafeDIStagedScope_Panel_panel.Stage1) -> @Sendable (SafeDIStagedScope_Panel_panel.Stage2) -> any Panel) {
+				        let __safeDI_panelBuilder_panel = panelBuilder_panel
+				        let __safeDI_panelBuilder_panel_Stage2 = __safeDI_panelBuilder_panel(SafeDIStagedScope_Panel_panel.Stage1())
 				        @Sendable func __safeDI_panel() -> any Panel {
-				            __safeDI_panelBuilder_Inner(SafeDIScope_Inner_panel.Inner())
+				            __safeDI_panelBuilder_panel_Stage2(SafeDIStagedScope_Panel_panel.Stage2())
 				        }
 				        let panel = SendableLazilyInstantiated<any Panel>(__safeDI_panel)
 				        self.init(panel: panel)
@@ -946,23 +946,23 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 				}
 
 				extension Inner {
-				    public enum __safeDI_Inner_50C95E7FD26DA23B {}
+				    public enum __safeDI_Inner_2282270D44CF58BA {}
 				}
 				"""
 			case .stagedBeneathSendableInstantiator:
 				"""
 				extension Inner {
-				    public enum SafeDIScope_Detail_panel {
-				        public struct Outer {}
+				    public enum SafeDIStagedScope_Panel_detailBuilder_panel {
+				        public struct Stage1 {}
 
-				        public struct Inner {}
+				        public struct Stage2 {}
 				    }
 
-				    public init(panelBuilder: @escaping (SafeDIScope_Detail_panel.Outer) -> @Sendable (SafeDIScope_Detail_panel.Inner) -> any Panel) {
-				        let __safeDI_panelBuilder = panelBuilder
-				        let __safeDI_panelBuilder_Inner = __safeDI_panelBuilder(SafeDIScope_Detail_panel.Outer())
+				    public init(panelBuilder_detailBuilder_panel: @escaping (SafeDIStagedScope_Panel_detailBuilder_panel.Stage1) -> @Sendable (SafeDIStagedScope_Panel_detailBuilder_panel.Stage2) -> any Panel) {
+				        let __safeDI_panelBuilder_detailBuilder_panel = panelBuilder_detailBuilder_panel
+				        let __safeDI_panelBuilder_detailBuilder_panel_Stage2 = __safeDI_panelBuilder_detailBuilder_panel(SafeDIStagedScope_Panel_detailBuilder_panel.Stage1())
 				        @Sendable func __safeDI_detailBuilder() -> Detail {
-				            let panel: any Panel = __safeDI_panelBuilder_Inner(SafeDIScope_Detail_panel.Inner())
+				            let panel: any Panel = __safeDI_panelBuilder_detailBuilder_panel_Stage2(SafeDIStagedScope_Panel_detailBuilder_panel.Stage2())
 				            return Detail(panel: panel)
 				        }
 				        let detailBuilder = SendableInstantiator<Detail>(__safeDI_detailBuilder)
@@ -971,7 +971,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 				}
 
 				extension Inner {
-				    public enum __safeDI_Inner_DDE5C65DA79FCFB1 {}
+				    public enum __safeDI_Inner_94F29C053EF554B1 {}
 				}
 				"""
 			}
@@ -982,25 +982,27 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			switch self {
 			case .sendableLazilyInstantiated:
 				"""
-				            func __safeDI_panelBuilder(_ scope: Inner.SafeDIScope_Inner_panel.Outer) -> @Sendable (Inner.SafeDIScope_Inner_panel.Inner) -> any Panel {
-				                @Sendable func __safeDI_panelBuilder_Inner(_ scope: Inner.SafeDIScope_Inner_panel.Inner) -> any Panel {
+				            func __safeDI_panelBuilder_panel(_ scope: Inner.SafeDIStagedScope_Panel_panel.Stage1) -> @Sendable (Inner.SafeDIStagedScope_Panel_panel.Stage2) -> any Panel {
+				                @Sendable func __safeDI_panelBuilder_panel_Stage2(_ scope: Inner.SafeDIStagedScope_Panel_panel.Stage2) -> any Panel {
 				                    @Sendable func __safeDI_panel() -> DefaultPanel {
 				                        DefaultPanel(user: user.instance)
 				                    }
 				                    return __safeDI_panel()
 				                }
-				                return __safeDI_panelBuilder_Inner
+				                return __safeDI_panelBuilder_panel_Stage2
 				            }
+				            return Inner(panelBuilder_panel: __safeDI_panelBuilder_panel)
 				"""
 			case .stagedBeneathSendableInstantiator:
 				"""
-				            func __safeDI_panelBuilder(_ scope: Inner.SafeDIScope_Detail_panel.Outer) -> @Sendable (Inner.SafeDIScope_Detail_panel.Inner) -> any Panel {
-				                @Sendable func __safeDI_panelBuilder_Inner(_ scope: Inner.SafeDIScope_Detail_panel.Inner) -> any Panel {
+				            func __safeDI_panelBuilder_detailBuilder_panel(_ scope: Inner.SafeDIStagedScope_Panel_detailBuilder_panel.Stage1) -> @Sendable (Inner.SafeDIStagedScope_Panel_detailBuilder_panel.Stage2) -> any Panel {
+				                @Sendable func __safeDI_panelBuilder_detailBuilder_panel_Stage2(_ scope: Inner.SafeDIStagedScope_Panel_detailBuilder_panel.Stage2) -> any Panel {
 				                    let panel: any Panel = DefaultPanel(user: user.instance)
 				                    return panel
 				                }
-				                return __safeDI_panelBuilder_Inner
+				                return __safeDI_panelBuilder_detailBuilder_panel_Stage2
 				            }
+				            return Inner(panelBuilder_detailBuilder_panel: __safeDI_panelBuilder_detailBuilder_panel)
 				"""
 			}
 		}
@@ -1008,10 +1010,8 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		/// The guard enum name `Inner`'s generated initializer declares.
 		var innerGuard: String {
 			switch self {
-			case .sendableLazilyInstantiated:
-				"__safeDI_Inner_50C95E7FD26DA23B"
-			case .stagedBeneathSendableInstantiator:
-				"__safeDI_Inner_DDE5C65DA79FCFB1"
+			case .sendableLazilyInstantiated: "__safeDI_Inner_2282270D44CF58BA"
+			case .stagedBeneathSendableInstantiator: "__safeDI_Inner_94F29C053EF554B1"
 			}
 		}
 	}
@@ -1050,7 +1050,6 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        func __safeDI_inner() -> Inner {
 			            _ = Inner.\(hole.innerGuard).self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Inner"))
 			\(hole.outerFill)
-			            return Inner(panelBuilder: __safeDI_panelBuilder)
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        self.init(inner: inner)
@@ -1114,7 +1113,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: LazilyInstantiated<Token>", "@Instantiated let service: Service"]),
 				"""
 				public func makeService(token: Token) -> Service {
-				    Service(token: token, userServiceBuilder: { scope in DefaultUserService(token: scope.token) })
+				    Service(token: token, userServiceBuilder: { scope in switch scope { case let .profileBuilder_userService(values): DefaultUserService(token: values.token) } })
 				}
 				""",
 			],
@@ -1123,23 +1122,27 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == SafeDIToolSeamBuilderParameterTests.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"Service": """
 			extension Service {
-			    public struct SafeDIScope_Profile_userService {
-			        public var token: Token { __safeDI_token.instance }
-			        let __safeDI_token: LazilyInstantiated<Token>
+			    @frozen public enum SafeDIScope_UserService {
+			        case profileBuilder_userService(profileBuilder_userService_Values)
 
-			        init(token: LazilyInstantiated<Token>) {
-			            __safeDI_token = token
+			        public struct profileBuilder_userService_Values {
+			            public var token: Token { __safeDI_token.instance }
+			            let __safeDI_token: LazilyInstantiated<Token>
+
+			            init(token: LazilyInstantiated<Token>) {
+			                __safeDI_token = token
+			            }
 			        }
 			    }
 
-			    public init(token: Token, userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+			    public init(token: Token, userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
 			        self.init(__safeDI_token: token, __safeDI_userServiceBuilder: userServiceBuilder)
 			    }
 
-			    public init(__safeDI_token: @autoclosure @escaping () -> Token, __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+			    public init(__safeDI_token: @autoclosure @escaping () -> Token, __safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        func __safeDI_profileBuilder() -> Profile {
-			            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(token: token))
+			            let userService: any UserService = __safeDI_userServiceBuilder(.profileBuilder_userService(SafeDIScope_UserService.profileBuilder_userService_Values(token: token)))
 			            return Profile(token: token.instance, userService: userService)
 			        }
 			        let profileBuilder = Instantiator<Profile>(__safeDI_profileBuilder)
@@ -1148,7 +1151,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_908534A678B3C5CD {}
+			    public enum __safeDI_Service_D8136A13E6ED1DD2 {}
 			}
 			""",
 		]))
@@ -1161,12 +1164,15 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        }
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_908534A678B3C5CD.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
-			            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
-			                let userService: any UserService = DefaultUserService(token: token.instance)
-			                return userService
+			            _ = Service.__safeDI_Service_D8136A13E6ED1DD2.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
+			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case .profileBuilder_userService:
+			                    let userService: any UserService = DefaultUserService(token: token.instance)
+			                    return userService
+			                }
 			            }
-			            return Service(__safeDI_token: token.instance, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder)
+			            return Service(__safeDI_token: token.instance, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
 			        }
 			        let service: Service = __safeDI_service()
 			        self.init(token: token, service: service)

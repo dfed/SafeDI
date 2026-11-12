@@ -886,8 +886,11 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 
 		func handWrittenCall() -> [String] {
 		    traceSink = []
-		    let seam = JobHoleSeam(c: C(), uploaderBuilder: { scope in
-		        HandWrittenUploader(jobBuilder: Instantiator { Job(c: scope.c) })
+		    let seam = JobHoleSeam(c: C(), jobUploaderBuilder: { scope in
+		        switch scope {
+		        case let .uploader(values):
+		            HandWrittenUploader(jobBuilder: Instantiator { Job(c: values.c) })
+		        }
 		    })
 		    trace("built")
 		    seam.uploader.buildJob()
@@ -1324,17 +1327,21 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles["Service+SafeDI.swift"] == generatedFileHeader + """
 		extension Service {
-		    public struct SafeDIScope_Service_userService {}
+		    @frozen public enum SafeDIScope_UserService {
+		        case userService(userService_Values)
 
-		    public init(userServiceBuilder: @escaping (SafeDIScope_Service_userService) -> any UserService) {
+		        public struct userService_Values {}
+		    }
+
+		    public init(userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
 		        let __safeDI_userServiceBuilder = userServiceBuilder
-		        let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Service_userService())
+		        let userService: any UserService = __safeDI_userServiceBuilder(.userService(SafeDIScope_UserService.userService_Values()))
 		        self.init(userService: userService)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_2567811726D4AD5E {}
+		    public enum __safeDI_Service_F61C88110D16DE79 {}
 		}
 		""")
 	}

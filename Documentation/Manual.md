@@ -760,7 +760,7 @@ extension Service {
 
 An added parameter received only if available, whose type SafeDI counts as narrower than the seam ([Access of generated parameters](#access-of-generated-parameters)), is not on the wider initializers, so a hand-written call of one keeps compiling. Suppose `Badge` adds `@Received(onlyIfAvailable: true) let theme: Theme?`, and `Theme` is `package`. `Service`’s `public` initializer does not change, and a `package` tier takes `analytics` and `theme`. A hand-written `Service(analytics: analytics)` calls the `public` initializer and passes `nil` for `theme`, even in `Service`’s own module with a `Theme` in hand; only `Service(analytics: analytics, theme: theme)` passes it. This is deliberate: adding a `package` receive only if available leaves a `public` seam’s signature as it was, so it breaks no hand-written call in another package, which could pass only `nil`. A tree that holds a `theme` calls the `package` tier and passes it, or, where it cannot reach that tier, is the error above. SafeDI matches that value by label and type name, so a tree in another package that holds a `theme` of an unrelated type also named `Theme` gets the error too. Where SafeDI counts the type as at least as visible as the seam, the new parameter is on every initializer and the call fails to compile as usual.
 
-A type the seam’s tree instantiates that no `@Instantiable` declaration its module can see fulfills, such as a protocol whose implementation lives in the app, is a hole. The generated initializer takes a builder for it, `<label>Builder`, for each place the tree builds it: a closure handed a struct of the values in scope there and returning the value the property holds. A property held in a wrapper is no different to write: the closure returns the plain value, and the generated initializer builds the `LazilyInstantiated`, `Instantiator` or other wrapper around it, so `{ _ in Implementation() }` fills a `LazilyInstantiated<any Service>` as it fills an `any Service`. An instantiator calls the closure each time it instantiates, and hands it the value it forwards as a second argument, of `ErasedInstantiator`’s first generic type, which leaves it out only when spelled `()` or `Void`, and always of type `T.ForwardedProperties` for `Instantiator<T>`, since the seam’s module cannot always see whether `T` forwards anything: `{ _, name in Implementation(name: name) }`. The initializer spells the builder of an `Instantiator<T>` as `Instantiator<T>.SeamBuilder<Scope>`, a function type of that shape, so that a forwarded function can escape into what the closure builds. Where `@Sendable` functions lie between the seam and that place, the builder is staged: a `@Sendable` closure for the values bound inside the first of them, and so on, the last returning the value and taking any forwarded value. Those functions are a `Sendable` wrapper’s builder, the code SafeDI generates to fill an inner seam’s builder when that is `@Sendable`, and, for a property held in a `Sendable` wrapper, the wrapper’s own function, whose stage is handed an empty struct: `{ _ in { _ in Implementation() } }`. The builder, and each value in the struct, is as visible as the types it names.
+A type the seam’s tree instantiates that no `@Instantiable` declaration its module can see fulfills, such as a protocol whose implementation lives in the app, is a hole. The generated initializer takes one builder per type it cannot build, named for that type (`serviceBuilder` for `Service`, `urlLoaderBuilder` for `URLLoader`): a closure handed a scope that says which place in the tree wants a value, and returning the value the property holds, so `{ _ in Implementation() }` fills every place of the type. The scope is an enum, `SafeDIScope_Service`, with a case for each place the seam builds the type, named by the labels on the path to it (`.profile_userService`), whose payload holds the values in scope there, and a case for each inner seam that holds places of the type, named by the path to the inner seam (`.inner`), whose payload is that seam’s enum: `case .inner:` leaves it closed, and `case let .inner(inner):` opens it. A property held in a wrapper is no different to write: the closure returns the plain value, and the generated initializer builds the `LazilyInstantiated`, `Instantiator` or other wrapper around it. An instantiator calls the closure each time it instantiates, and hands it the value it forwards as its case’s second value (`case let .maker(values, name):`), of `ErasedInstantiator`’s first generic type, which leaves it out only when spelled `()` or `Void`, and always of type `T.ForwardedProperties` for `Instantiator<T>`, since the seam’s module cannot always see whether `T` forwards anything. Where an inner seam’s enum reaches a `@Sendable` function, a second builder, `serviceSendableBuilder`, takes a `SafeDISendableScope_Service`, and a call in a `@Sendable` function gets its case there, as does an inner seam’s own `@Sendable` enum, whose case ends in `_Sendable`. A place the seam builds inside a `@Sendable` function, or holds in a `Sendable` wrapper, is staged, with a builder of its own, `serviceBuilder_<case>`: a closure for the values bound before the first `@Sendable` function, which returns a `@Sendable` closure for those bound inside it, and so on, the last returning the value and taking any forwarded value: `{ _ in { _ in Implementation() } }`. A staged place an inner seam holds is passed up as `serviceBuilder_<InnerSeam>_<case>`. Two hole types whose names collide are named apart by the type each returns, so `implBuilder` becomes `impl_ImplBuilder` beside `impl_AnyServiceBuilder`. A builder, and each value in its scope, is as visible as the types it names, an inner seam’s enum among them, and a forwarded value’s type.
 
 A module that can see an implementation fills the builder in the code it generates, building the implementation from the struct’s fields and from its own tree, whose types and initializers must be visible there, as a root’s are; a value the implementation receives must be in the struct, or come from that module. A seam that cannot fill the builder passes it up through its own initializer; a root that cannot is an error, as is a hole in a seam’s tree under the [Xcode project plugin](#limits-of-the-xcode-project-plugin). A hole depends on what the module reads, as [Which modules to list](#which-modules-to-list) describes: when a type becomes one the module reads, which under Bazel includes one a module beneath declares, the seam builds it and its initializer no longer takes that builder, so a hand-written call that passes the builder stops compiling. [Where a seam differs from building its tree inline](#where-a-seam-differs-from-building-its-tree-inline) covers a seam built again inside the tree that fills it.
 
@@ -769,15 +769,19 @@ For a value a generated call defers, a hand-written implementation creates the v
 ```swift
 // Generated in module Feature, where `Profile` instantiates `userService: any UserService`.
 extension Service {
-    public struct SafeDIScope_Profile_userService {
-        public let analytics: Analytics
+    @frozen public enum SafeDIScope_UserService {
+        case profile_userService(profile_userService_Values)
+
+        public struct profile_userService_Values {
+            public let analytics: Analytics
+        }
     }
 
-    public init(userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+    public init(userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
         let __safeDI_userServiceBuilder = userServiceBuilder
         let analytics = Analytics()
         func __safeDI_profile() -> Profile {
-            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(analytics: analytics))
+            let userService: any UserService = __safeDI_userServiceBuilder(.profile_userService(SafeDIScope_UserService.profile_userService_Values(analytics: analytics)))
             return Profile(userService: userService, analytics: analytics)
         }
         let profile: Profile = __safeDI_profile()
@@ -789,29 +793,39 @@ extension Service {
 ```swift
 // Generated in module App, which declares `DefaultUserService`, an implementation of `UserService`.
 func __safeDI_service() -> Service {
-    _ = Service.__safeDI_Service_80890FC499DC6112.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
-    func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
-        let analytics = scope.analytics
-        let userService: any UserService = DefaultUserService(analytics: analytics)
-        return userService
+    _ = Service.__safeDI_Service_D8E8DFCE0954DB42.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
+    func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+        switch scope {
+        case let .profile_userService(scope):
+            let analytics = scope.analytics
+            let userService: any UserService = DefaultUserService(analytics: analytics)
+            return userService
+        }
     }
-    return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+    return Service(userServiceBuilder: __safeDI_userServiceBuilder_Service)
 }
 ```
 
 ```swift
 // In module Feature, `ExportFeature` instantiates `screenBuilder: Instantiator<ExportScreen>` and `uploader: any Uploader`,
-// and `ExportScreen` receives `exportService`. SafeDI generates the hole's struct:
-public struct SafeDIScope_ExportFeature_uploader {
-    public var exportService: ExportService { __safeDI_exportService.instance }
-    public let screenBuilder: Instantiator<ExportScreen>
-    let __safeDI_exportService: LazilyInstantiated<ExportService>
-    // …and the initializer ExportFeature's generated initializer calls with its memo.
+// and `ExportScreen` receives `exportService`. SafeDI generates the hole's enum:
+@frozen public enum SafeDIScope_Uploader {
+    case uploader(uploader_Values)
+
+    public struct uploader_Values {
+        public var exportService: ExportService { __safeDI_exportService.instance }
+        public let screenBuilder: Instantiator<ExportScreen>
+        let __safeDI_exportService: LazilyInstantiated<ExportService>
+        // …and the initializer ExportFeature's generated initializer calls with its memo.
+    }
 }
 
 // In module App, which declares `DefaultUploader`, whose `UploadJob`s receive `exportService`, a hand-written call:
 let feature = ExportFeature(exportService: exportService, uploaderBuilder: { scope in
-    DefaultUploader(jobBuilder: Instantiator { UploadJob(exportService: scope.exportService) })
+    switch scope {
+    case let .uploader(values):
+        DefaultUploader(jobBuilder: Instantiator { UploadJob(exportService: values.exportService) })
+    }
 })
 // `exportService` exists before this call, as every argument of a hand-written call does, whether or not an `UploadJob` is ever built.
 // A generated call from a tree that holds the service as a `LazilyInstantiated` creates it when the first `UploadJob` is built, as inline.
