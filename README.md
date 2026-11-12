@@ -13,12 +13,8 @@ Compile-time-safe dependency injection without the boilerplate. No containers. N
 - **Dependency injection that feels natural.** Get the simplicity of manual dependency injection without ceremony.
 - **Compile-time graph validation.** If the code compiles, the dependency graph is valid.
 - **Scoped runtime values.** Make your real logged-in `User` available non-optionally to any type in the subtree with just a single macro decoration.
-- **Full-graph mocks.** Generated from your real dependency graph, `mock()` lets you override any branch for easy previews and tests.
+- **Full-graph mocks.** Generated from your real dependency graph, mocks let you override any of the graph’s objects for easy previews and tests.
 - **Architecture-independent.** SwiftUI or UIKit, coordinators or MVVM, one module or hundreds — SafeDI fits what you already have.
-- **`package` and `internal` types.** An `@Instantiable` type and its initializer can stay `package` when only its package constructs them, or `internal` when only its own module does; the build names any that generated code cannot reach, with a fix-it where it can.
-- **Per-module generated trees.** `@Instantiable(generateDependencyTree: true)` generates a type’s dependency tree in its own module, so trees in other modules call one generated initializer, and a change inside that tree recompiles only its module and the calls into it. The Xcode project plugin [builds these trees inline instead](Documentation/Manual.md#limits-of-the-xcode-project-plugin).
-- **Public mocks across packages.** `@Instantiable(generateMock: .public)` generates a `public` `mock()` that tests and previews in other packages can call without seeing the types it builds.
-- **Delayed instantiation.** `Instantiator` creates a new instance each time you ask; `LazilyInstantiated` creates one shared instance the first time it is read. An expensive or rarely needed dependency is built only when something uses it.
 - **Clear failures.** SafeDI reports an unsolvable graph as a compiler diagnostic at your declaration, in Xcode and in build logs. It names the declarations involved and offers a fix-it where one exists.
 
 ## The core concept
@@ -115,23 +111,16 @@ For previews and tests that need real data, pass forwarded values directly and u
 ## Features
 
 <table>
-<tr><td>✓ Compile-time safe</td><td>✓ Thread safe</td><td>✓ Hierarchical dependency scoping</td></tr>
-<tr><td>✓ Constructor injection</td><td>✓ Multi-module support</td><td>✓ Dependency inversion support</td></tr>
-<tr><td>✓ Transitive dependency solving</td><td>✓ Cycle detection</td><td>✓ Architecture independent</td></tr>
-<tr><td>✓ No DI-specific types or generics required</td><td>✓ Full-graph mocks</td><td>✓ Clear errors at your declaration, with a fix-it where one exists</td></tr>
-<tr><td>✓ Conditional compilation support</td><td>✓ Lazy shared dependencies</td><td>✓ Swift Package Manager, Xcode, Bazel, and Tuist</td></tr>
-<tr><td>✓ <code>package</code> and <code>internal</code> types</td><td>✓ Per-module generated trees</td><td>✓ Public mocks across packages</td></tr>
+<tr><td>✓ Compile-time validated graph</td><td>✓ Hierarchical dependency scoping</td><td>✓ Constructor injection</td><td>✓ Thread safe</td></tr>
+<tr><td>✓ Dependency inversion support</td><td>✓ Transitive dependency solving</td><td>✓ Cycle detection</td><td>✓ Generated mocks from your real graph</td></tr>
+<tr><td>✓ Multi-module support</td><td>✓ Conditional compilation support</td><td>✓ Lazy and on-demand instantiation</td><td>✓ Swift Package Manager, Xcode, Bazel, and Tuist</td></tr>
 </table>
 
 ## Getting started
 
-Three steps to integrate:
+To add SafeDI to a Swift package, add `.package(url: "https://github.com/dfed/SafeDI.git", from: "2.2.0")` to its dependencies. The [quick start](Documentation/QuickStart.md) sets up SafeDI in an app of several modules, in a Swift package, an Xcode project, Bazel, or Tuist: adding SafeDI to the build, declaring your types, creating the tree, and using mocks in tests and previews.
 
-1. Add `.package(url: "https://github.com/dfed/SafeDI.git", from: "2.2.0")` to your `Package.swift` dependencies.
-2. Attach the `SafeDIGenerator` build tool plugin to your first-party target(s).
-3. Decorate your app’s root type with `@Instantiable(isRoot: true)` and add `@Instantiable` to the dependencies it reaches.
-
-Working sample projects live in the [Examples folder](Examples/) — clone, open, and build. The [Manual](Documentation/Manual.md#installation) covers Xcode projects, multi-module packages, Bazel, Tuist, and custom build systems in depth.
+Working sample projects live in the [Examples folder](Examples/) — clone, open, and build. The [Manual](Documentation/Manual.md) is the reference for everything else, including [installation](Documentation/Manual.md#installation) in Xcode projects, Swift packages, Bazel, Tuist, and custom build systems.
 
 If you are migrating an existing project to SafeDI, follow our [migration guide](Documentation/Manual.md#migrating-to-safedi), which also covers [adopting SafeDI in a large, multi-module codebase](Documentation/Manual.md#adopting-safedi-in-a-large-codebase). If you are upgrading from SafeDI 1.x, follow the [1.x → 2.x migration guide](Documentation/Manual.md#migrating-from-safedi-1x-to-2x).
 

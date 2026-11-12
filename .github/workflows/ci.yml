@@ -169,6 +169,7 @@ jobs:
             Plugins/Shared.swift \
             README.md \
             Documentation/Manual.md \
+            Documentation/QuickStart.md \
             Sources/SafeDI/SafeDI.docc/SafeDI.md \
             Examples/ExampleTuistIntegration/README.md | sort)
           if [ "$changed" != "$expected" ]; then
