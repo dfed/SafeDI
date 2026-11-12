@@ -85,11 +85,16 @@ final class Scope: Hashable {
 	/// nothing. `nil` for every other scope.
 	let publicMockCall: PublicMockCall?
 
+	/// The builders the call `seamCall` or `publicMockCall` stands for passes, or `nil` for a scope that builds its type.
+	var calledBuilders: CalledBuilders? {
+		seamCall?.calledBuilders ?? publicMockCall?.calledBuilders
+	}
+
 	/// The properties that this scope is responsible for instantiating.
 	var propertiesToGenerate = [PropertyToGenerate]()
 
-	/// For a scope that calls a seam (`seamCall`), how the call passes each builder the seam's generated initializer
-	/// takes, in builder-label order. Empty for every other scope.
+	/// For a scope that calls a seam (`seamCall`) or another module's public mock (`publicMockCall`), how the call passes
+	/// each place the builders it passes reach, in the order they reach them. Empty for every other scope.
 	var holeArguments = [HoleArgument]()
 
 	/// How a seam call passes the builder for one of the seam's holes.
@@ -360,8 +365,9 @@ final class Scope: Hashable {
 	///     initializer's arguments. `nil` for a root of the dependency tree and for a mock root.
 	///   - startsCodeGeneration: Whether each generator of a dependency tree starts generating its code as soon as
 	///     it is created, which a tree built only to read its generators' sets skips.
-	///   - mockHoles: For a public mock's root, the holes its `mock()` takes a builder for, which each site of the tree
-	///     calls, as a seam's tree calls the builders of `seamRoot`'s signature.
+	///   - mockBuilders: For a public mock's root, the builders its `mock()` takes, which each site of the tree calls and
+	///     each call of another module's public mock hands its places up to, as a seam's tree calls the builders of
+	///     `seamRoot`'s signature.
 	///
 	/// The tree is created again while a scope that a lazy cycle closes on finds other parameters for its builder
 	/// function than it was created with (see `CycleParameter`): its cycle-closing scopes, created before it, pass
@@ -375,7 +381,7 @@ final class Scope: Hashable {
 		nearestDeclarations: NearestDeclarations = [:],
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		seamRoot: ScopeGenerator.SeamRoot? = nil,
-		mockHoles: [SeamSignature.Hole] = [],
+		mockBuilders: DependencyTreeGenerator.ShapedBuilders? = nil,
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,
 		startsCodeGeneration: Bool = true,
@@ -389,7 +395,7 @@ final class Scope: Hashable {
 				nearestDeclarations: nearestDeclarations,
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 				seamRoot: seamRoot,
-				mockHoles: mockHoles,
+				mockBuilders: mockBuilders,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				forMockGeneration: forMockGeneration,
 				startsCodeGeneration: startsCodeGeneration,
@@ -408,7 +414,7 @@ final class Scope: Hashable {
 		nearestDeclarations: NearestDeclarations,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		seamRoot: ScopeGenerator.SeamRoot?,
-		mockHoles: [SeamSignature.Hole],
+		mockBuilders: DependencyTreeGenerator.ShapedBuilders?,
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool,
 		startsCodeGeneration: Bool,
@@ -423,8 +429,10 @@ final class Scope: Hashable {
 			nearestDeclarations: nearestDeclarations,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			seamRoot: seamRoot,
+			mockBuilders: mockBuilders,
 			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes, builders: $0.signature.builders, scopeEnums: $0.signature.scopeEnums) }
-				?? (mockHoles.isEmpty ? SeamHoles() : SeamHoles(seamType: instantiable.concreteInstantiable, holes: mockHoles, builders: [], scopeEnums: [])),
+				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, scopeEnums: $0.scopeEnums) }
+				?? SeamHoles(),
 			sitePath: [],
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
@@ -490,6 +498,7 @@ private struct ScopeGeneratorUnderConstruction {
 		nearestDeclarations inheritedNearestDeclarations: NearestDeclarations,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		seamRoot: ScopeGenerator.SeamRoot?,
+		mockBuilders: DependencyTreeGenerator.ShapedBuilders? = nil,
 		seamHoles: SeamHoles,
 		sitePath: [Property],
 		enclosingFills: [String: String] = [:],
@@ -658,6 +667,7 @@ private struct ScopeGeneratorUnderConstruction {
 		}
 		self.childCycleParameterContexts = childCycleParameterContexts
 		self.seamRoot = seamRoot
+		self.mockBuilders = mockBuilders
 		self.seamHoles = seamHoles
 		self.declaredTypeNames = declaredTypeNames
 		// The path is kept only where a hole needs it: a site, and the stage calls of a staged builder, are found by it.
@@ -691,16 +701,10 @@ private struct ScopeGeneratorUnderConstruction {
 				fillNames[key] = functionName
 				fillsOfThisCall.append((Fill(hole: hole, key: key, functionName: functionName), fulfillingScope))
 			}
-			if let seamCall = scope.seamCall {
+			if let calledBuilders = scope.calledBuilders {
 				dispatchersOfThisCall = ScopeGenerator.FillDispatcher.dispatchers(
-					of: seamCall,
-					filledHoleTypes: Set(holeArguments.compactMap { holeArgument in
-						if case let .fill(hole, _) = holeArgument {
-							hole.holeType
-						} else {
-							nil
-						}
-					}),
+					of: calledBuilders,
+					filledSites: Self.filledSites(of: holeArguments),
 					enclosingDispatchers: enclosingFills,
 					fillNames: fillNames,
 					names: &names,
@@ -921,21 +925,39 @@ private struct ScopeGeneratorUnderConstruction {
 		))
 	}
 
-	/// What the call this scope makes passes each builder: the fill of a staged place or the seam's staged builder, and
-	/// for an enum the dispatcher that fills it or a closure that hands the enum up in a case of the seam's own.
-	private func builderCallArguments(fillNames: [String: String]) -> [ScopeGenerator.BuilderCallArgument] {
-		guard let seamCall = scope.seamCall, !holeArguments.isEmpty else { return [] }
-		let holeArgumentsBySite = Dictionary(holeArguments.map { ($0.hole.site, $0) }, uniquingKeysWith: { first, _ in first })
-		let filledHoleTypes = Set(holeArguments.compactMap { holeArgument in
+	/// The sites of the places a call whose builders `holeArguments` are fills.
+	private static func filledSites(of holeArguments: [Scope.HoleArgument]) -> Set<SeamSignature.Hole.Site> {
+		Set(holeArguments.compactMap { holeArgument in
 			if case let .fill(hole, _) = holeArgument {
-				hole.holeType
+				hole.site
 			} else {
 				nil
 			}
 		})
-		let callsGeneratedOnlyInitializer = seamCall.callsGeneratedOnlyInitializer
-		return seamCall.builders.map { builder in
-			let label = callsGeneratedOnlyInitializer ? builder.generatedOnlyArgumentLabel : builder.label.spelledAsArgumentLabel
+	}
+
+	/// What the call this scope makes passes each builder: the fill of a staged place or the staged builder of the seam or
+	/// public mock whose tree makes the call, and for an enum the dispatcher that fills it, a closure that hands the enum up
+	/// in a case of an enum of the seam or public mock whose tree makes the call, or the dispatcher handed that closure,
+	/// which it passes each place it does not fill: a seam's caller fills every place an enum reaches or none, a public
+	/// mock's caller each place it can. An internal mock takes each builder it passes up as a parameter, which the call
+	/// passes as its leaf's dependency of the builder's label: an empty value here, or the parameter called with the scope.
+	private func builderCallArguments(fillNames: [String: String]) -> [ScopeGenerator.BuilderCallArgument] {
+		guard let calledBuilders = scope.calledBuilders, !holeArguments.isEmpty else { return [] }
+		let holeArgumentsBySite = Dictionary(holeArguments.map { ($0.hole.site, $0) }, uniquingKeysWith: { first, _ in first })
+		let filledSites = Self.filledSites(of: holeArguments)
+		let enumsByKey = calledBuilders.enumsByKey
+		let callsGeneratedOnlyInitializer = scope.seamCall?.callsGeneratedOnlyInitializer ?? false
+		// A public mock's caller passes each builder by the leaf's argument of its label.
+		let isPublicMockCall = scope.publicMockCall != nil
+		return calledBuilders.builders.map { builder in
+			let label = if callsGeneratedOnlyInitializer {
+				builder.generatedOnlyArgumentLabel
+			} else if isPublicMockCall {
+				builder.label
+			} else {
+				builder.label.spelledAsArgumentLabel
+			}
 			switch builder.kind {
 			case let .staged(site):
 				guard let holeArgument = holeArgumentsBySite[site] else { return .init(label: label, value: "") }
@@ -944,17 +966,25 @@ private struct ScopeGeneratorUnderConstruction {
 					let fillKey = ScopeGenerator.fillKey(of: hole)
 					return .init(label: label, value: fillNames[fillKey] ?? ScopeGenerator.fillFunctionName(of: hole), enclosingFillKey: enclosingFills[fillKey] == nil ? nil : fillKey, isSendable: hole.isSendable)
 				case let .passUp(hole):
-					return .init(label: label, value: seamHoles.hole(taking: hole)?.internalName ?? hole.internalName)
+					let takingBuilder = seamHoles.hole(taking: hole)?.internalName
+					return .init(label: label, value: takingBuilder ?? (isPublicMockCall ? "" : hole.internalName))
 				}
 			case let .scopeEnum(enumKey):
-				if filledHoleTypes.contains(enumKey.holeType) {
-					let dispatcherKey = ScopeGenerator.FillDispatcher.key(of: enumKey)
-					return .init(label: label, value: fillNames[dispatcherKey] ?? "", enclosingFillKey: enclosingFills[dispatcherKey] == nil ? nil : dispatcherKey, isSendable: enumKey.isSendable)
-				} else {
-					// In a tree built to compute the signature, which generates nothing, the case is not settled yet.
-					let route = seamHoles.routeCase(at: sitePath, innerKey: enumKey)
+				let reachedSites = SeamSignature.ScopeEnum.sitesReached(from: enumKey, in: enumsByKey)
+				// In a tree built to compute the signature, which generates nothing, the case is not settled yet.
+				let route = seamHoles.routeCase(at: sitePath, innerKey: enumKey)
+				guard !reachedSites.isDisjoint(with: filledSites) else {
 					return .init(label: label, value: route.map { route in "{ \(route.builderName)(.\(route.caseName)($0)) }" } ?? "")
 				}
+				let dispatcherKey = ScopeGenerator.FillDispatcher.key(of: enumKey)
+				let dispatcher = fillNames[dispatcherKey] ?? ""
+				let enclosingFillKey = enclosingFills[dispatcherKey] == nil ? nil : dispatcherKey
+				guard reachedSites.isSubset(of: filledSites) else {
+					// The whole scope the call was given goes up, under the route's case.
+					let passUp = route.map { route in "\(route.builderName)(.\(route.caseName)(scope))" } ?? "\(builder.label)(scope)"
+					return .init(label: label, value: "{ scope in \(dispatcher)(scope, \(ScopeGenerator.FillDispatcher.passUpParameterName): { \(passUp) }) }", enclosingFillKey: enclosingFillKey, isSendable: enumKey.isSendable)
+				}
+				return .init(label: label, value: dispatcher, enclosingFillKey: enclosingFillKey, isSendable: enumKey.isSendable)
 			}
 		}
 	}
@@ -980,6 +1010,7 @@ private struct ScopeGeneratorUnderConstruction {
 			seamCall: scope.seamCall,
 			publicMockCall: scope.publicMockCall,
 			seamRoot: seamRoot,
+			mockBuilders: mockBuilders,
 			holeCallArguments: holeArguments.map { holeArgument in
 				switch holeArgument {
 				case let .fill(hole, _):
@@ -1080,6 +1111,8 @@ private struct ScopeGeneratorUnderConstruction {
 	/// is available. An alias absent here is bound to `nil`.
 	private let aliasBindings: [Property: Property]
 	private let seamRoot: ScopeGenerator.SeamRoot?
+	/// For a public mock's root, the builders its `mock()` takes; `nil` for every other scope.
+	private let mockBuilders: DependencyTreeGenerator.ShapedBuilders?
 	/// The holes of the seam whose tree is generated, by site, which the sites and the stage calls of staged builders
 	/// read. Empty outside a seam's tree, and in a seam's tree without holes.
 	private let seamHoles: SeamHoles

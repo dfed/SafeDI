@@ -1762,8 +1762,12 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    \(Self.comment(["Brush", "Image"]))
-		    public struct SafeDIMockScope_Badge_brush {
-		        public let image: Image
+		    @frozen public enum SafeDIMockScope_Brush {
+		        case badgeBuilder_brush(badgeBuilder_brush_Values)
+
+		        public struct badgeBuilder_brush_Values {
+		            public let image: Image
+		        }
 		    }
 
 		    /// Overrides for the mock dependency tree.
@@ -1782,12 +1786,12 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        brushBuilder: @escaping (Screen.SafeDIMockScope_Badge_brush) -> Brush,
+		        brushBuilder: @escaping (Screen.SafeDIMockScope_Brush) -> Brush,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let __safeDI_brushBuilder = brushBuilder
 		        func __safeDI_badgeBuilder(image: Image) -> Badge {
-		            let brush: Brush = __safeDI_brushBuilder(SafeDIMockScope_Badge_brush(image: image))
+		            let brush: Brush = __safeDI_brushBuilder(.badgeBuilder_brush(SafeDIMockScope_Brush.badgeBuilder_brush_Values(image: image)))
 		            return if let safeDIBuilder = safeDIOverrides.badgeBuilder { safeDIBuilder(image, brush) } else { Badge(image: image, brush: brush) }
 		        }
 		        let badgeBuilder = Instantiator<Badge> {
@@ -1798,7 +1802,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_mock_C1287F721258A6FF {}
+		    public enum __safeDI_Screen_mock_79375297172AEAB4 {}
 		}
 		#endif
 		"""])

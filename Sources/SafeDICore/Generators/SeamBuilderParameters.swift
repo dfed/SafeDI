@@ -27,23 +27,20 @@ extension DependencyTreeGenerator {
 	/// The holes of `seam`'s signature, read from `generator`, the generator of its tree, whose parameters are
 	/// `parameters`: one per site of a hole in the tree (a hole's generator), and one per hole of a seam the tree calls
 	/// that the module computing the signature cannot fill, which the seam passes up, shared by every call of that
-	/// seam. In builder-label order. A public mock keeps these per-place builders; a seam's places go through
-	/// `shapedBuilders`, which settles the builders it takes and their names.
+	/// seam or public mock. In builder-label order. `shapedBuilders` settles the builders a seam or a public mock takes for
+	/// them and their names.
 	///
 	/// A site's fields are the values whose nearest declaration on the site's path is bound before the site in the
 	/// code the seam's module generates: the seam's parameters, then each scope's on the path, outermost first, each
 	/// in the order it binds them – its forwarded properties, then its children in generation order, an `onlyIfAvailable`
 	/// alias bound to `nil` among them. A declaration bound after the site and the property still being built carry no
 	/// field, and hide the farther declarations of their label, which Swift would bind instead.
-	/// - Parameter scopeTypeNamePrefix: What each scope struct's name begins with: `SafeDIScope` for a seam's, and
-	///   `SafeDIMockScope` for a public mock's, whose type may be a seam too.
 	static func holes(
 		of seam: Instantiable,
 		generator: ScopeGenerator,
 		parameters: [SeamSignature.Parameter],
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
-		scopeTypeNamePrefix: String = "SafeDIScope",
 	) -> [SeamSignature.Hole] {
 		guard generator.containsBuildSite || generator.passesUpBuilder else { return [] }
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
@@ -153,7 +150,7 @@ extension DependencyTreeGenerator {
 		var holes = [SeamSignature.Hole]()
 		for (index, content) in siteContents.enumerated() {
 			let property = content.site.property
-			var scopeTypeName = "\(scopeTypeNamePrefix)_\(content.owner.concreteInstantiable.asIdentifier)_\(property.label)".spelledAsJoinedIdentifier
+			var scopeTypeName = "SafeDIScope_\(content.owner.concreteInstantiable.asIdentifier)_\(property.label)".spelledAsJoinedIdentifier
 			if siteCountByProperty[OwnedProperty(owner: content.owner.concreteInstantiable, property: property), default: 0] > 1 {
 				scopeTypeName = "\(scopeTypeName)_\(content.site.pathLabels)".spelledAsJoinedIdentifier
 			}

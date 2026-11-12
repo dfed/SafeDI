@@ -240,13 +240,13 @@ enum GraphFuzzerPublicMockOutputFeature: String, CaseIterable, Comparable {
 	/// construction wrapped in it.
 	case consumerErasedCall
 	case consumerErasedInline
-	/// A public mock taking a builder for a hole, `<label>Builder: @escaping (…SafeDIMockScope_…`, and a staged one, whose
-	/// first stage returns a `@Sendable` builder, in the declaring module.
+	/// A public mock taking a builder for a hole, `<label>Builder: @escaping (…SafeDIMockScope_…`, and a staged one,
+	/// `…: @escaping (…SafeDIStagedMockScope_…`, in the declaring module.
 	case holeBuilder
 	case stagedHoleBuilder
-	/// A consumer's mock filling a called public mock's builder with a function of its own (`func
-	/// __safeDI_<label>Builder(_ scope: …`), a fill that calls the public mock again with the fill around it (a fully
-	/// lazy cycle), and a consumer's mock taking the builder and passing it up.
+	/// A consumer's mock filling a called public mock's places with functions of its own (`func __safeDI_…(_ scope:
+	/// …MockScope_…`, a fill or a dispatcher), a fill that calls the public mock again with the fill around it (a fully
+	/// lazy cycle), and a consumer's mock taking a builder and passing it up.
 	case consumerFillsHole
 	case consumerFillReentersPublicMock
 	case consumerPassesHoleBuilderUp
@@ -459,7 +459,7 @@ struct GraphFuzzerPublicMockDraw {
 	/// alone (D530-2): rolls added after the rest of the draw was pinned, so that its other shapes are drawn as before.
 	static let publicMockCallShapeRandomSeedMask: UInt64 = 0x7075626D6B63616C
 	/// What begins the comment in `T6`'s file that holds its hand-written caller's call, after the caller's module:
-	/// `// publicMockCaller in FuzzOther: S1_T6.mock(holeBuilder: …)`. `GraphFuzzerOracle.addingPublicMockCallers` reads it.
+	/// `// publicMockCaller in FuzzOther: S1_T6.mock(s1_HoleBuilder: …)`. `GraphFuzzerOracle.addingPublicMockCallers` reads it.
 	static let publicMockCallerMarker = "// publicMockCaller in "
 
 	// MARK: Model
@@ -1088,28 +1088,33 @@ struct GraphFuzzerPublicMockDraw {
 			if holeRandom.percentChance(40) {
 				declaration.add(Property(attribute: "@Instantiated", label: "holeContext", type: instantiable("HoleContext")))
 			}
-			let owner: String
 			switch position {
 			case .direct:
-				owner = declaration.name
 				declaration.add(Property(attribute: attribute, label: holeLabel, type: holeType))
 			case .instantiator, .lazilyInstantiated, .sendableInstantiator, .sendableLazilyInstantiated:
 				let hostAccess: AccessLevel = holeRandom.percentChance(50) ? .public : .package
 				var host = instantiableClass("HoleHost", access: hostAccess)
 				host.properties = [Property(attribute: attribute, label: holeLabel, type: holeType)]
-				owner = host.name
 				declaration.add(Property(attribute: "@Instantiated", label: position.hostLabel, type: "\(position.wrapperName)<\(host.name)>"))
 				declaration.names(hostAccess)
 				declaringFiles.append(File(module: .seamModule, declarations: [Self.renderer(of: host)]))
 			}
-			// The call: a builder for the hole, `<label>Builder`, handed the hole's scope struct, `SafeDIMockScope_<owner>_<label>`,
-			// and an `Instantiator`'s forwarded value, staged around a `@Sendable` builder function. It returns the plain value.
-			let scopeType = "\(declaration.name).SafeDIMockScope_\(owner)_\(holeLabel)"
-			let forwardedParameter = spelling == .instantiator ? ", _: \(holeName).ForwardedProperties" : ""
-			let builder = position.isSendable
-				? "{ (_: \(scopeType).Stage1) in { (_: \(scopeType).Stage2\(forwardedParameter)) in \(value) } }"
-				: "{ (_: \(scopeType)\(forwardedParameter)) in \(value) }"
-			let call = "\(declaration.name).mock(\(holeLabel)Builder: \(builder))"
+			// The call: a builder named by the type the hole instantiates, `<type, leading capitals lowered>Builder`, handed an
+			// enum of the places, whose case carries an `Instantiator`'s forwarded value; or, for a place built inside a
+			// `@Sendable` builder function, a staged builder, `<that label>_<host label>_<hole label>`, whose last stage takes the
+			// forwarded value. It returns the plain value.
+			let instantiatedTypeName = switch spelling {
+			case .plain, .instantiator: holeName
+			case .existential: protocolName
+			case .erasedConstant, .erasedInstantiator: fillName
+			}
+			let enumBuilderLabel = Self.builderLabel(ofTypeNamed: instantiatedTypeName)
+			let forwardedParameter = spelling == .instantiator ? ", _" : ""
+			let call = if position.isSendable {
+				"\(declaration.name).mock(\(enumBuilderLabel)_\(position.hostLabel)_\(holeLabel): { _ in { _\(forwardedParameter) in \(value) } })"
+			} else {
+				"\(declaration.name).mock(\(enumBuilderLabel): { _ in \(value) })"
+			}
 			let holeDeclaration = declaration
 			declaringFiles.append(File(module: .seamModule, declarations: [
 				Self.renderer(of: holeDeclaration),
@@ -1495,6 +1500,15 @@ struct GraphFuzzerPublicMockDraw {
 	}
 
 	// MARK: Rendering
+
+	/// The label of the plain builder a public mock takes for the holes of the type named `typeName`: the name with its
+	/// leading capitals lowered, keeping the last when a lowercase letter follows it, then `Builder`.
+	static func builderLabel(ofTypeNamed typeName: String) -> String {
+		let characters = Array(typeName)
+		let capitalCount = characters.prefix { $0.isUppercase }.count
+		let loweredCount = capitalCount < characters.count && characters[capitalCount].isLowercase ? max(capitalCount - 1, 1) : capitalCount
+		return String(characters[..<loweredCount]).lowercased() + String(characters[loweredCount...]) + "Builder"
+	}
 
 	fileprivate static func renderer(of declaration: InstantiableClass) -> (Rendering) -> String {
 		{ rendering in render(declaration, rendering: rendering) }
@@ -2323,14 +2337,17 @@ extension GraphFuzzerPublicMockDraw {
 				if line.hasPrefix("@usableFromInline nonisolated func __safeDI_"), line.contains("_mockDefault_") {
 					features.insert(.forwardedProvider)
 				}
-				if line.contains("Builder: @escaping ("), line.contains(".SafeDIMockScope_") {
+				// A builder over an enum of the places, `SafeDIMockScope_…` or `SafeDISendableMockScope_…`, or a staged builder,
+				// `SafeDIStagedMockScope_…`.
+				if line.contains(": @escaping ("), line.contains("MockScope_"), !line.contains("func ") {
 					features.insert(isConsumerFile ? .consumerPassesHoleBuilderUp : .holeBuilder)
-					if !isConsumerFile, line.contains(") -> @Sendable (") {
+					if !isConsumerFile, line.contains(".SafeDIStagedMockScope_") {
 						features.insert(.stagedHoleBuilder)
 					}
 				}
 				guard isConsumerFile else { continue }
-				if line.hasPrefix("func __safeDI_"), line.contains("Builder(_ scope: "), line.contains(".SafeDIMockScope_") {
+				// A fill, handed a place's values or a stage's struct, or a dispatcher, which a call declares only with a fill.
+				if line.hasPrefix("func __safeDI_") || line.hasPrefix("@Sendable func __safeDI_"), line.contains("(_ scope: "), line.contains("MockScope_") {
 					features.insert(.consumerFillsHole)
 				}
 				for leafIndex in leafIndices {
