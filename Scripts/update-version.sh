@@ -41,6 +41,7 @@ MACOS_X86_64_SHA256=$(shasum -a 256 "$MACOS_X86_64_BINARY" | cut -d ' ' -f 1)
 DOCUMENTATION_FILES=(
     README.md
     Documentation/Manual.md
+    Documentation/QuickStart.md
     Sources/SafeDI/SafeDI.docc/SafeDI.md
     Examples/ExampleTuistIntegration/README.md
 )

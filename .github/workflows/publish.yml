@@ -305,6 +305,7 @@ jobs:
             MODULE.bazel \
             README.md \
             Documentation/Manual.md \
+            Documentation/QuickStart.md \
             Sources/SafeDI/SafeDI.docc/SafeDI.md \
             Examples/ExampleTuistIntegration/README.md
           git commit -m "Release ${{ inputs.version }}"

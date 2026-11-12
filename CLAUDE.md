@@ -25,6 +25,7 @@ Always lint before pushing. Always run the full test suite after changes — don
 - `Scripts/changed-line-coverage.sh [BASE]` runs the suite with coverage as CI does and prints every added or changed line under `Sources/` and `Plugins/` that no test executed (default base `origin/main`).
 - `Scripts/fuzz-corpus.sh [--features …] [--seed N] [--iterations M|corpus] [--release]` runs the graph fuzzer's long run and prints its pin lines.
 - `Scripts/multi-module-repro.sh ROOT MODULE…` runs `generate` per module as Bazel and Tuist do and compiles the modules in order.
+- `python3 -I Scripts/manual-table-of-contents.py [--check]` regenerates the Manual's Contents section from its headings; "Check Markdown links" runs it with `--check`, which fails when the section is out of date.
 - `Scripts/check-claude-instruction-files.sh` fails when an instruction file could be truncated or would load at launch by mistake; "Check Markdown links" runs it.
 
 ### CI

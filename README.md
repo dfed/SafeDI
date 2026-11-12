@@ -125,13 +125,9 @@ For previews and tests that need real data, pass forwarded values directly and u
 
 ## Getting started
 
-Three steps to integrate:
+To add SafeDI to a Swift package, add `.package(url: "https://github.com/dfed/SafeDI.git", from: "2.2.0")` to its dependencies. The [quick start](Documentation/QuickStart.md) sets up SafeDI in an app of several modules, in a Swift package, an Xcode project, Bazel, or Tuist: adding SafeDI to the build, declaring your types, creating the tree, and using mocks in tests and previews.
 
-1. Add `.package(url: "https://github.com/dfed/SafeDI.git", from: "2.2.0")` to your `Package.swift` dependencies.
-2. Attach the `SafeDIGenerator` build tool plugin to your first-party target(s).
-3. Decorate your app’s root type with `@Instantiable(isRoot: true)` and add `@Instantiable` to the dependencies it reaches.
-
-Working sample projects live in the [Examples folder](Examples/) — clone, open, and build. The [Manual](Documentation/Manual.md#installation) covers Xcode projects, multi-module packages, Bazel, Tuist, and custom build systems in depth.
+Working sample projects live in the [Examples folder](Examples/) — clone, open, and build. The [Manual](Documentation/Manual.md) is the reference for everything else, including [installation](Documentation/Manual.md#installation) in Xcode projects, Swift packages, Bazel, Tuist, and custom build systems.
 
 If you are migrating an existing project to SafeDI, follow our [migration guide](Documentation/Manual.md#migrating-to-safedi), which also covers [adopting SafeDI in a large, multi-module codebase](Documentation/Manual.md#adopting-safedi-in-a-large-codebase). If you are upgrading from SafeDI 1.x, follow the [1.x → 2.x migration guide](Documentation/Manual.md#migrating-from-safedi-1x-to-2x).
 
