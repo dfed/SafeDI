@@ -1272,7 +1272,6 @@ Under the Xcode project plugin:
 - A seam’s tree may not instantiate a type that no `@Instantiable` declaration its target reads fulfills, such as a protocol only the app implements. The error at the property leads with declaring a type that fulfills the property in the target or in one it depends on, or declaring the seam without `generateDependencyTree: true`.
 - A mock tree builds the type, another target’s `generateMock: .public` type included, inline where its tree is visible, and otherwise generation fails, saying to build the mocks in a Swift package target or to give the run module info that names the declaring module. The target’s tests and previews still call the `public` `mock()` the declaring target generates.
 - A type of another target that the target reads no declaration of counts as `public` (see [Access of generated parameters](#access-of-generated-parameters)). Hand the target the declaring target’s directory with `additionalDirectoriesToInclude`, whose `package` declarations then count at their level, or declare the seam or mock `package`.
-- Two `@Instantiable` types with the same name are always an error, even when each is private to its own target, because SafeDI does not know which target declares which.
 - The plugin cannot tell whether another target applies it, so a hand-written call of a generated initializer or of `mock()` fails with the compiler’s errors alone when the declaring target lacks the plugin.
 - A target that reads, through `additionalDirectoriesToInclude`, a file that imports the target itself gets the compiler’s “ignoring import” warning in generated code.
 - A generated file does not import the module of a type it builds through a `fulfilledByType` string or a `fulfillingAdditionalTypes` entry: list that module in `additionalImportedModules`, as [Generated imports](#generated-imports) describes.
@@ -1382,10 +1381,6 @@ Only SafeDI notices a missing entry; the compiler and the build system do not as
 - When a generated mock’s tree reaches such a type, `mock()` takes it as a required parameter, as [Dependency kinds in the generated mock](#dependency-kinds-in-the-generated-mock) describes, and SafeDI reports nothing.
 
 A module that uses types another module re-exports with `@_exported import` lists the module that declares them too: SafeDI does not follow the re-export to find a module to read. Under Bazel a tree needs no such entry, since the rule collects the declaring module beneath the one that re-exports it. The [Swift package](#swift-package) plugin needs no list: it reads the modules the target depends on itself.
-
-Two modules can each keep a private `@Instantiable` type of the same name. If `ModA` and `ModB` each have an `internal` `Store`, an app that reaches both through their seams builds, and SafeDI still checks both. An error about one of them calls it `ModA.Store`.
-
-When SafeDI cannot tell which of two same-named types a module means, it reports an error that names the modules declaring them. Rename one.
 
 #### Tuist
 
@@ -1681,7 +1676,7 @@ The rules in this section are the detail behind the sections above, which point 
 
 ### Access of generated parameters
 
-Each parameter of a [seam’s](#generating-a-dependency-tree-per-module) generated initializer or of a [public mock](#public-mocks) is as visible as the narrowest type it names, as far as SafeDI can prove from the declarations it reads. Those are a type’s own declaration (`@Instantiable` or not, `protocol` and `typealias` included) in the seam’s module, or a `package` or wider one in another module SafeDI reads, as a `.safedi` file records it. SafeDI ignores such a declaration only when it knows the module naming the type cannot see it: a `package` type of another package, or, under the [Swift package](#swift-package) plugin, a type of a module the naming module does not depend on. A type declared inside an extension counts at its own access level, capped by the extended type’s. Of two modules’ types of one name, SafeDI takes the narrower, unless the mention is spelled with its module (`Core.Theme`).
+Each parameter of a [seam’s](#generating-a-dependency-tree-per-module) generated initializer or of a [public mock](#public-mocks) is as visible as the narrowest type it names, as far as SafeDI can prove from the declarations it reads. Those are a type’s own declaration (`@Instantiable` or not, `protocol` and `typealias` included) in the seam’s module, or a `package` or wider one in another module SafeDI reads, as a `.safedi` file records it. A type declared inside an extension counts at its own access level, capped by the extended type’s. Of two modules’ types of one name, SafeDI takes the narrower, unless the mention is spelled with its module (`Core.Theme`).
 
 A type SafeDI reads no declaration of counts as `public`: a system framework’s, a package’s fetched from a URL, a binary target’s, or, under Bazel or Tuist, a first-party module’s that does not run SafeDI. This is exact except for a first-party module of the same package that does not run SafeDI: its `package` type fails to compile at the generated `public` initializer or mock, whose comment names the types counted `public`. Run SafeDI on every first-party module, as [Generating your dependency tree](#generating-your-dependency-tree) says.
 
