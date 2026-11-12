@@ -8822,6 +8822,51 @@ public actor DependencyTreeGenerator {
 		/// and walking it again would too. A receive of another alias of the same fulfilling property is walked again: a
 		/// chain that bails out at one received property can reach the declaring stack from another.
 		var walkedAliasFulfillingProperties = Set<WalkedAliasFulfillingProperty>()
+		/// See `labelsRead(inTreeOf:)`. Filled only by walks of a tree a cycle builds again, so a graph without cycles pays nothing.
+		var labelsReadByTreeRoot = [Scope: Set<String>]()
+		/// The labels `validateTreeBuiltAgainByCycle`'s judgements read anywhere `scope` reaches: the label of each `@Received`
+		/// property, and of the property each alias is fulfilled by rather than the alias's own, of `scope` and every scope it
+		/// instantiates, through cycle-closing scopes too, since the walk continues through them.
+		///
+		/// Each answer is a whole pass over what `scope` reaches, with its own visited set. It must not reuse the answers of
+		/// the pass in progress: inside a cycle, a scope's answer is only complete once the pass that visits it is, so a
+		/// memo of partial answers records a scope as reading nothing that it reads through the cycle. The stack is explicit
+		/// because a tree can be as deep as the module has types.
+		func labelsRead(inTreeOf scope: Scope) -> Set<String> {
+			if let labels = labelsReadByTreeRoot[scope] {
+				return labels
+			} else {
+				var labels = Set<String>()
+				var reachedScopes: Set<Scope> = [scope]
+				var scopesToVisit = [scope]
+				while let reachedScope = scopesToVisit.popLast() {
+					for dependency in reachedScope.instantiable.dependencies {
+						switch dependency.source {
+						case .received:
+							labels.insert(dependency.property.label)
+						case let .aliased(fulfillingProperty, _, _):
+							labels.insert(fulfillingProperty.label)
+						case .instantiated, .forwarded:
+							break
+						}
+					}
+					for case let .instantiated(_, childScope, _) in reachedScope.propertiesToGenerate {
+						if reachedScopes.insert(childScope).inserted {
+							scopesToVisit.append(childScope)
+						}
+					}
+				}
+				labelsReadByTreeRoot[scope] = labels
+				return labels
+			}
+		}
+		/// Whether the tree `scope` builds reads a label new to it: one of `newLabels`, or the label of one of
+		/// `newReceivableProperties`. See `validateTreeBuiltAgainByCycle`.
+		func treeReadsAnything(ofTreeRootedAt scope: Scope, newLabels: some Collection<String>, newReceivableProperties: Set<Property>) -> Bool {
+			guard !newLabels.isEmpty || !newReceivableProperties.isEmpty else { return false }
+			let readLabels = labelsRead(inTreeOf: scope)
+			return newLabels.contains(where: readLabels.contains) || newReceivableProperties.contains { readLabels.contains($0.label) }
+		}
 		/// Validates the tree rooted at `rootScope`, scope by scope, depth first in the order each scope declares its
 		/// children. It keeps its own stack of the scopes left to validate, since a tree can be as deep as the module
 		/// has types.
@@ -9031,6 +9076,11 @@ public actor DependencyTreeGenerator {
 		/// scope the stack holds already – calls its function with the bindings in scope there, so the walk goes on into that
 		/// tree built again whenever anything is new to it there, once for each parent of a cycle-closing scope and context
 		/// (`TreeBuiltAgain`), so nested cycles end.
+		///
+		/// The walk's work grows with every path the scopes it re-enters can be reached by, so a tree whose judgements cannot
+		/// change is not walked: at its start and before each child it pushes, the walk stops unless the tree reads a label
+		/// new to it (`labelsRead(inTreeOf:)`). Both of the walk's judgements fire only for a receive whose label is new, and
+		/// the new labels only shrink going down, so a tree that reads none has nothing to report, on any path.
 		func validateTreeBuiltAgainByCycle(
 			of scope: Scope,
 			for property: Property,
@@ -9063,6 +9113,7 @@ public actor DependencyTreeGenerator {
 			for (receivableProperty, depth) in receivableDepthByProperty where depth > closedOnDepth && receivableProperties.contains(receivableProperty) {
 				newReceivableProperties.insert(receivableProperty)
 			}
+			guard treeReadsAnything(ofTreeRootedAt: scope, newLabels: newDeclarationByLabel.keys, newReceivableProperties: newReceivableProperties) else { return }
 			var treesBuiltAgain: Set<TreeBuiltAgain> = [TreeBuiltAgain(
 				cycleClosingScopeParent: cycleClosingScopeParent,
 				closedOnProperty: property,
@@ -9167,14 +9218,14 @@ public actor DependencyTreeGenerator {
 				for childPropertyToGenerate in walkedScope.propertiesToGenerate {
 					switch childPropertyToGenerate {
 					case let .instantiated(declaredChildProperty, childScope, _):
+						// A child's tree is the same code as on its first build, and a cycle-closing scope's function's tree built
+						// again here sees what it saw where it was built: only a label new to it can change what it receives.
+						guard treeReadsAnything(ofTreeRootedAt: childScope, newLabels: childNewLabels, newReceivableProperties: childNewReceivableProperties) else { continue }
 						// A lazily instantiated property is validated as the constant it stands for.
 						let childProperty = declaredChildProperty.asValidatedForDependencyCycles
 						if let childClosedOnIndex = instantiationStack.indices.first(where: {
 							instantiationStack[$0] == childProperty && childParentTypeStack[$0] == childScope.instantiable.concreteInstantiable
 						}) {
-							// A cycle-closing scope, whose function's tree built again here sees what it saw where it was built
-							// unless something here is new to it.
-							guard !childNewLabels.isEmpty || !childNewReceivableProperties.isEmpty else { continue }
 							var childNewDeclarationByLabel = [String: DependencyTreeGeneratorError.LabelDeclaration]()
 							for label in childNewLabels {
 								childNewDeclarationByLabel[label] = childClosestDeclarationByLabel[label]
