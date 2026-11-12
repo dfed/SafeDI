@@ -136,6 +136,68 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesAliasFulfillingTypealiasEscaping_whenReceiverDeclaresOnlyItsOwnNameEscaping(integration: MultiModuleIntegration) async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+					Self.declarations,
+					"""
+					public typealias Handler = (Int) -> Void
+					""",
+					"""
+					@Instantiable
+					public final class TapReader: Instantiable {
+					    public init(onTap: @escaping OnTap) { self.onTap = onTap }
+					    @Received(fulfilledByDependencyNamed: "tap", ofType: Handler.self) let onTap: OnTap
+					}
+					""",
+					"""
+					@Instantiable(generateDependencyTree: true)
+					public final class Screen: Instantiable {
+					    public init(reader: TapReader) { self.reader = reader }
+					    @Instantiated let reader: TapReader
+					}
+					""",
+				]),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let fixtures = try #require(output.modules["Feature"]).fixtures
+		let tapReaderPath = switch integration {
+		case .moduleInfo: fixtures["TapReader.swift"]
+		case .swiftPackagePlugin: fixtures.compilerPath(of: "TapReader.swift")
+		}
+		let file = try generatedFile(ofModuleNamed: "Feature", typeName: "Screen", in: output, under: integration)
+		#expect(file == Self.expectedFile(code: """
+		extension Screen {
+		    public convenience init(tap: @escaping Handler) {
+		        self.init(__safeDI_tap: tap)
+		    }
+
+		    public convenience init(__safeDI_tap: @autoclosure @escaping () -> Handler) {
+		        let tap = LazilyInstantiated<Handler>(__safeDI_tap)
+		        func __safeDI_reader() -> TapReader {
+		            #sourceLocation(file: "\(tapReaderPath)", line: 4)
+		            let onTap: OnTap = tap.instance
+		            #sourceLocation()
+		            return TapReader(onTap: onTap)
+		        }
+		        let reader: TapReader = __safeDI_reader()
+		        self.init(reader: reader)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_BECF708EDD1150DB {}
+		}
+		"""), "Unexpected output \(file)")
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesTypealiasOfClosureEscapingOnEveryTier_whenWiderTierForwardsOwnAndDeferredParameters(integration: MultiModuleIntegration) async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.modulesDeclaringTieredScreen,

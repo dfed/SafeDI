@@ -752,7 +752,7 @@ private struct ScopeGeneratorUnderConstruction {
 			lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties.filter { !fieldLabels.contains($0.label) }.union(fieldInstanceProperties),
 			seamRoot: nil,
 			seamHoles: seamHoles,
-			sitePath: sitePath,
+			sitePath: sitePath + hole.pathBeforePropertyInItsFill,
 			enclosingFills: enclosingFillsOfThisCall,
 			erasedToConcreteExistential: hole.erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
@@ -926,7 +926,7 @@ private struct ScopeGeneratorUnderConstruction {
 			callSiteLazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties,
 		)
 		let scopeGenerator = if let fill {
-			ScopeGenerator(fill: fill.hole, key: fill.key, functionName: fill.functionName, boundLabels: fill.boundLabels, child: builtGenerator)
+			ScopeGenerator(fill: fill.hole, key: fill.key, functionName: fill.functionName, boundLabels: fill.boundLabels, stageCalls: seamHoles.fillStageCalls(at: sitePath), child: builtGenerator)
 		} else {
 			builtGenerator
 		}
@@ -1160,7 +1160,7 @@ extension Instantiable {
 
 /// The holes of a seam's signature, as the generators of the seam's tree look them up: each site by its path, each
 /// hole the seam passes up by the inner seam's hole it passes, and the stage calls of each staged builder by the path
-/// of the `@Sendable` builder function before which they are made.
+/// of the `@Sendable` function before which they are made.
 struct SeamHoles {
 	/// No holes: a tree that is not a seam's, or a seam's tree without holes.
 	init() {
@@ -1168,6 +1168,7 @@ struct SeamHoles {
 		sitesByPath = [:]
 		passedUpHolesBySite = [:]
 		stageCallsByPath = [:]
+		fillStageCallsByPath = [:]
 		internalNames = []
 	}
 
@@ -1175,26 +1176,32 @@ struct SeamHoles {
 		var sitesByPath = [[Property]: SeamSignature.Hole]()
 		var passedUpHolesBySite = [SeamSignature.Hole.Site: SeamSignature.Hole]()
 		var stageCallsByPath = [[Property]: [String]]()
+		var fillStageCallsByPath = [[Property]: [Int: [String]]]()
 		for hole in holes {
 			guard hole.innerSeamType == nil else {
 				passedUpHolesBySite[hole.site] = hole
 				continue
 			}
 			sitesByPath[hole.sitePath] = hole
-			// Each stage but the last is called just before the `@Sendable` builder function that starts the next.
-			for (stageIndex, depth) in hole.stageBoundaryDepths.enumerated() {
-				let stageFunction = stageIndex == 0 ? hole.internalName : "\(hole.internalName)_\(SeamSignature.Hole.stageName(at: stageIndex))"
-				let nextStageFunction = "\(hole.internalName)_\(SeamSignature.Hole.stageName(at: stageIndex + 1))"
+			// Each stage but the last is called just before the `@Sendable` function that starts the next.
+			for (stageIndex, boundary) in hole.stageBoundaries.enumerated() {
+				let stageFunction = hole.stageFunctionName(at: stageIndex, ofFunctionNamed: hole.internalName)
+				let nextStageFunction = hole.stageFunctionName(at: stageIndex + 1, ofFunctionNamed: hole.internalName)
 				let arguments = hole.stages[stageIndex].map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.label)" }.joined(separator: ", ")
-				stageCallsByPath[Array(hole.sitePath.prefix(depth)), default: []].append(
-					"let \(nextStageFunction) = \(stageFunction)(\(hole.stageStructType(at: stageIndex, qualifiedBy: nil).asSource)(\(arguments)))",
-				)
+				let call = "let \(nextStageFunction) = \(stageFunction)(\(hole.stageStructType(at: stageIndex, qualifiedBy: nil).asSource)(\(arguments)))"
+				let path = Array(hole.sitePath.prefix(boundary.pathLength))
+				if let fillStageIndex = boundary.fillStageIndex {
+					fillStageCallsByPath[path, default: [:]][fillStageIndex, default: []].append(call)
+				} else {
+					stageCallsByPath[path, default: []].append(call)
+				}
 			}
 		}
 		self.seamType = seamType
 		self.sitesByPath = sitesByPath
 		self.passedUpHolesBySite = passedUpHolesBySite
 		self.stageCallsByPath = stageCallsByPath
+		self.fillStageCallsByPath = fillStageCallsByPath
 		internalNames = Set(holes.map(\.internalName))
 	}
 
@@ -1229,11 +1236,18 @@ struct SeamHoles {
 		stageCallsByPath.isEmpty ? [] : stageCallsByPath[sitePath, default: []]
 	}
 
+	/// The stage calls made just before each function of the fill that builds the property at the end of `sitePath`, by
+	/// the function's stage among the fill's.
+	func fillStageCalls(at sitePath: [Property]) -> [Int: [String]] {
+		fillStageCallsByPath[sitePath, default: [:]]
+	}
+
 	/// The seam whose tree is generated, or `nil` for a tree that is no seam's.
 	private let seamType: TypeDescription?
 	private let sitesByPath: [[Property]: SeamSignature.Hole]
 	private let passedUpHolesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]
 	private let stageCallsByPath: [[Property]: [String]]
+	private let fillStageCallsByPath: [[Property]: [Int: [String]]]
 }
 
 // MARK: - NearestDeclarations

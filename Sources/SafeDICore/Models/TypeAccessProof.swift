@@ -467,9 +467,9 @@ public struct TypeAccessProof: Sendable {
 	// MARK: Internal
 
 	/// The types `type` names, in the order the compiler meets them, each a type the compiler checks against a
-	/// member's access: a type and its generic arguments, and the types inside every optional, collection, tuple,
-	/// closure, metatype, attribute, existential and composition. `Void` names nothing; a description the parser could
-	/// not read is named as written.
+	/// member's access: a type, its generic arguments and those of the types enclosing it, and the types inside every
+	/// optional, collection, tuple, closure, metatype, attribute, existential and composition. `Void` names nothing; a
+	/// description the parser could not read is named as written.
 	public static func mentionedTypes(in type: TypeDescription) -> [TypeDescription] {
 		var mentioned = [TypeDescription]()
 		var typesToVisit = [type]
@@ -478,9 +478,12 @@ public struct TypeAccessProof: Sendable {
 			switch visited {
 			case .void:
 				break
-			case let .simple(_, generics), let .nested(_, _, generics):
+			case let .simple(_, generics):
 				mentioned.append(visited)
 				children = generics
+			case let .nested(_, parentType, generics):
+				mentioned.append(visited)
+				children = parentType.genericArgumentsOfThisAndEnclosingTypes + generics
 			case .unknown:
 				mentioned.append(visited)
 			case let .composition(types):

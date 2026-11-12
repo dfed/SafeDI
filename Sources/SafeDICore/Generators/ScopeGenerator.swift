@@ -50,7 +50,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		holeCallArguments: [HoleCallArgument] = [],
 		passedUpHoles: [SeamSignature.Hole] = [],
 		stageCalls: [String] = [],
-		fill: (hole: SeamSignature.Hole, key: String, functionName: String, boundLabels: Set<String>)? = nil,
+		fill: (hole: SeamSignature.Hole, key: String, functionName: String, boundLabels: Set<String>, stageCalls: [Int: [String]])? = nil,
 		constructsWithHandWrittenMock: Bool = false,
 		cycleParameters: [CycleParameter] = [],
 		builtCycleParameters: [CycleParameter] = [],
@@ -67,6 +67,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.holeCallArguments = holeCallArguments
 		fillKey = fill?.key
 		fillStructBoundLabels = fill?.boundLabels ?? []
+		fillStageCalls = fill?.stageCalls ?? [:]
 		ownerPropertyStack = []
 		self.passedUpHoles = passedUpHoles
 		self.stageCalls = stageCalls
@@ -97,7 +98,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.declaration = declaration
 		self.propertiesToGenerate = propertiesToGenerate
 		containsBuildSite = propertiesToGenerate.contains(where: \.containsBuildSite)
-		fieldsCarriedBySites = containsBuildSite ? Set(propertiesToGenerate.flatMap(\.fieldsCarriedBySites)) : []
+		if containsBuildSite {
+			// A site's field of a label declared here reads this scope's declaration, or the site carries no field of it.
+			let labelsDeclaredHere = if let fill {
+				fill.boundLabels.union(fill.hole.uncarriedDeclarations.map(\.property.label))
+			} else {
+				Set(propertiesToGenerate.compactMap(\.property?.label) + instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property.label))
+			}
+			fieldsCarriedBySites = Set(propertiesToGenerate.flatMap(\.fieldsCarriedBySites).filter { !labelsDeclaredHere.contains($0.label) })
+		} else {
+			fieldsCarriedBySites = []
+		}
 		passesUpBuilder = !passedUpHoles.isEmpty || propertiesToGenerate.contains(where: \.passesUpBuilder)
 		// This runs at every scope of every tree, and nearly every child is outside every cycle.
 		var childCycleClosedOnDeclarations = Set<BuiltDeclaration>()
@@ -109,6 +120,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.childrenTakePartInCycle = childrenTakePartInCycle
 		var typesDeclaredEscaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
 		typesDeclaredEscaping.formUnion(instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
+		// An alias hands its receiver the value of the property it names, so a name that fulfills a property of a name
+		// its initializers declare `@escaping` is a function type too, which a generated parameter of it must also spell
+		// `@escaping`: `nameDeclaredEscaping` of that name spelled `@escaping`, which is `nil` for any type but a name. An
+		// erased alias hands the value to an initializer instead, which may take any type.
+		let initializerTypesDeclaredEscaping = typesDeclaredEscaping
+		for dependency in instantiable.dependencies where initializerTypesDeclaredEscaping.contains(dependency.property.typeDescription) {
+			if case let .aliased(fulfillingProperty: fulfillingProperty, erasedToConcreteExistential: false, onlyIfAvailable: _) = dependency.source,
+			   let fulfillingName = TypeDescription.attributed(fulfillingProperty.typeDescription, specifiers: [], attributes: ["escaping"]).nameDeclaredEscaping
+			{
+				typesDeclaredEscaping.insert(fulfillingName)
+			}
+		}
 		typesDeclaredEscaping.formUnion(publicMockCall?.typesDeclaredEscaping ?? [])
 		typesDeclaredEscaping.formUnion(seamCall?.typesDeclaredEscaping ?? [])
 		for child in propertiesToGenerate where !child.typesDeclaredEscaping.isEmpty {
@@ -152,10 +175,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		self.buildsInSendableFunction = buildsInSendableFunction
 		self.cycleClosedOnDeclarationsReferencedFromSendableFunction = cycleClosedOnDeclarationsReferencedFromSendableFunction
-		// A call inside a fill of its seam's call refers to every fill of the enclosing call by name. Where a `@Sendable`
-		// builder function that does not enclose a fill holds the reference – one between the call and the fill, a staged
-		// fill's later stage, or the call's own – the fill must be `@Sendable` too, and so must a fill the call passes to a
-		// seam that takes it `@Sendable`. Nearly no scope holds such a call.
+		// A call inside a fill of its seam's call refers to every fill of the enclosing call by name. Nearly no scope holds
+		// such a call. Which of a call's own fills that makes `@Sendable` is decided here, where every function that can
+		// refer to them has been built (see `sendableFills(of:referencedFromSendableFunctions:)`).
 		var referencedFillNamesByKey = [String: String]()
 		var fillKeysReferencedFromSendableFunction = Set<String>()
 		for holeCallArgument in holeCallArguments {
@@ -170,13 +192,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			referencedFillNamesByKey.merge(child.referencedFillNamesByKey) { name, _ in name }
 			fillKeysReferencedFromSendableFunction.formUnion(child.fillKeysReferencedFromSendableFunction)
 		}
-		let referencedFillKeys = Set(referencedFillNamesByKey.keys)
-		if buildsInSendableFunction || (fill.map { $0.hole.stages.count > 1 } ?? false) {
-			fillKeysReferencedFromSendableFunction.formUnion(referencedFillKeys)
-		}
+		let ownFills = propertiesToGenerate.compactMap { child in child.fillKey.map { (key: $0, generator: child) } }
 		// A call's own fills are declared in the function that makes it, which encloses every reference to them.
-		let ownFillKeys = Set(propertiesToGenerate.compactMap(\.fillKey))
-		sendableFillKeys = fillKeysReferencedFromSendableFunction.intersection(ownFillKeys)
+		let ownFillKeys = Set(ownFills.map(\.key))
+		if buildsInSendableFunction || (fill.map { $0.hole.stages.count > 1 } ?? false) {
+			fillKeysReferencedFromSendableFunction.formUnion(referencedFillNamesByKey.keys.filter { !ownFillKeys.contains($0) })
+		}
+		let sendableFills = Self.sendableFills(of: ownFills, referencedFromSendableFunctions: fillKeysReferencedFromSendableFunction)
+		sendableFillKeys = sendableFills.keys
+		fillKeysReferencedFromSendableFunction.formUnion(sendableFills.referencedFillKeys)
 		// A call's fills whose hole has a field bound from a deferred parameter read it from the caller's scope, unless a
 		// call inside one of them passes it on beneath another declaration of the label. Nearly no scope calls such a seam.
 		let fillsWithDeferredFields = propertiesToGenerate.compactMap { fill -> (fill: ScopeGenerator, hole: SeamSignature.Hole, key: String)? in
@@ -568,6 +592,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		passesUpBuilder = false
 		fillKey = nil
 		fillStructBoundLabels = []
+		fillStageCalls = [:]
 		fillDeferredLabelsHiddenByReenteringCalls = [:]
 		fillStructBoundLabelsChangedInTree = false
 		constructsWithHandWrittenMock = false
@@ -633,6 +658,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		passesUpBuilder = false
 		fillKey = nil
 		fillStructBoundLabels = []
+		fillStageCalls = [:]
 		fillDeferredLabelsHiddenByReenteringCalls = [:]
 		fillStructBoundLabelsChangedInTree = false
 		constructsWithHandWrittenMock = false
@@ -645,7 +671,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// the fields of the site's scope struct that `child`, the generator of the hole's property as the fulfilling
 	/// type builds it, reads. The fields it binds from the struct, those `boundLabels` names, are declared here, so a
 	/// receive they provide is not received from the scopes enclosing the call (see `fillStructBoundLabels`).
-	init(fill hole: SeamSignature.Hole, key: String, functionName: String, boundLabels: Set<String>, child: ScopeGenerator) {
+	init(fill hole: SeamSignature.Hole, key: String, functionName: String, boundLabels: Set<String>, stageCalls: [Int: [String]], child: ScopeGenerator) {
 		self.init(
 			instantiable: Instantiable(
 				instantiableType: hole.property.typeDescription.asInstantiatedType,
@@ -665,7 +691,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			erasedToConcreteExistential: false,
 			isPropertyCycle: false,
 			builtInlineSeamComment: nil,
-			fill: (hole, key, functionName, boundLabels),
+			fill: (hole, key, functionName, boundLabels, stageCalls),
 		)
 	}
 
@@ -983,6 +1009,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The seam whose builder for `sendableBuilder` a `@Sendable` stage of a fill fills, when that stage is what
 		/// captures the wrapper, or `nil` when a builder function does.
 		let capturingFillSeamType: TypeDescription?
+		/// Whether that stage is `@Sendable` only for where the fill is passed on: inside a `@Sendable` function that does
+		/// not enclose it, or to a seam that takes it `@Sendable`. No `@Sendable` function of `capturingFillSeamType`'s tree
+		/// holds the site then.
+		let capturingFillIsPassedOn: Bool
 		/// The wrapper property the builder function would capture.
 		let wrapperProperty: Property
 		/// The type that declares `wrapperProperty`, or `nil` when a mock root's tree receives it
@@ -1544,6 +1574,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var seamType: TypeDescription?
 		/// For a `@Sendable` stage of a fill, the seam whose builder for `property` it fills.
 		var fillSeamType: TypeDescription?
+		/// For such a stage, whether it is `@Sendable` only for where the fill is passed on.
+		var fillIsPassedOn = false
 	}
 
 	/// - Parameters:
@@ -1606,6 +1638,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				sendableBuilderDeclaringType: capturingBuilder.declaringType,
 				capturingSeamType: capturingBuilder.seamType,
 				capturingFillSeamType: capturingBuilder.fillSeamType,
+				capturingFillIsPassedOn: capturingBuilder.fillIsPassedOn,
 				wrapperProperty: wrapperProperty,
 				wrapperDeclaringType: wrapperDeclaration?.declaringType,
 				wrapperDeclarationLocation: wrapperDeclaration?.declarationLocation,
@@ -1730,16 +1763,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// type is not `Sendable`, which SafeDI cannot tell.
 				captures.append(contentsOf: cycleParameterArgumentCaptures(of: child, property: childProperty))
 			} else if case let .fill(hole, _) = child.generator.scopeData {
-				// A fill is declared where the seam is called, and builds the hole's property in its last stage, each stage
-				// after the first a `@Sendable` function, and the first too where the seam takes the builder `@Sendable` or a
-				// `@Sendable` function refers to the fill. Each stage binds the fields of its struct the fill binds; its tree
-				// reads every other label from the caller's scope – a field bound from a deferred parameter included – as it
-				// would inline, so a `@Sendable` function in the fill that reads a wrapper the caller declares captures it.
+				// A fill is declared where the seam is called, and builds the hole's property in its last stage. Each stage binds
+				// the fields of its struct the fill binds; its tree reads every other label from the caller's scope – a field
+				// bound from a deferred parameter included – as it would inline, so a `@Sendable` function in the fill that reads
+				// a wrapper the caller declares captures it.
 				await captures.append(contentsOf: fillCaptures(
 					of: hole,
 					fill: child.generator,
 					propertiesGeneratedLater: child.propertiesGeneratedLater,
-					isSendable: child.generator.fillKey.map(sendableFillKeys.contains) ?? false,
+					sendableStages: sendableStages(ofFill: child.generator),
 					declarationsByLabel: childDeclarationsByLabel,
 					enclosingSendableBuilders: enclosingSendableBuilders,
 					chain: chain,
@@ -1791,7 +1823,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		of hole: SeamSignature.Hole,
 		fill: ScopeGenerator,
 		propertiesGeneratedLater: Set<Property>,
-		isSendable: Bool,
+		sendableStages: [Bool],
 		declarationsByLabel: [String: [VisibleDeclaration]],
 		enclosingSendableBuilders: [SendableBuilder],
 		chain: [TypeDescription],
@@ -1802,9 +1834,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var sendableBuilders = enclosingSendableBuilders
 		var fillDeclarationsByLabel = declarationsByLabel
 		let boundLabels = fill.fillStructBoundLabels
-		for (stageIndex, fields) in hole.stages.enumerated() {
-			if Self.fillStageIsSendable(hole: hole, stageIndex: stageIndex, isSendable: isSendable) {
-				sendableBuilders.append(SendableBuilder(property: hole.property, declaringType: hole.ownerType, fillSeamType: hole.scopeSeamType))
+		for (fields, stageIsSendable) in zip(hole.stages, sendableStages) {
+			if stageIsSendable {
+				// With one stage, no `@Sendable` function of the filled seam's tree holds the site.
+				sendableBuilders.append(SendableBuilder(property: hole.property, declaringType: hole.ownerType, fillSeamType: hole.scopeSeamType, fillIsPassedOn: hole.stages.count == 1))
 			}
 			for field in fields where boundLabels.contains(field.property.label) {
 				fillDeclarationsByLabel[field.property.label] = [VisibleDeclaration(
@@ -2094,10 +2127,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The keys of `referencedFillNamesByKey` referred to from inside a `@Sendable` builder function that does not
 	/// enclose the fill, or passed to a seam that takes the fill `@Sendable`.
 	let fillKeysReferencedFromSendableFunction: Set<String>
-	/// For a seam call, the keys of its fills declared `@Sendable` beside those whose own hole is `@Sendable`: a
-	/// `@Sendable` builder function that does not enclose the fill refers to it, or a call inside the fill passes it to a
-	/// seam that takes it `@Sendable`.
-	let sendableFillKeys: Set<String>
+	/// For a seam call, the keys of its fills whose first function is `@Sendable`, which `sendableStages(ofFill:)` reads
+	/// (see `sendableFills(of:referencedFromSendableFunctions:)`).
+	private let sendableFillKeys: Set<String>
+	/// For a fill, the calls of the stages of the builders the seam whose tree holds the fill takes, for sites inside the
+	/// fill, by the stage of the fill whose function each call is made just before: empty but where a site is inside a
+	/// `@Sendable` function of the fill.
+	private let fillStageCalls: [Int: [String]]
 	/// The calls of a staged builder's stages made just before this scope's `@Sendable` builder function, each
 	/// binding the stage it returns: empty but where the seam's tree builds a hole beneath that function.
 	private let stageCalls: [String]
@@ -2109,8 +2145,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Whether this scope's generated subtree holds a site of a hole of the seam whose tree is generated: such a
 	/// child, a carrier, starts after its siblings that hold none (see `orderedPropertyToGenerateIndices`).
 	let containsBuildSite: Bool
-	/// The fields the scope structs of the sites in this generator's subtree carry: a fill the seam generates binds
-	/// each of the filled seam's fields they carry, whether or not its own tree reads it.
+	/// The fields the scope structs of the sites in this generator's subtree carry whose nearest declaration on each
+	/// site's path is above this scope: a fill the seam generates binds each of the filled seam's fields they carry,
+	/// whether or not its own tree reads it.
 	let fieldsCarriedBySites: Set<Property>
 	/// The received properties that are in scope only as the instance of a `LazilyInstantiated` property created
 	/// further up the tree. Passing one to this scope’s initializer reads that instance, which instantiates it.
@@ -2744,7 +2781,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					unavailableProperties: child.unavailableProperties,
 					propertiesGeneratedLater: child.propertiesGeneratedLater,
 					builderFunctionNames: childBuilderFunctionNames?[index].flatMap(\.self)
-						?? BuilderFunctionNames(fillIsSendable: child.generator.fillKey.map(sendableFillKeys.contains) ?? false),
+						?? BuilderFunctionNames(fillStagesAreSendable: sendableStages(ofFill: child.generator)),
 					leadingWhitespace: leadingMemberWhitespace,
 				),
 			)
@@ -2779,8 +2816,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The names of the builder functions of enclosing scopes that a cycle-closing scope in the
 		/// scope's subtree refers to, keyed by the declaration each builds, for those not named `functionName(toBuild:)`.
 		var enclosingFunctionNames = [BuiltDeclaration: String]()
-		/// For a fill, whether a `@Sendable` function that does not enclose it refers to it, so it is `@Sendable` too.
-		var fillIsSendable = false
+		/// For a fill, whether each of its functions is `@Sendable` (see `sendableStages(ofFill:)`), one per stage.
+		var fillStagesAreSendable = [Bool]()
 	}
 
 	/// A child scope that one generated body holds, as builder function naming sees it.
@@ -3233,7 +3270,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return try await generateFillCode(
 				of: hole,
 				functionName: functionName,
-				isSendable: builderFunctionNames.fillIsSendable,
+				sendableStages: builderFunctionNames.fillStagesAreSendable,
 				codeGeneration: codeGeneration,
 				propertiesGeneratedLater: propertiesGeneratedLater,
 				enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
@@ -3311,7 +3348,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return structDeclaration(named: hole.scopeTypeName, fields: hole.stages.first ?? [], indent: standardIndent)
 		}
 		let stageStructs = hole.stages.enumerated().map { stageIndex, fields in
-			structDeclaration(named: SeamSignature.Hole.stageName(at: stageIndex), fields: fields, indent: standardIndent + standardIndent)
+			structDeclaration(named: hole.stageName(at: stageIndex), fields: fields, indent: standardIndent + standardIndent)
 		}
 		return """
 		\(standardIndent)public enum \(hole.scopeTypeName) {
@@ -3325,7 +3362,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// which the builder returns, without one.
 	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole) -> String {
 		let lastStageIndex = site.stages.count - 1
-		let stageFunction = lastStageIndex == 0 ? site.internalName : "\(site.internalName)_\(SeamSignature.Hole.stageName(at: lastStageIndex))"
+		let stageFunction = site.stageFunctionName(at: lastStageIndex, ofFunctionNamed: site.internalName)
 		let arguments = site.stages[lastStageIndex].map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.label)" }.joined(separator: ", ")
 		let declaration = property.propertyType.isConstant ? "let \(property.asSource)" : "let \(property.label)"
 		return "\(declaration) = \(stageFunction)(\(site.stageStructType(at: lastStageIndex, qualifiedBy: nil).asSource)(\(arguments)))"
@@ -3333,24 +3370,34 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The function a seam's caller generates to fill the builder for `hole`: it binds the fields of each stage's
 	/// struct that the tree of its one child, the hole's property, reads, returns each later stage as a `@Sendable`
-	/// function, and builds the property in the last, as inline builds it at the site.
+	/// function, and builds the property in the last, as inline builds it at the site. A stage of a builder the seam
+	/// whose tree holds the fill takes, for a site inside the fill, is called just before the `@Sendable` function of the
+	/// fill that starts the next (`fillStageCalls`).
 	private func generateFillCode(
 		of hole: SeamSignature.Hole,
 		functionName: String,
-		isSendable: Bool,
+		sendableStages: [Bool],
 		codeGeneration: CodeGeneration,
 		propertiesGeneratedLater: Set<Property>,
 		enclosingFunctionNames: [BuiltDeclaration: String],
 	) async throws -> String {
 		guard let child = propertiesToGenerate.first, let property = child.property else { return "" }
 		// A field is bound where the tree reads it, or where a site inside the fill – one of the seam whose tree the fill
-		// is generated in – carries it in its own struct, unless the fill reads it from the caller's scope: one bound
+		// is generated in – carries this binding in its own struct, unless the fill reads it from the caller's scope: one bound
 		// from a deferred parameter (see `fillStructBoundLabels`).
 		func isRead(_ field: SeamSignature.Hole.Field) -> Bool {
 			fillStructBoundLabels.contains(field.property.label)
 				&& (child.reads(field.property) || child.fieldsCarriedBySites.contains(field.property))
 		}
 		let lastStageIndex = hole.stages.count - 1
+		// Every stage's parameter is named apart from what the tree reads by name, which it would hide.
+		let labelsReadInFill = Set(hole.stages.joined().map(\.property.label)
+			+ child.receivedProperties.map(\.label)
+			+ child.fieldsCarriedBySites.map(\.label))
+		var scopeParameterName = "scope"
+		while labelsReadInFill.contains(scopeParameterName) {
+			scopeParameterName += "_"
+		}
 		let childCode = try await generateProperties(
 			codeGeneration: codeGeneration,
 			propertiesGeneratedLater: propertiesGeneratedLater,
@@ -3360,16 +3407,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Built from the innermost stage out, each stage's function nested in the one before it.
 		var body = childCode.joined(separator: "\n").split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 		body.append(String(repeating: Self.standardIndent, count: lastStageIndex + 1) + "return \(property.label)")
-		for stageIndex in stride(from: lastStageIndex, through: 0, by: -1) {
+		for (stageIndex, stageIsSendable) in sendableStages.enumerated().reversed() {
 			let indent = String(repeating: Self.standardIndent, count: stageIndex + 1)
-			let bindings = hole.stages[stageIndex].filter(isRead).map { "\(indent)let \($0.property.label) = scope.\($0.property.label.spelledAsArgumentLabel)" }
-			let stageFunctionName = stageIndex == 0 ? functionName : "\(functionName)_\(SeamSignature.Hole.stageName(at: stageIndex))"
+			let bindings = hole.stages[stageIndex].filter(isRead).map { "\(indent)let \($0.property.label) = \(scopeParameterName).\($0.property.label.spelledAsArgumentLabel)" }
+			let stageFunctionName = hole.stageFunctionName(at: stageIndex, ofFunctionNamed: functionName)
 			let returnType = stageIndex == lastStageIndex
 				? hole.property.typeDescription
 				: TypeDescription.attributed(hole.stageFunctionType(at: stageIndex + 1, qualifiedBy: hole.scopeSeamType), specifiers: [], attributes: ["Sendable"])
-			let decorator = Self.fillStageIsSendable(hole: hole, stageIndex: stageIndex, isSendable: isSendable) ? "@Sendable " : ""
+			let decorator = stageIsSendable ? "@Sendable " : ""
 			let outerIndent = String(repeating: Self.standardIndent, count: stageIndex)
-			body = ["\(outerIndent)\(decorator)func \(stageFunctionName)(_ scope: \(hole.stageStructType(at: stageIndex, qualifiedBy: hole.scopeSeamType).asSource)) -> \(returnType.asSource) {"]
+			body = fillStageCalls[stageIndex, default: []].map { "\(outerIndent)\($0)" } + ["\(outerIndent)\(decorator)func \(stageFunctionName)(_ \(scopeParameterName): \(hole.stageStructType(at: stageIndex, qualifiedBy: hole.scopeSeamType).asSource)) -> \(returnType.asSource) {"]
 				+ bindings
 				+ body
 				+ ["\(outerIndent)}"]
@@ -3381,12 +3428,44 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return body.joined(separator: "\n")
 	}
 
-	/// Whether the function of the stage at `stageIndex` of a fill for `hole` is `@Sendable`: every stage after the first,
-	/// which an earlier stage returns as a `@Sendable` function, and the first when a `@Sendable` function that does not
-	/// enclose the fill refers to it (`isSendable`) or the seam takes the builder `@Sendable`. A fill's tree is built in
-	/// its last stage, so a read in it is inside a `@Sendable` function exactly when that stage is one.
-	static func fillStageIsSendable(hole: SeamSignature.Hole, stageIndex: Int, isSendable: Bool) -> Bool {
-		stageIndex > 0 || isSendable || hole.isSendable
+	/// Whether each function of `fill`, a fill of this scope's seam call, is `@Sendable`, one per stage of its hole,
+	/// outermost first; empty for a generator that is no fill. Every reader of whether a fill is `@Sendable` – generation,
+	/// the capture walk, a seam's signature, and the walk of what its tree reads – asks here. A stage after the first is
+	/// always `@Sendable`, since an earlier stage returns it as a `@Sendable` function; the first is by
+	/// `sendableFills(of:referencedFromSendableFunctions:)`.
+	nonisolated func sendableStages(ofFill fill: ScopeGenerator) -> [Bool] {
+		guard let hole = fill.fillHole else { return [] }
+		let firstStageIsSendable = fill.fillKey.map(sendableFillKeys.contains) ?? false
+		return hole.stages.indices.map { $0 > 0 || firstStageIsSendable }
+	}
+
+	/// Whether `fill`, a child of this scope, builds its tree inside a `@Sendable` function of its own: its last stage,
+	/// which holds the tree, is `@Sendable`. `false` for a generator that is no fill.
+	nonisolated func buildsInSendableFunction(ofFill fill: ScopeGenerator) -> Bool {
+		sendableStages(ofFill: fill).last ?? false
+	}
+
+	/// The fills among `fills`, the fills of one seam call, whose first function is `@Sendable`, by key, and every fill of
+	/// an enclosing call that those functions refer to. A fill's first function is `@Sendable` when the seam it is passed
+	/// to takes it `@Sendable` (its hole's own `isSendable`), a `@Sendable` function that does not enclose it refers to it
+	/// or passes it to a seam that takes it `@Sendable` (`referencedFromSendableFunctions`, found beneath this call), or
+	/// such a fill refers to it: a fill made `@Sendable` is a `@Sendable` function that refers to what its tree refers to.
+	/// The set only grows, so it is found with a worklist; it reads this call's subtree and the settled signatures of the
+	/// seams the subtree calls, and so no seam's own signature can depend on itself through it.
+	private static func sendableFills(
+		of fills: [(key: String, generator: ScopeGenerator)],
+		referencedFromSendableFunctions: Set<String>,
+	) -> (keys: Set<String>, referencedFillKeys: Set<String>) {
+		var fillsToVisit = fills.filter { $0.generator.fillHole?.isSendable == true || referencedFromSendableFunctions.contains($0.key) }
+		var keys = Set(fillsToVisit.map(\.key))
+		var referencedFillKeys = Set<String>()
+		while let fill = fillsToVisit.popLast() {
+			referencedFillKeys.formUnion(fill.generator.referencedFillNamesByKey.keys)
+			for referencedFill in fills where fill.generator.referencedFillNamesByKey[referencedFill.key] != nil && keys.insert(referencedFill.key).inserted {
+				fillsToVisit.append(referencedFill)
+			}
+		}
+		return (keys, referencedFillKeys)
 	}
 
 	/// The initializers a seam's module generates for the seam, followed by the enum every generated call refers to. Each

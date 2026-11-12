@@ -859,6 +859,20 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		return name
 	}
 
+	/// The generic arguments spelled on this type and on the types enclosing it, the outermost type's first.
+	var genericArgumentsOfThisAndEnclosingTypes: [TypeDescription] {
+		var genericArgumentsFromInnermost = [[TypeDescription]]()
+		var enclosingType = self
+		while case let .nested(_, parentType, generics) = enclosingType {
+			genericArgumentsFromInnermost.append(generics)
+			enclosingType = parentType
+		}
+		if case let .simple(_, generics) = enclosingType {
+			genericArgumentsFromInnermost.append(generics)
+		}
+		return genericArgumentsFromInnermost.reversed().flatMap(\.self)
+	}
+
 	/// The nominal type this names, with no generic arguments at any level – what a declaration of it records – or
 	/// `nil` when this names no nominal type.
 	public var withoutGenericArguments: TypeDescription? {

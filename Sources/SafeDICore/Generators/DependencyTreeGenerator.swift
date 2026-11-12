@@ -1792,6 +1792,8 @@ public actor DependencyTreeGenerator {
 			// the `@Sendable` builder function inside the seam's tree that reads it would built inline.
 			let capturingFunction = if let seamType = capture.capturingSeamType {
 				"`\(seamType.asSource)`'s generated initializer takes `\(capture.receivedProperty.label)` as a `@Sendable` closure, because a `@Sendable` function inside `\(seamType.asSource)`'s tree reads it, and that closure"
+			} else if capture.capturingFillIsPassedOn {
+				"The function SafeDI generates to fill the builder for `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` is passed to a seam from inside a `@Sendable` function, or to a seam that takes it `@Sendable`, so it is `@Sendable` too, and it"
 			} else if let fillSeamType = capture.capturingFillSeamType {
 				"`\(fillSeamType.asSource)`'s tree builds `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` inside a `@Sendable` function, so the function SafeDI generates to fill its builder is `@Sendable` too, and it"
 			} else {
@@ -4955,21 +4957,20 @@ public actor DependencyTreeGenerator {
 	/// labels whose nearest declaration is outside the tree – a parameter – where the tree reads them
 	/// (`parameterReads`). A parameter no read reaches, whose label a declaration inside the tree hides from every
 	/// receiver, is taken by value, so no `LazilyInstantiated` goes unread. Whether a function is `@Sendable` is read
-	/// from the facts the emitters decorate from: `buildsInSendableFunction` and `ScopeGenerator.fillStageIsSendable`.
+	/// from the facts the emitters decorate from: `buildsInSendableFunction` and `ScopeGenerator.sendableStages(ofFill:)`.
 	private static func receivers(in generator: ScopeGenerator, of _: Instantiable, instantiables: [TypeDescription: Instantiable]) -> (receivers: [SeamReceiver], parameterReads: ParameterReads) {
 		var receivers = [SeamReceiver]()
 		var keptDeclarationIndices = [ReceiverDeclaration: Int]()
 		var parameterReads = ParameterReads()
 		/// A generator to visit, with what the scopes enclosing it provide, whether it is built inside a `@Sendable`
-		/// function and inside a `@Sendable` fill, and the labels the scopes enclosing it declare or forward.
+		/// function, and the labels the scopes enclosing it declare or forward.
 		struct Frame {
 			let generator: ScopeGenerator
 			let providedProperties: Set<Property>
 			let insideSendable: Bool
-			let insideSendableFill: Bool
 			let declaredLabels: Set<String>
 		}
-		var generatorsToVisit = [Frame(generator: generator, providedProperties: [], insideSendable: false, insideSendableFill: false, declaredLabels: [])]
+		var generatorsToVisit = [Frame(generator: generator, providedProperties: [], insideSendable: false, declaredLabels: [])]
 		while let frame = generatorsToVisit.popLast() {
 			let visited = frame.generator
 			let providedProperties = frame.providedProperties
@@ -4987,11 +4988,11 @@ public actor DependencyTreeGenerator {
 			for parameter in visited.seamCallParameters ?? [] where parameter.deferral == .deferred(isSendable: true) {
 				recordRead(of: parameter.property.label, insideSendable: true)
 			}
-			// A site reads every parameter whose label no scope enclosing it declares, inside a `@Sendable` function only
-			// within a `@Sendable` fill: elsewhere it reads them at the site or at the call of a staged builder's first stage,
-			// which is made before the first `@Sendable` builder function on the site's path.
+			// A site reads every parameter whose label no scope enclosing it declares, and never inside a `@Sendable` function:
+			// it reads them at the site or at the call of a staged builder's first stage, which is made before the first
+			// `@Sendable` function on the site's path.
 			if visited.holeSite != nil {
-				parameterReads.siteDeclaredLabels.append((frame.declaredLabels, frame.insideSendableFill))
+				parameterReads.siteDeclaredLabels.append(frame.declaredLabels)
 			}
 			if visited.closesPropertyCycle {
 				// A scope that closes a lazy cycle passes the function it refers to each parameter's nearest declaration.
@@ -5085,21 +5086,13 @@ public actor DependencyTreeGenerator {
 			let childDeclaredLabels = frame.declaredLabels.union(visited.providedProperties.map(\.label))
 			let firstChildIndex = generatorsToVisit.endIndex
 			for child in visited.children {
-				let fillIsSendable = child.fillHole.map { hole in
-					ScopeGenerator.fillStageIsSendable(
-						hole: hole,
-						stageIndex: hole.stages.count - 1,
-						isSendable: child.fillKey.map(visited.sendableFillKeys.contains) ?? false,
-					)
-				} ?? false
 				// A fill binds the fields of the hole's struct its tree reads, which hide every declaration of their labels
 				// above it, but for those bound from a deferred parameter, which it reads from the caller's scope.
 				let fillFieldLabels = child.fillStructBoundLabels
 				generatorsToVisit.append(Frame(
 					generator: child,
 					providedProperties: childProvidedProperties,
-					insideSendable: frame.insideSendable || child.buildsInSendableFunction || fillIsSendable,
-					insideSendableFill: frame.insideSendableFill || fillIsSendable,
+					insideSendable: frame.insideSendable || child.buildsInSendableFunction || visited.buildsInSendableFunction(ofFill: child),
 					declaredLabels: fillFieldLabels.isEmpty ? childDeclaredLabels : childDeclaredLabels.union(fillFieldLabels),
 				))
 			}
@@ -5115,19 +5108,18 @@ public actor DependencyTreeGenerator {
 		var labelsRead = Set<String>()
 		/// Of those, the labels read inside a `@Sendable` function, or handed to a nested seam that takes them `@Sendable`.
 		var labelsReadInsideSendableFunction = Set<String>()
-		/// For each site of a hole, the labels the scopes enclosing it declare, and whether it is inside a `@Sendable`
-		/// fill: the site reads every parameter whose label none of them declares.
-		var siteDeclaredLabels = [(declaredLabels: Set<String>, insideSendableFill: Bool)]()
+		/// For each site of a hole, the labels the scopes enclosing it declare: the site reads every parameter whose label
+		/// none of them declares.
+		var siteDeclaredLabels = [Set<String>]()
 
 		/// Whether the tree reads the parameter labeled `label`.
 		func reads(_ label: String) -> Bool {
-			labelsRead.contains(label) || siteDeclaredLabels.contains { !$0.declaredLabels.contains(label) }
+			labelsRead.contains(label) || siteDeclaredLabels.contains { !$0.contains(label) }
 		}
 
 		/// Whether the tree reads the parameter labeled `label` inside a `@Sendable` function.
 		func readsInsideSendableFunction(_ label: String) -> Bool {
 			labelsReadInsideSendableFunction.contains(label)
-				|| siteDeclaredLabels.contains { $0.insideSendableFill && !$0.declaredLabels.contains(label) }
 		}
 	}
 
