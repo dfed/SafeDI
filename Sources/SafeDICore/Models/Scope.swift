@@ -380,7 +380,7 @@ final class Scope: Hashable {
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,
 		startsCodeGeneration: Bool = true,
-		declaredTypeNames: Set<String>,
+		declaredTypeNames: DeclaredTypeNames,
 	) throws -> ScopeGenerator {
 		var previousPassGenerator: ScopeGenerator?
 		var scopeGenerator: ScopeGenerator
@@ -415,7 +415,7 @@ final class Scope: Hashable {
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool,
 		startsCodeGeneration: Bool,
-		declaredTypeNames: Set<String>,
+		declaredTypeNames: DeclaredTypeNames,
 		previousPassGenerator: ScopeGenerator?,
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
@@ -499,7 +499,7 @@ private struct ScopeGeneratorUnderConstruction {
 		startsCodeGeneration: Bool,
 		fill: Fill? = nil,
 		buildsWithHandWrittenMocks: Bool = false,
-		declaredTypeNames: Set<String>,
+		declaredTypeNames: DeclaredTypeNames,
 		previousPassGenerator: ScopeGenerator?,
 		cycleParameterContexts: [ScopeGenerator.BuiltDeclaration: CycleParameterContext],
 	) {
@@ -669,16 +669,29 @@ private struct ScopeGeneratorUnderConstruction {
 		self.enclosingFills = enclosingFills
 		holeArguments = isPropertyCycle ? [] : scope.holeArguments
 		// The call's own fills are those no enclosing call fills. A fill is named apart from the fills enclosing it and from
-		// the builders the seam whose tree holds it takes, which a call inside it passes by name and which the fill, declared
-		// closer, would shadow. One seam's builder labels are distinct, so the call's own fills never share a name.
+		// the names the seam whose tree holds it binds for its builders, which a call inside it passes by name and which the
+		// fill, declared closer, would shadow. The function of each later stage of a fill is declared closer than its siblings
+		// too, so no fill's stage may have the name of a fill a call inside it passes. One seam's builder labels are distinct,
+		// so the call's own fills never share a name.
 		var fillsOfThisCall = [(fill: Fill, scope: Scope)]()
 		if !holeArguments.isEmpty {
-			let reservedNames = Set(enclosingFills.values).union(seamHoles.internalNames)
+			let namesEnclosingTheCall = Set(enclosingFills.values).union(seamHoles.namesBoundForBuilders)
+			let unrenamedFillNames = Set(holeArguments.compactMap { holeArgument -> String? in
+				guard case let .fill(hole, _) = holeArgument, enclosingFills[ScopeGenerator.fillKey(of: hole)] == nil else { return nil }
+				return ScopeGenerator.fillFunctionName(of: hole)
+			})
+			var namesBoundByEarlierFills = Set<String>()
 			for case let .fill(hole, fulfillingScope) in holeArguments where enclosingFills[ScopeGenerator.fillKey(of: hole)] == nil {
-				var functionName = ScopeGenerator.fillFunctionName(of: hole)
-				while reservedNames.contains(functionName) {
+				let unrenamedName = ScopeGenerator.fillFunctionName(of: hole)
+				let reservedNames = namesEnclosingTheCall.union(namesBoundByEarlierFills).union(unrenamedFillNames.subtracting([unrenamedName]))
+				func stageFunctionNames(ofFunctionNamed name: String) -> [String] {
+					hole.stages.indices.map { hole.stageFunctionName(at: $0, ofFunctionNamed: name) }
+				}
+				var functionName = unrenamedName
+				while stageFunctionNames(ofFunctionNamed: functionName).contains(where: reservedNames.contains) {
 					functionName = "\(functionName)_".spelledAsJoinedIdentifier
 				}
+				namesBoundByEarlierFills.formUnion(stageFunctionNames(ofFunctionNamed: functionName))
 				fillsOfThisCall.append((Fill(hole: hole, key: ScopeGenerator.fillKey(of: hole), functionName: functionName), fulfillingScope))
 			}
 		}
@@ -722,6 +735,7 @@ private struct ScopeGeneratorUnderConstruction {
 	func fillUnderConstruction(fill: Fill, scope: Scope) throws -> ScopeGeneratorUnderConstruction {
 		var fill = fill
 		let hole = fill.hole
+		try validateForwardedProperties(of: hole.property, declaredAt: hole.declarationLocation, on: hole.ownerType, seeingThroughModulesNamed: hole.declaringModuleNames, building: scope.instantiable)
 		// A field bound from a parameter the seam defers holds the seam's memo of what the call passed, which is the
 		// declaration of its label in the caller's scope: the fill reads that declaration, as inline, so the value is
 		// created when the tree reads it. Except where a call inside a fill of this call passes this fill on beneath
@@ -776,6 +790,7 @@ private struct ScopeGeneratorUnderConstruction {
 			holeProperty: property,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			site: seamHoles.site(at: sitePath + [property]),
+			stageCalls: seamHoles.stageCalls(at: sitePath + [property]),
 			ownerPropertyStack: childPropertyStack,
 		))
 	}
@@ -786,34 +801,54 @@ private struct ScopeGeneratorUnderConstruction {
 		property: Property,
 		erasedToConcreteExistential: Bool,
 	) throws -> ScopeGeneratorUnderConstruction {
+		try validateForwardedProperties(
+			of: property,
+			declaredAt: self.scope.instantiable.dependencies.first(where: { $0.property == property })?.declarationLocation,
+			on: self.scope.instantiable.concreteInstantiable,
+			seeingThroughModulesNamed: [],
+			building: scope.instantiable,
+		)
+		return ScopeGeneratorUnderConstruction(
+			scope: scope,
+			property: property,
+			propertyStack: childPropertyStack,
+			concreteTypeStack: childConcreteTypeStack,
+			nearestDeclarations: childNearestDeclarations,
+			lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
+			seamRoot: nil,
+			seamHoles: seamHoles,
+			sitePath: sitePath,
+			enclosingFills: enclosingFills,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			forMockGeneration: forMockGeneration,
+			startsCodeGeneration: startsCodeGeneration,
+			buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
+			declaredTypeNames: declaredTypeNames,
+			previousPassGenerator: previousPassChildGenerator,
+			cycleParameterContexts: childCycleParameterContexts,
+		)
+	}
+
+	/// Throws when `property`, declared on `parent` at `declarationLocation`, is an erased instantiator whose first
+	/// generic argument is not the `@Forwarded` properties of `builtInstantiable`.
+	/// - Parameter declaringModuleNames: The modules, beside the built type's, whose name may qualify a type either
+	///   spelling names: for a fill, that of the seam that holds the hole (`SeamSignature.Hole.declaringModuleNames`).
+	private func validateForwardedProperties(
+		of property: Property,
+		declaredAt declarationLocation: Dependency.DeclarationLocation?,
+		on parent: TypeDescription,
+		seeingThroughModulesNamed declaringModuleNames: [String],
+		building builtInstantiable: Instantiable,
+	) throws {
 		if let error = ErasedInstantiatorForwardedPropertiesMismatchError(
 			property: property,
-			declarationLocation: self.scope.instantiable.dependencies.first(where: { $0.property == property })?.declarationLocation,
-			parent: self.scope.instantiable.concreteInstantiable,
-			builtInstantiable: scope.instantiable,
+			declarationLocation: declarationLocation,
+			parent: parent,
+			builtInstantiable: builtInstantiable,
+			declaringModuleNames: declaringModuleNames,
 			declaredTypeNames: declaredTypeNames,
 		) {
 			throw error
-		} else {
-			ScopeGeneratorUnderConstruction(
-				scope: scope,
-				property: property,
-				propertyStack: childPropertyStack,
-				concreteTypeStack: childConcreteTypeStack,
-				nearestDeclarations: childNearestDeclarations,
-				lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
-				seamRoot: nil,
-				seamHoles: seamHoles,
-				sitePath: sitePath,
-				enclosingFills: enclosingFills,
-				erasedToConcreteExistential: erasedToConcreteExistential,
-				forMockGeneration: forMockGeneration,
-				startsCodeGeneration: startsCodeGeneration,
-				buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
-				declaredTypeNames: declaredTypeNames,
-				previousPassGenerator: previousPassChildGenerator,
-				cycleParameterContexts: childCycleParameterContexts,
-			)
 		}
 	}
 
@@ -916,6 +951,7 @@ private struct ScopeGeneratorUnderConstruction {
 				}
 			},
 			stageCalls: seamHoles.stageCalls(at: sitePath),
+			isBuiltByFill: fill != nil,
 			constructsWithHandWrittenMock: buildsWithHandWrittenMocks
 				&& scope.publicMockCall == nil
 				&& scope.instantiable.mockInitializer != nil
@@ -985,7 +1021,7 @@ private struct ScopeGeneratorUnderConstruction {
 	private let seamHoles: SeamHoles
 	/// The names the modules SafeDI read declare types by at file scope, which
 	/// `ErasedInstantiatorForwardedPropertiesMismatchError` reads.
-	private let declaredTypeNames: Set<String>
+	private let declaredTypeNames: DeclaredTypeNames
 	/// The properties from the root of the tree down to this scope's, when `seamHoles` is not empty; otherwise empty.
 	private let sitePath: [Property]
 	/// For a scope a fill builds the property of, the fill's hole, its key (see `ScopeGenerator.fillKey(of:)`), and the
@@ -1072,9 +1108,10 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 		declarationLocation: Dependency.DeclarationLocation?,
 		parent: TypeDescription,
 		builtInstantiable: Instantiable,
-		declaredTypeNames: Set<String>,
+		declaringModuleNames: [String],
+		declaredTypeNames: DeclaredTypeNames,
 	) {
-		guard !property.firstGenericMatchesForwardedProperties(of: builtInstantiable, declaredTypeNames: declaredTypeNames) else { return nil }
+		guard !property.firstGenericMatchesForwardedProperties(of: builtInstantiable, declaringModuleNames: declaringModuleNames, declaredTypeNames: declaredTypeNames) else { return nil }
 		self.property = property
 		self.declarationLocation = declarationLocation
 		self.parent = parent
@@ -1106,11 +1143,13 @@ extension Property {
 	/// `builtInstantiable`, has the `@Forwarded` properties of `builtInstantiable` as its first generic argument.
 	/// Any other property matches, as does one that builds a type with no `@Forwarded` properties. The comparison sees
 	/// through what a declaration's spelling alone shows to be the same type
-	/// (`TypeDescription.withoutSpellingDifferences(qualifiedByModulesNamed:declaredTypeNames:)`), since the generated code
+	/// (`TypeDescription.withoutSpellingDifferences(qualifiedByModulesNamed:orDeclaringModulesNamed:declaredTypeNames:)`), since the generated code
 	/// reads the elements by label; it does not resolve a typealias, so a spelling only the compiler can see through is
 	/// rejected, with an error that names a spelling it accepts. Whether a mock builds a received property that matches is
 	/// narrower: see `mockBuildsFirstGeneric(of:)`.
-	func firstGenericMatchesForwardedProperties(of builtInstantiable: Instantiable, declaredTypeNames: Set<String>) -> Bool {
+	/// - Parameter declaringModuleNames: The modules, beside `Swift` and the built type's, whose name it sees through as a
+	///   qualifier of either spelling, of a type no other module declares a type of the name of.
+	func firstGenericMatchesForwardedProperties(of builtInstantiable: Instantiable, declaringModuleNames: [String], declaredTypeNames: DeclaredTypeNames) -> Bool {
 		let forwardedProperties = builtInstantiable.forwardedProperties
 		guard propertyType.isErasedInstantiator,
 		      !forwardedProperties.isEmpty,
@@ -1121,8 +1160,8 @@ extension Property {
 		return forwardedArgument == .nested(name: "ForwardedProperties", parentType: builtInstantiable.concreteInstantiable)
 			// The forwarded argument is the same as the type the macro generates for `InstantiableName.ForwardedProperties`:
 			// the type of the only `@Forwarded` property, or the tuple of all of them.
-			|| forwardedArgument.withoutSpellingDifferences(qualifiedByModulesNamed: modulesNames, declaredTypeNames: declaredTypeNames)
-			== forwardedProperties.asForwardedPropertiesTypeDescription.withoutSpellingDifferences(qualifiedByModulesNamed: modulesNames, declaredTypeNames: declaredTypeNames)
+			|| forwardedArgument.withoutSpellingDifferences(qualifiedByModulesNamed: modulesNames, orDeclaringModulesNamed: declaringModuleNames, declaredTypeNames: declaredTypeNames)
+			== forwardedProperties.asForwardedPropertiesTypeDescription.withoutSpellingDifferences(qualifiedByModulesNamed: modulesNames, orDeclaringModulesNamed: declaringModuleNames, declaredTypeNames: declaredTypeNames)
 	}
 
 	/// Whether a mock that receives the property can build it, for an `ErasedInstantiator` or
@@ -1169,7 +1208,7 @@ struct SeamHoles {
 		passedUpHolesBySite = [:]
 		stageCallsByPath = [:]
 		fillStageCallsByPath = [:]
-		internalNames = []
+		namesBoundForBuilders = []
 	}
 
 	init(seamType: TypeDescription, holes: [SeamSignature.Hole]) {
@@ -1177,6 +1216,7 @@ struct SeamHoles {
 		var passedUpHolesBySite = [SeamSignature.Hole.Site: SeamSignature.Hole]()
 		var stageCallsByPath = [[Property]: [String]]()
 		var fillStageCallsByPath = [[Property]: [Int: [String]]]()
+		var namesBoundForBuilders = Set(holes.map(\.internalName))
 		for hole in holes {
 			guard hole.innerSeamType == nil else {
 				passedUpHolesBySite[hole.site] = hole
@@ -1187,6 +1227,7 @@ struct SeamHoles {
 			for (stageIndex, boundary) in hole.stageBoundaries.enumerated() {
 				let stageFunction = hole.stageFunctionName(at: stageIndex, ofFunctionNamed: hole.internalName)
 				let nextStageFunction = hole.stageFunctionName(at: stageIndex + 1, ofFunctionNamed: hole.internalName)
+				namesBoundForBuilders.insert(nextStageFunction)
 				let arguments = hole.stages[stageIndex].map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.label)" }.joined(separator: ", ")
 				let call = "let \(nextStageFunction) = \(stageFunction)(\(hole.stageStructType(at: stageIndex, qualifiedBy: nil).asSource)(\(arguments)))"
 				let path = Array(hole.sitePath.prefix(boundary.pathLength))
@@ -1202,12 +1243,12 @@ struct SeamHoles {
 		self.passedUpHolesBySite = passedUpHolesBySite
 		self.stageCallsByPath = stageCallsByPath
 		self.fillStageCallsByPath = fillStageCallsByPath
-		internalNames = Set(holes.map(\.internalName))
+		self.namesBoundForBuilders = namesBoundForBuilders
 	}
 
 	/// The name of every builder the seam's generated initializer takes, inside the initializer, which a call its tree
-	/// makes passes up by name. Empty outside a seam's tree.
-	let internalNames: Set<String>
+	/// makes passes up by name, and of the later stage each of its stage calls binds. Empty outside a seam's tree.
+	let namesBoundForBuilders: Set<String>
 
 	/// Whether the seam has no hole.
 	var isEmpty: Bool {

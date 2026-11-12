@@ -335,6 +335,7 @@ public struct SeamSignature: Sendable {
 
 		public init(
 			ownerType: TypeDescription,
+			declaringModuleNames: [String],
 			property: Property,
 			instantiatedType: TypeDescription,
 			declarationLocation: Dependency.DeclarationLocation?,
@@ -358,6 +359,7 @@ public struct SeamSignature: Sendable {
 			isSendable: Bool = false,
 		) {
 			self.ownerType = ownerType
+			self.declaringModuleNames = declaringModuleNames
 			self.property = property
 			self.instantiatedType = instantiatedType
 			self.declarationLocation = declarationLocation
@@ -383,7 +385,14 @@ public struct SeamSignature: Sendable {
 
 		/// The type whose `@Instantiated` property the site builds.
 		public let ownerType: TypeDescription
-		/// The property the site builds, as its owner declares it: the builder returns its type.
+		/// The module of the seam whose tree holds the site, when it also declares the owner and no seam passes the site up,
+		/// which a spelling of the property's type or of the fulfiller's `@Forwarded` property may qualify a type with, since
+		/// the fulfiller is in another module. Empty otherwise: generated code respells the property's type in every module on
+		/// the way to the fill, where a bare name may mean a type of that module, which its `.safedi` records only if a
+		/// declaration of that module mentions it.
+		public let declaringModuleNames: [String]
+		/// The property the site builds, as its owner declares it: the builder returns its type without its wrapper
+		/// (`builtType`).
 		public let property: Property
 		/// The type a declaration must fulfill to fill the builder: the property's instantiated type, or the type an
 		/// erased property names with `fulfilledByType:`.
@@ -496,6 +505,18 @@ public struct SeamSignature: Sendable {
 			passedUpRoute + declaredSitePath.dropLast()
 		}
 
+		/// What the builder returns: the property's declared type without its wrapper, which the tree that holds the site
+		/// builds around the builder.
+		public var builtType: TypeDescription {
+			property.typeDescription.builtTypeOfWrapper
+		}
+
+		/// The value an instantiator hands the builder, which the builder's last stage takes as its second argument, or
+		/// `nil` when the property is no instantiator, or is one spelled as forwarding `()` or `Void`.
+		public var forwardedType: TypeDescription? {
+			property.typeDescription.forwardedTypeOfWrapper
+		}
+
 		/// The label the initializer only generated code calls takes the builder under
 		/// (`ReservedName.seamGeneratedOnlyArgumentLabel(of:)`).
 		public var generatedOnlyArgumentLabel: String {
@@ -507,6 +528,7 @@ public struct SeamSignature: Sendable {
 		func takenUnder(parameterName: String) -> Hole {
 			Hole(
 				ownerType: ownerType,
+				declaringModuleNames: declaringModuleNames,
 				property: property,
 				instantiatedType: instantiatedType,
 				declarationLocation: declarationLocation,
@@ -535,18 +557,27 @@ public struct SeamSignature: Sendable {
 		/// structs are nested side by side, where a field's type that begins with one's name would resolve to it, so an
 		/// underscore is appended while a field's type begins with the name.
 		public func stageName(at stageIndex: Int) -> String {
+			Self.stageName(at: stageIndex, of: stages)
+		}
+
+		/// The name of the function the stage at `stageIndex` is, for a builder or fill named `functionName`: that name for
+		/// the first stage, whose function it is, and that name joined with the stage's for a later one.
+		public func stageFunctionName(at stageIndex: Int, ofFunctionNamed functionName: String) -> String {
+			Self.stageFunctionName(at: stageIndex, of: stages, ofFunctionNamed: functionName)
+		}
+
+		/// `stageFunctionName(at:ofFunctionNamed:)` of a hole with `stages`.
+		static func stageFunctionName(at stageIndex: Int, of stages: [[Field]], ofFunctionNamed functionName: String) -> String {
+			stageIndex == 0 ? functionName : "\(functionName)_\(stageName(at: stageIndex, of: stages))".spelledAsJoinedIdentifier
+		}
+
+		private static func stageName(at stageIndex: Int, of stages: [[Field]]) -> String {
 			let namedTypes = Set(stages.joined().flatMap { TypeAccessProof.mentionedTypes(in: $0.property.typeDescription).compactMap(\.outermostTypeName) })
 			var name = stageIndex == 0 ? "Outer" : stageIndex == 1 ? "Inner" : "Inner\(stageIndex)"
 			while namedTypes.contains(name) {
 				name += "_"
 			}
 			return name
-		}
-
-		/// The name of the function the stage at `stageIndex` is, for a builder or fill named `functionName`: that name for
-		/// the first stage, whose function it is, and that name joined with the stage's for a later one.
-		public func stageFunctionName(at stageIndex: Int, ofFunctionNamed functionName: String) -> String {
-			stageIndex == 0 ? functionName : "\(functionName)_\(stageName(at: stageIndex))".spelledAsJoinedIdentifier
 		}
 
 		/// The type of the struct the stage at `stageIndex` is handed, qualified by `seamType` when it is given.
@@ -560,19 +591,47 @@ public struct SeamSignature: Sendable {
 		}
 
 		/// The type of the function the stage at `stageIndex` is: it takes that stage's struct and returns the next
-		/// stage's `@Sendable` function, or the property's type at the last stage.
+		/// stage's `@Sendable` function, or, at the last stage, also takes the value an instantiator forwards and returns
+		/// the type the property builds.
 		public func stageFunctionType(at stageIndex: Int, qualifiedBy seamType: TypeDescription?) -> TypeDescription {
-			let returnType: TypeDescription = if stageIndex + 1 < stages.count {
-				.attributed(stageFunctionType(at: stageIndex + 1, qualifiedBy: seamType), specifiers: [], attributes: ["Sendable"])
-			} else {
-				property.typeDescription
-			}
-			return .closure(arguments: [stageStructType(at: stageIndex, qualifiedBy: seamType)], isAsync: false, doesThrow: false, returnType: returnType)
+			stageFunctionType(at: stageIndex, qualifiedBy: seamType, spelledWithoutAny: false)
 		}
 
 		/// The builder parameter's type, `@escaping`, with its scope type qualified by `seamType` when it is given.
 		public func builderType(qualifiedBy seamType: TypeDescription?) -> TypeDescription {
-			.attributed(stageFunctionType(at: 0, qualifiedBy: seamType), specifiers: [], attributes: isSendable ? ["escaping", "Sendable"] : ["escaping"])
+			builderType(qualifiedBy: seamType, spelledWithoutAny: false)
+		}
+
+		/// `builderType(qualifiedBy:)`, spelled without `any` at every depth, which the guard hashes.
+		var builderTypeWithoutAny: TypeDescription {
+			builderType(qualifiedBy: scopeSeamType, spelledWithoutAny: true).withoutAny
+		}
+
+		private func builderType(qualifiedBy seamType: TypeDescription?, spelledWithoutAny: Bool) -> TypeDescription {
+			let functionType = stageFunctionType(at: 0, qualifiedBy: seamType, spelledWithoutAny: spelledWithoutAny)
+			return (isSendable ? functionType.asSendableFunction : functionType).asFunctionParameter
+		}
+
+		/// `stageFunctionType(at:qualifiedBy:)`, built from the last stage out. Each later stage is held as its spelling, so
+		/// that the type has no more depth than one stage however many there are: `@Sendable` functions on a path can be as
+		/// many as the module has types, and a walk of a `TypeDescription` recurses per level.
+		private func stageFunctionType(at stageIndex: Int, qualifiedBy seamType: TypeDescription?, spelledWithoutAny: Bool) -> TypeDescription {
+			func spelled(_ type: TypeDescription) -> TypeDescription {
+				spelledWithoutAny ? type.withoutAny : type
+			}
+			let lastStageIndex = stages.count - 1
+			let lastStageStruct = stageStructType(at: lastStageIndex, qualifiedBy: seamType)
+			var functionType = property.typeDescription.seamBuilderTypeOfWrapper(takingScope: lastStageStruct)
+				?? .closure(arguments: [lastStageStruct] + (forwardedType.map { [$0] } ?? []), isAsync: false, doesThrow: false, returnType: builtType)
+			for earlierStageIndex in (stageIndex..<lastStageIndex).reversed() {
+				functionType = .closure(
+					arguments: [stageStructType(at: earlierStageIndex, qualifiedBy: seamType)],
+					isAsync: false,
+					doesThrow: false,
+					returnType: .unknown(text: spelled(functionType.asSendableFunction).asSource),
+				)
+			}
+			return functionType
 		}
 	}
 
@@ -654,7 +713,7 @@ public struct SeamSignature: Sendable {
 		public struct Hole: Hashable, Sendable {
 			public init(_ hole: SeamSignature.Hole) {
 				builderLabel = hole.builderLabel
-				type = hole.builderType(qualifiedBy: hole.scopeSeamType).withoutAny.asSource
+				type = hole.builderTypeWithoutAny.asSource
 				tierAccess = hole.tierAccess
 				fields = hole.stages.map { stage in
 					stage.map { Field(label: $0.property.label, type: $0.property.typeDescription.withoutAny.asSource, access: $0.access) }

@@ -1073,7 +1073,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		}
 
 		extension ExportFeature {
-		    public enum __safeDI_ExportFeature_mock_14D67F82A07155CC {}
+		    public enum __safeDI_ExportFeature_mock_9E87148B9DEB3E60 {}
 		}
 		#endif
 		"""

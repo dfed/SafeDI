@@ -88,6 +88,10 @@ public enum ReservedName: Hashable, Sendable {
 		"\(builderFunctionNamePrefix)\(label)".spelledAsJoinedIdentifier
 	}
 
+	/// The name of the parameter through which a function building a hole held in an instantiator takes the value the
+	/// instantiator forwards.
+	static let forwardedValueParameterName = "\(builderFunctionNamePrefix)forwarded"
+
 	/// The names of the types generated code constructs by name: the wrapper of each kind of property that is not
 	/// a constant, which generated code builds with its builder function.
 	static let constructedTypeNames = Set(Property.PropertyType.allCases.compactMap(\.wrapperTypeName))

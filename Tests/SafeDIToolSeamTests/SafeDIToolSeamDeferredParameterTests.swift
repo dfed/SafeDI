@@ -928,17 +928,25 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			case .sendableLazilyInstantiated:
 				"""
 				extension Inner {
-				    public struct SafeDIScope_Inner_panel {}
+				    public enum SafeDIScope_Inner_panel {
+				        public struct Outer {}
 
-				    public init(panelBuilder: @escaping (SafeDIScope_Inner_panel) -> SendableLazilyInstantiated<any Panel>) {
+				        public struct Inner {}
+				    }
+
+				    public init(panelBuilder: @escaping (SafeDIScope_Inner_panel.Outer) -> @Sendable (SafeDIScope_Inner_panel.Inner) -> any Panel) {
 				        let __safeDI_panelBuilder = panelBuilder
-				        let panel = __safeDI_panelBuilder(SafeDIScope_Inner_panel())
+				        let __safeDI_panelBuilder_Inner = __safeDI_panelBuilder(SafeDIScope_Inner_panel.Outer())
+				        @Sendable func __safeDI_panel() -> any Panel {
+				            __safeDI_panelBuilder_Inner(SafeDIScope_Inner_panel.Inner())
+				        }
+				        let panel = SendableLazilyInstantiated<any Panel>(__safeDI_panel)
 				        self.init(panel: panel)
 				    }
 				}
 
 				extension Inner {
-				    public enum __safeDI_Inner_271F695E34FC7C69 {}
+				    public enum __safeDI_Inner_50C95E7FD26DA23B {}
 				}
 				"""
 			case .stagedBeneathSendableInstantiator:
@@ -974,12 +982,14 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			switch self {
 			case .sendableLazilyInstantiated:
 				"""
-				            func __safeDI_panelBuilder(_ scope: Inner.SafeDIScope_Inner_panel) -> SendableLazilyInstantiated<any Panel> {
-				                @Sendable func __safeDI_panel() -> DefaultPanel {
-				                    DefaultPanel(user: user.instance)
+				            func __safeDI_panelBuilder(_ scope: Inner.SafeDIScope_Inner_panel.Outer) -> @Sendable (Inner.SafeDIScope_Inner_panel.Inner) -> any Panel {
+				                @Sendable func __safeDI_panelBuilder_Inner(_ scope: Inner.SafeDIScope_Inner_panel.Inner) -> any Panel {
+				                    @Sendable func __safeDI_panel() -> DefaultPanel {
+				                        DefaultPanel(user: user.instance)
+				                    }
+				                    return __safeDI_panel()
 				                }
-				                let panel = SendableLazilyInstantiated<any Panel>(__safeDI_panel)
-				                return panel
+				                return __safeDI_panelBuilder_Inner
 				            }
 				"""
 			case .stagedBeneathSendableInstantiator:
@@ -999,7 +1009,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		var innerGuard: String {
 			switch self {
 			case .sendableLazilyInstantiated:
-				"__safeDI_Inner_271F695E34FC7C69"
+				"__safeDI_Inner_50C95E7FD26DA23B"
 			case .stagedBeneathSendableInstantiator:
 				"__safeDI_Inner_DDE5C65DA79FCFB1"
 			}

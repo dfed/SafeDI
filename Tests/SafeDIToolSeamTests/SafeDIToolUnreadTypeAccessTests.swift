@@ -1790,7 +1790,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_mock_C9FAA72D066A61CB {}
+		    public enum __safeDI_Screen_mock_C1287F721258A6FF {}
 		}
 		#endif
 		"""])
