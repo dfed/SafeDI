@@ -46,7 +46,11 @@ for module in "$@"; do
 	dependencies=()
 	[[ -f "$root/$module/dependencies.txt" ]] && dependencies=(${(f)"$(grep -v '^[[:space:]]*$' "$root/$module/dependencies.txt")"})
 	if (( ${#dependencies} )); then
-		print -rn -- "${(j:,:)${dependencies/#/$output/}/%/.safedi}" >"$output/$module-dependencies.csv"
+		# One path per dependency, built element by element: a nested substitution inside double quotes joins the array
+		# into one word before an outer prefix or suffix applies.
+		dependency_paths=()
+		for dependency in "${dependencies[@]}"; do dependency_paths+=("$output/$dependency.safedi"); done
+		print -rn -- "${(j:,:)dependency_paths}" >"$output/$module-dependencies.csv"
 		arguments+=(--dependent-module-info-file-path "$output/$module-dependencies.csv")
 	fi
 	echo "--- generate $module" >&2

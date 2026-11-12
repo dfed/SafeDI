@@ -4287,6 +4287,282 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillClosesCycleInSeamTreeNamingDeclaredProperties_whenSiteIsInsideFillOfPassedUpHole() async {
+		// `Shell` passes up the builder of `Inner`'s hole, and `Host` fills it with `DefaultWidget`, whose own hole is the
+		// site: the chain walks `Shell`'s `inner` to `Inner`, the call that presented the hole.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultGadget.swift"]):11:5: error: \(Self.gadgetCycleMessage(chain: "Host -> shell -> Shell -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panelMaker"))
+			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panelMaker: Instantiator<Panel>` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.gadgetCycleModules(
+					feature: [
+						seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let inner: Inner"]),
+					],
+					middle: [],
+					hostDeclaration: "@Instantiated let shell: Shell",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillClosesCycleInSeamTreeNamingEveryHop_whenHoleIsPassedUpThroughTwoSeamsAndScope() async {
+		// `Shell` reaches `Inner` through `Carrier`, and `Outer` passes `Shell`'s copy on: every call on the way is a hop.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultGadget.swift"]):11:5: error: \(Self.gadgetCycleMessage(chain: "Host -> outer -> Outer -> shell -> Shell -> carrier -> Carrier -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panelMaker"))
+			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panelMaker: Instantiator<Panel>` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.gadgetCycleModules(
+					feature: [
+						seamFixtureType(named: "Carrier", declarations: ["@Instantiated let inner: Inner"]),
+						seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let carrier: Carrier"]),
+						seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated let shell: Shell"]),
+					],
+					middle: [],
+					hostDeclaration: "@Instantiated let outer: Outer",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillClosesCycleInSeamTreeNamingEveryHop_whenCallThatPassesHoleUpIsInsideFill() async {
+		// `Shell` fills `Holder`'s `slot` with `DefaultSlot`, whose call of `Inner` presents the hole `Shell` passes up: the
+		// route goes through that fill.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultGadget.swift"]):11:5: error: \(Self.gadgetCycleMessage(chain: "Host -> shell -> Shell -> holder -> Holder -> slot -> DefaultSlot -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panelMaker"))
+			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panelMaker: Instantiator<Panel>` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.gadgetCycleModules(
+					feature: [
+						"public protocol Slot {}",
+						seamFixtureType(named: "Holder", isSeam: true, declarations: ["@Instantiated let slot: any Slot"]),
+					],
+					middle: [
+						Self.fulfillingType(named: "DefaultSlot", fulfilling: "Slot", declarations: ["@Instantiated let inner: Inner"]),
+						seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let holder: Holder"]),
+					],
+					hostDeclaration: "@Instantiated let shell: Shell",
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillClosesCycleInSeamTreeNotingPathsSpelling_whenPathHoldsLazySpellingOfClosingProperty() async {
+		// `DefaultGadget` closes the cycle with `panel: Panel` on `Inner`'s `panel: LazilyInstantiated<Panel>`: the note is at
+		// `Inner`'s declaration, in its own spelling.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: \(Self.gadgetCycleMessage(chain: "Host -> shell -> Shell -> inner -> Inner -> panel -> Panel -> rowMaker -> Row -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panel", closingProperty: "panel: Panel"))
+			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panel: LazilyInstantiated<Panel>` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.fillCycleModules(
+					feature: [
+						seamFixtureType(named: "Row", declarations: ["@Instantiated let widget: any Widget"]),
+						seamFixtureType(named: "Panel", declarations: ["@Instantiated let rowMaker: Instantiator<Row>"]),
+						seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated let panel: LazilyInstantiated<Panel>"]),
+						Self.shellOfInner,
+					],
+					upper: [Self.widgetWithGadget, Self.hostOfShell],
+					app: [Self.gadget(declarations: ["@Instantiated let panel: Panel"]), Self.rootOfHost],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillClosesCycleInSeamTreeNotingNearestDeclaration_whenPathDeclaresClosingPropertyTwice() async {
+		// `Inner` and `Row` each declare `pane: any Pane`, built for different types, and the fill closes on the nearest, as
+		// generation finds a closer: the note is at `Row`'s.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: \(Self.gadgetCycleMessage(chain: "Host -> shell -> Shell -> inner -> Inner -> pane -> OuterPane -> rowMaker -> Row -> pane -> InnerPane -> widgetMaker -> DefaultWidget -> gadget -> DefaultGadget -> pane", closingProperty: "pane: any Pane", builtType: "Pane"))
+			\(fixtures["Feature"]!["Row.swift"]):7:5: note: `Row` instantiates `pane: any Pane` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.fillCycleModules(
+					feature: [
+						"public protocol Pane {}",
+						seamFixtureType(named: "InnerPane", declarations: ["@Instantiated let widgetMaker: Instantiator<Widget>"], conformances: ", Pane"),
+						seamFixtureType(named: "Row", declarations: [#"@Instantiated(fulfilledByType: "InnerPane") let pane: any Pane"#]),
+						seamFixtureType(named: "OuterPane", declarations: ["@Instantiated let rowMaker: Instantiator<Row>"], conformances: ", Pane"),
+						seamFixtureType(named: "Inner", isSeam: true, declarations: [#"@Instantiated(fulfilledByType: "OuterPane") let pane: any Pane"#]),
+						Self.shellOfInner,
+					],
+					upper: [Self.widgetWithGadget, Self.hostOfShell],
+					app: [Self.gadget(declarations: [#"@Instantiated(fulfilledByType: "InnerPane") let pane: any Pane"#]), Self.rootOfHost],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillClosesCycleInSeamTreeNotingHolesDeclaration_whenClosingPropertyIsHoleWhoseFillHoldsSite() async {
+		// `DefaultGadget` closes the cycle on `widgetMaker`, the hole `DefaultWidget` fills: `Panel` declares it, and the note
+		// has its place.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: \(Self.gadgetCycleMessage(chain: "Host -> shell -> Shell -> inner -> Inner -> panelMaker -> Panel -> widgetMaker -> DefaultWidget -> gadget -> DefaultGadget -> widgetMaker", closingProperty: "widgetMaker: Instantiator<Widget>", builtType: "Widget"))
+			\(fixtures["Feature"]!["Panel.swift"]):7:5: note: `Panel` instantiates `widgetMaker: Instantiator<Widget>` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.fillCycleModules(
+					feature: [
+						seamFixtureType(named: "Panel", declarations: ["@Instantiated let widgetMaker: Instantiator<Widget>"]),
+						seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated let panelMaker: Instantiator<Panel>"]),
+						Self.shellOfInner,
+					],
+					upper: [Self.widgetWithGadget, Self.hostOfShell],
+					app: [Self.gadget(declarations: ["@Instantiated let widgetMaker: Instantiator<Widget>"]), Self.rootOfHost],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillClosesCycleInSeamTreeNamingFulfiller_whenFulfillerOfProtocolHoleDeclaresNextHop() async {
+		// `DefaultWidget` fills `any Widget` and declares `midMaker`: the chain and the note name it, not the protocol.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: \(Self.gadgetCycleMessage(chain: "Host -> shell -> Shell -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> midMaker -> Mid -> gadget -> DefaultGadget -> midMaker", ownerOfHole: "Mid", closingProperty: "midMaker: Instantiator<Mid>", builtType: "Mid"))
+			\(fixtures["Upper"]!["DefaultWidget.swift"]):9:5: note: `DefaultWidget` instantiates `midMaker: Instantiator<Mid>` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.fillCycleModules(
+					feature: [
+						seamFixtureType(named: "Panel", declarations: ["@Instantiated let widget: any Widget"]),
+						seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated let panelMaker: Instantiator<Panel>"]),
+						Self.shellOfInner,
+					],
+					upper: [
+						Self.fulfillingType(named: "DefaultWidget", fulfilling: "Widget", declarations: ["@Instantiated let midMaker: Instantiator<Mid>"]),
+						seamFixtureType(named: "Mid", declarations: ["@Instantiated let gadget: any Gadget"]),
+						Self.hostOfShell,
+					],
+					app: [Self.gadget(declarations: ["@Instantiated let midMaker: Instantiator<Mid>"]), Self.rootOfHost],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: FillCycleSpelling.allCases, FillCycleHop.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillClosesCycleInSeamTree_whenClosingPropertyIsAnySpellingOfPathsProperty(spelling: FillCycleSpelling, hop: FillCycleHop) async {
+		// A lazily instantiated property is validated as the constant it stands for, so a closer in any spelling closes on a
+		// declaration in any spelling, wherever the cycle's instantiator is.
+		let closerName = hop == .onSeamPath ? "DefaultGadget" : "Helper"
+		let closerDeclaration = "@Instantiated let panel: \(spelling.closer)"
+		let rowDeclaration = hop == .onSeamPath ? "@Instantiated let rowMaker: Instantiator<Row>" : "@Instantiated let row: Row"
+		let rowHop = hop == .onSeamPath ? "rowMaker" : "row"
+		let fillHops = hop == .onSeamPath ? "DefaultGadget" : "DefaultGadget -> helperMaker -> Helper"
+		let chain = "Host -> shell -> Shell -> inner -> Inner -> panel -> Panel -> \(rowHop) -> Row -> widget -> DefaultWidget -> gadget -> \(fillHops) -> panel"
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["\(closerName).swift"]):10:5: error: \(Self.gadgetCycleMessage(chain: chain, closingProperty: "panel: \(spelling.closer)", closer: hop == .onSeamPath ? nil : "Helper"))
+			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panel: \(spelling.path)` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.fillCycleModules(
+					feature: [
+						seamFixtureType(named: "Row", declarations: ["@Instantiated let widget: any Widget"]),
+						seamFixtureType(named: "Panel", declarations: [rowDeclaration], conformances: ", Sendable"),
+						seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated let panel: \(spelling.path)"]),
+						Self.shellOfInner,
+					],
+					upper: [Self.widgetWithGadget, Self.hostOfShell],
+					app: (hop == .onSeamPath
+						? [Self.gadget(declarations: [closerDeclaration])]
+						: [Self.gadget(declarations: ["@Instantiated let helperMaker: Instantiator<Helper>"]), seamFixtureType(named: "Helper", declarations: [closerDeclaration])])
+						+ [Self.rootOfHost],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsNoInstantiableFoundNamingEveryHop_whenRootCallsSeamThatPassesHoleUpThroughTwoSeamsAndScope() async {
+		// `Outer` passes up the builder `Shell` passes up from `Inner`, reached through `Carrier`: the chain has every call.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `Widget`, which @Instantiated property `widget: any Widget` instantiates in chain: Root -> Outer -> Shell -> Carrier -> Inner -> Panel. `Inner` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes a builder for `widget`, and `Root`, a root, must fill it. Decorate `Widget`, or an extension of it, with @Instantiable; list `Widget` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["Feature"]!["Panel.swift"]):7:5: note: `Panel` instantiates `widget: any Widget` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: ["public protocol Widget {}"] + Self.typesPassingWidgetUpThroughTwoSeams,
+					app: [seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let outer: Outer"])],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsNoInstantiableFoundNamingEveryHopAndFulfiller_whenHoleIsInsideFillOfPassedUpHole() async {
+		// `Host` fills the passed-up `widget` with `DefaultWidget`, whose hole `gadget` no module fulfills: the chain has
+		// every call on the way to the fill, and the type that declares `gadget`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):10:5: error: No @Instantiable type or extension that module `App` can see fulfills `Gadget`, which @Instantiated property `gadget: any Gadget` instantiates in chain: Root -> Host -> Outer -> Shell -> Carrier -> Inner -> Panel -> DefaultWidget. `Host` generates its dependency tree in module `Upper`, which cannot see one either, so the initializer SafeDI generated for it takes a builder for `gadget`, and `Root`, a root, must fill it. Decorate `Gadget`, or an extension of it, with @Instantiable; list `Gadget` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["Upper"]!["DefaultWidget.swift"]):9:5: note: `DefaultWidget` instantiates `gadget: any Gadget` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.fillCycleModules(
+					feature: Self.typesPassingWidgetUpThroughTwoSeams,
+					upper: [Self.widgetWithGadget, seamFixtureType(named: "Host", isSeam: true, declarations: ["@Instantiated let outer: Outer"])],
+					app: [Self.rootOfHost],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_drawsFillAsHolesPropertyInDOTTree_whenRootFillsSeamsBuilder() async throws {
 		// The DOT tree draws a fill as the hole's property beneath the seam call, and the fulfiller's tree beneath it.
 		let output = try await executeSafeDIToolMultiModuleTest(
@@ -4314,6 +4590,120 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
 			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
 		]
+	}
+
+	/// `Inner`'s hole `widget`, which the seams of `feature` and `middle` pass up to `Host` in `Upper`, which fills it with
+	/// `DefaultWidget`, whose own hole `gadget` `App` fills with a type that instantiates `Inner`'s `panelMaker`.
+	static func gadgetCycleModules(feature: [String], middle: [String], hostDeclaration: String) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Widget {}",
+				"public protocol Gadget {}",
+				seamFixtureType(named: "Panel", declarations: ["@Instantiated let widget: any Widget"]),
+				seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated let panelMaker: Instantiator<Panel>"]),
+			] + feature),
+			ModuleFixture(name: "Middle", packageName: "Other", swiftFileContent: middle.map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			ModuleFixture(
+				name: "Upper",
+				packageName: "Other",
+				swiftFileContent: [
+					fulfillingType(named: "DefaultWidget", fulfilling: "Widget", declarations: ["@Instantiated let gadget: any Gadget"]),
+					seamFixtureType(named: "Host", isSeam: true, declarations: [hostDeclaration]),
+				].map { "import Feature\nimport Middle\n\n" + $0 },
+				dependencies: ["Feature", "Middle"],
+			),
+			ModuleFixture(
+				name: "App",
+				packageName: "Other",
+				swiftFileContent: [
+					fulfillingType(named: "DefaultGadget", fulfilling: "Gadget", declarations: ["@Instantiated let panelMaker: Instantiator<Panel>"]),
+					seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let host: Host"]),
+				].map { "import Feature\nimport Middle\nimport Upper\n\n" + $0 },
+				dependencies: ["Feature", "Middle", "Upper"],
+			),
+		]
+	}
+
+	/// The error of a fill of `ownerOfHole`'s `gadget` in `Host`'s tree, by `DefaultGadget`, that closes a cycle on
+	/// `closingProperty`, which builds `builtType`, printing `chain`. `closer`, beneath `DefaultGadget`, declares the property
+	/// when it is given, and `DefaultGadget` does otherwise.
+	static func gadgetCycleMessage(
+		chain: String,
+		ownerOfHole: String = "DefaultWidget",
+		closingProperty: String = "panelMaker: Instantiator<Panel>",
+		builtType: String = "Panel",
+		closer: String? = nil,
+	) -> String {
+		let closingLabel = String(closingProperty.prefix { $0 != ":" })
+		let closingType = closer ?? "DefaultGadget"
+		let closerDescription = closer.map { "`\($0)`, beneath `DefaultGadget`, which fills it," } ?? "`DefaultGadget`, which fills it,"
+		return "SafeDI cannot fill the builder for `\(ownerOfHole)`'s `gadget: any Gadget` in `Host`'s dependency tree: \(closerDescription) instantiates `\(closingProperty)`, which `Host`'s tree is building where it builds `gadget` (\(chain)). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `\(builtType)` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `\(closingType)` builds `\(builtType)` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`; make an @Instantiable declaration that fulfills `Gadget` one module `Upper` reads; or give `\(closingLabel)` on `\(closingType)` another label, so the cycle closes at `gadget` itself."
+	}
+
+	/// A spelling of the property on a seam's path and a spelling of the property of a fill that closes a cycle on it.
+	enum FillCycleSpelling: CaseIterable, Sendable {
+		case instanceOnPathLazyCloser
+		case instanceOnPathSendableLazyCloser
+		case lazyOnPathInstanceCloser
+		case sendableLazyOnPathInstanceCloser
+		case lazyOnPathSendableLazyCloser
+		case instanceOnPathInstanceCloser
+
+		var path: String {
+			switch self {
+			case .instanceOnPathLazyCloser, .instanceOnPathSendableLazyCloser, .instanceOnPathInstanceCloser:
+				"Panel"
+			case .lazyOnPathInstanceCloser, .lazyOnPathSendableLazyCloser:
+				"LazilyInstantiated<Panel>"
+			case .sendableLazyOnPathInstanceCloser:
+				"SendableLazilyInstantiated<Panel>"
+			}
+		}
+
+		var closer: String {
+			switch self {
+			case .lazyOnPathInstanceCloser, .sendableLazyOnPathInstanceCloser, .instanceOnPathInstanceCloser:
+				"Panel"
+			case .instanceOnPathLazyCloser:
+				"LazilyInstantiated<Panel>"
+			case .instanceOnPathSendableLazyCloser, .lazyOnPathSendableLazyCloser:
+				"SendableLazilyInstantiated<Panel>"
+			}
+		}
+	}
+
+	/// Where the instantiator of a cycle a fill closes is: between the path's property and the hole, or inside the fill.
+	enum FillCycleHop: CaseIterable, Sendable {
+		case onSeamPath
+		case insideFill
+	}
+
+	/// `Feature`, declaring `Widget`, `Gadget` and `feature`; `Upper`, declaring `upper`; and `App`, declaring `app`, each
+	/// depending on those before it.
+	static func fillCycleModules(feature: [String], upper: [String], app: [String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: ["public protocol Widget {}", "public protocol Gadget {}"] + feature),
+			ModuleFixture(name: "Upper", packageName: "Other", swiftFileContent: upper.map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Feature\nimport Upper\n\n" + $0 }, dependencies: ["Feature", "Upper"]),
+		]
+	}
+
+	/// `Panel`'s hole `widget`, of `Inner`, which `Shell` reaches through `Carrier` and passes up, and `Outer` passes up too.
+	static let typesPassingWidgetUpThroughTwoSeams = [
+		seamFixtureType(named: "Panel", declarations: ["@Instantiated let widget: any Widget"]),
+		seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated let panelMaker: Instantiator<Panel>"]),
+		seamFixtureType(named: "Carrier", declarations: ["@Instantiated let inner: Inner"]),
+		seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let carrier: Carrier"]),
+		seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated let shell: Shell"]),
+	]
+
+	static let shellOfInner = seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let inner: Inner"])
+	static let hostOfShell = seamFixtureType(named: "Host", isSeam: true, declarations: ["@Instantiated let shell: Shell"])
+	static let rootOfHost = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let host: Host"])
+	static let widgetWithGadget = fulfillingType(named: "DefaultWidget", fulfilling: "Widget", declarations: ["@Instantiated let gadget: any Gadget"])
+
+	static func gadget(declarations: [String]) -> String {
+		fulfillingType(named: "DefaultGadget", fulfilling: "Gadget", declarations: declarations)
 	}
 
 	/// The Swift code blocks of the Manual's section headed `heading`, up to its next heading of any level: the next line

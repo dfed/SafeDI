@@ -340,7 +340,7 @@ public struct SeamSignature: Sendable {
 			declarationLocation: Dependency.DeclarationLocation?,
 			erasedToConcreteExistential: Bool,
 			sitePath: [Property],
-			sitePathDeclarationLocations: [Dependency.DeclarationLocation?],
+			declaredSitePath: [DeclaredProperty],
 			fillPropertyStack: [Property],
 			builderLabel: String,
 			internalName: String,
@@ -349,11 +349,12 @@ public struct SeamSignature: Sendable {
 			typesToOwner: [PathType],
 			scopeTypeName: String,
 			stages: [[Field]],
-			stageBoundaryDepths: [Int],
+			stageBoundaries: [StageBoundary],
 			tierAccess: AccessLevel,
 			accessCause: TypeAccessProof.Cause? = nil,
 			uncarriedDeclarations: [UncarriedDeclaration],
 			innerSeamType: TypeDescription? = nil,
+			passedUpRoute: [DeclaredProperty] = [],
 			isSendable: Bool = false,
 		) {
 			self.ownerType = ownerType
@@ -362,7 +363,7 @@ public struct SeamSignature: Sendable {
 			self.declarationLocation = declarationLocation
 			self.erasedToConcreteExistential = erasedToConcreteExistential
 			self.sitePath = sitePath
-			self.sitePathDeclarationLocations = sitePathDeclarationLocations
+			self.declaredSitePath = declaredSitePath
 			self.fillPropertyStack = fillPropertyStack
 			self.builderLabel = builderLabel
 			self.internalName = internalName
@@ -371,11 +372,12 @@ public struct SeamSignature: Sendable {
 			self.typesToOwner = typesToOwner
 			self.scopeTypeName = scopeTypeName
 			self.stages = stages
-			self.stageBoundaryDepths = stageBoundaryDepths
+			self.stageBoundaries = stageBoundaries
 			self.tierAccess = tierAccess
 			self.accessCause = accessCause
 			self.uncarriedDeclarations = uncarriedDeclarations
 			self.innerSeamType = innerSeamType
+			self.passedUpRoute = passedUpRoute
 			self.isSendable = isSendable
 		}
 
@@ -391,10 +393,13 @@ public struct SeamSignature: Sendable {
 		/// Whether the property is `erasedToConcreteExistential`, which a fill wraps the fulfilling type in.
 		public let erasedToConcreteExistential: Bool
 		/// The properties from the root of the tree that holds the site down to the owner's property, outermost first:
-		/// the site's identity in that tree.
+		/// the site's identity in that tree, which generated names are made from. Inside a fill of a passed-up hole it holds
+		/// a stand-in for the seam that holds that hole (`pathBeforePropertyInItsFill`), no declaration, so a diagnostic
+		/// prints `declaredSitePath` instead.
 		public let sitePath: [Property]
-		/// Where each property of `sitePath` is declared, by the type that builds it.
-		public let sitePathDeclarationLocations: [Dependency.DeclarationLocation?]
+		/// The properties the code declares from the root of the tree that holds the site down to the owner's property,
+		/// outermost first, inside a fill of a passed-up hole through the calls that passed it up.
+		public let declaredSitePath: [DeclaredProperty]
 		/// The stack a fill builds the property's tree with: the properties from the root of the seam whose tree holds
 		/// the site to the owner's property, innermost first, each lazily instantiated one preceded by its instance, as
 		/// `Scope.createScopeGenerator` stacks them.
@@ -413,12 +418,11 @@ public struct SeamSignature: Sendable {
 		public let typesToOwner: [PathType]
 		/// The name of the scope struct, or, for a staged builder, of the enum holding one struct per stage.
 		public let scopeTypeName: String
-		/// The fields of each stage's struct: one stage, unless `@Sendable` builder functions lie between the seam and
-		/// the site, each of which starts another.
+		/// The fields of each stage's struct: one stage, unless `@Sendable` functions lie between the seam and the site,
+		/// each of which starts another.
 		public let stages: [[Field]]
-		/// The length of the site's path at each `@Sendable` builder function between the seam and the site, outermost
-		/// first: the path of the property whose builder function it is.
-		public let stageBoundaryDepths: [Int]
+		/// Where each stage after the first starts: each `@Sendable` function between the seam and the site, outermost first.
+		public let stageBoundaries: [StageBoundary]
 		/// The access each tier that takes the builder must have no more than: the builder's type is as visible as the
 		/// narrowest type it names – the scope struct at the access of the seam that declares it, and the property's type
 		/// as the declarations the signature is computed from prove it (`TypeAccessProof`) – capped at the seam's type.
@@ -431,9 +435,41 @@ public struct SeamSignature: Sendable {
 		/// The seam the tree calls that presented the hole first, when this one passes it up, or `nil` for a site of this
 		/// seam's own tree.
 		public let innerSeamType: TypeDescription?
-		/// Whether the builder is `@Sendable`: the seam's tree passes it on from inside a `@Sendable` builder function,
-		/// which captures it.
+		/// When this seam passes the hole up, the properties from its root to the call of the seam whose tree holds the
+		/// site, through the calls of every seam between, outermost first; empty for a site of this seam's own tree.
+		public let passedUpRoute: [DeclaredProperty]
+		/// Whether the builder is `@Sendable`: the seam's tree passes it on from inside a `@Sendable` function, which
+		/// captures it.
 		public let isSendable: Bool
+
+		/// A property on the way to a site, the type that declares it, and where, when that is known. For a property of a
+		/// protocol's fulfiller, the type is the fulfiller, which the property's type does not name.
+		public struct DeclaredProperty: Sendable {
+			public init(property: Property, declaringType: TypeDescription?, declarationLocation: Dependency.DeclarationLocation?) {
+				self.property = property
+				self.declaringType = declaringType
+				self.declarationLocation = declarationLocation
+			}
+
+			public let property: Property
+			public let declaringType: TypeDescription?
+			public let declarationLocation: Dependency.DeclarationLocation?
+		}
+
+		/// A `@Sendable` function between a seam and a site of its tree, which starts a stage of the site's builder: the seam
+		/// calls the stage before it just before declaring the function.
+		public struct StageBoundary: Sendable {
+			public init(pathLength: Int, fillStageIndex: Int? = nil) {
+				self.pathLength = pathLength
+				self.fillStageIndex = fillStageIndex
+			}
+
+			/// How much of the site's path leads to the property the function builds.
+			public let pathLength: Int
+			/// For a function of a fill the seam's tree generates for a seam it calls, its stage among the fill's stages, or
+			/// `nil` for a builder function.
+			public let fillStageIndex: Int?
+		}
 
 		/// What identifies a hole: its site, by the seam whose tree holds it and its path there, which a passed-up hole
 		/// keeps. A seam takes one builder per site, whatever route presents it.
@@ -445,6 +481,19 @@ public struct SeamSignature: Sendable {
 		/// The hole's site.
 		public var site: Site {
 			Site(seamType: scopeSeamType, path: sitePath)
+		}
+
+		/// What the path of a site inside a fill of this hole holds before the hole's property, in the tree of the seam whose
+		/// call the fill is passed to: the seam that holds the hole, when the seam called passes it up, and the properties
+		/// from that seam's root to the hole's owner. One call's holes can share a property, and each has a fill of its own.
+		var pathBeforePropertyInItsFill: [Property] {
+			(innerSeamType == nil ? [] : [Property(label: scopeSeamType.asIdentifier, typeDescription: scopeSeamType)]) + sitePath.dropLast()
+		}
+
+		/// What `declaredSitePath` holds before the hole's property for a site inside a fill of this hole: the calls that
+		/// passed the hole up, and the properties from the root of the seam that holds it to the hole's owner.
+		var declaredPathBeforePropertyInItsFill: [DeclaredProperty] {
+			passedUpRoute + declaredSitePath.dropLast()
 		}
 
 		/// The label the initializer only generated code calls takes the builder under
@@ -463,7 +512,7 @@ public struct SeamSignature: Sendable {
 				declarationLocation: declarationLocation,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				sitePath: sitePath,
-				sitePathDeclarationLocations: sitePathDeclarationLocations,
+				declaredSitePath: declaredSitePath,
 				fillPropertyStack: fillPropertyStack,
 				builderLabel: parameterName,
 				internalName: internalName,
@@ -472,18 +521,32 @@ public struct SeamSignature: Sendable {
 				typesToOwner: typesToOwner,
 				scopeTypeName: scopeTypeName,
 				stages: stages,
-				stageBoundaryDepths: stageBoundaryDepths,
+				stageBoundaries: stageBoundaries,
 				tierAccess: tierAccess,
 				accessCause: accessCause,
 				uncarriedDeclarations: uncarriedDeclarations,
 				innerSeamType: innerSeamType,
+				passedUpRoute: passedUpRoute,
 				isSendable: isSendable,
 			)
 		}
 
-		/// The name of the struct of the stage at `stageIndex`, or `nil` for an unstaged builder.
-		public static func stageName(at stageIndex: Int) -> String {
-			stageIndex == 0 ? "Outer" : stageIndex == 1 ? "Inner" : "Inner\(stageIndex)"
+		/// The name of the struct of the stage at `stageIndex` of a staged builder: `Outer`, `Inner`, `Inner2`, and so on. The
+		/// structs are nested side by side, where a field's type that begins with one's name would resolve to it, so an
+		/// underscore is appended while a field's type begins with the name.
+		public func stageName(at stageIndex: Int) -> String {
+			let namedTypes = Set(stages.joined().flatMap { TypeAccessProof.mentionedTypes(in: $0.property.typeDescription).compactMap(\.outermostTypeName) })
+			var name = stageIndex == 0 ? "Outer" : stageIndex == 1 ? "Inner" : "Inner\(stageIndex)"
+			while namedTypes.contains(name) {
+				name += "_"
+			}
+			return name
+		}
+
+		/// The name of the function the stage at `stageIndex` is, for a builder or fill named `functionName`: that name for
+		/// the first stage, whose function it is, and that name joined with the stage's for a later one.
+		public func stageFunctionName(at stageIndex: Int, ofFunctionNamed functionName: String) -> String {
+			stageIndex == 0 ? functionName : "\(functionName)_\(stageName(at: stageIndex))".spelledAsJoinedIdentifier
 		}
 
 		/// The type of the struct the stage at `stageIndex` is handed, qualified by `seamType` when it is given.
@@ -493,7 +556,7 @@ public struct SeamSignature: Sendable {
 			} else {
 				.simple(name: scopeTypeName, generics: [])
 			}
-			return stages.count == 1 ? scopeType : .nested(name: Self.stageName(at: stageIndex), parentType: scopeType, generics: [])
+			return stages.count == 1 ? scopeType : .nested(name: stageName(at: stageIndex), parentType: scopeType, generics: [])
 		}
 
 		/// The type of the function the stage at `stageIndex` is: it takes that stage's struct and returns the next

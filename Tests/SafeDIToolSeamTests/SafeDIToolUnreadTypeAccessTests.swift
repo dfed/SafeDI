@@ -205,6 +205,26 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingGenericArgument_whenGenericArgumentOfEnclosingTypeIsRecordedPackageTypeRequiredOnPublicSeam() async {
+		// `Box<Secret>.Bar` names `Secret`, as `[Secret]` does: the compiler checks it against the initializer's access.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `token: Box<Secret>.Bar`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Secret` is declared `package`. Declare `Secret` `public`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Secret.swift"]):1:1: note: `Secret` is declared `package` here.
+			\(fixtures["Feature"]!["Secret.swift"]):1:1-1:8: fixit: public
+			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `token: Box<Secret>.Bar` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.screenModules(receives: ["@Received let token: Box<Secret>.Bar"], extraFeatureFiles: ["Secret.swift": "package struct Secret {}", "Box.swift": "public struct Box<T> {\n    public struct Bar {}\n}"], hostForwards: nil),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesUnreadTypeOnPublicTier_whenParameterIsExistentialOrCompositionOfUnreadProtocol() async throws {
 		// A11, A12: `any Renderer` names `Renderer`; `Sendable`, a standard protocol, is never named by the comment.
 		let output = try await executeSafeDIToolMultiModuleTest(
