@@ -1280,7 +1280,7 @@ So the generated mock builds the dependencies your hand-written mock has a param
 
 ### Cross-module mock generation
 
-A mock generated with `generateMock: true`, and each `SafeDIMockConfiguration` it uses, is an `internal` member of an extension in the module that generates it, which avoids conflicts when several modules generate mocks for the same types. Each module generates mocks only for the types it declares, so run SafeDI on each target that declares one, as [Generating your dependency tree](#generating-your-dependency-tree) says. A module whose tests or previews need a mock of a type another module declares has two options:
+A mock generated with `generateMock: true`, and each `SafeDIMockConfiguration` it uses, is an `internal` member of an extension in the module that generates it, which avoids conflicts when several modules generate mocks for the same types. Each module generates mocks only for the types it declares, so run SafeDI on every target that depends on SafeDI, as [Generating your dependency tree](#generating-your-dependency-tree) says. A module whose tests or previews need a mock of a type another module declares has two options:
 
 1. List the type in its own `additionalMocksToGenerate`, which generates an internal `mock()` of the type there. The mock constructs the type and its tree in that module, so they must be visible to it, as [Access levels](#access-levels) describes.
 2. Declare the type with `generateMock: .public` in its own module, which generates a `mock()` that other modules call; the types its tree builds can then stay `package` or `internal`. See [Public mocks](#public-mocks).
@@ -1416,7 +1416,7 @@ To install the SafeDI framework into an Xcode project with Swift Package Manager
 
 SafeDI’s code generation runs `SafeDITool` in your build. Xcode projects and Swift packages run it through the `SafeDIGenerator` build tool plugin, which uses a prebuilt binary, so your build does not compile SwiftSyntax. An Xcode project also needs a one-time [install of that binary](#installing-the-prebuilt-safeditool-binary); until then, the plugin plans the build with a simpler scanner. [Bazel](#bazel) and [Tuist](#tuist) projects run it once per module through SafeDI’s Bazel rule and Tuist plugin. Any other build runs `SafeDITool` itself, as [Custom build system integration](#custom-build-system-integration) describes.
 
-SafeDI generates code for a type only in the module that declares it: a root’s `init()`, the initializer of a type with `generateDependencyTree: true`, and the `mock()` of a type with `generateMock`. So run SafeDI on each target that declares one of them.
+SafeDI generates code for a type only in the module that declares it: a root’s `init()`, the initializer of a type with `generateDependencyTree: true`, and the `mock()` of a type with `generateMock`. So run SafeDI on every target that depends on the `SafeDI` library, even one that declares none of them yet: a target that gains one later then needs no change to its build.
 
 Under Bazel and Tuist, run SafeDI on every first-party Swift module, even one that declares no `@Instantiable` type, and give each module a list of the modules it depends on, as [Which modules to list](#which-modules-to-list) describes. SafeDI reads nothing of a module it does not run on, so a `package` type there can fail to compile in a generated initializer or mock ([Access of generated parameters](#access-of-generated-parameters)).
 
@@ -1424,9 +1424,9 @@ A module needs a `SafeDIConfiguration.swift` only to set one of [its parameters]
 
 #### Xcode project
 
-If your first-party code comprises a single module in an `.xcodeproj`, once your Xcode project depends on the SafeDI package you can integrate the Swift Package Plugin simply by going to your target’s `Build Phases`, expanding the `Run Build Tool Plug-ins` drop-down, and adding the `SafeDIGenerator` as a build tool plug-in. You can see this integration in practice in the [ExampleProjectIntegration](../Examples/ExampleProjectIntegration) project. A target that declares a [seam](#generating-a-dependency-tree-per-module) needs the plugin, and `generatePlainDependencyTreeInitializers: true` in its configuration, only when hand-written code calls the seam’s generated initializer (see [Limits of the Xcode project plugin](#limits-of-the-xcode-project-plugin)).
+If your first-party code comprises a single module in an `.xcodeproj`, once your Xcode project depends on the SafeDI package you can integrate the Swift Package Plugin simply by going to your target’s `Build Phases`, expanding the `Run Build Tool Plug-ins` drop-down, and adding the `SafeDIGenerator` as a build tool plug-in. You can see this integration in practice in the [ExampleProjectIntegration](../Examples/ExampleProjectIntegration) project.
 
-If your Xcode project comprises multiple modules, follow the above steps, and then add a `#SafeDIConfiguration` to a file named `SafeDIConfiguration.swift` in your module to configure SafeDI:
+If your Xcode project comprises multiple modules, follow the above steps for each target that depends on SafeDI, and then add a `#SafeDIConfiguration` to a file named `SafeDIConfiguration.swift` in your module to configure SafeDI:
 
 ```swift
 import SafeDI
@@ -1438,7 +1438,7 @@ import SafeDI
 
 `additionalDirectoriesToInclude` names folders outside your module that SafeDI scans for Swift source files, relative to the executing directory (the directory containing the `.xcodeproj`). Xcode project plugins cannot discover dependent modules’ source directories, so list them here, as the [ExampleMultiProjectIntegration](../Examples/ExampleMultiProjectIntegration) project does in [its configuration](../Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift).
 
-When you add a framework target, apply the `SafeDIGenerator` plugin to it as above, and give it a `#SafeDIConfiguration` of its own whose `additionalDirectoriesToInclude` lists the folders of the targets it depends on. Then add the new target’s folder to the root target’s `additionalDirectoriesToInclude`.
+When you add a framework target that depends on SafeDI, apply the `SafeDIGenerator` plugin to it as above, and give it a `#SafeDIConfiguration` of its own whose `additionalDirectoriesToInclude` lists the folders of the targets it depends on. Then add the new target’s folder to the root target’s `additionalDirectoriesToInclude`.
 
 > **Note:** Any SafeDI declaration, roots included, may sit behind a bare condition such as `#if DEBUG`; see [Conditional compilation](#conditional-compilation).
 
@@ -1473,7 +1473,7 @@ The command writes `.safedi/.gitignore` on first run, with the single glob `*/sa
 
 #### Swift package
 
-If your first-party code is entirely contained in a Swift Package with one or more modules, add the following lines to each target that [Generating your dependency tree](#generating-your-dependency-tree) names:
+If your first-party code is entirely contained in a Swift Package with one or more modules, add the following lines to each target that depends on the `SafeDI` library, as [Generating your dependency tree](#generating-your-dependency-tree) says:
 
 ```swift
     plugins: [

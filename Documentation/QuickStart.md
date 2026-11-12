@@ -35,7 +35,7 @@ MyAppPackage/
         └── ProfileViewTests.swift
 ```
 
-Add SafeDI to the package’s dependencies, and its `SafeDI` library to each target that declares SafeDI types. Apply the `SafeDIGenerator` build tool plugin to each target that declares a root or a type with `generateMock: true`. Here, those are `Profile` and `Root`. `Networking` declares neither, so it needs only the library.
+Add SafeDI to the package’s dependencies. Add its `SafeDI` library and its `SafeDIGenerator` build tool plugin to each target that declares SafeDI types: here, `Networking`, `Profile`, and `Root`.
 
 In `Package.swift`:
 
@@ -50,7 +50,8 @@ In `Package.swift`:
          .target(
 -            name: "Networking"
 +            name: "Networking",
-+            dependencies: ["SafeDI"]
++            dependencies: ["SafeDI"],
++            plugins: [.plugin(name: "SafeDIGenerator", package: "SafeDI")]
          ),
          .target(
              name: "Profile",
@@ -66,7 +67,7 @@ In `Package.swift`:
          ),
 ```
 
-When you build, the plugin reads the target’s code and the code of the targets it depends on in your package, checks the dependency tree, and generates the code that builds it. If you later add `generateMock: true` to a type in `Networking`, add the plugin to `Networking` too.
+When you build, the plugin reads the target’s code and the code of the targets it depends on in your package, checks the dependency tree, and generates the code that builds it. The plugin generates nothing for `Networking`, which declares no root and no type with `generateMock: true`, but with the plugin already there, you don’t edit `Package.swift` when `Networking` gains one.
 
 ## 2. Mark the types in your dependency tree
 
@@ -282,7 +283,7 @@ Steps 2 to 4 are the same in every build system. Step 1, adding SafeDI to the bu
 If your modules are framework targets in an `.xcodeproj`, choose one of two routes:
 
 - **Move the modules into a local Swift package.** Create a package like the one above, and move each module’s files into `Sources/<module name>`. Keep the app target in the project, add the package to the project, and add the package’s `Root` library to the app target. Choose this route for new work: it has none of the next route’s limits.
-- **Keep the framework targets.** Apply the plugin to each target that declares a root or a type with `generateMock: true`. The Xcode project plugin can’t find the source files of the targets a target depends on, so give each target you apply the plugin to a `SafeDIConfiguration.swift` whose `additionalDirectoriesToInclude` lists the folders of the targets it depends on, as [Xcode project](Manual.md#xcode-project) describes. The plugin also can’t tell which target declares each type, so give each type that another target builds, and its initializer, `package` or `public` access. For `package` access, set `SWIFT_PACKAGE_NAME` to one name on every target. SafeDI reports each declaration that is too narrow. [Limits of the Xcode project plugin](Manual.md#limits-of-the-xcode-project-plugin) lists the plugin’s other limits.
+- **Keep the framework targets.** Apply the plugin to each target that declares SafeDI types. The Xcode project plugin can’t find the source files of the targets a target depends on, so give each target you apply the plugin to a `SafeDIConfiguration.swift` whose `additionalDirectoriesToInclude` lists the folders of the targets it depends on, as [Xcode project](Manual.md#xcode-project) describes. The plugin also can’t tell which target declares each type, so give each type that another target builds, and its initializer, `package` or `public` access. For `package` access, set `SWIFT_PACKAGE_NAME` to one name on every target. SafeDI reports each declaration that is too narrow. [Limits of the Xcode project plugin](Manual.md#limits-of-the-xcode-project-plugin) lists the plugin’s other limits.
 
 ### Bazel
 
