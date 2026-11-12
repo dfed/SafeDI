@@ -828,10 +828,14 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	@Test(arguments: ThirdModuleReach.cellsWhereCoreDoesNotReadBase)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_offersNoSeamForDeclarationOfThirdModule_whenCandidatesModuleDoesNotReadThatModule(reach: ThirdModuleReach, integration: MultiModuleIntegration) async {
-		// `Core` imports `Base`, or a module that re-exports it, but its own run is given only the module info of the
-		// modules it depends on directly, which `Base` is not, so declared a seam, `Service` would take a builder for
-		// `Formatter`, which `App` would still fill
-		// (`generate_throwsErrorAtDeclarationOfThirdModule_whenSeamWhoseModuleDoesNotReadThatModuleIsDeclared`).
+		// `Core` imports `Base`, or a module that re-exports it, but does not depend on it directly. These runs model a
+		// Tuist run, or a custom script's, which gives `Core`'s run only the module info of the modules it depends on
+		// directly, so declared a seam, `Service` would take a builder for `Formatter`, which `App` would still fill
+		// (`generate_throwsErrorAtDeclarationOfThirdModule_whenSeamWhoseModuleDoesNotReadThatModuleIsDeclared`). A Bazel
+		// run, told of every module beneath, reports this same error: `Core` declares no root or seam, so its run reads
+		// nothing from beneath, and the remedy is withheld, although the seam, once declared, would read `Base` from
+		// beneath and build `Formatter`
+		// (`generate_callsSeamBuildingDeclarationOfThirdModule_whenSeamWhoseModuleReadsThatModuleFromBeneathIsDeclared`).
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let formatterPath = Self.declarationPath(of: "Formatter.swift", in: "Base", fixtures: fixtures, under: integration)
 			return """
@@ -851,8 +855,12 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorAtDeclarationOfThirdModule_whenSeamWhoseModuleDoesNotReadThatModuleIsDeclared(reach: ThirdModuleReach, integration: MultiModuleIntegration) async {
 		// The seam `generate_offersNoSeamForDeclarationOfThirdModule_whenCandidatesModuleDoesNotReadThatModule` withholds,
-		// declared anyway: `Core` sees no `@Instantiable` declaration of `Formatter`, so `App` fills the builder the seam
-		// takes for it and still calls `Formatter`'s initializer. `Formatter` builds no tree, so no seam is offered.
+		// declared anyway, under a Tuist run or a custom script's, which gives `Core`'s run only the module info of the
+		// modules it depends on directly: `Core` sees no `@Instantiable` declaration of `Formatter`, so `App` fills the
+		// builder the seam takes for it and still calls `Formatter`'s initializer. `Formatter` builds no tree, so no
+		// seam is offered. A Bazel run, told of every module beneath, reads `Base` from beneath for the seam's tree, so
+		// the seam builds `Formatter` itself and `App` compiles
+		// (`generate_callsSeamBuildingDeclarationOfThirdModule_whenSeamWhoseModuleReadsThatModuleFromBeneathIsDeclared`).
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let formatterPath = Self.declarationPath(of: "Formatter.swift", in: "Base", fixtures: fixtures, under: integration)
 			return """
@@ -866,6 +874,52 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
+	}
+
+	@Test(arguments: ThirdModuleReach.reachesWhereCoreDoesNotDependOnBase)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsSeamBuildingDeclarationOfThirdModule_whenSeamWhoseModuleReadsThatModuleFromBeneathIsDeclared(reach: ThirdModuleReach) async throws {
+		// The shape of `generate_throwsErrorAtDeclarationOfThirdModule_whenSeamWhoseModuleDoesNotReadThatModuleIsDeclared`,
+		// with each run told of every module beneath it, as Bazel's rule tells it: `Core` declares a seam whose tree
+		// needs `Formatter`, which no module it depends on directly declares, so its run reads `Base` from beneath,
+		// builds `Formatter` in the initializer it generates for `Service`, and imports `Base`. `App` calls that
+		// initializer, and every module compiles.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesBuildingFormatterThroughService(reach: reach, serviceAttribute: "@Instantiable(generateDependencyTree: true)"),
+			integration: .moduleInfo,
+			modulesBeneath: { $0 },
+			filesToDelete: &filesToDelete,
+		)
+		let seamCode = """
+		extension Service {
+		    /// Code you write and code SafeDI generates can both call this initializer.
+		    public convenience init() {
+		        let formatter = Formatter()
+		        self.init(formatter: formatter)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_CBF29CE484222325 {}
+		}
+		"""
+		let pluginComment = MultiModuleIntegration.moduleInfo.seamCallComment(type: "Service", declaringModule: "Core")
+		let rootCode = """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_CBF29CE484222325.self\(pluginComment)
+		            return Service()
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		"""
+		#expect(output.modules["Core"]?.moduleInfoFile?.dependencyModuleNames == (["Base"] + reach.coreDependencies).sorted())
+		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + reach.importBlocksOfCoresGeneratedFileReadingBaseFromBeneath + "\n\n" + seamCode])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + reach.importBlocksOfAppsGeneratedFile + "\n\n" + rootCode])
+		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: FormatterConstruction.neighborsOfConstant, MultiModuleIntegration.allCases)
@@ -1429,9 +1483,13 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			MultiModuleIntegration.allCases.filter { !reach.coreReadsBase(under: $0) }.map { (reach, $0) }
 		}
 
+		/// Each reach under which `Core` does not depend on `Base` directly, so that its run reads `Base` only when told
+		/// of the modules beneath it, as Bazel's rule tells it.
+		static let reachesWhereCoreDoesNotDependOnBase = allCases.filter { !$0.coreDependencies.contains("Base") }
+
 		/// Whether `Core`'s own run reads `Base`'s declarations under `integration`: the plugin hands a run the files of
-		/// every module its module depends on, directly or not, and Bazel's invocation the module info of the modules it
-		/// depends on directly.
+		/// every module its module depends on, directly or not, and `.moduleInfo`, told of no module beneath as a Tuist
+		/// run or a custom script's is, the module info of the modules it depends on directly.
 		func coreReadsBase(under integration: MultiModuleIntegration) -> Bool {
 			switch integration {
 			case .moduleInfo:
@@ -1488,6 +1546,17 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 				"#if canImport(Base)\n@_exported import Base\n#endif"
 			case .importsModuleReexportingIt:
 				SafeDIToolAccessEnforcementTests.importBlock("Umbrella")
+			}
+		}
+
+		/// The imports the file `Core` generates for `Service` starts with when its run is told of the modules beneath it
+		/// and its seam's tree reads `Base` from there: those of `Service.swift` and `Base`'s, sorted by module.
+		var importBlocksOfCoresGeneratedFileReadingBaseFromBeneath: String {
+			switch self {
+			case .importsDependency, .reexportsDependency, .importsDependencyConditionally, .importsDependencyOfDependency:
+				importBlocksOfCoresGeneratedFile
+			case .importsModuleReexportingIt:
+				SafeDIToolAccessEnforcementTests.importBlock("Base") + "\n" + importBlocksOfCoresGeneratedFile
 			}
 		}
 
