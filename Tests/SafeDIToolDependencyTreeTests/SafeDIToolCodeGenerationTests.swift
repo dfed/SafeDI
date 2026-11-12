@@ -11697,7 +11697,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_namesAliasDeclarationInComment_whenHandWrittenManifestHasNoProjectRoot() async throws {
-		let rootDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let rootDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
 
 		let rootFile = rootDirectory.appendingPathComponent("Root.swift")
@@ -11733,13 +11733,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		let rootInputPath = currentDirectoryRelativePath(to: rootFile)
 		let consumerInputPath = currentDirectoryRelativePath(to: consumerFile)
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try [rootInputPath, consumerInputPath]
 			.joined(separator: ",")
 			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
 		let rootOutput = rootDirectory.appendingPathComponent("Root+SafeDI.swift")
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		try JSONEncoder().encode(SafeDIToolManifest(dependencyTreeGeneration: [
 			.init(inputFilePath: rootInputPath, outputFilePath: rootOutput.relativePath),
 		])).write(to: manifestFile)
@@ -11778,7 +11778,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesDistinctManifestOutputs_whenRootFilesShareTheSameBasename() async throws {
-		let rootDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let rootDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		let featureADirectory = rootDirectory.appendingPathComponent("FeatureA")
 		let featureBDirectory = rootDirectory.appendingPathComponent("FeatureB")
 		try FileManager.default.createDirectory(at: featureADirectory, withIntermediateDirectories: true)
@@ -11814,7 +11814,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: featureBRootFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try [
 			depFile.relativePath,
 			featureARootFile.relativePath,
@@ -11823,19 +11823,19 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		.joined(separator: ",")
 		.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 		let featureAOutput = outputDirectory.appendingPathComponent("FeatureA_Root+SafeDI.swift")
 		let featureBOutput = outputDirectory.appendingPathComponent("FeatureB_Root+SafeDI.swift")
 
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		let manifest = SafeDIToolManifest(dependencyTreeGeneration: [
 			.init(inputFilePath: featureARootFile.relativePath, outputFilePath: featureAOutput.relativePath),
 			.init(inputFilePath: featureBRootFile.relativePath, outputFilePath: featureBOutput.relativePath),
 		])
 		try JSONEncoder().encode(manifest).write(to: manifestFile)
 
-		let moduleInfoOutput = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".safedi")
+		let moduleInfoOutput = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".safedi")
 		filesToDelete += [
 			rootDirectory,
 			swiftFileCSV,
@@ -11881,7 +11881,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func scan_producesCorrectOutputFileName_whenRootFileIsAtProjectRoot() async throws {
-		let rootDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let rootDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
 
 		let rootFile = rootDirectory.appendingPathComponent("Root.swift")
@@ -11899,13 +11899,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: rootFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try rootFile.relativePath
 			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 
 		filesToDelete += [rootDirectory, swiftFileCSV, outputDirectory, manifestFile]
 
@@ -11928,7 +11928,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func scan_disambiguatesOutputFileNames_whenRootFilesShareTheSameBasename() async throws {
-		let rootDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let rootDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		let featureADirectory = rootDirectory.appendingPathComponent("FeatureA")
 		let featureBDirectory = rootDirectory.appendingPathComponent("FeatureB")
 		try FileManager.default.createDirectory(at: featureADirectory, withIntermediateDirectories: true)
@@ -11964,7 +11964,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: featureBRootFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try [
 			depFile.relativePath,
 			featureARootFile.relativePath,
@@ -11973,9 +11973,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		.joined(separator: ",")
 		.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 
 		filesToDelete += [rootDirectory, swiftFileCSV, outputDirectory, manifestFile]
 
@@ -11999,7 +11999,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func scan_disambiguatesMockOutputFileNames_whenMockFilesShareTheSameBasename() async throws {
-		let rootDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let rootDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		let featureADirectory = rootDirectory.appendingPathComponent("FeatureA")
 		let featureBDirectory = rootDirectory.appendingPathComponent("FeatureB")
 		try FileManager.default.createDirectory(at: featureADirectory, withIntermediateDirectories: true)
@@ -12021,7 +12021,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: featureBServiceFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try [
 			featureAServiceFile.relativePath,
 			featureBServiceFile.relativePath,
@@ -12029,9 +12029,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		.joined(separator: ",")
 		.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 
 		filesToDelete += [rootDirectory, swiftFileCSV, outputDirectory, manifestFile]
 
@@ -12058,7 +12058,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func scan_listsAdditionalMockOnce_whenConfigurationListsItTwice() async throws {
-		let rootDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let rootDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
 
 		let configurationFile = rootDirectory.appendingPathComponent("SafeDIConfiguration.swift")
@@ -12066,12 +12066,12 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		#SafeDIConfiguration(additionalMocksToGenerate: ["Service", "OtherService", "Service"])
 		""".write(to: configurationFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try configurationFile.relativePath.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 
 		filesToDelete += [rootDirectory, swiftFileCSV, outputDirectory, manifestFile]
 
@@ -12244,7 +12244,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_doesNotRewriteOutputFile_whenContentIsUnchanged() async throws {
-		let swiftFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".swift")
+		let swiftFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".swift")
 		try """
 		@Instantiable(isRoot: true)
 		public struct Root: Instantiable {
@@ -12259,20 +12259,20 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: swiftFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try swiftFile.relativePath.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 		let outputFile = outputDirectory.appendingPathComponent("Root+SafeDI.swift")
 
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		let manifest = SafeDIToolManifest(dependencyTreeGeneration: [
 			.init(inputFilePath: swiftFile.relativePath, outputFilePath: outputFile.relativePath),
 		])
 		try JSONEncoder().encode(manifest).write(to: manifestFile)
 
-		let moduleInfoOutput = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".safedi")
+		let moduleInfoOutput = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".safedi")
 
 		filesToDelete += [swiftFileCSV, swiftFile, manifestFile, moduleInfoOutput, outputDirectory]
 
@@ -13043,7 +13043,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_withOutputDirectory_scansAndGeneratesInOnePass() async throws {
-		let rootDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let rootDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
 
 		let rootFile = rootDirectory.appendingPathComponent("Root.swift")
@@ -13061,14 +13061,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: rootFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try rootFile.relativePath
 			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 
-		let moduleInfoOutput = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".safedi")
+		let moduleInfoOutput = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".safedi")
 
 		filesToDelete += [rootDirectory, swiftFileCSV, outputDirectory, moduleInfoOutput]
 
@@ -13089,7 +13089,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func scan_run_producesManifest() async throws {
-		let rootDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let rootDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
 
 		let rootFile = rootDirectory.appendingPathComponent("Root.swift")
@@ -13100,13 +13100,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: rootFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try rootFile.relativePath
 			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 
 		filesToDelete += [rootDirectory, swiftFileCSV, outputDirectory, manifestFile]
 
@@ -13131,7 +13131,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// file `Configuration.swift`, so the file name alone cannot tell them apart: only the one
 		// the manifest lists configures this module. No scan ran, so there is no cached module
 		// info and `generate` matches the manifest's configuration file among the CSV's paths.
-		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let projectRoot = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		let targetDirectory = projectRoot.appendingPathComponent("Target")
 		let dependencyDirectory = projectRoot.appendingPathComponent("Dependency")
 		try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
@@ -13175,13 +13175,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: depFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try [targetConfigurationFile, dependencyConfigurationFile, rootFile, depFile]
 			.map(\.path)
 			.joined(separator: ",")
 			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-		let outputFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".swift")
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let outputFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".swift")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		try JSONEncoder().encode(SafeDIToolManifest(
 			dependencyTreeGeneration: [.init(inputFilePath: rootFile.path, outputFilePath: outputFile.path)],
 			configurationFilePaths: [targetConfigurationFile.path],
@@ -13219,7 +13219,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	mutating func run_ignoresDependencyModuleConfiguration_whenConfigurationIsGuardedByActiveCondition() async throws {
 		// The dependency's configuration sits in an `#if` block whose condition is active, so it is
 		// scanned, but only the configuration the manifest lists configures this module.
-		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let projectRoot = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		let targetDirectory = projectRoot.appendingPathComponent("Target")
 		let dependencyDirectory = projectRoot.appendingPathComponent("Dependency")
 		try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
@@ -13266,13 +13266,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: depFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try [targetConfigurationFile, dependencyConfigurationFile, rootFile, depFile]
 			.map(\.path)
 			.joined(separator: ",")
 			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-		let outputFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".swift")
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let outputFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".swift")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		try JSONEncoder().encode(SafeDIToolManifest(
 			dependencyTreeGeneration: [.init(inputFilePath: rootFile.path, outputFilePath: outputFile.path)],
 			configurationFilePaths: [targetConfigurationFile.path],
@@ -13315,7 +13315,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	mutating func run_generatesDependencyTree_whenManifestOmitsActiveCompilationConditions() async throws {
 		// Custom build systems may write the manifest themselves. A manifest shaped
 		// for SafeDI 2.0.0 has no `activeCompilationConditions` key.
-		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let projectRoot = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
 		let rootFile = projectRoot.appendingPathComponent("Root.swift")
 		try """
@@ -13336,11 +13336,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: rootFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try rootFile.path
 			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-		let outputFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".swift")
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let outputFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".swift")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		try """
 		{
 		    "dependencyTreeGeneration": [
@@ -13393,7 +13393,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// while scan's manifest stores project-relative `inputFilePath`
 		// values, bypass → fresh parse → `ManifestError.rootNotInManifest`,
 		// which is our observable signal that the bypass fired.
-		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let projectRoot = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
 		let rootFile = projectRoot.appendingPathComponent("Root.swift")
 		try """
@@ -13405,12 +13405,12 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: rootFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try rootFile.path
 			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		filesToDelete += [projectRoot, swiftFileCSV, outputDirectory, manifestFile]
 
 		try await (Scan.parse([
@@ -13452,7 +13452,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// re-parsing the Swift source files. We verify scan wrote the cache
 		// file at the expected location and that generate produces the
 		// expected `Root+SafeDI.swift` output from the cached ModuleInfo.
-		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let projectRoot = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
 		let helperFile = projectRoot.appendingPathComponent("Helper.swift")
 		try """
@@ -13476,12 +13476,12 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: rootFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try "\(helperFile.path),\(rootFile.path)"
 			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		filesToDelete += [projectRoot, swiftFileCSV, outputDirectory, manifestFile]
 
 		try await (Scan.parse([
@@ -13521,7 +13521,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// fresh parse produces an empty module, so the root's planned
 		// file is written without code. A cache hit would return the
 		// cached Root and generate its tree.
-		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let projectRoot = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
 		let rootFile = projectRoot.appendingPathComponent("Root.swift")
 		try """
@@ -13533,12 +13533,12 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: rootFile, atomically: true, encoding: .utf8)
 
-		let scanCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let scanCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try rootFile.path
 			.write(to: scanCSV, atomically: true, encoding: .utf8)
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		filesToDelete += [projectRoot, scanCSV, outputDirectory, manifestFile]
 
 		try await (Scan.parse([
@@ -13549,7 +13549,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		])).run()
 
 		// Empty generate CSV — set differs from scan's CSV, forcing bypass.
-		let generateCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let generateCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try "".write(to: generateCSV, atomically: true, encoding: .utf8)
 		filesToDelete += [generateCSV]
 
@@ -13578,7 +13578,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// hit can never mask an unreadable input set. Delete the CSV after
 		// scan and confirm the missing-CSV NSError surfaces (rather than a
 		// successful cache hit).
-		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let projectRoot = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
 		let rootFile = projectRoot.appendingPathComponent("Root.swift")
 		try """
@@ -13590,12 +13590,12 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: rootFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try rootFile.path
 			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		filesToDelete += [projectRoot, outputDirectory, manifestFile]
 
 		try await (Scan.parse([
@@ -13626,7 +13626,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// relative `inputFilePath` once the file is gone. Instead the
 		// bypass forces a fresh parse of the CSV, which fails to read the
 		// missing file.
-		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let projectRoot = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
 		let rootFile = projectRoot.appendingPathComponent("Root.swift")
 		try """
@@ -13638,12 +13638,12 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: rootFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try rootFile.path
 			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		filesToDelete += [projectRoot, swiftFileCSV, outputDirectory, manifestFile]
 
 		try await (Scan.parse([
@@ -13683,7 +13683,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// walking the file again finds the root and generates its tree. Reusing the scan
 		// would find no root and write the file without code. The file is walked again
 		// under the name scan cached it by, relative to the project root.
-		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let projectRoot = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		let targetDirectory = projectRoot.appendingPathComponent("Target")
 		try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
 		filesToDelete += [projectRoot]
@@ -13709,11 +13709,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		#endif
 		""".write(to: rootFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try rootFile.path.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		filesToDelete += [swiftFileCSV, outputDirectory, manifestFile]
 
 		try await (Scan.parse([
@@ -13762,7 +13762,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// ModuleInfo. We observe the bypass by deleting a file from the
 		// additional directory — the fresh parse then misses a type the
 		// cached ModuleInfo would have had, causing validation to throw.
-		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let projectRoot = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
 		let targetDirectory = projectRoot.appendingPathComponent("Target")
 		try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
@@ -13819,12 +13819,12 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		}
 		""".write(to: siblingFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try "\(configFile.path),\(rootFile.path)"
 			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		filesToDelete += [swiftFileCSV, outputDirectory, manifestFile]
 
 		try await (Scan.parse([
@@ -13860,7 +13860,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Exercises scan's `unparsedAdditionalFiles` parse branch — the
 		// executeSafeDIToolTest helper puts all files in the CSV, so that
 		// branch isn't reached from the default test path.
-		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let projectRoot = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
 		let targetDirectory = projectRoot.appendingPathComponent("Target")
 		try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
@@ -13900,13 +13900,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// CSV contains only target files (absolute paths) — extra directory
 		// is reached via the #SafeDIConfiguration's
 		// `additionalDirectoriesToInclude`.
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try "\(targetConfigFile.path),\(targetRootFile.path)"
 			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		filesToDelete += [swiftFileCSV, outputDirectory, manifestFile]
 
 		try await (Scan.parse([

@@ -359,7 +359,7 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 	private static let repeatedRunCount = 5
 
 	private mutating func temporaryDirectory() throws -> URL {
-		let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let directory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		filesToDelete.append(directory)
 		return directory

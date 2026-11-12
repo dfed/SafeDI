@@ -947,7 +947,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	/// `additionalDirectoriesToInclude`.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func scannedKitchenSinkProject() async throws -> ScannedProject {
-		let additionalDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let additionalDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: additionalDirectory, withIntermediateDirectories: true)
 		filesToDelete.append(additionalDirectory)
 		try """
@@ -1139,12 +1139,12 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	///   that scan names them relative to it, or another directory, so that scan names them as the CSV does.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func scannedProject(files: [String: String], sourcesInsideProjectRoot: Bool = true) async throws -> ScannedProject {
-		let sourceDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let sourceDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
 		let projectRoot = if sourcesInsideProjectRoot {
 			sourceDirectory
 		} else {
-			URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+			TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		}
 		var filePaths = [String]()
 		for (fileName, content) in files.sorted(by: { $0.key < $1.key }) {
@@ -1152,11 +1152,11 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			try content.write(to: file, atomically: true, encoding: .utf8)
 			filePaths.append(file.path)
 		}
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try filePaths.joined(separator: ",").write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		filesToDelete += [sourceDirectory, swiftFileCSV, outputDirectory, manifestFile]
 
 		let scannedModuleInfo = try await performScan(

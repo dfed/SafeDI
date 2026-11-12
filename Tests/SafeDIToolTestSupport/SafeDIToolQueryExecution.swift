@@ -156,7 +156,7 @@ func executeSafeDIToolQuery(
 	additionalArguments: [String] = [],
 	filesToDelete: inout [URL],
 ) async throws -> QueryTestOutput {
-	let fixtureDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+	let fixtureDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 	// Created even for a run that names no module, since the test removes it when it ends.
 	try FileManager.default.createDirectory(at: fixtureDirectory, withIntermediateDirectories: true)
 	filesToDelete.append(fixtureDirectory)

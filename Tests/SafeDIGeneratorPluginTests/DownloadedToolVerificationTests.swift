@@ -55,7 +55,7 @@
 		}
 
 		private static func temporaryFile(containing contents: String) throws -> URL {
-			let fileURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+			let fileURL = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 			try Data(contents.utf8).write(to: fileURL)
 			return fileURL
 		}

@@ -536,7 +536,7 @@ enum DifferentialValueOracle {
 				description: "Could not locate SafeDI build artifacts for the differential value comparator. Build the package before running tests.",
 			)
 		}
-		let directory = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-differential-runtime-\(UUID().uuidString)")
+		let directory = TestTemporaryDirectory.root.appendingPathComponent("safedi-differential-runtime-\(UUID().uuidString)")
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		runtimeDirectoryToRemoveAtExit = directory
 		atexit {
@@ -737,7 +737,7 @@ enum DifferentialValueOracle {
 	) throws -> String {
 		let runtime = try runtime.get()
 		let pathName = role.map { "\($0.name) path" } ?? "path"
-		let directory = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-differential-\(role?.rawValue ?? "path")-\(UUID().uuidString)")
+		let directory = TestTemporaryDirectory.root.appendingPathComponent("safedi-differential-\(role?.rawValue ?? "path")-\(UUID().uuidString)")
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		filesToDelete.append(directory)
 

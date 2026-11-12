@@ -2963,7 +2963,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 	/// A new directory for one module's fixtures, removed when the test ends.
 	private mutating func temporaryModuleDirectory() throws -> URL {
-		let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+		let directory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		filesToDelete.append(directory)
 		return directory

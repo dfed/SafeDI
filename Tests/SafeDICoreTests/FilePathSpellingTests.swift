@@ -26,7 +26,7 @@ struct FilePathSpellingTests: ~Copyable {
 	// MARK: Initialization
 
 	init() throws {
-		fixtureDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		fixtureDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: fixtureDirectory.appendingPathComponent("Project/Sources"), withIntermediateDirectories: true)
 		// On Apple platforms, Foundation removes a leading `/private` only from a path that names an existing file.
 		try "".write(to: fixtureDirectory.appendingPathComponent("Project/Sources/File.swift"), atomically: true, encoding: .utf8)

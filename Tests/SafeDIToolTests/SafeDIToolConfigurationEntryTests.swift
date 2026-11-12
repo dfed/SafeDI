@@ -1072,12 +1072,12 @@ struct SafeDIToolConfigurationEntryTests: ~Copyable {
 
 	/// An absolute path at which nothing exists.
 	private static func missingPath() -> String {
-		URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("SafeDIToolTestsMissing-\(UUID().uuidString)").path
+		TestTemporaryDirectory.root.appendingPathComponent("SafeDIToolTestsMissing-\(UUID().uuidString)").path
 	}
 
 	/// A new, empty directory that the test deletes.
 	private mutating func makeTemporaryDirectory() throws -> URL {
-		let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let directory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		filesToDelete.append(directory)
 		return directory

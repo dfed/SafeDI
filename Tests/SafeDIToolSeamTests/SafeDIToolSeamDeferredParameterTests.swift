@@ -1649,7 +1649,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		/// The errors `swiftc` reports for `files`, type-checked against the SafeDI module the test build produced for a
 		/// macOS deployment target of `deploymentTarget` on this machine's architecture, as the verifier targets it.
 		private mutating func compileErrors(of files: [String], deploymentTarget: String) throws -> [String] {
-			let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+			let directory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 			try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 			filesToDelete.append(directory)
 			let filePaths = try files.enumerated().map { index, content in

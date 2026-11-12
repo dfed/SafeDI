@@ -9618,7 +9618,7 @@ enum GraphFuzzerOracle {
 		guard FileManager.default.isExecutableFile(atPath: toolURL.path) else {
 			throw GraphFuzzerInfrastructureError(description: "No SafeDITool executable at \(toolURL.path). Build the package with `swift build --build-tests`.")
 		}
-		let directory = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-graph-fuzzer-processes-\(UUID().uuidString)")
+		let directory = TestTemporaryDirectory.root.appendingPathComponent("safedi-graph-fuzzer-processes-\(UUID().uuidString)")
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		defer { try? FileManager.default.removeItem(at: directory) }
 		let fixtureFiles = try zip(fixture.fileNames, fixture.swiftFileContent).map { fileName, content in
@@ -9874,17 +9874,17 @@ enum GraphFuzzerOracle {
 	/// The directory the harness wrote a single-module fixture's files into, a directory of its own under the temporary
 	/// directory: the directory of the first of `fileNames`, the names the fixture gives its files.
 	/// - Throws: `GraphFuzzerInfrastructureError` when the harness wrote no file of that name, or wrote it anywhere but
-	///   in a directory under the temporary directory. The oracle deletes a rejected graph's fixture directory, and the
+	///   in a directory under the tests' temporary directory. The oracle deletes a rejected graph's fixture directory, and the
 	///   directory of a file the harness did not write – the empty path – was the working directory.
 	private static func fixtureDirectory(of fileNames: [String], in fixtures: FixturePaths, seed: UInt64) throws -> URL {
 		guard let fileName = fileNames.first, let path = fixtures.writtenPath(of: fileName) else {
 			throw GraphFuzzerInfrastructureError(description: "The test harness wrote no fixture named \(fileNames.first ?? "(none)") for seed \(seed): the fixture names its files apart from the names the harness gives them.")
 		}
 		let directory = URL(fileURLWithPath: path).deletingLastPathComponent()
-		let temporaryDirectoryComponents = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().pathComponents
+		let temporaryDirectoryComponents = TestTemporaryDirectory.root.resolvingSymlinksInPath().pathComponents
 		let directoryComponents = directory.resolvingSymlinksInPath().pathComponents
 		guard directoryComponents.count > temporaryDirectoryComponents.count, directoryComponents.starts(with: temporaryDirectoryComponents) else {
-			throw GraphFuzzerInfrastructureError(description: "The test harness wrote seed \(seed)'s fixture \(path) outside a directory of its own under the temporary directory.")
+			throw GraphFuzzerInfrastructureError(description: "The test harness wrote seed \(seed)'s fixture \(path) outside a directory of its own under the tests' temporary directory.")
 		}
 		return directory
 	}
@@ -9937,7 +9937,7 @@ enum GraphFuzzerOracle {
 				try? FileManager.default.removeItem(at: fileToDelete)
 			}
 		}
-		let fixtureDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-graph-fuzzer-\(UUID().uuidString)")
+		let fixtureDirectory = TestTemporaryDirectory.root.appendingPathComponent("safedi-graph-fuzzer-\(UUID().uuidString)")
 		try FileManager.default.createDirectory(at: fixtureDirectory, withIntermediateDirectories: true)
 		filesToDelete.append(fixtureDirectory)
 

@@ -544,7 +544,7 @@ func stageCompileSources(
 	filesToDelete: inout [URL],
 ) throws -> StagedCompileSources {
 	let prependedImport = prependsSafeDIImport ? "import SafeDI\n" : ""
-	let scratchDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-verify-\(UUID().uuidString)")
+	let scratchDirectory = TestTemporaryDirectory.root.appendingPathComponent("safedi-verify-\(UUID().uuidString)")
 	try FileManager.default.createDirectory(at: scratchDirectory, withIntermediateDirectories: true)
 	filesToDelete.append(scratchDirectory)
 
@@ -653,18 +653,22 @@ func compileSwift(
 /// handler that reads the last chunk can still be running after the process exits, when the caller has already taken
 /// what was read, and a compile that passed then seems to report no warning. A file also cannot fill up and block
 /// the process, as a pipe that no one drains can.
+///
+/// The process gets a temporary directory of its own (`TMPDIR`), deleted with its output once it exits, because
+/// `swiftc` leaves a `TemporaryDirectory.*` folder in its temporary directory on every run.
 func runProcess(_ executableURL: URL, arguments: [String]) throws -> SwiftCompileResult {
+	let invocationDirectory = TestTemporaryDirectory.uniquePath(prefix: "safedi-process-")
+	let temporaryDirectory = invocationDirectory.appendingPathComponent("tmp")
+	try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+	defer { try? FileManager.default.removeItem(at: invocationDirectory) }
 	let process = Process()
 	process.executableURL = executableURL
 	process.arguments = arguments
-	let standardOutput = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-process-output-\(UUID().uuidString)")
-	let standardError = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-process-error-\(UUID().uuidString)")
+	process.environment = TestTemporaryDirectory.environment(withTemporaryDirectory: temporaryDirectory)
+	let standardOutput = invocationDirectory.appendingPathComponent("output")
+	let standardError = invocationDirectory.appendingPathComponent("error")
 	FileManager.default.createFile(atPath: standardOutput.path, contents: nil)
 	FileManager.default.createFile(atPath: standardError.path, contents: nil)
-	defer {
-		try? FileManager.default.removeItem(at: standardOutput)
-		try? FileManager.default.removeItem(at: standardError)
-	}
 	process.standardOutput = try FileHandle(forWritingTo: standardOutput)
 	process.standardError = try FileHandle(forWritingTo: standardError)
 	try process.run()
