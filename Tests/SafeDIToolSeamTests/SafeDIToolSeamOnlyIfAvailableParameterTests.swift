@@ -120,14 +120,14 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(session: Session?) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_session session: Session?) {
 			        self.init(__safeDI_session: session, __safeDI_token: nil)
 			    }
 
-			    internal init(session: Session?, token: Token?) {
-			        self.init(__safeDI_session: session, __safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    internal init(__safeDI_session session: Session?, __safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        let detail = Detail(token: token.instance)
@@ -278,7 +278,7 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 		// the tree receives only if available, as a generated call does.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
-				Self.feature(receivingAnalytics: false),
+				Self.feature(receivingAnalytics: false, generatesPlainInitializers: true),
 				Self.legacy(calling: "Screen(user: user, database: database)"),
 			],
 			integration: .swiftPackagePlugin,
@@ -286,7 +286,7 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.modules["Feature"]?.generatedFiles == ["Screen+SafeDI.swift": generatedFileHeader + Self.screenInitializer])
+		#expect(output.modules["Feature"]?.generatedFiles == ["Screen+SafeDI.swift": generatedFileHeader + Self.screenInitializers])
 		guard compileVerificationIsEnabled else { return }
 		let compilation = try #require(output.compilation)
 		#expect(compilation.modules.map(\.moduleName) == ["Feature", "Legacy"])
@@ -303,24 +303,27 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 		// the new parameter instead of passing `nil` for it.
 		let call = "Screen(user: user, database: database, logger: nil)"
 		let before = try await executeSafeDIToolMultiModuleTest(
-			modules: [Self.feature(receivingAnalytics: false), Self.legacy(calling: call)],
+			modules: [Self.feature(receivingAnalytics: false, generatesPlainInitializers: true), Self.legacy(calling: call)],
 			integration: .swiftPackagePlugin,
 			filesToDelete: &filesToDelete,
 		)
 		let after = try await executeSafeDIToolMultiModuleTest(
-			modules: [Self.feature(receivingAnalytics: true), Self.legacy(calling: call)],
+			modules: [Self.feature(receivingAnalytics: true, generatesPlainInitializers: true), Self.legacy(calling: call)],
 			integration: .swiftPackagePlugin,
 			compileVerification: .returningOutcomeOnly,
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(before.modules["Feature"]?.generatedFiles == ["Screen+SafeDI.swift": generatedFileHeader + Self.screenInitializer])
+		#expect(before.modules["Feature"]?.generatedFiles == ["Screen+SafeDI.swift": generatedFileHeader + Self.screenInitializers])
 		#expect(after.modules["Feature"]?.generatedFiles == ["Screen+SafeDI.swift": generatedFileHeader + """
 		extension Screen {
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
 		    public init(user: User, analytics: Analytics?, database: Database, logger: Logger?) {
 		        self.init(__safeDI_user: user, __safeDI_analytics: analytics, __safeDI_database: database, __safeDI_logger: logger)
 		    }
 
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_user user: User, __safeDI_analytics: @autoclosure @escaping () -> Analytics?, __safeDI_database: @autoclosure @escaping () -> Database, __safeDI_logger: @autoclosure @escaping () -> Logger?) {
 		        let analytics = LazilyInstantiated<Analytics?>(__safeDI_analytics)
 		        let database = LazilyInstantiated<Database>(__safeDI_database)
@@ -364,10 +367,32 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 	/// What `Feature` generates for `screen` beside `cache(receivingAnalytics: false)`.
 	private static let screenInitializer = """
 	extension Screen {
+	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+	    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping () -> Database, __safeDI_logger: @autoclosure @escaping () -> Logger?) {
+	        let database = LazilyInstantiated<Database>(__safeDI_database)
+	        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
+	        let cache = Cache(database: database.instance, logger: logger.instance)
+	        self.init(user: user, cache: cache)
+	    }
+	}
+
+	extension Screen {
+	    public enum __safeDI_Screen_3192EA1C03ABD98F {}
+	}
+	"""
+
+	/// What `Feature` generates for `screen` beside `cache(receivingAnalytics: false)` when it sets
+	/// `generatePlainDependencyTreeInitializers: true`.
+	private static let screenInitializers = """
+	extension Screen {
+	    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
 	    public init(user: User, database: Database, logger: Logger?) {
 	        self.init(__safeDI_user: user, __safeDI_database: database, __safeDI_logger: logger)
 	    }
 
+	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+	    /// From code you write, call the initializer above instead.
 	    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping () -> Database, __safeDI_logger: @autoclosure @escaping () -> Logger?) {
 	        let database = LazilyInstantiated<Database>(__safeDI_database)
 	        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
@@ -407,9 +432,15 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 		"""
 	}
 
-	/// Module `Feature`, which declares `screen` and its tree.
-	private static func feature(receivingAnalytics: Bool) -> ModuleFixture {
-		ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [screen, cache(receivingAnalytics: receivingAnalytics)] + supportingTypes)
+	/// Module `Feature`, which declares `screen` and its tree, and, when `generatesPlainInitializers`, sets
+	/// `generatePlainDependencyTreeInitializers: true` for code that calls `Screen` by hand.
+	private static func feature(receivingAnalytics: Bool, generatesPlainInitializers: Bool = false) -> ModuleFixture {
+		ModuleFixture(
+			name: "Feature",
+			packageName: "Shop",
+			swiftFileContent: [screen, cache(receivingAnalytics: receivingAnalytics)] + supportingTypes,
+			swiftFileContentByFilePath: generatesPlainInitializers ? ["SafeDIConfiguration.swift": "#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n"] : [:],
+		)
 	}
 
 	/// A root of module `App` that holds `user` and `database`, and not `logger`.
@@ -518,10 +549,8 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(session: Session?) {
-			        self.init(__safeDI_session: session)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_session: @autoclosure @escaping () -> Session?) {
 			        let session = LazilyInstantiated<Session?>(__safeDI_session)
 			        let detail = Detail(session: session.instance)

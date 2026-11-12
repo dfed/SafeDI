@@ -27,8 +27,10 @@
 /// initializer. `guardTypeName` names an empty enum the seam's module generates beside the initializer and every
 /// generated call refers to, so two computations that disagree fail to compile at the call rather than pass `nil`
 /// where a value was expected. That is a different job from the `__safeDI_`-prefixed labels of the initializer only
-/// generated code calls, which keep it apart from the plain initializer people call: labels name no type and no
-/// availability, so a stale call that writes the right labels still compiles without the enum.
+/// generated code calls, which keep it apart from the plain initializer people call, which a module generates only
+/// when its configuration sets `generatePlainDependencyTreeInitializers`: labels name no type and no availability, so a
+/// stale call that writes the right labels still compiles without the enum. Nothing a signature holds depends on that
+/// setting, so no caller reads another module's.
 ///
 /// The signature and its parameters and receivers carry diagnostic payload – where each receive is declared – so none
 /// is `Equatable`: a comparison for meaning goes through a projection that states what it compares, `callShape` for
@@ -154,8 +156,8 @@ public struct SeamSignature: Sendable {
 		/// Whether the initializer only generated code calls takes the parameter by value or defers it: a by-value
 		/// pass-through – a constant, or its optional form – is taken as an `@autoclosure`, which the narrowest tier's body
 		/// holds in a `LazilyInstantiated` under the parameter's label, so the tree reads the caller's value where it would
-		/// read it inline, when a receiver is first built. A tier that defers a parameter has a second initializer for
-		/// people, which takes every parameter by value (`plainSpelling`), so a call cannot capture its caller.
+		/// read it inline, when a receiver is first built. The plain initializer for people, when the seam's module
+		/// generates one, takes every parameter by value (`plainSpelling`), so a call cannot capture its caller.
 		public let deferral: Deferral
 		/// The name the generated initializer binds a deferred parameter's autoclosure to: `__safeDI_<label>`, renamed
 		/// past every builder function name in the seam's tree, which would shadow it. Unused for a parameter taken by
@@ -188,10 +190,9 @@ public struct SeamSignature: Sendable {
 			}
 		}
 
-		/// The parameter as the plain initializer of a tier that defers a parameter, or the one initializer of a tier that
-		/// defers none, declares it: by value, under its label alone. An underscored name would keep the initializer out of
-		/// the module's symbol graph, which is what documentation is generated from. No parameter has a default, so every
-		/// call passes every one.
+		/// The parameter as a tier's plain initializer declares it: by value, under its label alone. An underscored name
+		/// would keep the initializer out of the module's symbol graph, which is what documentation is generated from. No
+		/// parameter has a default, so every call passes every one.
 		func plainSpelling(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
 			switch deferral {
 			case .none:
@@ -461,8 +462,8 @@ public struct SeamSignature: Sendable {
 		/// The name of the scope struct, or, for a staged builder, of the enum holding one struct per stage; for a place in a
 		/// seam's plain scope enum (`enumPlace`), the enum's name.
 		public internal(set) var scopeTypeName: String
-		/// Where a seam's plain scope enum carries this place, or `nil` for a staged place, which has a builder of its own, and
-		/// for a public mock's, which has a builder per place.
+		/// Where a seam's or a public mock's plain scope enum carries this place, or `nil` for a staged place, which has a
+		/// builder of its own.
 		public internal(set) var enumPlace: EnumPlace?
 		/// The name of the case the place has among its seam's places, unspelled: the labels of its path, joined by `_`. A
 		/// staged builder's label and its scope type are made from it. Empty for a public mock's place.
@@ -572,12 +573,6 @@ public struct SeamSignature: Sendable {
 		/// `nil` when the property is no instantiator, or is one spelled as forwarding `()` or `Void`.
 		public var forwardedType: TypeDescription? {
 			property.typeDescription.forwardedTypeOfWrapper
-		}
-
-		/// The label the initializer only generated code calls takes the builder under
-		/// (`ReservedName.seamGeneratedOnlyArgumentLabel(of:)`).
-		public var generatedOnlyArgumentLabel: String {
-			ReservedName.seamGeneratedOnlyArgumentLabel(of: builderLabel)
 		}
 
 		/// The name of the struct of the stage at `stageIndex` of a staged builder: `Stage1`, `Stage2`, and so on. The
@@ -887,12 +882,6 @@ public struct SeamSignature: Sendable {
 		parameters.filter { $0.tierAccess >= level }
 	}
 
-	/// Whether a tier that takes `parameters` has an initializer only generated code calls beside its plain one: it
-	/// defers one of them.
-	public static func tierHasGeneratedOnlyInitializer(taking parameters: [Parameter]) -> Bool {
-		parameters.contains(where: \.isDeferred)
-	}
-
 	/// What a call of the generated initializer depends on: each parameter's label, type spelled without `any`, tier
 	/// access, whether it is received only if available, whether it is deferred and `@Sendable` (`deferral`), and
 	/// whether the caller builds it first (`requiredThroughAlias`), and the tiers. Two signatures with one call shape generate the same guard and the same
@@ -1028,11 +1017,6 @@ public struct SeamSignature: Sendable {
 				hash.combine(field.access.spelledOnGeneratedDeclaration)
 			}
 		}
-	}
-
-	/// Each place by its site.
-	var holesBySite: [Hole.Site: Hole] {
-		Dictionary(holes.map { ($0.site, $0) }, uniquingKeysWith: { first, _ in first })
 	}
 
 	/// What settling a module's seams solves for: each parameter – its property, whether it is a pass-through, its
@@ -1226,12 +1210,6 @@ public struct SeamCall: Sendable {
 	public let scopeEnums: [SeamSignature.ScopeEnum]
 	/// The `SeamSignature.guardTypeName` of the signature the call was generated from.
 	public let guardTypeName: String
-	/// Whether the call is of the initializer only generated code calls, under its prefixed labels: the tier defers a
-	/// parameter, so a `LazilyInstantiated` the caller holds is created when the seam's tree first reads it.
-	public var callsGeneratedOnlyInitializer: Bool {
-		SeamSignature.tierHasGeneratedOnlyInitializer(taking: parameters)
-	}
-
 	/// The comment the call carries saying what to do when it does not compile.
 	public let comment: SeamCallComment
 	/// The parameters of the seam's signature the called tier does not take, which the call passes `nil` for: a caller
@@ -1345,8 +1323,9 @@ public struct SeamResolution: Sendable {
 		public let declaringModuleMockCondition: MockCondition
 	}
 
-	public init(currentModule: ModuleIdentity, currentModuleMockCondition: MockCondition = MockCondition("DEBUG"), generatedSeams: Set<TypeDescription>, foreignSeams: [TypeDescription: ForeignSeam], foreignPublicMocks: [TypeDescription: ForeignPublicMock] = [:], foreignDeclarationsSeenByModule: [String: ForeignDeclarations]? = nil, callersComputeFromTargetGraph: Bool = false, callersVisibleInstantiables: [TypeDescription: Instantiable]? = nil, callersVisiblePlainTypeDeclarations: [PlainTypeDeclaration] = [], carriesUnreadTypeComment: Bool = false) {
+	public init(currentModule: ModuleIdentity, currentModuleMockCondition: MockCondition = MockCondition("DEBUG"), generatedSeams: Set<TypeDescription>, foreignSeams: [TypeDescription: ForeignSeam], foreignPublicMocks: [TypeDescription: ForeignPublicMock] = [:], foreignDeclarationsSeenByModule: [String: ForeignDeclarations]? = nil, callersComputeFromTargetGraph: Bool = false, callersVisibleInstantiables: [TypeDescription: Instantiable]? = nil, callersVisiblePlainTypeDeclarations: [PlainTypeDeclaration] = [], carriesUnreadTypeComment: Bool = false, generatesPlainDependencyTreeInitializers: Bool = false) {
 		self.carriesUnreadTypeComment = carriesUnreadTypeComment
+		self.generatesPlainDependencyTreeInitializers = generatesPlainDependencyTreeInitializers
 		self.foreignDeclarationsSeenByModule = foreignDeclarationsSeenByModule
 		self.currentModule = currentModule
 		self.currentModuleMockCondition = currentModuleMockCondition
@@ -1451,6 +1430,12 @@ public struct SeamResolution: Sendable {
 	/// first-party module, and the types it does not read are another package's or a binary target's, which `package`
 	/// access does not reach.
 	public let carriesUnreadTypeComment: Bool
+	/// Whether each tier of the seams this module generates has a plain initializer for people beside the one generated
+	/// code calls: what this module's own `#SafeDIConfiguration` sets as `generatePlainDependencyTreeInitializers`.
+	/// Generated calls never call the plain initializer, so no signature, call or guard depends on this, and a nested
+	/// resolution, which computes another module's seams, does not carry it. Only the check that rejects a hand-written
+	/// initializer callable with a tier's readable labels reads it, in the computation of this module's own seams.
+	public let generatesPlainDependencyTreeInitializers: Bool
 
 	/// Whether any seam is treated as one, which is when the dependency tree generator builds a second map of scopes.
 	public var isEmpty: Bool {

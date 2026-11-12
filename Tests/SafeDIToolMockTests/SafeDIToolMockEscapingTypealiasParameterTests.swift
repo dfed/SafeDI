@@ -772,7 +772,9 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		extension Screen {
-		    public convenience init(onTap: @escaping OnTap) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_onTap onTap: @escaping OnTap) {
 		        let child = Child(onTap: onTap)
 		        self.init(onTap: onTap, child: child)
 		    }
@@ -1012,10 +1014,8 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		#endif
 
 		extension Middle {
-		    public convenience init(onTap: @escaping OnTap) {
-		        self.init(__safeDI_onTap: onTap)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_onTap: @autoclosure @escaping () -> OnTap) {
 		        let onTap = LazilyInstantiated<OnTap>(__safeDI_onTap)
 		        func __safeDI_inner() -> Inner {

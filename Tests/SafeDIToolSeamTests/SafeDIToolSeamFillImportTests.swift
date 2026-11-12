@@ -75,7 +75,7 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		                    return tracker
 		                }
 		            }
-		            return OuterSeam(trackerBuilder: __safeDI_trackerBuilder_OuterSeam)
+		            return OuterSeam(__safeDI_trackerBuilder: __safeDI_trackerBuilder_OuterSeam)
 		        }
 		        let outerSeam: OuterSeam = __safeDI_outerSeam()
 		        self.init(outerSeam: outerSeam)
@@ -107,6 +107,7 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		}
 		#expect(generatedFiles == [fileName: Self.generatedFile(importing: ["Core", "Impl", "InnerSeamModule"], """
 		extension OuterSeam {
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
 		        func __safeDI_innerSeam() -> InnerSeam {
 		            _ = InnerSeam.__safeDI_InnerSeam_7C0A041991816766.self\(integration.seamCallComment(type: "InnerSeam", declaringModule: "InnerSeamModule"))
@@ -117,7 +118,7 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		                    return tracker
 		                }
 		            }
-		            return InnerSeam(trackerBuilder: __safeDI_trackerBuilder_InnerSeam)
+		            return InnerSeam(__safeDI_trackerBuilder: __safeDI_trackerBuilder_InnerSeam)
 		        }
 		        let innerSeam: InnerSeam = __safeDI_innerSeam()
 		        self.init(innerSeam: innerSeam)
@@ -162,7 +163,7 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		                    return tracker
 		                }
 		            }
-		            return OuterSeam(trackerBuilder: __safeDI_trackerBuilder_OuterSeam)
+		            return OuterSeam(__safeDI_trackerBuilder: __safeDI_trackerBuilder_OuterSeam)
 		        }
 		        let outerSeam: OuterSeam = __safeDI_outerSeam()
 		        self.init(outerSeam: outerSeam)

@@ -49,6 +49,27 @@ struct SafeDIConfigurationVisitorTests {
 	}
 
 	@Test
+	func extractConfiguration_returnsGeneratePlainDependencyTreeInitializersTrue_whenSetToTrue() {
+		let configuration = extractConfiguration(from: """
+		#SafeDIConfiguration(
+		    generatePlainDependencyTreeInitializers: true
+		)
+		""")
+		#expect(configuration.generatePlainDependencyTreeInitializers)
+	}
+
+	@Test
+	func extractConfiguration_returnsGeneratePlainDependencyTreeInitializersFalse_whenSetToFalseOrOmittedOrNotLiteral() {
+		for source in [
+			"#SafeDIConfiguration(generatePlainDependencyTreeInitializers: false)",
+			"#SafeDIConfiguration()",
+			"#SafeDIConfiguration(generatePlainDependencyTreeInitializers: someVariable)",
+		] {
+			#expect(!extractConfiguration(from: source).generatePlainDependencyTreeInitializers, "\(source)")
+		}
+	}
+
+	@Test
 	func extractConfiguration_returnsMockConditionalCompilationNil() {
 		let configuration = extractConfiguration(from: """
 		#SafeDIConfiguration(

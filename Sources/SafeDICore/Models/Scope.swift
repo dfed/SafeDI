@@ -947,17 +947,11 @@ private struct ScopeGeneratorUnderConstruction {
 		let holeArgumentsBySite = Dictionary(holeArguments.map { ($0.hole.site, $0) }, uniquingKeysWith: { first, _ in first })
 		let filledSites = Self.filledSites(of: holeArguments)
 		let enumsByKey = calledBuilders.enumsByKey
-		let callsGeneratedOnlyInitializer = scope.seamCall?.callsGeneratedOnlyInitializer ?? false
-		// A public mock's caller passes each builder by the leaf's argument of its label.
+		// A seam's caller calls the initializer only generated code calls, under its prefixed labels; a public mock's
+		// caller passes each builder by the leaf's argument of its label.
 		let isPublicMockCall = scope.publicMockCall != nil
 		return calledBuilders.builders.map { builder in
-			let label = if callsGeneratedOnlyInitializer {
-				builder.generatedOnlyArgumentLabel
-			} else if isPublicMockCall {
-				builder.label
-			} else {
-				builder.label.spelledAsArgumentLabel
-			}
+			let label = isPublicMockCall ? builder.label : builder.generatedOnlyArgumentLabel
 			switch builder.kind {
 			case let .staged(site):
 				guard let holeArgument = holeArgumentsBySite[site] else { return .init(label: label, value: "") }

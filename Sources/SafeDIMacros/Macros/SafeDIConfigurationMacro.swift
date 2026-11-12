@@ -48,6 +48,10 @@ public struct SafeDIConfigurationMacro: DeclarationMacro {
 				guard isStringLiteralOrNil(argument.expression) else {
 					throw SafeDIConfigurationError.mockConditionalCompilationNotStringLiteralOrNil
 				}
+			case SafeDIConfigurationVisitor.generatePlainDependencyTreeInitializersArgumentLabel:
+				guard BooleanLiteralExprSyntax(argument.expression) != nil else {
+					throw SafeDIConfigurationError.generatePlainDependencyTreeInitializersNotBooleanLiteral
+				}
 			case let unknownLabel:
 				throw SafeDIConfigurationError.unexpectedArgument(unknownLabel)
 			}
@@ -95,6 +99,7 @@ public struct SafeDIConfigurationMacro: DeclarationMacro {
 		case additionalDirectoriesToIncludeNotStringLiteralArray
 		case additionalMocksToGenerateNotStringLiteralArray
 		case mockConditionalCompilationNotStringLiteralOrNil
+		case generatePlainDependencyTreeInitializersNotBooleanLiteral
 		case unexpectedUnlabeledArgument
 		case unexpectedArgument(String)
 
@@ -108,10 +113,12 @@ public struct SafeDIConfigurationMacro: DeclarationMacro {
 				"The `\(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel)` argument must be an array of string literals."
 			case .mockConditionalCompilationNotStringLiteralOrNil:
 				"The `\(SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel)` argument must be a string literal or `nil`."
+			case .generatePlainDependencyTreeInitializersNotBooleanLiteral:
+				"The `\(SafeDIConfigurationVisitor.generatePlainDependencyTreeInitializersArgumentLabel)` argument must be `true` or `false`."
 			case .unexpectedUnlabeledArgument:
-				"#\(SafeDIConfigurationVisitor.macroName) does not accept unlabeled arguments. Label each argument: `\(SafeDIConfigurationVisitor.additionalImportedModulesArgumentLabel)`, `\(SafeDIConfigurationVisitor.additionalDirectoriesToIncludeArgumentLabel)`, `\(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel)`, or `\(SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel)`."
+				"#\(SafeDIConfigurationVisitor.macroName) does not accept unlabeled arguments. Label each argument: `\(SafeDIConfigurationVisitor.additionalImportedModulesArgumentLabel)`, `\(SafeDIConfigurationVisitor.additionalDirectoriesToIncludeArgumentLabel)`, `\(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel)`, `\(SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel)`, or `\(SafeDIConfigurationVisitor.generatePlainDependencyTreeInitializersArgumentLabel)`."
 			case let .unexpectedArgument(label):
-				"#\(SafeDIConfigurationVisitor.macroName) does not accept an argument labeled `\(label)`. It accepts `\(SafeDIConfigurationVisitor.additionalImportedModulesArgumentLabel)`, `\(SafeDIConfigurationVisitor.additionalDirectoriesToIncludeArgumentLabel)`, `\(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel)`, and `\(SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel)`."
+				"#\(SafeDIConfigurationVisitor.macroName) does not accept an argument labeled `\(label)`. It accepts `\(SafeDIConfigurationVisitor.additionalImportedModulesArgumentLabel)`, `\(SafeDIConfigurationVisitor.additionalDirectoriesToIncludeArgumentLabel)`, `\(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel)`, `\(SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel)`, and `\(SafeDIConfigurationVisitor.generatePlainDependencyTreeInitializersArgumentLabel)`."
 			}
 		}
 	}

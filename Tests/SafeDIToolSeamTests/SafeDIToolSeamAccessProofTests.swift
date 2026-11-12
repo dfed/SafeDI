@@ -110,10 +110,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			""",
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
-			    public init(analytics: Analytics?) {
-			        self.init(__safeDI_analytics: analytics)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_analytics: @autoclosure @escaping () -> Analytics?) {
 			        let analytics = LazilyInstantiated<Analytics?>(__safeDI_analytics)
 			        let badge = Badge(analytics: analytics.instance)
@@ -152,14 +150,13 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			""",
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
 			        self.init(__safeDI_token: nil)
 			    }
 
-			    internal init(token: Token?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    internal init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        let badge = Badge(token: token.instance)
@@ -269,10 +266,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		let releaseOutput = try await executeSafeDIToolMultiModuleTest(modules: modules(isReleaseConfiguration: true), integration: integration, filesToDelete: &filesToDelete)
 		let seamFile = generatedFileHeader + """
 		extension Service {
-		    public init(token: Token) {
-		        self.init(__safeDI_token: token)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 		        let token = LazilyInstantiated<Token>(__safeDI_token)
 		        let badge = Badge(token: token.instance)
@@ -311,10 +306,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
-			    public init(token: Token) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        let badge = Badge(token: token.instance)
@@ -363,10 +356,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			#endif
 
 			extension Service {
-			    public init(launchDate: Date, names: [String], retries: Int) {
-			        self.init(__safeDI_launchDate: launchDate, __safeDI_names: names, __safeDI_retries: retries)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_launchDate: @autoclosure @escaping () -> Date, __safeDI_names: @autoclosure @escaping () -> [String], __safeDI_retries: @autoclosure @escaping () -> Int) {
 			        let launchDate = LazilyInstantiated<Date>(__safeDI_launchDate)
 			        let names = LazilyInstantiated<[String]>(__safeDI_names)
@@ -444,10 +435,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		func seamFile(consumerPath: String) -> String {
 			generatedFileHeader + """
 			extension Screen {
-			    public init(session: Session) {
-			        self.init(__safeDI_session: session)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_session: @autoclosure @escaping () -> Session) {
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        func __safeDI_consumer() -> Consumer {
@@ -508,10 +497,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(theme: Theme) {
-			        self.init(__safeDI_theme: theme)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_theme: @autoclosure @escaping () -> Theme) {
 			        let theme = LazilyInstantiated<Theme>(__safeDI_theme)
 			        let shelf: Shelf = Shelf.instantiate(theme: theme.instance)
@@ -562,10 +549,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
-			    public init(theme: Theme) {
-			        self.init(__safeDI_theme: theme)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_theme: @autoclosure @escaping () -> Theme) {
 			        let theme = LazilyInstantiated<Theme>(__safeDI_theme)
 			        let helper = Service.Helper(theme: theme.instance)
@@ -654,7 +639,9 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Checkout.Service {
-			    public init(theme: Theme) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_theme theme: Theme) {
 			        let badge = Badge()
 			        self.init(theme: theme, badge: badge)
 			    }
@@ -735,14 +722,13 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
 			        self.init(__safeDI_configuration: nil)
 			    }
 
-			    internal init(configuration: Configuration?) {
-			        self.init(__safeDI_configuration: configuration)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    internal init(__safeDI_configuration: @autoclosure @escaping () -> Configuration?) {
 			        let configuration = LazilyInstantiated<Configuration?>(__safeDI_configuration)
 			        let badge = Badge(configuration: configuration.instance)
@@ -802,10 +788,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Token, session: Session) {
-			        self.init(__safeDI_token: token, __safeDI_session: session)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_token token: Token, __safeDI_session: @autoclosure @escaping () -> Session) {
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        let detail = Detail(session: session.instance)
@@ -879,22 +863,20 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Feature.swift": generatedFileHeader + """
 			extension Service {
-			    public init(flag: Flag?) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_flag flag: Flag?) {
 			        self.init(__safeDI_flag: flag, __safeDI_session: nil, __safeDI_theme: nil)
 			    }
 
-			    package init(flag: Flag?, session: Session?, theme: Theme?) {
-			        self.init(__safeDI_flag: flag, __safeDI_session: session, __safeDI_theme: theme)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    package init(__safeDI_flag flag: Flag?, __safeDI_session: @autoclosure @escaping () -> Session?, __safeDI_theme: @autoclosure @escaping () -> Theme?) {
 			        self.init(__safeDI_flag: flag, __safeDI_session: __safeDI_session(), __safeDI_theme: __safeDI_theme(), __safeDI_token: nil)
 			    }
 
-			    internal init(flag: Flag?, session: Session?, theme: Theme?, token: Token?) {
-			        self.init(__safeDI_flag: flag, __safeDI_session: session, __safeDI_theme: theme, __safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    internal init(__safeDI_flag flag: Flag?, __safeDI_session: @autoclosure @escaping () -> Session?, __safeDI_theme: @autoclosure @escaping () -> Theme?, __safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let session = LazilyInstantiated<Session?>(__safeDI_session)
 			        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
@@ -1046,10 +1028,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
-			    public init(theme: Theme) {
-			        self.init(__safeDI_theme: theme)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_theme: @autoclosure @escaping () -> Theme) {
 			        let theme = LazilyInstantiated<Theme>(__safeDI_theme)
 			        let deep = Service.Helper.Deep(theme: theme.instance)
@@ -1100,10 +1080,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
-			    public init(theme: Theme) {
-			        self.init(__safeDI_theme: theme)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_theme: @autoclosure @escaping () -> Theme) {
 			        let theme = LazilyInstantiated<Theme>(__safeDI_theme)
 			        let helper = Service.Helper(theme: theme.instance)
@@ -1156,14 +1134,13 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#endif
 
 		extension Service {
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
 		        self.init(__safeDI_theme: nil)
 		    }
 
-		    internal init(theme: Hub.Theme?) {
-		        self.init(__safeDI_theme: theme)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    internal init(__safeDI_theme: @autoclosure @escaping () -> Hub.Theme?) {
 		        let theme = LazilyInstantiated<Hub.Theme?>(__safeDI_theme)
 		        let badge = Badge(theme: theme.instance)
@@ -1276,14 +1253,13 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
 			        self.init(__safeDI_token: nil)
 			    }
 
-			    internal init(token: Token?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    internal init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        let badge = Badge(token: token.instance)
@@ -1323,14 +1299,13 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		)
 		#expect(output.dependencyTreeFiles["Service+SafeDI.swift"] == generatedFileHeader + """
 		extension Service {
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
 		        self.init(__safeDI_key: nil)
 		    }
 
-		    internal init(key: Key?) {
-		        self.init(__safeDI_key: key)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    internal init(__safeDI_key: @autoclosure @escaping () -> Key?) {
 		        let key = LazilyInstantiated<Key?>(__safeDI_key)
 		        let badge = Badge(key: key.instance)
@@ -1366,14 +1341,13 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		)
 		#expect(output.dependencyTreeFiles["Service+SafeDI.swift"] == generatedFileHeader + """
 		extension Service {
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
 		        self.init(__safeDI_key: nil)
 		    }
 
-		    internal init(key: Key?) {
-		        self.init(__safeDI_key: key)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    internal init(__safeDI_key: @autoclosure @escaping () -> Key?) {
 		        let key = LazilyInstantiated<Key?>(__safeDI_key)
 		        let badge = Badge(key: key.instance)
@@ -1449,14 +1423,13 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
 			        self.init(__safeDI_auth: nil)
 			    }
 
-			    internal init(auth: (any (Auth & Sendable))?) {
-			        self.init(__safeDI_auth: auth)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    internal init(__safeDI_auth: @autoclosure @escaping () -> (any (Auth & Sendable))?) {
 			        let auth = LazilyInstantiated<(any (Auth & Sendable))?>(__safeDI_auth)
 			        let badge = Badge(auth: auth.instance)
@@ -1484,14 +1457,13 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
 			        self.init(__safeDI_palette: nil)
 			    }
 
-			    internal init(palette: [String: Theme]?) {
-			        self.init(__safeDI_palette: palette)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    internal init(__safeDI_palette: @autoclosure @escaping () -> [String: Theme]?) {
 			        let palette = LazilyInstantiated<[String: Theme]?>(__safeDI_palette)
 			        let badge = Badge(palette: palette.instance)
@@ -1521,14 +1493,13 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
 			        self.init(__safeDI_values: nil)
 			    }
 
-			    internal init(values: [3 of Int]?) {
-			        self.init(__safeDI_values: values)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    internal init(__safeDI_values: @autoclosure @escaping () -> [3 of Int]?) {
 			        let values = LazilyInstantiated<[3 of Int]?>(__safeDI_values)
 			        let badge = Badge(values: values.instance)
@@ -2121,11 +2092,14 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	#endif
 
 	extension Service {
+	    /// Code you write and code SafeDI generates can both call this initializer.
 	    public init() {
-	        self.init(theme: nil)
+	        self.init(__safeDI_theme: nil)
 	    }
 
-	    package init(theme: Hub.Theme?) {
+	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+	    package init(__safeDI_theme theme: Hub.Theme?) {
 	        let badge = Badge()
 	        self.init(theme: theme, badge: badge)
 	    }
@@ -2207,7 +2181,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		        func __safeDI_shellBuilder(theme: Hub.Theme) -> Shell {
 		            func __safeDI_service() -> Service {
 		                _ = Service.__safeDI_Service_9D6698F9EB89E77B.self
-		                return Service(theme: theme)
+		                return Service(__safeDI_theme: theme)
 		            }
 		            let service: Service = __safeDI_service()
 		            return Shell(theme: theme, service: service)
@@ -2329,14 +2303,13 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			#endif
 
 			extension Service {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
 			        self.init(__safeDI_theme: nil)
 			    }
 
-			    package init(theme: Hub.Theme?) {
-			        self.init(__safeDI_theme: theme)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    package init(__safeDI_theme: @autoclosure @escaping () -> Hub.Theme?) {
 			        let theme = LazilyInstantiated<Hub.Theme?>(__safeDI_theme)
 			        let badge = Badge(theme: theme.instance)
@@ -2559,14 +2532,13 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#endif
 
 		extension Service {
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
 		        self.init(__safeDI_theme: nil)
 		    }
 
-		    package init(theme: Hub.Theme?) {
-		        self.init(__safeDI_theme: theme)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    package init(__safeDI_theme: @autoclosure @escaping () -> Hub.Theme?) {
 		        let theme = LazilyInstantiated<Hub.Theme?>(__safeDI_theme)
 		        let badge = Badge(theme: theme.instance)
@@ -2588,6 +2560,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			#endif
 
 			extension Shell {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
 			        func __safeDI_service() -> Service {
 			            _ = Service.__safeDI_Service_93E737BA887EDA11.self // If this line does not compile, compile the code SafeDI generates for module Base into Base: under Bazel, add Base's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
@@ -2670,14 +2643,13 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			#endif
 
 			extension Shell {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
 			        self.init(__safeDI_session: nil, __safeDI_theme: nil)
 			    }
 
-			    package init(session: Session?, theme: Theme?) {
-			        self.init(__safeDI_session: session, __safeDI_theme: theme)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    package init(__safeDI_session: @autoclosure @escaping () -> Session?, __safeDI_theme: @autoclosure @escaping () -> Theme?) {
 			        let session = LazilyInstantiated<Session?>(__safeDI_session)
 			        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
@@ -3081,18 +3053,14 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			#endif
 
 			extension Service {
-			    public init(analytics: Analytics) {
-			        self.init(__safeDI_analytics: analytics)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_analytics: @autoclosure @escaping () -> Analytics) {
 			        self.init(__safeDI_analytics: __safeDI_analytics(), __safeDI_handler: nil, __safeDI_theme: nil)
 			    }
 
-			    package init(analytics: Analytics, handler: Handler?, theme: Theme?) {
-			        self.init(__safeDI_analytics: analytics, __safeDI_handler: handler, __safeDI_theme: theme)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    package init(__safeDI_analytics: @autoclosure @escaping () -> Analytics, __safeDI_handler: @autoclosure @escaping () -> Handler?, __safeDI_theme: @autoclosure @escaping () -> Theme?) {
 			        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 			        let handler = LazilyInstantiated<Handler?>(__safeDI_handler)
@@ -3214,10 +3182,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
-			    public init(token: Token) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        let badge = Badge(token: token.instance)
@@ -3309,10 +3275,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Feature.swift": generatedFileHeader + """
 			extension Service {
-			    public init(token: Token) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        let badge = Badge(token: token.instance)
@@ -3587,8 +3551,9 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		        }
 		    }
 
-		    package convenience init(shared: SharedThing, feedServiceBuilder: @escaping (SafeDIScope_FeedService) -> FeedService) {
-		        let __safeDI_feedServiceBuilder = feedServiceBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: @escaping (SafeDIScope_FeedService) -> FeedService) {
 		        func __safeDI_store() -> FeedStore {
 		            let formatter = FeedFormatter()
 		            return FeedStore(shared: shared, formatter: formatter)
@@ -3618,7 +3583,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		                    return service
 		                }
 		            }
-		            return FeedScreen(shared: shared, feedServiceBuilder: __safeDI_feedServiceBuilder_FeedScreen)
+		            return FeedScreen(__safeDI_shared: shared, __safeDI_feedServiceBuilder: __safeDI_feedServiceBuilder_FeedScreen)
 		        }
 		        let feed: FeedScreen = __safeDI_feed()
 		        self.init(shared: shared, feed: feed)
@@ -3671,10 +3636,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + Self.importLines("Core") + """
 		extension Service {
-		\(Self.unreadTypeComment(["Theme"], integration))    public init(theme: any Theme) {
-		        self.init(__safeDI_theme: theme)
-		    }
-
+		\(Self.unreadTypeComment(["Theme"], integration))    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_theme: @autoclosure @escaping () -> any Theme) {
 		        let theme = LazilyInstantiated<any Theme>(__safeDI_theme)
 		        let badge = Badge(theme: theme.instance)
@@ -3723,10 +3686,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		let expectedFeatureFileName = integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift"
 		let expectedFeatureFile: String = [generatedFileHeader, String(Self.importLines("Core").dropLast()), Self.importLines("Other"), """
 		extension Service {
-		\(Self.unreadTypeComment(["Other.Theme"], integration))    public init(theme: any Other.Theme) {
-		        self.init(__safeDI_theme: theme)
-		    }
-
+		\(Self.unreadTypeComment(["Other.Theme"], integration))    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_theme: @autoclosure @escaping () -> any Other.Theme) {
 		        let theme = LazilyInstantiated<any Other.Theme>(__safeDI_theme)
 		        let badge = Badge(theme: theme.instance)
@@ -3760,10 +3721,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + Self.importLines("Core") + """
 		extension Service {
-		\(Self.unreadTypeComment(["Theme"], integration))    public init(theme: any Theme) {
-		        self.init(__safeDI_theme: theme)
-		    }
-
+		\(Self.unreadTypeComment(["Theme"], integration))    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_theme: @autoclosure @escaping () -> any Theme) {
 		        let theme = LazilyInstantiated<any Theme>(__safeDI_theme)
 		        let badge = Badge(theme: theme.instance)
@@ -3786,7 +3745,9 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.profileModules(seamAttribute: "@Instantiable(generateDependencyTree: true)", userDeclaration: Self.publicUser), integration: integration, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "ProfileView+SafeDI.swift": generatedFileHeader + """
 		extension ProfileView {
-		    public convenience init(user: User) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_user user: User) {
 		        let store = ProfileStore()
 		        self.init(user: user, store: store)
 		    }
@@ -3807,7 +3768,9 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.profileModules(seamAttribute: "@Instantiable(generateDependencyTree: true)", userDeclaration: platformConditionedDeclaration(Self.publicUser)), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension ProfileView {
-		    public convenience init(user: User) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_user user: User) {
 		        let store = ProfileStore()
 		        self.init(user: user, store: store)
 		    }
@@ -3830,7 +3793,9 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// Split for Swift 6.2 on Linux, which times out type-checking chains like this one.
 		let expectedFeatureFile: String = [generatedFileHeader, String(Self.importLines("Core").dropLast()), Self.importLines("SafeDI"), """
 		extension Screen {
-		    package init(theme: Theme) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_theme theme: Theme) {
 		        let store = Store()
 		        self.init(theme: theme, store: store)
 		    }
@@ -3848,7 +3813,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		        let theme: Theme = ThemeProvider()
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_FE0EC2F5EC57A9C9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Screen(theme: theme)
+		            return Screen(__safeDI_theme: theme)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(theme: theme, screen: screen)
@@ -3951,7 +3916,9 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// Split for Swift 6.2 on Linux, which times out type-checking chains like this one.
 		let expectedSubprojectFile: String = [generatedFileHeader, String(Self.importLines("Foundation").dropLast()), Self.importLines("SafeDI"), """
 		extension ProfileScreen {
-		    package init(user: User) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_user user: User) {
 		        let store = ProfileStore(user: user)
 		        self.init(user: user, store: store)
 		    }
@@ -4393,10 +4360,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#endif
 
 		extension Service {
-		    package init(token: Rack.Token) {
-		        self.init(__safeDI_token: token)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    package init(__safeDI_token: @autoclosure @escaping () -> Rack.Token) {
 		        let token = LazilyInstantiated<Rack.Token>(__safeDI_token)
 		        let badge = Badge(token: token.instance)
@@ -4438,7 +4403,9 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#endif
 
 		extension ProfileView {
-		    package convenience init(user: Rack.User) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package convenience init(__safeDI_user user: Rack.User) {
 		        let store = ProfileStore()
 		        self.init(user: user, store: store)
 		    }
@@ -4472,10 +4439,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#endif
 
 		extension Service {
-		    public init(token: Rack.Token) {
-		        self.init(__safeDI_token: token)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_token: @autoclosure @escaping () -> Rack.Token) {
 		        let token = LazilyInstantiated<Rack.Token>(__safeDI_token)
 		        let badge = Badge(token: token.instance)
@@ -4516,10 +4481,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 
 		extension Service {
 		    // SafeDI counts `Rack` as `public`: no module it reads declares it narrower. If `Rack` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
-		    public init(token: Rack.Token) {
-		        self.init(__safeDI_token: token)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_token: @autoclosure @escaping () -> Rack.Token) {
 		        let token = LazilyInstantiated<Rack.Token>(__safeDI_token)
 		        let badge = Badge(token: token.instance)
@@ -5132,14 +5095,13 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	/// plain `Theme` only if available: a `public` tier that passes `nil`, and a `package` one that takes it.
 	private static let twoTierService = """
 	extension Service {
+	    /// Code you write and code SafeDI generates can both call this initializer.
 	    public init() {
 	        self.init(__safeDI_theme: nil)
 	    }
 
-	    package init(theme: Theme?) {
-	        self.init(__safeDI_theme: theme)
-	    }
-
+	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 	    package init(__safeDI_theme: @autoclosure @escaping () -> Theme?) {
 	        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
 	        let badge = Badge(theme: theme.instance)

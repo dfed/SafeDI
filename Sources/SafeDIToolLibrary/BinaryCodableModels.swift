@@ -417,6 +417,7 @@ extension SafeDIConfiguration: BinarySchemaMember {
 				BinaryLayoutField("additionalDirectoriesToInclude", \.additionalDirectoriesToInclude),
 				BinaryLayoutField("additionalMocksToGenerate", \.additionalMocksToGenerate),
 				BinaryLayoutField("mockConditionalCompilation", \.mockConditionalCompilation),
+				BinaryLayoutField("generatePlainDependencyTreeInitializers", \.generatePlainDependencyTreeInitializers),
 				BinaryLayoutField("declarationLocation", \.declarationLocation),
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
 			],
@@ -430,6 +431,7 @@ extension SafeDIConfiguration: BinarySchemaMember {
 			additionalDirectoriesToInclude: reader.read(),
 			additionalMocksToGenerate: reader.read(),
 			mockConditionalCompilation: reader.read() as String?,
+			generatePlainDependencyTreeInitializers: reader.read(),
 			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
 		)
 		sourceFilePath = try reader.read() as String?
@@ -440,6 +442,7 @@ extension SafeDIConfiguration: BinarySchemaMember {
 		writer.write(additionalDirectoriesToInclude)
 		writer.write(additionalMocksToGenerate)
 		writer.write(mockConditionalCompilation)
+		writer.write(generatePlainDependencyTreeInitializers)
 		writer.write(declarationLocation)
 		writer.write(sourceFilePath)
 	}

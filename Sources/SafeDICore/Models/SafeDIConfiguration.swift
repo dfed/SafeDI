@@ -25,6 +25,10 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 	/// The types must be known to the dependency tree (i.e., imported via module info).
 	public let additionalMocksToGenerate: [String]
 	public let mockConditionalCompilation: String?
+	/// Whether each initializer generated for a type the module declares with `generateDependencyTree: true` has, beside
+	/// the one generated code calls, a plain one for code a person writes. It decides only the code the module generates
+	/// for its own types, so a module that reads another module's `.safedi` file never reads it.
+	public let generatePlainDependencyTreeInitializers: Bool
 	/// The source file path where this configuration was declared.
 	/// Set during parsing to scope configuration to the current module.
 	public var sourceFilePath: String?
@@ -37,12 +41,29 @@ public struct SafeDIConfiguration: Codable, Equatable, Sendable {
 		additionalDirectoriesToInclude: [String],
 		additionalMocksToGenerate: [String] = [],
 		mockConditionalCompilation: String? = "DEBUG",
+		generatePlainDependencyTreeInitializers: Bool = false,
 		declarationLocation: Dependency.DeclarationLocation? = nil,
 	) {
 		self.additionalImportedModules = additionalImportedModules
 		self.additionalDirectoriesToInclude = additionalDirectoriesToInclude
 		self.additionalMocksToGenerate = additionalMocksToGenerate
 		self.mockConditionalCompilation = mockConditionalCompilation
+		self.generatePlainDependencyTreeInitializers = generatePlainDependencyTreeInitializers
 		self.declarationLocation = declarationLocation
+	}
+
+	/// This configuration as a module's `.safedi` file holds it, with `generatePlainDependencyTreeInitializers` at its
+	/// default: no reader of the file reads it, so turning it on or off leaves the file's bytes, and the builds of the
+	/// modules that read the file, as they were.
+	public var asHeldByModuleInfoFile: SafeDIConfiguration {
+		var configuration = SafeDIConfiguration(
+			additionalImportedModules: additionalImportedModules,
+			additionalDirectoriesToInclude: additionalDirectoriesToInclude,
+			additionalMocksToGenerate: additionalMocksToGenerate,
+			mockConditionalCompilation: mockConditionalCompilation,
+			declarationLocation: declarationLocation,
+		)
+		configuration.sourceFilePath = sourceFilePath
+		return configuration
 	}
 }

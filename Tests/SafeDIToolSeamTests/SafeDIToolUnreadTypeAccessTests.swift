@@ -55,7 +55,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window"], tiers: """
-		    public init(window: Window) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_window window: Window) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
 		    }
@@ -75,10 +77,8 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window"], tiers: """
-		    public init(window: Window) {
-		        self.init(__safeDI_window: window)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_window: @autoclosure @escaping () -> Window) {
 		        let window = LazilyInstantiated<Window>(__safeDI_window)
 		        let badge = Badge(window: window.instance)
@@ -99,7 +99,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Image", "Window"], tiers: """
-		    public init(image: Image, window: Window) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_image image: Image, __safeDI_window window: Window) {
 		        let cache = Cache()
 		        self.init(image: image, window: window, cache: cache)
 		    }
@@ -117,7 +119,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window"], tiers: """
-		    public init(window: Window?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_window window: Window?) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
 		    }
@@ -135,7 +139,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window"], imports: ["Kit", "SafeDI"], tiers: """
-		    public init(windowBuilder: ErasedInstantiator<(), Window>) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_windowBuilder windowBuilder: ErasedInstantiator<(), Window>) {
 		        let cache = Cache()
 		        self.init(windowBuilder: windowBuilder, cache: cache)
 		    }
@@ -153,7 +159,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window.Scene"], tiers: """
-		    public init(scene: Window.Scene) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_scene scene: Window.Scene) {
 		        let cache = Cache()
 		        self.init(scene: scene, cache: cache)
 		    }
@@ -175,7 +183,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Image", "Window"], tiers: """
-		    public init(images: [Image], render: @escaping (Image) -> Void, pair: (Image, Int), kind: Window.Type) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_images images: [Image], __safeDI_render render: @escaping (Image) -> Void, __safeDI_pair pair: (Image, Int), __safeDI_kind kind: Window.Type) {
 		        let cache = Cache()
 		        self.init(images: images, render: render, pair: pair, kind: kind, cache: cache)
 		    }
@@ -236,7 +246,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Renderer"], tiers: """
-		    public init(renderer: any Renderer, sendableRenderer: any (Renderer & Sendable)) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_renderer renderer: any Renderer, __safeDI_sendableRenderer sendableRenderer: any (Renderer & Sendable)) {
 		        let cache = Cache()
 		        self.init(renderer: renderer, sendableRenderer: sendableRenderer, cache: cache)
 		    }
@@ -254,7 +266,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Kit.Window"], tiers: """
-		    public init(window: Kit.Window) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_window window: Kit.Window) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
 		    }
@@ -277,7 +291,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], tiers: """
-		    package init(store: Store) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_store store: Store) {
 		        let cache = Cache()
 		        self.init(store: store, cache: cache)
 		    }
@@ -305,7 +321,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window"], imports: ["Kit", "SafeDI"], tiers: """
-		    public init(window: Window) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_window window: Window) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
 		    }
@@ -324,7 +342,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window"], tiers: """
-		    public init(badge: Window.Badge) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_badge badge: Window.Badge) {
 		        let cache = Cache()
 		        self.init(badge: badge, cache: cache)
 		    }
@@ -371,8 +391,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        }
 		    }
 
-		    public init(image: Image, userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
-		        let __safeDI_userServiceBuilder = userServiceBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_image image: Image, __safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
 		        let cache = Cache()
 		        let service: any UserService = __safeDI_userServiceBuilder(.service(SafeDIScope_UserService.service_Values(image: image, cache: cache)))
 		        self.init(image: image, service: service, cache: cache)
@@ -405,8 +426,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    {COMMENT}
-		    public init(rendererBuilder: @escaping (SafeDIScope_Renderer) -> any Renderer) {
-		        let __safeDI_rendererBuilder = rendererBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_rendererBuilder: @escaping (SafeDIScope_Renderer) -> any Renderer) {
 		        let cache = Cache()
 		        let renderer: any Renderer = __safeDI_rendererBuilder(.renderer(SafeDIScope_Renderer.renderer_Values(cache: cache)))
 		        self.init(renderer: renderer, cache: cache)
@@ -434,7 +456,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Store"], tiers: """
-		    public init(store: Store) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_store store: Store) {
 		        let cache = Cache()
 		        self.init(store: store, cache: cache)
 		    }
@@ -617,7 +641,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], tiers: """
-		    public init(mode: ChatService.TurnTakingMode) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_mode mode: ChatService.TurnTakingMode) {
 		        let cache = Cache()
 		        self.init(mode: mode, cache: cache)
 		    }
@@ -677,11 +703,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(config: nil, id: nil)
+		        self.init(__safeDI_config: nil, __safeDI_id: nil)
 		    }
 
-		    package init(config: Space.Config?, id: Space.ID?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_config config: Space.Config?, __safeDI_id id: Space.ID?) {
 		        let cache = Cache()
 		        self.init(config: config, id: id, cache: cache)
 		    }
@@ -721,7 +750,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window"], tiers: """
-		    public init(badge: Window.Badge) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_badge badge: Window.Badge) {
 		        let cache = Cache()
 		        self.init(badge: badge, cache: cache)
 		    }
@@ -770,11 +801,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: ["Kit", "SafeDI"], tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(ledger: nil, label: nil)
+		        self.init(__safeDI_ledger: nil, __safeDI_label: nil)
 		    }
 
-		    package init(ledger: Shelf.Ledger?, label: Shelf.Label?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_ledger ledger: Shelf.Ledger?, __safeDI_label label: Shelf.Label?) {
 		        let cache = Cache()
 		        self.init(ledger: ledger, label: label, cache: cache)
 		    }
@@ -797,11 +831,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: ["Kit", "SafeDI"], tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(ledger: nil)
+		        self.init(__safeDI_ledger: nil)
 		    }
 
-		    package init(ledger: Space.Ledger?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_ledger ledger: Space.Ledger?) {
 		        let cache = Cache()
 		        self.init(ledger: ledger, cache: cache)
 		    }
@@ -824,7 +861,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window.Scene"], imports: ["Kit", "SafeDI"], tiers: """
-		    public init(ledger: Window.Scene.Ledger) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_ledger ledger: Window.Scene.Ledger) {
 		        let cache = Cache()
 		        self.init(ledger: ledger, cache: cache)
 		    }
@@ -845,7 +884,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], tiers: """
-		    public init(userID: UserID) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_userID userID: UserID) {
 		        let cache = Cache()
 		        self.init(userID: userID, cache: cache)
 		    }
@@ -889,11 +930,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(token: nil)
+		        self.init(__safeDI_token: nil)
 		    }
 
-		    package init(token: Token?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_token token: Token?) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
 		    }
@@ -938,7 +982,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], tiers: """
-		    public init(id: Space.ID) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_id id: Space.ID) {
 		        let cache = Cache()
 		        self.init(id: id, cache: cache)
 		    }
@@ -1075,7 +1121,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], tiers: """
-		    public init(result: Swift.Result<Int, any Error>) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_result result: Swift.Result<Int, any Error>) {
 		        let cache = Cache()
 		        self.init(result: result, cache: cache)
 		    }
@@ -1148,7 +1196,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["DateInterval"], imports: ["Foundation", "Logs"], tiers: """
-		    public init(interval: DateInterval) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_interval interval: DateInterval) {
 		        let cache = Cache()
 		        self.init(interval: interval, cache: cache)
 		    }
@@ -1207,7 +1257,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Paints"], tiers: """
-		    public init(theme: Theme?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_theme theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -1231,7 +1283,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Brush", "Canvas", "Image", "Palette", "Window", "Window.Scene"], tiers: """
-		    public init(zebra: Canvas, apple: Window.Scene, mango: Brush, kiwi: Image, berry: Palette, fig: Window, date: [Brush]) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_zebra zebra: Canvas, __safeDI_apple apple: Window.Scene, __safeDI_mango mango: Brush, __safeDI_kiwi kiwi: Image, __safeDI_berry berry: Palette, __safeDI_fig fig: Window, __safeDI_date date: [Brush]) {
 		        let cache = Cache()
 		        self.init(zebra: zebra, apple: apple, mango: mango, kiwi: kiwi, berry: berry, fig: fig, date: date, cache: cache)
 		    }
@@ -1253,11 +1307,15 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window"], tiers: """
-		    public init(window: Window) {
-		        self.init(window: window, token: nil)
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_window window: Window) {
+		        self.init(__safeDI_window: window, __safeDI_token: nil)
 		    }
 
-		    package init(window: Window, token: Token?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_window window: Window, __safeDI_token token: Token?) {
 		        let cache = Cache()
 		        self.init(window: window, token: token, cache: cache)
 		    }
@@ -1282,11 +1340,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: ["Core"], tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(palette: nil)
+		        self.init(__safeDI_palette: nil)
 		    }
 
-		    package init(palette: Palette?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_palette palette: Palette?) {
 		        let cache = Cache()
 		        self.init(palette: palette, cache: cache)
 		    }
@@ -1310,11 +1371,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Outer.Inner"])
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: ["Core"], tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(inner: nil)
+		        self.init(__safeDI_inner: nil)
 		    }
 
-		    package init(inner: Outer.Inner?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_inner inner: Outer.Inner?) {
 		        let cache = Cache()
 		        self.init(inner: inner, cache: cache)
 		    }
@@ -1339,7 +1403,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.isEmpty == true)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Palette"], imports: ["Core"], tiers: """
-		    public init(palette: Palette) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_palette palette: Palette) {
 		        let cache = Cache()
 		        self.init(palette: palette, cache: cache)
 		    }
@@ -1389,11 +1455,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(kind: nil)
+		        self.init(__safeDI_kind: nil)
 		    }
 
-		    package init(kind: `Protocol`?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_kind kind: `Protocol`?) {
 		        let cache = Cache()
 		        self.init(kind: kind, cache: cache)
 		    }
@@ -1417,11 +1486,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: ["Core"], tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(commented: nil)
+		        self.init(__safeDI_commented: nil)
 		    }
 
-		    package init(commented: Commented?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_commented commented: Commented?) {
 		        let cache = Cache()
 		        self.init(commented: commented, cache: cache)
 		    }
@@ -1441,11 +1513,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(token: nil)
+		        self.init(__safeDI_token: nil)
 		    }
 
-		    package init(token: Token?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_token token: Token?) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
 		    }
@@ -1484,7 +1559,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: [], tiers: """
-		    public init(token: Token) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_token token: Token) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
 		    }
@@ -1503,7 +1580,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Token"], imports: [], tiers: """
-		    public init(token: Token) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_token token: Token) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
 		    }
@@ -1522,11 +1601,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: [], tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(token: nil)
+		        self.init(__safeDI_token: nil)
 		    }
 
-		    internal init(token: Token?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    internal init(__safeDI_token token: Token?) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
 		    }
@@ -1549,11 +1631,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.swiftPackagePlugin, comment: [], imports: ["Core"], assertions: Self.activeAssertion("FLAG"), tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(token: nil)
+		        self.init(__safeDI_token: nil)
 		    }
 
-		    package init(token: Token?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_token token: Token?) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
 		    }
@@ -1605,11 +1690,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], assertions: Self.activeAssertion("DEBUG"), tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(handler: nil)
+		        self.init(__safeDI_handler: nil)
 		    }
 
-		    internal init(handler: Handler?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    internal init(__safeDI_handler handler: Handler?) {
 		        let cache = Cache()
 		        self.init(handler: handler, cache: cache)
 		    }
@@ -1640,11 +1728,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.swiftPackagePlugin, comment: [], imports: ["Core"], tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(store: nil)
+		        self.init(__safeDI_store: nil)
 		    }
 
-		    package init(store: Store?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_store store: Store?) {
 		        let cache = Cache()
 		        self.init(store: store, cache: cache)
 		    }
@@ -1673,7 +1764,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window"], tiers: """
-		    public init(window: Window) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_window window: Window) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
 		    }
@@ -1681,15 +1774,13 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#expect(output.modules["Shell"]?.generatedFiles == ["Shell.swift": generatedFileHeader + Self.importLines(["Feature", "Kit"]) + """
 		extension Frame {
 		    \(Self.comment(["Window"]))
-		    public init(window: Window) {
-		        self.init(__safeDI_window: window)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_window: @autoclosure @escaping () -> Window) {
 		        let window = LazilyInstantiated<Window>(__safeDI_window)
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_564C5E6539CF6AA0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Screen(window: window.instance)
+		            return Screen(__safeDI_window: window.instance)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(screen: screen)
@@ -2017,7 +2108,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Image"], tiers: """
-		    public init(pair: Pair<Image>) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_pair pair: Pair<Image>) {
 		        let cache = Cache()
 		        self.init(pair: pair, cache: cache)
 		    }
@@ -2040,7 +2133,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window"], tiers: """
-		    public init(window: Window) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_window window: Window) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
 		    }
@@ -2065,10 +2160,8 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], tiers: """
-		    public init(buffer: [3 of Int]) {
-		        self.init(__safeDI_buffer: buffer)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_buffer: @autoclosure @escaping () -> [3 of Int]) {
 		        let buffer = LazilyInstantiated<[3 of Int]>(__safeDI_buffer)
 		        let badge = Badge(buffer: buffer.instance)
@@ -2288,7 +2381,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: integration, filesToDelete: &filesToDelete)
 		let assertions = integration == .swiftPackagePlugin ? Self.inactiveAssertion("FLAG") : ""
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Core", "Kit"], assertions: assertions, tiers: """
-		    public init(theme: Theme) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_theme theme: Theme) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -2311,7 +2406,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		let assertions = integration == .swiftPackagePlugin ? Self.inactiveAssertion("FLAG") : ""
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Core"], assertions: assertions, tiers: """
-		    public init(theme: Theme?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_theme theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -2334,11 +2431,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		let assertions = integration == .swiftPackagePlugin ? Self.activeAssertion("FLAG") : ""
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], assertions: assertions, tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(theme: nil)
+		        self.init(__safeDI_theme: nil)
 		    }
 
-		    package init(theme: Theme?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_theme theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -2368,29 +2468,37 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		let expected: [String: String] = switch conditions {
 		case ["A", "B"]:
 			Self.screenFiles(.moduleInfo, comment: [], assertions: Self.activeAssertion("A"), tiers: """
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
-			        self.init(theme: nil)
+			        self.init(__safeDI_theme: nil)
 			    }
 
-			    internal init(theme: Theme?) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    internal init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
 			""", guardHash: "2163FBB3C02B31CD")
 		case ["B"]:
 			Self.screenFiles(.moduleInfo, comment: [], assertions: Self.inactiveAssertion("A") + Self.activeAssertion("B"), tiers: """
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
-			        self.init(theme: nil)
+			        self.init(__safeDI_theme: nil)
 			    }
 
-			    package init(theme: Theme?) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    package init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
 			""", guardHash: "27F6F01DC5D0EF8E")
 		default:
 			Self.screenFiles(.moduleInfo, comment: [], assertions: Self.inactiveAssertion("A") + Self.inactiveAssertion("B"), tiers: """
-			    public init(theme: Theme?) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
@@ -2416,11 +2524,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], assertions: Self.activeAssertion("FLAG"), tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(theme: nil)
+		        self.init(__safeDI_theme: nil)
 		    }
 
-		    package init(theme: Theme?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_theme theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -2446,18 +2557,23 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		let expected = if isFlagReported {
 			Self.screenFiles(.moduleInfo, comment: [], assertions: Self.activeAssertion("FLAG"), tiers: """
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
-			        self.init(theme: nil)
+			        self.init(__safeDI_theme: nil)
 			    }
 
-			    package init(theme: Theme?) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    package init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
 			""", guardHash: "27F6F01DC5D0EF8E")
 		} else {
 			Self.screenFiles(.moduleInfo, comment: ["Theme"], assertions: Self.inactiveAssertion("FLAG"), tiers: """
-			    public init(theme: Theme?) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
@@ -2639,7 +2755,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Endpoint"], imports: ["Core"], assertions: Self.releaseEndpointAssertion(integration, isReleaseConfiguration: isReleaseConfiguration), tiers: """
-			    public init(endpoint: Endpoint) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_endpoint endpoint: Endpoint) {
 			        let cache = Cache()
 			        self.init(endpoint: endpoint, cache: cache)
 			    }
@@ -2662,7 +2780,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Endpoint"], imports: ["Core"], assertions: Self.releaseEndpointAssertion(integration, isReleaseConfiguration: isReleaseConfiguration), tiers: """
-			    public init(endpoint: Endpoint?) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_endpoint endpoint: Endpoint?) {
 			        let cache = Cache()
 			        self.init(endpoint: endpoint, cache: cache)
 			    }
@@ -2686,7 +2806,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], assertions: isReleaseConfiguration ? Self.activeAssertion("!DEBUG") : Self.inactiveAssertion("!DEBUG"), tiers: """
-			    public init(endpoint: Endpoint) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_endpoint endpoint: Endpoint) {
 			        let cache = Cache()
 			        self.init(endpoint: endpoint, cache: cache)
 			    }
@@ -2709,7 +2831,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Core"], tiers: """
-			    public init(theme: Theme?) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
@@ -2799,7 +2923,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				// The plugin reads `Core`'s file and asserts the decision a mention of `Theme` resolves by.
 				let assertions = integration == .swiftPackagePlugin ? (conditions.isEmpty ? Self.inactiveAssertion("FLAG") : Self.activeAssertion("FLAG")) : ""
 				let expectedFiles = conditions.isEmpty ? Self.packageThemeTiers(integration, assertions: assertions) : Self.screenFiles(integration, comment: ["Theme"], imports: ["Core"], assertions: assertions, tiers: """
-				    public init(theme: Theme?) {
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    public init(__safeDI_theme theme: Theme?) {
 				        let cache = Cache()
 				        self.init(theme: theme, cache: cache)
 				    }
@@ -2911,7 +3037,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], tiers: """
-			    public init(token: Token) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_token token: Token) {
 			        let cache = Cache()
 			        self.init(token: token, cache: cache)
 			    }
@@ -2940,7 +3068,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Theme"], imports: ["Core"], tiers: """
-			    public init(theme: Theme?) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
@@ -3037,7 +3167,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window"], imports: ["Core", "Kit"], tiers: """
-			    public init(window: Window) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_window window: Window) {
 			        let cache = Cache()
 			        self.init(window: window, cache: cache)
 			    }
@@ -3080,7 +3212,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Core"], tiers: """
-			    public init(theme: Theme?) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
@@ -3111,7 +3245,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], assertions: Self.activeAssertion("DEBUG"), tiers: """
-		    public init(token: Token) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_token token: Token) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
 		    }
@@ -3204,11 +3340,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		switch integration {
 		case .moduleInfo:
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], tiers: """
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
-			        self.init(theme: nil)
+			        self.init(__safeDI_theme: nil)
 			    }
 
-			    package init(theme: Theme?) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    package init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
@@ -3216,7 +3355,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			try expectEveryModuleCompiled(output)
 		case .swiftPackagePlugin:
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], assertions: Self.inactiveAssertion("FLAG"), tiers: """
-			    public init(theme: Theme?) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
 			    }
@@ -3243,7 +3384,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Token"], assertions: Self.inactiveAssertion("FLAG"), tiers: """
-		    public init(token: Token?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_token token: Token?) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
 		    }
@@ -3268,7 +3411,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window"], tiers: """
-		    public init(window: Window?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_window window: Window?) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
 		    }
@@ -3328,7 +3473,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + Self.inactiveAssertion("FLAG")])
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Theme"], imports: ["Core", "Kit"], tiers: """
-		    public init(theme: Theme) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_theme theme: Theme) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -3354,7 +3501,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		let assertions = integration == .swiftPackagePlugin ? Self.activeAssertion("DEBUG") : ""
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Paints"], assertions: assertions, tiers: """
-		    public init(theme: Theme) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_theme theme: Theme) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -3720,11 +3869,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	/// `Feature`'s generated files under `integration` for a seam that takes `theme: Theme?` on its `package` tier only.
 	private static func packageThemeTiers(_ integration: MultiModuleIntegration, assertions: String = "") -> [String: String] {
 		screenFiles(integration, comment: [], imports: ["Core"], assertions: assertions, tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(theme: nil)
+		        self.init(__safeDI_theme: nil)
 		    }
 
-		    package init(theme: Theme?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_theme theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -3735,11 +3887,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	/// only.
 	private static func packageConfigTiers(_ integration: MultiModuleIntegration) -> [String: String] {
 		screenFiles(integration, comment: [], imports: ["Core"], tiers: """
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
-		        self.init(config: nil)
+		        self.init(__safeDI_config: nil)
 		    }
 
-		    package init(config: Space.Config?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_config config: Space.Config?) {
 		        let cache = Cache()
 		        self.init(config: config, cache: cache)
 		    }

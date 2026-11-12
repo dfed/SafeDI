@@ -37,6 +37,7 @@
 ///   - additionalDirectoriesToInclude: Directories containing Swift files to include, relative to the executing directory. An entry may also name a single Swift file. Only the SPM build-tool plugin declares the files it reaches as build inputs, so under the Bazel and Tuist integrations list every Swift source via the build target itself instead. SafeDI warns about an entry from which it can read no Swift file.
 ///   - additionalMocksToGenerate: Type names from dependent modules to generate `mock()` methods for in this module. The types must be decorated with `@Instantiable` in their home module. Generation fails for an entry that names no `@Instantiable` type. See the "Cross-module mock generation" section of the manual.
 ///   - mockConditionalCompilation: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation.
+///   - generatePlainDependencyTreeInitializers: For each type this module declares with `generateDependencyTree: true`, whether SafeDI pairs each initializer whose labels start with `__safeDI_` with one that has readable labels, for code you write. Generated code calls the `__safeDI_` initializer whether this is `true` or `false`. Set it to `true` while code that does not use SafeDI yet calls such a type.
 ///
 /// Example:
 ///
@@ -50,4 +51,5 @@ public macro SafeDIConfiguration(
 	additionalDirectoriesToInclude: [StaticString] = [],
 	additionalMocksToGenerate: [StaticString] = [],
 	mockConditionalCompilation: StaticString? = "DEBUG",
+	generatePlainDependencyTreeInitializers: Bool = false,
 ) = #externalMacro(module: "SafeDIMacros", type: "SafeDIConfigurationMacro")

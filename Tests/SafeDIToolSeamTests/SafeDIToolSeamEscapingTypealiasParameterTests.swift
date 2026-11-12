@@ -74,10 +74,8 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		let file = try generatedFile(ofModuleNamed: "Feature", typeName: "Screen", in: output, under: integration)
 		#expect(file == Self.expectedFile(code: """
 		extension Screen {
-		    public convenience init(onTap: @escaping OnTap, config: Config) {
-		        self.init(__safeDI_onTap: onTap, __safeDI_config: config)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_onTap onTap: @escaping OnTap, __safeDI_config: @autoclosure @escaping () -> Config) {
 		        let config = LazilyInstantiated<Config>(__safeDI_config)
 		        let reader = ConfigReader(config: config.instance)
@@ -116,10 +114,8 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		let file = try generatedFile(ofModuleNamed: "Feature", typeName: "Screen", in: output, under: integration)
 		#expect(file == Self.expectedFile(code: """
 		extension Screen {
-		    public convenience init(onTap: @escaping OnTap) {
-		        self.init(__safeDI_onTap: onTap)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_onTap: @autoclosure @escaping () -> OnTap) {
 		        let onTap = LazilyInstantiated<OnTap>(__safeDI_onTap)
 		        let reader = TapReader(onTap: onTap.instance)
@@ -172,10 +168,8 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		let file = try generatedFile(ofModuleNamed: "Feature", typeName: "Screen", in: output, under: integration)
 		#expect(file == Self.expectedFile(code: """
 		extension Screen {
-		    public convenience init(tap: @escaping Handler) {
-		        self.init(__safeDI_tap: tap)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_tap: @autoclosure @escaping () -> Handler) {
 		        let tap = LazilyInstantiated<Handler>(__safeDI_tap)
 		        func __safeDI_reader() -> TapReader {
@@ -214,7 +208,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func handWrittenCall_compiles_whenPlainInitializerIsPassedAClosure(integration: MultiModuleIntegration) async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: Self.modulesDeclaringTieredScreen + [
+			modules: Self.tieredScreenModules(featureConfiguration: plainDependencyTreeInitializersConfiguration) + [
 				ModuleFixture(name: "App", packageName: "Application", swiftFileContent: [
 					"""
 					import Feature
@@ -234,7 +228,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		)
 
 		let file = try generatedFile(ofModuleNamed: "Feature", typeName: "Screen", in: output, under: integration)
-		#expect(file == Self.expectedFile(code: Self.tieredScreenCode), "Unexpected output \(file)")
+		#expect(file == Self.expectedFile(code: Self.tieredScreenCodeWithPlainInitializers), "Unexpected output \(file)")
 		try expectEveryModuleCompiled(output)
 	}
 
@@ -340,10 +334,8 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		let file = try generatedFile(ofModuleNamed: "App", typeName: "Outer", in: output, under: integration)
 		#expect(file == Self.expectedFile(imports: ["Feature", "Middle"], code: """
 		extension Outer {
-		    public convenience init(onTap: @escaping OnTap) {
-		        self.init(__safeDI_onTap: onTap)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_onTap: @autoclosure @escaping () -> OnTap) {
 		        let onTap = LazilyInstantiated<OnTap>(__safeDI_onTap)
 		        func __safeDI_mid() -> Mid {
@@ -413,10 +405,8 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		        }
 		    }
 
-		    public convenience init(onForward: @escaping OnTap, config: Config, serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
-		        self.init(__safeDI_onForward: onForward, __safeDI_config: config, __safeDI_serviceBuilder: serviceBuilder)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_onForward onForward: @escaping OnTap, __safeDI_config: @autoclosure @escaping () -> Config, __safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
 		        let config = LazilyInstantiated<Config>(__safeDI_config)
 		        func __safeDI_owner() -> ServiceOwner {
@@ -488,10 +478,8 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		        public struct Stage2 {}
 		    }
 
-		    public convenience init(onForward: @escaping OnTap, config: Config, serviceBuilder_owner_service: @escaping (SafeDIStagedScope_Service_owner_service.Stage1) -> @Sendable (SafeDIStagedScope_Service_owner_service.Stage2) -> any Service) {
-		        self.init(__safeDI_onForward: onForward, __safeDI_config: config, __safeDI_serviceBuilder_owner_service: serviceBuilder_owner_service)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_onForward onForward: @escaping OnTap, __safeDI_config: @autoclosure @escaping () -> Config, __safeDI_serviceBuilder_owner_service: @escaping (SafeDIStagedScope_Service_owner_service.Stage1) -> @Sendable (SafeDIStagedScope_Service_owner_service.Stage2) -> any Service) {
 		        let config = LazilyInstantiated<Config>(__safeDI_config)
 		        func __safeDI_owner() -> ServiceOwner {
@@ -553,10 +541,8 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		let file = try generatedFile(ofModuleNamed: "Feature", typeName: "Screen", in: output, under: integration)
 		#expect(file == Self.expectedFile(code: """
 		extension Screen {
-		    public convenience init(generic: @escaping Callback<String>, member: @escaping Space.OnTap, optional: OnTap?) {
-		        self.init(__safeDI_generic: generic, __safeDI_member: member, __safeDI_optional: optional)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_generic: @autoclosure @escaping () -> Callback<String>, __safeDI_member: @autoclosure @escaping () -> Space.OnTap, __safeDI_optional: @autoclosure @escaping () -> OnTap?) {
 		        let generic = LazilyInstantiated<Callback<String>>(__safeDI_generic)
 		        let member = LazilyInstantiated<Space.OnTap>(__safeDI_member)
@@ -605,10 +591,8 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		let file = try generatedFile(ofModuleNamed: "Feature", typeName: "Screen", in: output, under: integration)
 		#expect(file == Self.expectedFile(code: """
 		extension Screen {
-		    public convenience init(onTap: @escaping SendableTap) {
-		        self.init(__safeDI_onTap: onTap)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_onTap: @autoclosure @escaping @Sendable () -> SendableTap) {
 		        let onTap = SendableLazilyInstantiated<SendableTap>(__safeDI_onTap)
 		        @Sendable func __safeDI_readerBuilder() -> SendableReader {
@@ -648,46 +632,82 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 
 	/// `Screen` takes its own `onForward` and a deferred `onTap` on both its tiers, and `secret`, whose type is `internal`,
 	/// on the narrower one only, so its `public` tier forwards both to the `internal` one.
-	private static let modulesDeclaringTieredScreen = [
-		ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
-			declarations,
-			tapReader,
-			"""
-			struct Secret {}
-			""",
-			"""
-			@Instantiable
-			public final class SecretReader: Instantiable {
-			    init(secret: Secret?) { self.secret = secret }
-			    @Received(onlyIfAvailable: true) let secret: Secret?
-			}
-			""",
-			"""
-			@Instantiable(generateDependencyTree: true)
-			public final class Screen: Instantiable {
-			    public init(onForward: @escaping OnTap, reader: TapReader, secretReader: SecretReader) { self.onForward = onForward; self.reader = reader; self.secretReader = secretReader }
-			    @Forwarded let onForward: OnTap
-			    @Instantiated let reader: TapReader
-			    @Instantiated let secretReader: SecretReader
-			}
-			""",
-		]),
-	]
+	private static let modulesDeclaringTieredScreen = tieredScreenModules(featureConfiguration: [:])
 
-	private static let tieredScreenCode = """
+	/// `modulesDeclaringTieredScreen`, with `featureConfiguration` as `Feature`'s configuration files.
+	private static func tieredScreenModules(featureConfiguration: [String: String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				declarations,
+				tapReader,
+				"""
+				struct Secret {}
+				""",
+				"""
+				@Instantiable
+				public final class SecretReader: Instantiable {
+				    init(secret: Secret?) { self.secret = secret }
+				    @Received(onlyIfAvailable: true) let secret: Secret?
+				}
+				""",
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public final class Screen: Instantiable {
+				    public init(onForward: @escaping OnTap, reader: TapReader, secretReader: SecretReader) { self.onForward = onForward; self.reader = reader; self.secretReader = secretReader }
+				    @Forwarded let onForward: OnTap
+				    @Instantiated let reader: TapReader
+				    @Instantiated let secretReader: SecretReader
+				}
+				""",
+			], swiftFileContentByFilePath: featureConfiguration),
+		]
+	}
+
+	/// `tieredScreenCode` as a module that sets `generatePlainDependencyTreeInitializers: true` generates it.
+	private static let tieredScreenCodeWithPlainInitializers = """
 	extension Screen {
+	    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
 	    public convenience init(onForward: @escaping OnTap, onTap: @escaping OnTap) {
 	        self.init(__safeDI_onForward: onForward, __safeDI_onTap: onTap)
 	    }
 
+	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+	    /// From code you write, call the initializer above instead.
 	    public convenience init(__safeDI_onForward onForward: @escaping OnTap, __safeDI_onTap: @autoclosure @escaping () -> OnTap) {
 	        self.init(__safeDI_onForward: onForward, __safeDI_onTap: __safeDI_onTap(), __safeDI_secret: nil)
 	    }
 
+	    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
 	    internal convenience init(onForward: @escaping OnTap, onTap: @escaping OnTap, secret: Secret?) {
 	        self.init(__safeDI_onForward: onForward, __safeDI_onTap: onTap, __safeDI_secret: secret)
 	    }
 
+	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+	    /// From code you write, call the initializer above instead.
+	    internal convenience init(__safeDI_onForward onForward: @escaping OnTap, __safeDI_onTap: @autoclosure @escaping () -> OnTap, __safeDI_secret: @autoclosure @escaping () -> Secret?) {
+	        let onTap = LazilyInstantiated<OnTap>(__safeDI_onTap)
+	        let secret = LazilyInstantiated<Secret?>(__safeDI_secret)
+	        let reader = TapReader(onTap: onTap.instance)
+	        let secretReader = SecretReader(secret: secret.instance)
+	        self.init(onForward: onForward, reader: reader, secretReader: secretReader)
+	    }
+	}
+
+	extension Screen {
+	    public enum __safeDI_Screen_09F3399971E0C31B {}
+	}
+	"""
+
+	private static let tieredScreenCode = """
+	extension Screen {
+	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+	    public convenience init(__safeDI_onForward onForward: @escaping OnTap, __safeDI_onTap: @autoclosure @escaping () -> OnTap) {
+	        self.init(__safeDI_onForward: onForward, __safeDI_onTap: __safeDI_onTap(), __safeDI_secret: nil)
+	    }
+
+	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 	    internal convenience init(__safeDI_onForward onForward: @escaping OnTap, __safeDI_onTap: @autoclosure @escaping () -> OnTap, __safeDI_secret: @autoclosure @escaping () -> Secret?) {
 	        let onTap = LazilyInstantiated<OnTap>(__safeDI_onTap)
 	        let secret = LazilyInstantiated<Secret?>(__safeDI_secret)
