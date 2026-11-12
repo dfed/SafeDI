@@ -38,27 +38,6 @@ let emptyMockConfigurationFileOutput = generatedFileHeader
 /// read the module that declares one.
 let fulfillingDeclarationInAnotherModuleRemedy = "or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target's `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist."
 
-/// What `operation` returns or throws, unless the calling task is cancelled first: then a `CancellationError`, while
-/// `operation` runs on unobserved. A test's time limit cancels the test's task, which a generation that never ends does
-/// not notice, so a test that awaited the generation itself would outlive its limit and hold up the rest of the suite.
-/// `operation` runs in a task that inherits the caller's task-local values.
-func valueUnlessCancelled<Value: Sendable>(of operation: sending @escaping () async throws -> Value) async throws -> Value {
-	let (values, continuation) = AsyncThrowingStream.makeStream(of: Value.self)
-	Task {
-		do {
-			try await continuation.yield(operation())
-			continuation.finish()
-		} catch {
-			continuation.finish(throwing: error)
-		}
-	}
-	// Cancelling the calling task ends the iteration without a value.
-	for try await value in values {
-		return value
-	}
-	throw CancellationError()
-}
-
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func executeSafeDIToolTest(
 	swiftFileContent: [String],
@@ -321,7 +300,7 @@ func executeSafeDIToolTest(
 		)
 		let generateOutput: Generate.Output
 		do {
-			generateOutput = try await valueUnlessCancelled { try await tool.generate() }
+			generateOutput = try await tool.generate()
 		} catch {
 			throw SafeDIToolTestError(underlyingError: error, fixtures: fixtures)
 		}

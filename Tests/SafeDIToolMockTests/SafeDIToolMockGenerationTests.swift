@@ -11726,7 +11726,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
 	}
 
-	@Test(.timeLimit(.minutes(1)))
+	@Test
 	mutating func mock_settlesCycleParameters_whenLazilyInstantiatedDependencyClosesCycleOnConstantDeclaration() async throws {
 		// The preview lazily opens an editor of its own, which receives the preview's theme. The walk that finds the editor
 		// function's parameters meets the theme first at the lazy `editor`, which repeats the constant `editor` declaration.

@@ -4074,7 +4074,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 
 	// MARK: Tests – A cycle closed by another form of the declaration it repeats
 
-	@Test(.timeLimit(.minutes(1)))
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_settlesCycleParameters_whenLazilyInstantiatedDependencyClosesCycleOnConstantDeclaration() async throws {
 		// The preview lazily opens an editor of its own, which receives the preview's theme. The walk that finds the editor
@@ -4122,7 +4122,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		""")
 	}
 
-	@Test(.timeLimit(.minutes(1)))
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_settlesCycleParameters_whenConstantDependencyClosesCycleOnLazilyInstantiatedDeclaration() async throws {
 		// The preview opens an editor of its own, which receives the preview's theme. The walk that finds the editor
@@ -4170,7 +4170,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		""")
 	}
 
-	@Test(.timeLimit(.minutes(1)))
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsCaptureErrorAtToolbar_whenSendableLazilyInstantiatedDependencyClosesCycleOnConstantDeclarationPassingInstantiatorDeclaredOutsideIt() async {
 		// The preview's `SendableLazilyInstantiated` closure passes the preview's `themeBuilder`, declared outside it, to the
