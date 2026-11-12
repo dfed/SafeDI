@@ -27,7 +27,7 @@ percentage of the corpus's accepted graphs (the public mock corpus reports `outp
 error rejects must add up to their pins (`public-mock-errors`), what the base corpus's value oracle compares and
 skips must add up to its pins (`value-oracle`: counts, and set sums whose keys end in `Sum`, which add up wrapping
 like the accepted seed-set sum), and no shard may report a failure,
-a stale known issue, or a problem. Every long run writes `features`, `inspected` and `read-twins` for its corpus, and
+a stale known issue, a misfiled seed, or a problem. Every long run writes `features`, `inspected` and `read-twins` for its corpus, and
 `value-oracle` for the base corpus, so a complete report that names a corpus without one of them is a problem: a
 run that stopped writing the line would otherwise skip that line's check silently. Writes a Markdown summary to
 SUMMARY and the job summary, and exits non-zero when anything is missing or
@@ -138,7 +138,7 @@ for path in report_paths:
                 value_oracle_pins_by_corpus.setdefault(fields[1], set()).add(fields[3])
             elif fields[0] == "completed":
                 completed = True
-            elif fields[0] in ("failure", "stale", "problem"):
+            elif fields[0] in ("failure", "stale", "misfiled", "problem"):
                 problems.append(f"{path}: {line.strip()}")
     if len(shard_lines) != 1 or not completed:
         problems.append(f"{path} has no complete shard result; that shard failed or did not finish.")
