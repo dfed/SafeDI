@@ -63,21 +63,22 @@ struct SafeDIToolSeamDeepStageTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
+		let caseName = (Array(repeating: "carried", count: carrierCount + 1) + ["held"]).joined(separator: "_")
 		// One stage for each `@Sendable` function on the path: each carrier's, then the wrapper's own, which carries nothing.
 		func expectedStageFunctionTypes(qualifiedBy qualifier: String) -> String {
 			var expectedType = "any Gadget"
 			for stage in (1...carrierCount + 2).reversed() {
-				expectedType = "@Sendable (\(qualifier)SafeDIScope_L\(carrierCount)_held.\(Self.stageName(at: stage))) -> \(expectedType)"
+				expectedType = "@Sendable (\(qualifier)SafeDIStagedScope_Gadget_\(caseName).\(Self.stageName(at: stage))) -> \(expectedType)"
 			}
 			return expectedType
 		}
 		let generatedSeam = try #require(output.modules["Feature"]?.generatedFiles["Feature.swift"])
 		#expect(generatedSeam.split(separator: "\n").map(String.init).filter { $0.contains("public init(") } == [
-			"    public init(heldBuilder: @escaping (SafeDIScope_L\(carrierCount)_held.Outer) -> \(expectedStageFunctionTypes(qualifiedBy: ""))) {",
+			"    public init(gadgetBuilder_\(caseName): @escaping (SafeDIStagedScope_Gadget_\(caseName).Stage1) -> \(expectedStageFunctionTypes(qualifiedBy: ""))) {",
 		])
 		let generatedFill = try #require(output.modules["App"]?.generatedFiles["App.swift"])
-		#expect(generatedFill.split(separator: "\n").map(String.init).filter { $0.contains("func __safeDI_heldBuilder(") } == [
-			"            func __safeDI_heldBuilder(_ scope: Host.SafeDIScope_L\(carrierCount)_held.Outer) -> \(expectedStageFunctionTypes(qualifiedBy: "Host.")) {",
+		#expect(generatedFill.split(separator: "\n").map(String.init).filter { $0.contains("func __safeDI_gadgetBuilder_\(caseName)(") } == [
+			"            func __safeDI_gadgetBuilder_\(caseName)(_ scope: Host.SafeDIStagedScope_Gadget_\(caseName).Stage1) -> \(expectedStageFunctionTypes(qualifiedBy: "Host.")) {",
 		])
 	}
 
@@ -90,6 +91,6 @@ struct SafeDIToolSeamDeepStageTests: ~Copyable {
 	}
 
 	private static func stageName(at stageIndex: Int) -> String {
-		stageIndex == 1 ? "Inner" : "Inner\(stageIndex)"
+		"Stage\(stageIndex + 1)"
 	}
 }

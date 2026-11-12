@@ -2314,7 +2314,9 @@ public actor DependencyTreeGenerator {
 				/// A tier of the generated initializer is wider than `hole`'s builder, which every tier takes, as far as the
 				/// proof of the builder's type (`Hole.accessCause`) goes. Not a `ParameterKind`: a builder is no member of
 				/// `SeamSignature.parameters`, whose labels are what `parameterLabels(namedBy:about:)` names.
-				case tierOmitsBuilder(hole: SeamSignature.Hole, tier: AccessLevel)
+				case tierOmitsBuilder(hole: SeamSignature.Hole, builder: SeamSignature.Builder?, tier: AccessLevel)
+				/// A builder narrower than a tier only because of an inner seam whose enum it holds.
+				case tierOmitsBuilderHoldingInnerSeam(builder: SeamSignature.Builder, innerSeam: TypeDescription, tier: AccessLevel)
 			}
 
 			let seam: Instantiable
@@ -2408,7 +2410,12 @@ public actor DependencyTreeGenerator {
 					location = declaration.access.declarationStartLocation ?? location
 					let typeName = "`\(declaration.typeDescription.asSource)`"
 					message = "SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it takes its parameters at the access this declaration of \(typeName) proves, which is in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see it, so they would count \(typeName) as `public`, and their calls would not match the initializer. Declare \(typeName) in a file of this module, or of a module it depends on."
-				case let .tierOmitsBuilder(hole, tier):
+				case let .tierOmitsBuilderHoldingInnerSeam(builder, innerSeam, tier):
+					receivers = []
+					let (_, requiredBy, publicMockRequirement) = tierRequirement(tier)
+					let causeText = builder.accessCause.map { " " + SeamAccessExplanation.causeSentence($0, receivers: []) } ?? ""
+					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder.label): \(builder.parameterType.asSource)`, whose scope holds the builders of `\(innerSeam.asSource)`, a seam visible only at `\(builder.tierAccess.spelledOnGeneratedDeclaration)` access.\(publicMockRequirement)\(causeText) Declare \(seamName) at `\(builder.tierAccess.spelledOnGeneratedDeclaration)` access, or make `\(innerSeam.asSource)` `\(tier.spelledOnGeneratedDeclaration)`."
+				case let .tierOmitsBuilder(hole, builder, tier):
 					// Explained as a required parameter's omission is, by the shared formatter, with the builder's remedy in
 					// the place of a pass-through's.
 					receivers = []
@@ -2420,12 +2427,12 @@ public actor DependencyTreeGenerator {
 						neededLevel: tier,
 						parameterLevel: hole.tierAccess,
 						seam: seam.concreteInstantiable,
-						parameter: Property(label: hole.builderLabel, typeDescription: hole.builderType(qualifiedBy: hole.scopeSeamType)),
+						parameter: Property(label: builder?.label ?? hole.builderLabel, typeDescription: builder?.parameterType ?? hole.builderType(qualifiedBy: hole.scopeSeamType)),
 						receivers: [],
 						parameterKind: .builder(fulfilledType: hole.instantiatedType, seamModuleName: seam.moduleName, isPassedUp: hole.innerSeamType != nil),
 						seamAccessIsRequiredByPublicMock: isRequiredByPublicMock,
 					)
-					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(hole.builderLabel): \(hole.builderType(qualifiedBy: hole.scopeSeamType).asSource)`, the builder for `\(hole.ownerType.asSource)`'s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(publicMockRequirement)\(causeText) \(remedies)"
+					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder?.label ?? hole.builderLabel): \((builder?.parameterType ?? hole.builderType(qualifiedBy: hole.scopeSeamType)).asSource)`, the builder for `\(hole.ownerType.asSource)`'s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(publicMockRequirement)\(causeText) \(remedies)"
 					declarationNotes = SeamAccessExplanation.declarationNotes(for: hole.accessCause, neededLevel: tier)
 				case let .parameters(.initializerCollides(parameters, builderLabels, handWrittenInitializer)):
 					receivers = []
@@ -3033,7 +3040,6 @@ public actor DependencyTreeGenerator {
 							sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
 							scopeGenerator: scope.createScopeGenerator(
 								for: nil,
-								propertyStack: [],
 								lazilyInstantiatedInstanceProperties: [],
 								erasedToConcreteExistential: false,
 								declaredTypeNames: declaredTypeNames,
@@ -4297,7 +4303,6 @@ public actor DependencyTreeGenerator {
 				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
 				scopeGenerator: scope.createScopeGenerator(
 					for: nil,
-					propertyStack: [],
 					lazilyInstantiatedInstanceProperties: [],
 					erasedToConcreteExistential: false,
 					declaredTypeNames: declaredTypeNames,
@@ -4476,7 +4481,10 @@ public actor DependencyTreeGenerator {
 			// optional value passed to its declaring type, and every other read of it is rejected before emission, so it
 			// adds no parameter. The computation ends when a pass changes no signature's content – never the receivers'
 			// order, which a tree carrying the receivers of a seam that carries its own meets differently on every pass –
-			// or at the limit, which no input reaches by the argument above and which reports the component if one does.
+			// or at the limit, which no input reaches by the argument above and which reports the component if one does. The
+			// argument needs each pass to read the component's other seams as one pass left them: an enum a seam's builders
+			// reach is read from the seam that declares it (`ownScopeEnums`), since copies of different ages, each carried
+			// by a different neighbor, would differ on every pass around a cycle of four seams.
 			var errorsOfLastPass = [DependencyTreeGeneratorError]()
 			var failedSeamsOfLastPass = Set<TypeDescription>()
 			var settled = false
@@ -4484,6 +4492,15 @@ public actor DependencyTreeGenerator {
 				var knownSeamRoots = fixedSignatures.mapValues { Optional($0) }
 				for (seamType, seamRoot) in seamRoots {
 					knownSeamRoots[seamType] = seamRoot
+				}
+				// Every enum a seam's builders reach is read from the signature of the seam that declares it, as this pass's
+				// trees were built from: a copy another seam carries can be from an earlier pass, and copies of different
+				// ages taken from different neighbors would keep a cycle of seams from settling.
+				var ownScopeEnums = [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]()
+				for case let seamRoot? in knownSeamRoots.values {
+					for scopeEnum in seamRoot.signature.scopeEnums where scopeEnum.key.seamType == seamRoot.signature.seamType {
+						ownScopeEnums[scopeEnum.key] = scopeEnum
+					}
 				}
 				let scopeMap = Self.createSeamScopeMapping(
 					in: instantiables,
@@ -4510,7 +4527,7 @@ public actor DependencyTreeGenerator {
 							startsCodeGeneration: false,
 							declaredTypeNames: declaredTypeNames,
 						)
-						let seamRoot = try Self.seamRoot(of: seam, generator: generator, proof: proof, instantiables: instantiables)
+						let seamRoot = try Self.seamRoot(of: seam, generator: generator, proof: proof, instantiables: instantiables, ownScopeEnums: ownScopeEnums)
 						if seamRoot?.signature.settledContent != previousSeamRoot?.signature.settledContent {
 							changed = true
 						}
@@ -4544,6 +4561,12 @@ public actor DependencyTreeGenerator {
 			}
 			errors += errorsOfLastPass
 			failedSeams.formUnion(failedSeamsOfLastPass)
+		}
+		// Every enum of a cycle is generated by one module, whose seams are the ones settled here.
+		let seamTypesInOrder = seamRoots.keys.sorted()
+		let markedSeamRoots = Self.markingIndirectCases(in: seamTypesInOrder.map { seamRoots[$0] ?? nil })
+		for (seamType, seamRoot) in zip(seamTypesInOrder, markedSeamRoots) {
+			seamRoots[seamType] = seamRoot
 		}
 		return SeamSignatureComputation(seamRoots: seamRoots, errors: errors, failedSeams: failedSeams, proof: proof)
 	}
@@ -4581,46 +4604,52 @@ public actor DependencyTreeGenerator {
 			}
 			reachedSeamsBySeam[seam.concreteInstantiable] = reachedSeams.sorted()
 		}
+		return stronglyConnectedComponents(of: seams.map(\.concreteInstantiable), edges: { reachedSeamsBySeam[$0, default: []] })
+	}
+
+	/// The strongly connected components of a graph, in reverse topological order: a component after every component it
+	/// reaches. Tarjan's algorithm on an explicit stack, so that no walk recurses per node.
+	static func stronglyConnectedComponents<Node: Hashable>(of nodes: [Node], edges: (Node) -> [Node]) -> [Set<Node>] {
 		var index = 0
-		var indices = [TypeDescription: Int]()
-		var lowLinks = [TypeDescription: Int]()
-		var onStack = Set<TypeDescription>()
-		var stack = [TypeDescription]()
-		var components = [Set<TypeDescription>]()
-		for seam in seams where indices[seam.concreteInstantiable] == nil {
+		var indices = [Node: Int]()
+		var lowLinks = [Node: Int]()
+		var onStack = Set<Node>()
+		var stack = [Node]()
+		var components = [Set<Node>]()
+		for node in nodes where indices[node] == nil {
 			// Each frame is a seam and the index of the next reached seam to visit.
-			var frames: [(seam: TypeDescription, nextReached: Int)] = [(seam.concreteInstantiable, 0)]
-			indices[seam.concreteInstantiable] = index
-			lowLinks[seam.concreteInstantiable] = index
+			var frames: [(node: Node, nextReached: Int)] = [(node, 0)]
+			indices[node] = index
+			lowLinks[node] = index
 			index += 1
-			stack.append(seam.concreteInstantiable)
-			onStack.insert(seam.concreteInstantiable)
+			stack.append(node)
+			onStack.insert(node)
 			while let frame = frames.last {
-				let reached = reachedSeamsBySeam[frame.seam, default: []]
+				let reached = edges(frame.node)
 				if frame.nextReached < reached.count {
-					let reachedSeam = reached[frame.nextReached]
+					let reachedNode = reached[frame.nextReached]
 					frames[frames.count - 1].nextReached += 1
-					if indices[reachedSeam] == nil {
-						indices[reachedSeam] = index
-						lowLinks[reachedSeam] = index
+					if indices[reachedNode] == nil {
+						indices[reachedNode] = index
+						lowLinks[reachedNode] = index
 						index += 1
-						stack.append(reachedSeam)
-						onStack.insert(reachedSeam)
-						frames.append((reachedSeam, 0))
-					} else if onStack.contains(reachedSeam) {
-						lowLinks[frame.seam] = min(lowLinks[frame.seam, default: 0], indices[reachedSeam, default: 0])
+						stack.append(reachedNode)
+						onStack.insert(reachedNode)
+						frames.append((reachedNode, 0))
+					} else if onStack.contains(reachedNode) {
+						lowLinks[frame.node] = min(lowLinks[frame.node, default: 0], indices[reachedNode, default: 0])
 					}
 				} else {
 					frames.removeLast()
 					if let parent = frames.last {
-						lowLinks[parent.seam] = min(lowLinks[parent.seam, default: 0], lowLinks[frame.seam, default: 0])
+						lowLinks[parent.node] = min(lowLinks[parent.node, default: 0], lowLinks[frame.node, default: 0])
 					}
-					if lowLinks[frame.seam] == indices[frame.seam] {
-						var component = Set<TypeDescription>()
+					if lowLinks[frame.node] == indices[frame.node] {
+						var component = Set<Node>()
 						while let member = stack.popLast() {
 							onStack.remove(member)
 							component.insert(member)
-							if member == frame.seam {
+							if member == frame.node {
 								break
 							}
 						}
@@ -4788,6 +4817,8 @@ public actor DependencyTreeGenerator {
 					seamCall: SeamCall(
 						parameters: signature.parameters(ofTierAt: tier),
 						holes: signature.holes,
+						builders: signature.builders,
+						scopeEnums: signature.scopeEnums,
 						guardTypeName: signature.guardTypeName,
 						comment: seams.foreignSeams[instantiable.concreteInstantiable]?.callComment ?? .noComment,
 						unreachableTierIsReported: unreachableTierIsReported,
@@ -4926,7 +4957,6 @@ public actor DependencyTreeGenerator {
 		}
 		return try rootScope.createScopeGenerator(
 			for: nil,
-			propertyStack: [],
 			nearestDeclarations: nearestDeclarations,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			seamRoot: seamRoot,
@@ -5129,7 +5159,9 @@ public actor DependencyTreeGenerator {
 	/// a required non-optional wrapper provides every by-value form and the optional form of its kind, a by-value
 	/// property its optional form, and an optional wrapper nothing but itself. Two parameters under one label are
 	/// `parametersShareLabel`. `nil` when the signature would equal the seam's own initializer's.
-	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable]) throws -> ScopeGenerator.SeamRoot? {
+	/// - Parameter ownScopeEnums: Each seam's own enums, by key, as the signatures the pass's trees were built from hold
+	///   them: what `shapedBuilders` reads an enum the seam's builders reach from, never a copy another seam carries.
+	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable], ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]) throws -> ScopeGenerator.SeamRoot? {
 		let ownParameters = ownParameters(of: seam, proof: proof)
 		// The seam's own properties are parameters as declared, and provide forms as any parameter does.
 		var ownLabels = Set<String>()
@@ -5316,7 +5348,17 @@ public actor DependencyTreeGenerator {
 			}
 			return SeamSignature.Parameter(property: parameter.property, isPassThrough: parameter.isPassThrough, access: parameter.access, tierAccess: min(parameter.access, seamTypeAccess), isOnlyIfAvailable: parameter.isOnlyIfAvailable, requiredThroughAlias: parameter.requiredThroughAlias, deferral: parameter.deferral, internalName: internalName, receivers: parameter.receivers, accessCause: parameter.accessCause, otherInitializerArgumentsAccess: parameter.otherInitializerArgumentsAccess)
 		}
-		let holes = Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables)
+		let shapedBuilders = Self.shapedBuilders(
+			of: seam,
+			generator: generator,
+			holes: Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables),
+			parameters: parameters,
+			treeFunctionNames: Self.builderFunctionNamesOfProperties(in: generator, includingHoleSites: false),
+			proof: proof,
+			instantiables: instantiables,
+			ownScopeEnums: ownScopeEnums,
+		)
+		let holes = shapedBuilders.holes
 		let tiers = Self.tiers(of: seam, parameters: parameters)
 		for omitted in parameters where omitted.tierAccess < seamTypeAccess && !omitted.isOnlyIfAvailable {
 			// A pass-through that reaches this seam only through a nested seam call the module reaches no tier of,
@@ -5355,7 +5397,15 @@ public actor DependencyTreeGenerator {
 			guard let tier = tiers.first(where: { $0 > hole.tierAccess }),
 			      reportedHoleDeclarations.insert(OwnedHoleDeclaration(owner: hole.ownerType, property: hole.property)).inserted
 			else { continue }
-			errors.append(.seam(.init(seam: seam, kind: .tierOmitsBuilder(hole: hole, tier: tier))))
+			errors.append(.seam(.init(seam: seam, kind: .tierOmitsBuilder(hole: hole, builder: shapedBuilders.builderBySite[hole.site], tier: tier))))
+		}
+		// A builder can be narrower than every place it builds where an inner seam whose enum it holds is.
+		for builder in shapedBuilders.builders {
+			if let innerSeam = builder.narrowingInnerSeam, let tier = tiers.first(where: { $0 > builder.tierAccess }),
+			   !holes.contains(where: { hole in hole.tierAccess < tier && shapedBuilders.builderBySite[hole.site]?.label == builder.label })
+			{
+				errors.append(.seam(.init(seam: seam, kind: .tierOmitsBuilderHoldingInnerSeam(builder: builder, innerSeam: innerSeam, tier: tier))))
+			}
 		}
 		// A hand-written initializer that a call with a tier's argument labels can reach – its labels hold the tier's in
 		// order, and every other argument has a default value – is rejected whatever its types: because the labels match,
@@ -5363,7 +5413,7 @@ public actor DependencyTreeGenerator {
 		// non-optional generated parameter, a twin taking `Any`, an existential, a generic, a defaulted parameter or a
 		// closure loses to the generated initializer; beside an optional parameter, the twin takes the call from a caller
 		// holding the value. No comparison of types SafeDI can make tells a twin that takes a call from one that loses it.
-		let builderLabels = holes.map(\.builderLabel)
+		let builderLabels = shapedBuilders.builders.map(\.label)
 		for tier in tiers {
 			let tierParameters = parameters.filter { $0.tierAccess >= tier }
 			let tierLabels = tierParameters.map(\.property.label) + builderLabels
@@ -5383,6 +5433,8 @@ public actor DependencyTreeGenerator {
 			tiers: tiers,
 			noTierParameters: noTierParameters,
 			holes: holes,
+			builders: shapedBuilders.builders,
+			scopeEnums: shapedBuilders.scopeEnums,
 			typesDeclaredEscaping: generator.typesDeclaredEscaping.intersection(parameters.map(\.property.typeDescription)),
 		))
 	}
@@ -6015,7 +6067,6 @@ public actor DependencyTreeGenerator {
 		func mockRootGenerator(holes: [SeamSignature.Hole]) throws -> ScopeGenerator {
 			try mockRootScope.createScopeGenerator(
 				for: nil,
-				propertyStack: [],
 				// The mock root binds every received property it does not promote, which encloses its whole tree.
 				nearestDeclarations: .binding(allReceived),
 				lazilyInstantiatedInstanceProperties: [],

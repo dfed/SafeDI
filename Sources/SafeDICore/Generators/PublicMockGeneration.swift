@@ -585,6 +585,9 @@ struct PublicMockParameter: Sendable {
 	let type: TypeDescription
 	/// The parameter's type as the signature spells it, `@escaping` and `@autoclosure` included.
 	let typeSource: String
+	/// For a builder, the type the signature spells without `any`, which the function that spells `typeSource` makes, so that
+	/// nothing can be emitted and not hashed. `nil` for a parameter whose `type` spells it.
+	var typeWithoutAny: TypeDescription?
 	/// The default, as source after ` = `, or `nil` for none.
 	let defaultSource: String?
 	let defaultKind: DefaultKind
@@ -883,8 +886,9 @@ extension ScopeGenerator {
 				// The builder of a hole of another module's public mock the tree calls, which the mock passes up: it is as
 				// visible as that mock's computation proves, and a caller that sees a type fulfilling the hole fills it. One
 				// a `@Sendable` builder function captures is taken `@Sendable`, so a caller passes it up `@Sendable` too.
-				let builder = sendablePassedUpBuilders.contains(property) ? Property(label: property.label, typeDescription: property.typeDescription.asSendableFunction) : property
-				leadingParameters.append(PublicMockParameter(name: name, type: builder.typeDescription, typeSource: builder.typeDescription.asFunctionParameter.asSource, defaultSource: nil, defaultKind: .none, access: hole.tierAccess, accessCause: hole.accessCause, role: .received(builder, isRequired: true), hole: hole))
+				let isSendable = sendablePassedUpBuilders.contains(property)
+				let builder = isSendable ? Property(label: property.label, typeDescription: hole.stageFunctionType(at: 0, qualifiedBy: hole.scopeSeamType, isSendable: true)) : property
+				leadingParameters.append(PublicMockParameter(name: name, type: builder.typeDescription, typeSource: hole.builderType(qualifiedBy: hole.scopeSeamType, isSendable: isSendable).asSource, typeWithoutAny: hole.builderTypeWithoutAny(qualifiedBy: hole.scopeSeamType, isSendable: isSendable), defaultSource: nil, defaultKind: .none, access: hole.tierAccess, accessCause: hole.accessCause, role: .received(builder, isRequired: true), hole: hole))
 			} else if let mockDefault = flatReceivedParameterMockDefaults[property] {
 				// The mock builds the dependency with the hand-written mock when passed `nil`, as an internal mock defaults it.
 				defaultResolutions.append("\(bodyIndent)let \(name) = \(name) ?? (\(mockDefault.expression))")
@@ -909,6 +913,7 @@ extension ScopeGenerator {
 				name: hole.builderLabel,
 				type: closureType,
 				typeSource: builderType.asSource,
+				typeWithoutAny: hole.builderTypeWithoutAny(qualifiedBy: instantiable.concreteInstantiable),
 				defaultSource: nil,
 				defaultKind: .none,
 				access: hole.tierAccess,
@@ -941,12 +946,7 @@ extension ScopeGenerator {
 		var hash = SeamSignatureHash()
 		for parameter in parameters {
 			hash.combine(parameter.name)
-			// A builder holds each later stage as its spelling, which only its hole can spell without `any`. A builder a
-			// `@Sendable` function captures is `@Sendable` by this mock's own tree, which only the parameter's type records.
-			let builderType = parameter.hole.map { hole in
-				parameter.type.isSendableFunction && !hole.isSendable ? hole.builderTypeWithoutAny.asSendableFunction : hole.builderTypeWithoutAny
-			}
-			hash.combine((builderType ?? parameter.type.withoutAny).asSource)
+			hash.combine((parameter.typeWithoutAny ?? parameter.type.withoutAny).asSource)
 			hash.combine(parameter.access.spelledOnGeneratedDeclaration)
 			hash.combine(parameter.defaultKind.rawValue)
 		}

@@ -115,33 +115,44 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			case .plain:
 				"""
 				extension Host {
-				    public struct SafeDIScope_DefaultWidget_gadget {
-				        public let session: Session
-				        public let analytics: Analytics
-				        public let part: Part
+				    @frozen public enum SafeDIScope_Gadget {
+				        case inner_widget_gadget(inner_widget_gadget_Values)
+
+				        public struct inner_widget_gadget_Values {
+				            public let session: Session
+				            public let analytics: Analytics
+				            public let part: Part
+				        }
 				    }
 
-				    public init(gadgetBuilder: @escaping (SafeDIScope_DefaultWidget_gadget) -> any Gadget, gearBuilder: @escaping (Part.SafeDIScope_Part_gear) -> any Gear) {
+				    @frozen public enum SafeDIScope_Gear {
+				        case inner_widget_part(Part.SafeDIScope_Gear)
+				    }
+
+				    public init(gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget, gearBuilder: @escaping (SafeDIScope_Gear) -> any Gear) {
 				        let __safeDI_gadgetBuilder = gadgetBuilder
 				        let __safeDI_gearBuilder = gearBuilder
 				        let session = Session()
 				        func __safeDI_inner() -> Inner {
-				            _ = Inner.__safeDI_Inner_08053E85F53E4648.self\(seamCallComment(seam: "Inner", module: "Feature"))
-				            func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
-				                let analytics = scope.analytics
-				                func __safeDI_widget() -> DefaultWidget {
-				                    func __safeDI_part() -> Part {
-				                        _ = Part.__safeDI_Part_FDDB05C8BCBF2607.self\(seamCallComment(seam: "Part", module: "Feature"))
-				                        return Part(gearBuilder: __safeDI_gearBuilder)
+				            _ = Inner.__safeDI_Inner_A441BC75156D061F.self\(seamCallComment(seam: "Inner", module: "Feature"))
+				            func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+				                switch scope {
+				                case let .widget(scope):
+				                    let analytics = scope.analytics
+				                    func __safeDI_widget() -> DefaultWidget {
+				                        func __safeDI_part() -> Part {
+				                            _ = Part.__safeDI_Part_8735560374A43092.self\(seamCallComment(seam: "Inner", module: "Feature"))
+				                            return Part(gearBuilder: { __safeDI_gearBuilder(.inner_widget_part($0)) })
+				                        }
+				                        let part: Part = __safeDI_part()
+				                        let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_widget_gadget(SafeDIScope_Gadget.inner_widget_gadget_Values(session: session, analytics: analytics, part: part)))
+				                        return DefaultWidget(analytics: analytics, gadget: gadget, part: part)
 				                    }
-				                    let part: Part = __safeDI_part()
-				                    let gadget: any Gadget = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget(session: session, analytics: analytics, part: part))
-				                    return DefaultWidget(analytics: analytics, gadget: gadget, part: part)
+				                    let widget: any Widget = __safeDI_widget()
+				                    return widget
 				                }
-				                let widget: any Widget = __safeDI_widget()
-				                return widget
 				            }
-				            return Inner(widgetBuilder: __safeDI_widgetBuilder)
+				            return Inner(widgetBuilder: __safeDI_widgetBuilder_Inner)
 				        }
 				        let inner: Inner = __safeDI_inner()
 				        self.init(session: session, inner: inner)
@@ -149,45 +160,59 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				}
 
 				extension Host {
-				    public enum __safeDI_Host_6E6AFC1CF316A7E1 {}
+				    public enum __safeDI_Host_25297A734190213E {}
 				}
 				"""
 			case .sendableByRoute:
 				"""
 				extension Host {
-				    public enum SafeDIScope_DefaultWidget_gadget {
-				        public struct Outer {
+				    public enum SafeDIStagedScope_Gadget_shell_Inner_widget_gadget {
+				        public struct Stage1 {
 				            public let session: Session
 				        }
 
-				        public struct Inner {
+				        public struct Stage2 {
 				            public let analytics: Analytics
 				            public let part: Part
 				        }
 				    }
 
-				    public init(gadgetBuilder: @escaping (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget, gearBuilder: @escaping @Sendable (Part.SafeDIScope_Part_gear) -> any Gear) {
-				        let __safeDI_gadgetBuilder = gadgetBuilder
-				        let __safeDI_gearBuilder = gearBuilder
+				    @frozen public enum SafeDISendableScope_Gear {
+				        case shell_Inner_widget_part(Part.SafeDIScope_Gear)
+				    }
+
+				    public init(gadgetBuilder_shell_Inner_widget_gadget: @escaping (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget, gearSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gear) -> any Gear) {
+				        let __safeDI_gadgetBuilder_shell_Inner_widget_gadget = gadgetBuilder_shell_Inner_widget_gadget
+				        let __safeDI_gearSendableBuilder = gearSendableBuilder
 				        let session = Session()
 				        func __safeDI_shell() -> Shell {
-				            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-				            let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget.Outer(session: session))
-				            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+				            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+				            let __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_widget_gadget(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1(session: session))
+				            @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 				                let analytics = scope.analytics
 				                func __safeDI_widget() -> DefaultWidget {
 				                    func __safeDI_part() -> Part {
-				                        _ = Part.__safeDI_Part_FDDB05C8BCBF2607.self\(seamCallComment(seam: "Part", module: "Feature"))
-				                        return Part(gearBuilder: __safeDI_gearBuilder)
+				                        _ = Part.__safeDI_Part_8735560374A43092.self\(seamCallComment(seam: "Shell", module: "Feature"))
+				                        return Part(gearBuilder: { __safeDI_gearSendableBuilder(.shell_Inner_widget_part($0)) })
 				                    }
 				                    let part: Part = __safeDI_part()
-				                    let gadget: any Gadget = __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultWidget_gadget.Inner(analytics: analytics, part: part))
+				                    let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2(analytics: analytics, part: part))
 				                    return DefaultWidget(analytics: analytics, gadget: gadget, part: part)
 				                }
 				                let widget: any Widget = __safeDI_widget()
 				                return widget
 				            }
-				            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+				            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+				                switch scope {
+				                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+				                }
+				            }
+				            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+				                switch scope {
+				                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+				                }
+				            }
+				            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 				        }
 				        let shell: Shell = __safeDI_shell()
 				        self.init(session: session, shell: shell)
@@ -195,50 +220,54 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				}
 
 				extension Host {
-				    public enum __safeDI_Host_C0DFACC0D4D8427B {}
+				    public enum __safeDI_Host_F6DD5C282F7A31F3 {}
 				}
 				"""
 			case .lastStageOfStagedFill:
 				"""
 				extension Host {
-				    public enum SafeDIScope_DefaultWidget_gadget {
-				        public struct Outer {
+				    public enum SafeDIStagedScope_Gadget_inner_panelBuilder_widget_gadget {
+				        public struct Stage1 {
 				            public let session: Session
 				            public let analytics: Analytics
 				        }
 
-				        public struct Inner {
+				        public struct Stage2 {
 				            public let clock: Clock
 				            public let part: Part
 				        }
 				    }
 
-				    public init(gadgetBuilder: @escaping (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget, gearBuilder: @escaping @Sendable (Part.SafeDIScope_Part_gear) -> any Gear) {
-				        let __safeDI_gadgetBuilder = gadgetBuilder
-				        let __safeDI_gearBuilder = gearBuilder
+				    @frozen public enum SafeDISendableScope_Gear {
+				        case inner_panelBuilder_widget_part(Part.SafeDIScope_Gear)
+				    }
+
+				    public init(gadgetBuilder_inner_panelBuilder_widget_gadget: @escaping (SafeDIStagedScope_Gadget_inner_panelBuilder_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_inner_panelBuilder_widget_gadget.Stage2) -> any Gadget, gearSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gear) -> any Gear) {
+				        let __safeDI_gadgetBuilder_inner_panelBuilder_widget_gadget = gadgetBuilder_inner_panelBuilder_widget_gadget
+				        let __safeDI_gearSendableBuilder = gearSendableBuilder
 				        let session = Session()
 				        func __safeDI_inner() -> Inner {
-				            _ = Inner.__safeDI_Inner_88EF587EAC3F86D3.self\(seamCallComment(seam: "Inner", module: "Feature"))
-				            func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Panel_widget.Outer) -> @Sendable (Inner.SafeDIScope_Panel_widget.Inner) -> any Widget {
+				            _ = Inner.__safeDI_Inner_702BBF403C09CE6C.self\(seamCallComment(seam: "Inner", module: "Feature"))
+				            func __safeDI_widgetBuilder_panelBuilder_widget(_ scope: Inner.SafeDIStagedScope_Widget_panelBuilder_widget.Stage1) -> @Sendable (Inner.SafeDIStagedScope_Widget_panelBuilder_widget.Stage2) -> any Widget {
 				                let analytics = scope.analytics
-				                let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget.Outer(session: session, analytics: analytics))
-				                @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Panel_widget.Inner) -> any Widget {
+				                let __safeDI_gadgetBuilder_inner_panelBuilder_widget_gadget_Stage2 = __safeDI_gadgetBuilder_inner_panelBuilder_widget_gadget(SafeDIStagedScope_Gadget_inner_panelBuilder_widget_gadget.Stage1(session: session, analytics: analytics))
+				                @Sendable func __safeDI_widgetBuilder_panelBuilder_widget_Stage2(_ scope: Inner.SafeDIStagedScope_Widget_panelBuilder_widget.Stage2) -> any Widget {
 				                    let clock = scope.clock
 				                    func __safeDI_widget() -> DefaultWidget {
 				                        func __safeDI_part() -> Part {
-				                            _ = Part.__safeDI_Part_FDDB05C8BCBF2607.self\(seamCallComment(seam: "Part", module: "Feature"))
-				                            return Part(gearBuilder: __safeDI_gearBuilder)
+				                            _ = Part.__safeDI_Part_8735560374A43092.self\(seamCallComment(seam: "Inner", module: "Feature"))
+				                            return Part(gearBuilder: { __safeDI_gearSendableBuilder(.inner_panelBuilder_widget_part($0)) })
 				                        }
 				                        let part: Part = __safeDI_part()
-				                        let gadget: any Gadget = __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultWidget_gadget.Inner(clock: clock, part: part))
+				                        let gadget: any Gadget = __safeDI_gadgetBuilder_inner_panelBuilder_widget_gadget_Stage2(SafeDIStagedScope_Gadget_inner_panelBuilder_widget_gadget.Stage2(clock: clock, part: part))
 				                        return DefaultWidget(analytics: analytics, gadget: gadget, part: part)
 				                    }
 				                    let widget: any Widget = __safeDI_widget()
 				                    return widget
 				                }
-				                return __safeDI_widgetBuilder_Inner
+				                return __safeDI_widgetBuilder_panelBuilder_widget_Stage2
 				            }
-				            return Inner(widgetBuilder: __safeDI_widgetBuilder)
+				            return Inner(widgetBuilder_panelBuilder_widget: __safeDI_widgetBuilder_panelBuilder_widget)
 				        }
 				        let inner: Inner = __safeDI_inner()
 				        self.init(session: session, inner: inner)
@@ -246,54 +275,58 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				}
 
 				extension Host {
-				    public enum __safeDI_Host_CB3805EB9AC82CEB {}
+				    public enum __safeDI_Host_056A14C28200F753 {}
 				}
 				"""
 			case .stagedFillTakenSendable:
 				"""
 				extension Host {
-				    public enum SafeDIScope_DefaultWidget_gadget {
-				        public struct Outer {
+				    public enum SafeDIStagedScope_Gadget_shell_Inner_panelBuilder_widget_gadget {
+				        public struct Stage1 {
 				            public let session: Session
 				        }
 
-				        public struct Inner {
+				        public struct Stage2 {
 				            public let analytics: Analytics
 				        }
 
-				        public struct Inner2 {
+				        public struct Stage3 {
 				            public let clock: Clock
 				            public let part: Part
 				        }
 				    }
 
-				    public init(gadgetBuilder: @escaping (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner2) -> any Gadget, gearBuilder: @escaping @Sendable (Part.SafeDIScope_Part_gear) -> any Gear) {
-				        let __safeDI_gadgetBuilder = gadgetBuilder
-				        let __safeDI_gearBuilder = gearBuilder
+				    @frozen public enum SafeDISendableScope_Gear {
+				        case shell_Inner_panelBuilder_widget_part(Part.SafeDIScope_Gear)
+				    }
+
+				    public init(gadgetBuilder_shell_Inner_panelBuilder_widget_gadget: @escaping (SafeDIStagedScope_Gadget_shell_Inner_panelBuilder_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_panelBuilder_widget_gadget.Stage2) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_panelBuilder_widget_gadget.Stage3) -> any Gadget, gearSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gear) -> any Gear) {
+				        let __safeDI_gadgetBuilder_shell_Inner_panelBuilder_widget_gadget = gadgetBuilder_shell_Inner_panelBuilder_widget_gadget
+				        let __safeDI_gearSendableBuilder = gearSendableBuilder
 				        let session = Session()
 				        func __safeDI_shell() -> Shell {
-				            _ = Shell.__safeDI_Shell_A7580E2905D2AC49.self\(seamCallComment(seam: "Shell", module: "Feature"))
-				            let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget.Outer(session: session))
-				            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Panel_widget.Outer) -> @Sendable (Inner.SafeDIScope_Panel_widget.Inner) -> any Widget {
+				            _ = Shell.__safeDI_Shell_ADF5E6DB55D5B92B.self\(seamCallComment(seam: "Shell", module: "Feature"))
+				            let __safeDI_gadgetBuilder_shell_Inner_panelBuilder_widget_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_panelBuilder_widget_gadget(SafeDIStagedScope_Gadget_shell_Inner_panelBuilder_widget_gadget.Stage1(session: session))
+				            @Sendable func __safeDI_widgetBuilder_Inner_panelBuilder_widget(_ scope: Inner.SafeDIStagedScope_Widget_panelBuilder_widget.Stage1) -> @Sendable (Inner.SafeDIStagedScope_Widget_panelBuilder_widget.Stage2) -> any Widget {
 				                let analytics = scope.analytics
-				                let __safeDI_gadgetBuilder_Inner2 = __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultWidget_gadget.Inner(analytics: analytics))
-				                @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Panel_widget.Inner) -> any Widget {
+				                let __safeDI_gadgetBuilder_shell_Inner_panelBuilder_widget_gadget_Stage3 = __safeDI_gadgetBuilder_shell_Inner_panelBuilder_widget_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_panelBuilder_widget_gadget.Stage2(analytics: analytics))
+				                @Sendable func __safeDI_widgetBuilder_Inner_panelBuilder_widget_Stage2(_ scope: Inner.SafeDIStagedScope_Widget_panelBuilder_widget.Stage2) -> any Widget {
 				                    let clock = scope.clock
 				                    func __safeDI_widget() -> DefaultWidget {
 				                        func __safeDI_part() -> Part {
-				                            _ = Part.__safeDI_Part_FDDB05C8BCBF2607.self\(seamCallComment(seam: "Part", module: "Feature"))
-				                            return Part(gearBuilder: __safeDI_gearBuilder)
+				                            _ = Part.__safeDI_Part_8735560374A43092.self\(seamCallComment(seam: "Shell", module: "Feature"))
+				                            return Part(gearBuilder: { __safeDI_gearSendableBuilder(.shell_Inner_panelBuilder_widget_part($0)) })
 				                        }
 				                        let part: Part = __safeDI_part()
-				                        let gadget: any Gadget = __safeDI_gadgetBuilder_Inner2(SafeDIScope_DefaultWidget_gadget.Inner2(clock: clock, part: part))
+				                        let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_panelBuilder_widget_gadget_Stage3(SafeDIStagedScope_Gadget_shell_Inner_panelBuilder_widget_gadget.Stage3(clock: clock, part: part))
 				                        return DefaultWidget(analytics: analytics, gadget: gadget, part: part)
 				                    }
 				                    let widget: any Widget = __safeDI_widget()
 				                    return widget
 				                }
-				                return __safeDI_widgetBuilder_Inner
+				                return __safeDI_widgetBuilder_Inner_panelBuilder_widget_Stage2
 				            }
-				            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+				            return Shell(widgetBuilder_Inner_panelBuilder_widget: __safeDI_widgetBuilder_Inner_panelBuilder_widget)
 				        }
 				        let shell: Shell = __safeDI_shell()
 				        self.init(session: session, shell: shell)
@@ -301,7 +334,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				}
 
 				extension Host {
-				    public enum __safeDI_Host_D1581E8278EAC4AE {}
+				    public enum __safeDI_Host_75DD525ED99F9C65 {}
 				}
 				"""
 			}
@@ -315,18 +348,29 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				extension Root {
 				    public init() {
 				        func __safeDI_host() -> Host {
-				            _ = Host.__safeDI_Host_6E6AFC1CF316A7E1.self\(seamCallComment(seam: "Host", module: "Middle"))
-				            func __safeDI_gadgetBuilder(_ scope: Host.SafeDIScope_DefaultWidget_gadget) -> any Gadget {
-				                let session = scope.session
-				                let analytics = scope.analytics
-				                let gadget: any Gadget = DefaultGadget(session: session, analytics: analytics)
-				                return gadget
+				            _ = Host.__safeDI_Host_25297A734190213E.self\(seamCallComment(seam: "Host", module: "Middle"))
+				            func __safeDI_gadgetBuilder_Host(_ scope: Host.SafeDIScope_Gadget) -> any Gadget {
+				                switch scope {
+				                case let .inner_widget_gadget(scope):
+				                    let session = scope.session
+				                    let analytics = scope.analytics
+				                    let gadget: any Gadget = DefaultGadget(session: session, analytics: analytics)
+				                    return gadget
+				                }
 				            }
-				            func __safeDI_gearBuilder(_ scope: Part.SafeDIScope_Part_gear) -> any Gear {
-				                let gear: any Gear = DefaultGear()
-				                return gear
+				            func __safeDI_gearBuilder_Host(_ scope: Host.SafeDIScope_Gear) -> any Gear {
+				                switch scope {
+				                case let .inner_widget_part(scope): return __safeDI_gearBuilder_Part(scope)
+				                }
 				            }
-				            return Host(gadgetBuilder: __safeDI_gadgetBuilder, gearBuilder: __safeDI_gearBuilder)
+				            func __safeDI_gearBuilder_Part(_ scope: Part.SafeDIScope_Gear) -> any Gear {
+				                switch scope {
+				                case .gear:
+				                    let gear: any Gear = DefaultGear()
+				                    return gear
+				                }
+				            }
+				            return Host(gadgetBuilder: __safeDI_gadgetBuilder_Host, gearBuilder: __safeDI_gearBuilder_Host)
 				        }
 				        let host: Host = __safeDI_host()
 				        self.init(host: host)
@@ -338,21 +382,29 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				extension Root {
 				    public init() {
 				        func __safeDI_host() -> Host {
-				            _ = Host.__safeDI_Host_C0DFACC0D4D8427B.self\(seamCallComment(seam: "Host", module: "Middle"))
-				            func __safeDI_gadgetBuilder(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget {
+				            _ = Host.__safeDI_Host_F6DD5C282F7A31F3.self\(seamCallComment(seam: "Host", module: "Middle"))
+				            func __safeDI_gadgetBuilder_shell_Inner_widget_gadget(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget {
 				                let session = scope.session
-				                @Sendable func __safeDI_gadgetBuilder_Inner(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget {
+				                @Sendable func __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget {
 				                    let analytics = scope.analytics
 				                    let gadget: any Gadget = DefaultGadget(session: session, analytics: analytics)
 				                    return gadget
 				                }
-				                return __safeDI_gadgetBuilder_Inner
+				                return __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2
 				            }
-				            @Sendable func __safeDI_gearBuilder(_ scope: Part.SafeDIScope_Part_gear) -> any Gear {
-				                let gear: any Gear = DefaultGear()
-				                return gear
+				            @Sendable func __safeDI_gearSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Gear) -> any Gear {
+				                switch scope {
+				                case let .shell_Inner_widget_part(scope): return __safeDI_gearBuilder_Part(scope)
+				                }
 				            }
-				            return Host(gadgetBuilder: __safeDI_gadgetBuilder, gearBuilder: __safeDI_gearBuilder)
+				            @Sendable func __safeDI_gearBuilder_Part(_ scope: Part.SafeDIScope_Gear) -> any Gear {
+				                switch scope {
+				                case .gear:
+				                    let gear: any Gear = DefaultGear()
+				                    return gear
+				                }
+				            }
+				            return Host(gadgetBuilder_shell_Inner_widget_gadget: __safeDI_gadgetBuilder_shell_Inner_widget_gadget, gearSendableBuilder: __safeDI_gearSendableBuilder_Host)
 				        }
 				        let host: Host = __safeDI_host()
 				        self.init(host: host)
@@ -364,21 +416,29 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				extension Root {
 				    public init() {
 				        func __safeDI_host() -> Host {
-				            _ = Host.__safeDI_Host_CB3805EB9AC82CEB.self\(seamCallComment(seam: "Host", module: "Middle"))
-				            func __safeDI_gadgetBuilder(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget {
+				            _ = Host.__safeDI_Host_056A14C28200F753.self\(seamCallComment(seam: "Host", module: "Middle"))
+				            func __safeDI_gadgetBuilder_inner_panelBuilder_widget_gadget(_ scope: Host.SafeDIStagedScope_Gadget_inner_panelBuilder_widget_gadget.Stage1) -> @Sendable (Host.SafeDIStagedScope_Gadget_inner_panelBuilder_widget_gadget.Stage2) -> any Gadget {
 				                let session = scope.session
 				                let analytics = scope.analytics
-				                @Sendable func __safeDI_gadgetBuilder_Inner(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget {
+				                @Sendable func __safeDI_gadgetBuilder_inner_panelBuilder_widget_gadget_Stage2(_ scope: Host.SafeDIStagedScope_Gadget_inner_panelBuilder_widget_gadget.Stage2) -> any Gadget {
 				                    let gadget: any Gadget = DefaultGadget(session: session, analytics: analytics)
 				                    return gadget
 				                }
-				                return __safeDI_gadgetBuilder_Inner
+				                return __safeDI_gadgetBuilder_inner_panelBuilder_widget_gadget_Stage2
 				            }
-				            @Sendable func __safeDI_gearBuilder(_ scope: Part.SafeDIScope_Part_gear) -> any Gear {
-				                let gear: any Gear = DefaultGear()
-				                return gear
+				            @Sendable func __safeDI_gearSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Gear) -> any Gear {
+				                switch scope {
+				                case let .inner_panelBuilder_widget_part(scope): return __safeDI_gearBuilder_Part(scope)
+				                }
 				            }
-				            return Host(gadgetBuilder: __safeDI_gadgetBuilder, gearBuilder: __safeDI_gearBuilder)
+				            @Sendable func __safeDI_gearBuilder_Part(_ scope: Part.SafeDIScope_Gear) -> any Gear {
+				                switch scope {
+				                case .gear:
+				                    let gear: any Gear = DefaultGear()
+				                    return gear
+				                }
+				            }
+				            return Host(gadgetBuilder_inner_panelBuilder_widget_gadget: __safeDI_gadgetBuilder_inner_panelBuilder_widget_gadget, gearSendableBuilder: __safeDI_gearSendableBuilder_Host)
 				        }
 				        let host: Host = __safeDI_host()
 				        self.init(host: host)
@@ -390,24 +450,32 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				extension Root {
 				    public init() {
 				        func __safeDI_host() -> Host {
-				            _ = Host.__safeDI_Host_D1581E8278EAC4AE.self\(seamCallComment(seam: "Host", module: "Middle"))
-				            func __safeDI_gadgetBuilder(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Inner) -> @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Inner2) -> any Gadget {
+				            _ = Host.__safeDI_Host_75DD525ED99F9C65.self\(seamCallComment(seam: "Host", module: "Middle"))
+				            func __safeDI_gadgetBuilder_shell_Inner_panelBuilder_widget_gadget(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_panelBuilder_widget_gadget.Stage1) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_panelBuilder_widget_gadget.Stage2) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_panelBuilder_widget_gadget.Stage3) -> any Gadget {
 				                let session = scope.session
-				                @Sendable func __safeDI_gadgetBuilder_Inner(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Inner) -> @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Inner2) -> any Gadget {
+				                @Sendable func __safeDI_gadgetBuilder_shell_Inner_panelBuilder_widget_gadget_Stage2(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_panelBuilder_widget_gadget.Stage2) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_panelBuilder_widget_gadget.Stage3) -> any Gadget {
 				                    let analytics = scope.analytics
-				                    @Sendable func __safeDI_gadgetBuilder_Inner2(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Inner2) -> any Gadget {
+				                    @Sendable func __safeDI_gadgetBuilder_shell_Inner_panelBuilder_widget_gadget_Stage3(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_panelBuilder_widget_gadget.Stage3) -> any Gadget {
 				                        let gadget: any Gadget = DefaultGadget(session: session, analytics: analytics)
 				                        return gadget
 				                    }
-				                    return __safeDI_gadgetBuilder_Inner2
+				                    return __safeDI_gadgetBuilder_shell_Inner_panelBuilder_widget_gadget_Stage3
 				                }
-				                return __safeDI_gadgetBuilder_Inner
+				                return __safeDI_gadgetBuilder_shell_Inner_panelBuilder_widget_gadget_Stage2
 				            }
-				            @Sendable func __safeDI_gearBuilder(_ scope: Part.SafeDIScope_Part_gear) -> any Gear {
-				                let gear: any Gear = DefaultGear()
-				                return gear
+				            @Sendable func __safeDI_gearSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Gear) -> any Gear {
+				                switch scope {
+				                case let .shell_Inner_panelBuilder_widget_part(scope): return __safeDI_gearBuilder_Part(scope)
+				                }
 				            }
-				            return Host(gadgetBuilder: __safeDI_gadgetBuilder, gearBuilder: __safeDI_gearBuilder)
+				            @Sendable func __safeDI_gearBuilder_Part(_ scope: Part.SafeDIScope_Gear) -> any Gear {
+				                switch scope {
+				                case .gear:
+				                    let gear: any Gear = DefaultGear()
+				                    return gear
+				                }
+				            }
+				            return Host(gadgetBuilder_shell_Inner_panelBuilder_widget_gadget: __safeDI_gadgetBuilder_shell_Inner_panelBuilder_widget_gadget, gearSendableBuilder: __safeDI_gearSendableBuilder_Host)
 				        }
 				        let host: Host = __safeDI_host()
 				        self.init(host: host)
@@ -502,30 +570,30 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public enum SafeDIScope_Holder_gadget {
-		        public struct Outer {
+		    public enum SafeDIStagedScope_Gadget_shell_Inner_widget_holderBuilder_gadget {
+		        public struct Stage1 {
 		            public let session: Session
 		        }
 
-		        public struct Inner {
+		        public struct Stage2 {
 		            public let analytics: Analytics
 		        }
 
-		        public struct Inner2 {}
+		        public struct Stage3 {}
 		    }
 
-		    public init(gadgetBuilder: @escaping (SafeDIScope_Holder_gadget.Outer) -> @Sendable (SafeDIScope_Holder_gadget.Inner) -> @Sendable (SafeDIScope_Holder_gadget.Inner2) -> any Gadget) {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
+		    public init(gadgetBuilder_shell_Inner_widget_holderBuilder_gadget: @escaping (SafeDIStagedScope_Gadget_shell_Inner_widget_holderBuilder_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_holderBuilder_gadget.Stage2) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_holderBuilder_gadget.Stage3) -> any Gadget) {
+		        let __safeDI_gadgetBuilder_shell_Inner_widget_holderBuilder_gadget = gadgetBuilder_shell_Inner_widget_holderBuilder_gadget
 		        let session = Session()
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-		            let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_Holder_gadget.Outer(session: session))
-		            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+		            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		            let __safeDI_gadgetBuilder_shell_Inner_widget_holderBuilder_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_widget_holderBuilder_gadget(SafeDIStagedScope_Gadget_shell_Inner_widget_holderBuilder_gadget.Stage1(session: session))
+		            @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 		                let analytics = scope.analytics
 		                func __safeDI_widget() -> DefaultWidget {
-		                    let __safeDI_gadgetBuilder_Inner2 = __safeDI_gadgetBuilder_Inner(SafeDIScope_Holder_gadget.Inner(analytics: analytics))
+		                    let __safeDI_gadgetBuilder_shell_Inner_widget_holderBuilder_gadget_Stage3 = __safeDI_gadgetBuilder_shell_Inner_widget_holderBuilder_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_widget_holderBuilder_gadget.Stage2(analytics: analytics))
 		                    @Sendable func __safeDI_holderBuilder() -> Holder {
-		                        let gadget: any Gadget = __safeDI_gadgetBuilder_Inner2(SafeDIScope_Holder_gadget.Inner2())
+		                        let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_widget_holderBuilder_gadget_Stage3(SafeDIStagedScope_Gadget_shell_Inner_widget_holderBuilder_gadget.Stage3())
 		                        return Holder(analytics: analytics, gadget: gadget)
 		                    }
 		                    let holderBuilder = SendableInstantiator<Holder>(__safeDI_holderBuilder)
@@ -534,7 +602,17 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		                let widget: any Widget = __safeDI_widget()
 		                return widget
 		            }
-		            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+		            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+		                }
+		            }
+		            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 		        }
 		        let shell: Shell = __safeDI_shell()
 		        self.init(session: session, shell: shell)
@@ -542,27 +620,27 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_700E23F48AB42629 {}
+		    public enum __safeDI_Host_61C36CCD44E79BEB {}
 		}
 		"""])
 		expectGeneratedCode(of: output, module: "App", imports: ["Feature", "Middle"], rootFiles: ["Root": """
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_700E23F48AB42629.self\(seamCallComment(seam: "Host", module: "Middle"))
-		            func __safeDI_gadgetBuilder(_ scope: Host.SafeDIScope_Holder_gadget.Outer) -> @Sendable (Host.SafeDIScope_Holder_gadget.Inner) -> @Sendable (Host.SafeDIScope_Holder_gadget.Inner2) -> any Gadget {
+		            _ = Host.__safeDI_Host_61C36CCD44E79BEB.self\(seamCallComment(seam: "Host", module: "Middle"))
+		            func __safeDI_gadgetBuilder_shell_Inner_widget_holderBuilder_gadget(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_holderBuilder_gadget.Stage1) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_widget_holderBuilder_gadget.Stage2) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_widget_holderBuilder_gadget.Stage3) -> any Gadget {
 		                let session = scope.session
-		                @Sendable func __safeDI_gadgetBuilder_Inner(_ scope: Host.SafeDIScope_Holder_gadget.Inner) -> @Sendable (Host.SafeDIScope_Holder_gadget.Inner2) -> any Gadget {
+		                @Sendable func __safeDI_gadgetBuilder_shell_Inner_widget_holderBuilder_gadget_Stage2(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_holderBuilder_gadget.Stage2) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_widget_holderBuilder_gadget.Stage3) -> any Gadget {
 		                    let analytics = scope.analytics
-		                    @Sendable func __safeDI_gadgetBuilder_Inner2(_ scope: Host.SafeDIScope_Holder_gadget.Inner2) -> any Gadget {
+		                    @Sendable func __safeDI_gadgetBuilder_shell_Inner_widget_holderBuilder_gadget_Stage3(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_holderBuilder_gadget.Stage3) -> any Gadget {
 		                        let gadget: any Gadget = DefaultGadget(session: session, analytics: analytics)
 		                        return gadget
 		                    }
-		                    return __safeDI_gadgetBuilder_Inner2
+		                    return __safeDI_gadgetBuilder_shell_Inner_widget_holderBuilder_gadget_Stage3
 		                }
-		                return __safeDI_gadgetBuilder_Inner
+		                return __safeDI_gadgetBuilder_shell_Inner_widget_holderBuilder_gadget_Stage2
 		            }
-		            return Host(gadgetBuilder: __safeDI_gadgetBuilder)
+		            return Host(gadgetBuilder_shell_Inner_widget_holderBuilder_gadget: __safeDI_gadgetBuilder_shell_Inner_widget_holderBuilder_gadget)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -592,39 +670,49 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public enum SafeDIScope_DefaultYarn_gadget {
-		        public struct Outer {
+		    public enum SafeDIStagedScope_Gadget_shell_Inner_widget_deepShell_Deep_yarn_gadget {
+		        public struct Stage1 {
 		            public let session: Session
 		        }
 
-		        public struct Inner {
+		        public struct Stage2 {
 		            public let analytics: Analytics
 		        }
 
-		        public struct Inner2 {}
+		        public struct Stage3 {}
 		    }
 
-		    public init(gadgetBuilder: @escaping (SafeDIScope_DefaultYarn_gadget.Outer) -> @Sendable (SafeDIScope_DefaultYarn_gadget.Inner) -> @Sendable (SafeDIScope_DefaultYarn_gadget.Inner2) -> any Gadget) {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
+		    public init(gadgetBuilder_shell_Inner_widget_deepShell_Deep_yarn_gadget: @escaping (SafeDIStagedScope_Gadget_shell_Inner_widget_deepShell_Deep_yarn_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_deepShell_Deep_yarn_gadget.Stage2) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_deepShell_Deep_yarn_gadget.Stage3) -> any Gadget) {
+		        let __safeDI_gadgetBuilder_shell_Inner_widget_deepShell_Deep_yarn_gadget = gadgetBuilder_shell_Inner_widget_deepShell_Deep_yarn_gadget
 		        let session = Session()
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-		            let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultYarn_gadget.Outer(session: session))
-		            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+		            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		            let __safeDI_gadgetBuilder_shell_Inner_widget_deepShell_Deep_yarn_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_widget_deepShell_Deep_yarn_gadget(SafeDIStagedScope_Gadget_shell_Inner_widget_deepShell_Deep_yarn_gadget.Stage1(session: session))
+		            @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 		                let analytics = scope.analytics
 		                func __safeDI_widget() -> DefaultWidget {
 		                    func __safeDI_deepShell() -> DeepShell {
-		                        _ = DeepShell.__safeDI_DeepShell_2D73002467694E10.self\(seamCallComment(seam: "DeepShell", module: "Feature"))
-		                        let __safeDI_gadgetBuilder_Inner2 = __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultYarn_gadget.Inner(analytics: analytics))
-		                        @Sendable func __safeDI_yarnBuilder(_ scope: Deep.SafeDIScope_Deep_yarn) -> any Yarn {
+		                        _ = DeepShell.__safeDI_DeepShell_B58B4F4F25E9236A.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		                        let __safeDI_gadgetBuilder_shell_Inner_widget_deepShell_Deep_yarn_gadget_Stage3 = __safeDI_gadgetBuilder_shell_Inner_widget_deepShell_Deep_yarn_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_widget_deepShell_Deep_yarn_gadget.Stage2(analytics: analytics))
+		                        @Sendable func __safeDI_yarnBuilder_Deep_yarn(_ scope: Deep.SafeDIScope_Yarn.yarn_Values) -> any Yarn {
 		                            func __safeDI_yarn() -> DefaultYarn {
-		                                let gadget: any Gadget = __safeDI_gadgetBuilder_Inner2(SafeDIScope_DefaultYarn_gadget.Inner2())
+		                                let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_widget_deepShell_Deep_yarn_gadget_Stage3(SafeDIStagedScope_Gadget_shell_Inner_widget_deepShell_Deep_yarn_gadget.Stage3())
 		                                return DefaultYarn(gadget: gadget)
 		                            }
 		                            let yarn: any Yarn = __safeDI_yarn()
 		                            return yarn
 		                        }
-		                        return DeepShell(yarnBuilder: __safeDI_yarnBuilder)
+		                        @Sendable func __safeDI_yarnSendableBuilder_DeepShell(_ scope: DeepShell.SafeDISendableScope_Yarn) -> any Yarn {
+		                            switch scope {
+		                            case let .deepBuilder(scope): return __safeDI_yarnBuilder_Deep(scope)
+		                            }
+		                        }
+		                        @Sendable func __safeDI_yarnBuilder_Deep(_ scope: Deep.SafeDIScope_Yarn) -> any Yarn {
+		                            switch scope {
+		                            case let .yarn(scope): return __safeDI_yarnBuilder_Deep_yarn(scope)
+		                            }
+		                        }
+		                        return DeepShell(yarnSendableBuilder: __safeDI_yarnSendableBuilder_DeepShell)
 		                    }
 		                    let deepShell: DeepShell = __safeDI_deepShell()
 		                    return DefaultWidget(deepShell: deepShell)
@@ -632,7 +720,17 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		                let widget: any Widget = __safeDI_widget()
 		                return widget
 		            }
-		            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+		            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+		                }
+		            }
+		            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 		        }
 		        let shell: Shell = __safeDI_shell()
 		        self.init(session: session, shell: shell)
@@ -640,26 +738,26 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_B50534156CA996C4 {}
+		    public enum __safeDI_Host_02867210AE3E6E25 {}
 		}
 		"""])
 		expectGeneratedCode(of: output, module: "App", imports: ["Feature", "Middle"], rootFiles: ["Root": """
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_B50534156CA996C4.self\(seamCallComment(seam: "Host", module: "Middle"))
-		            func __safeDI_gadgetBuilder(_ scope: Host.SafeDIScope_DefaultYarn_gadget.Outer) -> @Sendable (Host.SafeDIScope_DefaultYarn_gadget.Inner) -> @Sendable (Host.SafeDIScope_DefaultYarn_gadget.Inner2) -> any Gadget {
+		            _ = Host.__safeDI_Host_02867210AE3E6E25.self\(seamCallComment(seam: "Host", module: "Middle"))
+		            func __safeDI_gadgetBuilder_shell_Inner_widget_deepShell_Deep_yarn_gadget(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_deepShell_Deep_yarn_gadget.Stage1) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_widget_deepShell_Deep_yarn_gadget.Stage2) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_widget_deepShell_Deep_yarn_gadget.Stage3) -> any Gadget {
 		                let session = scope.session
-		                @Sendable func __safeDI_gadgetBuilder_Inner(_ scope: Host.SafeDIScope_DefaultYarn_gadget.Inner) -> @Sendable (Host.SafeDIScope_DefaultYarn_gadget.Inner2) -> any Gadget {
-		                    @Sendable func __safeDI_gadgetBuilder_Inner2(_ scope: Host.SafeDIScope_DefaultYarn_gadget.Inner2) -> any Gadget {
+		                @Sendable func __safeDI_gadgetBuilder_shell_Inner_widget_deepShell_Deep_yarn_gadget_Stage2(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_deepShell_Deep_yarn_gadget.Stage2) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_widget_deepShell_Deep_yarn_gadget.Stage3) -> any Gadget {
+		                    @Sendable func __safeDI_gadgetBuilder_shell_Inner_widget_deepShell_Deep_yarn_gadget_Stage3(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_deepShell_Deep_yarn_gadget.Stage3) -> any Gadget {
 		                        let gadget: any Gadget = DefaultGadget(session: session)
 		                        return gadget
 		                    }
-		                    return __safeDI_gadgetBuilder_Inner2
+		                    return __safeDI_gadgetBuilder_shell_Inner_widget_deepShell_Deep_yarn_gadget_Stage3
 		                }
-		                return __safeDI_gadgetBuilder_Inner
+		                return __safeDI_gadgetBuilder_shell_Inner_widget_deepShell_Deep_yarn_gadget_Stage2
 		            }
-		            return Host(gadgetBuilder: __safeDI_gadgetBuilder)
+		            return Host(gadgetBuilder_shell_Inner_widget_deepShell_Deep_yarn_gadget: __safeDI_gadgetBuilder_shell_Inner_widget_deepShell_Deep_yarn_gadget)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -698,27 +796,27 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			case .lazilyInstantiated:
 				"""
 				extension Host {
-				    public enum SafeDIScope_DefaultWidget_gadget {
-				        public struct Outer {
+				    public enum SafeDIStagedScope_Gadget_shell_Inner_widget_gadget {
+				        public struct Stage1 {
 				            public let session: Session
 				        }
 
-				        public struct Inner {
+				        public struct Stage2 {
 				            public let analytics: Analytics
 				        }
 				    }
 
-				    public init(gadgetBuilder: @escaping (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget) {
-				        let __safeDI_gadgetBuilder = gadgetBuilder
+				    public init(gadgetBuilder_shell_Inner_widget_gadget: @escaping (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget) {
+				        let __safeDI_gadgetBuilder_shell_Inner_widget_gadget = gadgetBuilder_shell_Inner_widget_gadget
 				        let session = Session()
 				        func __safeDI_shell() -> Shell {
-				            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-				            let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget.Outer(session: session))
-				            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+				            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+				            let __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_widget_gadget(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1(session: session))
+				            @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 				                let analytics = scope.analytics
 				                func __safeDI_widget() -> DefaultWidget {
 				                    func __safeDI_gadget() -> any Gadget {
-				                        __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultWidget_gadget.Inner(analytics: analytics))
+				                        __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2(analytics: analytics))
 				                    }
 				                    let gadget = LazilyInstantiated<any Gadget>(__safeDI_gadget)
 				                    return DefaultWidget(analytics: analytics, gadget: gadget)
@@ -726,7 +824,17 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                let widget: any Widget = __safeDI_widget()
 				                return widget
 				            }
-				            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+				            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+				                switch scope {
+				                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+				                }
+				            }
+				            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+				                switch scope {
+				                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+				                }
+				            }
+				            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 				        }
 				        let shell: Shell = __safeDI_shell()
 				        self.init(session: session, shell: shell)
@@ -734,36 +842,36 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				}
 
 				extension Host {
-				    public enum __safeDI_Host_C5D522AE64911A57 {}
+				    public enum __safeDI_Host_C2B8446A21A9B91D {}
 				}
 				"""
 			case .sendableLazilyInstantiated:
 				"""
 				extension Host {
-				    public enum SafeDIScope_DefaultWidget_gadget {
-				        public struct Outer {
+				    public enum SafeDIStagedScope_Gadget_shell_Inner_widget_gadget {
+				        public struct Stage1 {
 				            public let session: Session
 				        }
 
-				        public struct Inner {
+				        public struct Stage2 {
 				            public let analytics: Analytics
 				        }
 
-				        public struct Inner2 {}
+				        public struct Stage3 {}
 				    }
 
-				    public init(gadgetBuilder: @escaping (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner2) -> any Gadget) {
-				        let __safeDI_gadgetBuilder = gadgetBuilder
+				    public init(gadgetBuilder_shell_Inner_widget_gadget: @escaping (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage3) -> any Gadget) {
+				        let __safeDI_gadgetBuilder_shell_Inner_widget_gadget = gadgetBuilder_shell_Inner_widget_gadget
 				        let session = Session()
 				        func __safeDI_shell() -> Shell {
-				            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-				            let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget.Outer(session: session))
-				            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+				            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+				            let __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_widget_gadget(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1(session: session))
+				            @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 				                let analytics = scope.analytics
 				                func __safeDI_widget() -> DefaultWidget {
-				                    let __safeDI_gadgetBuilder_Inner2 = __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultWidget_gadget.Inner(analytics: analytics))
+				                    let __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage3 = __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2(analytics: analytics))
 				                    @Sendable func __safeDI_gadget() -> any Gadget {
-				                        __safeDI_gadgetBuilder_Inner2(SafeDIScope_DefaultWidget_gadget.Inner2())
+				                        __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage3(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage3())
 				                    }
 				                    let gadget = SendableLazilyInstantiated<any Gadget>(__safeDI_gadget)
 				                    return DefaultWidget(analytics: analytics, gadget: gadget)
@@ -771,7 +879,17 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                let widget: any Widget = __safeDI_widget()
 				                return widget
 				            }
-				            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+				            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+				                switch scope {
+				                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+				                }
+				            }
+				            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+				                switch scope {
+				                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+				                }
+				            }
+				            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 				        }
 				        let shell: Shell = __safeDI_shell()
 				        self.init(session: session, shell: shell)
@@ -779,7 +897,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				}
 
 				extension Host {
-				    public enum __safeDI_Host_9EF90261B450AE82 {}
+				    public enum __safeDI_Host_198E2D9E98324E47 {}
 				}
 				"""
 			}
@@ -792,19 +910,19 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				extension Root {
 				    public init() {
 				        func __safeDI_host() -> Host {
-				            _ = Host.__safeDI_Host_C5D522AE64911A57.self\(seamCallComment(seam: "Host", module: "Middle"))
-				            func __safeDI_gadgetBuilder(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget {
+				            _ = Host.__safeDI_Host_C2B8446A21A9B91D.self\(seamCallComment(seam: "Host", module: "Middle"))
+				            func __safeDI_gadgetBuilder_shell_Inner_widget_gadget(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget {
 				                let session = scope.session
-				                @Sendable func __safeDI_gadgetBuilder_Inner(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget {
+				                @Sendable func __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget {
 				                    let analytics = scope.analytics
 				                    func __safeDI_gadget() -> DefaultGadget {
 				                        DefaultGadget(session: session, analytics: analytics)
 				                    }
 				                    return __safeDI_gadget()
 				                }
-				                return __safeDI_gadgetBuilder_Inner
+				                return __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2
 				            }
-				            return Host(gadgetBuilder: __safeDI_gadgetBuilder)
+				            return Host(gadgetBuilder_shell_Inner_widget_gadget: __safeDI_gadgetBuilder_shell_Inner_widget_gadget)
 				        }
 				        let host: Host = __safeDI_host()
 				        self.init(host: host)
@@ -816,22 +934,22 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				extension Root {
 				    public init() {
 				        func __safeDI_host() -> Host {
-				            _ = Host.__safeDI_Host_9EF90261B450AE82.self\(seamCallComment(seam: "Host", module: "Middle"))
-				            func __safeDI_gadgetBuilder(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Inner) -> @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Inner2) -> any Gadget {
+				            _ = Host.__safeDI_Host_198E2D9E98324E47.self\(seamCallComment(seam: "Host", module: "Middle"))
+				            func __safeDI_gadgetBuilder_shell_Inner_widget_gadget(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage3) -> any Gadget {
 				                let session = scope.session
-				                @Sendable func __safeDI_gadgetBuilder_Inner(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Inner) -> @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Inner2) -> any Gadget {
+				                @Sendable func __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage3) -> any Gadget {
 				                    let analytics = scope.analytics
-				                    @Sendable func __safeDI_gadgetBuilder_Inner2(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Inner2) -> any Gadget {
+				                    @Sendable func __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage3(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage3) -> any Gadget {
 				                        @Sendable func __safeDI_gadget() -> DefaultGadget {
 				                            DefaultGadget(session: session, analytics: analytics)
 				                        }
 				                        return __safeDI_gadget()
 				                    }
-				                    return __safeDI_gadgetBuilder_Inner2
+				                    return __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage3
 				                }
-				                return __safeDI_gadgetBuilder_Inner
+				                return __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2
 				            }
-				            return Host(gadgetBuilder: __safeDI_gadgetBuilder)
+				            return Host(gadgetBuilder_shell_Inner_widget_gadget: __safeDI_gadgetBuilder_shell_Inner_widget_gadget)
 				        }
 				        let host: Host = __safeDI_host()
 				        self.init(host: host)
@@ -882,36 +1000,60 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_top() -> Top {
-		            _ = Top.__safeDI_Top_7C175F0BF15B70E1.self\(seamCallComment(seam: "Top", module: "Feature"))
-		            @Sendable func __safeDI_firstBuilder(_ scope: SubA.SafeDIScope_SubA_first) -> any First {
-		                func __safeDI_first() -> DefaultFirst {
-		                    func __safeDI_subB() -> SubB {
-		                        _ = SubB.__safeDI_SubB_4D9A4FD97E985BD4.self\(seamCallComment(seam: "SubB", module: "Feature"))
-		                        return SubB(secondBuilder: __safeDI_secondBuilder)
-		                    }
-		                    let subB: SubB = __safeDI_subB()
-		                    return DefaultFirst(subB: subB)
+		            _ = Top.__safeDI_Top_0073276940F34EB1.self\(seamCallComment(seam: "Top", module: "Feature"))
+		            @Sendable func __safeDI_firstSendableBuilder_Top(_ scope: Top.SafeDISendableScope_First) -> any First {
+		                switch scope {
+		                case let .subABuilder(scope): return __safeDI_firstBuilder_SubA(scope)
 		                }
-		                let first: any First = __safeDI_first()
-		                return first
 		            }
-		            @Sendable func __safeDI_secondBuilder(_ scope: SubB.SafeDIScope_SubB_second) -> any Second {
-		                func __safeDI_second() -> DefaultSecond {
-		                    func __safeDI_subC() -> SubC {
-		                        _ = SubC.__safeDI_SubC_832F09DFF162441D.self\(seamCallComment(seam: "SubC", module: "Feature"))
-		                        return SubC(thirdBuilder: __safeDI_thirdBuilder)
+		            @Sendable func __safeDI_firstBuilder_SubA(_ scope: SubA.SafeDIScope_First) -> any First {
+		                switch scope {
+		                case .first:
+		                    func __safeDI_first() -> DefaultFirst {
+		                        func __safeDI_subB() -> SubB {
+		                            _ = SubB.__safeDI_SubB_3FE2E3B686B63FF2.self\(seamCallComment(seam: "Top", module: "Feature"))
+		                            return SubB(secondBuilder: __safeDI_secondBuilder_SubB)
+		                        }
+		                        let subB: SubB = __safeDI_subB()
+		                        return DefaultFirst(subB: subB)
 		                    }
-		                    let subC: SubC = __safeDI_subC()
-		                    return DefaultSecond(subC: subC)
+		                    let first: any First = __safeDI_first()
+		                    return first
 		                }
-		                let second: any Second = __safeDI_second()
-		                return second
 		            }
-		            @Sendable func __safeDI_thirdBuilder(_ scope: SubC.SafeDIScope_SubC_third) -> any Third {
-		                let third: any Third = DefaultThird()
-		                return third
+		            func __safeDI_secondBuilder_Top(_ scope: Top.SafeDIScope_Second) -> any Second {
+		                switch scope {
+		                case let .subB(scope): return __safeDI_secondBuilder_SubB(scope)
+		                }
 		            }
-		            return Top(firstBuilder: __safeDI_firstBuilder, secondBuilder: __safeDI_secondBuilder, thirdBuilder: __safeDI_thirdBuilder)
+		            @Sendable func __safeDI_secondBuilder_SubB(_ scope: SubB.SafeDIScope_Second) -> any Second {
+		                switch scope {
+		                case .second:
+		                    func __safeDI_second() -> DefaultSecond {
+		                        func __safeDI_subC() -> SubC {
+		                            _ = SubC.__safeDI_SubC_D44B97D8B84C631C.self\(seamCallComment(seam: "Top", module: "Feature"))
+		                            return SubC(thirdBuilder: __safeDI_thirdBuilder_SubC)
+		                        }
+		                        let subC: SubC = __safeDI_subC()
+		                        return DefaultSecond(subC: subC)
+		                    }
+		                    let second: any Second = __safeDI_second()
+		                    return second
+		                }
+		            }
+		            func __safeDI_thirdBuilder_Top(_ scope: Top.SafeDIScope_Third) -> any Third {
+		                switch scope {
+		                case let .subC(scope): return __safeDI_thirdBuilder_SubC(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_thirdBuilder_SubC(_ scope: SubC.SafeDIScope_Third) -> any Third {
+		                switch scope {
+		                case .third:
+		                    let third: any Third = DefaultThird()
+		                    return third
+		                }
+		            }
+		            return Top(firstSendableBuilder: __safeDI_firstSendableBuilder_Top, secondBuilder: __safeDI_secondBuilder_Top, thirdBuilder: __safeDI_thirdBuilder_Top)
 		        }
 		        let top: Top = __safeDI_top()
 		        self.init(top: top)
@@ -950,36 +1092,60 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_top() -> Top {
-		            _ = Top.__safeDI_Top_85D510C964ABBC77.self\(seamCallComment(seam: "Top", module: "Feature"))
-		            func __safeDI_firstBuilder(_ scope: SubA.SafeDIScope_SubA_first) -> any First {
-		                func __safeDI_first() -> DefaultFirst {
-		                    func __safeDI_thirdShell() -> ThirdShell {
-		                        _ = ThirdShell.__safeDI_ThirdShell_27113BAF838BA793.self\(seamCallComment(seam: "ThirdShell", module: "Feature"))
-		                        @Sendable func __safeDI_thirdBuilder(_ scope: SubC.SafeDIScope_SubC_third) -> any Third {
-		                            func __safeDI_third() -> DefaultThird {
-		                                func __safeDI_subB() -> SubB {
-		                                    _ = SubB.__safeDI_SubB_4D9A4FD97E985BD4.self\(seamCallComment(seam: "SubB", module: "Feature"))
-		                                    return SubB(secondBuilder: __safeDI_secondBuilder)
-		                                }
-		                                let subB: SubB = __safeDI_subB()
-		                                return DefaultThird(subB: subB)
-		                            }
-		                            let third: any Third = __safeDI_third()
-		                            return third
-		                        }
-		                        return ThirdShell(thirdBuilder: __safeDI_thirdBuilder)
-		                    }
-		                    let thirdShell: ThirdShell = __safeDI_thirdShell()
-		                    return DefaultFirst(thirdShell: thirdShell)
+		            _ = Top.__safeDI_Top_9DA066B47A13D238.self\(seamCallComment(seam: "Top", module: "Feature"))
+		            func __safeDI_firstBuilder_Top(_ scope: Top.SafeDIScope_First) -> any First {
+		                switch scope {
+		                case let .subA(scope): return __safeDI_firstBuilder_SubA(scope)
 		                }
-		                let first: any First = __safeDI_first()
-		                return first
 		            }
-		            @Sendable func __safeDI_secondBuilder(_ scope: SubB.SafeDIScope_SubB_second) -> any Second {
-		                let second: any Second = DefaultSecond()
-		                return second
+		            func __safeDI_firstBuilder_SubA(_ scope: SubA.SafeDIScope_First) -> any First {
+		                switch scope {
+		                case .first:
+		                    func __safeDI_first() -> DefaultFirst {
+		                        func __safeDI_thirdShell() -> ThirdShell {
+		                            _ = ThirdShell.__safeDI_ThirdShell_D1039470AE38B38A.self\(seamCallComment(seam: "Top", module: "Feature"))
+		                            @Sendable func __safeDI_thirdSendableBuilder_ThirdShell(_ scope: ThirdShell.SafeDISendableScope_Third) -> any Third {
+		                                switch scope {
+		                                case let .subCBuilder(scope): return __safeDI_thirdBuilder_SubC(scope)
+		                                }
+		                            }
+		                            @Sendable func __safeDI_thirdBuilder_SubC(_ scope: SubC.SafeDIScope_Third) -> any Third {
+		                                switch scope {
+		                                case .third:
+		                                    func __safeDI_third() -> DefaultThird {
+		                                        func __safeDI_subB() -> SubB {
+		                                            _ = SubB.__safeDI_SubB_3FE2E3B686B63FF2.self\(seamCallComment(seam: "Top", module: "Feature"))
+		                                            return SubB(secondBuilder: __safeDI_secondBuilder_SubB)
+		                                        }
+		                                        let subB: SubB = __safeDI_subB()
+		                                        return DefaultThird(subB: subB)
+		                                    }
+		                                    let third: any Third = __safeDI_third()
+		                                    return third
+		                                }
+		                            }
+		                            return ThirdShell(thirdSendableBuilder: __safeDI_thirdSendableBuilder_ThirdShell)
+		                        }
+		                        let thirdShell: ThirdShell = __safeDI_thirdShell()
+		                        return DefaultFirst(thirdShell: thirdShell)
+		                    }
+		                    let first: any First = __safeDI_first()
+		                    return first
+		                }
 		            }
-		            return Top(firstBuilder: __safeDI_firstBuilder, secondBuilder: __safeDI_secondBuilder)
+		            func __safeDI_secondBuilder_Top(_ scope: Top.SafeDIScope_Second) -> any Second {
+		                switch scope {
+		                case let .subB(scope): return __safeDI_secondBuilder_SubB(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_secondBuilder_SubB(_ scope: SubB.SafeDIScope_Second) -> any Second {
+		                switch scope {
+		                case .second:
+		                    let second: any Second = DefaultSecond()
+		                    return second
+		                }
+		            }
+		            return Top(firstBuilder: __safeDI_firstBuilder_Top, secondBuilder: __safeDI_secondBuilder_Top)
 		        }
 		        let top: Top = __safeDI_top()
 		        self.init(top: top)
@@ -1010,8 +1176,8 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public enum SafeDIScope_DefaultWidget_gadget {
-		        public struct Outer {
+		    public enum SafeDIStagedScope_Gadget_shell_Inner_widget_gadget {
+		        public struct Stage1 {
 		            public var user: User { __safeDI_user.instance }
 		            public let session: Session
 		            let __safeDI_user: LazilyInstantiated<User>
@@ -1022,31 +1188,41 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		            }
 		        }
 
-		        public struct Inner {
+		        public struct Stage2 {
 		            public let analytics: Analytics
 		        }
 		    }
 
-		    public init(user: User, gadgetBuilder: @escaping (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget) {
-		        self.init(__safeDI_user: user, __safeDI_gadgetBuilder: gadgetBuilder)
+		    public init(user: User, gadgetBuilder_shell_Inner_widget_gadget: @escaping (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget) {
+		        self.init(__safeDI_user: user, __safeDI_gadgetBuilder_shell_Inner_widget_gadget: gadgetBuilder_shell_Inner_widget_gadget)
 		    }
 
-		    public init(__safeDI_user: @autoclosure @escaping () -> User, __safeDI_gadgetBuilder: @escaping (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget) {
+		    public init(__safeDI_user: @autoclosure @escaping () -> User, __safeDI_gadgetBuilder_shell_Inner_widget_gadget: @escaping (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget) {
 		        let user = LazilyInstantiated<User>(__safeDI_user)
 		        let session = Session(user: user.instance)
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-		            let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget.Outer(user: user, session: session))
-		            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+		            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		            let __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_widget_gadget(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1(user: user, session: session))
+		            @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 		                let analytics = scope.analytics
 		                func __safeDI_widget() -> DefaultWidget {
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultWidget_gadget.Inner(analytics: analytics))
+		                    let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2(analytics: analytics))
 		                    return DefaultWidget(gadget: gadget)
 		                }
 		                let widget: any Widget = __safeDI_widget()
 		                return widget
 		            }
-		            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+		            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+		                }
+		            }
+		            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 		        }
 		        let shell: Shell = __safeDI_shell()
 		        self.init(session: session, shell: shell)
@@ -1054,7 +1230,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_8096A83C6BCBA086 {}
+		    public enum __safeDI_Host_DFBE8C3E8F0DC668 {}
 		}
 		"""])
 		expectGeneratedCode(of: output, module: "App", imports: ["Feature", "Middle"], rootFiles: ["Root": """
@@ -1065,15 +1241,15 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		        }
 		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_8096A83C6BCBA086.self\(seamCallComment(seam: "Host", module: "Middle"))
-		            func __safeDI_gadgetBuilder(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget {
-		                @Sendable func __safeDI_gadgetBuilder_Inner(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget {
+		            _ = Host.__safeDI_Host_DFBE8C3E8F0DC668.self\(seamCallComment(seam: "Host", module: "Middle"))
+		            func __safeDI_gadgetBuilder_shell_Inner_widget_gadget(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget {
+		                @Sendable func __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget {
 		                    let gadget: any Gadget = DefaultGadget(user: user.instance)
 		                    return gadget
 		                }
-		                return __safeDI_gadgetBuilder_Inner
+		                return __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2
 		            }
-		            return Host(__safeDI_user: user.instance, __safeDI_gadgetBuilder: __safeDI_gadgetBuilder)
+		            return Host(__safeDI_user: user.instance, __safeDI_gadgetBuilder_shell_Inner_widget_gadget: __safeDI_gadgetBuilder_shell_Inner_widget_gadget)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(user: user, host: host)
@@ -1103,48 +1279,75 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public struct SafeDIScope_Host_gadget {
-		        public let shell: Shell
+		    @frozen public enum SafeDIScope_Gadget {
+		        case gadget(gadget_Values)
+
+		        public struct gadget_Values {
+		            public let shell: Shell
+		        }
 		    }
 
-		    public init(gadgetBuilder: @escaping @Sendable (SafeDIScope_Host_gadget) -> any Gadget) {
+		    @frozen public enum SafeDISendableScope_Gadget {
+		        case shell_Inner_widget_hostBuilder(Host.SafeDIScope_Gadget)
+		        indirect case shell_Inner_widget_hostBuilder_Sendable(Host.SafeDISendableScope_Gadget)
+		    }
+
+		    public init(gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget, gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        let __safeDI_gadgetBuilder = gadgetBuilder
+		        let __safeDI_gadgetSendableBuilder = gadgetSendableBuilder
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-		            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
-		                func __safeDI_widget() -> DefaultWidget {
-		                    func __safeDI_hostBuilder() -> Host {
-		                        _ = Host.__safeDI_Host_4AC51CF704B2E01C.self
-		                        return Host(gadgetBuilder: __safeDI_gadgetBuilder)
-		                    }
-		                    let hostBuilder = Instantiator<Host>(__safeDI_hostBuilder)
-		                    return DefaultWidget(hostBuilder: hostBuilder)
+		            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
 		                }
-		                let widget: any Widget = __safeDI_widget()
-		                return widget
 		            }
-		            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+		            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case .widget:
+		                    func __safeDI_widget() -> DefaultWidget {
+		                        func __safeDI_hostBuilder() -> Host {
+		                            _ = Host.__safeDI_Host_8E411E9DE3820C17.self
+		                            return Host(gadgetBuilder: { __safeDI_gadgetSendableBuilder(.shell_Inner_widget_hostBuilder($0)) }, gadgetSendableBuilder: { __safeDI_gadgetSendableBuilder(.shell_Inner_widget_hostBuilder_Sendable($0)) })
+		                        }
+		                        let hostBuilder = Instantiator<Host>(__safeDI_hostBuilder)
+		                        return DefaultWidget(hostBuilder: hostBuilder)
+		                    }
+		                    let widget: any Widget = __safeDI_widget()
+		                    return widget
+		                }
+		            }
+		            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 		        }
 		        let shell: Shell = __safeDI_shell()
-		        let gadget: any Gadget = __safeDI_gadgetBuilder(SafeDIScope_Host_gadget(shell: shell))
+		        let gadget: any Gadget = __safeDI_gadgetBuilder(.gadget(SafeDIScope_Gadget.gadget_Values(shell: shell)))
 		        self.init(gadget: gadget, shell: shell)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_4AC51CF704B2E01C {}
+		    public enum __safeDI_Host_8E411E9DE3820C17 {}
 		}
 		"""])
 		expectGeneratedCode(of: output, module: "App", imports: ["Feature", "Middle"], rootFiles: ["Root": """
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_4AC51CF704B2E01C.self\(seamCallComment(seam: "Host", module: "Middle"))
-		            @Sendable func __safeDI_gadgetBuilder(_ scope: Host.SafeDIScope_Host_gadget) -> any Gadget {
-		                let gadget: any Gadget = DefaultGadget()
-		                return gadget
+		            _ = Host.__safeDI_Host_8E411E9DE3820C17.self\(seamCallComment(seam: "Host", module: "Middle"))
+		            @Sendable func __safeDI_gadgetBuilder_Host(_ scope: Host.SafeDIScope_Gadget) -> any Gadget {
+		                switch scope {
+		                case .gadget:
+		                    let gadget: any Gadget = DefaultGadget()
+		                    return gadget
+		                }
 		            }
-		            return Host(gadgetBuilder: __safeDI_gadgetBuilder)
+		            @Sendable func __safeDI_gadgetSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Gadget) -> any Gadget {
+		                switch scope {
+		                case let .shell_Inner_widget_hostBuilder(scope): return __safeDI_gadgetBuilder_Host(scope)
+		                case let .shell_Inner_widget_hostBuilder_Sendable(scope): return __safeDI_gadgetSendableBuilder_Host(scope)
+		                }
+		            }
+		            return Host(gadgetBuilder: __safeDI_gadgetBuilder_Host, gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1168,30 +1371,37 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: adjusted.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public struct SafeDIScope_Holder_gadget {
-		        public let session: Session
-		        public let analytics: Analytics
+		    @frozen public enum SafeDIScope_Gadget {
+		        case inner_widget_holderBuilder_gadget(inner_widget_holderBuilder_gadget_Values)
+
+		        public struct inner_widget_holderBuilder_gadget_Values {
+		            public let session: Session
+		            public let analytics: Analytics
+		        }
 		    }
 
-		    public init(gadgetBuilder: @escaping (SafeDIScope_Holder_gadget) -> any Gadget) {
+		    public init(gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 		        let __safeDI_gadgetBuilder = gadgetBuilder
 		        let session = Session()
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_08053E85F53E4648.self\(seamCallComment(seam: "Inner", module: "Feature"))
-		            func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
-		                let analytics = scope.analytics
-		                func __safeDI_widget() -> DefaultWidget {
-		                    func __safeDI_holderBuilder() -> Holder {
-		                        let gadget: any Gadget = __safeDI_gadgetBuilder(SafeDIScope_Holder_gadget(session: session, analytics: analytics))
-		                        return Holder(analytics: analytics, gadget: gadget)
+		            _ = Inner.__safeDI_Inner_A441BC75156D061F.self\(seamCallComment(seam: "Inner", module: "Feature"))
+		            func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope):
+		                    let analytics = scope.analytics
+		                    func __safeDI_widget() -> DefaultWidget {
+		                        func __safeDI_holderBuilder() -> Holder {
+		                            let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_widget_holderBuilder_gadget(SafeDIScope_Gadget.inner_widget_holderBuilder_gadget_Values(session: session, analytics: analytics)))
+		                            return Holder(analytics: analytics, gadget: gadget)
+		                        }
+		                        let holderBuilder = Instantiator<Holder>(__safeDI_holderBuilder)
+		                        return DefaultWidget(analytics: analytics, holderBuilder: holderBuilder)
 		                    }
-		                    let holderBuilder = Instantiator<Holder>(__safeDI_holderBuilder)
-		                    return DefaultWidget(analytics: analytics, holderBuilder: holderBuilder)
+		                    let widget: any Widget = __safeDI_widget()
+		                    return widget
 		                }
-		                let widget: any Widget = __safeDI_widget()
-		                return widget
 		            }
-		            return Inner(widgetBuilder: __safeDI_widgetBuilder)
+		            return Inner(widgetBuilder: __safeDI_widgetBuilder_Inner)
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(session: session, inner: inner)
@@ -1199,21 +1409,24 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_1B63B94269D01214 {}
+		    public enum __safeDI_Host_52446D1F6D568C46 {}
 		}
 		"""])
 		expectGeneratedCode(of: output, module: "App", imports: ["Feature", "Middle"], rootFiles: ["Root": """
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_1B63B94269D01214.self\(seamCallComment(seam: "Host", module: "Middle"))
-		            func __safeDI_gadgetBuilder(_ scope: Host.SafeDIScope_Holder_gadget) -> any Gadget {
-		                let session = scope.session
-		                let analytics = scope.analytics
-		                let gadget: any Gadget = DefaultGadget(session: session, analytics: analytics)
-		                return gadget
+		            _ = Host.__safeDI_Host_52446D1F6D568C46.self\(seamCallComment(seam: "Host", module: "Middle"))
+		            func __safeDI_gadgetBuilder_Host(_ scope: Host.SafeDIScope_Gadget) -> any Gadget {
+		                switch scope {
+		                case let .inner_widget_holderBuilder_gadget(scope):
+		                    let session = scope.session
+		                    let analytics = scope.analytics
+		                    let gadget: any Gadget = DefaultGadget(session: session, analytics: analytics)
+		                    return gadget
+		                }
 		            }
-		            return Host(gadgetBuilder: __safeDI_gadgetBuilder)
+		            return Host(gadgetBuilder: __safeDI_gadgetBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1234,35 +1447,38 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public enum SafeDIScope_Holder_gadget {
-		        public struct Outer {
+		    public enum SafeDIStagedScope_Gadget_inner_widget_holderBuilder_gadget {
+		        public struct Stage1 {
 		            public let session: Session
 		            public let analytics: Analytics
 		        }
 
-		        public struct Inner {}
+		        public struct Stage2 {}
 		    }
 
-		    public init(gadgetBuilder: @escaping (SafeDIScope_Holder_gadget.Outer) -> @Sendable (SafeDIScope_Holder_gadget.Inner) -> any Gadget) {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
+		    public init(gadgetBuilder_inner_widget_holderBuilder_gadget: @escaping (SafeDIStagedScope_Gadget_inner_widget_holderBuilder_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_inner_widget_holderBuilder_gadget.Stage2) -> any Gadget) {
+		        let __safeDI_gadgetBuilder_inner_widget_holderBuilder_gadget = gadgetBuilder_inner_widget_holderBuilder_gadget
 		        let session = Session()
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_08053E85F53E4648.self\(seamCallComment(seam: "Inner", module: "Feature"))
-		            func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
-		                let analytics = scope.analytics
-		                func __safeDI_widget() -> DefaultWidget {
-		                    let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_Holder_gadget.Outer(session: session, analytics: analytics))
-		                    @Sendable func __safeDI_holderBuilder() -> Holder {
-		                        let gadget: any Gadget = __safeDI_gadgetBuilder_Inner(SafeDIScope_Holder_gadget.Inner())
-		                        return Holder(analytics: analytics, gadget: gadget)
+		            _ = Inner.__safeDI_Inner_A441BC75156D061F.self\(seamCallComment(seam: "Inner", module: "Feature"))
+		            func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope):
+		                    let analytics = scope.analytics
+		                    func __safeDI_widget() -> DefaultWidget {
+		                        let __safeDI_gadgetBuilder_inner_widget_holderBuilder_gadget_Stage2 = __safeDI_gadgetBuilder_inner_widget_holderBuilder_gadget(SafeDIStagedScope_Gadget_inner_widget_holderBuilder_gadget.Stage1(session: session, analytics: analytics))
+		                        @Sendable func __safeDI_holderBuilder() -> Holder {
+		                            let gadget: any Gadget = __safeDI_gadgetBuilder_inner_widget_holderBuilder_gadget_Stage2(SafeDIStagedScope_Gadget_inner_widget_holderBuilder_gadget.Stage2())
+		                            return Holder(analytics: analytics, gadget: gadget)
+		                        }
+		                        let holderBuilder = SendableInstantiator<Holder>(__safeDI_holderBuilder)
+		                        return DefaultWidget(analytics: analytics, holderBuilder: holderBuilder)
 		                    }
-		                    let holderBuilder = SendableInstantiator<Holder>(__safeDI_holderBuilder)
-		                    return DefaultWidget(analytics: analytics, holderBuilder: holderBuilder)
+		                    let widget: any Widget = __safeDI_widget()
+		                    return widget
 		                }
-		                let widget: any Widget = __safeDI_widget()
-		                return widget
 		            }
-		            return Inner(widgetBuilder: __safeDI_widgetBuilder)
+		            return Inner(widgetBuilder: __safeDI_widgetBuilder_Inner)
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(session: session, inner: inner)
@@ -1270,24 +1486,24 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_BC1A6108B9F4021B {}
+		    public enum __safeDI_Host_9AA85E597E4A6132 {}
 		}
 		"""])
 		expectGeneratedCode(of: output, module: "App", imports: ["Feature", "Middle"], rootFiles: ["Root": """
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_BC1A6108B9F4021B.self\(seamCallComment(seam: "Host", module: "Middle"))
-		            func __safeDI_gadgetBuilder(_ scope: Host.SafeDIScope_Holder_gadget.Outer) -> @Sendable (Host.SafeDIScope_Holder_gadget.Inner) -> any Gadget {
+		            _ = Host.__safeDI_Host_9AA85E597E4A6132.self\(seamCallComment(seam: "Host", module: "Middle"))
+		            func __safeDI_gadgetBuilder_inner_widget_holderBuilder_gadget(_ scope: Host.SafeDIStagedScope_Gadget_inner_widget_holderBuilder_gadget.Stage1) -> @Sendable (Host.SafeDIStagedScope_Gadget_inner_widget_holderBuilder_gadget.Stage2) -> any Gadget {
 		                let session = scope.session
 		                let analytics = scope.analytics
-		                @Sendable func __safeDI_gadgetBuilder_Inner(_ scope: Host.SafeDIScope_Holder_gadget.Inner) -> any Gadget {
+		                @Sendable func __safeDI_gadgetBuilder_inner_widget_holderBuilder_gadget_Stage2(_ scope: Host.SafeDIStagedScope_Gadget_inner_widget_holderBuilder_gadget.Stage2) -> any Gadget {
 		                    let gadget: any Gadget = DefaultGadget(session: session, analytics: analytics)
 		                    return gadget
 		                }
-		                return __safeDI_gadgetBuilder_Inner
+		                return __safeDI_gadgetBuilder_inner_widget_holderBuilder_gadget_Stage2
 		            }
-		            return Host(gadgetBuilder: __safeDI_gadgetBuilder)
+		            return Host(gadgetBuilder_inner_widget_holderBuilder_gadget: __safeDI_gadgetBuilder_inner_widget_holderBuilder_gadget)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1315,24 +1531,35 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public init() {
 		        let session = Session()
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-		            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
-		                func __safeDI_widget() -> DefaultWidget {
-		                    func __safeDI_part() -> Part {
-		                        _ = Part.__safeDI_Part_FDDB05C8BCBF2607.self\(seamCallComment(seam: "Part", module: "Feature"))
-		                        func __safeDI_gearBuilder(_ scope: Part.SafeDIScope_Part_gear) -> any Gear {
-		                            let gear: any Gear = DefaultGear()
-		                            return gear
-		                        }
-		                        return Part(gearBuilder: __safeDI_gearBuilder)
-		                    }
-		                    let part: Part = __safeDI_part()
-		                    return DefaultWidget(part: part)
+		            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
 		                }
-		                let widget: any Widget = __safeDI_widget()
-		                return widget
 		            }
-		            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+		            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case .widget:
+		                    func __safeDI_widget() -> DefaultWidget {
+		                        func __safeDI_part() -> Part {
+		                            _ = Part.__safeDI_Part_8735560374A43092.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		                            func __safeDI_gearBuilder_Part(_ scope: Part.SafeDIScope_Gear) -> any Gear {
+		                                switch scope {
+		                                case .gear:
+		                                    let gear: any Gear = DefaultGear()
+		                                    return gear
+		                                }
+		                            }
+		                            return Part(gearBuilder: __safeDI_gearBuilder_Part)
+		                        }
+		                        let part: Part = __safeDI_part()
+		                        return DefaultWidget(part: part)
+		                    }
+		                    let widget: any Widget = __safeDI_widget()
+		                    return widget
+		                }
+		            }
+		            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 		        }
 		        let shell: Shell = __safeDI_shell()
 		        self.init(session: session, shell: shell)
@@ -1369,17 +1596,17 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public init() {
 		        let session = Session()
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_88EF587EAC3F86D3.self\(seamCallComment(seam: "Inner", module: "Feature"))
-		            func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Panel_widget.Outer) -> @Sendable (Inner.SafeDIScope_Panel_widget.Inner) -> any Widget {
+		            _ = Inner.__safeDI_Inner_702BBF403C09CE6C.self\(seamCallComment(seam: "Inner", module: "Feature"))
+		            func __safeDI_widgetBuilder_panelBuilder_widget(_ scope: Inner.SafeDIStagedScope_Widget_panelBuilder_widget.Stage1) -> @Sendable (Inner.SafeDIStagedScope_Widget_panelBuilder_widget.Stage2) -> any Widget {
 		                let analytics = scope.analytics
-		                @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Panel_widget.Inner) -> any Widget {
+		                @Sendable func __safeDI_widgetBuilder_panelBuilder_widget_Stage2(_ scope: Inner.SafeDIStagedScope_Widget_panelBuilder_widget.Stage2) -> any Widget {
 		                    let clock = scope.clock
 		                    let widget: any Widget = DefaultWidget(analytics: analytics, clock: clock)
 		                    return widget
 		                }
-		                return __safeDI_widgetBuilder_Inner
+		                return __safeDI_widgetBuilder_panelBuilder_widget_Stage2
 		            }
-		            return Inner(widgetBuilder: __safeDI_widgetBuilder)
+		            return Inner(widgetBuilder_panelBuilder_widget: __safeDI_widgetBuilder_panelBuilder_widget)
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(session: session, inner: inner)
@@ -1434,38 +1661,54 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public enum SafeDIScope_DefaultSecond_gadget {
-		        public struct Outer {}
+		    public enum SafeDIStagedScope_Gadget_topBuilder_SubB_second_gadget {
+		        public struct Stage1 {}
 
-		        public struct Inner {}
+		        public struct Stage2 {}
 		    }
 
-		    public init(gadgetBuilder: @escaping (SafeDIScope_DefaultSecond_gadget.Outer) -> @Sendable (SafeDIScope_DefaultSecond_gadget.Inner) -> any Gadget) {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
-		        let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultSecond_gadget.Outer())
+		    public init(gadgetBuilder_topBuilder_SubB_second_gadget: @escaping (SafeDIStagedScope_Gadget_topBuilder_SubB_second_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_topBuilder_SubB_second_gadget.Stage2) -> any Gadget) {
+		        let __safeDI_gadgetBuilder_topBuilder_SubB_second_gadget = gadgetBuilder_topBuilder_SubB_second_gadget
+		        let __safeDI_gadgetBuilder_topBuilder_SubB_second_gadget_Stage2 = __safeDI_gadgetBuilder_topBuilder_SubB_second_gadget(SafeDIStagedScope_Gadget_topBuilder_SubB_second_gadget.Stage1())
 		        @Sendable func __safeDI_topBuilder() -> Top {
-		            _ = Top.__safeDI_Top_85D510C964ABBC77.self\(seamCallComment(seam: "Top", module: "Feature"))
-		            func __safeDI_firstBuilder(_ scope: SubA.SafeDIScope_SubA_first) -> any First {
-		                func __safeDI_first() -> DefaultFirst {
-		                    func __safeDI_subB() -> SubB {
-		                        _ = SubB.__safeDI_SubB_4D9A4FD97E985BD4.self\(seamCallComment(seam: "SubB", module: "Feature"))
-		                        return SubB(secondBuilder: __safeDI_secondBuilder)
+		            _ = Top.__safeDI_Top_9DA066B47A13D238.self\(seamCallComment(seam: "Top", module: "Feature"))
+		            func __safeDI_firstBuilder_Top(_ scope: Top.SafeDIScope_First) -> any First {
+		                switch scope {
+		                case let .subA(scope): return __safeDI_firstBuilder_SubA(scope)
+		                }
+		            }
+		            func __safeDI_firstBuilder_SubA(_ scope: SubA.SafeDIScope_First) -> any First {
+		                switch scope {
+		                case .first:
+		                    func __safeDI_first() -> DefaultFirst {
+		                        func __safeDI_subB() -> SubB {
+		                            _ = SubB.__safeDI_SubB_3FE2E3B686B63FF2.self\(seamCallComment(seam: "Top", module: "Feature"))
+		                            return SubB(secondBuilder: __safeDI_secondBuilder_SubB)
+		                        }
+		                        let subB: SubB = __safeDI_subB()
+		                        return DefaultFirst(subB: subB)
 		                    }
-		                    let subB: SubB = __safeDI_subB()
-		                    return DefaultFirst(subB: subB)
+		                    let first: any First = __safeDI_first()
+		                    return first
 		                }
-		                let first: any First = __safeDI_first()
-		                return first
 		            }
-		            func __safeDI_secondBuilder(_ scope: SubB.SafeDIScope_SubB_second) -> any Second {
-		                func __safeDI_second() -> DefaultSecond {
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultSecond_gadget.Inner())
-		                    return DefaultSecond(gadget: gadget)
+		            func __safeDI_secondBuilder_Top(_ scope: Top.SafeDIScope_Second) -> any Second {
+		                switch scope {
+		                case let .subB(scope): return __safeDI_secondBuilder_SubB(scope)
 		                }
-		                let second: any Second = __safeDI_second()
-		                return second
 		            }
-		            return Top(firstBuilder: __safeDI_firstBuilder, secondBuilder: __safeDI_secondBuilder)
+		            func __safeDI_secondBuilder_SubB(_ scope: SubB.SafeDIScope_Second) -> any Second {
+		                switch scope {
+		                case .second:
+		                    func __safeDI_second() -> DefaultSecond {
+		                        let gadget: any Gadget = __safeDI_gadgetBuilder_topBuilder_SubB_second_gadget_Stage2(SafeDIStagedScope_Gadget_topBuilder_SubB_second_gadget.Stage2())
+		                        return DefaultSecond(gadget: gadget)
+		                    }
+		                    let second: any Second = __safeDI_second()
+		                    return second
+		                }
+		            }
+		            return Top(firstBuilder: __safeDI_firstBuilder_Top, secondBuilder: __safeDI_secondBuilder_Top)
 		        }
 		        let topBuilder = SendableInstantiator<Top>(__safeDI_topBuilder)
 		        self.init(topBuilder: topBuilder)
@@ -1473,7 +1716,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_BD386D3D354C59EF {}
+		    public enum __safeDI_Host_9E9D9EBB91B93B33 {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -1502,24 +1745,40 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_top() -> Top {
-		            _ = Top.__safeDI_Top_85D510C964ABBC77.self\(seamCallComment(seam: "Top", module: "Feature"))
-		            func __safeDI_firstBuilder(_ scope: SubA.SafeDIScope_SubA_first) -> any First {
-		                func __safeDI_first() -> DefaultFirst {
-		                    @Sendable func __safeDI_subBBuilder() -> SubB {
-		                        _ = SubB.__safeDI_SubB_4D9A4FD97E985BD4.self\(seamCallComment(seam: "SubB", module: "Feature"))
-		                        return SubB(secondBuilder: __safeDI_secondBuilder)
-		                    }
-		                    let subBBuilder = SendableInstantiator<SubB>(__safeDI_subBBuilder)
-		                    return DefaultFirst(subBBuilder: subBBuilder)
+		            _ = Top.__safeDI_Top_9DA066B47A13D238.self\(seamCallComment(seam: "Top", module: "Feature"))
+		            func __safeDI_firstBuilder_Top(_ scope: Top.SafeDIScope_First) -> any First {
+		                switch scope {
+		                case let .subA(scope): return __safeDI_firstBuilder_SubA(scope)
 		                }
-		                let first: any First = __safeDI_first()
-		                return first
 		            }
-		            @Sendable func __safeDI_secondBuilder(_ scope: SubB.SafeDIScope_SubB_second) -> any Second {
-		                let second: any Second = DefaultSecond()
-		                return second
+		            func __safeDI_firstBuilder_SubA(_ scope: SubA.SafeDIScope_First) -> any First {
+		                switch scope {
+		                case .first:
+		                    func __safeDI_first() -> DefaultFirst {
+		                        @Sendable func __safeDI_subBBuilder() -> SubB {
+		                            _ = SubB.__safeDI_SubB_3FE2E3B686B63FF2.self\(seamCallComment(seam: "Top", module: "Feature"))
+		                            return SubB(secondBuilder: __safeDI_secondBuilder_SubB)
+		                        }
+		                        let subBBuilder = SendableInstantiator<SubB>(__safeDI_subBBuilder)
+		                        return DefaultFirst(subBBuilder: subBBuilder)
+		                    }
+		                    let first: any First = __safeDI_first()
+		                    return first
+		                }
 		            }
-		            return Top(firstBuilder: __safeDI_firstBuilder, secondBuilder: __safeDI_secondBuilder)
+		            func __safeDI_secondBuilder_Top(_ scope: Top.SafeDIScope_Second) -> any Second {
+		                switch scope {
+		                case let .subB(scope): return __safeDI_secondBuilder_SubB(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_secondBuilder_SubB(_ scope: SubB.SafeDIScope_Second) -> any Second {
+		                switch scope {
+		                case .second:
+		                    let second: any Second = DefaultSecond()
+		                    return second
+		                }
+		            }
+		            return Top(firstBuilder: __safeDI_firstBuilder_Top, secondBuilder: __safeDI_secondBuilder_Top)
 		        }
 		        let top: Top = __safeDI_top()
 		        self.init(top: top)
@@ -1570,38 +1829,48 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public enum SafeDIScope_DefaultWidget_gadget {
-		        public struct Outer {
+		    public enum SafeDIStagedScope_Gadget_shell_Inner_widget_gadget {
+		        public struct Stage1 {
 		            public let session: Session
 		        }
 
-		        public struct Inner {
+		        public struct Stage2 {
 		            public let analytics: Analytics
 		            public let hostBuilder: SendableInstantiator<Host>
 		        }
 		    }
 
-		    public init(gadgetBuilder: @escaping @Sendable (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget) {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
+		    public init(gadgetBuilder_shell_Inner_widget_gadget: @escaping @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget) {
+		        let __safeDI_gadgetBuilder_shell_Inner_widget_gadget = gadgetBuilder_shell_Inner_widget_gadget
 		        let session = Session()
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-		            let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget.Outer(session: session))
-		            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+		            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		            let __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_widget_gadget(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1(session: session))
+		            @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 		                let analytics = scope.analytics
 		                func __safeDI_widget() -> DefaultWidget {
 		                    @Sendable func __safeDI_hostBuilder() -> Host {
-		                        _ = Host.__safeDI_Host_2700B077A5888288.self
-		                        return Host(gadgetBuilder: __safeDI_gadgetBuilder)
+		                        _ = Host.__safeDI_Host_F66F1171C60658AE.self
+		                        return Host(gadgetBuilder_shell_Inner_widget_gadget: __safeDI_gadgetBuilder_shell_Inner_widget_gadget)
 		                    }
 		                    let hostBuilder = SendableInstantiator<Host>(__safeDI_hostBuilder)
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultWidget_gadget.Inner(analytics: analytics, hostBuilder: hostBuilder))
+		                    let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2(analytics: analytics, hostBuilder: hostBuilder))
 		                    return DefaultWidget(analytics: analytics, gadget: gadget, hostBuilder: hostBuilder)
 		                }
 		                let widget: any Widget = __safeDI_widget()
 		                return widget
 		            }
-		            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+		            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+		                }
+		            }
+		            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 		        }
 		        let shell: Shell = __safeDI_shell()
 		        self.init(session: session, shell: shell)
@@ -1609,23 +1878,23 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_2700B077A5888288 {}
+		    public enum __safeDI_Host_F66F1171C60658AE {}
 		}
 		"""])
 		expectGeneratedCode(of: output, module: "App", imports: ["Feature", "Middle"], rootFiles: ["Root": """
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_2700B077A5888288.self\(seamCallComment(seam: "Host", module: "Middle"))
-		            @Sendable func __safeDI_gadgetBuilder(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget {
-		                @Sendable func __safeDI_gadgetBuilder_Inner(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget {
+		            _ = Host.__safeDI_Host_F66F1171C60658AE.self\(seamCallComment(seam: "Host", module: "Middle"))
+		            @Sendable func __safeDI_gadgetBuilder_shell_Inner_widget_gadget(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget {
+		                @Sendable func __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(_ scope: Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget {
 		                    let analytics = scope.analytics
 		                    let gadget: any Gadget = DefaultGadget(analytics: analytics)
 		                    return gadget
 		                }
-		                return __safeDI_gadgetBuilder_Inner
+		                return __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2
 		            }
-		            return Host(gadgetBuilder: __safeDI_gadgetBuilder)
+		            return Host(gadgetBuilder_shell_Inner_widget_gadget: __safeDI_gadgetBuilder_shell_Inner_widget_gadget)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1649,38 +1918,48 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: [
 			"Host": """
 			extension Host {
-			    public enum SafeDIScope_DefaultWidget_gadget {
-			        public struct Outer {
+			    public enum SafeDIStagedScope_Gadget_shell_Inner_widget_gadget {
+			        public struct Stage1 {
 			            public let session: Session
 			        }
 
-			        public struct Inner {
+			        public struct Stage2 {
 			            public let analytics: Analytics
 			            public let otherBuilder: Instantiator<Other>
 			        }
 			    }
 
-			    public init(gadgetBuilder: @escaping @Sendable (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget) {
-			        let __safeDI_gadgetBuilder = gadgetBuilder
+			    public init(gadgetBuilder_shell_Inner_widget_gadget: @escaping @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget) {
+			        let __safeDI_gadgetBuilder_shell_Inner_widget_gadget = gadgetBuilder_shell_Inner_widget_gadget
 			        let session = Session()
 			        func __safeDI_shell() -> Shell {
-			            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			            let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget.Outer(session: session))
-			            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+			            _ = Shell.__safeDI_Shell_076D60492DA3478F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            let __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_widget_gadget(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1(session: session))
+			            @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 			                let analytics = scope.analytics
 			                func __safeDI_widget() -> DefaultWidget {
 			                    func __safeDI_otherBuilder() -> Other {
-			                        _ = Other.__safeDI_Other_73D58D3B20ADBBFA.self
-			                        return Other(gadgetBuilder: __safeDI_gadgetBuilder)
+			                        _ = Other.__safeDI_Other_709165532C0D2BF1.self
+			                        return Other(gadgetBuilder_Host_shell_Inner_widget_gadget: __safeDI_gadgetBuilder_shell_Inner_widget_gadget)
 			                    }
 			                    let otherBuilder = Instantiator<Other>(__safeDI_otherBuilder)
-			                    let gadget: any Gadget = __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultWidget_gadget.Inner(analytics: analytics, otherBuilder: otherBuilder))
+			                    let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2(analytics: analytics, otherBuilder: otherBuilder))
 			                    return DefaultWidget(analytics: analytics, gadget: gadget, otherBuilder: otherBuilder)
 			                }
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+			            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+			                switch scope {
+			                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+			                }
+			            }
+			            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+			                switch scope {
+			                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+			                }
+			            }
+			            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 			        }
 			        let shell: Shell = __safeDI_shell()
 			        self.init(session: session, shell: shell)
@@ -1688,16 +1967,16 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_73D58D3B20ADBBFA {}
+			    public enum __safeDI_Host_1DD0F476D3B3F944 {}
 			}
 			""",
 			"Other": """
 			extension Other {
-			    public init(gadgetBuilder: @escaping @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget) {
-			        let __safeDI_gadgetBuilder = gadgetBuilder
+			    public init(gadgetBuilder_Host_shell_Inner_widget_gadget: @escaping @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (Host.SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget) {
+			        let __safeDI_gadgetBuilder_Host_shell_Inner_widget_gadget = gadgetBuilder_Host_shell_Inner_widget_gadget
 			        @Sendable func __safeDI_hostBuilder() -> Host {
-			            _ = Host.__safeDI_Host_73D58D3B20ADBBFA.self
-			            return Host(gadgetBuilder: __safeDI_gadgetBuilder)
+			            _ = Host.__safeDI_Host_1DD0F476D3B3F944.self
+			            return Host(gadgetBuilder_shell_Inner_widget_gadget: __safeDI_gadgetBuilder_Host_shell_Inner_widget_gadget)
 			        }
 			        let hostBuilder = SendableInstantiator<Host>(__safeDI_hostBuilder)
 			        self.init(hostBuilder: hostBuilder)
@@ -1705,7 +1984,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			}
 
 			extension Other {
-			    public enum __safeDI_Other_73D58D3B20ADBBFA {}
+			    public enum __safeDI_Other_709165532C0D2BF1 {}
 			}
 			""",
 		])
@@ -1725,38 +2004,48 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public enum SafeDIScope_DefaultWidget_gadget {
-		        public struct Outer {
+		    public enum SafeDIStagedScope_Gadget_shell_Inner_widget_gadget {
+		        public struct Stage1 {
 		            public let session: Session
 		        }
 
-		        public struct Inner {
+		        public struct Stage2 {
 		            public let analytics: Analytics
 		            public let hostBuilder: Instantiator<Host>
 		        }
 		    }
 
-		    public init(gadgetBuilder: @escaping @Sendable (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget) {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
+		    public init(gadgetBuilder_shell_Inner_widget_gadget: @escaping @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget) {
+		        let __safeDI_gadgetBuilder_shell_Inner_widget_gadget = gadgetBuilder_shell_Inner_widget_gadget
 		        let session = Session()
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-		            let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget.Outer(session: session))
-		            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+		            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		            let __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_widget_gadget(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1(session: session))
+		            @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 		                let analytics = scope.analytics
 		                func __safeDI_widget() -> DefaultWidget {
 		                    func __safeDI_hostBuilder() -> Host {
-		                        _ = Host.__safeDI_Host_F8A6FB056B62C8EE.self
-		                        return Host(gadgetBuilder: __safeDI_gadgetBuilder)
+		                        _ = Host.__safeDI_Host_0BE9624E3D02D360.self
+		                        return Host(gadgetBuilder_shell_Inner_widget_gadget: __safeDI_gadgetBuilder_shell_Inner_widget_gadget)
 		                    }
 		                    let hostBuilder = Instantiator<Host>(__safeDI_hostBuilder)
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultWidget_gadget.Inner(analytics: analytics, hostBuilder: hostBuilder))
+		                    let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2(analytics: analytics, hostBuilder: hostBuilder))
 		                    return DefaultWidget(analytics: analytics, gadget: gadget, hostBuilder: hostBuilder)
 		                }
 		                let widget: any Widget = __safeDI_widget()
 		                return widget
 		            }
-		            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+		            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+		                }
+		            }
+		            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 		        }
 		        let shell: Shell = __safeDI_shell()
 		        self.init(session: session, shell: shell)
@@ -1764,7 +2053,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_F8A6FB056B62C8EE {}
+		    public enum __safeDI_Host_0BE9624E3D02D360 {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -1786,8 +2075,8 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public enum SafeDIScope_DefaultWidget_gadget {
-		        public struct Outer {
+		    public enum SafeDIStagedScope_Gadget_shell_Inner_widget_gadget {
+		        public struct Stage1 {
 		            public var user: User { __safeDI_user.instance }
 		            public let account: Account
 		            let __safeDI_user: SendableLazilyInstantiated<User>
@@ -1798,37 +2087,47 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		            }
 		        }
 
-		        public struct Inner {
+		        public struct Stage2 {
 		            public let analytics: Analytics
 		            public let hostBuilder: SendableInstantiator<Host>
 		        }
 		    }
 
-		    public init(user: User, gadgetBuilder: @escaping @Sendable (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget) {
-		        self.init(__safeDI_user: user, __safeDI_gadgetBuilder: gadgetBuilder)
+		    public init(user: User, gadgetBuilder_shell_Inner_widget_gadget: @escaping @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget) {
+		        self.init(__safeDI_user: user, __safeDI_gadgetBuilder_shell_Inner_widget_gadget: gadgetBuilder_shell_Inner_widget_gadget)
 		    }
 
-		    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User, __safeDI_gadgetBuilder: @escaping @Sendable (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget) {
+		    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User, __safeDI_gadgetBuilder_shell_Inner_widget_gadget: @escaping @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget) {
 		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 		        let account = Account(user: user.instance)
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-		            let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget.Outer(user: user, account: account))
-		            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+		            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		            let __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_widget_gadget(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1(user: user, account: account))
+		            @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 		                let analytics = scope.analytics
 		                func __safeDI_widget() -> DefaultWidget {
 		                    @Sendable func __safeDI_hostBuilder() -> Host {
-		                        _ = Host.__safeDI_Host_B3264F5C5338E5DF.self
-		                        return Host(__safeDI_user: user.instance, __safeDI_gadgetBuilder: __safeDI_gadgetBuilder)
+		                        _ = Host.__safeDI_Host_0358E601680BB949.self
+		                        return Host(__safeDI_user: user.instance, __safeDI_gadgetBuilder_shell_Inner_widget_gadget: __safeDI_gadgetBuilder_shell_Inner_widget_gadget)
 		                    }
 		                    let hostBuilder = SendableInstantiator<Host>(__safeDI_hostBuilder)
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultWidget_gadget.Inner(analytics: analytics, hostBuilder: hostBuilder))
+		                    let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2(analytics: analytics, hostBuilder: hostBuilder))
 		                    return DefaultWidget(gadget: gadget, hostBuilder: hostBuilder)
 		                }
 		                let widget: any Widget = __safeDI_widget()
 		                return widget
 		            }
-		            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+		            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+		                }
+		            }
+		            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 		        }
 		        let shell: Shell = __safeDI_shell()
 		        self.init(account: account, shell: shell)
@@ -1836,7 +2135,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_B3264F5C5338E5DF {}
+		    public enum __safeDI_Host_0358E601680BB949 {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -1944,20 +2243,20 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			case .inner:
 				"""
 				extension Seam1 {
-				    public enum SafeDIScope_Panel_widget {
-				        public struct Outer {
+				    public enum SafeDIStagedScope_Widget_panelBuilder_widget {
+				        public struct Stage1 {
 				            public let value: Inner
 				        }
 
-				        public struct Inner_ {}
+				        public struct Stage2 {}
 				    }
 
-				    public init(widgetBuilder: @escaping (SafeDIScope_Panel_widget.Outer) -> @Sendable (SafeDIScope_Panel_widget.Inner_) -> any Widget) {
-				        let __safeDI_widgetBuilder = widgetBuilder
+				    public init(widgetBuilder_panelBuilder_widget: @escaping (SafeDIStagedScope_Widget_panelBuilder_widget.Stage1) -> @Sendable (SafeDIStagedScope_Widget_panelBuilder_widget.Stage2) -> any Widget) {
+				        let __safeDI_widgetBuilder_panelBuilder_widget = widgetBuilder_panelBuilder_widget
 				        let value = Inner()
-				        let __safeDI_widgetBuilder_Inner_ = __safeDI_widgetBuilder(SafeDIScope_Panel_widget.Outer(value: value))
+				        let __safeDI_widgetBuilder_panelBuilder_widget_Stage2 = __safeDI_widgetBuilder_panelBuilder_widget(SafeDIStagedScope_Widget_panelBuilder_widget.Stage1(value: value))
 				        @Sendable func __safeDI_panelBuilder() -> Panel {
-				            let widget: any Widget = __safeDI_widgetBuilder_Inner_(SafeDIScope_Panel_widget.Inner_())
+				            let widget: any Widget = __safeDI_widgetBuilder_panelBuilder_widget_Stage2(SafeDIStagedScope_Widget_panelBuilder_widget.Stage2())
 				            return Panel(widget: widget)
 				        }
 				        let panelBuilder = SendableInstantiator<Panel>(__safeDI_panelBuilder)
@@ -1966,26 +2265,26 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				}
 
 				extension Seam1 {
-				    public enum __safeDI_Seam1_7CD0130B20931863 {}
+				    public enum __safeDI_Seam1_F72248F9F157F9B3 {}
 				}
 				"""
 			case .outer:
 				"""
 				extension Seam1 {
-				    public enum SafeDIScope_Panel_widget {
-				        public struct Outer_ {
+				    public enum SafeDIStagedScope_Widget_panelBuilder_widget {
+				        public struct Stage1 {
 				            public let value: Outer
 				        }
 
-				        public struct Inner {}
+				        public struct Stage2 {}
 				    }
 
-				    public init(widgetBuilder: @escaping (SafeDIScope_Panel_widget.Outer_) -> @Sendable (SafeDIScope_Panel_widget.Inner) -> any Widget) {
-				        let __safeDI_widgetBuilder = widgetBuilder
+				    public init(widgetBuilder_panelBuilder_widget: @escaping (SafeDIStagedScope_Widget_panelBuilder_widget.Stage1) -> @Sendable (SafeDIStagedScope_Widget_panelBuilder_widget.Stage2) -> any Widget) {
+				        let __safeDI_widgetBuilder_panelBuilder_widget = widgetBuilder_panelBuilder_widget
 				        let value = Outer()
-				        let __safeDI_widgetBuilder_Inner = __safeDI_widgetBuilder(SafeDIScope_Panel_widget.Outer_(value: value))
+				        let __safeDI_widgetBuilder_panelBuilder_widget_Stage2 = __safeDI_widgetBuilder_panelBuilder_widget(SafeDIStagedScope_Widget_panelBuilder_widget.Stage1(value: value))
 				        @Sendable func __safeDI_panelBuilder() -> Panel {
-				            let widget: any Widget = __safeDI_widgetBuilder_Inner(SafeDIScope_Panel_widget.Inner())
+				            let widget: any Widget = __safeDI_widgetBuilder_panelBuilder_widget_Stage2(SafeDIStagedScope_Widget_panelBuilder_widget.Stage2())
 				            return Panel(widget: widget)
 				        }
 				        let panelBuilder = SendableInstantiator<Panel>(__safeDI_panelBuilder)
@@ -1994,29 +2293,29 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				}
 
 				extension Seam1 {
-				    public enum __safeDI_Seam1_15DD502B1A920B7A {}
+				    public enum __safeDI_Seam1_9F9EA46DCF6257F8 {}
 				}
 				"""
 			case .genericArgumentInner:
 				"""
 				extension Seam1 {
-				    public enum SafeDIScope_Panel_widget {
-				        public struct Outer {
+				    public enum SafeDIStagedScope_Widget_panelBuilder_widget {
+				        public struct Stage1 {
 				            public let value: Instantiator<Inner>
 				        }
 
-				        public struct Inner_ {}
+				        public struct Stage2 {}
 				    }
 
-				    public init(widgetBuilder: @escaping (SafeDIScope_Panel_widget.Outer) -> @Sendable (SafeDIScope_Panel_widget.Inner_) -> any Widget) {
-				        let __safeDI_widgetBuilder = widgetBuilder
+				    public init(widgetBuilder_panelBuilder_widget: @escaping (SafeDIStagedScope_Widget_panelBuilder_widget.Stage1) -> @Sendable (SafeDIStagedScope_Widget_panelBuilder_widget.Stage2) -> any Widget) {
+				        let __safeDI_widgetBuilder_panelBuilder_widget = widgetBuilder_panelBuilder_widget
 				        func __safeDI_value() -> Inner {
 				            Inner()
 				        }
 				        let value = Instantiator<Inner>(__safeDI_value)
-				        let __safeDI_widgetBuilder_Inner_ = __safeDI_widgetBuilder(SafeDIScope_Panel_widget.Outer(value: value))
+				        let __safeDI_widgetBuilder_panelBuilder_widget_Stage2 = __safeDI_widgetBuilder_panelBuilder_widget(SafeDIStagedScope_Widget_panelBuilder_widget.Stage1(value: value))
 				        @Sendable func __safeDI_panelBuilder() -> Panel {
-				            let widget: any Widget = __safeDI_widgetBuilder_Inner_(SafeDIScope_Panel_widget.Inner_())
+				            let widget: any Widget = __safeDI_widgetBuilder_panelBuilder_widget_Stage2(SafeDIStagedScope_Widget_panelBuilder_widget.Stage2())
 				            return Panel(widget: widget)
 				        }
 				        let panelBuilder = SendableInstantiator<Panel>(__safeDI_panelBuilder)
@@ -2025,26 +2324,26 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				}
 
 				extension Seam1 {
-				    public enum __safeDI_Seam1_BE61DDE8E303971D {}
+				    public enum __safeDI_Seam1_DA713AEA49C24DCD {}
 				}
 				"""
 			case .nestedInOuter:
 				"""
 				extension Seam1 {
-				    public enum SafeDIScope_Panel_widget {
-				        public struct Outer_ {
+				    public enum SafeDIStagedScope_Widget_panelBuilder_widget {
+				        public struct Stage1 {
 				            public let value: Outer.Leaf
 				        }
 
-				        public struct Inner {}
+				        public struct Stage2 {}
 				    }
 
-				    public init(widgetBuilder: @escaping (SafeDIScope_Panel_widget.Outer_) -> @Sendable (SafeDIScope_Panel_widget.Inner) -> any Widget) {
-				        let __safeDI_widgetBuilder = widgetBuilder
+				    public init(widgetBuilder_panelBuilder_widget: @escaping (SafeDIStagedScope_Widget_panelBuilder_widget.Stage1) -> @Sendable (SafeDIStagedScope_Widget_panelBuilder_widget.Stage2) -> any Widget) {
+				        let __safeDI_widgetBuilder_panelBuilder_widget = widgetBuilder_panelBuilder_widget
 				        let value = Outer.Leaf()
-				        let __safeDI_widgetBuilder_Inner = __safeDI_widgetBuilder(SafeDIScope_Panel_widget.Outer_(value: value))
+				        let __safeDI_widgetBuilder_panelBuilder_widget_Stage2 = __safeDI_widgetBuilder_panelBuilder_widget(SafeDIStagedScope_Widget_panelBuilder_widget.Stage1(value: value))
 				        @Sendable func __safeDI_panelBuilder() -> Panel {
-				            let widget: any Widget = __safeDI_widgetBuilder_Inner(SafeDIScope_Panel_widget.Inner())
+				            let widget: any Widget = __safeDI_widgetBuilder_panelBuilder_widget_Stage2(SafeDIStagedScope_Widget_panelBuilder_widget.Stage2())
 				            return Panel(widget: widget)
 				        }
 				        let panelBuilder = SendableInstantiator<Panel>(__safeDI_panelBuilder)
@@ -2053,28 +2352,28 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				}
 
 				extension Seam1 {
-				    public enum __safeDI_Seam1_B3D523214DDDCF72 {}
+				    public enum __safeDI_Seam1_08FBC475A74E4D1C {}
 				}
 				"""
 			case .innerAndItsRenaming:
 				"""
 				extension Seam1 {
-				    public enum SafeDIScope_Panel_widget {
-				        public struct Outer {
+				    public enum SafeDIStagedScope_Widget_panelBuilder_widget {
+				        public struct Stage1 {
 				            public let value: Inner
 				            public let other: Inner_
 				        }
 
-				        public struct Inner__ {}
+				        public struct Stage2 {}
 				    }
 
-				    public init(widgetBuilder: @escaping (SafeDIScope_Panel_widget.Outer) -> @Sendable (SafeDIScope_Panel_widget.Inner__) -> any Widget) {
-				        let __safeDI_widgetBuilder = widgetBuilder
+				    public init(widgetBuilder_panelBuilder_widget: @escaping (SafeDIStagedScope_Widget_panelBuilder_widget.Stage1) -> @Sendable (SafeDIStagedScope_Widget_panelBuilder_widget.Stage2) -> any Widget) {
+				        let __safeDI_widgetBuilder_panelBuilder_widget = widgetBuilder_panelBuilder_widget
 				        let value = Inner()
 				        let other = Inner_()
-				        let __safeDI_widgetBuilder_Inner__ = __safeDI_widgetBuilder(SafeDIScope_Panel_widget.Outer(value: value, other: other))
+				        let __safeDI_widgetBuilder_panelBuilder_widget_Stage2 = __safeDI_widgetBuilder_panelBuilder_widget(SafeDIStagedScope_Widget_panelBuilder_widget.Stage1(value: value, other: other))
 				        @Sendable func __safeDI_panelBuilder() -> Panel {
-				            let widget: any Widget = __safeDI_widgetBuilder_Inner__(SafeDIScope_Panel_widget.Inner__())
+				            let widget: any Widget = __safeDI_widgetBuilder_panelBuilder_widget_Stage2(SafeDIStagedScope_Widget_panelBuilder_widget.Stage2())
 				            return Panel(widget: widget)
 				        }
 				        let panelBuilder = SendableInstantiator<Panel>(__safeDI_panelBuilder)
@@ -2083,26 +2382,26 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				}
 
 				extension Seam1 {
-				    public enum __safeDI_Seam1_D5F7730F977635B3 {}
+				    public enum __safeDI_Seam1_23BC3A0C36310090 {}
 				}
 				"""
 			case .memberNamedInner:
 				"""
 				extension Seam1 {
-				    public enum SafeDIScope_Panel_widget {
-				        public struct Outer {
+				    public enum SafeDIStagedScope_Widget_panelBuilder_widget {
+				        public struct Stage1 {
 				            public let value: Box.Inner
 				        }
 
-				        public struct Inner {}
+				        public struct Stage2 {}
 				    }
 
-				    public init(widgetBuilder: @escaping (SafeDIScope_Panel_widget.Outer) -> @Sendable (SafeDIScope_Panel_widget.Inner) -> any Widget) {
-				        let __safeDI_widgetBuilder = widgetBuilder
+				    public init(widgetBuilder_panelBuilder_widget: @escaping (SafeDIStagedScope_Widget_panelBuilder_widget.Stage1) -> @Sendable (SafeDIStagedScope_Widget_panelBuilder_widget.Stage2) -> any Widget) {
+				        let __safeDI_widgetBuilder_panelBuilder_widget = widgetBuilder_panelBuilder_widget
 				        let value = Box.Inner()
-				        let __safeDI_widgetBuilder_Inner = __safeDI_widgetBuilder(SafeDIScope_Panel_widget.Outer(value: value))
+				        let __safeDI_widgetBuilder_panelBuilder_widget_Stage2 = __safeDI_widgetBuilder_panelBuilder_widget(SafeDIStagedScope_Widget_panelBuilder_widget.Stage1(value: value))
 				        @Sendable func __safeDI_panelBuilder() -> Panel {
-				            let widget: any Widget = __safeDI_widgetBuilder_Inner(SafeDIScope_Panel_widget.Inner())
+				            let widget: any Widget = __safeDI_widgetBuilder_panelBuilder_widget_Stage2(SafeDIStagedScope_Widget_panelBuilder_widget.Stage2())
 				            return Panel(widget: widget)
 				        }
 				        let panelBuilder = SendableInstantiator<Panel>(__safeDI_panelBuilder)
@@ -2111,7 +2410,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				}
 
 				extension Seam1 {
-				    public enum __safeDI_Seam1_1C64888B1C41BC8D {}
+				    public enum __safeDI_Seam1_55D020B98B292DAC {}
 				}
 				"""
 			}
@@ -2152,24 +2451,24 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Feature", imports: [], rootFiles: ["Seam1": """
 		extension Seam1 {
-		    public enum SafeDIScope_Panel_widget {
-		        public struct Outer {
+		    public enum SafeDIStagedScope_Widget_trayBuilder_panelBuilder_widget {
+		        public struct Stage1 {
 		            public let value: Inner2
 		        }
 
-		        public struct Inner {}
+		        public struct Stage2 {}
 
-		        public struct Inner2_ {}
+		        public struct Stage3 {}
 		    }
 
-		    public init(widgetBuilder: @escaping (SafeDIScope_Panel_widget.Outer) -> @Sendable (SafeDIScope_Panel_widget.Inner) -> @Sendable (SafeDIScope_Panel_widget.Inner2_) -> any Widget) {
-		        let __safeDI_widgetBuilder = widgetBuilder
+		    public init(widgetBuilder_trayBuilder_panelBuilder_widget: @escaping (SafeDIStagedScope_Widget_trayBuilder_panelBuilder_widget.Stage1) -> @Sendable (SafeDIStagedScope_Widget_trayBuilder_panelBuilder_widget.Stage2) -> @Sendable (SafeDIStagedScope_Widget_trayBuilder_panelBuilder_widget.Stage3) -> any Widget) {
+		        let __safeDI_widgetBuilder_trayBuilder_panelBuilder_widget = widgetBuilder_trayBuilder_panelBuilder_widget
 		        let value = Inner2()
-		        let __safeDI_widgetBuilder_Inner = __safeDI_widgetBuilder(SafeDIScope_Panel_widget.Outer(value: value))
+		        let __safeDI_widgetBuilder_trayBuilder_panelBuilder_widget_Stage2 = __safeDI_widgetBuilder_trayBuilder_panelBuilder_widget(SafeDIStagedScope_Widget_trayBuilder_panelBuilder_widget.Stage1(value: value))
 		        @Sendable func __safeDI_trayBuilder() -> Tray {
-		            let __safeDI_widgetBuilder_Inner2_ = __safeDI_widgetBuilder_Inner(SafeDIScope_Panel_widget.Inner())
+		            let __safeDI_widgetBuilder_trayBuilder_panelBuilder_widget_Stage3 = __safeDI_widgetBuilder_trayBuilder_panelBuilder_widget_Stage2(SafeDIStagedScope_Widget_trayBuilder_panelBuilder_widget.Stage2())
 		            @Sendable func __safeDI_panelBuilder() -> Panel {
-		                let widget: any Widget = __safeDI_widgetBuilder_Inner2_(SafeDIScope_Panel_widget.Inner2_())
+		                let widget: any Widget = __safeDI_widgetBuilder_trayBuilder_panelBuilder_widget_Stage3(SafeDIStagedScope_Widget_trayBuilder_panelBuilder_widget.Stage3())
 		                return Panel(widget: widget)
 		            }
 		            let panelBuilder = SendableInstantiator<Panel>(__safeDI_panelBuilder)
@@ -2181,25 +2480,25 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Seam1 {
-		    public enum __safeDI_Seam1_1B86E43328FADAC6 {}
+		    public enum __safeDI_Seam1_337950EE26B83ED8 {}
 		}
 		"""])
 		expectGeneratedCode(of: output, module: "App", imports: ["Feature"], rootFiles: ["Root": """
 		extension Root {
 		    public init() {
 		        func __safeDI_seam1() -> Seam1 {
-		            _ = Seam1.__safeDI_Seam1_1B86E43328FADAC6.self\(seamCallComment(seam: "Seam1", module: "Feature"))
-		            func __safeDI_widgetBuilder(_ scope: Seam1.SafeDIScope_Panel_widget.Outer) -> @Sendable (Seam1.SafeDIScope_Panel_widget.Inner) -> @Sendable (Seam1.SafeDIScope_Panel_widget.Inner2_) -> any Widget {
-		                @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Seam1.SafeDIScope_Panel_widget.Inner) -> @Sendable (Seam1.SafeDIScope_Panel_widget.Inner2_) -> any Widget {
-		                    @Sendable func __safeDI_widgetBuilder_Inner2_(_ scope: Seam1.SafeDIScope_Panel_widget.Inner2_) -> any Widget {
+		            _ = Seam1.__safeDI_Seam1_337950EE26B83ED8.self\(seamCallComment(seam: "Seam1", module: "Feature"))
+		            func __safeDI_widgetBuilder_trayBuilder_panelBuilder_widget(_ scope: Seam1.SafeDIStagedScope_Widget_trayBuilder_panelBuilder_widget.Stage1) -> @Sendable (Seam1.SafeDIStagedScope_Widget_trayBuilder_panelBuilder_widget.Stage2) -> @Sendable (Seam1.SafeDIStagedScope_Widget_trayBuilder_panelBuilder_widget.Stage3) -> any Widget {
+		                @Sendable func __safeDI_widgetBuilder_trayBuilder_panelBuilder_widget_Stage2(_ scope: Seam1.SafeDIStagedScope_Widget_trayBuilder_panelBuilder_widget.Stage2) -> @Sendable (Seam1.SafeDIStagedScope_Widget_trayBuilder_panelBuilder_widget.Stage3) -> any Widget {
+		                    @Sendable func __safeDI_widgetBuilder_trayBuilder_panelBuilder_widget_Stage3(_ scope: Seam1.SafeDIStagedScope_Widget_trayBuilder_panelBuilder_widget.Stage3) -> any Widget {
 		                        let widget: any Widget = DefaultWidget()
 		                        return widget
 		                    }
-		                    return __safeDI_widgetBuilder_Inner2_
+		                    return __safeDI_widgetBuilder_trayBuilder_panelBuilder_widget_Stage3
 		                }
-		                return __safeDI_widgetBuilder_Inner
+		                return __safeDI_widgetBuilder_trayBuilder_panelBuilder_widget_Stage2
 		            }
-		            return Seam1(widgetBuilder: __safeDI_widgetBuilder)
+		            return Seam1(widgetBuilder_trayBuilder_panelBuilder_widget: __safeDI_widgetBuilder_trayBuilder_panelBuilder_widget)
 		        }
 		        let seam1: Seam1 = __safeDI_seam1()
 		        self.init(seam1: seam1)
@@ -2218,53 +2517,70 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public struct SafeDIScope_DefaultWidget_gadget_inner_widget {
-		        public let session: Session
-		        public let analytics: Analytics
-		    }
+		    @frozen public enum SafeDIScope_Gadget {
+		        case inner_widget_gadget(inner_widget_gadget_Values)
 
-		    public enum SafeDIScope_DefaultWidget_gadget_shell_Inner_widget {
-		        public struct Outer {
+		        public struct inner_widget_gadget_Values {
 		            public let session: Session
-		            public let inner: Inner
-		        }
-
-		        public struct Inner_ {
 		            public let analytics: Analytics
 		        }
 		    }
 
-		    public init(gadgetBuilder_inner_widget: @escaping (SafeDIScope_DefaultWidget_gadget_inner_widget) -> any Gadget, gadgetBuilder_shell_Inner_widget: @escaping (SafeDIScope_DefaultWidget_gadget_shell_Inner_widget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget_shell_Inner_widget.Inner_) -> any Gadget) {
-		        let __safeDI_gadgetBuilder_inner_widget = gadgetBuilder_inner_widget
-		        let __safeDI_gadgetBuilder_shell_Inner_widget = gadgetBuilder_shell_Inner_widget
+		    public enum SafeDIStagedScope_Gadget_shell_Inner_widget_gadget {
+		        public struct Stage1 {
+		            public let session: Session
+		            public let inner: Inner
+		        }
+
+		        public struct Stage2 {
+		            public let analytics: Analytics
+		        }
+		    }
+
+		    public init(gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget, gadgetBuilder_shell_Inner_widget_gadget: @escaping (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget) {
+		        let __safeDI_gadgetBuilder = gadgetBuilder
+		        let __safeDI_gadgetBuilder_shell_Inner_widget_gadget = gadgetBuilder_shell_Inner_widget_gadget
 		        let session = Session()
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_08053E85F53E4648.self\(seamCallComment(seam: "Inner", module: "Feature"))
-		            func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
-		                let analytics = scope.analytics
-		                func __safeDI_widget() -> DefaultWidget {
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_inner_widget(SafeDIScope_DefaultWidget_gadget_inner_widget(session: session, analytics: analytics))
-		                    return DefaultWidget(analytics: analytics, gadget: gadget)
+		            _ = Inner.__safeDI_Inner_A441BC75156D061F.self\(seamCallComment(seam: "Inner", module: "Feature"))
+		            func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope):
+		                    let analytics = scope.analytics
+		                    func __safeDI_widget() -> DefaultWidget {
+		                        let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_widget_gadget(SafeDIScope_Gadget.inner_widget_gadget_Values(session: session, analytics: analytics)))
+		                        return DefaultWidget(analytics: analytics, gadget: gadget)
+		                    }
+		                    let widget: any Widget = __safeDI_widget()
+		                    return widget
 		                }
-		                let widget: any Widget = __safeDI_widget()
-		                return widget
 		            }
-		            return Inner(widgetBuilder: __safeDI_widgetBuilder)
+		            return Inner(widgetBuilder: __safeDI_widgetBuilder_Inner)
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-		            let __safeDI_gadgetBuilder_shell_Inner_widget_Inner_ = __safeDI_gadgetBuilder_shell_Inner_widget(SafeDIScope_DefaultWidget_gadget_shell_Inner_widget.Outer(session: session, inner: inner))
-		            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+		            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Inner", module: "Feature"))
+		            let __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_widget_gadget(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1(session: session, inner: inner))
+		            @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 		                let analytics = scope.analytics
 		                func __safeDI_widget() -> DefaultWidget {
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_widget_Inner_(SafeDIScope_DefaultWidget_gadget_shell_Inner_widget.Inner_(analytics: analytics))
+		                    let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2(analytics: analytics))
 		                    return DefaultWidget(analytics: analytics, gadget: gadget)
 		                }
 		                let widget: any Widget = __safeDI_widget()
 		                return widget
 		            }
-		            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+		            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+		                }
+		            }
+		            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 		        }
 		        let shell: Shell = __safeDI_shell()
 		        self.init(session: session, inner: inner, shell: shell)
@@ -2272,7 +2588,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_0BA14C7297580305 {}
+		    public enum __safeDI_Host_CAA239727FBFCC06 {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -2290,35 +2606,45 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public enum SafeDIScope_DefaultWidget_gadget {
-		        public struct Outer {
+		    public enum SafeDIStagedScope_Gadget_shellMaker_Inner_widget_gadget {
+		        public struct Stage1 {
 		            public let session: Session
 		        }
 
-		        public struct Inner {}
+		        public struct Stage2 {}
 
-		        public struct Inner2 {
+		        public struct Stage3 {
 		            public let analytics: Analytics
 		        }
 		    }
 
-		    public init(gadgetBuilder: @escaping (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner2) -> any Gadget) {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
+		    public init(gadgetBuilder_shellMaker_Inner_widget_gadget: @escaping (SafeDIStagedScope_Gadget_shellMaker_Inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shellMaker_Inner_widget_gadget.Stage2) -> @Sendable (SafeDIStagedScope_Gadget_shellMaker_Inner_widget_gadget.Stage3) -> any Gadget) {
+		        let __safeDI_gadgetBuilder_shellMaker_Inner_widget_gadget = gadgetBuilder_shellMaker_Inner_widget_gadget
 		        let session = Session()
-		        let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget.Outer(session: session))
+		        let __safeDI_gadgetBuilder_shellMaker_Inner_widget_gadget_Stage2 = __safeDI_gadgetBuilder_shellMaker_Inner_widget_gadget(SafeDIStagedScope_Gadget_shellMaker_Inner_widget_gadget.Stage1(session: session))
 		        @Sendable func __safeDI_shellMaker() -> Shell {
-		            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-		            let __safeDI_gadgetBuilder_Inner2 = __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultWidget_gadget.Inner())
-		            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+		            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		            let __safeDI_gadgetBuilder_shellMaker_Inner_widget_gadget_Stage3 = __safeDI_gadgetBuilder_shellMaker_Inner_widget_gadget_Stage2(SafeDIStagedScope_Gadget_shellMaker_Inner_widget_gadget.Stage2())
+		            @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 		                let analytics = scope.analytics
 		                func __safeDI_widget() -> DefaultWidget {
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_Inner2(SafeDIScope_DefaultWidget_gadget.Inner2(analytics: analytics))
+		                    let gadget: any Gadget = __safeDI_gadgetBuilder_shellMaker_Inner_widget_gadget_Stage3(SafeDIStagedScope_Gadget_shellMaker_Inner_widget_gadget.Stage3(analytics: analytics))
 		                    return DefaultWidget(analytics: analytics, gadget: gadget)
 		                }
 		                let widget: any Widget = __safeDI_widget()
 		                return widget
 		            }
-		            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+		            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+		                }
+		            }
+		            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 		        }
 		        let shellMaker = SendableInstantiator<Shell>(__safeDI_shellMaker)
 		        self.init(session: session, shellMaker: shellMaker)
@@ -2326,27 +2652,27 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_9EF90261B450AE82 {}
+		    public enum __safeDI_Host_CE8C407BD0619E01 {}
 		}
 		"""])
 		expectGeneratedCode(of: output, module: "App", imports: ["Feature", "Middle"], rootFiles: ["Root": """
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_9EF90261B450AE82.self\(seamCallComment(seam: "Host", module: "Middle"))
-		            func __safeDI_gadgetBuilder(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Inner) -> @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Inner2) -> any Gadget {
+		            _ = Host.__safeDI_Host_CE8C407BD0619E01.self\(seamCallComment(seam: "Host", module: "Middle"))
+		            func __safeDI_gadgetBuilder_shellMaker_Inner_widget_gadget(_ scope: Host.SafeDIStagedScope_Gadget_shellMaker_Inner_widget_gadget.Stage1) -> @Sendable (Host.SafeDIStagedScope_Gadget_shellMaker_Inner_widget_gadget.Stage2) -> @Sendable (Host.SafeDIStagedScope_Gadget_shellMaker_Inner_widget_gadget.Stage3) -> any Gadget {
 		                let session = scope.session
-		                @Sendable func __safeDI_gadgetBuilder_Inner(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Inner) -> @Sendable (Host.SafeDIScope_DefaultWidget_gadget.Inner2) -> any Gadget {
-		                    @Sendable func __safeDI_gadgetBuilder_Inner2(_ scope: Host.SafeDIScope_DefaultWidget_gadget.Inner2) -> any Gadget {
+		                @Sendable func __safeDI_gadgetBuilder_shellMaker_Inner_widget_gadget_Stage2(_ scope: Host.SafeDIStagedScope_Gadget_shellMaker_Inner_widget_gadget.Stage2) -> @Sendable (Host.SafeDIStagedScope_Gadget_shellMaker_Inner_widget_gadget.Stage3) -> any Gadget {
+		                    @Sendable func __safeDI_gadgetBuilder_shellMaker_Inner_widget_gadget_Stage3(_ scope: Host.SafeDIStagedScope_Gadget_shellMaker_Inner_widget_gadget.Stage3) -> any Gadget {
 		                        let analytics = scope.analytics
 		                        let gadget: any Gadget = DefaultGadget(session: session, analytics: analytics)
 		                        return gadget
 		                    }
-		                    return __safeDI_gadgetBuilder_Inner2
+		                    return __safeDI_gadgetBuilder_shellMaker_Inner_widget_gadget_Stage3
 		                }
-		                return __safeDI_gadgetBuilder_Inner
+		                return __safeDI_gadgetBuilder_shellMaker_Inner_widget_gadget_Stage2
 		            }
-		            return Host(gadgetBuilder: __safeDI_gadgetBuilder)
+		            return Host(gadgetBuilder_shellMaker_Inner_widget_gadget: __safeDI_gadgetBuilder_shellMaker_Inner_widget_gadget)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -2374,36 +2700,46 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public enum SafeDIScope_DefaultWidget_gadget {
-		        public struct Outer {}
+		    public enum SafeDIStagedScope_Gadget_holderMaker_shell_Inner_widget_gadget {
+		        public struct Stage1 {}
 
-		        public struct Inner {
+		        public struct Stage2 {
 		            public let bag: Bag
 		        }
 
-		        public struct Inner2 {
+		        public struct Stage3 {
 		            public let analytics: Analytics
 		        }
 		    }
 
-		    public init(gadgetBuilder: @escaping (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner2) -> any Gadget) {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
-		        let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget.Outer())
+		    public init(gadgetBuilder_holderMaker_shell_Inner_widget_gadget: @escaping (SafeDIStagedScope_Gadget_holderMaker_shell_Inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_holderMaker_shell_Inner_widget_gadget.Stage2) -> @Sendable (SafeDIStagedScope_Gadget_holderMaker_shell_Inner_widget_gadget.Stage3) -> any Gadget) {
+		        let __safeDI_gadgetBuilder_holderMaker_shell_Inner_widget_gadget = gadgetBuilder_holderMaker_shell_Inner_widget_gadget
+		        let __safeDI_gadgetBuilder_holderMaker_shell_Inner_widget_gadget_Stage2 = __safeDI_gadgetBuilder_holderMaker_shell_Inner_widget_gadget(SafeDIStagedScope_Gadget_holderMaker_shell_Inner_widget_gadget.Stage1())
 		        @Sendable func __safeDI_holderMaker() -> ShellHolder {
 		            let bag = Bag()
 		            func __safeDI_shell() -> Shell {
-		                _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-		                let __safeDI_gadgetBuilder_Inner2 = __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultWidget_gadget.Inner(bag: bag))
-		                @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+		                _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		                let __safeDI_gadgetBuilder_holderMaker_shell_Inner_widget_gadget_Stage3 = __safeDI_gadgetBuilder_holderMaker_shell_Inner_widget_gadget_Stage2(SafeDIStagedScope_Gadget_holderMaker_shell_Inner_widget_gadget.Stage2(bag: bag))
+		                @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 		                    let analytics = scope.analytics
 		                    func __safeDI_widget() -> DefaultWidget {
-		                        let gadget: any Gadget = __safeDI_gadgetBuilder_Inner2(SafeDIScope_DefaultWidget_gadget.Inner2(analytics: analytics))
+		                        let gadget: any Gadget = __safeDI_gadgetBuilder_holderMaker_shell_Inner_widget_gadget_Stage3(SafeDIStagedScope_Gadget_holderMaker_shell_Inner_widget_gadget.Stage3(analytics: analytics))
 		                        return DefaultWidget(gadget: gadget)
 		                    }
 		                    let widget: any Widget = __safeDI_widget()
 		                    return widget
 		                }
-		                return Shell(widgetBuilder: __safeDI_widgetBuilder)
+		                @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+		                    switch scope {
+		                    case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+		                    }
+		                }
+		                @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                    switch scope {
+		                    case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+		                    }
+		                }
+		                return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 		            }
 		            let shell: Shell = __safeDI_shell()
 		            return ShellHolder(bag: bag, shell: shell)
@@ -2414,7 +2750,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_1EFCE9B3055C0C32 {}
+		    public enum __safeDI_Host_D8B73ED70185DC4D {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -2436,41 +2772,51 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public enum SafeDIScope_DefaultWidget_gadget {
-		        public struct Outer {
+		    public enum SafeDIStagedScope_Gadget_shell_Inner_widget_gadget {
+		        public struct Stage1 {
 		            public let itemMaker: Instantiator<Item>
 		        }
 
-		        public struct Inner {
+		        public struct Stage2 {
 		            public let analytics: Analytics
 		            public let hostBuilder: SendableInstantiator<Host>
 		        }
 		    }
 
-		    public init(gadgetBuilder: @escaping @Sendable (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget) {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
+		    public init(gadgetBuilder_shell_Inner_widget_gadget: @escaping @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget) {
+		        let __safeDI_gadgetBuilder_shell_Inner_widget_gadget = gadgetBuilder_shell_Inner_widget_gadget
 		        func __safeDI_itemMaker() -> Item {
 		            Item()
 		        }
 		        let itemMaker = Instantiator<Item>(__safeDI_itemMaker)
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-		            let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget.Outer(itemMaker: itemMaker))
-		            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+		            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		            let __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_widget_gadget(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1(itemMaker: itemMaker))
+		            @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 		                let analytics = scope.analytics
 		                func __safeDI_widget() -> DefaultWidget {
 		                    @Sendable func __safeDI_hostBuilder() -> Host {
-		                        _ = Host.__safeDI_Host_7109D89A9DDD9F78.self
-		                        return Host(gadgetBuilder: __safeDI_gadgetBuilder)
+		                        _ = Host.__safeDI_Host_1F3370B92A0A8E82.self
+		                        return Host(gadgetBuilder_shell_Inner_widget_gadget: __safeDI_gadgetBuilder_shell_Inner_widget_gadget)
 		                    }
 		                    let hostBuilder = SendableInstantiator<Host>(__safeDI_hostBuilder)
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultWidget_gadget.Inner(analytics: analytics, hostBuilder: hostBuilder))
+		                    let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2(analytics: analytics, hostBuilder: hostBuilder))
 		                    return DefaultWidget(gadget: gadget, hostBuilder: hostBuilder)
 		                }
 		                let widget: any Widget = __safeDI_widget()
 		                return widget
 		            }
-		            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+		            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+		                }
+		            }
+		            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 		        }
 		        let shell: Shell = __safeDI_shell()
 		        self.init(itemMaker: itemMaker, shell: shell)
@@ -2478,7 +2824,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_7109D89A9DDD9F78 {}
+		    public enum __safeDI_Host_1F3370B92A0A8E82 {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -2519,40 +2865,46 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public struct SafeDIScope_DefaultWidget_gadget_inner_a_widget {
-		        public let alpha: Alpha
+		    @frozen public enum SafeDIScope_Gadget {
+		        case inner_a_widget_gadget(inner_a_widget_gadget_Values)
+		        case inner_b_widget_gadget(inner_b_widget_gadget_Values)
+
+		        public struct inner_a_widget_gadget_Values {
+		            public let alpha: Alpha
+		        }
+
+		        public struct inner_b_widget_gadget_Values {
+		            public let a: A
+		            public let beta: Beta
+		        }
 		    }
 
-		    public struct SafeDIScope_DefaultWidget_gadget_inner_b_widget {
-		        public let a: A
-		        public let beta: Beta
-		    }
-
-		    public init(gadgetBuilder_inner_a_widget: @escaping (SafeDIScope_DefaultWidget_gadget_inner_a_widget) -> any Gadget, gadgetBuilder_inner_b_widget: @escaping (SafeDIScope_DefaultWidget_gadget_inner_b_widget) -> any Gadget) {
-		        let __safeDI_gadgetBuilder_inner_a_widget = gadgetBuilder_inner_a_widget
-		        let __safeDI_gadgetBuilder_inner_b_widget = gadgetBuilder_inner_b_widget
+		    public init(gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
+		        let __safeDI_gadgetBuilder = gadgetBuilder
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_AF8582629C1D0F19.self\(seamCallComment(seam: "Inner", module: "Feature"))
-		            func __safeDI_widgetBuilder_A(_ scope: Inner.SafeDIScope_A_widget) -> any Widget {
-		                let alpha = scope.alpha
-		                func __safeDI_widget() -> DefaultWidget {
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_inner_a_widget(SafeDIScope_DefaultWidget_gadget_inner_a_widget(alpha: alpha))
-		                    return DefaultWidget(gadget: gadget)
+		            _ = Inner.__safeDI_Inner_172F8689A03DDCFE.self\(seamCallComment(seam: "Inner", module: "Feature"))
+		            func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .a_widget(scope):
+		                    let alpha = scope.alpha
+		                    func __safeDI_widget() -> DefaultWidget {
+		                        let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_a_widget_gadget(SafeDIScope_Gadget.inner_a_widget_gadget_Values(alpha: alpha)))
+		                        return DefaultWidget(gadget: gadget)
+		                    }
+		                    let widget: any Widget = __safeDI_widget()
+		                    return widget
+		                case let .b_widget(scope):
+		                    let a = scope.a
+		                    let beta = scope.beta
+		                    func __safeDI_widget() -> DefaultWidget {
+		                        let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_b_widget_gadget(SafeDIScope_Gadget.inner_b_widget_gadget_Values(a: a, beta: beta)))
+		                        return DefaultWidget(gadget: gadget)
+		                    }
+		                    let widget: any Widget = __safeDI_widget()
+		                    return widget
 		                }
-		                let widget: any Widget = __safeDI_widget()
-		                return widget
 		            }
-		            func __safeDI_widgetBuilder_B(_ scope: Inner.SafeDIScope_B_widget) -> any Widget {
-		                let a = scope.a
-		                let beta = scope.beta
-		                func __safeDI_widget() -> DefaultWidget {
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_inner_b_widget(SafeDIScope_DefaultWidget_gadget_inner_b_widget(a: a, beta: beta))
-		                    return DefaultWidget(gadget: gadget)
-		                }
-		                let widget: any Widget = __safeDI_widget()
-		                return widget
-		            }
-		            return Inner(widgetBuilder_A: __safeDI_widgetBuilder_A, widgetBuilder_B: __safeDI_widgetBuilder_B)
+		            return Inner(widgetBuilder: __safeDI_widgetBuilder_Inner)
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(inner: inner)
@@ -2560,7 +2912,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_FC54B2393D00D00F {}
+		    public enum __safeDI_Host_1AF2C76943211E42 {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -2574,50 +2926,61 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public enum SafeDIScope_DefaultWidget_gadget_shell_Inner_a_widget {
-		        public struct Outer {}
+		    public enum SafeDIStagedScope_Gadget_shell_Inner_a_widget_gadget {
+		        public struct Stage1 {}
 
-		        public struct Inner {
+		        public struct Stage2 {
 		            public let alpha: Alpha
 		        }
 		    }
 
-		    public enum SafeDIScope_DefaultWidget_gadget_shell_Inner_b_widget {
-		        public struct Outer {}
+		    public enum SafeDIStagedScope_Gadget_shell_Inner_b_widget_gadget {
+		        public struct Stage1 {}
 
-		        public struct Inner {
+		        public struct Stage2 {
 		            public let a: A
 		            public let beta: Beta
 		        }
 		    }
 
-		    public init(gadgetBuilder_shell_Inner_a_widget: @escaping (SafeDIScope_DefaultWidget_gadget_shell_Inner_a_widget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget_shell_Inner_a_widget.Inner) -> any Gadget, gadgetBuilder_shell_Inner_b_widget: @escaping (SafeDIScope_DefaultWidget_gadget_shell_Inner_b_widget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget_shell_Inner_b_widget.Inner) -> any Gadget) {
-		        let __safeDI_gadgetBuilder_shell_Inner_a_widget = gadgetBuilder_shell_Inner_a_widget
-		        let __safeDI_gadgetBuilder_shell_Inner_b_widget = gadgetBuilder_shell_Inner_b_widget
+		    public init(gadgetBuilder_shell_Inner_a_widget_gadget: @escaping (SafeDIStagedScope_Gadget_shell_Inner_a_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_a_widget_gadget.Stage2) -> any Gadget, gadgetBuilder_shell_Inner_b_widget_gadget: @escaping (SafeDIStagedScope_Gadget_shell_Inner_b_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_b_widget_gadget.Stage2) -> any Gadget) {
+		        let __safeDI_gadgetBuilder_shell_Inner_a_widget_gadget = gadgetBuilder_shell_Inner_a_widget_gadget
+		        let __safeDI_gadgetBuilder_shell_Inner_b_widget_gadget = gadgetBuilder_shell_Inner_b_widget_gadget
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_FB36EDA823F4EAE1.self\(seamCallComment(seam: "Shell", module: "Feature"))
-		            let __safeDI_gadgetBuilder_shell_Inner_a_widget_Inner = __safeDI_gadgetBuilder_shell_Inner_a_widget(SafeDIScope_DefaultWidget_gadget_shell_Inner_a_widget.Outer())
-		            @Sendable func __safeDI_widgetBuilder_A(_ scope: Inner.SafeDIScope_A_widget) -> any Widget {
+		            _ = Shell.__safeDI_Shell_1D90DEA21EAB29B6.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		            let __safeDI_gadgetBuilder_shell_Inner_a_widget_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_a_widget_gadget(SafeDIStagedScope_Gadget_shell_Inner_a_widget_gadget.Stage1())
+		            @Sendable func __safeDI_widgetBuilder_Inner_a_widget(_ scope: Inner.SafeDIScope_Widget.a_widget_Values) -> any Widget {
 		                let alpha = scope.alpha
 		                func __safeDI_widget() -> DefaultWidget {
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_a_widget_Inner(SafeDIScope_DefaultWidget_gadget_shell_Inner_a_widget.Inner(alpha: alpha))
+		                    let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_a_widget_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_a_widget_gadget.Stage2(alpha: alpha))
 		                    return DefaultWidget(gadget: gadget)
 		                }
 		                let widget: any Widget = __safeDI_widget()
 		                return widget
 		            }
-		            let __safeDI_gadgetBuilder_shell_Inner_b_widget_Inner = __safeDI_gadgetBuilder_shell_Inner_b_widget(SafeDIScope_DefaultWidget_gadget_shell_Inner_b_widget.Outer())
-		            @Sendable func __safeDI_widgetBuilder_B(_ scope: Inner.SafeDIScope_B_widget) -> any Widget {
+		            let __safeDI_gadgetBuilder_shell_Inner_b_widget_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_b_widget_gadget(SafeDIStagedScope_Gadget_shell_Inner_b_widget_gadget.Stage1())
+		            @Sendable func __safeDI_widgetBuilder_Inner_b_widget(_ scope: Inner.SafeDIScope_Widget.b_widget_Values) -> any Widget {
 		                let a = scope.a
 		                let beta = scope.beta
 		                func __safeDI_widget() -> DefaultWidget {
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_b_widget_Inner(SafeDIScope_DefaultWidget_gadget_shell_Inner_b_widget.Inner(a: a, beta: beta))
+		                    let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_b_widget_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_b_widget_gadget.Stage2(a: a, beta: beta))
 		                    return DefaultWidget(gadget: gadget)
 		                }
 		                let widget: any Widget = __safeDI_widget()
 		                return widget
 		            }
-		            return Shell(widgetBuilder_A: __safeDI_widgetBuilder_A, widgetBuilder_B: __safeDI_widgetBuilder_B)
+		            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .a_widget(scope): return __safeDI_widgetBuilder_Inner_a_widget(scope)
+		                case let .b_widget(scope): return __safeDI_widgetBuilder_Inner_b_widget(scope)
+		                }
+		            }
+		            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 		        }
 		        let shell: Shell = __safeDI_shell()
 		        self.init(shell: shell)
@@ -2625,7 +2988,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_E4F16507666B84E2 {}
+		    public enum __safeDI_Host_6A22390C4918F370 {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -2656,38 +3019,54 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public struct SafeDIScope_DefaultWidget_gadget_top_SubA_widget {
-		        public let alpha: Alpha
+		    @frozen public enum SafeDIScope_Gadget {
+		        case top_SubA_widget_gadget(top_SubA_widget_gadget_Values)
+		        case top_SubB_widget_gadget(top_SubB_widget_gadget_Values)
+
+		        public struct top_SubA_widget_gadget_Values {
+		            public let alpha: Alpha
+		        }
+
+		        public struct top_SubB_widget_gadget_Values {
+		            public let beta: Beta
+		        }
 		    }
 
-		    public struct SafeDIScope_DefaultWidget_gadget_top_SubB_widget {
-		        public let beta: Beta
-		    }
-
-		    public init(gadgetBuilder_top_SubA_widget: @escaping (SafeDIScope_DefaultWidget_gadget_top_SubA_widget) -> any Gadget, gadgetBuilder_top_SubB_widget: @escaping (SafeDIScope_DefaultWidget_gadget_top_SubB_widget) -> any Gadget) {
-		        let __safeDI_gadgetBuilder_top_SubA_widget = gadgetBuilder_top_SubA_widget
-		        let __safeDI_gadgetBuilder_top_SubB_widget = gadgetBuilder_top_SubB_widget
+		    public init(gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
+		        let __safeDI_gadgetBuilder = gadgetBuilder
 		        func __safeDI_top() -> Top {
-		            _ = Top.__safeDI_Top_C5F8239A730976C8.self\(seamCallComment(seam: "Top", module: "Feature"))
-		            func __safeDI_widgetBuilder_SubA(_ scope: SubA.SafeDIScope_SubA_widget) -> any Widget {
-		                let alpha = scope.alpha
-		                func __safeDI_widget() -> DefaultWidget {
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_top_SubA_widget(SafeDIScope_DefaultWidget_gadget_top_SubA_widget(alpha: alpha))
-		                    return DefaultWidget(gadget: gadget)
+		            _ = Top.__safeDI_Top_C8A5790490E40760.self\(seamCallComment(seam: "Top", module: "Feature"))
+		            func __safeDI_widgetBuilder_Top(_ scope: Top.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .subA(scope): return __safeDI_widgetBuilder_SubA(scope)
+		                case let .subB(scope): return __safeDI_widgetBuilder_SubB(scope)
 		                }
-		                let widget: any Widget = __safeDI_widget()
-		                return widget
 		            }
-		            func __safeDI_widgetBuilder_SubB(_ scope: SubB.SafeDIScope_SubB_widget) -> any Widget {
-		                let beta = scope.beta
-		                func __safeDI_widget() -> DefaultWidget {
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_top_SubB_widget(SafeDIScope_DefaultWidget_gadget_top_SubB_widget(beta: beta))
-		                    return DefaultWidget(gadget: gadget)
+		            func __safeDI_widgetBuilder_SubA(_ scope: SubA.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope):
+		                    let alpha = scope.alpha
+		                    func __safeDI_widget() -> DefaultWidget {
+		                        let gadget: any Gadget = __safeDI_gadgetBuilder(.top_SubA_widget_gadget(SafeDIScope_Gadget.top_SubA_widget_gadget_Values(alpha: alpha)))
+		                        return DefaultWidget(gadget: gadget)
+		                    }
+		                    let widget: any Widget = __safeDI_widget()
+		                    return widget
 		                }
-		                let widget: any Widget = __safeDI_widget()
-		                return widget
 		            }
-		            return Top(widgetBuilder_SubA: __safeDI_widgetBuilder_SubA, widgetBuilder_SubB: __safeDI_widgetBuilder_SubB)
+		            func __safeDI_widgetBuilder_SubB(_ scope: SubB.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope):
+		                    let beta = scope.beta
+		                    func __safeDI_widget() -> DefaultWidget {
+		                        let gadget: any Gadget = __safeDI_gadgetBuilder(.top_SubB_widget_gadget(SafeDIScope_Gadget.top_SubB_widget_gadget_Values(beta: beta)))
+		                        return DefaultWidget(gadget: gadget)
+		                    }
+		                    let widget: any Widget = __safeDI_widget()
+		                    return widget
+		                }
+		            }
+		            return Top(widgetBuilder: __safeDI_widgetBuilder_Top)
 		        }
 		        let top: Top = __safeDI_top()
 		        self.init(top: top)
@@ -2695,7 +3074,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_23BFBEFD00D39C41 {}
+		    public enum __safeDI_Host_5B068A1FBECC5F0D {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -2750,19 +3129,19 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
 		    // SafeDI counts `Box.Bar` as `public`: no module it reads declares it narrower. If `Box.Bar` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
-		    public enum SafeDIScope_Holder_gadget {
-		        public struct Outer {}
+		    public enum SafeDIStagedScope_Gadget_holderMaker_gadget {
+		        public struct Stage1 {}
 
-		        public struct Inner_ {
+		        public struct Stage2 {
 		            public let token: Box<Inner>.Bar
 		        }
 		    }
 
-		    public init(gadgetBuilder: @escaping (SafeDIScope_Holder_gadget.Outer) -> @Sendable (SafeDIScope_Holder_gadget.Inner_) -> any Gadget) {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
-		        let __safeDI_gadgetBuilder_Inner_ = __safeDI_gadgetBuilder(SafeDIScope_Holder_gadget.Outer())
+		    public init(gadgetBuilder_holderMaker_gadget: @escaping (SafeDIStagedScope_Gadget_holderMaker_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_holderMaker_gadget.Stage2) -> any Gadget) {
+		        let __safeDI_gadgetBuilder_holderMaker_gadget = gadgetBuilder_holderMaker_gadget
+		        let __safeDI_gadgetBuilder_holderMaker_gadget_Stage2 = __safeDI_gadgetBuilder_holderMaker_gadget(SafeDIStagedScope_Gadget_holderMaker_gadget.Stage1())
 		        @Sendable func __safeDI_holderMaker(token: Box<Inner>.Bar) -> Holder {
-		            let gadget: any Gadget = __safeDI_gadgetBuilder_Inner_(SafeDIScope_Holder_gadget.Inner_(token: token))
+		            let gadget: any Gadget = __safeDI_gadgetBuilder_holderMaker_gadget_Stage2(SafeDIStagedScope_Gadget_holderMaker_gadget.Stage2(token: token))
 		            return Holder(token: token, gadget: gadget)
 		        }
 		        let holderMaker = SendableInstantiator<Holder> {
@@ -2773,7 +3152,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_CF3E35B0FE3CC135 {}
+		    public enum __safeDI_Host_941FCAED062F4376 {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -2828,26 +3207,33 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			case .besideThePlace:
 				"""
 				extension Host {
-				    public struct SafeDIScope_DefaultWidget_gadget {
-				        public let session: Session
-				        public let analytics: Analytics
+				    @frozen public enum SafeDIScope_Gadget {
+				        case inner_widget_gadget(inner_widget_gadget_Values)
+
+				        public struct inner_widget_gadget_Values {
+				            public let session: Session
+				            public let analytics: Analytics
+				        }
 				    }
 
-				    public init(gadgetBuilder: @escaping (SafeDIScope_DefaultWidget_gadget) -> any Gadget) {
+				    public init(gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 				        let __safeDI_gadgetBuilder = gadgetBuilder
 				        let session = Session()
 				        func __safeDI_inner() -> Inner {
-				            _ = Inner.__safeDI_Inner_08053E85F53E4648.self\(seamCallComment(seam: "Inner", module: "Feature"))
-				            func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
-				                func __safeDI_widget() -> DefaultWidget {
-				                    let analytics = Analytics()
-				                    let gadget: any Gadget = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget(session: session, analytics: analytics))
-				                    return DefaultWidget(analytics: analytics, gadget: gadget)
+				            _ = Inner.__safeDI_Inner_A441BC75156D061F.self\(seamCallComment(seam: "Inner", module: "Feature"))
+				            func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+				                switch scope {
+				                case .widget:
+				                    func __safeDI_widget() -> DefaultWidget {
+				                        let analytics = Analytics()
+				                        let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_widget_gadget(SafeDIScope_Gadget.inner_widget_gadget_Values(session: session, analytics: analytics)))
+				                        return DefaultWidget(analytics: analytics, gadget: gadget)
+				                    }
+				                    let widget: any Widget = __safeDI_widget()
+				                    return widget
 				                }
-				                let widget: any Widget = __safeDI_widget()
-				                return widget
 				            }
-				            return Inner(widgetBuilder: __safeDI_widgetBuilder)
+				            return Inner(widgetBuilder: __safeDI_widgetBuilder_Inner)
 				        }
 				        let inner: Inner = __safeDI_inner()
 				        self.init(session: session, inner: inner)
@@ -2855,36 +3241,43 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				}
 
 				extension Host {
-				    public enum __safeDI_Host_8714E1D53A857C27 {}
+				    public enum __safeDI_Host_9C23B9AD5CDCF084 {}
 				}
 				"""
 			case .aboveTheOwnerOfThePlace:
 				"""
 				extension Host {
-				    public struct SafeDIScope_Holder_gadget {
-				        public let session: Session
-				        public let analytics: Analytics
+				    @frozen public enum SafeDIScope_Gadget {
+				        case inner_widget_holder_gadget(inner_widget_holder_gadget_Values)
+
+				        public struct inner_widget_holder_gadget_Values {
+				            public let session: Session
+				            public let analytics: Analytics
+				        }
 				    }
 
-				    public init(gadgetBuilder: @escaping (SafeDIScope_Holder_gadget) -> any Gadget) {
+				    public init(gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 				        let __safeDI_gadgetBuilder = gadgetBuilder
 				        let session = Session()
 				        func __safeDI_inner() -> Inner {
-				            _ = Inner.__safeDI_Inner_08053E85F53E4648.self\(seamCallComment(seam: "Inner", module: "Feature"))
-				            func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
-				                func __safeDI_widget() -> DefaultWidget {
-				                    let analytics = Analytics()
-				                    func __safeDI_holder() -> Holder {
-				                        let gadget: any Gadget = __safeDI_gadgetBuilder(SafeDIScope_Holder_gadget(session: session, analytics: analytics))
-				                        return Holder(gadget: gadget)
+				            _ = Inner.__safeDI_Inner_A441BC75156D061F.self\(seamCallComment(seam: "Inner", module: "Feature"))
+				            func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+				                switch scope {
+				                case .widget:
+				                    func __safeDI_widget() -> DefaultWidget {
+				                        let analytics = Analytics()
+				                        func __safeDI_holder() -> Holder {
+				                            let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_widget_holder_gadget(SafeDIScope_Gadget.inner_widget_holder_gadget_Values(session: session, analytics: analytics)))
+				                            return Holder(gadget: gadget)
+				                        }
+				                        let holder: Holder = __safeDI_holder()
+				                        return DefaultWidget(analytics: analytics, holder: holder)
 				                    }
-				                    let holder: Holder = __safeDI_holder()
-				                    return DefaultWidget(analytics: analytics, holder: holder)
+				                    let widget: any Widget = __safeDI_widget()
+				                    return widget
 				                }
-				                let widget: any Widget = __safeDI_widget()
-				                return widget
 				            }
-				            return Inner(widgetBuilder: __safeDI_widgetBuilder)
+				            return Inner(widgetBuilder: __safeDI_widgetBuilder_Inner)
 				        }
 				        let inner: Inner = __safeDI_inner()
 				        self.init(session: session, inner: inner)
@@ -2892,37 +3285,44 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				}
 
 				extension Host {
-				    public enum __safeDI_Host_1B63B94269D01214 {}
+				    public enum __safeDI_Host_C145425651CBFCDB {}
 				}
 				"""
 			case .forwardedToTheOwnerOfThePlace:
 				"""
 				extension Host {
-				    public struct SafeDIScope_Holder_gadget {
-				        public let session: Session
-				        public let analytics: Analytics
+				    @frozen public enum SafeDIScope_Gadget {
+				        case inner_widget_holderMaker_gadget(inner_widget_holderMaker_gadget_Values)
+
+				        public struct inner_widget_holderMaker_gadget_Values {
+				            public let session: Session
+				            public let analytics: Analytics
+				        }
 				    }
 
-				    public init(gadgetBuilder: @escaping (SafeDIScope_Holder_gadget) -> any Gadget) {
+				    public init(gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 				        let __safeDI_gadgetBuilder = gadgetBuilder
 				        let session = Session()
 				        func __safeDI_inner() -> Inner {
-				            _ = Inner.__safeDI_Inner_08053E85F53E4648.self\(seamCallComment(seam: "Inner", module: "Feature"))
-				            func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
-				                func __safeDI_widget() -> DefaultWidget {
-				                    func __safeDI_holderMaker(analytics: Analytics) -> Holder {
-				                        let gadget: any Gadget = __safeDI_gadgetBuilder(SafeDIScope_Holder_gadget(session: session, analytics: analytics))
-				                        return Holder(analytics: analytics, gadget: gadget)
+				            _ = Inner.__safeDI_Inner_A441BC75156D061F.self\(seamCallComment(seam: "Inner", module: "Feature"))
+				            func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+				                switch scope {
+				                case .widget:
+				                    func __safeDI_widget() -> DefaultWidget {
+				                        func __safeDI_holderMaker(analytics: Analytics) -> Holder {
+				                            let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_widget_holderMaker_gadget(SafeDIScope_Gadget.inner_widget_holderMaker_gadget_Values(session: session, analytics: analytics)))
+				                            return Holder(analytics: analytics, gadget: gadget)
+				                        }
+				                        let holderMaker = Instantiator<Holder> {
+				                            __safeDI_holderMaker(analytics: $0)
+				                        }
+				                        return DefaultWidget(holderMaker: holderMaker)
 				                    }
-				                    let holderMaker = Instantiator<Holder> {
-				                        __safeDI_holderMaker(analytics: $0)
-				                    }
-				                    return DefaultWidget(holderMaker: holderMaker)
+				                    let widget: any Widget = __safeDI_widget()
+				                    return widget
 				                }
-				                let widget: any Widget = __safeDI_widget()
-				                return widget
 				            }
-				            return Inner(widgetBuilder: __safeDI_widgetBuilder)
+				            return Inner(widgetBuilder: __safeDI_widgetBuilder_Inner)
 				        }
 				        let inner: Inner = __safeDI_inner()
 				        self.init(session: session, inner: inner)
@@ -2930,7 +3330,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				}
 
 				extension Host {
-				    public enum __safeDI_Host_1B63B94269D01214 {}
+				    public enum __safeDI_Host_2FBF3483F498BCE7 {}
 				}
 				"""
 			}
@@ -2965,32 +3365,42 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public enum SafeDIScope_DefaultWidget_gadget {
-		        public struct Outer {
+		    public enum SafeDIStagedScope_Gadget_shell_Inner_widget_gadget {
+		        public struct Stage1 {
 		            public let session: Session
 		        }
 
-		        public struct Inner {
+		        public struct Stage2 {
 		            public let analytics: Analytics
 		        }
 		    }
 
-		    public init(gadgetBuilder: @escaping (SafeDIScope_DefaultWidget_gadget.Outer) -> @Sendable (SafeDIScope_DefaultWidget_gadget.Inner) -> any Gadget) {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
+		    public init(gadgetBuilder_shell_Inner_widget_gadget: @escaping (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2) -> any Gadget) {
+		        let __safeDI_gadgetBuilder_shell_Inner_widget_gadget = gadgetBuilder_shell_Inner_widget_gadget
 		        let session = Session()
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-		            let __safeDI_gadgetBuilder_Inner = __safeDI_gadgetBuilder(SafeDIScope_DefaultWidget_gadget.Outer(session: session))
-		            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+		            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		            let __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2 = __safeDI_gadgetBuilder_shell_Inner_widget_gadget(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage1(session: session))
+		            @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 		                func __safeDI_widget() -> DefaultWidget {
 		                    let analytics = Analytics()
-		                    let gadget: any Gadget = __safeDI_gadgetBuilder_Inner(SafeDIScope_DefaultWidget_gadget.Inner(analytics: analytics))
+		                    let gadget: any Gadget = __safeDI_gadgetBuilder_shell_Inner_widget_gadget_Stage2(SafeDIStagedScope_Gadget_shell_Inner_widget_gadget.Stage2(analytics: analytics))
 		                    return DefaultWidget(analytics: analytics, gadget: gadget)
 		                }
 		                let widget: any Widget = __safeDI_widget()
 		                return widget
 		            }
-		            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+		            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+		                }
+		            }
+		            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 		        }
 		        let shell: Shell = __safeDI_shell()
 		        self.init(session: session, shell: shell)
@@ -2998,7 +3408,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_C5D522AE64911A57 {}
+		    public enum __safeDI_Host_C2B8446A21A9B91D {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -3017,32 +3427,42 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public enum `SafeDIScope_DefaultWidget_my gadget` {
-		        public struct Outer {
+		    public enum `SafeDIStagedScope_Gadget_shell_Inner_widget_my gadget` {
+		        public struct Stage1 {
 		            public let session: Session
 		        }
 
-		        public struct Inner {
+		        public struct Stage2 {
 		            public let analytics: Analytics
 		        }
 		    }
 
-		    public init(`my gadgetBuilder`: @escaping (`SafeDIScope_DefaultWidget_my gadget`.Outer) -> @Sendable (`SafeDIScope_DefaultWidget_my gadget`.Inner) -> any Gadget) {
-		        let `__safeDI_my gadgetBuilder` = `my gadgetBuilder`
+		    public init(`gadgetBuilder_shell_Inner_widget_my gadget`: @escaping (`SafeDIStagedScope_Gadget_shell_Inner_widget_my gadget`.Stage1) -> @Sendable (`SafeDIStagedScope_Gadget_shell_Inner_widget_my gadget`.Stage2) -> any Gadget) {
+		        let `__safeDI_gadgetBuilder_shell_Inner_widget_my gadget` = `gadgetBuilder_shell_Inner_widget_my gadget`
 		        let session = Session()
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_044C0E6D7176FF2A.self\(seamCallComment(seam: "Shell", module: "Feature"))
-		            let `__safeDI_my gadgetBuilder_Inner` = `__safeDI_my gadgetBuilder`(`SafeDIScope_DefaultWidget_my gadget`.Outer(session: session))
-		            @Sendable func __safeDI_widgetBuilder(_ scope: Inner.SafeDIScope_Inner_widget) -> any Widget {
+		            _ = Shell.__safeDI_Shell_076D60492DA3478F.self\(seamCallComment(seam: "Shell", module: "Feature"))
+		            let `__safeDI_gadgetBuilder_shell_Inner_widget_my gadget_Stage2` = `__safeDI_gadgetBuilder_shell_Inner_widget_my gadget`(`SafeDIStagedScope_Gadget_shell_Inner_widget_my gadget`.Stage1(session: session))
+		            @Sendable func __safeDI_widgetBuilder_Inner_widget(_ scope: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 		                let analytics = scope.analytics
 		                func __safeDI_widget() -> DefaultWidget {
-		                    let `my gadget`: any Gadget = `__safeDI_my gadgetBuilder_Inner`(`SafeDIScope_DefaultWidget_my gadget`.Inner(analytics: analytics))
+		                    let `my gadget`: any Gadget = `__safeDI_gadgetBuilder_shell_Inner_widget_my gadget_Stage2`(`SafeDIStagedScope_Gadget_shell_Inner_widget_my gadget`.Stage2(analytics: analytics))
 		                    return DefaultWidget(`my gadget`: `my gadget`)
 		                }
 		                let widget: any Widget = __safeDI_widget()
 		                return widget
 		            }
-		            return Shell(widgetBuilder: __safeDI_widgetBuilder)
+		            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+		                }
+		            }
+		            return Shell(widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell)
 		        }
 		        let shell: Shell = __safeDI_shell()
 		        self.init(session: session, shell: shell)
@@ -3050,23 +3470,23 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_B411728FB7ADAD95 {}
+		    public enum __safeDI_Host_F8920AFED3D541C9 {}
 		}
 		"""])
 		expectGeneratedCode(of: output, module: "App", imports: ["Feature", "Middle"], rootFiles: ["Root": """
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_B411728FB7ADAD95.self\(seamCallComment(seam: "Host", module: "Middle"))
-		            func `__safeDI_my gadgetBuilder`(_ scope: Host.`SafeDIScope_DefaultWidget_my gadget`.Outer) -> @Sendable (Host.`SafeDIScope_DefaultWidget_my gadget`.Inner) -> any Gadget {
+		            _ = Host.__safeDI_Host_F8920AFED3D541C9.self\(seamCallComment(seam: "Host", module: "Middle"))
+		            func `__safeDI_gadgetBuilder_shell_Inner_widget_my gadget`(_ scope: Host.`SafeDIStagedScope_Gadget_shell_Inner_widget_my gadget`.Stage1) -> @Sendable (Host.`SafeDIStagedScope_Gadget_shell_Inner_widget_my gadget`.Stage2) -> any Gadget {
 		                let session = scope.session
-		                @Sendable func `__safeDI_my gadgetBuilder_Inner`(_ scope: Host.`SafeDIScope_DefaultWidget_my gadget`.Inner) -> any Gadget {
+		                @Sendable func `__safeDI_gadgetBuilder_shell_Inner_widget_my gadget_Stage2`(_ scope: Host.`SafeDIStagedScope_Gadget_shell_Inner_widget_my gadget`.Stage2) -> any Gadget {
 		                    let `my gadget`: any Gadget = DefaultGadget(session: session)
 		                    return `my gadget`
 		                }
-		                return `__safeDI_my gadgetBuilder_Inner`
+		                return `__safeDI_gadgetBuilder_shell_Inner_widget_my gadget_Stage2`
 		            }
-		            return Host(`my gadgetBuilder`: `__safeDI_my gadgetBuilder`)
+		            return Host(`gadgetBuilder_shell_Inner_widget_my gadget`: `__safeDI_gadgetBuilder_shell_Inner_widget_my gadget`)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -3093,20 +3513,20 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    public enum `SafeDIScope_Holder_my gadget` {
-		        public struct Outer {
+		    public enum `SafeDIStagedScope_Gadget_holderMaker_my gadget` {
+		        public struct Stage1 {
 		            public let session: Session
 		        }
 
-		        public struct Inner {}
+		        public struct Stage2 {}
 		    }
 
-		    public init(`my gadgetBuilder`: @escaping (`SafeDIScope_Holder_my gadget`.Outer) -> @Sendable (`SafeDIScope_Holder_my gadget`.Inner) -> any Gadget) {
-		        let `__safeDI_my gadgetBuilder` = `my gadgetBuilder`
+		    public init(`gadgetBuilder_holderMaker_my gadget`: @escaping (`SafeDIStagedScope_Gadget_holderMaker_my gadget`.Stage1) -> @Sendable (`SafeDIStagedScope_Gadget_holderMaker_my gadget`.Stage2) -> any Gadget) {
+		        let `__safeDI_gadgetBuilder_holderMaker_my gadget` = `gadgetBuilder_holderMaker_my gadget`
 		        let session = Session()
-		        let `__safeDI_my gadgetBuilder_Inner` = `__safeDI_my gadgetBuilder`(`SafeDIScope_Holder_my gadget`.Outer(session: session))
+		        let `__safeDI_gadgetBuilder_holderMaker_my gadget_Stage2` = `__safeDI_gadgetBuilder_holderMaker_my gadget`(`SafeDIStagedScope_Gadget_holderMaker_my gadget`.Stage1(session: session))
 		        @Sendable func __safeDI_holderMaker() -> Holder {
-		            let `my gadget`: any Gadget = `__safeDI_my gadgetBuilder_Inner`(`SafeDIScope_Holder_my gadget`.Inner())
+		            let `my gadget`: any Gadget = `__safeDI_gadgetBuilder_holderMaker_my gadget_Stage2`(`SafeDIStagedScope_Gadget_holderMaker_my gadget`.Stage2())
 		            return Holder(`my gadget`: `my gadget`)
 		        }
 		        let holderMaker = SendableInstantiator<Holder>(__safeDI_holderMaker)
@@ -3115,7 +3535,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_09A83DA17CA4E613 {}
+		    public enum __safeDI_Host_D1DBA7F623008717 {}
 		}
 		"""])
 		try expectEveryModuleCompiled(output)
@@ -3141,20 +3561,20 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Feature", imports: [], rootFiles: ["Inner": """
 		extension Inner {
-		    public enum `SafeDIScope_Panel_my widget` {
-		        public struct Outer {
+		    public enum `SafeDIStagedScope_Widget_panelBuilder_my widget` {
+		        public struct Stage1 {
 		            public let analytics: Analytics
 		        }
 
-		        public struct Inner {}
+		        public struct Stage2 {}
 		    }
 
-		    public init(`my widgetBuilder`: @escaping (`SafeDIScope_Panel_my widget`.Outer) -> @Sendable (`SafeDIScope_Panel_my widget`.Inner) -> any Widget) {
-		        let `__safeDI_my widgetBuilder` = `my widgetBuilder`
+		    public init(`widgetBuilder_panelBuilder_my widget`: @escaping (`SafeDIStagedScope_Widget_panelBuilder_my widget`.Stage1) -> @Sendable (`SafeDIStagedScope_Widget_panelBuilder_my widget`.Stage2) -> any Widget) {
+		        let `__safeDI_widgetBuilder_panelBuilder_my widget` = `widgetBuilder_panelBuilder_my widget`
 		        let analytics = Analytics()
-		        let `__safeDI_my widgetBuilder_Inner` = `__safeDI_my widgetBuilder`(`SafeDIScope_Panel_my widget`.Outer(analytics: analytics))
+		        let `__safeDI_widgetBuilder_panelBuilder_my widget_Stage2` = `__safeDI_widgetBuilder_panelBuilder_my widget`(`SafeDIStagedScope_Widget_panelBuilder_my widget`.Stage1(analytics: analytics))
 		        @Sendable func __safeDI_panelBuilder() -> Panel {
-		            let `my widget`: any Widget = `__safeDI_my widgetBuilder_Inner`(`SafeDIScope_Panel_my widget`.Inner())
+		            let `my widget`: any Widget = `__safeDI_widgetBuilder_panelBuilder_my widget_Stage2`(`SafeDIStagedScope_Widget_panelBuilder_my widget`.Stage2())
 		            return Panel(`my widget`: `my widget`)
 		        }
 		        let panelBuilder = SendableInstantiator<Panel>(__safeDI_panelBuilder)
@@ -3163,22 +3583,22 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		}
 
 		extension Inner {
-		    public enum __safeDI_Inner_A3D01F6FE0E44503 {}
+		    public enum __safeDI_Inner_5D877CA0996E6990 {}
 		}
 		"""])
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
 		    public init() {
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_A3D01F6FE0E44503.self\(seamCallComment(seam: "Inner", module: "Feature"))
-		            func `__safeDI_my widgetBuilder`(_ scope: Inner.`SafeDIScope_Panel_my widget`.Outer) -> @Sendable (Inner.`SafeDIScope_Panel_my widget`.Inner) -> any Widget {
-		                @Sendable func `__safeDI_my widgetBuilder_Inner`(_ scope: Inner.`SafeDIScope_Panel_my widget`.Inner) -> any Widget {
+		            _ = Inner.__safeDI_Inner_5D877CA0996E6990.self\(seamCallComment(seam: "Inner", module: "Feature"))
+		            func `__safeDI_widgetBuilder_panelBuilder_my widget`(_ scope: Inner.`SafeDIStagedScope_Widget_panelBuilder_my widget`.Stage1) -> @Sendable (Inner.`SafeDIStagedScope_Widget_panelBuilder_my widget`.Stage2) -> any Widget {
+		                @Sendable func `__safeDI_widgetBuilder_panelBuilder_my widget_Stage2`(_ scope: Inner.`SafeDIStagedScope_Widget_panelBuilder_my widget`.Stage2) -> any Widget {
 		                    let `my widget`: any Widget = DefaultWidget()
 		                    return `my widget`
 		                }
-		                return `__safeDI_my widgetBuilder_Inner`
+		                return `__safeDI_widgetBuilder_panelBuilder_my widget_Stage2`
 		            }
-		            return Inner(`my widgetBuilder`: `__safeDI_my widgetBuilder`)
+		            return Inner(`widgetBuilder_panelBuilder_my widget`: `__safeDI_widgetBuilder_panelBuilder_my widget`)
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(inner: inner)
@@ -3215,14 +3635,19 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		extension Host {
 		    public init() {
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_4C8DB7A33F3F44EA.self\(seamCallComment(seam: "Inner", module: "Feature"))
-		            func __safeDI_widgetBuilder(_ scope_: Inner.SafeDIScope_Inner_widget) -> any Widget {
+		            _ = Inner.__safeDI_Inner_5A8797B87FCD6716.self\(seamCallComment(seam: "Inner", module: "Feature"))
+		            func __safeDI_widgetBuilder_Inner_widget(_ scope_: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 		                let scope = scope_.scope
 		                let analytics = scope_.analytics
 		                let widget: any Widget = DefaultWidget(scope: scope, analytics: analytics)
 		                return widget
 		            }
-		            return Inner(widgetBuilder: __safeDI_widgetBuilder)
+		            func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+		                }
+		            }
+		            return Inner(widgetBuilder: __safeDI_widgetBuilder_Inner)
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(inner: inner)
@@ -3260,16 +3685,16 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		extension Host {
 		    public init() {
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_6976D1FB7BF7AAA3.self\(seamCallComment(seam: "Inner", module: "Feature"))
-		            func __safeDI_widgetBuilder(_ scope_: Inner.SafeDIScope_Panel_widget.Outer) -> @Sendable (Inner.SafeDIScope_Panel_widget.Inner) -> any Widget {
+		            _ = Inner.__safeDI_Inner_00743EAB528C6956.self\(seamCallComment(seam: "Inner", module: "Feature"))
+		            func __safeDI_widgetBuilder_panelBuilder_widget(_ scope_: Inner.SafeDIStagedScope_Widget_panelBuilder_widget.Stage1) -> @Sendable (Inner.SafeDIStagedScope_Widget_panelBuilder_widget.Stage2) -> any Widget {
 		                let scope = scope_.scope
-		                @Sendable func __safeDI_widgetBuilder_Inner(_ scope_: Inner.SafeDIScope_Panel_widget.Inner) -> any Widget {
+		                @Sendable func __safeDI_widgetBuilder_panelBuilder_widget_Stage2(_ scope_: Inner.SafeDIStagedScope_Widget_panelBuilder_widget.Stage2) -> any Widget {
 		                    let widget: any Widget = DefaultWidget(scope: scope)
 		                    return widget
 		                }
-		                return __safeDI_widgetBuilder_Inner
+		                return __safeDI_widgetBuilder_panelBuilder_widget_Stage2
 		            }
-		            return Inner(widgetBuilder: __safeDI_widgetBuilder)
+		            return Inner(widgetBuilder_panelBuilder_widget: __safeDI_widgetBuilder_panelBuilder_widget)
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(inner: inner)
@@ -3307,12 +3732,17 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public init() {
 		        let scope = Analytics()
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_6D8DF2F580F0544A.self\(seamCallComment(seam: "Inner", module: "Feature"))
-		            func __safeDI_widgetBuilder(_ scope_: Inner.SafeDIScope_Inner_widget) -> any Widget {
+		            _ = Inner.__safeDI_Inner_0D6DF99B501922EC.self\(seamCallComment(seam: "Inner", module: "Feature"))
+		            func __safeDI_widgetBuilder_Inner_widget(_ scope_: Inner.SafeDIScope_Widget.widget_Values) -> any Widget {
 		                let widget: any Widget = DefaultWidget(scope: scope)
 		                return widget
 		            }
-		            return Inner(widgetBuilder: __safeDI_widgetBuilder)
+		            func __safeDI_widgetBuilder_Inner(_ scope: Inner.SafeDIScope_Widget) -> any Widget {
+		                switch scope {
+		                case let .widget(scope): return __safeDI_widgetBuilder_Inner_widget(scope)
+		                }
+		            }
+		            return Inner(widgetBuilder: __safeDI_widgetBuilder_Inner)
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(scope: scope, inner: inner)

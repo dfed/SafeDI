@@ -2433,9 +2433,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#if DEBUG
 			extension Root {
 			    public enum SafeDIMockScope_Child_thing {
-			        public struct Outer {}
+			        public struct Stage1 {}
 
-			        public struct Inner {}
+			        public struct Stage2 {}
 			    }
 
 			    /// Overrides for the mock dependency tree.
@@ -2450,14 +2450,14 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    public static func mock(
-			        thingBuilder: @escaping (Root.SafeDIMockScope_Child_thing.Outer) -> @Sendable (Root.SafeDIMockScope_Child_thing.Inner) -> Thing,
+			        thingBuilder: @escaping (Root.SafeDIMockScope_Child_thing.Stage1) -> @Sendable (Root.SafeDIMockScope_Child_thing.Stage2) -> Thing,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let __safeDI_thingBuilder = thingBuilder
 			        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder
-			        let __safeDI_thingBuilder_Inner = __safeDI_thingBuilder(SafeDIMockScope_Child_thing.Outer())
+			        let __safeDI_thingBuilder_Stage2 = __safeDI_thingBuilder(SafeDIMockScope_Child_thing.Stage1())
 			        @Sendable func __safeDI_childBuilder() -> Child {
-			            let thing: Thing = __safeDI_thingBuilder_Inner(SafeDIMockScope_Child_thing.Inner())
+			            let thing: Thing = __safeDI_thingBuilder_Stage2(SafeDIMockScope_Child_thing.Stage2())
 			            return if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(thing) } else { Child(thing: thing) }
 			        }
 			        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
@@ -2466,7 +2466,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 
 			extension Root {
-			    public enum __safeDI_Root_mock_8037B588A5ECDF81 {}
+			    public enum __safeDI_Root_mock_0346ADCB84386FB9 {}
 			}
 			#endif
 			""",
@@ -4171,18 +4171,18 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#if DEBUG
 			extension Service {
 			    public enum SafeDIMockScope_Service_held {
-			        public struct Outer {}
+			        public struct Stage1 {}
 
-			        public struct Inner {}
+			        public struct Stage2 {}
 			    }
 
 			    public static func mock(
-			        heldBuilder: @escaping (Service.SafeDIMockScope_Service_held.Outer) -> @Sendable (Service.SafeDIMockScope_Service_held.Inner) -> \(gadget)
+			        heldBuilder: @escaping (Service.SafeDIMockScope_Service_held.Stage1) -> @Sendable (Service.SafeDIMockScope_Service_held.Stage2) -> \(gadget)
 			    ) -> Service {
 			        let __safeDI_heldBuilder = heldBuilder
-			        let __safeDI_heldBuilder_Inner = __safeDI_heldBuilder(SafeDIMockScope_Service_held.Outer())
+			        let __safeDI_heldBuilder_Stage2 = __safeDI_heldBuilder(SafeDIMockScope_Service_held.Stage1())
 			        @Sendable func __safeDI_held() -> \(gadget) {
-			            __safeDI_heldBuilder_Inner(SafeDIMockScope_Service_held.Inner())
+			            __safeDI_heldBuilder_Stage2(SafeDIMockScope_Service_held.Stage2())
 			        }
 			        let held = SendableLazilyInstantiated<\(gadget)>(__safeDI_held)
 			        return Service(held: held)
@@ -4190,7 +4190,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_mock_BEC93B86505FBB9F {}
+			    public enum __safeDI_Service_mock_86E98AFF26D77ED9 {}
 			}
 			#endif
 			""",
@@ -4236,10 +4236,13 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"Profile+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
-			    public struct SafeDIMockScope_Service_userServiceBuilder {}
+			    public struct SafeDIMockScope_Service_userServiceBuilder {
+			        public typealias LastStage<__safeDI_Forwarded> = (SafeDIMockScope_Service_userServiceBuilder, __safeDI_Forwarded) -> UserService
+			        public typealias SendableLastStage<__safeDI_Forwarded> = @Sendable (SafeDIMockScope_Service_userServiceBuilder, __safeDI_Forwarded) -> UserService
+			    }
 
 			    public static func mock(
-			        userServiceBuilderBuilder: @escaping Instantiator<UserService>.SeamBuilder<Service.SafeDIMockScope_Service_userServiceBuilder>
+			        userServiceBuilderBuilder: @escaping Service.SafeDIMockScope_Service_userServiceBuilder.LastStage<UserService.ForwardedProperties>
 			    ) -> Service {
 			        let __safeDI_userServiceBuilderBuilder = userServiceBuilderBuilder
 			        let userServiceBuilder = Instantiator<UserService> {
@@ -4250,7 +4253,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_mock_FC1043D70C60B020 {}
+			    public enum __safeDI_Service_mock_64CD404690468AC4 {}
 			}
 			#endif
 			""",
@@ -10032,21 +10035,25 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		let imports = "#if canImport(SharedModule)\nimport SharedModule\n#endif\n\n"
 		let seamCode = """
 		extension FeedScreen {
-		    public struct SafeDIScope_FeedScreen_service {
-		        public let shared: SharedThing
-		        internal let store: FeedStore
+		    @frozen public enum SafeDIScope_FeedService {
+		        case service(service_Values)
+
+		        public struct service_Values {
+		            public let shared: SharedThing
+		            internal let store: FeedStore
+		        }
 		    }
 
-		    public convenience init(shared: SharedThing, serviceBuilder: @escaping (SafeDIScope_FeedScreen_service) -> FeedService) {
-		        let __safeDI_serviceBuilder = serviceBuilder
+		    public convenience init(shared: SharedThing, feedServiceBuilder: @escaping (SafeDIScope_FeedService) -> FeedService) {
+		        let __safeDI_feedServiceBuilder = feedServiceBuilder
 		        let store = FeedStore(shared: shared)
-		        let service: FeedService = __safeDI_serviceBuilder(SafeDIScope_FeedScreen_service(shared: shared, store: store))
+		        let service: FeedService = __safeDI_feedServiceBuilder(.service(SafeDIScope_FeedService.service_Values(shared: shared, store: store)))
 		        self.init(shared: shared, store: store, service: service)
 		    }
 		}
 
 		extension FeedScreen {
-		    public enum __safeDI_FeedScreen_C92B4602192AF4D6 {}
+		    public enum __safeDI_FeedScreen_91C4FAF0D0AEF562 {}
 		}
 		"""
 		let mockCode = """

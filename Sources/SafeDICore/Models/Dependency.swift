@@ -180,9 +180,6 @@ public struct Dependency: Codable, Hashable, Sendable {
 	static let sendableLazilyInstantiatedType = "SendableLazilyInstantiated"
 	/// The associated type of `Instantiable` that names what an `Instantiator` of the conforming type forwards.
 	static let forwardedPropertiesType = "ForwardedProperties"
-	/// `Instantiator`'s generic aliases of the function that builds a hole held in an instantiator.
-	static let seamBuilderType = "SeamBuilder"
-	static let sendableSeamBuilderType = "SendableSeamBuilder"
 	/// The property of `LazilyInstantiated` and `SendableLazilyInstantiated` that vends the lazily instantiated instance.
 	static let lazilyInstantiatedInstancePropertyName = "instance"
 }
