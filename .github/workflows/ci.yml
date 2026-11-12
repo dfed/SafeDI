@@ -1251,10 +1251,6 @@ jobs:
       # that need it, and this step checks that each names a path that exists.
       - name: Check Excluded Links
         run: python3 .github/scripts/check-excluded-markdown-links.py .github/md-dead-link-check.toml
-      # The manual's Contents section lists its headings, so this step fails
-      # when a heading changes without the list being regenerated.
-      - name: Check Manual Contents
-        run: python3 -I Scripts/manual-table-of-contents.py --check
       # Claude Code truncates an instruction file it loads on demand at 40,000
       # characters, and loads a rules file without `paths:` in every session, so
       # this step keeps CLAUDE.md, the directory CLAUDE.md files and

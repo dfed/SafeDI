@@ -172,7 +172,7 @@ Don’t add `apiClient` to `ProfileView`. `AvatarLoader` receives the `APIClient
 Decorate the root, the type at the top of the tree, with `@Instantiable(isRoot: true)`. The root is the one type in the tree that your own code creates, by calling an `init()` with no arguments. SafeDI generates that `init()`, which builds everything below the root. No type above the root passes the root anything, so a root can’t receive or forward a dependency, and the `@Instantiable` macro reports an error as you type if a root does. Here, the root is `RootView`. In `RootView`:
 
 - Replace the hand-written `init()` with an initializer that takes each dependency. The generated `init()` creates the dependencies and calls that initializer.
-- Decorate `apiClient` with `@Instantiated`. `RootView` doesn’t use `apiClient` itself, but `AvatarLoader`, below `RootView` in the tree, receives the `APIClient`.
+- Decorate `apiClient` with `@Instantiated`. `RootView` doesn’t use `apiClient` itself: instantiating it here creates the one `APIClient` that any type below `RootView` can receive, as `AvatarLoader` does.
 - Replace the code that creates a `ProfileView` with an `@Instantiated` `Instantiator<ProfileView>`, and call the instantiator’s `instantiate(_:)` with the user. `RootView` can’t be given a finished `ProfileView` when `RootView` is created, because no user exists until someone signs in. An [`Instantiator`](Manual.md#instantiator) builds a `ProfileView` each time you call `instantiate(_:)`: you pass the forwarded `user`, and SafeDI builds the rest. If a type in the tree declares a plain `@Instantiated` `ProfileView` in place of an `Instantiator<ProfileView>`, SafeDI reports an error when you build.
 
 In `Sources/Root/RootView.swift`:
@@ -215,29 +215,11 @@ In `Sources/Root/RootView.swift`:
  }
 ```
 
-Without its header and imports, the code SafeDI generates for `RootView` is:
-
-```swift
-extension RootView {
-    public init() {
-        let apiClient = APIClient()
-        func __safeDI_profileViewBuilder(user: User) -> ProfileView {
-            let avatarLoader = AvatarLoader(apiClient: apiClient)
-            return ProfileView(user: user, avatarLoader: avatarLoader)
-        }
-        let profileViewBuilder = Instantiator<ProfileView> {
-            __safeDI_profileViewBuilder(user: $0)
-        }
-        self.init(apiClient: apiClient, profileViewBuilder: profileViewBuilder)
-    }
-}
-```
-
-The generated `init()` creates one `APIClient`. The local function takes a `User` and builds a `ProfileView` with a new `AvatarLoader`, which gets that `APIClient`. The `Instantiator` calls the function each time `instantiate(_:)` runs. Then the `init()` calls the initializer you wrote. [Finding the generated code](Manual.md#finding-the-generated-code) says where to read the whole file.
+The `init()` that SafeDI generates builds the same objects the hand-written `init()` did: one `APIClient`, and an `AvatarLoader` for each `ProfileView`. To read the generated code, see [Finding the generated code](Manual.md#finding-the-generated-code).
 
 Leave your app target, which shows `RootView` by calling `RootView()`, as it is. The app target depends on the package’s `Root` library, and the call `RootView()` reaches the `init()` SafeDI generates in place of the one you removed. The app target declares no `@Instantiable` types, so the app target needs no plugin.
 
-In your own app, the root can be a view in a module, as here. In a SwiftUI app, you can make the `App` type the root instead, if SafeDI runs on the app target. In a UIKit app, make the root a class that your app delegate creates and stores: the app delegate can’t be the root, because it already has a no-argument `init()` from `NSObject`. See [Creating the root of your dependency tree](Manual.md#creating-the-root-of-your-dependency-tree).
+An app that runs SafeDI on its app target can make its SwiftUI `App` type the root, as SafeDI’s Xcode, Bazel, and Tuist examples do; [Creating the root of your dependency tree](Manual.md#creating-the-root-of-your-dependency-tree) covers this and UIKit apps.
 
 ### Access across modules
 
@@ -247,7 +229,7 @@ SafeDI generates the code that builds `RootView`’s tree in `Root`, and `Profil
 - Within one Swift package, a type from another module needs `package` or `public` access. Here, those types are `public`.
 - Outside a Swift package, `package` access works only when every module is compiled with one package name, and each section of [Other build systems](#other-build-systems) says how to set that name. Otherwise, use `public`.
 
-SafeDI reports each type or initializer that needs wider access, and names the change to make.
+If a type or initializer isn’t visible enough, SafeDI’s build error tells you which one and what access to give it.
 
 ## 4. Use mocks in tests and previews
 
