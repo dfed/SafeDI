@@ -623,6 +623,15 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		.attributed(self, specifiers: [], attributes: ["Sendable"])
 	}
 
+	/// Whether this type is spelled with `@Sendable` at its top: a function type `asSendableFunction` made.
+	var isSendableFunction: Bool {
+		if case let .attributed(_, _, attributes) = self {
+			attributes.contains("Sendable")
+		} else {
+			false
+		}
+	}
+
 	public var asFunctionParameter: TypeDescription {
 		switch self {
 		case .any,

@@ -1115,9 +1115,13 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		let mock = """
 		#if DEBUG
 		extension ExportFeature {
-		    public struct SafeDIMockScope_ExportFeature_uploader {
-		        public let exportService: ExportService
-		        public let screenBuilder: Instantiator<ExportScreen>
+		    @frozen public enum SafeDIMockScope_Uploader {
+		        case uploader(uploader_Values)
+
+		        public struct uploader_Values {
+		            public let exportService: ExportService
+		            public let screenBuilder: Instantiator<ExportScreen>
+		        }
 		    }
 
 		    /// Overrides for the mock dependency tree.
@@ -1135,7 +1139,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        uploaderBuilder: @escaping (ExportFeature.SafeDIMockScope_ExportFeature_uploader) -> any Uploader,
+		        uploaderBuilder: @escaping (ExportFeature.SafeDIMockScope_Uploader) -> any Uploader,
 		        exportService: ExportService? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> ExportFeature {
@@ -1145,13 +1149,13 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(exportService) } else { ExportScreen(exportService: exportService) }
 		        }
 		        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
-		        let uploader: any Uploader = __safeDI_uploaderBuilder(SafeDIMockScope_ExportFeature_uploader(exportService: exportService, screenBuilder: screenBuilder))
+		        let uploader: any Uploader = __safeDI_uploaderBuilder(.uploader(SafeDIMockScope_Uploader.uploader_Values(exportService: exportService, screenBuilder: screenBuilder)))
 		        return ExportFeature(screenBuilder: screenBuilder, uploader: uploader)
 		    }
 		}
 
 		extension ExportFeature {
-		    public enum __safeDI_ExportFeature_mock_9E87148B9DEB3E60 {}
+		    public enum __safeDI_ExportFeature_mock_E057F9BDDBAF41A6 {}
 		}
 		#endif
 		"""

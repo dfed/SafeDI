@@ -348,7 +348,7 @@ public actor DependencyTreeGenerator {
 
 			// Each mock root reports the first error it finds, and the errors of every mock root are reported.
 			do {
-				let mockRoot = try createMockRoot(
+				let mockRoot = try await createMockRoot(
 					for: instantiable,
 					scope: scope,
 					// A `generateMock: true` type declared in this module gets its mock whether
@@ -713,7 +713,7 @@ public actor DependencyTreeGenerator {
 		let instantiable = mockRootInstantiable(for: scope.instantiable, scope: scope)
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
-		let mockRoot = try createMockRoot(
+		let mockRoot = try await createMockRoot(
 			for: instantiable,
 			scope: scope,
 			// A type that sets `generateMock: true` fails to generate in its own module; any other generated mock
@@ -961,10 +961,19 @@ public actor DependencyTreeGenerator {
 		// whose tree this module cannot build, is a leaf that calls that mock, so the map is built again with those.
 		var typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping(publicMockCalls: [:])
 		var publicMockCalls = try await publicMockCalls(in: typeDescriptionToScopeMap)
+		let generatesPublicMock = typeDescriptionToFulfillingInstantiableMap.values.contains(where: { $0.generateMock == .public })
+		// A public mock's tree takes a builder for what a fill instantiates that nothing fulfills, where an internal mock's
+		// fill would read a value nothing binds, so the trees of each kind of mock fill their own places.
+		var publicMockCallsOfPublicMocks = publicMockCalls
 		if !publicMockCalls.isEmpty {
 			typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls)
 			// A call that fills a builder declares no dependency for it, so the map is built again with the fills.
-			let filledHoles = holesFilled(byCallsOf: publicMockCalls, in: typeDescriptionToScopeMap)
+			if generatesPublicMock {
+				for (calledType, holes) in holesFilled(byCallsOf: publicMockCalls, in: typeDescriptionToScopeMap, unfulfilledInstantiationsAreHoles: true) {
+					publicMockCallsOfPublicMocks[calledType]?.filledHoles = holes
+				}
+			}
+			let filledHoles = holesFilled(byCallsOf: publicMockCalls, in: typeDescriptionToScopeMap, unfulfilledInstantiationsAreHoles: false)
 			if !filledHoles.isEmpty {
 				for (calledType, holes) in filledHoles {
 					publicMockCalls[calledType]?.filledHoles = holes
@@ -1020,8 +1029,8 @@ public actor DependencyTreeGenerator {
 			erasureDeclarations: erasureDeclarations,
 			erasedToConcreteTypeMap: erasedToConcreteTypeMap,
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
-			publicMockTypeDescriptionToScopeMap: typeDescriptionToFulfillingInstantiableMap.values.contains(where: { $0.generateMock == .public })
-				? createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls, buildsHoles: true)
+			publicMockTypeDescriptionToScopeMap: generatesPublicMock
+				? createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCallsOfPublicMocks, buildsHoles: true)
 				: nil,
 			flatParameterMockDefaults: flatParameterMockDefaults(in: typeDescriptionToScopeMap, emittingModule: mockEmittingModule),
 			handWrittenMockLocationsByConcreteType: handWrittenMockLocationsByConcreteType,
@@ -1117,7 +1126,7 @@ public actor DependencyTreeGenerator {
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
-	) throws -> ScopeGenerator {
+	) async throws -> ScopeGenerator {
 		// A hand-written method also named `mock` can be confused with the
 		// generated `mock()`: identical signatures redeclare, overlapping ones
 		// make calls ambiguous or silently pick the generated method, and a
@@ -1159,10 +1168,11 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
-		return try createMockRootScopeGenerator(
+		return try await createMockRootScopeGenerator(
 			for: instantiable,
 			scope: scope,
 			typeDescriptionToScopeMap: mockScopes.typeDescriptionToScopeMap,
+			flatParameterMockDefaults: mockScopes.flatParameterMockDefaults,
 			erasedToConcreteTypeMap: mockScopes.erasedToConcreteTypeMap,
 			emittingModule: emittingModule,
 			receivedPropertiesCache: &receivedPropertiesCache,
@@ -3546,11 +3556,11 @@ public actor DependencyTreeGenerator {
 				passedParameters: tierParameters.compactMap { parameter in
 					switch parameter.role {
 					case let .forwarded(property):
-						PublicMockCall.PassedParameter(name: parameter.name, type: parameter.type, dependency: Dependency(property: property, source: .forwarded, declarationLocation: ownPlan.instantiable.declarationLocation), isBuiltWhenNil: false, hole: nil)
+						PublicMockCall.PassedParameter(name: parameter.name, type: parameter.type, dependency: Dependency(property: property, source: .forwarded, declarationLocation: ownPlan.instantiable.declarationLocation), isBuiltWhenNil: false, builder: nil)
 					case let .received(property, isRequired):
-						// A required parameter the declaring module named apart from another of its label – a builder it passes
-						// up, or a dependency it cannot build – has no default to leave it to, so the leaf receives it under the
-						// parameter's name, which the calling mock then takes it by.
+						// A required parameter the declaring module named apart from another of its label – a dependency it cannot
+						// build – has no default to leave it to, so the leaf receives it under the parameter's name, which the
+						// calling mock then takes it by.
 						PublicMockCall.PassedParameter(
 							name: parameter.name,
 							type: parameter.type,
@@ -3561,7 +3571,7 @@ public actor DependencyTreeGenerator {
 							),
 							isBuiltWhenNil: parameter.isBuiltWhenNil,
 							builtWrapper: parameter.builtWrapper,
-							hole: parameter.hole,
+							builder: parameter.builder,
 						)
 					case .constructionDefault, .overrides:
 						nil
@@ -3589,6 +3599,9 @@ public actor DependencyTreeGenerator {
 				callerModuleMockCondition: seams.currentModuleMockCondition,
 				receiversByLabel: ownPlan.receiversByLabel,
 				typesDeclaredEscaping: ownPlan.typesDeclaredEscaping.intersection(tierParameters.map(\.type)),
+				holes: ownPlan.plan.holes + ownPlan.plan.unpresentedHoles,
+				builders: ownPlan.plan.builders,
+				scopeEnums: ownPlan.plan.scopeEnums,
 			)
 		}
 		return publicMockCalls
@@ -3693,7 +3706,10 @@ public actor DependencyTreeGenerator {
 		}
 		let receivingTypes = differingParameters.flatMap { ownPlan.receiversByLabel[$0.name, default: []].map(\.declaringType) }
 		let fulfillingTypes = differingParameters.compactMap { typeDescriptionToFulfillingInstantiableMap[$0.type.unwrapped.asInstantiatedType]?.concreteInstantiable }
+		// A type the tree reaches is built as the declaration that fulfills it, which can be another type: a protocol's
+		// fulfiller, which builds a place of this mock's tree or of a public mock it calls.
 		let reachedTypes = Self.typesReachable(fromRoots: [type], in: typeDescriptionToFulfillingInstantiableMap)
+			.compactMap { typeDescriptionToFulfillingInstantiableMap[$0]?.concreteInstantiable }
 		return if let declaration = earliest(receivingTypes) ?? earliest(fulfillingTypes) ?? earliest(reachedTypes) {
 			PublicMockFinding.callersCannotSee(declaration, of: instantiable)
 		} else {
@@ -3731,7 +3747,7 @@ public actor DependencyTreeGenerator {
 		let instantiable = mockRootInstantiable(for: declaredInstantiable, scope: scope)
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
-		let mockRoot = try createMockRoot(
+		let mockRoot = try await createMockRoot(
 			for: instantiable,
 			scope: scope,
 			generatedMockReason: .generateMock,
@@ -3762,14 +3778,18 @@ public actor DependencyTreeGenerator {
 	/// stand for, and each parameter that tier omits as a receive only if available – and built by a mock method that
 	/// takes the tier's parameters. One dependency per label: a required parameter the declaring module named apart is
 	/// declared under its name (`publicMockCalls(in:)`), and a second form of a label that has a default is left to it.
-	private static func publicMockLeafInstantiable(of instantiable: Instantiable, calling publicMockCall: PublicMockCall) -> Instantiable {
+	/// - Parameter takesBuildersFromOwnEnums: Whether the leaf is in a public mock's tree, which hands each place it does not
+	///   fill up in a case of its own enums (`Scope.builderCallArguments`), so it receives no builder; an internal mock's
+	///   receives each builder that reaches a place the call does not fill, which the mock takes as a parameter.
+	private static func publicMockLeafInstantiable(of instantiable: Instantiable, calling publicMockCall: PublicMockCall, takesBuildersFromOwnEnums: Bool) -> Instantiable {
 		var dependencies = [Dependency]()
 		var arguments = [Initializer.Argument]()
 		var labels = Set<String>()
-		let filledSites = Set(publicMockCall.filledHoles.map(\.site))
+		let passedUpBuilderLabels = takesBuildersFromOwnEnums ? [] : Set(publicMockCall.passedUpBuilders.map(\.label))
 		for parameter in publicMockCall.passedParameters where labels.insert(parameter.dependency.property.label).inserted {
-			// A builder the call fills is passed the fill (`ScopeGenerator.HoleCallArgument`), so the leaf receives nothing for it.
-			if !(parameter.hole.map { filledSites.contains($0.site) } ?? false) {
+			// A builder the call fills is passed its fill or dispatcher (`ScopeGenerator.BuilderCallArgument`), so the leaf
+			// receives nothing for it.
+			if parameter.builder.map({ passedUpBuilderLabels.contains($0.label) }) ?? true {
 				dependencies.append(parameter.dependency)
 			}
 			arguments.append(Initializer.Argument(outerLabel: parameter.name, innerLabel: parameter.dependency.property.label, typeDescription: parameter.type))
@@ -5680,12 +5700,13 @@ public actor DependencyTreeGenerator {
 		for instantiable: Instantiable,
 		scope: Scope,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault],
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
 		emittingModule: EmittingModule?,
 		receivedPropertiesCache cache: inout ReceivedPropertiesCache,
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
-	) throws -> ScopeGenerator {
+	) async throws -> ScopeGenerator {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
 		// (via ObjectIdentifier) so each scope outside a cycle is visited at most once.
@@ -6064,32 +6085,60 @@ public actor DependencyTreeGenerator {
 		// Build the final ScopeGenerator once. The mock root binds every received
 		// property it does not promote — as a `mock()` parameter or a `SafeDIOverrides`
 		// entry — so each is receivable throughout the tree.
-		func mockRootGenerator(holes: [SeamSignature.Hole]) throws -> ScopeGenerator {
+		func mockRootGenerator(builders: ShapedBuilders?) throws -> ScopeGenerator {
 			try mockRootScope.createScopeGenerator(
 				for: nil,
 				// The mock root binds every received property it does not promote, which encloses its whole tree.
 				nearestDeclarations: .binding(allReceived),
 				lazilyInstantiatedInstanceProperties: [],
-				mockHoles: holes,
+				mockBuilders: builders,
 				erasedToConcreteExistential: false,
 				forMockGeneration: true,
 				declaredTypeNames: declaredTypeNames,
 			)
 		}
-		let generator = try mockRootGenerator(holes: [])
-		// A public mock's tree holds a site for each hole (see `createMockTypeDescriptionToScopeMapping`), whose builder
-		// `mock()` takes: the sites' fields are what is in scope there, read from the tree as a seam's are, and the tree
-		// is built again so that each site calls its builder.
-		guard instantiable.generateMock == .public, generator.containsBuildSite else { return generator }
+		let generator = try mockRootGenerator(builders: nil)
+		// A public mock's tree holds a site for each hole (see `createMockTypeDescriptionToScopeMapping`), and a call of
+		// another module's public mock passes up the places it cannot fill: `mock()` takes builders for them, shaped as a
+		// seam's are. The sites' fields are what is in scope there, read from the tree as a seam's are, and the tree is built
+		// again so that each site calls its builder, and each call hands its builders up.
+		guard instantiable.generateMock == .public, generator.containsBuildSite || generator.passesUpBuilder else { return generator }
 		let holes = Self.holes(
 			of: instantiable,
 			generator: generator,
 			parameters: [],
 			proof: publicMockContext.proof,
 			instantiables: typeDescriptionToFulfillingInstantiableMap,
-			scopeTypeNamePrefix: "SafeDIMockScope",
 		)
-		return try mockRootGenerator(holes: holes)
+		let treeFunctionNames = Self.builderFunctionNamesOfProperties(in: generator, includingHoleSites: false)
+		func shapedBuilders(namedApartFrom otherParameterLabels: Set<String>) -> ShapedBuilders {
+			Self.shapedBuilders(
+				of: instantiable,
+				generator: generator,
+				holes: holes,
+				parameters: [],
+				otherParameterLabels: otherParameterLabels,
+				treeFunctionNames: treeFunctionNames,
+				proof: publicMockContext.proof,
+				instantiables: typeDescriptionToFulfillingInstantiableMap,
+				ownScopeEnums: [:],
+				scopeTypeNames: .publicMock,
+			)
+		}
+		let builders = shapedBuilders(namedApartFrom: [])
+		let builtGenerator = try mockRootGenerator(builders: builders)
+		// The builders follow every other parameter, and are named apart from them as a seam's are from its parameters. A
+		// builder's name changes no other parameter's, so the tree is built again only when a builder takes another name.
+		let parameters = await builtGenerator.mockRootParameters(instantiable: instantiable, mockDefaults: flatParameterMockDefaults)
+		let otherParameterLabels = ScopeGenerator.publicMockPlan(
+			of: instantiable,
+			parameters: parameters,
+			parameterNames: ScopeGenerator.mockRootParameterNames(of: parameters),
+			context: publicMockContext,
+		).parameters.filter { $0.builder == nil }.map(\.name)
+		let buildersNamedApart = shapedBuilders(namedApartFrom: Set(otherParameterLabels))
+		guard buildersNamedApart.builders.map(\.label) != builders.builders.map(\.label) else { return builtGenerator }
+		return try mockRootGenerator(builders: buildersNamedApart)
 	}
 
 	/// The names `instantiables` and `plainTypeDeclarations` declare types by at file scope. A type of such a name hides the
@@ -6330,8 +6379,10 @@ public actor DependencyTreeGenerator {
 			// The labels the type declares, which the types it builds receive under them, and which its own aliases of
 			// them rename.
 			let labelsDeclaredByScope = Set(scope.instantiable.dependencies.lazy.filter { !$0.source.isReceived }.map(\.property.label))
-			let receives = scope.instantiable.dependencies.compactMap { dependency in
-				Self.propertyReceivedFromAbove(byReceiveOf: dependency, onTypeDeclaring: labelsDeclaredByScope).map {
+			// A builder passed up to the mock's own parameter is read there, which the mock names apart from every label.
+			let receives = scope.instantiable.dependencies.compactMap { dependency -> HidingReceive? in
+				guard !(scope.publicMockCall?.passesUpBuilder(receivedAs: dependency.property) ?? false) else { return nil }
+				return Self.propertyReceivedFromAbove(byReceiveOf: dependency, onTypeDeclaring: labelsDeclaredByScope).map {
 					HidingReceive(dependency: dependency, property: $0.property, isRequired: $0.isRequired, hidingType: scopeType)
 				}
 			}
@@ -7751,7 +7802,7 @@ public actor DependencyTreeGenerator {
 			}
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
 				let scope = visitedConcreteTypeToScope[instantiable.concreteInstantiable] ?? publicMockCalls[instantiable.concreteInstantiable].map { publicMockCall in
-					let leafInstantiable = Self.publicMockLeafInstantiable(of: instantiable, calling: publicMockCall)
+					let leafInstantiable = Self.publicMockLeafInstantiable(of: instantiable, calling: publicMockCall, takesBuildersFromOwnEnums: buildsHoles)
 					return Scope(instantiable: leafInstantiable, publicMockCall: publicMockCall)
 				} ?? Scope(instantiable: instantiable)
 				visitedConcreteTypeToScope[instantiable.concreteInstantiable] = scope
@@ -7865,10 +7916,16 @@ public actor DependencyTreeGenerator {
 					continue
 				}
 			}
-			// A leaf that fills a builder passes a function that builds the hole's property as the type that fulfills it.
-			for hole in scope.publicMockCall?.filledHoles ?? [] {
-				if let fulfillingScope = Self.fulfillingMockScope(of: hole, in: typeDescriptionToScopeMap) {
-					scope.holeArguments.append(.fill(hole, fulfillingScope))
+			// A leaf fills each place it can with a function that builds the place's property as the type that fulfills it,
+			// and passes every other place up.
+			if let publicMockCall = scope.publicMockCall {
+				let filledSites = Set(publicMockCall.filledHoles.map(\.site))
+				scope.holeArguments = publicMockCall.holes.map { hole in
+					if filledSites.contains(hole.site), let fulfillingScope = Self.fulfillingMockScope(of: hole, in: typeDescriptionToScopeMap) {
+						.fill(hole, fulfillingScope)
+					} else {
+						.passUp(hole)
+					}
 				}
 			}
 		}
@@ -7920,32 +7977,34 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
-	/// The holes of the calls in `publicMockCalls` that this module fills, by called type, decided over
-	/// `typeDescriptionToScopeMap`, in which every call passes every builder up. A module fills a hole when a declaration
+	/// The places of the calls in `publicMockCalls` that this module fills, by called type, decided over
+	/// `typeDescriptionToScopeMap`, in which every call passes every builder up. A module fills a place when a declaration
 	/// it sees fulfills it, as the mock's tree built inline would build it (`fulfillingMockScope(of:in:)`: a hand-written
 	/// mock or a `mockOnly` fake included), and the fill builds that tree as the inline mock would – every construction
-	/// in it one this module can reach, hand-written mock methods included – from the values the hole's scope struct
-	/// carries and the fills of the other holes it fills alone. Every other builder is passed up: the calling mock takes
-	/// it, as a parameter its caller passes.
+	/// in it one this module can reach, hand-written mock methods included – from the values the place's scope struct
+	/// carries and the builders of the public mocks it calls whose every place is filled. Starting from every such place,
+	/// a place whose fill would read anything else is dropped, until none is: a fill never passes a place up. Every other
+	/// place is passed up: the calling mock takes it, through a case of its own enum or as a parameter its caller passes.
+	/// - Parameter unfulfilledInstantiationsAreHoles: Whether the fills are a public mock's, whose tree is built with holes,
+	///   so a type a fill's tree instantiates that no declaration the module sees fulfills is a place of the mock's own. An
+	///   internal mock's fill would read a value nothing binds there, so it does not fill the place.
 	private func holesFilled(
 		byCallsOf publicMockCalls: [TypeDescription: PublicMockCall],
 		in typeDescriptionToScopeMap: [TypeDescription: Scope],
+		unfulfilledInstantiationsAreHoles: Bool,
 	) -> [TypeDescription: [SeamSignature.Hole]] {
 		guard let emittingModule = emittingModuleToCheck else { return [:] }
 		struct Candidate {
 			let calledType: TypeDescription
 			let hole: SeamSignature.Hole
-			/// The builder's parameter, as a call that passes it up receives it.
-			let builder: Property
 			/// What the fill's tree receives that the scope struct does not carry.
 			let receivedBesideFields: Set<Property>
 		}
 		var receivedPropertiesCache = ReceivedPropertiesCache()
 		var candidates = [Candidate]()
 		for calledType in publicMockCalls.keys.sorted() {
-			for parameter in publicMockCalls[calledType]?.passedParameters ?? [] {
-				guard let hole = parameter.hole,
-				      let fulfillingScope = Self.fulfillingMockScope(of: hole, in: typeDescriptionToScopeMap),
+			for hole in publicMockCalls[calledType]?.holes ?? [] {
+				guard let fulfillingScope = Self.fulfillingMockScope(of: hole, in: typeDescriptionToScopeMap),
 				      Self.inaccessibleConstructions(
 				      	Self.constructions(
 				      		inTreeRootedAt: fulfillingScope,
@@ -7958,7 +8017,8 @@ public actor DependencyTreeGenerator {
 				      	),
 				      	from: emittingModule,
 				      	extendedTypes: extendedTypeDeclarations,
-				      ).isEmpty
+				      ).isEmpty,
+				      unfulfilledInstantiationsAreHoles || !Self.instantiatesWhatNothingFulfills(inTreeRootedAt: fulfillingScope)
 				else { continue }
 				// A field is read by value, only if available, and as a lazily instantiated property's instance too.
 				var fieldForms = Set<Property>()
@@ -7970,22 +8030,51 @@ public actor DependencyTreeGenerator {
 				}
 				candidates.append(Candidate(
 					calledType: calledType,
-					// The fill is passed, and named, as the parameter that takes its builder.
-					hole: hole.takenUnder(parameterName: parameter.name),
-					builder: parameter.dependency.property,
+					hole: hole,
 					receivedBesideFields: Self.collectReceivedProperties(from: fulfillingScope, cache: &receivedPropertiesCache).received.subtracting(fieldForms),
 				))
 			}
 		}
-		// A fill may call a public mock whose builder another fill fills, its own included, which the call passes.
+		// A fill may call a public mock whose every place another fill fills, its own included, which the call passes its
+		// fills and dispatchers: each builder of that mock is then received by nothing.
 		var filled = candidates
 		while true {
-			let filledBuilders = Set(filled.map(\.builder))
+			var filledBuilders = Set<Property>()
+			for (calledType, calledCandidates) in Dictionary(grouping: filled, by: \.calledType) {
+				guard var publicMockCall = publicMockCalls[calledType] else { continue }
+				publicMockCall.filledHoles = calledCandidates.map(\.hole)
+				let passedUpLabels = Set(publicMockCall.passedUpBuilders.map(\.label))
+				for parameter in publicMockCall.passedParameters {
+					if let builder = parameter.builder, !passedUpLabels.contains(builder.label) {
+						filledBuilders.insert(parameter.dependency.property)
+					}
+				}
+			}
 			let kept = filled.filter { $0.receivedBesideFields.isSubset(of: filledBuilders) }
 			guard kept.count < filled.count else { break }
 			filled = kept
 		}
 		return Dictionary(grouping: filled, by: \.calledType).mapValues { $0.map(\.hole) }
+	}
+
+	/// Whether a scope of the mock tree rooted at `scope`, in a map built without holes, instantiates a property no scope
+	/// builds: one no declaration the module sees fulfills, which the inline mock takes as a parameter.
+	private static func instantiatesWhatNothingFulfills(inTreeRootedAt scope: Scope) -> Bool {
+		var visitedScopes = Set<ObjectIdentifier>()
+		// A stack of its own, since a tree can be as deep as the module has types.
+		var scopesToVisit = [scope]
+		while let visitedScope = scopesToVisit.popLast() {
+			guard visitedScopes.insert(ObjectIdentifier(visitedScope)).inserted else { continue }
+			var builtProperties = Set<Property>()
+			for case let .instantiated(property, childScope, _) in visitedScope.propertiesToGenerate {
+				builtProperties.insert(property)
+				scopesToVisit.append(childScope)
+			}
+			for dependency in visitedScope.instantiable.dependencies where dependency.isInstantiated && !builtProperties.contains(dependency.property) {
+				return true
+			}
+		}
+		return false
 	}
 
 	/// A collection of `@Instantiable`-decorated types that are at the roots of their respective dependency trees.
@@ -9019,7 +9108,11 @@ public actor DependencyTreeGenerator {
 			} else {
 				receivableProperties
 			}
-			for dependency in scope.instantiable.dependencies {
+			// A builder an internal mock passes up to its own parameter, which the leaf that calls the public mock receives
+			// under the builder's label, is a receive no declaration the person wrote can fulfill: the mock names the
+			// parameter apart from every label its tree declares, and the leaf reads it there (see
+			// `ScopeGenerator.mockRootParameterNames(of:)`).
+			for dependency in scope.instantiable.dependencies where !(scope.publicMockCall?.passesUpBuilder(receivedAs: dependency.property) ?? false) {
 				let receivedProperty: Property
 				let acceptedProperties: Set<Property>
 				switch dependency.source {

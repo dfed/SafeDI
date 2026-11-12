@@ -479,7 +479,11 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": Self.generatedFile(importing: ["Deep", "Inner"], """
 		#if DEBUG
 		extension FeedScreen {
-		    public struct SafeDIMockScope_InnerScreen_clock {}
+		    @frozen public enum SafeDIMockScope_Clock {
+		        case innerScreen_clock(innerScreen_clock_Values)
+
+		        public struct innerScreen_clock_Values {}
+		    }
 
 		    /// Overrides for the mock dependency tree.
 		    public struct SafeDIOverrides {
@@ -493,12 +497,12 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        clockBuilder: @escaping (FeedScreen.SafeDIMockScope_InnerScreen_clock) -> Clock,
+		        clockBuilder: @escaping (FeedScreen.SafeDIMockScope_Clock) -> Clock,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> FeedScreen {
 		        let __safeDI_clockBuilder = clockBuilder
 		        func __safeDI_innerScreen() -> InnerScreen {
-		            let clock: Clock = __safeDI_clockBuilder(SafeDIMockScope_InnerScreen_clock())
+		            let clock: Clock = __safeDI_clockBuilder(.innerScreen_clock(SafeDIMockScope_Clock.innerScreen_clock_Values()))
 		            return if let safeDIBuilder = safeDIOverrides.innerScreen { safeDIBuilder(clock) } else { InnerScreen(clock: clock) }
 		        }
 		        let innerScreen: InnerScreen = __safeDI_innerScreen()
@@ -507,7 +511,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}
 
 		extension FeedScreen {
-		    public enum __safeDI_FeedScreen_mock_83A2A773E0818ACC {}
+		    public enum __safeDI_FeedScreen_mock_6426765AFC8C4713 {}
 		}
 		#endif
 		""")])

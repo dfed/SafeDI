@@ -624,8 +624,9 @@ struct PublicMockParameter: Sendable {
 	/// taken by value, the wrapper it builds, which a calling mock that can build it builds in its place, as the inline
 	/// mock would, and passes the instance of.
 	var builtWrapper: Property?
-	/// For the builder of a hole in the mock's tree, the hole, which a module calling the mock that sees a type that
-	/// fulfills it fills.
+	/// For a builder, the builder, whose places a module calling the mock that sees a type that fulfills them fills.
+	var builder: SeamSignature.Builder?
+	/// For a builder, the first place it reaches, whose property's type the builder returns.
 	var hole: SeamSignature.Hole?
 	/// The lines that document the parameter above each tier that takes it
 	/// (`MockRootParameters.UncoveredParameter.sharedValueDocumentation`).
@@ -667,8 +668,22 @@ struct PublicMockPlan: Sendable {
 	let promotedParameterNames: [Property: String]
 	/// What the construction of the mocked type passes for each of its own default-valued parameters, by label.
 	let constructionDefaultValues: [String: String]
-	/// The holes of the mock's tree, whose builders `mock()` takes, in builder-label order.
+	/// Every place the builders `mock()` takes reach, in the order they reach them: the mock's own, and those the calls of
+	/// other modules' public mocks in its tree pass up.
 	var holes = [SeamSignature.Hole]()
+	/// The builders `mock()` takes, as a seam takes them (`DependencyTreeGenerator.shapedBuilders`).
+	var builders = [SeamSignature.Builder]()
+	/// Every enum the builders reach: the mock's own, then those their cases hold.
+	var scopeEnums = [SeamSignature.ScopeEnum]()
+	/// The places of the enums the builders reach that the mock fills itself, so never hands a builder: a case of an enum
+	/// holds a called mock's whole enum, whose places the mock fills some of. A caller switches over every case of an enum
+	/// it fills a place of, so it fills each of these it can too, and passes the others up with the places `holes` lists.
+	var unpresentedHoles = [SeamSignature.Hole]()
+
+	/// The builders `mock()` takes.
+	var calledBuilders: CalledBuilders {
+		CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums)
+	}
 
 	/// The parameters the tier at `tier` takes.
 	func parameters(ofTier tier: AccessLevel) -> [PublicMockParameter] {
@@ -698,8 +713,7 @@ extension ScopeGenerator {
 			},
 			onlyIfAvailableOverrides: parameterNames.onlyIfAvailableOverrides,
 			parameterTree: parameters.parameterTree,
-			passedUpHoles: parameters.parameterTree.passedUpHolesByBuilder,
-			sendablePassedUpBuilders: parameters.parameterTree.passedUpBuildersCapturedBySendableFunctions,
+			builders: parameters.mockBuilders,
 			// A public mock takes each property received only if available as a parameter, so only the tree's nodes make
 			// a `SafeDIOverrides`.
 			hasOverrides: !treePropertyNodes.isEmpty,
@@ -707,7 +721,32 @@ extension ScopeGenerator {
 			context: context,
 		)
 		plan.noTierParameters = noTierParameters(in: parameters.parameterTree, leftOut: parameters.receivedOnlyByPublicMockCallsLeftOut)
+		plan.unpresentedHoles = unpresentedHoles(of: plan, in: parameters.parameterTree)
 		return plan
+	}
+
+	/// The places the enums of `plan`'s builders reach that the mock never hands them (see
+	/// `PublicMockPlan.unpresentedHoles`), each as the call in the tree `items` that reaches it first presents it, in tree
+	/// order.
+	private static func unpresentedHoles(of plan: PublicMockPlan, in items: [MockTreeItem]) -> [SeamSignature.Hole] {
+		let calledBuilders = plan.calledBuilders
+		let enumsByKey = calledBuilders.enumsByKey
+		var unpresentedSites = Set<SeamSignature.Hole.Site>()
+		for builder in plan.builders {
+			unpresentedSites.formUnion(calledBuilders.sitesReached(by: builder, in: enumsByKey))
+		}
+		unpresentedSites.subtract(plan.holes.map(\.site))
+		guard !unpresentedSites.isEmpty else { return [] }
+		var unpresentedHoles = [SeamSignature.Hole]()
+		// Depth first, in tree order, on a stack of its own, since a mock tree can be as deep as the module has types.
+		var nodesToVisit = Array(items.propertyNodes.reversed())
+		while let node = nodesToVisit.popLast() {
+			for hole in node.publicMockCall?.holes ?? [] where unpresentedSites.remove(hole.site) != nil {
+				unpresentedHoles.append(hole)
+			}
+			nodesToVisit.append(contentsOf: node.propertyChildren.reversed())
+		}
+		return unpresentedHoles
 	}
 
 	/// The parameters on no tier of a public mock whose tree is `items` (see `PublicMockPlan.noTierParameters`): each
@@ -719,7 +758,15 @@ extension ScopeGenerator {
 		// Depth first, in tree order, on a stack of its own, since a mock tree can be as deep as the module has types.
 		var nodesToVisit = Array(items.propertyNodes.reversed())
 		while let node = nodesToVisit.popLast() {
+			// A node's call, then the calls the trees of the fills it passes make, depth first.
+			var publicMockCalls = [PublicMockCall]()
 			if let publicMockCall = node.publicMockCall {
+				publicMockCalls.append(publicMockCall)
+			}
+			if let fillingGenerator = node.fillingGenerator {
+				publicMockCalls += ScopeGenerator.publicMockCallsInFills(of: fillingGenerator)
+			}
+			for publicMockCall in publicMockCalls {
 				for parameter in publicMockCall.omittedParameters {
 					guard case let .received(property, _) = parameter.role,
 					      leftOut.contains(property),
@@ -773,8 +820,7 @@ extension ScopeGenerator {
 		promotedNodes: [(node: MockParameterNode, name: String)],
 		onlyIfAvailableOverrides: [OnlyIfAvailableOverride],
 		parameterTree: [MockTreeItem],
-		passedUpHoles: [Property: SeamSignature.Hole],
-		sendablePassedUpBuilders: Set<Property>,
+		builders shapedBuilders: DependencyTreeGenerator.ShapedBuilders?,
 		hasOverrides: Bool,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		context: PublicMockContext,
@@ -882,14 +928,7 @@ extension ScopeGenerator {
 			}
 		}
 		for (property, name) in flatReceivedParameters {
-			if let hole = passedUpHoles[property] {
-				// The builder of a hole of another module's public mock the tree calls, which the mock passes up: it is as
-				// visible as that mock's computation proves, and a caller that sees a type fulfilling the hole fills it. One
-				// a `@Sendable` builder function captures is taken `@Sendable`, so a caller passes it up `@Sendable` too.
-				let isSendable = sendablePassedUpBuilders.contains(property)
-				let builder = isSendable ? Property(label: property.label, typeDescription: hole.stageFunctionType(at: 0, qualifiedBy: hole.scopeSeamType, isSendable: true)) : property
-				leadingParameters.append(PublicMockParameter(name: name, type: builder.typeDescription, typeSource: hole.builderType(qualifiedBy: hole.scopeSeamType, isSendable: isSendable).asSource, typeWithoutAny: hole.builderTypeWithoutAny(qualifiedBy: hole.scopeSeamType, isSendable: isSendable), defaultSource: nil, defaultKind: .none, access: hole.tierAccess, accessCause: hole.accessCause, role: .received(builder, isRequired: true), hole: hole))
-			} else if let mockDefault = flatReceivedParameterMockDefaults[property] {
+			if let mockDefault = flatReceivedParameterMockDefaults[property] {
 				// The mock builds the dependency with the hand-written mock when passed `nil`, as an internal mock defaults it.
 				defaultResolutions.append("\(bodyIndent)let \(name) = \(name) ?? (\(mockDefault.expression))")
 				let optionalProperty = Property(label: property.label, typeDescription: .optional(property.typeDescription))
@@ -902,24 +941,27 @@ extension ScopeGenerator {
 			let typeSource = uncovered.isSendableAutoclosure ? "@autoclosure @escaping @Sendable () -> \(uncovered.typeSource)" : uncovered.typeSource
 			leadingParameters.append(PublicMockParameter(name: uncovered.label, type: uncovered.property.typeDescription, typeSource: typeSource, defaultSource: nil, defaultKind: .none, access: access(of: uncovered.property.typeDescription, receivedAs: uncovered.property.label), role: .received(uncovered.property, isRequired: true), sharedValueDocumentation: uncovered.sharedValueDocumentation))
 		}
-		// Each hole's builder, required: what fills the hole takes the values in scope at its site. The tree calls each
-		// builder by the name the sites call it by, bound before anything else, in builder-label order.
-		let holes = parameterTree.holesOfTree
-		defaultResolutions.insert(contentsOf: holes.map { "\(bodyIndent)let \($0.internalName) = \($0.builderLabel)" }, at: 0)
-		for hole in holes {
-			let builderType = hole.builderType(qualifiedBy: instantiable.concreteInstantiable)
-			let closureType = hole.stageFunctionType(at: 0, qualifiedBy: instantiable.concreteInstantiable)
+		// Each builder, required, in builder order, as a seam takes it: what fills a place takes the values in scope at its
+		// site, and a call of another module's public mock hands up the places it does not fill. The tree calls each builder
+		// by the name the sites and calls call it by, bound before anything else.
+		let holes = shapedBuilders?.holes ?? []
+		let builders = shapedBuilders?.builders ?? []
+		defaultResolutions.insert(contentsOf: builders.map { "\(bodyIndent)let \($0.internalName) = \($0.label)" }, at: 0)
+		for builder in builders {
+			// The function type the builder is, without `@escaping`, which a caller's leaf receives it as.
+			let functionType = builder.parameterType.strippingEscaping
 			leadingParameters.append(PublicMockParameter(
-				name: hole.builderLabel,
-				type: closureType,
-				typeSource: builderType.asSource,
-				typeWithoutAny: hole.builderTypeWithoutAny(qualifiedBy: instantiable.concreteInstantiable),
+				name: builder.label,
+				type: functionType,
+				typeSource: builder.parameterType.asSource,
+				typeWithoutAny: builder.parameterTypeWithoutAny,
 				defaultSource: nil,
 				defaultKind: .none,
-				access: hole.tierAccess,
-				accessCause: hole.accessCause,
-				role: .received(Property(label: hole.builderLabel, typeDescription: closureType), isRequired: true),
-				hole: hole,
+				access: builder.tierAccess,
+				accessCause: builder.accessCause,
+				role: .received(Property(label: builder.label, typeDescription: functionType), isRequired: true),
+				builder: builder,
+				hole: holes.first { shapedBuilders?.builderBySite[$0.site]?.label == builder.label },
 			))
 		}
 
@@ -950,15 +992,13 @@ extension ScopeGenerator {
 			hash.combine(parameter.access.spelledOnGeneratedDeclaration)
 			hash.combine(parameter.defaultKind.rawValue)
 		}
-		// Each hole's fields after every parameter, as a seam hashes them – those of the holes whose builders the mock
-		// passes up too – since a caller that computed the struct without a field would resolve its label from its own
-		// scope instead.
-		let hashedHoles = holes + passedUpHoles.sorted { $0.key < $1.key }.map(\.value)
-		for field in hashedHoles.flatMap({ SeamSignature.CallShape.Hole($0).fields.joined() }) {
-			hash.combine(field.label)
-			hash.combine(field.type)
-			hash.combine(field.access.spelledOnGeneratedDeclaration)
-		}
+		// After every parameter, the builders among them, every enum they reach and each staged place's stages, as a seam
+		// hashes them.
+		SeamSignature.combine(
+			scopeEnums: SeamSignature.scopeEnumShapes(of: shapedBuilders?.scopeEnums ?? [], holes: holes),
+			holes: holes.map(SeamSignature.CallShape.Hole.init),
+			into: &hash,
+		)
 		var plan = PublicMockPlan(
 			parameters: parameters,
 			tiers: tiers,
@@ -970,6 +1010,8 @@ extension ScopeGenerator {
 			constructionDefaultValues: constructionDefaultValues,
 		)
 		plan.holes = holes
+		plan.builders = builders
+		plan.scopeEnums = shapedBuilders?.scopeEnums ?? []
 		return plan
 	}
 
@@ -1199,7 +1241,11 @@ struct PublicMockFinding: Hashable, Sendable {
 		case .instantiated:
 			"which \(receiverNames.first ?? typeName) instantiates and no `@Instantiable` declaration this module sees fulfills"
 		case let .builder(hole):
-			"which returns `\(hole.builtType.asSource)` for the hole `\(hole.property.label)`"
+			if let enumPlace = hole.enumPlace {
+				"whose case `\(enumPlace.caseName)` builds `\(hole.builtType.asSource)` for the hole `\(hole.property.label)`"
+			} else {
+				"which builds `\(hole.builtType.asSource)` for the hole `\(hole.property.label)`"
+			}
 		}
 		let parameterName = if case let .builder(hole) = parameter.kind {
 			hole.builderLabel
@@ -1304,17 +1350,19 @@ extension ScopeGenerator {
 		for dependency in parameters.forwardedDependencies where parameters.forwardedParameterDefaults[dependency.property.label] == nil {
 			check(dependency.property, kind: .forwarded)
 		}
-		// A builder the tree passes up is checked as the hole's own builder is, below.
-		let passedUpHoles = parameters.parameterTree.passedUpHolesByBuilder
-		for property in parameters.flatReceivedProperties where passedUpHoles[property] == nil && parameters.flatReceivedParameterMockDefaults[property] == nil {
+		for property in parameters.flatReceivedProperties where parameters.flatReceivedParameterMockDefaults[property] == nil {
 			check(property, kind: .received)
 		}
 		for uncovered in parameters.flatUncoveredParameters {
 			check(uncovered.property, kind: .instantiated)
 		}
-		// A hole's builder is as visible as the hole's type, proven as a seam's builder is.
-		for hole in parameters.parameterTree.holesOfTree + passedUpHoles.sorted(by: { $0.key < $1.key }).map(\.value) where hole.tierAccess < .public {
-			guard let cause = hole.accessCause else { continue }
+		// A builder is as visible as the places it builds, proven as a seam's builder is, and reported once per declaration
+		// of a place's property, however many places build it.
+		var reportedDeclarations = Set<String>()
+		for hole in parameters.mockBuilders?.holes ?? [] where hole.tierAccess < .public {
+			guard let cause = hole.accessCause,
+			      reportedDeclarations.insert("\(hole.ownerType.asSource) \(hole.property.asSource)").inserted
+			else { continue }
 			omittedParameters.append(PublicMockFinding.OmittedRequiredParameter(
 				property: hole.property,
 				kind: .builder(hole),
@@ -1396,13 +1444,40 @@ struct PublicMockCall: Sendable {
 
 	/// The declarations in the public mock's tree that receive each label, which a diagnostic notes.
 	let receiversByLabel: [String: [(declaringType: TypeDescription, dependency: Dependency)]]
-	/// The holes whose builders the call fills (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)`); the call passes
-	/// every other builder up, as a dependency the calling tree receives.
+	/// The places the call fills (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)`), each with a fill; the call passes
+	/// every other place up.
 	var filledHoles = [SeamSignature.Hole]()
 	/// The types of the passed parameters that the mock's tree declares `@escaping` (`ScopeGenerator.typesDeclaredEscaping`).
 	/// The calling tree's scope for the type is a leaf, with no scopes for that tree, so a function the calling tree
 	/// declares with such a parameter learns the name here.
 	let typesDeclaredEscaping: Set<TypeDescription>
+	/// Every place the mock's builders reach: those it hands them, in the order they reach them (`PublicMockPlan.holes`),
+	/// then those it fills itself (`PublicMockPlan.unpresentedHoles`), which the calling module fills or passes up alike.
+	let holes: [SeamSignature.Hole]
+	/// The builders the mock takes (`PublicMockPlan.builders`).
+	let builders: [SeamSignature.Builder]
+	/// Every enum the mock's builders reach (`PublicMockPlan.scopeEnums`).
+	let scopeEnums: [SeamSignature.ScopeEnum]
+
+	/// The builders the call passes.
+	var calledBuilders: CalledBuilders {
+		CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums)
+	}
+
+	/// The builders a caller that fills `filledHoles` passes up, as the leaf receives them: each that reaches a place the
+	/// caller does not fill.
+	var passedUpBuilders: [SeamSignature.Builder] {
+		let filledSites = Set(filledHoles.map(\.site))
+		let calledBuilders = calledBuilders
+		let enumsByKey = calledBuilders.enumsByKey
+		return builders.filter { !calledBuilders.sitesReached(by: $0, in: enumsByKey).isSubset(of: filledSites) }
+	}
+
+	/// Whether the leaf that makes the call receives `property` as a builder it passes up, which an internal mock takes as a
+	/// parameter of its own (see `passedUpBuilders`).
+	func passesUpBuilder(receivedAs property: Property) -> Bool {
+		passedParameters.contains { $0.builder != nil && $0.dependency.property == property }
+	}
 }
 
 extension PublicMockCall {
@@ -1420,8 +1495,8 @@ extension PublicMockCall {
 		/// The wrapper the called mock builds when the call passes `nil`, for a lazily instantiated dependency it takes by
 		/// value (`PublicMockParameter.builtWrapper`).
 		var builtWrapper: Property?
-		/// For the builder of a hole, the hole (`PublicMockParameter.hole`).
-		let hole: SeamSignature.Hole?
+		/// For a builder, the builder (`PublicMockParameter.builder`).
+		let builder: SeamSignature.Builder?
 	}
 
 	/// The line before the call that names the mock's guard enum, so that a call generated from another signature

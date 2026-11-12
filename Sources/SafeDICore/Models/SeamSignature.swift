@@ -580,14 +580,6 @@ public struct SeamSignature: Sendable {
 			ReservedName.seamGeneratedOnlyArgumentLabel(of: builderLabel)
 		}
 
-		/// This hole as a call of a public mock takes its builder: under `parameterName`, the name the called mock gives
-		/// the builder's parameter, which a mock that passes up the builders of several holes of one label names apart.
-		func takenUnder(parameterName: String) -> Hole {
-			var hole = self
-			hole.builderLabel = parameterName
-			return hole
-		}
-
 		/// The name of the struct of the stage at `stageIndex` of a staged builder: `Stage1`, `Stage2`, and so on. The
 		/// structs are nested side by side, where a field's type, or the built type the last stage's generic alias spells,
 		/// that begins with one's name would resolve to it, so an underscore is appended while such a type begins with the
@@ -820,6 +812,26 @@ public struct SeamSignature: Sendable {
 		var type: TypeDescription {
 			.nested(name: typeName, parentType: key.seamType, generics: [])
 		}
+
+		/// The sites of the places the enum of `key` reaches among `enumsByKey`, its own and those of the enums its cases hold,
+		/// each once, found with an explicit stack: cases can recurse.
+		static func sitesReached(from key: Key, in enumsByKey: [Key: ScopeEnum]) -> Set<Hole.Site> {
+			var sites = Set<Hole.Site>()
+			var visitedKeys = Set<Key>()
+			var keysToVisit = [key]
+			while let visitedKey = keysToVisit.popLast() {
+				guard visitedKeys.insert(visitedKey).inserted, let scopeEnum = enumsByKey[visitedKey] else { continue }
+				for enumCase in scopeEnum.cases {
+					switch enumCase.kind {
+					case let .own(site):
+						sites.insert(site)
+					case let .inner(innerKey, _, _, _):
+						keysToVisit.append(innerKey)
+					}
+				}
+			}
+			return sites
+		}
 	}
 
 	/// A builder of the generated initializer.
@@ -967,6 +979,19 @@ public struct SeamSignature: Sendable {
 	public private(set) var callShape: CallShape
 
 	private static func callShape(parameters: [Parameter], holes: [Hole], builders: [Builder], scopeEnums: [ScopeEnum], tiers: [AccessLevel]) -> CallShape {
+		CallShape(
+			parameters: parameters.map(CallShape.Parameter.init),
+			holes: holes.map(CallShape.Hole.init),
+			builders: builders.map(CallShape.Builder.init),
+			scopeEnums: scopeEnumShapes(of: scopeEnums, holes: holes),
+			tiers: tiers,
+		)
+	}
+
+	/// What a call depends on of `scopeEnums`, whose own cases build `holes`: each enum by its key's spelling, in that
+	/// order, with each case's name and payload – the fields and forwarded type of the place it builds, or the key of the
+	/// enum it holds.
+	static func scopeEnumShapes(of scopeEnums: [ScopeEnum], holes: [Hole]) -> [CallShape.ScopeEnum] {
 		let holesBySite = Dictionary(holes.map { ($0.site, $0) }, uniquingKeysWith: { first, _ in first })
 		func payload(of enumCase: ScopeEnum.Case) -> String {
 			switch enumCase.kind {
@@ -978,16 +1003,31 @@ public struct SeamSignature: Sendable {
 				return enumKey.spelling
 			}
 		}
-		return CallShape(
-			parameters: parameters.map(CallShape.Parameter.init),
-			holes: holes.map(CallShape.Hole.init),
-			builders: builders.map(CallShape.Builder.init),
-			// Each key spelled once, then sorted by its spelling.
-			scopeEnums: scopeEnums.map { (spelling: $0.key.spelling, scopeEnum: $0) }.sorted { $0.spelling < $1.spelling }.map { spelling, scopeEnum in
-				CallShape.ScopeEnum(key: spelling, typeName: scopeEnum.typeName, cases: scopeEnum.cases.map { CallShape.ScopeEnum.Case(name: $0.name, payload: payload(of: $0)) })
-			},
-			tiers: tiers,
-		)
+		// Each key spelled once, then sorted by its spelling.
+		return scopeEnums.map { (spelling: $0.key.spelling, scopeEnum: $0) }.sorted { $0.spelling < $1.spelling }.map { spelling, scopeEnum in
+			CallShape.ScopeEnum(key: spelling, typeName: scopeEnum.typeName, cases: scopeEnum.cases.map { CallShape.ScopeEnum.Case(name: $0.name, payload: payload(of: $0)) })
+		}
+	}
+
+	/// Hashes into `hash`, after a signature's builders, every enum they reach and each staged place's stages: a field is
+	/// hashed, since a caller that computed the struct without it would resolve the label from its own scope instead. A
+	/// seam's guard and a public mock's guard both end with it.
+	static func combine(scopeEnums: [CallShape.ScopeEnum], holes: [CallShape.Hole], into hash: inout SeamSignatureHash) {
+		for scopeEnum in scopeEnums {
+			hash.combine(scopeEnum.key)
+			hash.combine(scopeEnum.typeName)
+			for enumCase in scopeEnum.cases {
+				hash.combine(enumCase.name)
+				hash.combine(enumCase.payload)
+			}
+		}
+		for hole in holes where hole.fields.count > 1 {
+			for field in hole.fields.joined() {
+				hash.combine(field.label)
+				hash.combine(field.type)
+				hash.combine(field.access.spelledOnGeneratedDeclaration)
+			}
+		}
 	}
 
 	/// Each place by its site.
@@ -1095,28 +1135,13 @@ public struct SeamSignature: Sendable {
 		}
 		// Each builder after every parameter, so a seam without one hashes what it always hashed: the label, the type the
 		// signature spells, attributes included, and the tier access. Then every enum the builders reach, and each staged
-		// place's stages. A field is hashed, since a caller that computed the struct without it would resolve the label from
-		// its own scope instead.
+		// place's stages.
 		for builder in callShape.builders {
 			hash.combine(builder.label)
 			hash.combine(builder.type)
 			hash.combine(builder.tierAccess.spelledOnGeneratedDeclaration)
 		}
-		for scopeEnum in callShape.scopeEnums {
-			hash.combine(scopeEnum.key)
-			hash.combine(scopeEnum.typeName)
-			for enumCase in scopeEnum.cases {
-				hash.combine(enumCase.name)
-				hash.combine(enumCase.payload)
-			}
-		}
-		for hole in callShape.holes where hole.fields.count > 1 {
-			for field in hole.fields.joined() {
-				hash.combine(field.label)
-				hash.combine(field.type)
-				hash.combine(field.access.spelledOnGeneratedDeclaration)
-			}
-		}
+		combine(scopeEnums: callShape.scopeEnums, holes: callShape.holes, into: &hash)
 		return "\(ReservedName.builderFunctionNamePrefix)\(seamType.asIdentifier)_\(hash.hexadecimal)".spelledAsJoinedIdentifier
 	}
 }
@@ -1235,6 +1260,34 @@ public struct SeamCall: Sendable {
 	/// report is the type's. `false` where the caller reaches a tier and where the caller runs no check: the omission is
 	/// then reported as any other receive's is.
 	public let unreachableTierIsReported: Bool
+
+	/// The builders the call passes.
+	var calledBuilders: CalledBuilders {
+		CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums)
+	}
+}
+
+/// The builders a call passes another module's seam or public mock: the builders, every enum they reach, and every place
+/// they reach, in the order they reach them, which the calling module fills or passes up.
+struct CalledBuilders: Sendable {
+	let holes: [SeamSignature.Hole]
+	let builders: [SeamSignature.Builder]
+	let scopeEnums: [SeamSignature.ScopeEnum]
+
+	/// Each enum by its key.
+	var enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum] {
+		Dictionary(scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+	}
+
+	/// The sites `builder` reaches: those of the places of its enum and of the enums its cases hold, or its staged place.
+	func sitesReached(by builder: SeamSignature.Builder, in enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]) -> Set<SeamSignature.Hole.Site> {
+		switch builder.kind {
+		case let .scopeEnum(key):
+			SeamSignature.ScopeEnum.sitesReached(from: key, in: enumsByKey)
+		case let .staged(site):
+			[site]
+		}
+	}
 }
 
 /// What a run of `generate` tells the dependency tree generator about the seams among the declarations it reads.

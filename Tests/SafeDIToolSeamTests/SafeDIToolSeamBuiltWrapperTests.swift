@@ -1451,7 +1451,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			"Analytics+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
-			    public enum SafeDIMockScope_Service_part {
+			    public enum SafeDIStagedMockScope_Panel_part {
 			        public struct Stage1 {
 			            public let analytics: Analytics
 			        }
@@ -1473,21 +1473,21 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			    }
 
 			    public static func mock(
-			        partBuilder: @escaping (Service.SafeDIMockScope_Service_part.Stage1) -> Service.SafeDIMockScope_Service_part.SendableLastStage<Panel.ForwardedProperties>,
+			        panelBuilder_part: @escaping (Service.SafeDIStagedMockScope_Panel_part.Stage1) -> Service.SafeDIStagedMockScope_Panel_part.SendableLastStage<Panel.ForwardedProperties>,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Service {
-			        let __safeDI_partBuilder = partBuilder
+			        let __safeDI_panelBuilder_part = panelBuilder_part
 			        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-			        let __safeDI_partBuilder_Stage2 = __safeDI_partBuilder(SafeDIMockScope_Service_part.Stage1(analytics: analytics))
+			        let __safeDI_panelBuilder_part_Stage2 = __safeDI_panelBuilder_part(SafeDIStagedMockScope_Panel_part.Stage1(analytics: analytics))
 			        let part = SendableInstantiator<Panel> {
-			            __safeDI_partBuilder_Stage2(SafeDIMockScope_Service_part.Stage2(), $0)
+			            __safeDI_panelBuilder_part_Stage2(SafeDIStagedMockScope_Panel_part.Stage2(), $0)
 			        }
 			        return Service(analytics: analytics, part: part)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_mock_74238C92A98D70B3 {}
+			    public enum __safeDI_Service_mock_4B545D5B45549E4A {}
 			}
 			#endif
 			""",
@@ -1540,8 +1540,12 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		#expect(generated == generatedFileHeader + """
 		#if DEBUG
 		extension Service {
-		    public struct SafeDIMockScope_Middle_again {
-		        public let beneath: Beneath
+		    @frozen public enum SafeDIMockScope_Gadget {
+		        case again_again(again_again_Values)
+
+		        public struct again_again_Values {
+		            public let beneath: Beneath
+		        }
 		    }
 
 		    /// Overrides for the mock dependency tree.
@@ -1556,10 +1560,10 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        againBuilder: @escaping (Service.SafeDIMockScope_Middle_again) -> any Gadget,
+		        gadgetBuilder: @escaping (Service.SafeDIMockScope_Gadget) -> any Gadget,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
-		        let __safeDI_againBuilder = againBuilder
+		        let __safeDI_gadgetBuilder = gadgetBuilder
 		        func __safeDI_again() -> Middle {
 		            func __safeDI_beneath() -> Beneath {
 		                let again = Instantiator<Middle>(__safeDI_again)
@@ -1567,7 +1571,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            }
 		            let beneath: Beneath = __safeDI_beneath()
 		            func __safeDI_again_Gadget() -> any Gadget {
-		                __safeDI_againBuilder(SafeDIMockScope_Middle_again(beneath: beneath))
+		                __safeDI_gadgetBuilder(.again_again(SafeDIMockScope_Gadget.again_again_Values(beneath: beneath)))
 		            }
 		            let again = LazilyInstantiated<any Gadget>(__safeDI_again_Gadget)
 		            return Middle.__safeDI_init(again: again, beneath: beneath, safeDIBuilder: safeDIOverrides.again.safeDIBuilder)
@@ -1578,7 +1582,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_mock_4E24CBC42CC24810 {}
+		    public enum __safeDI_Service_mock_EA22785EE73EBECA {}
 		}
 		#endif
 		""")
@@ -2132,24 +2136,25 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			"Service+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
-			    public struct SafeDIMockScope_Service_part {
-			        public typealias LastStage<__safeDI_Forwarded> = (SafeDIMockScope_Service_part, __safeDI_Forwarded) -> ActionPanel
-			        public typealias SendableLastStage<__safeDI_Forwarded> = @Sendable (SafeDIMockScope_Service_part, __safeDI_Forwarded) -> ActionPanel
+			    @frozen public enum SafeDIMockScope_ActionPanel {
+			        case part(part_Values, ActionPanel.ForwardedProperties)
+
+			        public struct part_Values {}
 			    }
 
 			    public static func mock(
-			        partBuilder: @escaping Service.SafeDIMockScope_Service_part.LastStage<ActionPanel.ForwardedProperties>
+			        actionPanelBuilder: @escaping (Service.SafeDIMockScope_ActionPanel) -> ActionPanel
 			    ) -> Service {
-			        let __safeDI_partBuilder = partBuilder
+			        let __safeDI_actionPanelBuilder = actionPanelBuilder
 			        let part = Instantiator<ActionPanel> {
-			            __safeDI_partBuilder(SafeDIMockScope_Service_part(), $0)
+			            __safeDI_actionPanelBuilder(.part(SafeDIMockScope_ActionPanel.part_Values(), $0))
 			        }
 			        return Service(part: part)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_mock_17C54E06F20AF216 {}
+			    public enum __safeDI_Service_mock_D65F71046D0B5675 {}
 			}
 			#endif
 			""",

@@ -45,32 +45,56 @@ struct GeneratedNameAllocator {
 // MARK: - Shaping a seam's builders
 
 extension DependencyTreeGenerator {
-	/// The builders a seam's generated initializer takes for `holes`, its places: `holes` itself, in the order the builders
-	/// reach the places and carrying the names the builders settle; the builders; the enums they are handed; and the first
-	/// builder, in builder order, that reaches each place, which a diagnostic about the place names.
-	struct ShapedBuilders {
+	/// The builders a seam's generated initializer, or a public mock, takes for `holes`, its places: `holes` itself, in the
+	/// order the builders reach the places and carrying the names the builders settle; the builders; the enums they are
+	/// handed; and the first builder, in builder order, that reaches each place, which a diagnostic about the place names.
+	struct ShapedBuilders: Sendable {
 		let holes: [SeamSignature.Hole]
 		let builders: [SeamSignature.Builder]
 		let scopeEnums: [SeamSignature.ScopeEnum]
 		let builderBySite: [SeamSignature.Hole.Site: SeamSignature.Builder]
 	}
 
+	/// What the scope types a seam or a public mock declares for its builders are named by, and how its builders spell them.
+	struct ScopeTypeNames {
+		/// The prefix of a plain enum's name.
+		let plain: String
+		/// The prefix of a `@Sendable` enum's name.
+		let sendable: String
+		/// The prefix of a staged place's scope type's name.
+		let staged: String
+		/// Whether a builder spells its own scope types qualified by the type that declares them: a public mock's builder
+		/// is spelled once for its own signature and for each module that calls it, as an internal mock's parameter.
+		let areQualified: Bool
+
+		/// A seam's: `SafeDIScope_`, `SafeDISendableScope_` and `SafeDIStagedScope_`, spelled inside its extension.
+		static let seam = ScopeTypeNames(plain: "SafeDIScope", sendable: "SafeDISendableScope", staged: "SafeDIStagedScope", areQualified: false)
+		/// A public mock's: `SafeDIMockScope_`, `SafeDISendableMockScope_` and `SafeDIStagedMockScope_`, apart from the seam's
+		/// a mocked seam declares beside them.
+		static let publicMock = ScopeTypeNames(plain: "SafeDIMockScope", sendable: "SafeDISendableMockScope", staged: "SafeDIStagedMockScope", areQualified: true)
+	}
+
 	/// Shapes `holes`, every place of `seam`'s tree `generator` the seam's initializer must take a builder for, into builders.
 	///
-	/// A place the seam builds in plain code is a case of its hole type's plain enum. A call of an inner seam whose enum this
-	/// module cannot fill is a case holding that enum: of the plain enum when the call is in plain code and the inner enum
-	/// plain, and of the `@Sendable` enum otherwise. A place the seam builds inside a `@Sendable` function, and a staged place
-	/// of an inner seam, has a builder of its own. An enum exists only if it has a case. Fill or pass up is decided per
-	/// instantiated type per module, so every place one enum reaches is filled or none is.
+	/// A place the seam builds in plain code is a case of its hole type's plain enum. A call of an inner seam, or of another
+	/// module's public mock, that passes up a place its enum reaches is a case holding that enum: of the plain enum when the
+	/// call is in plain code and the inner enum plain, and of the `@Sendable` enum otherwise. A place the seam builds inside
+	/// a `@Sendable` function, and a staged place of an inner seam, has a builder of its own. An enum exists only if it has a
+	/// case. A seam's caller fills or passes up per instantiated type, so every place one of its enums reaches is filled or
+	/// none is; a public mock's caller decides per place.
+	/// - Parameter otherParameterLabels: The labels of a public mock's parameters, which its builders follow and are named
+	///   apart from as a seam's builders are from its parameters.
 	static func shapedBuilders(
 		of seam: Instantiable,
 		generator: ScopeGenerator,
 		holes flatHoles: [SeamSignature.Hole],
 		parameters: [SeamSignature.Parameter],
+		otherParameterLabels: Set<String> = [],
 		treeFunctionNames: Set<String>,
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
 		ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum],
+		scopeTypeNames: ScopeTypeNames = .seam,
 	) -> ShapedBuilders {
 		guard !flatHoles.isEmpty else { return ShapedBuilders(holes: [], builders: [], scopeEnums: [], builderBySite: [:]) }
 		let seamType = seam.concreteInstantiable
@@ -112,13 +136,18 @@ extension DependencyTreeGenerator {
 					stagedHoleSites.append(site)
 				}
 			case let .call(sitePath, call, isInSendableFunction):
-				guard let seamCall = call.seamCall else { continue }
-				for scopeEnum in seamCall.scopeEnums where calledSeamsEnums[scopeEnum.key] == nil {
+				guard let calledBuilders = call.calledBuilders else { continue }
+				for scopeEnum in calledBuilders.scopeEnums where calledSeamsEnums[scopeEnum.key] == nil {
 					calledSeamsEnums[scopeEnum.key] = scopeEnum
 				}
-				let passedUpHoleTypes = Set(call.passedUpHoles.map(\.holeType))
-				for builder in seamCall.builders {
-					guard case let .scopeEnum(innerKey) = builder.kind, passedUpHoleTypes.contains(innerKey.holeType), let innerEnum = reachedEnum(innerKey) else { continue }
+				// The call hands up an enum that reaches a place it passes up.
+				let passedUpSites = Set(call.passedUpHoles.map(\.site))
+				let calledEnumsByKey = calledBuilders.enumsByKey
+				for builder in calledBuilders.builders {
+					guard case let .scopeEnum(innerKey) = builder.kind,
+					      !SeamSignature.ScopeEnum.sitesReached(from: innerKey, in: calledEnumsByKey).isDisjoint(with: passedUpSites),
+					      let innerEnum = reachedEnum(innerKey)
+					else { continue }
 					let innerEnumType = innerEnum.type
 					let rawName = SeamSignature.Hole.caseName(of: sitePath) + (innerKey.isSendable ? "_Sendable" : "")
 					let key = SeamSignature.ScopeEnum.Key(seamType: seamType, holeType: innerKey.holeType, isSendable: innerKey.isSendable || isInSendableFunction)
@@ -137,7 +166,8 @@ extension DependencyTreeGenerator {
 		// The stem of each hole type, from its instantiated type, named apart.
 		let holeTypes = Array(Set(enumKeysInReachOrder.map(\.holeType) + stagedHoleSites.compactMap { holesBySite[$0]?.holeType }))
 			.sorted { ($0.instantiatedType.asSource, $0.builtType.asSource) < ($1.instantiatedType.asSource, $1.builtType.asSource) }
-		let stemByHoleType = stems(of: holeTypes, parameterLabels: Set(parameters.map(\.property.label)))
+		let parameterLabels = Set(parameters.map(\.property.label)).union(otherParameterLabels)
+		let stemByHoleType = stems(of: holeTypes, parameterLabels: parameterLabels)
 		func plainLabel(of holeType: SeamSignature.HoleType) -> String {
 			Self.plainBuilderLabel(ofStem: stemByHoleType[holeType, default: ""])
 		}
@@ -147,7 +177,7 @@ extension DependencyTreeGenerator {
 
 		// Builder order: per hole type in label order, then plain, `@Sendable`, staged.
 		let orderedHoleTypes = holeTypes.sorted { plainLabel(of: $0) < plainLabel(of: $1) }
-		var takenLabels = Set(parameters.map(\.property.label))
+		var takenLabels = parameterLabels
 		for holeType in orderedHoleTypes {
 			takenLabels.insert(plainLabel(of: holeType))
 			takenLabels.insert(sendableLabel(of: holeType))
@@ -170,7 +200,7 @@ extension DependencyTreeGenerator {
 			}
 			holesBySite[site]?.builderLabel = label
 			if isOwnPlace {
-				var scopeTypeName = "SafeDIStagedScope_\(stem)_\(caseName)".spelledAsIdentifier
+				var scopeTypeName = "\(scopeTypeNames.staged)_\(stem)_\(caseName)".spelledAsIdentifier
 				while !takenStagedScopeTypeNames.insert(scopeTypeName).inserted {
 					scopeTypeName = "\(scopeTypeName)_".spelledAsJoinedIdentifier
 				}
@@ -197,7 +227,7 @@ extension DependencyTreeGenerator {
 				if !isSendable {
 					internalNameByPlainHoleType[holeType] = internalName
 				}
-				let typeName = "\(isSendable ? "SafeDISendableScope" : "SafeDIScope")_\(stem)".spelledAsIdentifier
+				let typeName = "\(isSendable ? scopeTypeNames.sendable : scopeTypeNames.plain)_\(stem)".spelledAsIdentifier
 				// Two cases of one name are both named apart.
 				var indicesByName = [String: [Int]]()
 				for (index, draftCase) in draftCases.enumerated() {
@@ -250,7 +280,8 @@ extension DependencyTreeGenerator {
 				for inner in innerAccessByEnum[key, default: []] where min(inner.level, seamTypeAccess) < narrowest.level {
 					narrowest = (min(inner.level, seamTypeAccess), inner.cause, inner.seam)
 				}
-				let parameterType = Self.builderParameterType(takingEnum: .simple(name: typeName, generics: []), returning: returnType(of: holeType, in: flatHoles), isSendable: isSendable)
+				let enumType: TypeDescription = scopeTypeNames.areQualified ? .nested(name: typeName, parentType: seamType, generics: []) : .simple(name: typeName, generics: [])
+				let parameterType = Self.builderParameterType(takingEnum: enumType, returning: returnType(of: holeType, in: flatHoles), isSendable: isSendable)
 				builders.append(SeamSignature.Builder(
 					kind: .scopeEnum(key),
 					label: label,
@@ -269,7 +300,7 @@ extension DependencyTreeGenerator {
 				})
 				hole.internalName = internalName
 				holesBySite[staged.site] = hole
-				let qualifiedBy = hole.innerSeamType == nil ? nil : hole.scopeSeamType
+				let qualifiedBy = hole.innerSeamType == nil && !scopeTypeNames.areQualified ? nil : hole.scopeSeamType
 				builders.append(SeamSignature.Builder(
 					kind: .staged(site: staged.site),
 					label: staged.label,
