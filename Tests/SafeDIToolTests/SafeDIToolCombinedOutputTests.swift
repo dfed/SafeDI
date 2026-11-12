@@ -559,7 +559,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 	mutating func run_combinedOutput_enumeratesIncludeDirectoriesWithoutRequiringSourcesCSV() async throws {
 		// Driving `generate` purely from `--include` (no positional CSV) is
 		// a supported workflow; combined mode has to cope with it.
-		let tempDir = FileManager.default.temporaryDirectory
+		let tempDir = TestTemporaryDirectory.root
 			.appendingPathComponent("SafeDIToolIncludeTest-\(UUID().uuidString)", isDirectory: true)
 		try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
 		filesToDelete.append(tempDir)
@@ -656,7 +656,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 			moduleMembershipArguments: ["--module-name", "CrossModule", "--package-name", "Example"],
 		)
 
-		let tempDir = FileManager.default.temporaryDirectory
+		let tempDir = TestTemporaryDirectory.root
 			.appendingPathComponent("SafeDIToolMockConfigOnlyTest-\(UUID().uuidString)", isDirectory: true)
 		try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
 		filesToDelete.append(tempDir)
@@ -724,7 +724,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 			moduleMembershipArguments: ["--module-name", "CrossModule", "--package-name", "Example"],
 		)
 
-		let tempDir = FileManager.default.temporaryDirectory
+		let tempDir = TestTemporaryDirectory.root
 			.appendingPathComponent("SafeDIToolDepsCSVNewlineTest-\(UUID().uuidString)", isDirectory: true)
 		try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
 		filesToDelete.append(tempDir)
@@ -869,7 +869,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		// Manifest JSON is user-supplied; a duplicate `inputFilePath`
 		// must surface as a recoverable `ValidationError` rather than a
 		// `Dictionary(uniqueKeysWithValues:)` runtime trap.
-		let tempDir = FileManager.default.temporaryDirectory
+		let tempDir = TestTemporaryDirectory.root
 			.appendingPathComponent("SafeDIToolDuplicateManifestTest-\(UUID().uuidString)", isDirectory: true)
 		try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
 		filesToDelete.append(tempDir)
@@ -1236,14 +1236,9 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 	private var filesToDelete: [URL]
 }
 
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension URL {
 	fileprivate static var temporaryFile: URL {
-		#if os(Linux)
-			FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-		#else
-			URL.temporaryDirectory.appending(path: UUID().uuidString)
-		#endif
+		TestTemporaryDirectory.uniquePath()
 	}
 }
 

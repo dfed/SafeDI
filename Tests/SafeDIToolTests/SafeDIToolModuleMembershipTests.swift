@@ -627,7 +627,7 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 			moduleMembershipArguments: ["--module-name", "Engines"],
 		)
 		let path = try output.writtenModuleInfoOutputPath
-		let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("Engines")
+		let directory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString).appendingPathComponent("Engines")
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		filesToDelete.append(directory.deletingLastPathComponent())
 		try Self.instantiableContent(named: "Pump").write(to: directory.appendingPathComponent("Pump.swift"), atomically: true, encoding: .utf8)
@@ -1077,7 +1077,7 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 	/// The membership `generate` reads from `capturedExampleTargetGraph`, written where the plugin writes it beside a
 	/// CSV, with `capturedExampleStage` in place of `$STAGE`.
 	private mutating func capturedExampleMembership() throws -> ModuleMembership {
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".csv")
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".csv")
 		let targetGraphFile = URL(fileURLWithPath: swiftFileCSV.path + PluginTargetGraph.fileNameSuffix)
 		try Self.capturedExampleTargetGraph
 			.replacingOccurrences(of: Self.capturedExampleStagePlaceholder, with: Self.capturedExampleStage)
@@ -1316,7 +1316,7 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 			try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
 			try content.write(to: file, atomically: true, encoding: .utf8)
 		}
-		let temporaryDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let temporaryDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		let outputDirectory = temporaryDirectory.appendingPathComponent("Output")
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 		filesToDelete.append(temporaryDirectory)

@@ -177,7 +177,7 @@ func executeSafeDIToolTest(
 
 	// A module info file names the module it describes, so the run writes one only when the test names its module.
 	let moduleInfoOutput: URL? = moduleMembershipArguments.contains("--module-name") ? URL.temporaryFile.appendingPathExtension("safedi") : nil
-	let outputDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+	let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 	let manifestFile = URL.temporaryFile.appendingPathExtension("json")
 	let dotTreeOutput = URL.temporaryFile.appendingPathExtension("dot")
 	let combinedOutput = URL.temporaryFile.appendingPathExtension("swift")
@@ -475,14 +475,7 @@ enum TestFixtureLocation {
 
 extension URL {
 	fileprivate static var temporaryFile: URL {
-		#if os(Linux)
-			return FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-		#else
-			guard #available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) else {
-				return FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-			}
-			return URL.temporaryDirectory.appending(path: UUID().uuidString)
-		#endif
+		TestTemporaryDirectory.uniquePath()
 	}
 }
 

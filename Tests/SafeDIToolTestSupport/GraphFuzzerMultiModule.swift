@@ -639,10 +639,10 @@ enum GraphFuzzerMultiModuleProperty {
 		)
 	}
 
-	/// `text` with each path under a fixture root – a directory named by a UUID under the temporary directory,
+	/// `text` with each path under a fixture root – a directory named by a UUID under the tests' temporary directory,
 	/// however that directory is spelled: through `/private` or not – reduced to `<fixture-directory>/…`, so the
 	/// paths both integrations cite in `#sourceLocation` directives and in diagnostics read the same. The harness
-	/// spells the root two ways, as `FileManager.default.temporaryDirectory` spells it and resolved with `realpath(3)`,
+	/// spells the root two ways, as `TestTemporaryDirectory.root` spells it and resolved with `realpath(3)`,
 	/// and both end in the UUID component, so one expression covers both without threading the root, which the
 	/// harness's error does not carry, through to here; everything after the root is kept.
 	static func reducingFixtureRootPaths(in text: String) -> String {

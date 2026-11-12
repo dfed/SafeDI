@@ -262,7 +262,7 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 	/// A module whose child receives an optional property that only its non-optional form fulfills, which
 	/// `generate` reports with a fix-it.
 	private mutating func makeModuleWithUnfulfillableOptionalReceive() throws -> HandedPathModule {
-		let moduleDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let moduleDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		let sourceDirectory = moduleDirectory.appendingPathComponent("Module")
 		try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
 		filesToDelete.append(moduleDirectory)
@@ -423,7 +423,7 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 		},
 		rootDependencyType: String = "Dependency",
 	) throws -> Project {
-		let fixtureDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let fixtureDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		let projectDirectory = fixtureDirectory.appendingPathComponent("Project")
 		for directory in ["Target", "Shared", "Extra"] {
 			try FileManager.default.createDirectory(at: projectDirectory.appendingPathComponent(directory), withIntermediateDirectories: true)

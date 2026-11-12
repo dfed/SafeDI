@@ -27,7 +27,7 @@ struct SafeDIToolCompileVerifierTests: ~Copyable {
 	// MARK: Initialization
 
 	init() throws {
-		directory = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-compile-verifier-tests-\(UUID().uuidString)")
+		directory = TestTemporaryDirectory.root.appendingPathComponent("safedi-compile-verifier-tests-\(UUID().uuidString)")
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 	}
 

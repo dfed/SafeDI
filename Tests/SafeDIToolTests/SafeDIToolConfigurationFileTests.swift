@@ -635,7 +635,7 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_warns_whenModuleIsLoadedFromScanCache() async throws {
-		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let projectRoot = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
 		let simpleTypeFile = projectRoot.appendingPathComponent("SimpleType.swift")
 		try Self.simpleTypeContent.write(to: simpleTypeFile, atomically: true, encoding: .utf8)
@@ -644,12 +644,12 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 		#SafeDIConfiguration(mockConditionalCompilation: nil)
 		""".write(to: configurationFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try "\(simpleTypeFile.path),\(configurationFile.path)"
 			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		filesToDelete += [projectRoot, swiftFileCSV, outputDirectory, manifestFile, scannedModuleInfoURL(forManifestPath: manifestFile.path)]
 
 		try await Scan.parse([
@@ -679,7 +679,7 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesGeneratedCode_whenGenerateWarns() async throws {
-		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let projectRoot = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
 		let helperFile = projectRoot.appendingPathComponent("Helper.swift")
 		try """
@@ -703,10 +703,10 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 		#SafeDIConfiguration(mockConditionalCompilation: nil)
 		""".write(to: configurationFile, atomically: true, encoding: .utf8)
 
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try "\(helperFile.path),\(rootFile.path),\(configurationFile.path)"
 			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 		filesToDelete += [projectRoot, swiftFileCSV, outputDirectory]
 

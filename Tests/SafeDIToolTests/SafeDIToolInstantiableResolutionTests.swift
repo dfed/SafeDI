@@ -176,7 +176,7 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 	/// lists as its module's file, as `generate` resolves it.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func resolvedServiceDeclaredInTwoModules(productionFilePath: String, mockOnlyFilePath: String) async throws -> Instantiable {
-		let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let directory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		filesToDelete.append(directory)
 		var filePaths = [String]()
 		for (filePath, content) in [(productionFilePath, Self.productionDeclaration), (mockOnlyFilePath, Self.mockOnlyExtension)] {
@@ -216,7 +216,7 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 	private mutating func resolvedInstantiables(
 		fromFilesNamed contentByFileName: [String: String],
 	) async throws -> (instantiables: [TypeDescription: Instantiable], filePaths: [String: String]) {
-		let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let directory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		filesToDelete.append(directory)
 		var filePaths = [String: String]()

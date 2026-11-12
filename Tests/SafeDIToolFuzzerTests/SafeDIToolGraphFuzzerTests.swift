@@ -1600,7 +1600,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// directory named as a macOS runner's temporary directory is, and expects the two to agree.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private static func expectNoRenamedGraphFailureUnderPathHoldingALabel(of fixture: GraphFuzzerFixture, sourceLocation: SourceLocation = #_sourceLocation) async throws {
-		let parentDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("t85nd63d71x27_8gl5gw3l_w0000gn-\(UUID().uuidString)")
+		let parentDirectory = TestTemporaryDirectory.root.appendingPathComponent("t85nd63d71x27_8gl5gw3l_w0000gn-\(UUID().uuidString)")
 		try FileManager.default.createDirectory(at: parentDirectory, withIntermediateDirectories: true)
 		defer {
 			try? FileManager.default.removeItem(at: parentDirectory)
@@ -3278,7 +3278,7 @@ struct SafeDIToolGraphFuzzerTests {
 	func summaryOfReport_saysTheSeedIsMisfiled_whenAnEntryListsADifferenceItsGraphDoesNotShow() throws {
 		let knownIssue = GraphFuzzerKnownIssue(reason: "Both reasons", signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)], seeds: [12])
 		let reportLine = try #require(GraphFuzzerFinding.staleRenamedGraphDifference(knownIssue, .mockConfigurationFieldPresence).reportLine(seed: 12))
-		let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+		let directory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		defer { try? FileManager.default.removeItem(at: directory) }
 		let report = directory.appendingPathComponent("report")
@@ -3291,7 +3291,10 @@ struct SafeDIToolGraphFuzzerTests {
 		process.executableURL = URL(fileURLWithPath: "/bin/bash")
 		process.arguments = [script.path, report.path, summary.path, "12", "1"]
 		// The job summary of a CI run of this suite is not this test's to write to.
-		process.environment = ProcessInfo.processInfo.environment.filter { $0.key != "GITHUB_STEP_SUMMARY" }
+		process.environment = TestTemporaryDirectory.environment(
+			withTemporaryDirectory: directory,
+			from: ProcessInfo.processInfo.environment.filter { $0.key != "GITHUB_STEP_SUMMARY" },
+		)
 
 		try process.run()
 		process.waitUntilExit()

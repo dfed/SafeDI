@@ -1349,11 +1349,11 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		    public init() {}
 		}
 		""".write(to: directory.appendingPathComponent("Additional/StagingRoot.swift"), atomically: true, encoding: .utf8)
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try "\(relativeDirectoryPath)/Target/SafeDIConfiguration.swift".write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		filesToDelete += [directory, swiftFileCSV, outputDirectory, manifestFile, scannedModuleInfoURL(forManifestPath: manifestFile.path)]
 
 		try await Scan.parse([

@@ -391,7 +391,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	mutating func generate_constructsInternalTypes_whenHandWrittenManifestNamesNoOwnFiles() async throws {
 		// A hand-written manifest that names no `mockScopedFilePaths` makes the input files the module's own, so the
 		// generated code constructs the internal types they declare.
-		let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+		let directory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		filesToDelete.append(directory)
 		let rootFile = directory.appendingPathComponent("Root.swift")
@@ -2403,7 +2403,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	mutating func generate_throwsError_whenHandWrittenManifestNamesNoOwnFilesAndAdditionalDirectoryDeclaresInternalType() async throws {
 		// A hand-written manifest that names no `mockScopedFilePaths` makes the input files the module's own, and a
 		// file reached through `additionalDirectoriesToInclude` is not one of them.
-		let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+		let directory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		let additionalDirectory = directory.appendingPathComponent("Additional")
 		try FileManager.default.createDirectory(at: additionalDirectory, withIntermediateDirectories: true)
 		filesToDelete.append(directory)

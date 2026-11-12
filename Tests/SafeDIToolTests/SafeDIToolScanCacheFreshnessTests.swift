@@ -764,7 +764,7 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 	/// A project whose root is in `Root.swift`, and which holds the content of `otherFiles` at each file name.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func scannedProject(throughSymbolicLink: Bool = false, alongside otherFiles: [String: String] = [:]) async throws -> ScannedProject {
-		let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let directory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		let rootFile = directory.appendingPathComponent("Root.swift")
 		let targetFile = throughSymbolicLink ? directory.appendingPathComponent("Target.swift") : rootFile
@@ -777,11 +777,11 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 			try otherFiles[fileName]?.write(to: fileURL, atomically: true, encoding: .utf8)
 			return fileURL
 		}
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let swiftFileCSV = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try ([rootFile] + otherFileURLs).map(\.path).joined(separator: ",").write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let outputDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		let manifestFile = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString + ".json")
 		filesToDelete += [directory, swiftFileCSV, outputDirectory, manifestFile, scannedModuleInfoURL(forManifestPath: manifestFile.path)]
 
 		try await Scan.parse([

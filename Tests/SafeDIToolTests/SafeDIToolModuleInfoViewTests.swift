@@ -659,7 +659,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_leavesOutputsUntouched_whenRunAgainOverUnchangedInputs() async throws {
 		// Cells 10c and 10d: a second run over the same inputs writes neither output, so their modification dates stay.
-		let fixtureDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+		let fixtureDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: fixtureDirectory, withIntermediateDirectories: true)
 		filesToDelete.append(fixtureDirectory)
 		let source = fixtureDirectory.appendingPathComponent("Clock.swift")
@@ -690,7 +690,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesNoModuleInfo_whenRunFails() async throws {
 		// Cell 28: a run that fails leaves the module info an earlier run wrote exactly as it was.
-		let fixtureDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+		let fixtureDirectory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: fixtureDirectory, withIntermediateDirectories: true)
 		filesToDelete.append(fixtureDirectory)
 		let source = fixtureDirectory.appendingPathComponent("Root.swift")
