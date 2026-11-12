@@ -1,6 +1,6 @@
 # SafeDI Quick Start
 
-This guide adds SafeDI to an app whose code is split into modules. It starts from a small app with three modules that does not use SafeDI yet:
+This guide adds SafeDI to an existing application. It starts from a small app with three modules that does not use SafeDI yet:
 
 - `Networking`, which declares an `APIClient`.
 - `Profile`, a feature module, which declares a `ProfileView`, the `AvatarLoader` it uses, and a `User` model.
@@ -8,11 +8,7 @@ This guide adds SafeDI to an app whose code is split into modules. It starts fro
 
 The types below the root view already take their dependencies in their initializers, and the root view creates them by hand. By the end, SafeDI writes the code that creates them.
 
-Each step that changes a file shows the change as a diff. Add the green lines, which start with `+`. Remove the red lines, which start with `-`. The other lines stay as they are, and show where the change goes.
-
-The modules live in a Swift package. [Other build systems](#other-build-systems) covers Xcode projects, Bazel, and Tuist. The [Manual](Manual.md) is the reference for everything this guide touches.
-
-SafeDI needs Swift 6.2 or later, which ships with Xcode 26.
+The modules live in a Swift package. [Other build systems](#other-build-systems) covers Xcode projects, Bazel, and Tuist.
 
 ## 1. Add SafeDI to your package
 
@@ -35,7 +31,7 @@ MyAppPackage/
         └── ProfileViewTests.swift
 ```
 
-Add SafeDI to the package’s dependencies. Add its `SafeDI` library and its `SafeDIGenerator` build tool plugin to each target that declares SafeDI types: here, `Networking`, `Profile`, and `Root`.
+Add SafeDI to the package’s dependencies. Add its `SafeDI` library and its `SafeDIGenerator` build tool plugin to each target that declares `@Instantiable` types: here, `Networking`, `Profile`, and `Root`.
 
 In `Package.swift`:
 
@@ -48,33 +44,32 @@ In `Package.swift`:
 +    ],
      targets: [
          .target(
--            name: "Networking"
-+            name: "Networking",
+             name: "Networking",
 +            dependencies: ["SafeDI"],
-+            plugins: [.plugin(name: "SafeDIGenerator", package: "SafeDI")]
++            plugins: [.plugin(name: "SafeDIGenerator", package: "SafeDI")],
          ),
          .target(
              name: "Profile",
--            dependencies: ["Networking"]
+-            dependencies: ["Networking"],
 +            dependencies: ["Networking", "SafeDI"],
-+            plugins: [.plugin(name: "SafeDIGenerator", package: "SafeDI")]
++            plugins: [.plugin(name: "SafeDIGenerator", package: "SafeDI")],
          ),
          .target(
              name: "Root",
--            dependencies: ["Networking", "Profile"]
+-            dependencies: ["Networking", "Profile"],
 +            dependencies: ["Networking", "Profile", "SafeDI"],
-+            plugins: [.plugin(name: "SafeDIGenerator", package: "SafeDI")]
++            plugins: [.plugin(name: "SafeDIGenerator", package: "SafeDI")],
          ),
 ```
 
-When you build, the plugin reads the target’s code and the code of the targets it depends on in your package, checks the dependency tree, and generates the code that builds it. The plugin generates nothing for `Networking`, which declares no root and no type with `generateMock: true`, but with the plugin already there, you don’t edit `Package.swift` when `Networking` gains one.
+When you build, the plugin reads the code of the target and of each target in your package that the target depends on, checks the dependency tree, and generates the code that builds the tree. The plugin generates nothing for `Networking`, which declares no root and no type with `generateMock: true`. Because the plugin is already applied, you won’t need to edit `Package.swift` when `Networking` gains a root or a type with `generateMock: true`.
 
-## 2. Mark the types in your dependency tree
+## 2. Decorate the types in your dependency tree
 
-Mark each type you want SafeDI to create with `@Instantiable`. Here, that’s `APIClient`, `AvatarLoader`, and `ProfileView`. For each one:
+Decorate each type you want SafeDI to instantiate with `@Instantiable`. Here, that’s `APIClient`, `AvatarLoader`, and `ProfileView`. For each one:
 
-- Make it conform to `Instantiable`.
-- Give it an initializer that takes each of its dependencies, with the property’s label and type. The types here already have one.
+- Make the type conform to `Instantiable`.
+- Give the type an initializer with a parameter for each property that holds a dependency, with the property’s label and type. The types here already have one.
 
 `@Instantiable` checks both as you type, and offers a fix-it that adds whatever is missing.
 
@@ -90,7 +85,7 @@ Mark each type you want SafeDI to create with `@Instantiable`. Here, that’s `A
      public init() {}
 ```
 
-Leave `User`, in `Profile`, as it is. It is a plain model, not a SafeDI type. SafeDI creates the types in your tree from one another, when the tree is built. A `User` can't be made that way: it holds data that exists only once the app is running and someone signs in, so `RootView` creates it then. Your code creates a value like this and passes it into the tree, as `ProfileView`’s forwarded `user` shows below.
+Leave `User`, in `Profile`, as it is. SafeDI instantiates the types in your dependency tree, but a `User` is a runtime-created value, which exists only once someone signs in. `RootView` creates a `User` at sign-in and forwards the `User` into the tree, as [step 3](#3-decorate-the-root-and-build-the-tree) shows. A forwarded type doesn’t need to be decorated with `@Instantiable`. Forward any other runtime-created value, such as a network response or user input, the same way.
 
 ```swift
 // Sources/Profile/User.swift
@@ -103,13 +98,13 @@ public struct User: Sendable {
 }
 ```
 
-Mark each property that holds a dependency with how it gets its value:
+Decorate each property that holds a dependency with the macro that says where the property’s value comes from:
 
-- `@Instantiated`: SafeDI creates a new instance when it creates the type that declares it.
-- `@Received`: SafeDI passes in the instance that a type above it in the tree instantiated or forwarded, with the same name and type. Use it to share one instance without passing it through every type in between. If no type above provides it, SafeDI reports an error when you build.
-- `@Forwarded`: your code passes the value in when it creates the type, as step 3 shows. Use it for a value that exists only at runtime, such as the signed-in user.
+- `@Instantiated`: SafeDI instantiates a new instance for the property along with the type that declares the property.
+- `@Received`: SafeDI passes in the value of a property further up the tree that has the same name and type and is decorated with `@Instantiated` or `@Forwarded`. Use `@Received` to share one instance without passing that instance through every type in between. If no type further up the tree provides a property with that name and type, SafeDI reports an error when you build.
+- `@Forwarded`: your code passes in a runtime-created value, such as the signed-in user, when your code instantiates the type that declares the property, as [step 3](#3-decorate-the-root-and-build-the-tree) shows.
 
-In `AvatarLoader`, mark `apiClient` `@Received`: it receives the one `APIClient` that the root, `RootView`, instantiates in step 3. In `Sources/Profile/AvatarLoader.swift`:
+In `AvatarLoader`, decorate `apiClient` with `@Received`: `AvatarLoader` receives the one `APIClient` that the root, `RootView`, instantiates in [step 3](#3-decorate-the-root-and-build-the-tree). In `Sources/Profile/AvatarLoader.swift`:
 
 ```diff
  import Foundation
@@ -133,7 +128,7 @@ In `AvatarLoader`, mark `apiClient` `@Received`: it receives the one `APIClient`
  }
 ```
 
-In `ProfileView`, mark `user` `@Forwarded`, because a user exists only once someone signs in. Mark `avatarLoader` `@Instantiated`, because each `ProfileView` creates its own. Add `generateMock: true`, so that SafeDI generates `ProfileView.mock(…)`, and add a preview that calls it. [Step 4](#4-use-mocks-in-tests-and-previews) explains mocks. In `Sources/Profile/ProfileView.swift`:
+In `ProfileView`, decorate `user` with `@Forwarded`, because a `User` exists only once someone signs in. Decorate `avatarLoader` with `@Instantiated`, because each `ProfileView` has its own `AvatarLoader`. Add `generateMock: true`, so that SafeDI generates `ProfileView.mock(…)`, and add a preview that calls `ProfileView.mock(…)`. [Step 4](#4-use-mocks-in-tests-and-previews) explains mocks. In `Sources/Profile/ProfileView.swift`:
 
 ```diff
 +import SafeDI
@@ -170,15 +165,15 @@ In `ProfileView`, mark `user` `@Forwarded`, because a user exists only once some
 +#endif
 ```
 
-Don’t add `apiClient` to `ProfileView`. `AvatarLoader` receives it from `RootView`, above `ProfileView` in the tree, so `ProfileView` doesn’t pass it along.
+Don’t add `apiClient` to `ProfileView`. `AvatarLoader` receives the `APIClient` from `RootView`, above `ProfileView` in the tree, so `ProfileView` doesn’t pass the `APIClient` along.
 
-## 3. Mark the root and build the tree
+## 3. Decorate the root and build the tree
 
-Mark the root, the type at the top of the tree, `@Instantiable(isRoot: true)`. The root is the one type in the tree that your own code creates, by calling an `init()` with no arguments. SafeDI generates that `init()`, and it builds everything below the root. No type above the root passes it anything, so a root can’t receive or forward a dependency, and the `@Instantiable` macro reports one as you type. Here, the root is `RootView`. In it:
+Decorate the root, the type at the top of the tree, with `@Instantiable(isRoot: true)`. The root is the one type in the tree that your own code creates, by calling an `init()` with no arguments. SafeDI generates that `init()`, which builds everything below the root. No type above the root passes the root anything, so a root can’t receive or forward a dependency, and the `@Instantiable` macro reports an error as you type if a root does. Here, the root is `RootView`. In `RootView`:
 
-- Replace the hand-written `init()` with an initializer that takes each dependency. The generated `init()` creates the dependencies and calls it.
-- Mark `apiClient` `@Instantiated`. `RootView` doesn’t use it itself, but `AvatarLoader`, below it, receives it.
-- Replace the code that creates a `ProfileView` with an `@Instantiated` `Instantiator<ProfileView>`, and call its `instantiate(_:)` with the user. `RootView` can’t be given a finished `ProfileView` when it is created, because no user exists until someone signs in. An [`Instantiator`](Manual.md#instantiator) builds a `ProfileView` each time you call `instantiate(_:)`: you pass the forwarded `user`, and SafeDI builds the rest. If a type in the tree declares a plain `@Instantiated` `ProfileView` in place of an `Instantiator<ProfileView>`, SafeDI reports an error when you build.
+- Replace the hand-written `init()` with an initializer that takes each dependency. The generated `init()` creates the dependencies and calls that initializer.
+- Decorate `apiClient` with `@Instantiated`. `RootView` doesn’t use `apiClient` itself, but `AvatarLoader`, below `RootView` in the tree, receives the `APIClient`.
+- Replace the code that creates a `ProfileView` with an `@Instantiated` `Instantiator<ProfileView>`, and call the instantiator’s `instantiate(_:)` with the user. `RootView` can’t be given a finished `ProfileView` when `RootView` is created, because no user exists until someone signs in. An [`Instantiator`](Manual.md#instantiator) builds a `ProfileView` each time you call `instantiate(_:)`: you pass the forwarded `user`, and SafeDI builds the rest. If a type in the tree declares a plain `@Instantiated` `ProfileView` in place of an `Instantiator<ProfileView>`, SafeDI reports an error when you build.
 
 In `Sources/Root/RootView.swift`:
 
@@ -238,15 +233,15 @@ extension RootView {
 }
 ```
 
-It creates one `APIClient`. The local function takes a `User` and builds a `ProfileView` with a new `AvatarLoader`, which gets that `APIClient`. The `Instantiator` calls the function each time `instantiate(_:)` runs. Then the `init()` calls the initializer you wrote. [Finding the generated code](Manual.md#finding-the-generated-code) says where to read the whole file.
+The generated `init()` creates one `APIClient`. The local function takes a `User` and builds a `ProfileView` with a new `AvatarLoader`, which gets that `APIClient`. The `Instantiator` calls the function each time `instantiate(_:)` runs. Then the `init()` calls the initializer you wrote. [Finding the generated code](Manual.md#finding-the-generated-code) says where to read the whole file.
 
-Leave your app target, which shows `RootView` by calling `RootView()`, as it is. It depends on the package’s `Root` library, and that call reaches the `init()` SafeDI generates in place of the one you removed. The app target declares no SafeDI types, so it needs no plugin.
+Leave your app target, which shows `RootView` by calling `RootView()`, as it is. The app target depends on the package’s `Root` library, and the call `RootView()` reaches the `init()` SafeDI generates in place of the one you removed. The app target declares no `@Instantiable` types, so the app target needs no plugin.
 
 In your own app, the root can be a view in a module, as here. In a SwiftUI app, you can make the `App` type the root instead, if SafeDI runs on the app target. In a UIKit app, make the root a class that your app delegate creates and stores: the app delegate can’t be the root, because it already has a no-argument `init()` from `NSObject`. See [Creating the root of your dependency tree](Manual.md#creating-the-root-of-your-dependency-tree).
 
 ### Access across modules
 
-SafeDI generates the code that builds `RootView`’s tree in `Root`, and `ProfileView`’s mock in `Profile`. That code calls each type’s initializer, so give each type it builds, and the type’s initializer, enough access for that module to call it:
+SafeDI generates the code that builds `RootView`’s tree in `Root`, and `ProfileView`’s mock in `Profile`. The generated code calls the initializer of each type in the tree or the mock, so give each of those types, and its initializer, enough access for the module that holds the generated code to call the initializer:
 
 - A type declared in the same module can stay `internal`.
 - Within one Swift package, a type from another module needs `package` or `public` access. Here, those types are `public`.
@@ -258,7 +253,7 @@ SafeDI reports each type or initializer that needs wider access, and names the c
 
 Because `ProfileView` has `generateMock: true`, SafeDI generates `ProfileView.mock(…)`. A mock builds one type and everything below it without a root, so a preview or a test can show `ProfileView` on its own. Pass the mock what it can’t build, here the forwarded `user`. The mock builds the rest, including the `APIClient` that `AvatarLoader` receives, which in the app comes from `RootView`. By default, SafeDI wraps each mock in `#if DEBUG`, so put a preview that calls one inside `#if DEBUG`, as `ProfileView.swift` above does.
 
-Call it the same way in a test. The mock is `internal`, so import `Profile` with `@testable`:
+Call `ProfileView.mock(…)` the same way in a test. The mock is `internal`, so import `Profile` with `@testable`:
 
 ```swift
 // Tests/ProfileTests/ProfileViewTests.swift
@@ -276,14 +271,14 @@ To change how the mock builds a dependency, such as the `APIClient` that `Avatar
 
 ## Other build systems
 
-Steps 2 to 4 are the same in every build system. Step 1, adding SafeDI to the build, differs, and so does how you set up `package` access. Each section below covers both.
+Steps [2](#2-decorate-the-types-in-your-dependency-tree) to [4](#4-use-mocks-in-tests-and-previews) are the same in every build system. [Step 1](#1-add-safedi-to-your-package), adding SafeDI to the build, differs, and so does how you set up `package` access. Each section below covers both.
 
 ### Xcode projects
 
 If your modules are framework targets in an `.xcodeproj`, choose one of two routes:
 
 - **Move the modules into a local Swift package.** Create a package like the one above, and move each module’s files into `Sources/<module name>`. Keep the app target in the project, add the package to the project, and add the package’s `Root` library to the app target. Choose this route for new work: it has none of the next route’s limits.
-- **Keep the framework targets.** Apply the plugin to each target that declares SafeDI types. The Xcode project plugin can’t find the source files of the targets a target depends on, so give each target you apply the plugin to a `SafeDIConfiguration.swift` whose `additionalDirectoriesToInclude` lists the folders of the targets it depends on, as [Xcode project](Manual.md#xcode-project) describes. The plugin also can’t tell which target declares each type, so give each type that another target builds, and its initializer, `package` or `public` access. For `package` access, set `SWIFT_PACKAGE_NAME` to one name on every target. SafeDI reports each declaration that is too narrow. [Limits of the Xcode project plugin](Manual.md#limits-of-the-xcode-project-plugin) lists the plugin’s other limits.
+- **Keep the framework targets.** Apply the plugin to each target that declares `@Instantiable` types. The Xcode project plugin can’t find the source files of the targets a target depends on, so give each target you apply the plugin to a `SafeDIConfiguration.swift` whose `additionalDirectoriesToInclude` lists the folders of the targets that target depends on, as [Xcode project](Manual.md#xcode-project) describes. The plugin also can’t tell which target declares each type, so give each type that another target builds, and its initializer, `package` or `public` access. For `package` access, set `SWIFT_PACKAGE_NAME` to one name on every target. SafeDI reports each declaration that is too narrow. [Limits of the Xcode project plugin](Manual.md#limits-of-the-xcode-project-plugin) lists the plugin’s other limits.
 
 ### Bazel
 
@@ -365,12 +360,12 @@ SafeDI’s `SafeDITuist` plugin provides the script that runs SafeDI on each mod
 
 ```diff
  let tuist = Tuist(
--    project: .tuist()
+-    project: .tuist(),
 +    project: .tuist(
 +        plugins: [
 +            .git(url: "https://github.com/dfed/SafeDI", sha: "<commit>", directory: "TuistPlugins/SafeDITuist"),
-+        ]
-+    )
++        ],
++    ),
  )
 ```
 
@@ -378,11 +373,10 @@ Depend on the same SafeDI version in `Tuist/Package.swift`, so that `tuist insta
 
 ```diff
  let package = Package(
--    name: "MyApp"
-+    name: "MyApp",
+     name: "MyApp",
 +    dependencies: [
 +        .package(url: "https://github.com/dfed/SafeDI.git", from: "2.2.0"),
-+    ]
++    ],
  )
 ```
 
@@ -400,7 +394,7 @@ In `Project.swift`, import `SafeDITuist`, and give each module three things: `Sa
          bundleId: "com.example.\(name)",
          deploymentTargets: .iOS("17.0"),
 -        sources: ["\(name)/**/*.swift"],
--        dependencies: dependencies.map { .target(name: $0) }
+-        dependencies: dependencies.map { .target(name: $0) },
 +        sources: .sourceFilesList(globs: [
 +            .glob("\(name)/**/*.swift"),
 +            SafeDI.generatedSource,
@@ -408,7 +402,7 @@ In `Project.swift`, import `SafeDITuist`, and give each module three things: `Sa
 +        scripts: [
 +            SafeDI.preCompileScript(module: name, dependencies: dependencies),
 +        ],
-+        dependencies: dependencies.map { .target(name: $0) } + [.external(name: "SafeDI")]
++        dependencies: dependencies.map { .target(name: $0) } + [.external(name: "SafeDI")],
      )
  }
 ```

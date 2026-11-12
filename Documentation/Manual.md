@@ -124,9 +124,9 @@ public struct LoggedInView: Instantiable, View {
 }
 ```
 
-- `@Forwarded` marks a dependency that is passed in at runtime (e.g., the authenticated `User` returned from sign-in) and made available to the rest of this scope and its subtree.
-- `@Received` marks a dependency that was already created further up the tree and is being received here.
-- `@Instantiated` marks a dependency that SafeDI constructs when this type is instantiated. `noteStorage`’s own `@Received` inputs are resolved from this scope’s context.
+- A property decorated with `@Forwarded` holds a runtime-created value, such as the authenticated `User` returned from sign-in, which is forwarded into the tree when this type is instantiated and made available to the rest of this scope and its subtree.
+- A property decorated with `@Received` holds a dependency that was instantiated or forwarded further up the tree and is being received here.
+- A property decorated with `@Instantiated` holds a dependency that SafeDI instantiates when this type is instantiated. `noteStorage`’s own `@Received` inputs are resolved from this scope’s context.
 
 [@Instantiated](#instantiated), [@Forwarded](#forwarded), [@Received](#received), and [Conditionally receiving dependencies](#conditionally-receiving-dependencies) cover each kind in detail, including `@Instantiated`’s parameters for dependency inversion and `@Received`’s `onlyIfAvailable` option.
 
@@ -400,7 +400,7 @@ In a SwiftUI `View`, `@Instantiated` objects are re-initialized each time SwiftU
 
 ### @Forwarded
 
-Property declarations within `@Instantiable` types decorated with [`@Forwarded`](../Sources/SafeDI/Decorators/Forwarded.swift) represent dependencies that come from the runtime, e.g. user input or backend-delivered content. Like an `@Instantiated`-decorated property, a `@Forwarded`-decorated property is available to be `@Received` by objects instantiated further down the dependency tree.
+Property declarations within `@Instantiable` types decorated with [`@Forwarded`](../Sources/SafeDI/Decorators/Forwarded.swift) represent runtime-created instances or values, such as the authenticated `User` returned from sign-in, a network response, or user input. Like an `@Instantiated`-decorated property, a `@Forwarded`-decorated property is available to be `@Received` by objects instantiated further down the dependency tree.
 
 A `@Forwarded` property is forwarded into the SafeDI dependency tree by an [`Instantiator`](#instantiator)’s `instantiate(_:)` function that creates an instance of the property’s enclosing type. For the `LoggedInView` [above](#instantiable), the root that passes the authenticated user in uses the child’s `Instantiator`:
 
@@ -649,7 +649,7 @@ Read `instance` after initialization instead, such as in a method or a view’s 
 
 `Instantiator`, `ErasedInstantiator`, and `LazilyInstantiated` are not `Sendable`. To share one across concurrency domains, declare its `Sendable` twin: [`SendableInstantiator`](../Sources/SafeDI/DelayedInstantiation/SendableInstantiator.swift), [`SendableErasedInstantiator`](../Sources/SafeDI/DelayedInstantiation/SendableErasedInstantiator.swift), or [`SendableLazilyInstantiated`](../Sources/SafeDI/DelayedInstantiation/SendableLazilyInstantiated.swift).
 
-A `SendableLazilyInstantiated` creates its instance exactly once, while holding a lock, and requires the instance to be `Sendable`. It is available on macOS 15, iOS 18, tvOS 18, watchOS 11, and visionOS 2 and later. The generated code is not marked `@available`, so use it only in a module whose deployment targets are at least those versions.
+A `SendableLazilyInstantiated` creates its instance exactly once, while holding a lock, and requires the instance to be `Sendable`. It is available on macOS 15, iOS 18, tvOS 18, watchOS 11, and visionOS 2 and later. The generated code is not decorated with `@available`, so use it only in a module whose deployment targets are at least those versions.
 
 A `Sendable` wrapper builds its dependency in a `@Sendable` function that runs on no actor. The dependency need not be `Sendable`, but two rules apply to the types the function builds:
 
@@ -2022,7 +2022,7 @@ It is strongly recommended that projects adopting SafeDI start their migration b
 A codebase of many modules adopts SafeDI the same way, from the root down. Four features let it do so without making every type `public` or building the whole tree in the root’s module:
 
 - **Types keep their access levels.** A type and its initializer need to be visible only to the module whose generated code builds them, so `internal` and `package` types work. See [Access levels](#access-levels).
-- **Each module can generate its own tree.** Mark the type at a module’s boundary, such as a feature’s entry point, with `generateDependencyTree: true`, which makes it a seam. That module then generates the type’s tree as an initializer, and trees in other modules call it. A change inside the module recompiles only that module and the calls. In production, the types built inside need to be visible only in that module. See [Generating a dependency tree per module](#generating-a-dependency-tree-per-module).
+- **Each module can generate its own tree.** Decorate the type at a module’s boundary, such as a feature’s entry point, with `@Instantiable(generateDependencyTree: true)`, which makes it a seam. That module then generates the type’s tree as an initializer, and trees in other modules call it. A change inside the module recompiles only that module and the calls. In production, the types built inside need to be visible only in that module. See [Generating a dependency tree per module](#generating-a-dependency-tree-per-module).
 - **Implementations can live above the feature.** A module’s tree can instantiate a protocol that only the app implements. The module’s generated initializer then takes a builder for it, and the app’s generated code fills it in, as the example below shows.
 - **Mocks cross modules.** A mock in another module builds a seam’s whole tree, so it needs that tree’s types to be visible, unless the seam is declared with `generateMock: .public`. That gives the seam a `public` `mock()`, which tests and previews in any package can call. See [Public mocks](#public-mocks).
 
