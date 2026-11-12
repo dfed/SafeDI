@@ -1310,7 +1310,7 @@ extension ScopeGenerator {
 		for accessNeed in context.extendedTypeAccessNeedsByType[instantiable.concreteInstantiable, default: []] + instantiable.accessNeeds(constructingWithMockMethod: false) {
 			switch accessNeed.declaration {
 			case let .type(type), let .extensionDeclaringType(type):
-				guard TypeAccessProof.normalized(accessNeed.level) < .public else { continue }
+				guard AccessLevel.normalized(accessNeed.level) < .public else { continue }
 				if type == instantiable.concreteInstantiable {
 					return [PublicMockFinding.typeTheMacroRejects(instantiable, level: accessNeed.level)]
 				} else {

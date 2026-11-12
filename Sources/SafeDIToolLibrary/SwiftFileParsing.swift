@@ -601,7 +601,7 @@ public struct FileScan: Codable, Sendable {
 			outputFileDeclarations: outputFileDeclarations,
 			plainTypeDeclarations: plainTypeDeclarations.filter { plainTypeDeclaration in
 				plainTypeDeclaration.typeDescription.outermostTypeName.map { keptTypeNames.outermostTypeNames.contains($0.spelledWithoutBackticks) } == true
-					|| (keepingThoseOtherModulesPackageCanName && TypeAccessProof.normalized(plainTypeDeclaration.levelBeforeExtendedTypeCap) == .package)
+					|| (keepingThoseOtherModulesPackageCanName && AccessLevel.normalized(plainTypeDeclaration.levelBeforeExtendedTypeCap) == .package)
 			},
 			plainTypeDeclarationDecisions: [],
 			keptGuardedPlainTypeNames: keptGuardedTypeNames.sorted(),

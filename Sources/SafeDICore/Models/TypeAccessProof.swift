@@ -125,7 +125,7 @@ public struct TypeAccessProof: Sendable {
 				for _ in 0...entry.enclosingTypeAccess.count {
 					extendedType = extendedType?.popNested
 				}
-				let ownLevel = Self.normalized(AccessLevel.effective(ofTypeDeclaredBy: entry))
+				let ownLevel = AccessLevel.normalized(AccessLevel.effective(ofTypeDeclaredBy: entry))
 				let candidates = extendedType.map { plainTypeDeclarations.candidates(named: $0, mentionedFrom: .declaration(entry)) } ?? []
 				if let extendedType,
 				   let bounding = nameableEntry(of: extendedType, mentionedFrom: entry.moduleName),
@@ -154,7 +154,7 @@ public struct TypeAccessProof: Sendable {
 					)
 				}
 			} else {
-				entryKind = .typeDeclaration(level: Self.normalized(AccessLevel.effective(ofTypeDeclaredBy: entry)))
+				entryKind = .typeDeclaration(level: AccessLevel.normalized(AccessLevel.effective(ofTypeDeclaredBy: entry)))
 			}
 			kinds[type] = entryKind
 			return entryKind
@@ -175,7 +175,7 @@ public struct TypeAccessProof: Sendable {
 		/// The level of `declaration`, capped by the exact proof of the type an extension it is in extends, or `nil` when
 		/// that type's proof is not exact.
 		func exactLevel(of declaration: PlainTypeDeclaration) -> AccessLevel? {
-			let ownLevel = Self.normalized(declaration.levelBeforeExtendedTypeCap)
+			let ownLevel = AccessLevel.normalized(declaration.levelBeforeExtendedTypeCap)
 			guard let extendedType = declaration.extendedType else { return ownLevel }
 			let mentioningModule = MentioningModule.plainDeclaration(declaration)
 			if nameableEntry(of: extendedType, mentionedFrom: declaration.moduleName) != nil {
@@ -641,7 +641,7 @@ public struct TypeAccessProof: Sendable {
 			members.append(ProvingMember(
 				kind: instantiable.declarationType.isExtension ? .instantiateMethod : .initializer,
 				initializer: initializer,
-				ownLevel: normalized(AccessLevel.ownLevel(of: initializer.access, declaredIn: instantiable.access)),
+				ownLevel: AccessLevel.normalized(AccessLevel.ownLevel(of: initializer.access, declaredIn: instantiable.access)),
 				moduleName: instantiable.moduleName,
 				location: initializer.access.declarationStartLocation ?? instantiable.declarationLocation,
 			))
@@ -650,7 +650,7 @@ public struct TypeAccessProof: Sendable {
 			members.append(ProvingMember(
 				kind: .mockMethod(name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName),
 				initializer: mockInitializer,
-				ownLevel: normalized(AccessLevel.ownLevel(of: mockInitializer.access, declaredIn: instantiable.mockDeclarationAccess ?? instantiable.access)),
+				ownLevel: AccessLevel.normalized(AccessLevel.ownLevel(of: mockInitializer.access, declaredIn: instantiable.mockDeclarationAccess ?? instantiable.access)),
 				moduleName: instantiable.mockDeclarationModuleName,
 				location: mockInitializer.access.declarationStartLocation ?? instantiable.mockDeclarationLocation,
 			))
@@ -662,13 +662,13 @@ public struct TypeAccessProof: Sendable {
 	/// declared at the top level, which the compiler then requires the type to reach, and `internal` otherwise.
 	private static func extensionBound(_ extensionAccess: AccessDeclaration, extendedType: TypeDescription) -> AccessLevel {
 		extensionAccess.spellsAccessModifier && extendedType.popNested == nil
-			? normalized(extensionAccess.level.asDefaultOfExtensionMembers)
+			? AccessLevel.normalized(extensionAccess.level.asDefaultOfExtensionMembers)
 			: .internal
 	}
 
 	/// The level an extension spells, as a generated declaration can take it, or `nil` when it spells none.
 	private static func spelledLevel(of extensionAccess: AccessDeclaration) -> AccessLevel? {
-		extensionAccess.spellsAccessModifier ? normalized(extensionAccess.level.asDefaultOfExtensionMembers) : nil
+		extensionAccess.spellsAccessModifier ? AccessLevel.normalized(extensionAccess.level.asDefaultOfExtensionMembers) : nil
 	}
 
 	/// Whether two declarations are in one module: both name it, or both are in the run's own files.
@@ -679,19 +679,6 @@ public struct TypeAccessProof: Sendable {
 			// Without both names, only the run's own files are known to be one module's; a computation of another
 			// module's seam, which passes no `isOwnFile`, has none.
 			[left.sourceFilePath, right.sourceFilePath].allSatisfy { filePath in filePath.flatMap { isOwnFile?($0) } == true }
-		}
-	}
-
-	/// The level a generated declaration can take: `open` counts as `public`, and `fileprivate` and `private` as
-	/// `internal`, which generated code in another file can never name anyway.
-	public static func normalized(_ level: AccessLevel) -> AccessLevel {
-		switch level {
-		case .open, .public:
-			.public
-		case .package:
-			.package
-		case .internal, .fileprivate, .private:
-			.internal
 		}
 	}
 
@@ -808,7 +795,7 @@ public struct TypeAccessProof: Sendable {
 		var uncappedDeclarations = [PlainTypeDeclaration]()
 		var uncappedLevel: AccessLevel?
 		for candidate in candidates {
-			let ownLevel = Self.normalized(candidate.levelBeforeExtendedTypeCap)
+			let ownLevel = AccessLevel.normalized(candidate.levelBeforeExtendedTypeCap)
 			let extendedTypeCap = candidate.extendedType.flatMap { extendedType in
 				cause(of: extendedType, mentionedFrom: .plainDeclaration(candidate), admittedModules: admittedModules).map { (extendedType: extendedType, cause: $0) }
 			}
@@ -1348,7 +1335,7 @@ extension TypeAccessProof {
 				guard !outermostTypeDeclarations.contains(where: { $0.moduleName == mentioningModule.moduleName }) else { return [] }
 				return declarations.filter { declaration in
 					(declaration.moduleName != nil || declaration.sourceFilePath.flatMap { isOwnFile?($0) } != true)
-						&& TypeAccessProof.normalized(declaration.levelBeforeExtendedTypeCap) >= .package
+						&& AccessLevel.normalized(declaration.levelBeforeExtendedTypeCap) >= .package
 				}
 			}
 		}

@@ -42,4 +42,17 @@ public enum AccessLevel: Codable, Hashable, Sendable {
 	public var spelling: String {
 		"\(self)"
 	}
+
+	/// The level a generated declaration can take: `open` counts as `public`, and `fileprivate` and `private` as
+	/// `internal`, which generated code in another file can never name anyway.
+	public static func normalized(_ level: AccessLevel) -> AccessLevel {
+		switch level {
+		case .open, .public:
+			.public
+		case .package:
+			.package
+		case .internal, .fileprivate, .private:
+			.internal
+		}
+	}
 }
