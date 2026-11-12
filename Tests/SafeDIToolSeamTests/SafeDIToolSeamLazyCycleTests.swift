@@ -61,7 +61,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
 			        func __safeDI_t3Builder() -> T3 {
 			            _ = T3.__safeDI_T3_637A336A650792AD.self
-			            return T3(t1Builder: t1Builder)
+			            return T3(__safeDI_t1Builder: t1Builder)
 			        }
 			        let t3Builder = Instantiator<T3>(__safeDI_t3Builder)
 			        self.init(t1Builder: t1Builder, t3Builder: t3Builder)
@@ -70,7 +70,9 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			""",
 			"T3+SafeDI.swift": generatedFileHeader + """
 			extension T3 {
-			    public convenience init(t1Builder: Instantiator<T1>) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public convenience init(__safeDI_t1Builder t1Builder: Instantiator<T1>) {
 			        func __safeDI_t0Builder() -> T0 {
 			            func __safeDI_t1Builder() -> T1 {
 			                T1()
@@ -78,7 +80,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			            let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
 			            func __safeDI_t3Builder() -> T3 {
 			                _ = T3.__safeDI_T3_637A336A650792AD.self
-			                return T3(t1Builder: t1Builder)
+			                return T3(__safeDI_t1Builder: t1Builder)
 			            }
 			            let t3Builder = Instantiator<T3>(__safeDI_t3Builder)
 			            return T0(t1Builder: t1Builder, t3Builder: t3Builder)
@@ -189,10 +191,8 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			""",
 			"Top+SafeDI.swift": generatedFileHeader + """
 			extension Top {
-			    public convenience init(x: X?) {
-			        self.init(__safeDI_x: x)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_x __safeDI_x_: @autoclosure @escaping () -> X?) {
 			        let x = LazilyInstantiated<X?>(__safeDI_x_)
 			        func __safeDI_aBuilder(x: X?) -> A {
@@ -266,6 +266,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			""",
 			"Mid+SafeDI.swift": generatedFileHeader + """
 			extension Mid {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public convenience init() {
 			        let x = X(renamed: nil)
 			        #sourceLocation(file: "\(output.fixtures["Mid.swift"])", line: 10)
@@ -369,7 +370,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		                        return AnyRouting(__safeDI_routerBuilder())
 		                    }
 		                }
-		                return Service(routerBuilder: __safeDI_routerBuilder_Service)
+		                return Service(__safeDI_routerBuilder: __safeDI_routerBuilder_Service)
 		            }
 		            let service: Service = __safeDI_service()
 		            func __safeDI_midBuilder() -> Mid {
@@ -489,7 +490,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		                        return AnyRouting(__safeDI_routerBuilder())
 		                    }
 		                }
-		                return Service(routerBuilder: __safeDI_routerBuilder_Service)
+		                return Service(__safeDI_routerBuilder: __safeDI_routerBuilder_Service)
 		            }
 		            let service: Service = __safeDI_service()
 		            func __safeDI_midBuilder() -> Mid {
@@ -582,7 +583,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
 			        func __safeDI_t3() -> T3 {
 			            _ = T3.__safeDI_T3_637A336A650792AD.self
-			            return T3(t1Builder: t1Builder)
+			            return T3(__safeDI_t1Builder: t1Builder)
 			        }
 			        let t3: T3 = __safeDI_t3()
 			        self.init(t1Builder: t1Builder, t3: t3)
@@ -591,7 +592,9 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			""",
 			"T3+SafeDI.swift": generatedFileHeader + """
 			extension T3 {
-			    public convenience init(t1Builder: Instantiator<T1>) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public convenience init(__safeDI_t1Builder t1Builder: Instantiator<T1>) {
 			        func __safeDI_t0Builder() -> T0 {
 			            func __safeDI_t1Builder() -> T1 {
 			                T1()
@@ -599,7 +602,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			            let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
 			            func __safeDI_t3() -> T3 {
 			                _ = T3.__safeDI_T3_637A336A650792AD.self
-			                return T3(t1Builder: t1Builder)
+			                return T3(__safeDI_t1Builder: t1Builder)
 			            }
 			            let t3: T3 = __safeDI_t3()
 			            return T0(t1Builder: t1Builder, t3: t3)
@@ -679,6 +682,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			""",
 			"S+SafeDI.swift": generatedFileHeader + """
 			extension S {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public convenience init() {
 			        func __safeDI_a() -> A {
 			            func __safeDI_b() -> B {
@@ -971,7 +975,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		                    return AnyRouting(__safeDI_routerBuilder(analytics: analytics))
 		                }
 		            }
-		            return Service(analytics: analytics, routerBuilder: __safeDI_routerBuilder_Service)
+		            return Service(__safeDI_analytics: analytics, __safeDI_routerBuilder: __safeDI_routerBuilder_Service)
 		        }
 		        let service: Service = __safeDI_service()
 		        self.init(analytics: analytics, service: service)

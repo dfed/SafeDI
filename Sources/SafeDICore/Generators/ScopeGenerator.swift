@@ -2276,6 +2276,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The comment the generated `public` declarations' file carries, naming the types they name that SafeDI reads
 		/// no declaration of, or `nil` when the run writes none.
 		var unreadTypeComment: UnreadTypeComment?
+		/// Whether each tier has a plain initializer for people beside the one generated code calls: set only for a seam
+		/// this run generates, from its module's configuration (`SeamResolution.generatesPlainDependencyTreeInitializers`).
+		/// No signature, call or guard reads it, so no caller depends on another module's setting.
+		var generatesPlainInitializers = false
 
 		/// The call of each deferred parameter's autoclosure that an alias the seam declares, keeping the parameter's
 		/// label, is bound from, by label. Such an alias is the parameter's only reader – every declaration beneath it
@@ -4055,10 +4059,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// The initializers a seam's module generates for the seam, followed by the enum every generated call refers to. Each
-	/// tier that defers a parameter has two: a plain one for people, whose parameters are values and whose body forwards
-	/// them, and one only generated code calls, whose labels are prefixed. A tier that defers none has one, under its
-	/// readable labels. The tier's last initializer passes `nil` for the parameters the tier omits and calls the next
-	/// narrower tier; the narrowest builds the tree and calls the seam's own initializer.
+	/// tier has one only generated code calls, whose labels are prefixed, and which every generated call calls; when the
+	/// seam's module sets `generatePlainDependencyTreeInitializers`, it is preceded by a plain one for people, whose
+	/// parameters are values under readable labels and whose body forwards them. A tier's initializer only generated
+	/// code calls passes `nil` for the parameters the tier omits and calls the next narrower tier's; the narrowest builds
+	/// the tree and calls the seam's own initializer.
 	private func generateSeamRootCode(
 		instantiable: Instantiable,
 		seamRoot: SeamRoot,
@@ -4102,12 +4107,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var initializers = [String]()
 		for (index, tier) in signature.tiers.enumerated() {
 			let parameters = tierParameters[index]
-			let hasGeneratedOnlyInitializer = SeamSignature.tierHasGeneratedOnlyInitializer(taking: parameters)
 			let body: String
 			if index == signature.tiers.count - 1 {
-				// The narrowest tier builds the tree, which reads each builder by its internal name: a parameter under that
-				// name, or, on a tier with one initializer, a binding of the parameter, whose own name has no underscore.
-				let builderBindings = hasGeneratedOnlyInitializer ? [] : signature.builders.map { "\(bodyIndent)let \($0.internalName) = \($0.label)" }
+				// The narrowest tier builds the tree, which reads each builder by its internal name, its parameter's name.
 				let generatedProperties = try await generateProperties(
 					propertiesGeneratedLater: propertiesGeneratedLater,
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
@@ -4116,15 +4118,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let argumentList = try instantiable.generateArgumentList(
 					unavailableProperties: unavailableProperties,
 				)
-				body = (builderBindings + memoLines + generatedProperties + ["\(bodyIndent)self.init(\(argumentList))"]).joined(separator: "\n")
+				body = (memoLines + generatedProperties + ["\(bodyIndent)self.init(\(argumentList))"]).joined(separator: "\n")
 			} else {
 				// A wider tier passes `nil` for each parameter it omits: one whose type the tier's callers cannot
 				// see, which only a parameter received only if available can be. It passes a deferred parameter it takes
 				// as its autoclosure's call, which the narrower tier's autoclosure defers in turn.
 				let tierParameterSet = Set(parameters.map(\.property))
-				let narrowerTierParameters = tierParameters[index + 1]
-				let callsGeneratedOnlyInitializer = SeamSignature.tierHasGeneratedOnlyInitializer(taking: narrowerTierParameters)
-				let parameterArguments = narrowerTierParameters.map { parameter in
+				let parameterArguments = tierParameters[index + 1].map { parameter in
 					let value = if !tierParameterSet.contains(parameter.property) {
 						"nil"
 					} else if parameter.isDeferred {
@@ -4132,38 +4132,58 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					} else {
 						parameter.property.label
 					}
-					return "\(callsGeneratedOnlyInitializer ? parameter.generatedOnlyArgumentLabel : parameter.property.label.spelledAsArgumentLabel): \(value)"
+					return "\(parameter.generatedOnlyArgumentLabel): \(value)"
 				}
-				let builderArguments = signature.builders.map { builder in
-					"\(callsGeneratedOnlyInitializer ? builder.generatedOnlyArgumentLabel : builder.label.spelledAsArgumentLabel): \(hasGeneratedOnlyInitializer ? builder.internalName : builder.label)"
-				}
+				let builderArguments = signature.builders.map { "\($0.generatedOnlyArgumentLabel): \($0.internalName)" }
 				body = "\(bodyIndent)self.init(\((parameterArguments + builderArguments).joined(separator: ", ")))"
 			}
 			let marker = tier == .public
 				? seamRoot.unreadTypeComment?.markerLine(namedBy: parameters.map(\.property.typeDescription) + signature.holes.map(\.property.typeDescription), indent: Self.standardIndent).map { "\($0)\n" }
 				: nil
 			let declarationPrefix = "\(Self.standardIndent)\(attributesPrefix)\(tier.spelledOnGeneratedDeclaration) \(initializerKeyword)"
-			if hasGeneratedOnlyInitializer {
+			// A builder the caller passes can be held by a wrapper the seam builds, such as an instantiator, and called later.
+			let plainDocumentation = if signature.builders.isEmpty {
+				"\(Self.standardIndent)/// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained."
+			} else {
+				"\(Self.standardIndent)/// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns."
+			}
+			// A tier that takes no argument has one initializer, `init()`, which the two would both spell and which code of
+			// either kind can call, whatever the setting. Otherwise the initializer only generated code calls points code
+			// people write at the plain one above it where the module generates it, and at the setting where it does not.
+			let takesNoArgument = parameters.isEmpty && signature.builders.isEmpty
+			let generatedOnlyDocumentation = if takesNoArgument {
+				"\(Self.standardIndent)/// Code you write and code SafeDI generates can both call this initializer."
+			} else if seamRoot.generatesPlainInitializers {
+				"""
+				\(Self.standardIndent)/// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				\(Self.standardIndent)/// From code you write, call the initializer above instead.
+				"""
+			} else {
+				"""
+				\(Self.standardIndent)/// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				\(Self.standardIndent)/// To call this type from code you write, set `\(SafeDIConfigurationVisitor.generatePlainDependencyTreeInitializersArgumentLabel): true` in this module's `#\(SafeDIConfigurationVisitor.macroName)`.
+				"""
+			}
+			let generatedOnlyInitializer = """
+			\(generatedOnlyDocumentation)
+			\(declarationPrefix)(\(generatedOnlyParameterList(of: parameters))) {
+			\(body)
+			\(Self.standardIndent)}
+			"""
+			if seamRoot.generatesPlainInitializers, !takesNoArgument {
 				// The plain initializer forwards its values, so the closures the other one holds capture its own parameters
 				// and never what its caller wrote.
 				let forwardedArguments = parameters.map { "\($0.generatedOnlyArgumentLabel): \($0.property.label)" }
 					+ signature.builders.map { "\($0.generatedOnlyArgumentLabel): \($0.label)" }
 				initializers.append("""
-				\(marker ?? "")\(declarationPrefix)(\(plainParameterList(of: parameters))) {
+				\(marker ?? "")\(plainDocumentation)
+				\(declarationPrefix)(\(plainParameterList(of: parameters))) {
 				\(bodyIndent)self.init(\(forwardedArguments.joined(separator: ", ")))
 				\(Self.standardIndent)}
 				""")
-				initializers.append("""
-				\(declarationPrefix)(\(generatedOnlyParameterList(of: parameters))) {
-				\(body)
-				\(Self.standardIndent)}
-				""")
+				initializers.append(generatedOnlyInitializer)
 			} else {
-				initializers.append("""
-				\(marker ?? "")\(declarationPrefix)(\(plainParameterList(of: parameters))) {
-				\(body)
-				\(Self.standardIndent)}
-				""")
+				initializers.append((marker ?? "") + generatedOnlyInitializer)
 			}
 		}
 		// The scope types of the seam's builders before the initializers that build them. A case's forwarded value is as

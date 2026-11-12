@@ -111,10 +111,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		#expect(output.dependencyTreeFiles.keys.sorted() == ["Root+SafeDI.swift", "Screen+SafeDI.swift"])
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User, database: Database, logger: Logger?) {
-		        self.init(__safeDI_user: user, __safeDI_database: database, __safeDI_logger: logger)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping () -> Database, __safeDI_logger: @autoclosure @escaping () -> Logger?) {
 		        let database = LazilyInstantiated<Database>(__safeDI_database)
 		        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
@@ -225,10 +223,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User, database: Database, logger: Logger?, session: Session) {
-		        self.init(__safeDI_user: user, __safeDI_database: database, __safeDI_logger: logger, __safeDI_session: session)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_user user: User, __safeDI_database database: Database, __safeDI_logger: @autoclosure @escaping () -> Logger?, __safeDI_session: @autoclosure @escaping () -> Session) {
 		        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
 		        let session = LazilyInstantiated<Session>(__safeDI_session)
@@ -322,10 +318,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let cachePath = output.fixtures["Cache.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(database: Database, storage: Database) {
-		        self.init(__safeDI_database: database, __safeDI_storage: storage)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_database: @autoclosure @escaping () -> Database, __safeDI_storage: @autoclosure @escaping () -> Database) {
 		        let database = LazilyInstantiated<Database>(__safeDI_database)
 		        let storage = LazilyInstantiated<Database>(__safeDI_storage)
@@ -426,10 +420,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(session: Session?) {
-		        self.init(__safeDI_session: session)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_session: @autoclosure @escaping () -> Session?) {
 		        let session = LazilyInstantiated<Session?>(__safeDI_session)
 		        let detail = Detail(session: session.instance)
@@ -582,10 +574,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(token: Token) {
-		        self.init(__safeDI_token: token)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 		        let token = LazilyInstantiated<Token>(__safeDI_token)
 		        let clock: Clock = Clock.instantiate(token: token.instance)
@@ -775,10 +765,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Internals.Screen {
-		    internal init(token: Token) {
-		        self.init(__safeDI_token: token)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    internal init(__safeDI_token: @autoclosure @escaping () -> Token) {
 		        let token = LazilyInstantiated<Token>(__safeDI_token)
 		        let tracker = Tracker(token: token.instance)
@@ -1056,10 +1044,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(service0: any ServiceProtocol0, service1: any ServiceProtocol1, service10: any ServiceProtocol10, service11: any ServiceProtocol11, service12: any ServiceProtocol12, service13: any ServiceProtocol13, service14: any ServiceProtocol14, service15: any ServiceProtocol15, service16: any ServiceProtocol16, service17: any ServiceProtocol17, service18: any ServiceProtocol18, service19: any ServiceProtocol19, service2: any ServiceProtocol2, service3: any ServiceProtocol3, service4: any ServiceProtocol4, service5: any ServiceProtocol5, service6: any ServiceProtocol6, service7: any ServiceProtocol7, service8: any ServiceProtocol8, service9: any ServiceProtocol9) {
-		        self.init(__safeDI_service0: service0, __safeDI_service1: service1, __safeDI_service10: service10, __safeDI_service11: service11, __safeDI_service12: service12, __safeDI_service13: service13, __safeDI_service14: service14, __safeDI_service15: service15, __safeDI_service16: service16, __safeDI_service17: service17, __safeDI_service18: service18, __safeDI_service19: service19, __safeDI_service2: service2, __safeDI_service3: service3, __safeDI_service4: service4, __safeDI_service5: service5, __safeDI_service6: service6, __safeDI_service7: service7, __safeDI_service8: service8, __safeDI_service9: service9)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_service0: @autoclosure @escaping () -> any ServiceProtocol0, __safeDI_service1: @autoclosure @escaping () -> any ServiceProtocol1, __safeDI_service10: @autoclosure @escaping () -> any ServiceProtocol10, __safeDI_service11: @autoclosure @escaping () -> any ServiceProtocol11, __safeDI_service12: @autoclosure @escaping () -> any ServiceProtocol12, __safeDI_service13: @autoclosure @escaping () -> any ServiceProtocol13, __safeDI_service14: @autoclosure @escaping () -> any ServiceProtocol14, __safeDI_service15: @autoclosure @escaping () -> any ServiceProtocol15, __safeDI_service16: @autoclosure @escaping () -> any ServiceProtocol16, __safeDI_service17: @autoclosure @escaping () -> any ServiceProtocol17, __safeDI_service18: @autoclosure @escaping () -> any ServiceProtocol18, __safeDI_service19: @autoclosure @escaping () -> any ServiceProtocol19, __safeDI_service2: @autoclosure @escaping () -> any ServiceProtocol2, __safeDI_service3: @autoclosure @escaping () -> any ServiceProtocol3, __safeDI_service4: @autoclosure @escaping () -> any ServiceProtocol4, __safeDI_service5: @autoclosure @escaping () -> any ServiceProtocol5, __safeDI_service6: @autoclosure @escaping () -> any ServiceProtocol6, __safeDI_service7: @autoclosure @escaping () -> any ServiceProtocol7, __safeDI_service8: @autoclosure @escaping () -> any ServiceProtocol8, __safeDI_service9: @autoclosure @escaping () -> any ServiceProtocol9) {
 		        let service0 = LazilyInstantiated<any ServiceProtocol0>(__safeDI_service0)
 		        let service1 = LazilyInstantiated<any ServiceProtocol1>(__safeDI_service1)
@@ -1252,7 +1238,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let detailPath = output.fixtures["Detail.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(session: Session?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_session session: Session?) {
 		        func __safeDI_detail() -> Detail {
 		            #sourceLocation(file: "\(detailPath)", line: 7)
 		            let current: Session? = session
@@ -1274,7 +1262,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let session = Session()
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_75FDE4A4CAE60A7D.self
-		            return Screen(session: session)
+		            return Screen(__safeDI_session: session)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(session: session, screen: screen)
@@ -1364,10 +1352,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let summaryPath = output.fixtures["Summary.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(session: Session?) {
-		        self.init(__safeDI_session: session)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_session: @autoclosure @escaping () -> Session?) {
 		        let session = LazilyInstantiated<Session?>(__safeDI_session)
 		        let detail = Detail(session: session.instance)
@@ -1471,10 +1457,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(session: Session?) {
-		        self.init(__safeDI_session: session)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_session: @autoclosure @escaping () -> Session?) {
 		        let session = LazilyInstantiated<Session?>(__safeDI_session)
 		        let detail = Detail(session: session.instance)
@@ -1584,10 +1568,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Internals.Screen {
-		    internal init(user: User, session: Session, token: Token) {
-		        self.init(__safeDI_user: user, __safeDI_session: session, __safeDI_token: token)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    internal init(__safeDI_user user: User, __safeDI_session session: Session, __safeDI_token: @autoclosure @escaping () -> Token) {
 		        let token = LazilyInstantiated<Token>(__safeDI_token)
 		        let tracker = Tracker(token: token.instance)
@@ -1746,6 +1728,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 					}
 					""",
 				],
+				swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration,
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 				buildSettingArguments: ["--build-setting-active-compilation-conditions=[DEBUG]", "--build-setting-other-swift-flags=[]"],
@@ -1808,6 +1791,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 					}
 					""",
 				],
+				swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration,
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
@@ -1894,10 +1878,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(`default`: Token?, token: Token?) {
-			        self.init(__safeDI_default: `default`, __safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_default: @autoclosure @escaping () -> Token?, __safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let `default` = LazilyInstantiated<Token?>(__safeDI_default)
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
@@ -2250,10 +2232,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User, database: Database) {
-		        self.init(__safeDI_user: user, __safeDI_database: database)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping () -> Database) {
 		        let database = LazilyInstantiated<Database>(__safeDI_database)
 		        let cache = Cache(database: database.instance)
@@ -2391,6 +2371,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 					Self.userContent,
 					Self.databaseContent,
 				],
+				swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration,
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
@@ -2642,10 +2623,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		#expect(output.dependencyTreeFiles.keys.sorted() == ["Root+SafeDI.swift"] + (0..<10).map { "Seam\($0)+SafeDI.swift" })
 		#expect(output.dependencyTreeFiles["Seam0+SafeDI.swift"] == generatedFileHeader + """
 		extension Seam0 {
-		    public init(token: Token) {
-		        self.init(__safeDI_token: token)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 		        let token = LazilyInstantiated<Token>(__safeDI_token)
 		        func __safeDI_seam1() -> Seam1 {
@@ -2663,10 +2642,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		""")
 		#expect(output.dependencyTreeFiles["Seam9+SafeDI.swift"] == generatedFileHeader + """
 		extension Seam9 {
-		    public init(token: Token) {
-		        self.init(__safeDI_token: token)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 		        let token = LazilyInstantiated<Token>(__safeDI_token)
 		        let reader = Reader(token: token.instance)
@@ -2862,10 +2839,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// its own computation of the seam's signature, name one enum and pass each parameter.
 		let seamCode = """
 		extension Screen {
-		    public init(user: User, database: Database, logger: Logger?) {
-		        self.init(__safeDI_user: user, __safeDI_database: database, __safeDI_logger: logger)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping () -> Database, __safeDI_logger: @autoclosure @escaping () -> Logger?) {
 		        let database = LazilyInstantiated<Database>(__safeDI_database)
 		        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
@@ -3018,10 +2993,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let callComment = integration.seamCallComment(type: "Session", declaringModule: "Core")
 		let sessionCode = """
 		extension Session {
-		    public init(database: Database) {
-		        self.init(__safeDI_database: database)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_database: @autoclosure @escaping () -> Database) {
 		        let database = LazilyInstantiated<Database>(__safeDI_database)
 		        let store = Store(database: database.instance)
@@ -3036,10 +3009,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		func featureSeamCode(_ typeName: String) -> String {
 			"""
 			extension \(typeName) {
-			    public init(database: Database) {
-			        self.init(__safeDI_database: database)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_database: @autoclosure @escaping () -> Database) {
 			        let database = LazilyInstantiated<Database>(__safeDI_database)
 			        func __safeDI_session() -> Session {
@@ -3151,10 +3122,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		#expect(output.dependencyTreeFiles.keys.sorted() == ["Root+SafeDI.swift"] + (0..<9).map { "Seam\($0)+SafeDI.swift" })
 		#expect(output.dependencyTreeFiles["Seam0+SafeDI.swift"] == generatedFileHeader + """
 		extension Seam0 {
-		    public init(dependency0: Dependency0, dependency1: Dependency1, dependency2: Dependency2, dependency3: Dependency3, dependency4: Dependency4, dependency5: Dependency5, dependency6: Dependency6, dependency7: Dependency7, dependency8: Dependency8) {
-		        self.init(__safeDI_dependency0: dependency0, __safeDI_dependency1: dependency1, __safeDI_dependency2: dependency2, __safeDI_dependency3: dependency3, __safeDI_dependency4: dependency4, __safeDI_dependency5: dependency5, __safeDI_dependency6: dependency6, __safeDI_dependency7: dependency7, __safeDI_dependency8: dependency8)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_dependency0 dependency0: Dependency0, __safeDI_dependency1: @autoclosure @escaping () -> Dependency1, __safeDI_dependency2: @autoclosure @escaping () -> Dependency2, __safeDI_dependency3: @autoclosure @escaping () -> Dependency3, __safeDI_dependency4: @autoclosure @escaping () -> Dependency4, __safeDI_dependency5: @autoclosure @escaping () -> Dependency5, __safeDI_dependency6: @autoclosure @escaping () -> Dependency6, __safeDI_dependency7: @autoclosure @escaping () -> Dependency7, __safeDI_dependency8: @autoclosure @escaping () -> Dependency8) {
 		        let dependency1 = LazilyInstantiated<Dependency1>(__safeDI_dependency1)
 		        let dependency2 = LazilyInstantiated<Dependency2>(__safeDI_dependency2)
@@ -3179,10 +3148,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		""")
 		#expect(output.dependencyTreeFiles["Seam8+SafeDI.swift"] == generatedFileHeader + """
 		extension Seam8 {
-		    public init(dependency8: Dependency8, dependency0: Dependency0, dependency1: Dependency1, dependency2: Dependency2, dependency3: Dependency3, dependency4: Dependency4, dependency5: Dependency5, dependency6: Dependency6, dependency7: Dependency7) {
-		        self.init(__safeDI_dependency8: dependency8, __safeDI_dependency0: dependency0, __safeDI_dependency1: dependency1, __safeDI_dependency2: dependency2, __safeDI_dependency3: dependency3, __safeDI_dependency4: dependency4, __safeDI_dependency5: dependency5, __safeDI_dependency6: dependency6, __safeDI_dependency7: dependency7)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_dependency8 dependency8: Dependency8, __safeDI_dependency0: @autoclosure @escaping () -> Dependency0, __safeDI_dependency1: @autoclosure @escaping () -> Dependency1, __safeDI_dependency2: @autoclosure @escaping () -> Dependency2, __safeDI_dependency3: @autoclosure @escaping () -> Dependency3, __safeDI_dependency4: @autoclosure @escaping () -> Dependency4, __safeDI_dependency5: @autoclosure @escaping () -> Dependency5, __safeDI_dependency6: @autoclosure @escaping () -> Dependency6, __safeDI_dependency7: @autoclosure @escaping () -> Dependency7) {
 		        let dependency0 = LazilyInstantiated<Dependency0>(__safeDI_dependency0)
 		        let dependency1 = LazilyInstantiated<Dependency1>(__safeDI_dependency1)
@@ -3310,10 +3277,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Namespace.Internals.Screen {
-		    internal init(user: User, session: Session, token: Token) {
-		        self.init(__safeDI_user: user, __safeDI_session: session, __safeDI_token: token)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    internal init(__safeDI_user user: User, __safeDI_session session: Session, __safeDI_token: @autoclosure @escaping () -> Token) {
 		        let token = LazilyInstantiated<Token>(__safeDI_token)
 		        let tracker = Tracker(token: token.instance)
@@ -3427,10 +3392,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		let vaultCode = """
 		extension Vault {
-		    public init(database: Database) {
-		        self.init(__safeDI_database: database)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_database: @autoclosure @escaping () -> Database) {
 		        let database = LazilyInstantiated<Database>(__safeDI_database)
 		        let store = Store(database: database.instance)
@@ -3444,10 +3407,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		"""
 		let dashboardCode = """
 		extension Dashboard {
-		    public init(database: Database) {
-		        self.init(__safeDI_database: database)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_database: @autoclosure @escaping () -> Database) {
 		        let database = LazilyInstantiated<Database>(__safeDI_database)
 		        func __safeDI_vault() -> Vault {
@@ -4076,7 +4037,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: .required, summary: .required, caller: .wrapper))
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: LazilyInstantiated<User>) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_user user: LazilyInstantiated<User>) {
 		        let detail = Detail(user: user.instance)
 		        let summary = Summary(user: user)
 		        self.init(detail: detail, summary: summary)
@@ -4096,7 +4059,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let user = LazilyInstantiated<User>(__safeDI_user)
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_F630901E5C2B99B5.self
-		            return Screen(user: user)
+		            return Screen(__safeDI_user: user)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(user: user, screen: screen)
@@ -4115,7 +4078,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: nil, summary: .onlyIfAvailable, caller: .otherWrapper))
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: LazilyInstantiated<User>?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_user user: LazilyInstantiated<User>?) {
 		        let summary = Summary(user: user)
 		        self.init(summary: summary)
 		    }
@@ -4134,7 +4099,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_71C706F9FE9BEAFE.self
-		            return Screen(user: nil)
+		            return Screen(__safeDI_user: nil)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(user: user, screen: screen)
@@ -4153,10 +4118,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: .onlyIfAvailable, summary: nil, caller: .optionalWrapper))
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User?) {
-		        self.init(__safeDI_user: user)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_user: @autoclosure @escaping () -> User?) {
 		        let user = LazilyInstantiated<User?>(__safeDI_user)
 		        let detail = Detail(user: user.instance)
@@ -4195,10 +4158,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: .onlyIfAvailable, summary: nil, caller: .instanceWhoseTreeBuildsScreen))
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User?) {
-		        self.init(__safeDI_user: user)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_user: @autoclosure @escaping () -> User?) {
 		        let user = LazilyInstantiated<User?>(__safeDI_user)
 		        let detail = Detail(user: user.instance)
@@ -4237,7 +4198,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: detail, summary: nil, own: (.required, asWrapper: false), caller: .instance))
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_user user: User) {
 		        let detail = Detail(user: user)
 		        self.init(user: user, detail: detail)
 		    }
@@ -4253,7 +4216,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let user = User()
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_38882A8C29DA6D12.self
-		            return Screen(user: user)
+		            return Screen(__safeDI_user: user)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(user: user, screen: screen)
@@ -4272,7 +4235,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: .required, summary: .required, wrapper: "SendableLazilyInstantiated", caller: .wrapper, detailInSendableBuilder: true))
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: SendableLazilyInstantiated<User>) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_user user: SendableLazilyInstantiated<User>) {
 		        @Sendable func __safeDI_detailBuilder() -> Detail {
 		            Detail(user: user.instance)
 		        }
@@ -4295,7 +4260,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_307551CFFDF140EB.self
-		            return Screen(user: user)
+		            return Screen(__safeDI_user: user)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(user: user, screen: screen)
@@ -4379,7 +4344,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let detailPath = output.fixtures["Detail.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: LazilyInstantiated<User>) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_user user: LazilyInstantiated<User>) {
 		        func __safeDI_detail() -> Detail {
 		            #sourceLocation(file: "\(detailPath)", line: 7)
 		            let currentUser: User = user.instance
@@ -4405,7 +4372,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let user = LazilyInstantiated<User>(__safeDI_user)
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_F630901E5C2B99B5.self
-		            return Screen(user: user)
+		            return Screen(__safeDI_user: user)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(user: user, screen: screen)
@@ -4422,7 +4389,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let detailPath = output.fixtures["Detail.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: LazilyInstantiated<User>) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_user user: LazilyInstantiated<User>) {
 		        func __safeDI_detail() -> Detail {
 		            #sourceLocation(file: "\(detailPath)", line: 7)
 		            let currentUser: User? = user.instance
@@ -4448,7 +4417,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let user = LazilyInstantiated<User>(__safeDI_user)
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_F630901E5C2B99B5.self
-		            return Screen(user: user)
+		            return Screen(__safeDI_user: user)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(user: user, screen: screen)
@@ -4520,7 +4489,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			fixture: Self.labelFormsFixture(detail: .required, summary: .required, caller: .wrapper),
 			seamCode: """
 			extension Screen {
-			    public init(user: LazilyInstantiated<User>) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_user user: LazilyInstantiated<User>) {
 			        let detail = Detail(user: user.instance)
 			        let summary = Summary(user: user)
 			        self.init(detail: detail, summary: summary)
@@ -4540,7 +4511,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			        let user = LazilyInstantiated<User>(__safeDI_user)
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_F630901E5C2B99B5.self<COMMENT>
-			            return Screen(user: user)
+			            return Screen(__safeDI_user: user)
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(user: user, screen: screen)
@@ -4872,10 +4843,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Token?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        func __safeDI_first() -> First {
@@ -4992,10 +4961,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Token?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        func __safeDI_session() -> Session {
@@ -5096,10 +5063,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Panel+SafeDI.swift"] == generatedFileHeader + """
 		extension Internals.Panel {
-		    internal init(session: Session) {
-		        self.init(__safeDI_session: session)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    internal init(__safeDI_session: @autoclosure @escaping () -> Session) {
 		        let session = LazilyInstantiated<Session>(__safeDI_session)
 		        let detail = Detail(session: session.instance)
@@ -5113,10 +5078,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		""")
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(session: Session) {
-		        self.init(__safeDI_session: session)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_session: @autoclosure @escaping () -> Session) {
 		        let session = LazilyInstantiated<Session>(__safeDI_session)
 		        func __safeDI_panel() -> Internals.Panel {
@@ -5160,10 +5123,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Panel+SafeDI.swift"] == generatedFileHeader + """
 		extension Internals.Panel {
-		    internal init(session: Session?) {
-		        self.init(__safeDI_session: session)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    internal init(__safeDI_session: @autoclosure @escaping () -> Session?) {
 		        let session = LazilyInstantiated<Session?>(__safeDI_session)
 		        let detail = Detail(session: session.instance)
@@ -5177,10 +5138,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		""")
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(session: Session?) {
-		        self.init(__safeDI_session: session)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_session: @autoclosure @escaping () -> Session?) {
 		        let session = LazilyInstantiated<Session?>(__safeDI_session)
 		        func __safeDI_panel() -> Internals.Panel {
@@ -5277,6 +5236,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let callComment = integration.seamCallComment(type: "Service", declaringModule: "Core")
 		let serviceCode = """
 		extension Service {
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
 		        let cache = Cache()
 		        self.init(cache: cache)
@@ -5595,7 +5555,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// `Feature.Screen` instantiates `logger: Logger`, which this run builds as the additional directory's
 		// `Feature.Logger`, which receives `token`: the generated initializer takes `name` and `token`. The callers build
 		// the top-level `Logger`, which receives nothing, so for them it takes `name` alone, which the hand-written
-		// `init(name:)` can be called with: the error names the declaration the callers cannot see.
+		// `init(name:)` can be called with. The module generates the plain initializers, so the callers' computation
+		// checks the readable labels and throws: the error names the declaration the callers cannot see.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
 			\(fixtures["Screen.swift"]):2:5: error: SafeDI cannot generate the dependency tree of `Feature.Screen`: the initializer SafeDI generates for it depends on `Feature.Logger`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see that declaration, so their calls would not match the initializer. Declare `Feature.Logger` in a file of this module, or of a module it depends on.
@@ -5605,7 +5566,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 				swiftFileContent: [
 					"""
 					#SafeDIConfiguration(
-					    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+					    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"],
+					    generatePlainDependencyTreeInitializers: true
 					)
 					""",
 					"""
@@ -5645,6 +5607,109 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 					public extension Feature {
 					    @Instantiable
 					    struct Logger: Instantiable {
+					        public init(token: Token) {
+					            self.token = token
+					        }
+
+					        @Received let token: Token
+					    }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				pluginTargetGraph: { inputSwiftFilePaths in
+					PluginTargetGraph(
+						target: PluginTargetGraph.Target(moduleName: "App", packageID: "application", sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: []),
+						dependencyTargets: [],
+					)
+				},
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingReceiverOfCollidingLabel_whenCallersComputationFindsHandWrittenInitializerTakingReadableLabels() async {
+		// This run builds `Feature.Screen`'s `alpha` and `beta` as the additional directory's `Feature.Alpha`, which receives
+		// `token`, and `Feature.Beta`, which receives `name`: the generated initializer takes `name` and `token`. The callers
+		// build the top-level `Alpha`, which receives `token`, and `Beta`, which receives nothing, so for them it takes
+		// `token` alone, which the hand-written `init(token:)` can be called with. The callers' computation throws for that
+		// collision, which names `token`, so the error names `Feature.Alpha`, the receiver of `token`, and not
+		// `Feature.Beta`, which is declared first.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Screen.swift"]):2:5: error: SafeDI cannot generate the dependency tree of `Feature.Screen`: the initializer SafeDI generates for it depends on `Feature.Alpha`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see that declaration, so their calls would not match the initializer. Declare `Feature.Alpha` in a file of this module, or of a module it depends on.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#SafeDIConfiguration(
+					    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"],
+					    generatePlainDependencyTreeInitializers: true
+					)
+					""",
+					"""
+					public extension Feature {
+					    @Instantiable(generateDependencyTree: true)
+					    struct Screen: Instantiable {
+					        public init(alpha: Alpha, beta: Beta) {
+					            self.alpha = alpha
+					            self.beta = beta
+					        }
+
+					        public init(token: Token) {
+					            self.init(alpha: Alpha(token: token), beta: Beta(name: Name()))
+					        }
+
+					        @Instantiated let alpha: Alpha
+					        @Instantiated let beta: Beta
+					    }
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Alpha: Instantiable {
+					    public init(token: Token) {
+					        self.token = token
+					    }
+
+					    @Received let token: Token
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Beta: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					public struct Token {
+					    public init() {}
+					}
+
+					public struct Name {
+					    public init() {}
+					}
+					""",
+				],
+				additionalDirectorySwiftFileContent: [
+					"""
+					public enum Feature {}
+
+					public extension Feature {
+					    @Instantiable
+					    struct Beta: Instantiable {
+					        public init(name: Name) {
+					            self.name = name
+					        }
+
+					        @Received let name: Name
+					    }
+
+					    @Instantiable
+					    struct Alpha: Instantiable {
 					        public init(token: Token) {
 					            self.token = token
 					        }
@@ -6941,14 +7006,20 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		/// - Parameters:
 		///   - memo: The line binding a deferred parameter's `LazilyInstantiated`, which `Summary` reads the instance of, or
 		///     empty for a parameter taken by value.
-		///   - generatedOnlyParameter: The parameter of the initializer only generated code calls, for a parameter the tier
-		///     defers, or `nil` for a tier with one initializer.
-		func childCell(_ alias: AliasOfProvidedProperty, _ neighbor: LabelNeighbor, parameter: String, generatedOnlyParameter: String? = nil, memo: String = "", hash: String, rootBinding: String, rootCall: String, rootInitializer: String) -> AliasOfProvidedPropertyCell {
+		///   - parameter: The parameter of the initializer only generated code calls, or empty for a seam that takes none.
+		func childCell(_ alias: AliasOfProvidedProperty, _ neighbor: LabelNeighbor, parameter: String, memo: String = "", hash: String, rootBinding: String, rootCall: String, rootInitializer: String) -> AliasOfProvidedPropertyCell {
 			let summary = neighbor == .none ? "" : "\n        let summary = Summary(user: user\(memo.isEmpty ? "" : ".instance"))"
 			let initializerCall = neighbor == .none ? "self.init(detail: detail)" : "self.init(detail: detail, summary: summary)"
 			let inlineSummary = neighbor == .none ? "" : "\n            let summary = Summary(user: user)"
 			let inlineCall = neighbor == .none ? "return Screen(detail: detail)" : "return Screen(detail: detail, summary: summary)"
-			let initializerOpening = generatedOnlyParameter.map { "    public init(\(parameter)) {\n        self.init(__safeDI_user: user)\n    }\n\n    public init(\($0)) {" } ?? "    public init(\(parameter)) {"
+			let initializerOpening = parameter.isEmpty ? """
+			    /// Code you write and code SafeDI generates can both call this initializer.
+			    public init() {
+			""" : """
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(\(parameter)) {
+			"""
 			return .init(alias: alias, neighbor: neighbor, expectation: .generates(
 				seam: """
 				extension Screen {
@@ -7012,13 +7083,14 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		"""
 		var cells = [
 			childCell(.onChild, .none, parameter: "", hash: noParameterHash, rootBinding: "", rootCall: "Screen()", rootInitializer: "self.init(screen: screen)"),
-			childCell(.onChild, .otherType, parameter: "user: Name", generatedOnlyParameter: "__safeDI_user __safeDI_user_: @autoclosure @escaping () -> Name", memo: "\n        let user = LazilyInstantiated<Name>(__safeDI_user_)", hash: "F73835999917C6CA", rootBinding: nameBinding, rootCall: "Screen(__safeDI_user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
-			childCell(.onChild, .instantiator, parameter: "user: Instantiator<User>", hash: "0C022EBEABB7BCBE", rootBinding: instantiatorBinding, rootCall: "Screen(user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
-			childCell(.onChild, .optionalWrapper, parameter: "user: LazilyInstantiated<User>?", hash: "71C706F9FE9BEAFE", rootBinding: wrapperBinding, rootCall: "Screen(user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
+			childCell(.onChild, .otherType, parameter: "__safeDI_user __safeDI_user_: @autoclosure @escaping () -> Name", memo: "\n        let user = LazilyInstantiated<Name>(__safeDI_user_)", hash: "F73835999917C6CA", rootBinding: nameBinding, rootCall: "Screen(__safeDI_user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
+			childCell(.onChild, .instantiator, parameter: "__safeDI_user user: Instantiator<User>", hash: "0C022EBEABB7BCBE", rootBinding: instantiatorBinding, rootCall: "Screen(__safeDI_user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
+			childCell(.onChild, .optionalWrapper, parameter: "__safeDI_user user: LazilyInstantiated<User>?", hash: "71C706F9FE9BEAFE", rootBinding: wrapperBinding, rootCall: "Screen(__safeDI_user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
 		]
 		let seamRootCell = AliasOfProvidedPropertyCell(alias: .onSeamRoot, neighbor: .none, expectation: .generates(
 			seam: """
 			extension Screen {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
 			        let user = User()
 			        #sourceLocation(file: "<SCREEN-PATH>", line: 10)
@@ -7512,7 +7584,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		)
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_user user: User) {
 		        let summary = Summary(user: user)
 		        self.init(user: user, summary: summary)
 		    }
@@ -7527,7 +7601,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init() {
 		        func __safeDI_screenBuilder(user: User) -> Screen {
 		            _ = Screen.__safeDI_Screen_38882A8C29DA6D12.self
-		            return Screen(user: user)
+		            return Screen(__safeDI_user: user)
 		        }
 		        let screenBuilder = Instantiator<Screen> {
 		            __safeDI_screenBuilder(user: $0)
@@ -7717,10 +7791,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			let initializerCall = declaresBuilderFirst ? "self.init(\(builder): \(builder), \(leafLabel): \(leafLabel))" : "self.init(\(leafLabel): \(leafLabel), \(builder): \(builder))"
 			return """
 			extension \(name) {
-			    public init(token: Token) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			\(declaresBuilderFirst ? builderCode + leafCode : leafCode + builderCode)        \(initializerCall)
@@ -7936,10 +8008,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let detailPath = output.fixtures["Detail.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(token: Token) {
-		        self.init(__safeDI_token: token)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 		        let token = LazilyInstantiated<Token>(__safeDI_token)
 		        func __safeDI_detail() -> Detail {
@@ -7965,10 +8035,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		""")
 		#expect(output.dependencyTreeFiles["Panel+SafeDI.swift"] == generatedFileHeader + """
 		extension Panel {
-		    public init(token: Token) {
-		        self.init(__safeDI_token: token)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 		        let token = LazilyInstantiated<Token>(__safeDI_token)
 		        let consumer = Consumer(token: token.instance)
@@ -8000,10 +8068,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Panel+SafeDI.swift": generatedFileHeader + """
 			extension Panel {
-			    public init(token: Token?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        func __safeDI_screenBuilder() -> Screen {
@@ -8034,10 +8100,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Token?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        func __safeDI_detail() -> Detail {
@@ -8427,7 +8491,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		)
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: LazilyInstantiated<User>) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_user user: LazilyInstantiated<User>) {
 		        let detail = Detail(user: user.instance)
 		        self.init(user: user, detail: detail)
 		    }
@@ -8442,7 +8508,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init() {
 		        func __safeDI_screenBuilder(user: LazilyInstantiated<User>) -> Screen {
 		            _ = Screen.__safeDI_Screen_F630901E5C2B99B5.self
-		            return Screen(user: user)
+		            return Screen(__safeDI_user: user)
 		        }
 		        let screenBuilder = Instantiator<Screen> {
 		            __safeDI_screenBuilder(user: $0)
@@ -8567,10 +8633,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		)
 		#expect(output.dependencyTreeFiles["Inner+SafeDI.swift"] == generatedFileHeader + """
 		extension Inner {
-		    public init(user: User) {
-		        self.init(__safeDI_user: user)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 		        let user = LazilyInstantiated<User>(__safeDI_user)
 		        let summary = Summary(user: user.instance)
@@ -8584,7 +8648,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		""")
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: LazilyInstantiated<User>) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_user user: LazilyInstantiated<User>) {
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_08AA1A656B91D4BA.self
 		            return Inner(__safeDI_user: user.instance)
@@ -8607,7 +8673,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let user = LazilyInstantiated<User>(__safeDI_user)
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_F630901E5C2B99B5.self
-		            return Screen(user: user)
+		            return Screen(__safeDI_user: user)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(user: user, screen: screen)
@@ -8672,10 +8738,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		)
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: Feature.User) {
-		        self.init(__safeDI_user: user)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_user: @autoclosure @escaping () -> Feature.User) {
 		        let user = LazilyInstantiated<Feature.User>(__safeDI_user)
 		        let detail = Detail(user: user.instance)
@@ -8789,7 +8853,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		)
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(logger: LazilyInstantiated<any Logger>) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_logger logger: LazilyInstantiated<any Logger>) {
 		        let detail = Detail(logger: logger.instance)
 		        let summary = Summary(logger: logger)
 		        let preview = Preview(logger: logger.instance)
@@ -8810,7 +8876,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let logger = LazilyInstantiated<any Logger>(__safeDI_logger)
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_756559A0816FE635.self
-		            return Screen(logger: logger)
+		            return Screen(__safeDI_logger: logger)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(logger: logger, screen: screen)
@@ -8907,10 +8973,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let detailPath = output.fixtures["Detail.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(token: Token?) {
-		        self.init(__safeDI_token: token)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 		        let token = LazilyInstantiated<Token?>(__safeDI_token)
 		        func __safeDI_detail() -> Detail {
@@ -9036,10 +9100,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		)
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User) {
-		        self.init(__safeDI_user: user)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 		        let user = LazilyInstantiated<User>(__safeDI_user)
 		        func __safeDI_detailBuilder() -> Detail {

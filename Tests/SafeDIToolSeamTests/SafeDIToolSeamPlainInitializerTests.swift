@@ -24,7 +24,8 @@ import Testing
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
-/// How a person calls a seam, against how generated code does. A tier that defers a parameter has two initializers: a
+/// How a person calls a seam, against how generated code does. A seam's module that sets
+/// `generatePlainDependencyTreeInitializers: true`, as every seam's module here does, gives each tier two initializers: a
 /// plain one that takes values, whose arguments a call evaluates when it is made and keeps nothing of the caller, and
 /// one only generated code calls, with `__safeDI_`-prefixed labels, which defers each value so a `LazilyInstantiated`
 /// the caller holds is created where it would be inline. These tests compile and run what the tool really emits.
@@ -73,12 +74,15 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 	}
 	"""
 
+	/// The configuration of every module here that declares a seam, which a hand-written call needs.
+	private static let configuration = ["SafeDIConfiguration.swift": "#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n"]
+
 	/// `featureFiles` and `handWrittenCalls` run through the tool and compiled, as a path the comparator can run.
 	private mutating func handWrittenCallPath(_ handWrittenCalls: String) async throws -> DifferentialValuePath {
 		let files = Self.featureFiles + [Self.config + "\n\n" + handWrittenCalls]
-		let output = try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let output = try await executeSafeDIToolTest(swiftFileContent: files, swiftFileContentByFilePath: Self.configuration, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		return DifferentialValuePath(
-			fixtureFiles: Dictionary(uniqueKeysWithValues: files.enumerated().map { ("File\($0.offset).swift", $0.element) }),
+			fixtureFiles: Dictionary(uniqueKeysWithValues: files.enumerated().map { ("File\($0.offset).swift", $0.element) }).merging(Self.configuration) { first, _ in first },
 			generatedFiles: output.dependencyTreeFiles,
 		)
 	}
@@ -695,7 +699,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 	private mutating func timingPath(featureFiles: [String], appFiles: [String], appFileNamedScenarios: String) async throws -> DifferentialValuePath {
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
-				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: featureFiles),
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: featureFiles, swiftFileContentByFilePath: Self.configuration),
 				ModuleFixture(name: "App", packageName: "Store", swiftFileContent: appFiles + [appFileNamedScenarios], dependencies: ["Feature"]),
 			],
 			integration: .moduleInfo,
@@ -705,7 +709,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 			Dictionary(uniqueKeysWithValues: files.enumerated().map { ("File\($0.offset).swift", $0.element) })
 		}
 		return try DifferentialValuePath(modules: [
-			DifferentialValueModule(name: "Feature", packageName: "Shop", fixtureFiles: fixtureFiles(featureFiles), generatedFiles: #require(output.modules["Feature"]).generatedFiles),
+			DifferentialValueModule(name: "Feature", packageName: "Shop", fixtureFiles: fixtureFiles(featureFiles).merging(Self.configuration) { first, _ in first }, generatedFiles: #require(output.modules["Feature"]).generatedFiles),
 			DifferentialValueModule(name: "App", packageName: "Store", dependencyModuleNames: ["Feature"], fixtureFiles: fixtureFiles(appFiles + [appFileNamedScenarios]), generatedFiles: #require(output.modules["App"]).generatedFiles),
 		])
 	}
@@ -965,13 +969,16 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 			seamFixtureType(named: "Feature", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let eager: EagerReader", "@Instantiated let lazy: LazilyInstantiated<LazyReader>"]),
 			Self.user,
 		]
-		let output = try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let output = try await executeSafeDIToolTest(swiftFileContent: files, swiftFileContentByFilePath: Self.configuration, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.dependencyTreeFiles["Feature+SafeDI.swift"] == generatedFileHeader + """
 		extension Feature {
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
 		    public convenience init(a: User, b: User) {
 		        self.init(__safeDI_a: a, __safeDI_b: b)
 		    }
 
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_a: @autoclosure @escaping () -> User, __safeDI_b: @autoclosure @escaping () -> User) {
 		        let a = LazilyInstantiated<User>(__safeDI_a)
 		        let b = LazilyInstantiated<User>(__safeDI_b)
@@ -1052,9 +1059,9 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 
 	/// `files` run through the tool, with `callEachTier()`, which calls each tier by hand, compiled and run.
 	private mutating func tierOutput(of files: [String], expectingDescriptionOf builderTypes: (String, String)) async throws -> TestOutput {
-		let output = try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let output = try await executeSafeDIToolTest(swiftFileContent: files, swiftFileContentByFilePath: Self.configuration, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let path = DifferentialValuePath(
-			fixtureFiles: Dictionary(uniqueKeysWithValues: files.enumerated().map { ("File\($0.offset).swift", $0.element) }),
+			fixtureFiles: Dictionary(uniqueKeysWithValues: files.enumerated().map { ("File\($0.offset).swift", $0.element) }).merging(Self.configuration) { first, _ in first },
 			generatedFiles: output.dependencyTreeFiles,
 		)
 		let description = try DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("callEachTier()")], filesToDelete: &filesToDelete)
@@ -1077,18 +1084,24 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		let output = try await tierOutput(of: files, expectingDescriptionOf: ("Instantiator<Reader>", "Instantiator<SecretReader>"))
 		#expect(output.dependencyTreeFiles["Seam+SafeDI.swift"] == generatedFileHeader + """
 		extension Seam {
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
 		    public convenience init(c: User) {
 		        self.init(__safeDI_c: c)
 		    }
 
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_c: @autoclosure @escaping () -> User) {
 		        self.init(__safeDI_c: __safeDI_c(), __safeDI_secret: nil)
 		    }
 
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
 		    internal convenience init(c: User, secret: Secret?) {
 		        self.init(__safeDI_c: c, __safeDI_secret: secret)
 		    }
 
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
 		    internal convenience init(__safeDI_c: @autoclosure @escaping () -> User, __safeDI_secret: @autoclosure @escaping () -> Secret?) {
 		        let c = LazilyInstantiated<User>(__safeDI_c)
 		        let secret = LazilyInstantiated<Secret?>(__safeDI_secret)
@@ -1112,21 +1125,32 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_emitsOneInitializerForWideTierAndTwoForNarrow_whenOnlyNarrowTierDefers() async throws {
-		// The `public` tier takes only a wrapper, by value, so it has one initializer, which calls the narrow tier's prefixed
-		// one; the `internal` tier defers `secret`, so its wrapper parameter is prefixed too, keeping the name its tree reads.
+	mutating func generate_emitsTwoInitializersPerTier_whenOnlyNarrowTierDefers() async throws {
+		// The `public` tier takes only a wrapper, by value, and still has both initializers: its prefixed one calls the narrow
+		// tier's prefixed one, and the `internal` tier defers `secret`, binding its wrapper parameter to the name its tree
+		// reads.
 		let files = Self.tierFiles(parameterType: "Instantiator<User>", secretType: "Secret?", value: "Instantiator<User> { User() }")
 		let output = try await tierOutput(of: files, expectingDescriptionOf: ("Instantiator<Reader>", "Instantiator<SecretReader>"))
 		#expect(output.dependencyTreeFiles["Seam+SafeDI.swift"] == generatedFileHeader + """
 		extension Seam {
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
 		    public convenience init(c: Instantiator<User>) {
+		        self.init(__safeDI_c: c)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public convenience init(__safeDI_c c: Instantiator<User>) {
 		        self.init(__safeDI_c: c, __safeDI_secret: nil)
 		    }
 
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
 		    internal convenience init(c: Instantiator<User>, secret: Secret?) {
 		        self.init(__safeDI_c: c, __safeDI_secret: secret)
 		    }
 
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
 		    internal convenience init(__safeDI_c c: Instantiator<User>, __safeDI_secret: @autoclosure @escaping () -> Secret?) {
 		        let secret = LazilyInstantiated<Secret?>(__safeDI_secret)
 		        func __safeDI_readerBuilder() -> Reader {
@@ -1149,16 +1173,30 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_emitsOneInitializerPerTier_whenNoTierDefers() async throws {
+	mutating func generate_emitsTwoInitializersPerTier_whenNoTierDefers() async throws {
 		let files = Self.tierFiles(parameterType: "Instantiator<User>", secretType: "Instantiator<Secret>?", value: "Instantiator<User> { User() }")
 		let output = try await tierOutput(of: files, expectingDescriptionOf: ("Instantiator<Reader>", "Instantiator<SecretReader>"))
 		#expect(output.dependencyTreeFiles["Seam+SafeDI.swift"] == generatedFileHeader + """
 		extension Seam {
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
 		    public convenience init(c: Instantiator<User>) {
-		        self.init(c: c, secret: nil)
+		        self.init(__safeDI_c: c)
 		    }
 
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public convenience init(__safeDI_c c: Instantiator<User>) {
+		        self.init(__safeDI_c: c, __safeDI_secret: nil)
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
 		    internal convenience init(c: Instantiator<User>, secret: Instantiator<Secret>?) {
+		        self.init(__safeDI_c: c, __safeDI_secret: secret)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    internal convenience init(__safeDI_c c: Instantiator<User>, __safeDI_secret secret: Instantiator<Secret>?) {
 		        func __safeDI_readerBuilder() -> Reader {
 		            Reader(c: c)
 		        }
@@ -1184,18 +1222,24 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		let output = try await tierOutput(of: files, expectingDescriptionOf: ("SendableInstantiator<Reader>", "SendableInstantiator<SecretReader>"))
 		#expect(output.dependencyTreeFiles["Seam+SafeDI.swift"] == generatedFileHeader + """
 		extension Seam {
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
 		    public convenience init(c: User) {
 		        self.init(__safeDI_c: c)
 		    }
 
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_c: @autoclosure @escaping @Sendable () -> User) {
 		        self.init(__safeDI_c: __safeDI_c(), __safeDI_secret: nil)
 		    }
 
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
 		    internal convenience init(c: User, secret: Secret?) {
 		        self.init(__safeDI_c: c, __safeDI_secret: secret)
 		    }
 
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
 		    internal convenience init(__safeDI_c: @autoclosure @escaping @Sendable () -> User, __safeDI_secret: @autoclosure @escaping @Sendable () -> Secret?) {
 		        let c = SendableLazilyInstantiated<User>(__safeDI_c)
 		        let secret = SendableLazilyInstantiated<Secret?>(__safeDI_secret)
@@ -1249,13 +1293,16 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 			}
 			""",
 		]
-		let output = try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let output = try await executeSafeDIToolTest(swiftFileContent: files, swiftFileContentByFilePath: Self.configuration, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.dependencyTreeFiles["Seam+SafeDI.swift"] == generatedFileHeader + """
 		extension Seam {
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained.
 		    public init(`default`: User, `inout`: User, `my label`: User) {
 		        self.init(__safeDI_default: `default`, __safeDI_inout: `inout`, `__safeDI_my label`: `my label`)
 		    }
 
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
 		    public init(__safeDI_default: @autoclosure @escaping () -> User, __safeDI_inout: @autoclosure @escaping () -> User, `__safeDI_my label`: @autoclosure @escaping () -> User) {
 		        let `default` = LazilyInstantiated<User>(__safeDI_default)
 		        let `inout` = LazilyInstantiated<User>(__safeDI_inout)
@@ -1300,16 +1347,16 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_declaresBuilderWithoutUnderscoredName_whenTierDefersNothing() async throws {
-		// A tier that defers nothing has one initializer, which documentation must list, so no parameter name has an
-		// underscore; the tree still reads the builder by its reserved name, bound first, so a declaration of the builder's
+	mutating func generate_declaresPlainBuilderWithoutUnderscoredName_whenTierDefersNothing() async throws {
+		// The plain initializer, which documentation must list, declares no underscored name, and forwards the builder to
+		// the initializer generated code calls, whose tree reads it by its reserved name, so a declaration of the builder's
 		// label in the tree cannot hide it.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 					"public protocol UserService: Sendable {}",
 					seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let userService: any UserService"]),
-				]),
+				], swiftFileContentByFilePath: Self.configuration),
 				ModuleFixture(name: "App", packageName: "Store", swiftFileContent: [
 					"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service"]),
 					"""
@@ -1333,8 +1380,14 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		        public struct userService_Values {}
 		    }
 
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public init(userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
-		        let __safeDI_userServiceBuilder = userServiceBuilder
+		        self.init(__safeDI_userServiceBuilder: userServiceBuilder)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
 		        let userService: any UserService = __safeDI_userServiceBuilder(.userService(SafeDIScope_UserService.userService_Values()))
 		        self.init(userService: userService)
 		    }

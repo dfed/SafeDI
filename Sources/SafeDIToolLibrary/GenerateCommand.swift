@@ -1224,6 +1224,8 @@ public struct Generate: AsyncParsableCommand {
 			// Every build tool plugin's run is given a manifest or an output directory. Any other run – Bazel's, Tuist's, a
 			// custom script's – reads only the modules whose module info it is given.
 			carriesUnreadTypeComment: swiftManifest == nil && outputDirectory == nil,
+			// The configuration of the module this run generates, which declares the seams it generates.
+			generatesPlainDependencyTreeInitializers: configuration?.generatePlainDependencyTreeInitializers ?? false,
 		)
 	}
 

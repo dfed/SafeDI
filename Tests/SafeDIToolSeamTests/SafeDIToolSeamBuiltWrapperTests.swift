@@ -117,8 +117,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        }
 				    }
 
-				    public init(gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
-				        let __safeDI_gadgetBuilder = gadgetBuilder
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    public init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 				        let analytics = Analytics()
 				        func __safeDI_part() -> any Gadget {
 				            __safeDI_gadgetBuilder(.part(SafeDIScope_Gadget.part_Values(analytics: analytics)))
@@ -139,8 +140,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        public struct Stage2 {}
 				    }
 
-				    public init(gadgetBuilder_part: @escaping (SafeDIStagedScope_Gadget_part.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_part.Stage2) -> any Gadget) {
-				        let __safeDI_gadgetBuilder_part = gadgetBuilder_part
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    public init(__safeDI_gadgetBuilder_part: @escaping (SafeDIStagedScope_Gadget_part.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_part.Stage2) -> any Gadget) {
 				        let analytics = Analytics()
 				        let __safeDI_gadgetBuilder_part_Stage2 = __safeDI_gadgetBuilder_part(SafeDIStagedScope_Gadget_part.Stage1(analytics: analytics))
 				        @Sendable func __safeDI_part() -> any Gadget {
@@ -162,8 +164,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        }
 				    }
 
-				    public init(panelBuilder: @escaping (SafeDIScope_Panel) -> Panel) {
-				        let __safeDI_panelBuilder = panelBuilder
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    public init(__safeDI_panelBuilder: @escaping (SafeDIScope_Panel) -> Panel) {
 				        let analytics = Analytics()
 				        let part = Instantiator<Panel> {
 				            __safeDI_panelBuilder(.part(SafeDIScope_Panel.part_Values(analytics: analytics), $0))
@@ -185,8 +188,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        public typealias SendableLastStage<__safeDI_Forwarded> = @Sendable (Stage2, __safeDI_Forwarded) -> Panel
 				    }
 
-				    public init(panelBuilder_part: @escaping (SafeDIStagedScope_Panel_part.Stage1) -> SafeDIStagedScope_Panel_part.SendableLastStage<Panel.ForwardedProperties>) {
-				        let __safeDI_panelBuilder_part = panelBuilder_part
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    public init(__safeDI_panelBuilder_part: @escaping (SafeDIStagedScope_Panel_part.Stage1) -> SafeDIStagedScope_Panel_part.SendableLastStage<Panel.ForwardedProperties>) {
 				        let analytics = Analytics()
 				        let __safeDI_panelBuilder_part_Stage2 = __safeDI_panelBuilder_part(SafeDIStagedScope_Panel_part.Stage1(analytics: analytics))
 				        let part = SendableInstantiator<Panel> {
@@ -207,8 +211,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        }
 				    }
 
-				    public init(namedGadgetBuilder: @escaping (SafeDIScope_NamedGadget) -> AnyGadget) {
-				        let __safeDI_namedGadgetBuilder = namedGadgetBuilder
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    public init(__safeDI_namedGadgetBuilder: @escaping (SafeDIScope_NamedGadget) -> AnyGadget) {
 				        let analytics = Analytics()
 				        let part = ErasedInstantiator<String, AnyGadget> {
 				            __safeDI_namedGadgetBuilder(.part(SafeDIScope_NamedGadget.part_Values(analytics: analytics), $0))
@@ -230,8 +235,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        public typealias SendableLastStage<__safeDI_Forwarded> = @Sendable (Stage2, __safeDI_Forwarded) -> AnyGadget
 				    }
 
-				    public init(namedGadgetBuilder_part: @escaping (SafeDIStagedScope_NamedGadget_part.Stage1) -> SafeDIStagedScope_NamedGadget_part.SendableLastStage<String>) {
-				        let __safeDI_namedGadgetBuilder_part = namedGadgetBuilder_part
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    public init(__safeDI_namedGadgetBuilder_part: @escaping (SafeDIStagedScope_NamedGadget_part.Stage1) -> SafeDIStagedScope_NamedGadget_part.SendableLastStage<String>) {
 				        let analytics = Analytics()
 				        let __safeDI_namedGadgetBuilder_part_Stage2 = __safeDI_namedGadgetBuilder_part(SafeDIStagedScope_NamedGadget_part.Stage1(analytics: analytics))
 				        let part = SendableErasedInstantiator<String, AnyGadget> {
@@ -258,7 +264,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				                    return __safeDI_part()
 				                }
 				            }
-				            return Host(gadgetBuilder: __safeDI_gadgetBuilder_Host)
+				            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host)
 				"""
 			case .sendableLazilyInstantiated:
 				"""
@@ -272,7 +278,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				                }
 				                return __safeDI_gadgetBuilder_part_Stage2
 				            }
-				            return Host(gadgetBuilder_part: __safeDI_gadgetBuilder_part)
+				            return Host(__safeDI_gadgetBuilder_part: __safeDI_gadgetBuilder_part)
 				"""
 			case .instantiator:
 				"""
@@ -286,7 +292,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				                    return __safeDI_part(name: __safeDI_forwarded)
 				                }
 				            }
-				            return Host(panelBuilder: __safeDI_panelBuilder_Host)
+				            return Host(__safeDI_panelBuilder: __safeDI_panelBuilder_Host)
 				"""
 			case .sendableInstantiator:
 				"""
@@ -300,7 +306,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				                }
 				                return __safeDI_panelBuilder_part_Stage2
 				            }
-				            return Host(panelBuilder_part: __safeDI_panelBuilder_part)
+				            return Host(__safeDI_panelBuilder_part: __safeDI_panelBuilder_part)
 				"""
 			case .erasedInstantiator:
 				"""
@@ -314,7 +320,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				                    return AnyGadget(__safeDI_part(name: __safeDI_forwarded))
 				                }
 				            }
-				            return Host(namedGadgetBuilder: __safeDI_namedGadgetBuilder_Host)
+				            return Host(__safeDI_namedGadgetBuilder: __safeDI_namedGadgetBuilder_Host)
 				"""
 			case .sendableErasedInstantiator:
 				"""
@@ -328,7 +334,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				                }
 				                return __safeDI_namedGadgetBuilder_part_Stage2
 				            }
-				            return Host(namedGadgetBuilder_part: __safeDI_namedGadgetBuilder_part)
+				            return Host(__safeDI_namedGadgetBuilder_part: __safeDI_namedGadgetBuilder_part)
 				"""
 			}
 		}
@@ -403,8 +409,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        }
 		    }
 
-		    public init(actionGadgetBuilder: @escaping (SafeDIScope_ActionGadget) -> any Gadget) {
-		        let __safeDI_actionGadgetBuilder = actionGadgetBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_actionGadgetBuilder: @escaping (SafeDIScope_ActionGadget) -> any Gadget) {
 		        let analytics = Analytics()
 		        let part: ErasedInstantiator<nonisolated(nonsending) () async -> Void, any Gadget> = ErasedInstantiator {
 		            __safeDI_actionGadgetBuilder(.part(SafeDIScope_ActionGadget.part_Values(analytics: analytics), $0))
@@ -432,7 +439,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return __safeDI_part(run: __safeDI_forwarded)
 		                }
 		            }
-		            return Host(actionGadgetBuilder: __safeDI_actionGadgetBuilder_Host)
+		            return Host(__safeDI_actionGadgetBuilder: __safeDI_actionGadgetBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -491,9 +498,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        }
 		    }
 
-		    public init(pairGadgetBuilder: @escaping (SafeDIScope_PairGadget) -> any Gadget, pairPanelBuilder: @escaping (SafeDIScope_PairPanel) -> PairPanel) {
-		        let __safeDI_pairGadgetBuilder = pairGadgetBuilder
-		        let __safeDI_pairPanelBuilder = pairPanelBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_pairGadgetBuilder: @escaping (SafeDIScope_PairGadget) -> any Gadget, __safeDI_pairPanelBuilder: @escaping (SafeDIScope_PairPanel) -> PairPanel) {
 		        let analytics = Analytics()
 		        let erased = ErasedInstantiator<(count: Int, name: String), any Gadget> {
 		            __safeDI_pairGadgetBuilder(.erased(SafeDIScope_PairGadget.erased_Values(analytics: analytics), $0))
@@ -534,7 +541,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return __safeDI_held(count: __safeDI_forwarded.count, name: __safeDI_forwarded.name)
 		                }
 		            }
-		            return Host(pairGadgetBuilder: __safeDI_pairGadgetBuilder_Host, pairPanelBuilder: __safeDI_pairPanelBuilder_Host)
+		            return Host(__safeDI_pairGadgetBuilder: __safeDI_pairGadgetBuilder_Host, __safeDI_pairPanelBuilder: __safeDI_pairPanelBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -573,8 +580,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        }
 		    }
 
-		    public init(defaultGadgetBuilder: @escaping (SafeDIScope_DefaultGadget) -> any Gadget) {
-		        let __safeDI_defaultGadgetBuilder = defaultGadgetBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_defaultGadgetBuilder: @escaping (SafeDIScope_DefaultGadget) -> any Gadget) {
 		        let analytics = Analytics()
 		        func __safeDI_part() -> any Gadget {
 		            __safeDI_defaultGadgetBuilder(.part(SafeDIScope_DefaultGadget.part_Values(analytics: analytics)))
@@ -603,7 +611,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return __safeDI_part()
 		                }
 		            }
-		            return Host(defaultGadgetBuilder: __safeDI_defaultGadgetBuilder_Host)
+		            return Host(__safeDI_defaultGadgetBuilder: __safeDI_defaultGadgetBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -649,8 +657,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        }
 		    }
 
-		    public init(emptyPanelBuilder: @escaping (SafeDIScope_EmptyPanel) -> EmptyPanel) {
-		        let __safeDI_emptyPanelBuilder = emptyPanelBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_emptyPanelBuilder: @escaping (SafeDIScope_EmptyPanel) -> EmptyPanel) {
 		        let analytics = Analytics()
 		        let held = Instantiator<EmptyPanel> {
 		            __safeDI_emptyPanelBuilder(.held(SafeDIScope_EmptyPanel.held_Values(analytics: analytics), $0))
@@ -678,7 +687,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return __safeDI_held()
 		                }
 		            }
-		            return Host(emptyPanelBuilder: __safeDI_emptyPanelBuilder_Host)
+		            return Host(__safeDI_emptyPanelBuilder: __safeDI_emptyPanelBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -716,7 +725,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return __safeDI_forwarded(name: __safeDI_forwarded_)
 		                }
 		            }
-		            return Host(panelBuilder: __safeDI_panelBuilder_Host)
+		            return Host(__safeDI_panelBuilder: __safeDI_panelBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -761,7 +770,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                }
 		                return __safeDI_loopingGadgetBuilder_again_Stage2
 		            }
-		            return Host(loopingGadgetBuilder_again: __safeDI_loopingGadgetBuilder_again)
+		            return Host(__safeDI_loopingGadgetBuilder_again: __safeDI_loopingGadgetBuilder_again)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -784,7 +793,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return __safeDI_again(name: __safeDI_forwarded)
 		                }
 		            }
-		            return Host(loopingGadgetBuilder: __safeDI_loopingGadgetBuilder_Host)
+		            return Host(__safeDI_loopingGadgetBuilder: __safeDI_loopingGadgetBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -825,8 +834,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public typealias SendableLastStage<__safeDI_Forwarded> = @Sendable (Stage2, __safeDI_Forwarded) -> Panel
 		    }
 
-		    public init(panelBuilder_ownerBuilder_held: @escaping (SafeDIStagedScope_Panel_ownerBuilder_held.Stage1) -> SafeDIStagedScope_Panel_ownerBuilder_held.SendableLastStage<Panel.ForwardedProperties>) {
-		        let __safeDI_panelBuilder_ownerBuilder_held = panelBuilder_ownerBuilder_held
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_panelBuilder_ownerBuilder_held: @escaping (SafeDIStagedScope_Panel_ownerBuilder_held.Stage1) -> SafeDIStagedScope_Panel_ownerBuilder_held.SendableLastStage<Panel.ForwardedProperties>) {
 		        let analytics = Analytics()
 		        let __safeDI_panelBuilder_ownerBuilder_held_Stage2 = __safeDI_panelBuilder_ownerBuilder_held(SafeDIStagedScope_Panel_ownerBuilder_held.Stage1(analytics: analytics))
 		        @Sendable func __safeDI_ownerBuilder() -> Owner {
@@ -859,7 +869,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                }
 		                return __safeDI_panelBuilder_ownerBuilder_held_Stage2
 		            }
-		            return Host(panelBuilder_ownerBuilder_held: __safeDI_panelBuilder_ownerBuilder_held)
+		            return Host(__safeDI_panelBuilder_ownerBuilder_held: __safeDI_panelBuilder_ownerBuilder_held)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -920,8 +930,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public typealias SendableLastStage<__safeDI_Forwarded> = @Sendable (Stage3, __safeDI_Forwarded) -> Panel
 		    }
 
-		    public init(panelBuilder_ownerBuilder_held: @escaping (SafeDIStagedScope_Panel_ownerBuilder_held.Stage1) -> @Sendable (SafeDIStagedScope_Panel_ownerBuilder_held.Stage2) -> SafeDIStagedScope_Panel_ownerBuilder_held.SendableLastStage<Panel.ForwardedProperties>) {
-		        let __safeDI_panelBuilder_ownerBuilder_held = panelBuilder_ownerBuilder_held
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_panelBuilder_ownerBuilder_held: @escaping (SafeDIStagedScope_Panel_ownerBuilder_held.Stage1) -> @Sendable (SafeDIStagedScope_Panel_ownerBuilder_held.Stage2) -> SafeDIStagedScope_Panel_ownerBuilder_held.SendableLastStage<Panel.ForwardedProperties>) {
 		        let analytics = Analytics()
 		        let __safeDI_panelBuilder_ownerBuilder_held_Stage2 = __safeDI_panelBuilder_ownerBuilder_held(SafeDIStagedScope_Panel_ownerBuilder_held.Stage1(analytics: analytics))
 		        @Sendable func __safeDI_ownerBuilder() -> Owner {
@@ -960,7 +971,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                }
 		                return __safeDI_panelBuilder_ownerBuilder_held_Stage2
 		            }
-		            return Host(panelBuilder_ownerBuilder_held: __safeDI_panelBuilder_ownerBuilder_held)
+		            return Host(__safeDI_panelBuilder_ownerBuilder_held: __safeDI_panelBuilder_ownerBuilder_held)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1020,8 +1031,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public struct part_Values {}
 		    }
 
-		    public init(panelBuilder: @escaping (SafeDIScope_Panel) -> Panel) {
-		        let __safeDI_panelBuilder = panelBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_panelBuilder: @escaping (SafeDIScope_Panel) -> Panel) {
 		        let part = Instantiator<Panel> {
 		            __safeDI_panelBuilder(.part(SafeDIScope_Panel.part_Values(), $0))
 		        }
@@ -1038,11 +1050,12 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        case inner(Inner.SafeDIScope_Panel)
 		    }
 
-		    public init(panelBuilder: @escaping (SafeDIScope_Panel) -> Panel) {
-		        let __safeDI_panelBuilder = panelBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_panelBuilder: @escaping (SafeDIScope_Panel) -> Panel) {
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_38378D6B4354F712.self
-		            return Inner(panelBuilder: { __safeDI_panelBuilder(.inner($0)) })
+		            return Inner(__safeDI_panelBuilder: { __safeDI_panelBuilder(.inner($0)) })
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(inner: inner)
@@ -1072,7 +1085,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return __safeDI_part(name: __safeDI_forwarded)
 		                }
 		            }
-		            return Outer(panelBuilder: __safeDI_panelBuilder_Outer)
+		            return Outer(__safeDI_panelBuilder: __safeDI_panelBuilder_Outer)
 		        }
 		        let outer: Outer = __safeDI_outer()
 		        self.init(outer: outer)
@@ -1123,8 +1136,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
-		    public init(gadgetBuilder_inner_widget_gadget: @escaping (SafeDIStagedScope_Gadget_inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_inner_widget_gadget.Stage2) -> @Sendable (SafeDIStagedScope_Gadget_inner_widget_gadget.Stage3) -> any Gadget) {
-		        let __safeDI_gadgetBuilder_inner_widget_gadget = gadgetBuilder_inner_widget_gadget
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_gadgetBuilder_inner_widget_gadget: @escaping (SafeDIStagedScope_Gadget_inner_widget_gadget.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_inner_widget_gadget.Stage2) -> @Sendable (SafeDIStagedScope_Gadget_inner_widget_gadget.Stage3) -> any Gadget) {
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_8F27C91B16119DEE.self\(seamCallComment(seam: "Inner"))
 		            func __safeDI_widgetBuilder_widget(_ scope: Inner.SafeDIStagedScope_Widget_widget.Stage1) -> @Sendable (Inner.SafeDIStagedScope_Widget_widget.Stage2) -> any Widget {
@@ -1139,7 +1153,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                }
 		                return __safeDI_widgetBuilder_widget_Stage2
 		            }
-		            return Inner(widgetBuilder_widget: __safeDI_widgetBuilder_widget)
+		            return Inner(__safeDI_widgetBuilder_widget: __safeDI_widgetBuilder_widget)
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(inner: inner)
@@ -1232,8 +1246,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        }
 		    }
 
-		    public init(labeledGadgetBuilder: @escaping (SafeDIScope_LabeledGadget) -> any Gadget) {
-		        let __safeDI_labeledGadgetBuilder = labeledGadgetBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_labeledGadgetBuilder: @escaping (SafeDIScope_LabeledGadget) -> any Gadget) {
 		        let analytics = Analytics()
 		        let part = ErasedInstantiator<Label, any Gadget> {
 		            __safeDI_labeledGadgetBuilder(.part(SafeDIScope_LabeledGadget.part_Values(analytics: analytics), $0))
@@ -1255,8 +1270,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        }
 		    }
 
-		    package init(labeledGadgetBuilder: @escaping (SafeDIScope_LabeledGadget) -> any Gadget) {
-		        let __safeDI_labeledGadgetBuilder = labeledGadgetBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package init(__safeDI_labeledGadgetBuilder: @escaping (SafeDIScope_LabeledGadget) -> any Gadget) {
 		        let analytics = Analytics()
 		        let part = ErasedInstantiator<Label, any Gadget> {
 		            __safeDI_labeledGadgetBuilder(.part(SafeDIScope_LabeledGadget.part_Values(analytics: analytics), $0))
@@ -1284,7 +1300,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return __safeDI_part(label: __safeDI_forwarded)
 		                }
 		            }
-		            return Host(labeledGadgetBuilder: __safeDI_labeledGadgetBuilder_Host)
+		            return Host(__safeDI_labeledGadgetBuilder: __safeDI_labeledGadgetBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1305,7 +1321,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return __safeDI_part(label: __safeDI_forwarded)
 		                }
 		            }
-		            return Host(labeledGadgetBuilder: __safeDI_labeledGadgetBuilder_Host)
+		            return Host(__safeDI_labeledGadgetBuilder: __safeDI_labeledGadgetBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1349,7 +1365,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		"""
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
-				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature, swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n"]),
 				ModuleFixture(name: "App", packageName: "Other", swiftFileContentByFilePath: ["Caller.swift": caller], dependencies: ["Feature"]),
 			],
 			integration: .moduleInfo,
@@ -1384,8 +1400,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        }
 		    }
 
-		    public init(gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 		        func __safeDI_again() -> Middle {
 		            func __safeDI_beneath() -> Beneath {
 		                let again = Instantiator<Middle>(__safeDI_again)
@@ -1610,8 +1627,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        }
 		    }
 
-		    public init(actionPanelBuilder: @escaping (SafeDIScope_ActionPanel) -> ActionPanel) {
-		        let __safeDI_actionPanelBuilder = actionPanelBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_actionPanelBuilder: @escaping (SafeDIScope_ActionPanel) -> ActionPanel) {
 		        let analytics = Analytics()
 		        let part = Instantiator<ActionPanel> {
 		            __safeDI_actionPanelBuilder(.part(SafeDIScope_ActionPanel.part_Values(analytics: analytics), $0))
@@ -1639,7 +1657,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return __safeDI_part(forwardedAction: __safeDI_forwarded)
 		                }
 		            }
-		            return Host(actionPanelBuilder: __safeDI_actionPanelBuilder_Host)
+		            return Host(__safeDI_actionPanelBuilder: __safeDI_actionPanelBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1677,8 +1695,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public typealias SendableLastStage<__safeDI_Forwarded> = @Sendable (Stage2, __safeDI_Forwarded) -> ActionPanel
 		    }
 
-		    public init(actionPanelBuilder_part: @escaping (SafeDIStagedScope_ActionPanel_part.Stage1) -> SafeDIStagedScope_ActionPanel_part.SendableLastStage<ActionPanel.ForwardedProperties>) {
-		        let __safeDI_actionPanelBuilder_part = actionPanelBuilder_part
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_actionPanelBuilder_part: @escaping (SafeDIStagedScope_ActionPanel_part.Stage1) -> SafeDIStagedScope_ActionPanel_part.SendableLastStage<ActionPanel.ForwardedProperties>) {
 		        let analytics = Analytics()
 		        let __safeDI_actionPanelBuilder_part_Stage2 = __safeDI_actionPanelBuilder_part(SafeDIStagedScope_ActionPanel_part.Stage1(analytics: analytics))
 		        let part = SendableInstantiator<ActionPanel> {
@@ -1707,7 +1726,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                }
 		                return __safeDI_actionPanelBuilder_part_Stage2
 		            }
-		            return Host(actionPanelBuilder_part: __safeDI_actionPanelBuilder_part)
+		            return Host(__safeDI_actionPanelBuilder_part: __safeDI_actionPanelBuilder_part)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1746,8 +1765,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        }
 		    }
 
-		    public init(actionPanelBuilder: @escaping (SafeDIScope_ActionPanel) -> ActionPanel) {
-		        let __safeDI_actionPanelBuilder = actionPanelBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_actionPanelBuilder: @escaping (SafeDIScope_ActionPanel) -> ActionPanel) {
 		        let analytics = Analytics()
 		        let part = Instantiator<ActionPanel> {
 		            __safeDI_actionPanelBuilder(.part(SafeDIScope_ActionPanel.part_Values(analytics: analytics), $0))
@@ -1775,7 +1795,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return __safeDI_part(forwardedAction: __safeDI_forwarded)
 		                }
 		            }
-		            return Host(actionPanelBuilder: __safeDI_actionPanelBuilder_Host)
+		            return Host(__safeDI_actionPanelBuilder: __safeDI_actionPanelBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1814,8 +1834,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public typealias SendableLastStage<__safeDI_Forwarded> = @Sendable (Stage2, __safeDI_Forwarded) -> ActionPanel
 		    }
 
-		    public init(actionPanelBuilder_part: @escaping (SafeDIStagedScope_ActionPanel_part.Stage1) -> SafeDIStagedScope_ActionPanel_part.SendableLastStage<ActionPanel.ForwardedProperties>) {
-		        let __safeDI_actionPanelBuilder_part = actionPanelBuilder_part
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_actionPanelBuilder_part: @escaping (SafeDIStagedScope_ActionPanel_part.Stage1) -> SafeDIStagedScope_ActionPanel_part.SendableLastStage<ActionPanel.ForwardedProperties>) {
 		        let analytics = Analytics()
 		        let __safeDI_actionPanelBuilder_part_Stage2 = __safeDI_actionPanelBuilder_part(SafeDIStagedScope_ActionPanel_part.Stage1(analytics: analytics))
 		        let part = SendableInstantiator<ActionPanel> {
@@ -1844,7 +1865,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                }
 		                return __safeDI_actionPanelBuilder_part_Stage2
 		            }
-		            return Host(actionPanelBuilder_part: __safeDI_actionPanelBuilder_part)
+		            return Host(__safeDI_actionPanelBuilder_part: __safeDI_actionPanelBuilder_part)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1882,8 +1903,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        }
 		    }
 
-		    public init(tapGadgetBuilder: @escaping (SafeDIScope_TapGadget) -> AnyGadget) {
-		        let __safeDI_tapGadgetBuilder = tapGadgetBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_tapGadgetBuilder: @escaping (SafeDIScope_TapGadget) -> AnyGadget) {
 		        let analytics = Analytics()
 		        let part = ErasedInstantiator<OnTap, AnyGadget> {
 		            __safeDI_tapGadgetBuilder(.part(SafeDIScope_TapGadget.part_Values(analytics: analytics), $0))
@@ -1911,7 +1933,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return AnyGadget(__safeDI_part(onTap: __safeDI_forwarded))
 		                }
 		            }
-		            return Host(tapGadgetBuilder: __safeDI_tapGadgetBuilder_Host)
+		            return Host(__safeDI_tapGadgetBuilder: __safeDI_tapGadgetBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1951,8 +1973,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public typealias SendableLastStage<__safeDI_Forwarded> = @Sendable (Stage2, __safeDI_Forwarded) -> AnyGadget
 		    }
 
-		    public init(tapGadgetBuilder_part: @escaping (SafeDIStagedScope_TapGadget_part.Stage1) -> SafeDIStagedScope_TapGadget_part.SendableLastStage<SendableOnTap>) {
-		        let __safeDI_tapGadgetBuilder_part = tapGadgetBuilder_part
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_tapGadgetBuilder_part: @escaping (SafeDIStagedScope_TapGadget_part.Stage1) -> SafeDIStagedScope_TapGadget_part.SendableLastStage<SendableOnTap>) {
 		        let analytics = Analytics()
 		        let __safeDI_tapGadgetBuilder_part_Stage2 = __safeDI_tapGadgetBuilder_part(SafeDIStagedScope_TapGadget_part.Stage1(analytics: analytics))
 		        let part = SendableErasedInstantiator<SendableOnTap, AnyGadget> {
@@ -1981,7 +2004,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                }
 		                return __safeDI_tapGadgetBuilder_part_Stage2
 		            }
-		            return Host(tapGadgetBuilder_part: __safeDI_tapGadgetBuilder_part)
+		            return Host(__safeDI_tapGadgetBuilder_part: __safeDI_tapGadgetBuilder_part)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -2032,7 +2055,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		"""
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
-				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature, swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n"]),
 				ModuleFixture(name: "App", packageName: "Other", swiftFileContentByFilePath: ["Caller.swift": caller], dependencies: ["Feature"]),
 			],
 			integration: .moduleInfo,
@@ -2060,7 +2083,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		"""
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
-				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature, swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n"]),
 				ModuleFixture(name: "App", packageName: "Other", swiftFileContentByFilePath: ["Caller.swift": caller], dependencies: ["Feature"]),
 			],
 			integration: .moduleInfo,
@@ -2225,7 +2248,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return __safeDI_part()
 		                }
 		            }
-		            return Host(gadgetBuilder: __safeDI_gadgetBuilder_Host)
+		            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -2291,9 +2314,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public struct Stage2 {}
 		    }
 
-		    public init(gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget, gadgetBuilder_slazy: @escaping (SafeDIStagedScope_Gadget_slazy.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_slazy.Stage2) -> any Gadget) {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
-		        let __safeDI_gadgetBuilder_slazy = gadgetBuilder_slazy
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget, __safeDI_gadgetBuilder_slazy: @escaping (SafeDIStagedScope_Gadget_slazy.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_slazy.Stage2) -> any Gadget) {
 		        let analytics = Analytics()
 		        let __safeDI_gadgetBuilder_slazy_Stage2 = __safeDI_gadgetBuilder_slazy(SafeDIStagedScope_Gadget_slazy.Stage1(analytics: analytics))
 		        @Sendable func __safeDI_slazy() -> any Gadget {
@@ -2342,12 +2365,12 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public struct Stage2 {}
 		    }
 
-		    public init(gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget, gadgetBuilder_a: @escaping (SafeDIStagedScope_Gadget_a.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_a.Stage2) -> any Gadget) {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
-		        let __safeDI_gadgetBuilder_a = gadgetBuilder_a
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget, __safeDI_gadgetBuilder_a: @escaping (SafeDIStagedScope_Gadget_a.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_a.Stage2) -> any Gadget) {
 		        func __safeDI_s() -> InnerSeam {
 		            _ = InnerSeam.__safeDI_InnerSeam_2982FB4F39114BA5.self
-		            return InnerSeam(gadgetBuilder: { __safeDI_gadgetBuilder(.s($0)) })
+		            return InnerSeam(__safeDI_gadgetBuilder: { __safeDI_gadgetBuilder(.s($0)) })
 		        }
 		        let s: InnerSeam = __safeDI_s()
 		        let __safeDI_gadgetBuilder_a_Stage2 = __safeDI_gadgetBuilder_a(SafeDIStagedScope_Gadget_a.Stage1(s: s))
@@ -2375,8 +2398,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        }
 		    }
 
-		    public init(gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 		        func __safeDI_i() -> Inner {
 		            let a: any Gadget = __safeDI_gadgetBuilder(.i_a(SafeDIScope_Gadget.i_a_Values()))
 		            return Inner(a: a)
@@ -2427,7 +2451,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    @Sendable func __safeDI_a() -> DefaultGadget {
 		                        @Sendable func __safeDI_hostMaker() -> Host {
 		                            _ = Host.__safeDI_Host_4C8838A6786F4042.self\(seamCallComment(seam: "Host"))
-		                            return Host(gadgetBuilder: __safeDI_gadgetBuilder_Host, gadgetBuilder_a: __safeDI_gadgetBuilder_a)
+		                            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host, __safeDI_gadgetBuilder_a: __safeDI_gadgetBuilder_a)
 		                        }
 		                        let hostMaker = SendableInstantiator<Host>(__safeDI_hostMaker)
 		                        return DefaultGadget(hostMaker: hostMaker)
@@ -2447,7 +2471,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    func __safeDI_a() -> DefaultGadget {
 		                        @Sendable func __safeDI_hostMaker() -> Host {
 		                            _ = Host.__safeDI_Host_4C8838A6786F4042.self\(seamCallComment(seam: "Host"))
-		                            return Host(gadgetBuilder: __safeDI_gadgetBuilder_Host, gadgetBuilder_a: __safeDI_gadgetBuilder_a)
+		                            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host, __safeDI_gadgetBuilder_a: __safeDI_gadgetBuilder_a)
 		                        }
 		                        let hostMaker = SendableInstantiator<Host>(__safeDI_hostMaker)
 		                        return DefaultGadget(hostMaker: hostMaker)
@@ -2458,7 +2482,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    func __safeDI_a() -> DefaultGadget {
 		                        @Sendable func __safeDI_hostMaker() -> Host {
 		                            _ = Host.__safeDI_Host_4C8838A6786F4042.self\(seamCallComment(seam: "Host"))
-		                            return Host(gadgetBuilder: __safeDI_gadgetBuilder_Host, gadgetBuilder_a: __safeDI_gadgetBuilder_a)
+		                            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host, __safeDI_gadgetBuilder_a: __safeDI_gadgetBuilder_a)
 		                        }
 		                        let hostMaker = SendableInstantiator<Host>(__safeDI_hostMaker)
 		                        return DefaultGadget(hostMaker: hostMaker)
@@ -2467,7 +2491,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return a
 		                }
 		            }
-		            return Host(gadgetBuilder: __safeDI_gadgetBuilder_Host, gadgetBuilder_a: __safeDI_gadgetBuilder_a)
+		            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host, __safeDI_gadgetBuilder_a: __safeDI_gadgetBuilder_a)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -2516,8 +2540,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
-		    public init(gadgetBuilder_s_i_a_a: @escaping (SafeDIStagedScope_Gadget_s_i_a_a.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_s_i_a_a.Stage2) -> @Sendable (SafeDIStagedScope_Gadget_s_i_a_a.Stage3) -> any Gadget) {
-		        let __safeDI_gadgetBuilder_s_i_a_a = gadgetBuilder_s_i_a_a
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_gadgetBuilder_s_i_a_a: @escaping (SafeDIStagedScope_Gadget_s_i_a_a.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_s_i_a_a.Stage2) -> @Sendable (SafeDIStagedScope_Gadget_s_i_a_a.Stage3) -> any Gadget) {
 		        func __safeDI_s() -> InnerSeam {
 		            _ = InnerSeam.__safeDI_InnerSeam_8881FEFF4115FBA8.self\(seamCallComment(seam: "InnerSeam"))
 		            let __safeDI_gadgetBuilder_s_i_a_a_Stage2 = __safeDI_gadgetBuilder_s_i_a_a(SafeDIStagedScope_Gadget_s_i_a_a.Stage1())
@@ -2525,7 +2550,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                func __safeDI_a() -> P1Impl {
 		                    @Sendable func __safeDI_maker() -> InnerSeam {
 		                        _ = InnerSeam.__safeDI_InnerSeam_8881FEFF4115FBA8.self\(seamCallComment(seam: "InnerSeam"))
-		                        return InnerSeam(p1Builder: __safeDI_p1Builder_InnerSeam, p2Builder: __safeDI_p2Builder_InnerSeam)
+		                        return InnerSeam(__safeDI_p1Builder: __safeDI_p1Builder_InnerSeam, __safeDI_p2Builder: __safeDI_p2Builder_InnerSeam)
 		                    }
 		                    let maker = SendableInstantiator<InnerSeam>(__safeDI_maker)
 		                    let __safeDI_gadgetBuilder_s_i_a_a_Stage3 = __safeDI_gadgetBuilder_s_i_a_a_Stage2(SafeDIStagedScope_Gadget_s_i_a_a.Stage2(maker: maker))
@@ -2550,7 +2575,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return a
 		                }
 		            }
-		            return InnerSeam(p1Builder: __safeDI_p1Builder_InnerSeam, p2Builder: __safeDI_p2Builder_InnerSeam)
+		            return InnerSeam(__safeDI_p1Builder: __safeDI_p1Builder_InnerSeam, __safeDI_p2Builder: __safeDI_p2Builder_InnerSeam)
 		        }
 		        let s: InnerSeam = __safeDI_s()
 		        self.init(s: s)
@@ -2624,7 +2649,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return AnyGadget(__safeDI_part(label: __safeDI_forwarded))
 		                }
 		            }
-		            return Host(namedGadgetBuilder: __safeDI_namedGadgetBuilder_Host)
+		            return Host(__safeDI_namedGadgetBuilder: __safeDI_namedGadgetBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -2644,7 +2669,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return AnyGadget(__safeDI_part(label: __safeDI_forwarded))
 		                }
 		            }
-		            return Host(namedGadgetBuilder: __safeDI_namedGadgetBuilder_Host)
+		            return Host(__safeDI_namedGadgetBuilder: __safeDI_namedGadgetBuilder_Host)
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)

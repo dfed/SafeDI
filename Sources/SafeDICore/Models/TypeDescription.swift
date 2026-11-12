@@ -215,25 +215,45 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	/// This type as a seam names a hole type: without `any` at every depth, each composition's members in the order of their
 	/// identifiers, so spellings of one type name one hole type.
 	var spelledCanonically: TypeDescription {
-		switch withoutAny {
+		let type = withoutAny
+		switch type {
 		case let .simple(name, generics):
-			.simple(name: name, generics: generics.map(\.spelledCanonically))
+			return .simple(name: name, generics: generics.map(\.spelledCanonically))
 		case let .nested(name, parentType, generics):
-			.nested(name: name, parentType: parentType.spelledCanonically, generics: generics.map(\.spelledCanonically))
+			return .nested(name: name, parentType: parentType.spelledCanonically, generics: generics.map(\.spelledCanonically))
 		case let .composition(types):
-			.composition(UnorderedEquatingCollection(types.map(\.spelledCanonically).sorted { $0.asIdentifier < $1.asIdentifier }))
-		case let .optional(type):
-			.optional(type.spelledCanonically)
-		case let .implicitlyUnwrappedOptional(type):
-			.implicitlyUnwrappedOptional(type.spelledCanonically)
+			return .composition(UnorderedEquatingCollection(types.map(\.spelledCanonically).sorted { $0.asIdentifier < $1.asIdentifier }))
+		case let .optional(wrappedType):
+			return .optional(wrappedType.spelledCanonically)
+		case let .implicitlyUnwrappedOptional(wrappedType):
+			// The macro rejects `!` at the top of an `@Instantiated` property's type and of the type its wrapper builds, but
+			// not inside the type a `fulfilledByType:` string names, such as `"Box<(any Q & P)!>"`.
+			return .implicitlyUnwrappedOptional(wrappedType.spelledCanonically)
 		case let .array(element):
-			.array(element: element.spelledCanonically)
+			return .array(element: element.spelledCanonically)
 		case let .dictionary(key, value):
-			.dictionary(key: key.spelledCanonically, value: value.spelledCanonically)
+			return .dictionary(key: key.spelledCanonically, value: value.spelledCanonically)
 		case let .tuple(elements):
-			.tuple(elements.map { TupleElement(label: $0.label, $0.typeDescription.spelledCanonically) })
-		case let type:
-			type
+			return .tuple(elements.map { TupleElement(label: $0.label, $0.typeDescription.spelledCanonically) })
+		case let .closure(arguments, isAsync, doesThrow, thrownType, returnType):
+			return .closure(arguments: arguments.map(\.spelledCanonically), isAsync: isAsync, doesThrow: doesThrow, thrownType: thrownType?.spelledCanonically, returnType: returnType.spelledCanonically)
+		case let .attributed(attributedType, specifiers, attributes):
+			return .attributed(attributedType.spelledCanonically, specifiers: specifiers, attributes: attributes)
+		case let .metatype(instanceType, isType):
+			// `withoutAny` has already decided whether the metatype is existential from the instance type's `any`.
+			return .metatype(instanceType.spelledCanonically, isType: isType)
+		case let .variadic(elementType):
+			// A variadic parameter of a function type a generic argument spells: `Box<(Int...) -> Void>`.
+			return .variadic(elementType.spelledCanonically)
+		case .void,
+		     .unknown,
+		     .any,
+		     .some:
+			// `Void` and a spelling SafeDI does not parse, such as a value generic argument, hold no type to spell canonically.
+			// No hole type spells the others: `withoutAny` removes `any`; Swift accepts `some` in a stored property's type
+			// only beside an initial value, which a `let` its initializer sets cannot have, and never in a function type's
+			// parameter.
+			return type
 		}
 	}
 

@@ -1274,10 +1274,8 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 		#expect(output.generatedFiles == [
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Feature.Screen {
-			    public init(mode: Feature.Mode) {
-			        self.init(__safeDI_mode: mode)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_mode: @autoclosure @escaping () -> Feature.Mode) {
 			        let mode = LazilyInstantiated<Feature.Mode>(__safeDI_mode)
 			        let child = Feature.Child(mode: mode.instance)

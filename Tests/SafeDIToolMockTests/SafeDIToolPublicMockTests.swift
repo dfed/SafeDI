@@ -3949,6 +3949,42 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingStagedBuilder_whenPackageHoleTypeIsBuiltInsideSendableWrapper() async {
+		// As the previous test, with the hole held in a `Sendable` wrapper: its place is staged, so it has a builder of its
+		// own, which no case of an enum names.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):5:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `userServiceBuilder_userService`, which builds `UserService` for the hole `userService`, and cannot pass `nil` for it, since it is required. `UserService` is declared `package`. Declare `UserService` `public`; declare in this module, or a module it depends on, a `mockOnly` `@Instantiable` type that fulfills `UserService` (`@Instantiable(fulfillingAdditionalTypes: [UserService.self], mockOnly: true)`), which the mock builds instead of taking `userServiceBuilder_userService`, leaving production's hole as it is; or use `generateMock: .internal`.
+			\(fixtures["Service.swift"]):1:1: note: `UserService` is declared `package` here.
+			\(fixtures["Service.swift"]):1:1-1:8: fixit: public
+			\(fixtures["Service.swift"]):11:5: note: `Service` instantiates `userService: SendableLazilyInstantiated<UserService>` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					package final class UserService: Sendable {
+					    package init() {}
+					}
+
+					@Instantiable(generateMock: .public)
+					public struct Service: Instantiable {
+					    package init(userService: SendableLazilyInstantiated<UserService>) {
+					        self.userService = userService
+					    }
+
+					    @Instantiated let userService: SendableLazilyInstantiated<UserService>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsMockOnlyStubInPlaceOfTakingBuilder_whenDeclaringModuleDeclaresStubThatFulfillsHole() async throws {
 		// BZ-6: the remedy the error above names. A `mockOnly` stub in `Core` fulfills the hole's type, so `Service`'s
 		// mock builds the stub and takes no builder, while production still has the hole; another package calls it.
@@ -10225,8 +10261,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        }
 		    }
 
-		    public convenience init(shared: SharedThing, feedServiceBuilder: @escaping (SafeDIScope_FeedService) -> FeedService) {
-		        let __safeDI_feedServiceBuilder = feedServiceBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: @escaping (SafeDIScope_FeedService) -> FeedService) {
 		        let store = FeedStore(shared: shared)
 		        let service: FeedService = __safeDI_feedServiceBuilder(.service(SafeDIScope_FeedService.service_Values(shared: shared, store: store)))
 		        self.init(shared: shared, store: store, service: service)

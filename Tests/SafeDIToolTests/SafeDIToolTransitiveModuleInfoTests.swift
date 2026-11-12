@@ -416,6 +416,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == (listsComplete ? ["Deep", "Inner", "Middle"] : ["Middle"]))
 		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": Self.generatedFile(importing: ["Deep", "Inner"], """
 		extension FeedScreen {
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
 		        func __safeDI_innerScreen() -> InnerScreen {
 		            let clock = Clock()

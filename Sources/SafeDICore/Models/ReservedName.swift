@@ -82,8 +82,9 @@ public enum ReservedName: Hashable, Sendable {
 
 	/// The argument label under which the initializer of a seam that only generated code calls takes the parameter or
 	/// builder labeled `label`, which is in `spelledAsIdentifier` spelling. A person's call uses the readable label on the
-	/// plain initializer beside it, and no name SafeDI is given begins with this prefix, so the two initializers never
-	/// share a label.
+	/// plain initializer beside it, which a module generates when its configuration sets
+	/// `generatePlainDependencyTreeInitializers`, and no name SafeDI is given begins with this prefix, so the two
+	/// initializers never share a label.
 	static func seamGeneratedOnlyArgumentLabel(of label: String) -> String {
 		"\(builderFunctionNamePrefix)\(label)".spelledAsJoinedIdentifier
 	}

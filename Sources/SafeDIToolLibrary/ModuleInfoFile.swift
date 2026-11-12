@@ -71,7 +71,7 @@ public struct ModuleInfoFile: Codable, Sendable {
 			imports: module.imports,
 			mockImports: module.mockImports,
 			instantiables: module.instantiables,
-			configurations: module.configurations,
+			configurations: module.configurations.map(\.asHeldByModuleInfoFile),
 			filesWithUnexpectedNodes: module.filesWithUnexpectedNodes,
 			conditionalCompilationDecisions: module.conditionalCompilationDecisions,
 			instantiableTypeNamesInAnyClause: module.instantiableTypeNamesInAnyClause,

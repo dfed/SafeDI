@@ -4332,6 +4332,7 @@ public actor DependencyTreeGenerator {
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
 			var seamRoot = seamRoot
 			seamRoot.unreadTypeComment = unreadTypeComment
+			seamRoot.generatesPlainInitializers = seams.generatesPlainDependencyTreeInitializers
 			rootScopeGenerators.append(try RootScopeInfo(
 				typeDescription: seam.concreteInstantiable,
 				instantiable: seam,
@@ -4547,7 +4548,14 @@ public actor DependencyTreeGenerator {
 							startsCodeGeneration: false,
 							declaredTypeNames: declaredTypeNames,
 						)
-						let seamRoot = try Self.seamRoot(of: seam, generator: generator, proof: proof, instantiables: instantiables, ownScopeEnums: ownScopeEnums)
+						let seamRoot = try Self.seamRoot(
+							of: seam,
+							generator: generator,
+							proof: proof,
+							instantiables: instantiables,
+							ownScopeEnums: ownScopeEnums,
+							generatesPlainInitializers: seams.generatesPlainDependencyTreeInitializers,
+						)
 						if seamRoot?.signature.settledContent != previousSeamRoot?.signature.settledContent {
 							changed = true
 						}
@@ -5181,7 +5189,9 @@ public actor DependencyTreeGenerator {
 	/// `parametersShareLabel`. `nil` when the signature would equal the seam's own initializer's.
 	/// - Parameter ownScopeEnums: Each seam's own enums, by key, as the signatures the pass's trees were built from hold
 	///   them: what `shapedBuilders` reads an enum the seam's builders reach from, never a copy another seam carries.
-	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable], ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]) throws -> ScopeGenerator.SeamRoot? {
+	/// - Parameter generatesPlainInitializers: Whether the seam's tiers have plain initializers, which a hand-written
+	///   initializer callable with their labels would collide with: the module's `SeamResolution.generatesPlainDependencyTreeInitializers`.
+	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable], ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum], generatesPlainInitializers: Bool) throws -> ScopeGenerator.SeamRoot? {
 		let ownParameters = ownParameters(of: seam, proof: proof)
 		// The seam's own properties are parameters as declared, and provide forms as any parameter does.
 		var ownLabels = Set<String>()
@@ -5433,11 +5443,19 @@ public actor DependencyTreeGenerator {
 		// non-optional generated parameter, a twin taking `Any`, an existential, a generic, a defaulted parameter or a
 		// closure loses to the generated initializer; beside an optional parameter, the twin takes the call from a caller
 		// holding the value. No comparison of types SafeDI can make tells a twin that takes a call from one that loses it.
+		// A tier's readable labels are checked only where the seam's module generates the plain initializer that takes
+		// them; a tier that takes no argument has one `init()` whatever the module sets. The check rejects a seam and
+		// changes no signature, so another module's computation of the seam's signature, which does not know the setting
+		// and skips the check, reaches the signature the seam's own module generates. It reads only the initializers of
+		// the declaration SafeDI reads: a hand-written twin in an extension SafeDI does not read is a redeclaration the
+		// compiler reports.
 		let builderLabels = shapedBuilders.builders.map(\.label)
 		for tier in tiers {
 			let tierParameters = parameters.filter { $0.tierAccess >= tier }
 			let tierLabels = tierParameters.map(\.property.label) + builderLabels
-			if let handWrittenInitializer = seam.otherInitializers.first(where: { Self.initializer($0, isCallableWithLabels: tierLabels) }) {
+			if generatesPlainInitializers || tierLabels.isEmpty,
+			   let handWrittenInitializer = seam.otherInitializers.first(where: { Self.initializer($0, isCallableWithLabels: tierLabels) })
+			{
 				errors.append(.seam(.init(
 					seam: seam,
 					kind: .parameters(.initializerCollides(parameters: tierParameters, builderLabels: builderLabels, handWrittenInitializer: handWrittenInitializer)),
@@ -5546,11 +5564,11 @@ public actor DependencyTreeGenerator {
 				access: initializerAccess,
 				// Spelled as a parsed initializer, and the generated tier, spell each parameter – a closure `@escaping` –
 				// so a dependency matches it as it matches a hand-written initializer's argument. The dependencies keep
-				// the property as declared. A generated call of a tier that defers a parameter calls the initializer only
-				// generated code calls, under its prefixed labels.
+				// the property as declared. A generated call calls the initializer only generated code calls, under its
+				// prefixed labels.
 				arguments: parameters.map { parameter in
 					Initializer.Argument(
-						outerLabel: SeamSignature.tierHasGeneratedOnlyInitializer(taking: parameters) ? parameter.generatedOnlyArgumentLabel : nil,
+						outerLabel: parameter.generatedOnlyArgumentLabel,
 						innerLabel: parameter.property.label,
 						typeDescription: parameter.property.asFunctionParamter.typeDescription,
 						defaultValueExpression: nil,

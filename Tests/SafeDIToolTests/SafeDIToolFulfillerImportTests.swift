@@ -196,6 +196,7 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.files(integration: integration, moduleName: "Feature", rootFileName: "FeatureScreen", importing: ["Contracts", "Impl"], """
 		extension FeatureScreen {
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
 		        let thing = AnyThing(DefaultThing())
 		        self.init(thing: thing)

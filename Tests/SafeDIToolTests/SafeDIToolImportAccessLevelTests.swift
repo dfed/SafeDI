@@ -550,10 +550,8 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 				]), bodies: [
 					"""
 					extension Session {
-					    public init(token: Token) {
-					        self.init(__safeDI_token: token)
-					    }
-
+					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 					    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 					        let token = LazilyInstantiated<Token>(__safeDI_token)
 					        let vault = Vault(token: token.instance)
@@ -1769,6 +1767,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 
 	private static let panelTree = """
 	extension Panel {
+	    /// Code you write and code SafeDI generates can both call this initializer.
 	    public init() {
 	        let gauge = Gauge()
 	        self.init(gauge: gauge)
@@ -1832,10 +1831,8 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 
 	private static let feedTree = """
 	extension Feed {
-	    public init(url: URL) {
-	        self.init(__safeDI_url: url)
-	    }
-
+	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 	    public init(__safeDI_url: @autoclosure @escaping () -> URL) {
 	        let url = LazilyInstantiated<URL>(__safeDI_url)
 	        let loader = Loader(url: url.instance)
@@ -1850,10 +1847,8 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 
 	private static let shelfTree = """
 	extension Shelf {
-	    package init(directory: URL) {
-	        self.init(__safeDI_directory: directory)
-	    }
-
+	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 	    package init(__safeDI_directory: @autoclosure @escaping () -> URL) {
 	        let directory = LazilyInstantiated<URL>(__safeDI_directory)
 	        let cache = Cache(directory: directory.instance)
@@ -1868,6 +1863,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 
 	private static let feedGaugeTree = """
 	extension Feed {
+	    /// Code you write and code SafeDI generates can both call this initializer.
 	    public init() {
 	        let gauge = Gauge()
 	        self.init(gauge: gauge)
@@ -1889,10 +1885,8 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		let unreadTypeComment = integration == .moduleInfo ? "    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n" : ""
 		return """
 		extension Screen {
-		\(unreadTypeComment)    public init(window: Window) {
-		        self.init(__safeDI_window: window)
-		    }
-
+		\(unreadTypeComment)    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_window: @autoclosure @escaping () -> Window) {
 		        let window = LazilyInstantiated<Window>(__safeDI_window)
 		        func __safeDI_session() -> Session {
@@ -1956,10 +1950,8 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		}
 		return """
 		extension Session {
-		\(unreadTypeComment)    public init(url: URL, window: Window) {
-		        self.init(__safeDI_url: url, __safeDI_window: window)
-		    }
-
+		\(unreadTypeComment)    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_url: @autoclosure @escaping () -> URL, __safeDI_window: @autoclosure @escaping () -> Window) {
 		        let url = LazilyInstantiated<URL>(__safeDI_url)
 		        let window = LazilyInstantiated<Window>(__safeDI_window)

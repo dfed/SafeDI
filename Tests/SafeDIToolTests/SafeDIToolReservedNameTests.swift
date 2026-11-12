@@ -283,6 +283,7 @@ struct SafeDIToolReservedNameTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
 		        let cache = Cache()
 		        self.init(cache: cache)

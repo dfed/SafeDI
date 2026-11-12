@@ -61,18 +61,14 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			.moduleInfo: [
 				"Feature.swift": generatedFileHeader + """
 				extension Service {
-				    public convenience init(title: String) {
-				        self.init(__safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_title: @autoclosure @escaping () -> String) {
 				        self.init(__safeDI_theme: nil, __safeDI_title: __safeDI_title())
 				    }
 
-				    package convenience init(theme: Theme?, title: String) {
-				        self.init(__safeDI_theme: theme, __safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    package convenience init(__safeDI_theme: @autoclosure @escaping () -> Theme?, __safeDI_title: @autoclosure @escaping () -> String) {
 				        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
 				        let title = LazilyInstantiated<String>(__safeDI_title)
@@ -90,18 +86,14 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			.swiftPackagePlugin: [
 				"Service+SafeDI.swift": generatedFileHeader + """
 				extension Service {
-				    public convenience init(title: String) {
-				        self.init(__safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_title: @autoclosure @escaping () -> String) {
 				        self.init(__safeDI_theme: nil, __safeDI_title: __safeDI_title())
 				    }
 
-				    package convenience init(theme: Theme?, title: String) {
-				        self.init(__safeDI_theme: theme, __safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    package convenience init(__safeDI_theme: @autoclosure @escaping () -> Theme?, __safeDI_title: @autoclosure @escaping () -> String) {
 				        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
 				        let title = LazilyInstantiated<String>(__safeDI_title)
@@ -269,18 +261,14 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			.moduleInfo: [
 				"Feature.swift": generatedFileHeader + """
 				extension Service {
-				    public init(title: String) {
-				        self.init(__safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public init(__safeDI_title: @autoclosure @escaping () -> String) {
 				        self.init(__safeDI_theme: nil, __safeDI_title: __safeDI_title())
 				    }
 
-				    package init(theme: Theme?, title: String) {
-				        self.init(__safeDI_theme: theme, __safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    package init(__safeDI_theme: @autoclosure @escaping () -> Theme?, __safeDI_title: @autoclosure @escaping () -> String) {
 				        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
 				        let title = LazilyInstantiated<String>(__safeDI_title)
@@ -298,18 +286,14 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			.swiftPackagePlugin: [
 				"Service+SafeDI.swift": generatedFileHeader + """
 				extension Service {
-				    public init(title: String) {
-				        self.init(__safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public init(__safeDI_title: @autoclosure @escaping () -> String) {
 				        self.init(__safeDI_theme: nil, __safeDI_title: __safeDI_title())
 				    }
 
-				    package init(theme: Theme?, title: String) {
-				        self.init(__safeDI_theme: theme, __safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    package init(__safeDI_theme: @autoclosure @escaping () -> Theme?, __safeDI_title: @autoclosure @escaping () -> String) {
 				        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
 				        let title = LazilyInstantiated<String>(__safeDI_title)
@@ -466,18 +450,14 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			.moduleInfo: [
 				"Feature.swift": generatedFileHeader + """
 				extension Service {
-				    public convenience init(title: String) {
-				        self.init(__safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_title: @autoclosure @escaping () -> String) {
 				        self.init(__safeDI_theme: nil, __safeDI_title: __safeDI_title())
 				    }
 
-				    internal convenience init(theme: Theme?, title: String) {
-				        self.init(__safeDI_theme: theme, __safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    internal convenience init(__safeDI_theme: @autoclosure @escaping () -> Theme?, __safeDI_title: @autoclosure @escaping () -> String) {
 				        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
 				        let title = LazilyInstantiated<String>(__safeDI_title)
@@ -495,18 +475,14 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			.swiftPackagePlugin: [
 				"Service+SafeDI.swift": generatedFileHeader + """
 				extension Service {
-				    public convenience init(title: String) {
-				        self.init(__safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_title: @autoclosure @escaping () -> String) {
 				        self.init(__safeDI_theme: nil, __safeDI_title: __safeDI_title())
 				    }
 
-				    internal convenience init(theme: Theme?, title: String) {
-				        self.init(__safeDI_theme: theme, __safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    internal convenience init(__safeDI_theme: @autoclosure @escaping () -> Theme?, __safeDI_title: @autoclosure @escaping () -> String) {
 				        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
 				        let title = LazilyInstantiated<String>(__safeDI_title)
@@ -667,18 +643,14 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			.moduleInfo: [
 				"Feature.swift": generatedFileHeader + """
 				extension Service {
-				    public convenience init(title: String) {
-				        self.init(__safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_title: @autoclosure @escaping () -> String) {
 				        self.init(__safeDI_theme: nil, __safeDI_title: __safeDI_title())
 				    }
 
-				    package convenience init(theme: Theme?, title: String) {
-				        self.init(__safeDI_theme: theme, __safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    package convenience init(__safeDI_theme: @autoclosure @escaping () -> Theme?, __safeDI_title: @autoclosure @escaping () -> String) {
 				        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
 				        let title = LazilyInstantiated<String>(__safeDI_title)
@@ -696,18 +668,14 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			.swiftPackagePlugin: [
 				"Service+SafeDI.swift": generatedFileHeader + """
 				extension Service {
-				    public convenience init(title: String) {
-				        self.init(__safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_title: @autoclosure @escaping () -> String) {
 				        self.init(__safeDI_theme: nil, __safeDI_title: __safeDI_title())
 				    }
 
-				    package convenience init(theme: Theme?, title: String) {
-				        self.init(__safeDI_theme: theme, __safeDI_title: title)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    package convenience init(__safeDI_theme: @autoclosure @escaping () -> Theme?, __safeDI_title: @autoclosure @escaping () -> String) {
 				        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
 				        let title = LazilyInstantiated<String>(__safeDI_title)
@@ -870,22 +838,19 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			.moduleInfo: [
 				"Feature.swift": generatedFileHeader + """
 				extension Panel {
+				    /// Code you write and code SafeDI generates can both call this initializer.
 				    public convenience init() {
 				        self.init(__safeDI_theme: nil)
 				    }
 
-				    package convenience init(theme: Theme?) {
-				        self.init(__safeDI_theme: theme)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    package convenience init(__safeDI_theme: @autoclosure @escaping () -> Theme?) {
 				        self.init(__safeDI_color: nil, __safeDI_theme: __safeDI_theme())
 				    }
 
-				    internal convenience init(color: Color?, theme: Theme?) {
-				        self.init(__safeDI_color: color, __safeDI_theme: theme)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    internal convenience init(__safeDI_color: @autoclosure @escaping () -> Color?, __safeDI_theme: @autoclosure @escaping () -> Theme?) {
 				        let color = LazilyInstantiated<Color?>(__safeDI_color)
 				        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
@@ -900,22 +865,19 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				}
 
 				extension Screen {
+				    /// Code you write and code SafeDI generates can both call this initializer.
 				    public convenience init() {
 				        self.init(__safeDI_theme: nil)
 				    }
 
-				    package convenience init(theme: Theme?) {
-				        self.init(__safeDI_theme: theme)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    package convenience init(__safeDI_theme: @autoclosure @escaping () -> Theme?) {
 				        self.init(__safeDI_color: nil, __safeDI_theme: __safeDI_theme())
 				    }
 
-				    internal convenience init(color: Color?, theme: Theme?) {
-				        self.init(__safeDI_color: color, __safeDI_theme: theme)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    internal convenience init(__safeDI_color: @autoclosure @escaping () -> Color?, __safeDI_theme: @autoclosure @escaping () -> Theme?) {
 				        let color = LazilyInstantiated<Color?>(__safeDI_color)
 				        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
@@ -933,22 +895,19 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			.swiftPackagePlugin: [
 				"Panel+SafeDI.swift": generatedFileHeader + """
 				extension Panel {
+				    /// Code you write and code SafeDI generates can both call this initializer.
 				    public convenience init() {
 				        self.init(__safeDI_theme: nil)
 				    }
 
-				    package convenience init(theme: Theme?) {
-				        self.init(__safeDI_theme: theme)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    package convenience init(__safeDI_theme: @autoclosure @escaping () -> Theme?) {
 				        self.init(__safeDI_color: nil, __safeDI_theme: __safeDI_theme())
 				    }
 
-				    internal convenience init(color: Color?, theme: Theme?) {
-				        self.init(__safeDI_color: color, __safeDI_theme: theme)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    internal convenience init(__safeDI_color: @autoclosure @escaping () -> Color?, __safeDI_theme: @autoclosure @escaping () -> Theme?) {
 				        let color = LazilyInstantiated<Color?>(__safeDI_color)
 				        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
@@ -964,22 +923,19 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
+				    /// Code you write and code SafeDI generates can both call this initializer.
 				    public convenience init() {
 				        self.init(__safeDI_theme: nil)
 				    }
 
-				    package convenience init(theme: Theme?) {
-				        self.init(__safeDI_theme: theme)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    package convenience init(__safeDI_theme: @autoclosure @escaping () -> Theme?) {
 				        self.init(__safeDI_color: nil, __safeDI_theme: __safeDI_theme())
 				    }
 
-				    internal convenience init(color: Color?, theme: Theme?) {
-				        self.init(__safeDI_color: color, __safeDI_theme: theme)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    internal convenience init(__safeDI_color: @autoclosure @escaping () -> Color?, __safeDI_theme: @autoclosure @escaping () -> Theme?) {
 				        let color = LazilyInstantiated<Color?>(__safeDI_color)
 				        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
@@ -1214,10 +1170,8 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			.moduleInfo: [
 				"Feature.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(logger: Logger) {
-				        self.init(__safeDI_logger: logger)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_logger: @autoclosure @escaping () -> Logger) {
 				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
 				        let detail = Detail(logger: logger.instance)
@@ -1233,10 +1187,8 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			.swiftPackagePlugin: [
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(logger: Logger) {
-				        self.init(__safeDI_logger: logger)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_logger: @autoclosure @escaping () -> Logger) {
 				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
 				        let detail = Detail(logger: logger.instance)
@@ -1276,10 +1228,8 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				}
 
 				extension Outer {
-				    public convenience init(logger: Logger) {
-				        self.init(__safeDI_logger: logger)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_logger: @autoclosure @escaping () -> Logger) {
 				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
 				        func __safeDI_screen() -> Screen {
@@ -1325,10 +1275,8 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				#endif
 
 				extension Outer {
-				    public convenience init(logger: Logger) {
-				        self.init(__safeDI_logger: logger)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_logger: @autoclosure @escaping () -> Logger) {
 				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
 				        func __safeDI_screen() -> Screen {

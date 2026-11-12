@@ -8545,7 +8545,7 @@ struct GraphFuzzerToolRuns {
 		switch firstOutcome {
 		case let .accepted(seamFiles, _):
 			kind = .seamTierOmitsValueInlinePasses
-			let parameterLabels = Set(seamFiles.values.flatMap(GraphFuzzerOracle.seamInitializers(inGeneratedFile:)).filter { $0.seamTypeName == seamName }.flatMap { tier in
+			let parameterLabels = Set(seamFiles.values.flatMap { GraphFuzzerOracle.seamInitializers(inGeneratedFile: $0) }.filter { $0.seamTypeName == seamName }.flatMap { tier in
 				tier.parameters.map { $0.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces) }
 			})
 			for module in [GraphFuzzerModule.samePackageCaller, .otherPackageCaller] {
@@ -8769,12 +8769,12 @@ enum GraphFuzzerOracle {
 	///
 	/// - Parameter willRunSeed: Called before the tool first runs a seed's graph, so that a long run can record
 	///   which seed was running if the tool crashes the process.
-	/// - Parameter isolatedValueOracleSeeds: The base corpus seeds whose value-oracle fixture is known not to compile
-	///   (`GraphFuzzerKnownIssue.Signature.valueOracleFixtureDoesNotCompile`), each compared on its own.
+	/// - Parameter isolatedSeeds: The seeds whose value graphs are each compared on their own
+	///   (`valueComparisons(of:isolatingValueGraphsOf:)`).
 	static func results(
 		forSeeds seeds: [UInt64],
 		features: Set<GraphFuzzerGeneratorFeature> = [],
-		isolatingValueOracleGraphsOf isolatedValueOracleSeeds: Set<UInt64> = [],
+		isolatingValueGraphsOf isolatedSeeds: Set<UInt64> = [],
 		willRunSeed: @Sendable (UInt64) -> Void = { _ in },
 	) async throws -> [GraphFuzzerResult] {
 		var toolRuns = [GraphFuzzerToolRuns]()
@@ -8782,18 +8782,18 @@ enum GraphFuzzerOracle {
 			willRunSeed(seed)
 			await toolRuns.append(try self.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: features)))
 		}
-		return try results(of: toolRuns, isolatingValueOracleGraphsOf: isolatedValueOracleSeeds)
+		return try results(of: toolRuns, isolatingValueGraphsOf: isolatedSeeds)
 	}
 
 	/// The oracle's verdict on graphs the tool already ran.
-	/// - Parameter isolatedValueOracleSeeds: The base corpus seeds whose value-oracle graph is compared on its own.
-	static func results(of toolRuns: [GraphFuzzerToolRuns], isolatingValueOracleGraphsOf isolatedValueOracleSeeds: Set<UInt64> = []) throws -> [GraphFuzzerResult] {
+	/// - Parameter isolatedSeeds: The seeds whose value graphs are each compared on their own.
+	static func results(of toolRuns: [GraphFuzzerToolRuns], isolatingValueGraphsOf isolatedSeeds: Set<UInt64> = []) throws -> [GraphFuzzerResult] {
 		let compiledRuns = toolRuns.filter { $0.runsDifferFailure == nil }
 		// A graph that fails as a debug build is reported as one.
 		let compilationFailures = compileVerificationIsEnabled
 			? try compilationFailures(of: compiledRuns).merging(compilationFailures(of: compiledRuns.filter(\.fixture.compilesAsReleaseBuildToo), definesDebug: false)) { debugFailure, _ in debugFailure }
 			: [:]
-		let valueComparisons = try valueComparisons(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil }, isolatingValueOracleGraphsOf: isolatedValueOracleSeeds)
+		let valueComparisons = try valueComparisons(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil }, isolatingValueGraphsOf: isolatedSeeds)
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
 			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.multiModuleFailures.first].compactMap(\.self) + renamedGraphFailures
@@ -8831,12 +8831,13 @@ enum GraphFuzzerOracle {
 
 	/// `valueFailures(of:)`, with the base corpus seeds whose value-oracle graph the comparator compared, failing or
 	/// not. A base corpus graph is compared by its value-oracle graph (`GraphFuzzerValueOracleRun.valueGraph`): each
-	/// root's mock and each mirrored mock with its production build, in one path, with no exemption. A seed of
-	/// `isolatedValueOracleSeeds` is compared on its own, outside the batch, so that its known compile failure does not
-	/// make the batch compile each graph again on its own.
+	/// root's mock and each mirrored mock with its production build, in one path, with no exemption. The graphs of a seed
+	/// of `isolatedSeeds` are compared on their own, outside the batch, with `DifferentialValueLimits.isolatedFuzzerGraph`:
+	/// a seed whose known compile failure would make the batch compile each graph again on its own, or one whose probes
+	/// traverse more wrappers than the batch's budget allows, which a larger budget for every graph would slow down.
 	static func valueComparisons(
 		of toolRuns: [GraphFuzzerToolRuns],
-		isolatingValueOracleGraphsOf isolatedValueOracleSeeds: Set<UInt64> = [],
+		isolatingValueGraphsOf isolatedSeeds: Set<UInt64> = [],
 	) throws -> (failures: [UInt64: GraphFuzzerFailure], comparedValueOracleSeeds: Set<UInt64>) {
 		let inspectedRuns = toolRuns.filter(\.isInspectedByValueOracle)
 		// A graph with a hole is compared with its visible build too, in which the seam builds the fulfilling type.
@@ -8872,25 +8873,18 @@ enum GraphFuzzerOracle {
 				exemptions: [],
 			))
 		}
-		let visibleGraphs = visibleRuns.compactMap { runs -> DifferentialValueGraph? in
+		let visibleGraphs = visibleRuns.compactMap { runs -> (runs: GraphFuzzerToolRuns, graph: DifferentialValueGraph)? in
 			guard case let .accepted(holeFiles, _) = runs.firstOutcome, case let .accepted(visibleFiles, _) = runs.visibleOutcome else { return nil }
 			let storingFixture = GraphFuzzerGenerator.fixture(forSeed: runs.fixture.seed, features: GraphFuzzerGeneratorFeature.features(drawnIn: runs.fixture), storingEveryParameter: true)
-			return DifferentialValueGraph(
+			return (runs, DifferentialValueGraph(
 				name: "seed \(runs.fixture.seed), visible build",
 				feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: holeFiles),
 				knownRight: DifferentialValuePath(fixture: storingFixture.withoutHoles, generatedFiles: visibleFiles),
 				probes: storingFixture.differentialValueProbes(generatedFiles: holeFiles),
-			)
+			))
 		}
-		let batchedValueOracleGraphs = valueOracleGraphs.filter { !isolatedValueOracleSeeds.contains($0.runs.fixture.seed) }
-		let isolatedValueOracleGraphs = valueOracleGraphs.filter { isolatedValueOracleSeeds.contains($0.runs.fixture.seed) }
-		guard let comparisons = try DifferentialValueOracle.compare(graphs: graphs.map(\.graph) + visibleGraphs + batchedValueOracleGraphs.map(\.graph), filesToDelete: &filesToDelete) else { return ([:], []) }
-		var valueOracleComparisons = Array(zip(batchedValueOracleGraphs.map(\.runs), comparisons.suffix(batchedValueOracleGraphs.count)))
-		for (runs, graph) in isolatedValueOracleGraphs {
-			if let comparison = try DifferentialValueOracle.compare(graphs: [graph], filesToDelete: &filesToDelete)?.first {
-				valueOracleComparisons.append((runs, comparison))
-			}
-		}
+		guard let comparisons = try compare(graphs + visibleGraphs + valueOracleGraphs, isolating: isolatedSeeds, filesToDelete: &filesToDelete) else { return ([:], []) }
+		let valueOracleComparisons = zip(valueOracleGraphs.map(\.runs), comparisons.suffix(valueOracleGraphs.count))
 		var failures = [UInt64: GraphFuzzerFailure]()
 		var comparedValueOracleSeeds = Set<UInt64>()
 		for (runs, comparison) in valueOracleComparisons {
@@ -8914,7 +8908,7 @@ enum GraphFuzzerOracle {
 				)
 			}
 		}
-		for (runs, comparison) in zip(visibleRuns, comparisons.dropFirst(graphs.count)) {
+		for ((runs, _), comparison) in zip(visibleGraphs, comparisons.dropFirst(graphs.count)) {
 			switch comparison.result {
 			case let .success(valueComparison):
 				let differences = valueComparison.differences
@@ -8960,6 +8954,33 @@ enum GraphFuzzerOracle {
 			}
 		}
 		return (failures, comparedValueOracleSeeds)
+	}
+
+	/// Compares each of `graphs`, beside the runs it judges: the graphs of seeds outside `isolatedSeeds` in one batch,
+	/// with the comparator's ordinary limits, and each isolated seed's graphs in a batch of their own, with
+	/// `DifferentialValueLimits.isolatedFuzzerGraph`, the seeds in the order of their first graph.
+	/// - Returns: Each graph's comparison, in the order of `graphs`, or `nil` when compile verification is disabled.
+	private static func compare(
+		_ graphs: [(runs: GraphFuzzerToolRuns, graph: DifferentialValueGraph)],
+		isolating isolatedSeeds: Set<UInt64>,
+		filesToDelete: inout [URL],
+	) throws -> [DifferentialValueGraphComparison]? {
+		var batches = [(indices: graphs.indices.filter { !isolatedSeeds.contains(graphs[$0].runs.fixture.seed) }, limits: DifferentialValueLimits())]
+		var isolatedSeedsInOrder = [UInt64]()
+		for (runs, _) in graphs where isolatedSeeds.contains(runs.fixture.seed) && !isolatedSeedsInOrder.contains(runs.fixture.seed) {
+			isolatedSeedsInOrder.append(runs.fixture.seed)
+		}
+		for seed in isolatedSeedsInOrder {
+			batches.append((graphs.indices.filter { graphs[$0].runs.fixture.seed == seed }, DifferentialValueLimits.isolatedFuzzerGraph))
+		}
+		var comparisons = [DifferentialValueGraphComparison?](repeating: nil, count: graphs.count)
+		for (indices, limits) in batches {
+			guard let batchComparisons = try DifferentialValueOracle.compare(graphs: indices.map { graphs[$0].graph }, limits: limits, filesToDelete: &filesToDelete) else { return nil }
+			for (index, comparison) in zip(indices, batchComparisons) {
+				comparisons[index] = comparison
+			}
+		}
+		return comparisons.compactMap(\.self)
 	}
 
 	/// How many times the code in `generatedFiles` passes a literal `nil` to each argument of each construction of a
@@ -9023,8 +9044,10 @@ enum GraphFuzzerOracle {
 	/// The names generated code gives a hole's builders and places, which a hand-written caller spells: each label of a
 	/// parameter of a seam's generated initializer or a generated mock whose type names a scope of places (`SafeDIScope_…`,
 	/// `SafeDISendableScope_…`, `SafeDIStagedScope_…`, or a public mock's `…MockScope_…`), as `<Type>(<label>:)`; each such
-	/// scope type an extension declares, as `<Type>.<scope>`; and each case of one, as `<Type>.<scope>.<case>`. The
-	/// initializer only generated code calls, whose labels are prefixed, names the same builders, so it is left out.
+	/// scope type an extension declares, as `<Type>.<scope>`; and each case of one, as `<Type>.<scope>.<case>`. A seam's
+	/// labels are read from the initializer only generated code calls, which every module generates, without their
+	/// `__safeDI_` prefix: they are the labels of the plain initializer a module that sets
+	/// `generatePlainDependencyTreeInitializers` generates beside it, which names the same builders.
 	static func holeBuilderNames(in generatedFiles: [String: String]) -> Set<String> {
 		let scopeDeclaration = try! NSRegularExpression(pattern: #"^    (?:@frozen )?(?:public |package |internal )?(?:enum|struct) (SafeDI\w*Scope_\w+) \{$"#)
 		let scopeCase = try! NSRegularExpression(pattern: #"^        (?:indirect )?case (\w+)"#)
@@ -9033,10 +9056,10 @@ enum GraphFuzzerOracle {
 			guard let match = expression.firstMatch(in: line, range: range), let capture = Range(match.range(at: 1), in: line) else { return nil }
 			return String(line[capture])
 		}
-		/// The label of `parameter`, `label: Type`, when its type names a scope of places.
+		/// The label of `parameter`, `label: Type`, when its type names a scope of places, without a `__safeDI_` prefix.
 		func builderLabel(of parameter: String) -> String? {
 			guard let colon = parameter.firstIndex(of: ":"), parameter[colon...].contains("Scope_") else { return nil }
-			return parameter[..<colon].trimmingCharacters(in: .whitespaces)
+			return generatedOnlyLabel(of: parameter) ?? parameter[..<colon].trimmingCharacters(in: .whitespaces)
 		}
 		var names = Set<String>()
 		for (_, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) {
@@ -9071,7 +9094,6 @@ enum GraphFuzzerOracle {
 					}
 				} else if line.hasPrefix("    "), !line.hasPrefix("     "), let parametersStart = line.range(of: "init("), line.hasSuffix(") {") {
 					let parameters = String(line[parametersStart.upperBound..<line.index(line.endIndex, offsetBy: -3)])
-					guard !parameters.hasPrefix("__safeDI_") else { continue }
 					for label in topLevelParameters(parameters).compactMap(builderLabel(of:)) {
 						names.insert("\(extendedType)(\(label):)")
 					}
@@ -9692,10 +9714,12 @@ enum GraphFuzzerOracle {
 
 	/// The generated initializers in `contents` – one seam's generated file, or a module's combined output – of each
 	/// seam whose guard enum the file declares, in the order the file declares them, widest tier first, with each
-	/// tier's access and parameters, each parameter the text of one: every initializer an extension of the seam
-	/// declares as its own member, not a member of a type nested in it, and not the one only generated code calls,
-	/// whose labels are prefixed, so each tier appears once.
-	static func seamInitializers(inGeneratedFile contents: String) -> [(seamTypeName: String, access: String, parameters: [String])] {
+	/// tier's access and parameters, each parameter the text of one as a tier's plain initializer spells it: every
+	/// initializer only generated code calls, which every tier has, that an extension of the seam declares as its own
+	/// member, not a member of a type nested in it, so each tier appears once whether or not the seam's module generates
+	/// plain initializers beside them (`plainSpelling(ofGeneratedOnlyParameter:)`), or, when `keepsGeneratedOnlySpelling`,
+	/// as the initializer only generated code calls spells it.
+	static func seamInitializers(inGeneratedFile contents: String, keepsGeneratedOnlySpelling: Bool = false) -> [(seamTypeName: String, access: String, parameters: [String])] {
 		var extendedType: String?
 		var guardedTypes = Set<String>()
 		var initializers = [(seamTypeName: String, access: String, parameters: [String])]()
@@ -9711,13 +9735,47 @@ enum GraphFuzzerOracle {
 				} else if let parametersStart = trimmedLine.range(of: "init("), trimmedLine.hasSuffix(") {") {
 					let modifiers = trimmedLine[..<parametersStart.lowerBound].split(separator: " ")
 					let access = modifiers.first { ["public", "package", "internal", "fileprivate", "private"].contains($0) }.map(String.init) ?? "internal"
-					let parameters = String(trimmedLine[parametersStart.upperBound..<trimmedLine.index(trimmedLine.endIndex, offsetBy: -3)])
-					guard !parameters.hasPrefix("__safeDI_") else { continue }
-					initializers.append((extendedType, access, topLevelParameters(parameters).map { callerSpelling(ofParameter: $0, of: extendedType) }))
+					let parameters = topLevelParameters(String(trimmedLine[parametersStart.upperBound..<trimmedLine.index(trimmedLine.endIndex, offsetBy: -3)]))
+					// A tier that takes no argument has one initializer; any other tier's plain initializer takes no prefixed
+					// label.
+					guard parameters.allSatisfy({ generatedOnlyLabel(of: $0) != nil }) else { continue }
+					initializers.append((extendedType, access, parameters.map { callerSpelling(ofParameter: keepsGeneratedOnlySpelling ? $0 : plainSpelling(ofGeneratedOnlyParameter: $0), of: extendedType) }))
 				}
 			}
 		}
 		return initializers.filter { guardedTypes.contains($0.seamTypeName) }
+	}
+
+	/// The external label of `parameter`, a parameter of an initializer only generated code calls, without its
+	/// `__safeDI_` prefix and with backticks only where the label needs them, or `nil` for a parameter without the prefix.
+	static func generatedOnlyLabel(of parameter: String) -> String? {
+		let trimmed = parameter.trimmingCharacters(in: .whitespaces)
+		let isQuoted = trimmed.hasPrefix("`")
+		let externalLabel = isQuoted
+			? String(trimmed.dropFirst().prefix { $0 != "`" })
+			: String(trimmed.prefix { $0 != " " && $0 != ":" })
+		guard externalLabel.hasPrefix("__safeDI_") else { return nil }
+		let label = String(externalLabel.dropFirst("__safeDI_".count))
+		return label.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" } ? label : "`\(label)`"
+	}
+
+	/// `parameter`, a parameter of an initializer only generated code calls, as the tier's plain initializer spells it:
+	/// under its label without the prefix, and a deferred parameter's `@autoclosure` as the value it returns.
+	private static func plainSpelling(ofGeneratedOnlyParameter parameter: String) -> String {
+		guard let label = generatedOnlyLabel(of: parameter), let colon = parameter.range(of: ": ") else { return parameter }
+		var type = String(parameter[colon.upperBound...]).trimmingCharacters(in: .whitespaces)
+		if type.hasPrefix("@autoclosure @escaping ") {
+			type = String(type.dropFirst("@autoclosure @escaping ".count))
+			if type.hasPrefix("@Sendable ") {
+				type = String(type.dropFirst("@Sendable ".count))
+			}
+			type = String(type.dropFirst("() -> ".count))
+			// A function value a plain initializer stores escapes it.
+			if type.hasPrefix("("), type.contains("->"), !type.hasSuffix("?"), !type.hasSuffix("!") {
+				type = "@escaping " + type
+			}
+		}
+		return "\(label): \(type)"
 	}
 
 	/// `parameter`, a parameter of a generated initializer of `seamTypeName`, as code outside the seam's extension spells
@@ -9734,10 +9792,11 @@ enum GraphFuzzerOracle {
 		seamInitializers(inGeneratedFile: contents).map { ($0.seamTypeName, $0.parameters) }
 	}
 
-	/// `seamInitializers(inGeneratedFile:)` grouped by seam, in the order the file first declares each.
+	/// `seamInitializers(inGeneratedFile:keepsGeneratedOnlySpelling:)`, each parameter spelled as the initializer only
+	/// generated code calls spells it, grouped by seam, in the order the file first declares each.
 	private static func seamInitializersBySeam(inGeneratedFile contents: String) -> [(seamTypeName: String, initializers: [(access: String, parameters: [String])])] {
 		var grouped = [(seamTypeName: String, initializers: [(access: String, parameters: [String])])]()
-		for initializer in seamInitializers(inGeneratedFile: contents) {
+		for initializer in seamInitializers(inGeneratedFile: contents, keepsGeneratedOnlySpelling: true) {
 			if let index = grouped.firstIndex(where: { $0.seamTypeName == initializer.seamTypeName }) {
 				grouped[index].initializers.append((initializer.access, initializer.parameters))
 			} else {
@@ -9749,16 +9808,29 @@ enum GraphFuzzerOracle {
 
 	/// An enum named `callerName` whose functions call each of `tiers` of the seam `seamTypeName`, indexed by the tier's
 	/// position among the seam's tiers: for each tier, one call passing every parameter, as every call must, since no
-	/// parameter has a default, spelled at the narrower of the tier's access and the seam type's.
+	/// parameter has a default, spelled at the narrower of the tier's access and the seam type's. The call is of the
+	/// initializer every generated call calls, each parameter of the function taken as that initializer takes it: a
+	/// deferred one as an `@autoclosure`, which the call passes on by calling it.
 	private static func seamCaller(named callerName: String, of seamTypeName: String, calling tiers: [(offset: Int, element: (access: String, parameters: [String]))], seamTypeAccess: String) -> String {
 		let accessOrder = ["private", "fileprivate", "internal", "package", "public"]
 		var functions = [String]()
 		for (index, tier) in tiers {
 			let access = [tier.access, seamTypeAccess].min { (accessOrder.firstIndex(of: $0) ?? 2) < (accessOrder.firstIndex(of: $1) ?? 2) } ?? "internal"
-			let labels = tier.parameters.map { $0.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces) }
+			var parameters = [String]()
+			var arguments = [String]()
+			for parameter in tier.parameters {
+				guard let label = generatedOnlyLabel(of: parameter), let colon = parameter.range(of: ": ") else { continue }
+				let type = String(parameter[colon.upperBound...]).trimmingCharacters(in: .whitespaces)
+				let trimmed = parameter.trimmingCharacters(in: .whitespaces)
+				let externalLabel = trimmed.hasPrefix("`")
+					? "`" + trimmed.dropFirst().prefix { $0 != "`" } + "`"
+					: String(trimmed.prefix { $0 != " " && $0 != ":" })
+				parameters.append("\(label): \(type)")
+				arguments.append("\(externalLabel): \(label)\(type.hasPrefix("@autoclosure") ? "()" : "")")
+			}
 			functions.append("""
-			    \(access) static func callTier\(index)(\(tier.parameters.joined(separator: ", "))) -> \(seamTypeName) {
-			        \(seamTypeName)(\(labels.map { "\($0): \($0)" }.joined(separator: ", ")))
+			    \(access) static func callTier\(index)(\(parameters.joined(separator: ", "))) -> \(seamTypeName) {
+			        \(seamTypeName)(\(arguments.joined(separator: ", ")))
 			    }
 			""")
 		}

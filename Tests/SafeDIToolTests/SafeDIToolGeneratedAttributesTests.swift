@@ -415,6 +415,7 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    @MainActor public init() {
 			        let presenter = Presenter()
 			        self.init(presenter: presenter)
@@ -511,6 +512,7 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    @MainActor public init() {
 			        let presenter = Presenter()
 			        self.init(presenter: presenter)
@@ -607,14 +609,13 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    @MainActor public init() {
 			        self.init(__safeDI_token: nil)
 			    }
 
-			    @MainActor internal init(token: Token?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    @MainActor internal init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        let presenter = Presenter()
@@ -676,6 +677,7 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Inner+SafeDI.swift": generatedFileHeader + """
 			extension Inner {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    @MainActor public init() {
 			        let presenter = Presenter()
 			        self.init(presenter: presenter)
@@ -688,6 +690,7 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			""",
 			"Outer+SafeDI.swift": generatedFileHeader + """
 			extension Outer {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    @MainActor public init() {
 			        func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_CBF29CE484222325.self
@@ -760,6 +763,7 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
 			        let presenter = Presenter()
 			        self.init(presenter: presenter)
@@ -875,6 +879,7 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 	/// The code generated for `mainActorSeam` with `generatedInitializerAttributes: "@MainActor"`, after the header.
 	private static let mainActorSeamCode = """
 	extension Screen {
+	    /// Code you write and code SafeDI generates can both call this initializer.
 	    @MainActor public init() {
 	        let presenter = Presenter()
 	        self.init(presenter: presenter)

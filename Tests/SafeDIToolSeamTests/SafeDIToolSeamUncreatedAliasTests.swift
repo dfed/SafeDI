@@ -68,10 +68,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -111,10 +109,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -154,10 +150,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -289,10 +283,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(authToken: Label?, token: Secret?) {
-			        self.init(__safeDI_authToken: authToken, __safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_authToken authToken: Label?, __safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
@@ -370,10 +362,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
@@ -434,10 +424,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_leftBuilder(authToken: Secret) -> Left {
@@ -520,10 +508,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(authToken: LazilyInstantiated<Secret>, token: Secret?) {
-			        self.init(__safeDI_authToken: authToken, __safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_authToken authToken: LazilyInstantiated<Secret>, __safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
@@ -603,10 +589,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(authToken: Label, token: Secret?) {
-			        self.init(__safeDI_authToken: authToken, __safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_authToken authToken: Label, __safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
@@ -695,6 +679,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public convenience init() {
 			        func __safeDI_token() -> Secret {
 			            func __safeDI_detailBuilder() -> Detail {
@@ -781,6 +766,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public convenience init() {
 			        func __safeDI_a() -> A {
 			            func __safeDI_detail() -> Detail {
@@ -869,6 +855,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public convenience init() {
 			        func __safeDI_token() -> Secret {
 			            func __safeDI_detailBuilder() -> Detail {
@@ -980,10 +967,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
@@ -1073,10 +1058,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -1116,10 +1099,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -1225,10 +1206,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_other() -> Secret {
@@ -1314,6 +1293,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public convenience init() {
 			        func __safeDI_token() -> Secret {
 			            func __safeDI_leftBuilder() -> Left {
@@ -1403,10 +1383,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
@@ -1484,10 +1462,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -1526,10 +1502,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -1568,10 +1542,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -1698,10 +1670,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_leftBuilder(authToken: Secret) -> Left {
@@ -1742,10 +1712,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_leftBuilder(authToken: Secret) -> Left {
@@ -1786,10 +1754,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_leftBuilder(authToken: Secret) -> Left {
@@ -1927,10 +1893,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token_)
 				        func __safeDI_left() -> Left {
@@ -1972,10 +1936,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token_)
 				        func __safeDI_left() -> Left {
@@ -2017,10 +1979,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token_)
 				        func __safeDI_left() -> Left {
@@ -2161,10 +2121,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
@@ -2239,7 +2197,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_screenBuilder(token: Secret) -> Screen {
 			            _ = Screen.__safeDI_Screen_AC3B2DB59BEF585F.self
-			            return Screen(token: token)
+			            return Screen(__safeDI_token: token)
 			        }
 			        let screenBuilder = Instantiator<Screen> {
 			            __safeDI_screenBuilder(token: $0)
@@ -2250,7 +2208,9 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret) {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public convenience init(__safeDI_token token: Secret) {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
@@ -2323,6 +2283,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public convenience init() {
 			        func __safeDI_leftBuilder(token: Secret) -> Left {
 			            func __safeDI_detail() -> Detail {
@@ -2400,10 +2361,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret) {
 			        let token = LazilyInstantiated<Secret>(__safeDI_token)
 			        func __safeDI_left() -> Left {
@@ -2478,10 +2437,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret) {
 			        let token = LazilyInstantiated<Secret>(__safeDI_token)
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
@@ -2542,10 +2499,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret) {
 			        let token = LazilyInstantiated<Secret>(__safeDI_token)
 			        func __safeDI_left() -> Left {
@@ -2633,6 +2588,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public convenience init() {
 			        func __safeDI_token() -> Secret {
 			            func __safeDI_detailBuilder() -> Detail {
@@ -2717,10 +2673,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
@@ -2752,10 +2706,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
@@ -2787,10 +2739,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
@@ -2897,10 +2847,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
@@ -2980,10 +2928,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
@@ -3043,10 +2989,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
@@ -3146,10 +3090,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: (any Auth)?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> (any Auth)?) {
 				        let token = LazilyInstantiated<(any Auth)?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -3187,10 +3129,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: (() -> Void)?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> (() -> Void)?) {
 				        let token = LazilyInstantiated<(() -> Void)?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -3228,10 +3168,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Feature.Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Feature.Secret?) {
 				        let token = LazilyInstantiated<Feature.Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -3269,10 +3207,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: SecretID?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> SecretID?) {
 				        let token = LazilyInstantiated<SecretID?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -3310,10 +3246,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -3351,10 +3285,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: (@Sendable () -> Void)?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> (@Sendable () -> Void)?) {
 				        let token = LazilyInstantiated<(@Sendable () -> Void)?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -3392,10 +3324,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: (() -> Void)?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> (() -> Void)?) {
 				        let token = LazilyInstantiated<(() -> Void)?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -3433,10 +3363,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: (a: Int, b: String)?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> (a: Int, b: String)?) {
 				        let token = LazilyInstantiated<(a: Int, b: String)?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -3474,10 +3402,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Box<Secret>?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Box<Secret>?) {
 				        let token = LazilyInstantiated<Box<Secret>?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -3736,10 +3662,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 		#expect(try #require(output.modules["Feature"]).generatedFiles == [
 			integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
@@ -3782,10 +3706,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			#endif
 
 			extension Screen {
-			    public convenience init(token: Secret?) {
-			        self.init(__safeDI_token: token)
-			    }
-
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
@@ -3827,10 +3749,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			"moduleInfo-authToken": [
 				"Feature.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -3856,10 +3776,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			"moduleInfo-nothing": [
 				"Feature.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -3885,10 +3803,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			"moduleInfo-token": [
 				"Feature.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -3914,10 +3830,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			"swiftPackagePlugin-authToken": [
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -3943,10 +3857,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			"swiftPackagePlugin-nothing": [
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -3972,10 +3884,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			"swiftPackagePlugin-token": [
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -4133,10 +4043,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			"moduleInfo-authToken": [
 				"Feature.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -4163,10 +4071,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			"moduleInfo-nothing": [
 				"Feature.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -4193,10 +4099,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			"moduleInfo-token": [
 				"Feature.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -4223,10 +4127,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			"swiftPackagePlugin-authToken": [
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -4253,10 +4155,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			"swiftPackagePlugin-nothing": [
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -4283,10 +4183,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			"swiftPackagePlugin-token": [
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -4449,10 +4347,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				#endif
 
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
@@ -4482,10 +4378,8 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				#endif
 
 				extension Screen {
-				    public convenience init(token: Secret?) {
-				        self.init(__safeDI_token: token)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {

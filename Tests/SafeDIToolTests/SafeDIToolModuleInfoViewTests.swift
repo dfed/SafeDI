@@ -96,7 +96,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feed"]?.moduleInfoFile?.dependencyModuleNames == ["Core"])
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.appCallingFeedScreen(guardHash: "029593DA1BB2FBD5", tokenLabel: "token")])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.appCallingFeedScreen(guardHash: "029593DA1BB2FBD5")])
 		try expectEveryModuleCompiled(output)
 	}
 
@@ -350,7 +350,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		        let feedScreen: FeedScreen = __safeDI_feedScreen()
 		        func __safeDI_session() -> Session {
 		            _ = Session.__safeDI_Session_029593DA1BB2FBD5.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Session", declaringModule: "Session"))
-		            return Session(token: nil)
+		            return Session(__safeDI_token: nil)
 		        }
 		        let session: Session = __safeDI_session()
 		        self.init(feedScreen: feedScreen, session: session)
@@ -959,14 +959,14 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 	/// `App`'s generated file: `FeedScreen`'s generated initializer takes `token: Token?`, which `Session` receives only if
 	/// available beneath it, and `App` passes `nil`; its file imports what the files of `Feed`, `Session` and `Core` do.
 	/// `guardHash` is the guard of a `token` the initializer defers, as a pass-through; one `FeedScreen` receives itself
-	/// is taken by value, and its guard hashes no deferral.
-	private static func appCallingFeedScreen(guardHash: String = "F046DCFB1718557F", tokenLabel: String = "__safeDI_token") -> String {
+	/// is taken by value, and its guard hashes no deferral. Either way the call is of the initializer generated code calls.
+	private static func appCallingFeedScreen(guardHash: String = "F046DCFB1718557F") -> String {
 		generatedFileHeader + importBlock("Core") + "\n" + importBlock("Feed") + "\n" + importBlock("Session") + "\n\n" + """
 		extension Root {
 		    public init() {
 		        func __safeDI_feedScreen() -> FeedScreen {
 		            _ = FeedScreen.__safeDI_FeedScreen_\(guardHash).self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "FeedScreen", declaringModule: "Feed"))
-		            return FeedScreen(\(tokenLabel): nil)
+		            return FeedScreen(__safeDI_token: nil)
 		        }
 		        let feedScreen: FeedScreen = __safeDI_feedScreen()
 		        self.init(feedScreen: feedScreen)

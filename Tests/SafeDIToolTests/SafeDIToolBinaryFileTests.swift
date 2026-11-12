@@ -214,7 +214,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	func schemaDescription_describesTypeOfEveryFieldAndPayloadInWriteOrder() {
 		let lines = BinaryFile.schemaDescription.split(separator: "\n").map(String.init)
 
-		#expect(lines.contains("SafeDICore.SafeDIConfiguration: additionalImportedModules: Swift.Array<Swift.String>, additionalDirectoriesToInclude: Swift.Array<Swift.String>, additionalMocksToGenerate: Swift.Array<Swift.String>, mockConditionalCompilation: Swift.Optional<Swift.String>, declarationLocation: Swift.Optional<SafeDICore.Dependency.DeclarationLocation>, sourceFilePath: Swift.Optional<Swift.String>"))
+		#expect(lines.contains("SafeDICore.SafeDIConfiguration: additionalImportedModules: Swift.Array<Swift.String>, additionalDirectoriesToInclude: Swift.Array<Swift.String>, additionalMocksToGenerate: Swift.Array<Swift.String>, mockConditionalCompilation: Swift.Optional<Swift.String>, generatePlainDependencyTreeInitializers: Swift.Bool, declarationLocation: Swift.Optional<SafeDICore.Dependency.DeclarationLocation>, sourceFilePath: Swift.Optional<Swift.String>"))
 		#expect(lines.contains("SafeDICore.Dependency.Source: instantiated(fulfillingTypeDescription: Swift.Optional<SafeDICore.TypeDescription>, erasedToConcreteExistential: Swift.Bool), received(onlyIfAvailable: Swift.Bool), aliased(fulfillingProperty: SafeDICore.Property, erasedToConcreteExistential: Swift.Bool, onlyIfAvailable: Swift.Bool), forwarded"))
 	}
 

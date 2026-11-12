@@ -621,7 +621,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		)
 		let seamCode = """
 		extension Service {
-		    public init(analytics: LazilyInstantiated<Analytics>, session: Session) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_analytics analytics: LazilyInstantiated<Analytics>, __safeDI_session session: Session) {
 		        let tokenCache = TokenCache()
 		        self.init(analytics: analytics, session: session, tokenCache: tokenCache)
 		    }
@@ -643,7 +645,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		        func __safeDI_screen() -> Screen {
 		            func __safeDI_service() -> Service {
 		                _ = Service.__safeDI_Service_EEBD82F55D1C7D4A.self\(pluginComment)
-		                return Service(analytics: analytics, session: session)
+		                return Service(__safeDI_analytics: analytics, __safeDI_session: session)
 		            }
 		            let service: Service = __safeDI_service()
 		            return Screen(analytics: analytics, session: session, service: service)
@@ -786,6 +788,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		)
 		let seamCode = """
 		extension Service {
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
 		        let formatter = Formatter()
 		        self.init(formatter: formatter)
@@ -1016,8 +1019,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		        public struct userService_Values {}
 		    }
 
-		    public convenience init(userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
-		        let __safeDI_userServiceBuilder = userServiceBuilder
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
 		        let userService: any UserService = __safeDI_userServiceBuilder(.userService(SafeDIScope_UserService.userService_Values()))
 		        self.init(userService: userService)
 		    }
@@ -1029,6 +1033,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		"""
 		let featureImplCode = """
 		extension DefaultUserService {
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
 		        let cache = Cache()
 		        self.init(cache: cache)
@@ -1055,7 +1060,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		                    return userService
 		                }
 		            }
-		            return Service(userServiceBuilder: __safeDI_userServiceBuilder_Service)
+		            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
 		        }
 		        let service: Service = __safeDI_service()
 		        self.init(service: service)
@@ -2147,6 +2152,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		#expect(try #require(output.modules["Feature"]).generatedFiles == [
 			"FeatureView+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + """
 			extension FeatureView {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    package init() {
 			        let networkClient = NetworkClient()
 			        let formatter = Formatter()
@@ -3971,7 +3977,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		#endif
 
 		extension Screen {
-		\(comment)    public convenience init(theme: Theme) {
+		\(comment)    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_theme theme: Theme) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -4041,11 +4049,14 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		#endif
 
 		extension Screen {
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public convenience init() {
-		        self.init(theme: nil)
+		        self.init(__safeDI_theme: nil)
 		    }
 
-		    package convenience init(theme: Theme?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package convenience init(__safeDI_theme theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -4071,7 +4082,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		#endif
 
 		extension SeamF {
-		\(Self.unreadStoreComment(integration: integration))    public convenience init(store: Store) {
+		\(Self.unreadStoreComment(integration: integration))    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_store store: Store) {
 		        let inner = Inner(store: store)
 		        self.init(store: store, inner: inner)
 		    }
@@ -4096,7 +4109,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		#endif
 
 		extension SeamF {
-		\(Self.unreadStoreComment(integration: integration))    public convenience init(store: Store?) {
+		\(Self.unreadStoreComment(integration: integration))    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_store store: Store?) {
 		        let inner = Inner()
 		        self.init(store: store, inner: inner)
 		    }
@@ -4159,7 +4174,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		#endif
 
 		extension Screen {
-		\(comment)    public convenience init(inner: Outer.Inner) {
+		\(comment)    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_inner inner: Outer.Inner) {
 		        let cache = Cache()
 		        self.init(inner: inner, cache: cache)
 		    }

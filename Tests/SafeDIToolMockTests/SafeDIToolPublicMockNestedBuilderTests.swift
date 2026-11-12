@@ -296,6 +296,70 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesEachPassedUpBuilderSendableOnce_whenInternalCallerBuildsAPublicCallerInASendableFunction() async throws {
+		// `BoardScreen` builds `Board` in a `@Sendable` builder function, which captures both builders `Board`'s mock passes
+		// up: the plain family's, which `BoardScreen`'s mock takes `@Sendable`, and the `@Sendable` family's, which is
+		// `@Sendable` already.
+		let heldBoardScreen = """
+		import Core
+		import Mid
+		import SafeDI
+
+		@Instantiable(generateMock: true)
+		public struct BoardScreen: Instantiable {
+		    public init(board: SendableInstantiator<Board>) {
+		        self.board = board
+		    }
+
+		    @Instantiated let board: SendableInstantiator<Board>
+		}
+		"""
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(mid: [Self.board], app: [heldBoardScreen]), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Mid)
+		import Mid
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension BoardScreen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            board: (@Sendable () -> Board.SafeDIOverrides)? = nil
+		        ) {
+		            self.board = board
+		        }
+
+		        let board: (@Sendable () -> Board.SafeDIOverrides)?
+		    }
+
+		    static func mock(
+		        serviceBuilder: @escaping @Sendable (Board.SafeDIMockScope_Service) -> any Service,
+		        serviceSendableBuilder: @escaping @Sendable (Board.SafeDISendableMockScope_Service) -> any Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> BoardScreen {
+		        _ = Board.\(Self.boardGuard).self\(Self.comment("Mid"))
+		        let __safeDI_board__safeDIBuilder = safeDIOverrides.board
+		        @Sendable func __safeDI_board() -> Board {
+		            Board.mock(serviceBuilder: serviceBuilder, serviceSendableBuilder: serviceSendableBuilder, safeDIOverrides: __safeDI_board__safeDIBuilder?() ?? .init())
+		        }
+		        let board = SendableInstantiator<Board>(__safeDI_board)
+		        return BoardScreen(board: board)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_fillsThroughBothFamiliesDispatchers_whenCallerOfAPublicCallerSeesATypeThatFulfillsTheHole() async throws {
 		let modules = Self.modules(mid: [Self.board], app: [Self.boardScreen, Self.defaultService])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)

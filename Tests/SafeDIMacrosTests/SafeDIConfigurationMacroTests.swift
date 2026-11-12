@@ -56,7 +56,8 @@ import Testing
 				    additionalImportedModules: ["MyModule"],
 				    additionalDirectoriesToInclude: ["DirA"],
 				    additionalMocksToGenerate: ["SomeService"],
-				    mockConditionalCompilation: "DEBUG"
+				    mockConditionalCompilation: "DEBUG",
+				    generatePlainDependencyTreeInitializers: true
 				)
 				""",
 				expandedSource: "",
@@ -100,6 +101,43 @@ import Testing
 				)
 				""",
 				expandedSource: "",
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenGeneratePlainDependencyTreeInitializersIsFalse() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    generatePlainDependencyTreeInitializers: false
+				)
+				""",
+				expandedSource: "",
+				macros: safeDIConfigurationTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_throwsError_whenGeneratePlainDependencyTreeInitializersHasNonLiteralValue() {
+			assertMacroExpansion(
+				"""
+				#SafeDIConfiguration(
+				    generatePlainDependencyTreeInitializers: someVariable
+				)
+				""",
+				expandedSource: """
+				#SafeDIConfiguration(
+				    generatePlainDependencyTreeInitializers: someVariable
+				)
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The `generatePlainDependencyTreeInitializers` argument must be `true` or `false`.",
+						line: 1,
+						column: 1,
+					),
+				],
 				macros: safeDIConfigurationTestMacros,
 			)
 		}
@@ -292,7 +330,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "#SafeDIConfiguration does not accept unlabeled arguments. Label each argument: `additionalImportedModules`, `additionalDirectoriesToInclude`, `additionalMocksToGenerate`, or `mockConditionalCompilation`.",
+						message: "#SafeDIConfiguration does not accept unlabeled arguments. Label each argument: `additionalImportedModules`, `additionalDirectoriesToInclude`, `additionalMocksToGenerate`, `mockConditionalCompilation`, or `generatePlainDependencyTreeInitializers`.",
 						line: 1,
 						column: 1,
 					),
@@ -316,7 +354,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "#SafeDIConfiguration does not accept an argument labeled `unknownParameter`. It accepts `additionalImportedModules`, `additionalDirectoriesToInclude`, `additionalMocksToGenerate`, and `mockConditionalCompilation`.",
+						message: "#SafeDIConfiguration does not accept an argument labeled `unknownParameter`. It accepts `additionalImportedModules`, `additionalDirectoriesToInclude`, `additionalMocksToGenerate`, `mockConditionalCompilation`, and `generatePlainDependencyTreeInitializers`.",
 						line: 1,
 						column: 1,
 					),

@@ -502,7 +502,7 @@ struct SafeDIToolGraphFuzzerTests {
 	        let authToken: S31_Secret = token
 	        func __safeDI_screen() -> S31_Screen {
 	            _ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self
-	            return S31_Screen(token: token)
+	            return S31_Screen(__safeDI_token: token)
 	        }
 	        let screen: S31_Screen = __safeDI_screen()
 	        self.init(authToken: authToken, screen: screen)
@@ -723,7 +723,8 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	/// A seam's generated file whose plain enum holds `cases`, each `case <name>(<name>_Values)`, and whose initializer
-	/// takes `builderLabel` over it.
+	/// takes `builderLabel` over it, as a module that does not set `generatePlainDependencyTreeInitializers` generates it:
+	/// only the initializer generated code calls, with its labels prefixed.
 	private static func holeSeamFile(builderLabel: String, cases: [String]) -> String {
 		"""
 		extension S8_Feature {
@@ -731,11 +732,9 @@ struct SafeDIToolGraphFuzzerTests {
 		\(cases.map { "        case \($0)(\($0)_Values)\n\n        public struct \($0)_Values {\n            public let analytics: S8_Analytics\n        }" }.joined(separator: "\n\n"))
 		    }
 
-		    public init(\(builderLabel): @escaping (SafeDIScope_S8_Service) -> any S8_Service) {
-		        self.init(__safeDI_\(builderLabel): \(builderLabel))
-		    }
-
-		    init(__safeDI_\(builderLabel): @escaping (SafeDIScope_S8_Service) -> any S8_Service) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public init(__safeDI_\(builderLabel): @escaping (SafeDIScope_S8_Service) -> any S8_Service) {
 		        let service: any S8_Service = __safeDI_\(builderLabel)(.\(cases[0])(SafeDIScope_S8_Service.\(cases[0])_Values(analytics: S8_Analytics())))
 		        self.init(service: service)
 		    }
@@ -786,6 +785,19 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func holeBuilderNames_readsTheSameNames_whenModuleAlsoGeneratesPlainInitializer() {
+		// A module that sets `generatePlainDependencyTreeInitializers` generates a plain initializer beside the one generated
+		// code calls, and both name the same builders.
+		let fileName = "FuzzFeature/S8_Feature+SafeDI.swift"
+		let defaultFile = Self.holeSeamFile(builderLabel: "s8_ServiceBuilder", cases: ["service"])
+		let plainInitializer = "    public init(s8_ServiceBuilder: @escaping (SafeDIScope_S8_Service) -> any S8_Service) {\n        self.init(__safeDI_s8_ServiceBuilder: s8_ServiceBuilder)\n    }\n\n"
+		let optedInFile = defaultFile.replacingOccurrences(of: "    /// Only code SafeDI generates", with: plainInitializer + "    /// Only code SafeDI generates")
+
+		#expect(optedInFile != defaultFile)
+		#expect(GraphFuzzerOracle.holeBuilderNames(in: [fileName: optedInFile]) == GraphFuzzerOracle.holeBuilderNames(in: [fileName: defaultFile]))
+	}
+
+	@Test
 	func holeBuilderNames_readsPublicMockBuildersAndScopes_whenMockTakesBuilderOverEnumOfItsPlaces() {
 		// A public mock takes its builders on lines of their own, and a consumer's mock a flat builder typed by the called
 		// mock's enum: both are names a hand-written caller spells.
@@ -825,11 +837,15 @@ struct SafeDIToolGraphFuzzerTests {
 		// a `public` tier taking a type the generator declared `package`. A tier as narrow as the type is sound.
 		let unsoundTier = """
 		extension S1_ProofSeam {
-		    public convenience init(proofTheme: S1_ProofTheme?) {
-		        self.init(proofTheme: proofTheme)
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_proofTheme proofTheme: S1_ProofTheme?) {
+		        self.init(__safeDI_proofTheme: proofTheme)
 		    }
 
-		    package convenience init(proofCrate: S1_ProofSpace.S1_ProofCrate, proofTheme: S1_ProofTheme?) {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    package convenience init(__safeDI_proofCrate proofCrate: S1_ProofSpace.S1_ProofCrate, __safeDI_proofTheme proofTheme: S1_ProofTheme?) {
 		        let proofBadge = S1_ProofBadge(proofTheme: proofTheme)
 		        self.init(proofBadge: proofBadge)
 		    }
@@ -909,7 +925,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// A seam's tiers and a call of its public tier from a caller in another package.
 	private static let omittingCall = [
-		"FuzzFeature/S1_ProofSeam+SafeDI.swift": "extension S1_ProofSeam {\n    public convenience init() {\n        self.init(proofTheme: nil)\n    }\n\n    package convenience init(proofTheme: S1_ProofTheme?) {\n        self.init(proofBadge: S1_ProofBadge(proofTheme: proofTheme))\n    }\n}\n\nextension S1_ProofSeam {\n    public enum __safeDI_S1_ProofSeam_0123456789ABCDEF {}\n}\n",
+		"FuzzFeature/S1_ProofSeam+SafeDI.swift": "extension S1_ProofSeam {\n    public convenience init() {\n        self.init(__safeDI_proofTheme: nil)\n    }\n\n    package convenience init(__safeDI_proofTheme proofTheme: S1_ProofTheme?) {\n        self.init(proofBadge: S1_ProofBadge(proofTheme: proofTheme))\n    }\n}\n\nextension S1_ProofSeam {\n    public enum __safeDI_S1_ProofSeam_0123456789ABCDEF {}\n}\n",
 		"FuzzOther/S1_ProofOtherRoot+SafeDI.swift": "extension S1_ProofOtherRoot {\n    public convenience init() {\n        func __safeDI_proofSeam() -> S1_ProofSeam {\n            _ = S1_ProofSeam.__safeDI_S1_ProofSeam_0123456789ABCDEF.self\n            return S1_ProofSeam()\n        }\n        self.init(proofSeam: __safeDI_proofSeam())\n    }\n}\n",
 	]
 
@@ -4276,7 +4292,7 @@ struct SafeDIToolGraphFuzzerTests {
 						.map { configuration.startingSeed &+ UInt64($0) }
 					nextBatchIndex += 1
 					group.addTask {
-						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueOracleGraphsOf: corpus.isolatedValueOracleSeeds) { seed in
+						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueGraphsOf: corpus.isolatedValueGraphSeeds) { seed in
 							report.append("seed \(seed)")
 						}
 						for index in results.indices where results[index].failure == nil
@@ -4627,10 +4643,15 @@ struct SafeDIToolGraphFuzzerTests {
 		/// How many graphs name a type no declaration SafeDI reads declares, which the oracle runs again as their read
 		/// twin (`GraphFuzzerFixture.readTwin`) and compares with the graph: none for a corpus that draws no such type.
 		var readTwinGraphCount = 0
+		/// The seeds whose value graphs' probes traverse more wrappers than `DifferentialValueLimits()` allows, each listed
+		/// by name so that only its graphs get `DifferentialValueLimits.isolatedFuzzerGraph`'s budget.
+		var seedsTraversingPastTheBatchBudget = Set<UInt64>()
 
-		/// The seeds whose value-oracle fixture is known not to compile, which the value oracle compares each on its own.
-		var isolatedValueOracleSeeds: Set<UInt64> {
-			SafeDIToolGraphFuzzerTests.isolatedValueOracleSeeds(of: knownIssues)
+		/// The seeds whose value graphs the value oracle compares each on its own, with
+		/// `DifferentialValueLimits.isolatedFuzzerGraph`: those whose value-oracle fixture is known not to compile, and
+		/// `seedsTraversingPastTheBatchBudget`.
+		var isolatedValueGraphSeeds: Set<UInt64> {
+			SafeDIToolGraphFuzzerTests.isolatedValueOracleSeeds(of: knownIssues).union(seedsTraversingPastTheBatchBudget)
 		}
 	}
 
@@ -4720,10 +4741,11 @@ struct SafeDIToolGraphFuzzerTests {
 		spellingDrawFeatures: Set(GraphFuzzerSpelling.allCases.map(\.drawFeature)),
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
+		seedsTraversingPastTheBatchBudget: seamCorpusSeedsTraversingPastTheBatchBudget,
 	)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0xA413E559BB8C972E
+	static let seamCorpusFixtureHash: UInt64 = 0x738354155D0E6294
 	static let seamCorpusAcceptedSeedCount = 290
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xD6D6804D93BCEE5C
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -4734,6 +4756,11 @@ struct SafeDIToolGraphFuzzerTests {
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
 	/// with their read twin.
 	static let seamCorpusReadTwinGraphCount = 153
+	/// The seam corpus's seeds whose probes traverse more wrappers than a batch allows, compared on their own with
+	/// `DifferentialValueLimits.isolatedFuzzerGraph`: seed 391, whose `S391_Root0()` traverses 130,726 through a chain of
+	/// hole draws that re-enter one another (`HoleInner2`, `HoleDeep`, `HoleLoop`, `HoleSeam`), on its builds with the
+	/// hole, visible and inline alike.
+	static let seamCorpusSeedsTraversingPastTheBatchBudget: Set<UInt64> = [391]
 
 	/// The ordinary suite's batch of the seam corpus: graphs the tool accepts whose generated code, between them, shows
 	/// every `GraphFuzzerSeamOutputFeature` – both kinds of pass-through, a call reading `.instance`, an `@escaping`
@@ -5082,32 +5109,32 @@ struct SafeDIToolGraphFuzzerTests {
 	/// percent: the floor of the share the corpus run observed, for each feature the generated code shows today. The
 	/// commits that make another feature show pin it in turn.
 	static let publicMockCorpusOutputFeatureMinimumShares: [GraphFuzzerPublicMockOutputFeature: Int] = [
-		.allNonPublicConfiguration: 23,
-		.configurationStruct: 20,
-		.constructionFunction: 49,
-		.consumerCall: 52,
-		.consumerErasedCall: 13,
+		.allNonPublicConfiguration: 40,
+		.configurationStruct: 32,
+		.constructionFunction: 80,
+		.consumerCall: 78,
+		.consumerErasedCall: 18,
 		.consumerErasedInline: 2,
-		.consumerFillReentersPublicMock: 1,
-		.consumerFillsHole: 2,
-		.consumerInline: 21,
-		.consumerPassesHoleBuilderUp: 6,
-		.consumerPassesInstance: 27,
-		.consumerSendableFactory: 10,
-		.defaultRewritten: 54,
-		.forwardedProvider: 2,
-		.holeBuilder: 23,
-		.isolatedConstruction: 1,
-		.moduleConfiguration: 49,
-		.publicTier: 64,
-		.secondTier: 34,
+		.consumerFillReentersPublicMock: 2,
+		.consumerFillsHole: 3,
+		.consumerInline: 34,
+		.consumerPassesHoleBuilderUp: 9,
+		.consumerPassesInstance: 42,
+		.consumerSendableFactory: 16,
+		.defaultRewritten: 85,
+		.forwardedProvider: 3,
+		.holeBuilder: 34,
+		.isolatedConstruction: 2,
+		.moduleConfiguration: 80,
+		.publicTier: 95,
+		.secondTier: 57,
 		.stagedHoleBuilder: 1,
 		.thirdTier: 0,
-		.unreadTypeComment: 14,
+		.unreadTypeComment: 26,
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0xFC0CF09D51885BF9
+	static let publicMockCorpusFixtureHash: UInt64 = 0x25B6F9BBB91973CD
 	static let publicMockCorpusAcceptedSeedCount = 863
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x0ACCA7FED6243E41
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -5532,7 +5559,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 /// The smoke batch's results, computed once per process and shared by the tests that check them.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private let smokeResults = Task {
-	try await GraphFuzzerOracle.results(forSeeds: SafeDIToolGraphFuzzerTests.smokeSeeds, isolatingValueOracleGraphsOf: SafeDIToolGraphFuzzerTests.baseCorpus.isolatedValueOracleSeeds)
+	try await GraphFuzzerOracle.results(forSeeds: SafeDIToolGraphFuzzerTests.smokeSeeds, isolatingValueGraphsOf: SafeDIToolGraphFuzzerTests.baseCorpus.isolatedValueGraphSeeds)
 }
 
 /// The seam smoke batch's results, drawn with the `generateDependencyTree` feature, computed once per process.

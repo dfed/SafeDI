@@ -46,6 +46,10 @@ func seamFixtureType(
 	"""
 }
 
+/// The configuration file of a module whose seams code a person writes calls, which sets
+/// `generatePlainDependencyTreeInitializers: true`, for a fixture's `swiftFileContentByFilePath`.
+let plainDependencyTreeInitializersConfiguration = ["SafeDIConfiguration.swift": "#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n"]
+
 /// `files` with no type declared as a seam, so every tree is built inline.
 func inlineFixture(_ files: [String]) -> [String] {
 	files.map { $0.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable") }

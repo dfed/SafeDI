@@ -283,15 +283,26 @@ struct DifferentialValueGraph {
 struct DifferentialValueLimits: Equatable {
 	/// - Parameters:
 	///   - probeTimeLimitInSeconds: How long a probe may run before the probe executable is stopped, which fails the
-	///     path's description: far longer than any fuzzer graph's probe takes.
+	///     path's description: far longer than any batched fuzzer graph's probe takes.
 	///   - traversalsPerProbe: How many wrappers a probe traverses at most, so that a description cannot grow
 	///     exponentially with the builders each type holds: about eleven times what the busiest probe of the fuzzer's
-	///     corpus traverses, 908. A probe that spends them on either path fails its graph's comparison, unless an
-	///     exemption accepts each node where it did.
+	///     corpora traversed when it was set, 908, which keeps a probe that runs away cheap in a batch of hundreds of
+	///     graphs. A seed whose probes need more is compared on its own with `isolatedFuzzerGraph`. A probe that spends
+	///     them on either path fails its graph's comparison, unless an exemption accepts each node where it did.
 	init(probeTimeLimitInSeconds: Int = 60, traversalsPerProbe: Int = 10_000) {
 		self.probeTimeLimitInSeconds = probeTimeLimitInSeconds
 		self.traversalsPerProbe = traversalsPerProbe
 	}
+
+	/// The limits of a fuzzer seed whose value graphs are compared on their own
+	/// (`GraphFuzzerOracle.valueComparisons(of:isolatingValueGraphsOf:)`), for the seeds listed by name because their
+	/// probes traverse more wrappers than the default allows (a seed isolated because its value-oracle fixture is known
+	/// not to compile gets them too, and never runs a probe): seed 391 of the seam corpus, whose `S391_Root0()` traverses
+	/// 130,726 through a chain of hole draws that re-enter one another, and runs for up to 23 seconds on a ten-core Mac.
+	/// 200,000 is the smallest round budget above it with half again as many to spare, and 300 seconds keeps the time
+	/// limit far above the probe. Every other graph keeps the default, so that a probe that runs away there still stops
+	/// at 10,000 traversals and the batch stays fast; the seed takes two to three minutes to fuzz on its own.
+	static let isolatedFuzzerGraph = DifferentialValueLimits(probeTimeLimitInSeconds: 300, traversalsPerProbe: 200_000)
 
 	let probeTimeLimitInSeconds: Int
 	let traversalsPerProbe: Int

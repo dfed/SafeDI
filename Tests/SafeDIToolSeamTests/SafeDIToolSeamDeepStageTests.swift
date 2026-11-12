@@ -74,7 +74,7 @@ struct SafeDIToolSeamDeepStageTests: ~Copyable {
 		}
 		let generatedSeam = try #require(output.modules["Feature"]?.generatedFiles["Feature.swift"])
 		#expect(generatedSeam.split(separator: "\n").map(String.init).filter { $0.contains("public init(") } == [
-			"    public init(gadgetBuilder_\(caseName): @escaping (SafeDIStagedScope_Gadget_\(caseName).Stage1) -> \(expectedStageFunctionTypes(qualifiedBy: ""))) {",
+			"    public init(__safeDI_gadgetBuilder_\(caseName): @escaping (SafeDIStagedScope_Gadget_\(caseName).Stage1) -> \(expectedStageFunctionTypes(qualifiedBy: ""))) {",
 		])
 		let generatedFill = try #require(output.modules["App"]?.generatedFiles["App.swift"])
 		#expect(generatedFill.split(separator: "\n").map(String.init).filter { $0.contains("func __safeDI_gadgetBuilder_\(caseName)(") } == [

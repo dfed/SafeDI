@@ -73,6 +73,7 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 			#endif
 
 			extension Panel {
+			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
 			        let gauge = Gauge()
 			        self.init(gauge: gauge)
@@ -307,6 +308,7 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.screenModules(seam: true, screenInitializer: "init(detail: Detail)", declarations: ["@Instantiated let detail: Detail"], appDeclarations: ["@Instantiated let screen: Screen"]), integration: integration, filesToDelete: &filesToDelete)
 		#expect(Self.seamFile(of: output, integration: integration) == generatedFileHeader + """
 		extension Screen {
+		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
 		        let detail = Detail()
 		        self.init(detail: detail)
@@ -366,10 +368,8 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.screenModules(seam: true, screenInitializer: "package init(reader: Reader)", declarations: ["@Instantiated let reader: Reader"], appDeclarations: ["@Instantiated let token: Token", "@Instantiated let screen: Screen"]), integration: integration, filesToDelete: &filesToDelete)
 		#expect(Self.seamFile(of: output, integration: integration) == generatedFileHeader + """
 		extension Screen {
-		    public init(token: Token) {
-		        self.init(__safeDI_token: token)
-		    }
-
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 		        let token = LazilyInstantiated<Token>(__safeDI_token)
 		        let reader = Reader(token: token.instance)
@@ -429,10 +429,8 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 			#expect(output.modules["Feature"]?.generatedFiles == [
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public init(logger: Logger?) {
-				        self.init(__safeDI_logger: logger)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public init(__safeDI_logger: @autoclosure @escaping () -> Logger?) {
 				        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
 				        let detail = Detail(logger: logger.instance)
@@ -468,10 +466,8 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 			#expect(output.modules["Feature"]?.generatedFiles == [
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public init(logger: Logger?) {
-				        self.init(__safeDI_logger: logger)
-				    }
-
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public init(__safeDI_logger: @autoclosure @escaping () -> Logger?) {
 				        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
 				        let detail = Detail(logger: logger.instance)
