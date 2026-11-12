@@ -29,12 +29,14 @@ import SafeDICore
 /// then each outermost name is qualified among those types and `plainTypeDeclarations`
 /// (`TypeAccessProof.NestedTypeQualifier`), so a type nested in the declaration's type, or in a type enclosing it, is
 /// qualified though it is not `@Instantiable`.
-/// - Parameter plainTypeDeclarations: The plain type declarations of the modules whose declarations
-///   `unnormalizedInstantiables` holds, each with the module that declares it.
+/// - Parameters:
+///   - plainTypeDeclarations: The plain type declarations of the modules whose declarations `unnormalizedInstantiables`
+///     holds, each with the module that declares it.
+///   - reach: Which declarations a mention in each module can name.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration]) -> [Instantiable] {
+func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration], reach: TypeAccessProof.ModuleReach) -> [Instantiable] {
 	let instantiableTypes = Set(unnormalizedInstantiables.flatMap(\.instantiableTypes))
-	let nestedTypeQualifier = TypeAccessProof.NestedTypeQualifier(instantiables: unnormalizedInstantiables, plainTypeDeclarations: plainTypeDeclarations)
+	let nestedTypeQualifier = TypeAccessProof.NestedTypeQualifier(instantiables: unnormalizedInstantiables, plainTypeDeclarations: plainTypeDeclarations, reach: reach)
 	return unnormalizedInstantiables.map { unnormalizedInstantiable in
 		let mentioningModule = TypeAccessProof.MentioningModule.declaration(unnormalizedInstantiable)
 		// An extension-based declaration's members are written in an extension at file scope.
@@ -168,6 +170,266 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable], 
 	}
 }
 
+/// `normalizedInstantiables` with each type two or more production declarations fulfill told apart from the types `viewer`
+/// cannot name, so that those stop competing with each other and with what `viewer` can name, and SafeDI still checks
+/// them: a declaration `viewer` cannot name fulfills the type under the name spelled with its module (`ModA.Store`), and
+/// each mention of the type in the declaring module is spelled that way too, since that module's own declaration of the
+/// name shadows every module it imports. A `fulfillingAdditionalTypes` claim of a type `viewer` can write, by a declaration
+/// it cannot construct, is told apart the same way, and a mention of that type keeps its spelling, since it means the same
+/// type everywhere, while a dependency of the declaring module that instantiates it is fulfilled by the distinguished
+/// name. Only names `resolveSafeDIFulfilledTypes` would reject are touched, so nothing that resolves today changes.
+///
+/// SafeDI cannot tell what any other module means by the name: it can read a module SafeDI reads nothing of (a fetched
+/// package, a library built without SafeDI, Foundation), and which modules each of its files imports decides. So a
+/// declaration of another module that spells the name, in a module that may name a declaration told apart under it
+/// (`TypeAccessProof.MentionedDeclarations.meaning(of:mentionedFrom:)`: it can, or SafeDI cannot tell), leaves the name
+/// whole, which reports the duplicate error: a rejection has a remedy, and a wrong spelling does not compile. A module
+/// SafeDI knows cannot name such a declaration – it is `internal`, or `package` across a package boundary SafeDI knows,
+/// or the module declares a type of the name itself, or, under the target graph, does not depend on the declaring module
+/// – keeps its mention as written, as `viewer` keeps its own. A module of a run given module info files that does not
+/// list the declaring module may still import it, beneath a module it lists, so its mention keeps the name whole. Of a
+/// claim of a name `viewer` can write, only another module's dependency that instantiates the name, or its `mockOnly`
+/// declaration of the claimant's own type, is such a mention, since a mention of the name means the one type wherever it
+/// is written, and a `mockOnly` declaration of another type provides that type's mock.
+///
+/// This follows normalization, since a mention of a nested type equals the type it names only once it is qualified. A
+/// declaration whose name `viewer` can write is left alone, even beside another of its name, so two that `viewer` can name
+/// stay the duplicate error, as does every declaration of a run that knows no module name for `viewer` or the declaration:
+/// the Xcode project plugin's. A name stays whole when one of the declarations `viewer` cannot name is a seam or has a
+/// public mock, whose signatures are computed and looked up by type in each module's own view, when the spelling with
+/// the module is already another type's, or when `viewer` can write a claimed name that another declaration it can name
+/// means differently, since a bare mention of what the claim claims would then resolve to that other type.
+/// - Parameters:
+///   - viewer: The module whose view of the declarations this is: the module generating code, or the module a seam's or
+///     public mock's signature is computed for.
+///   - normalizedInstantiables: The declarations as `normalizingInstantiableTypes(of:plainTypeDeclarations:reach:)` returned them.
+///   - plainTypeDeclarations: The plain type declarations of the modules that declare them, which bound what an extension
+///     declares and name what a `fulfillingAdditionalTypes` claim names.
+///   - modulesRead: The modules whose declarations the run of `generate` for a named module, other than `viewer`, reads.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+func distinguishingTypesUnnameable(
+	from viewer: ModuleIdentity,
+	among normalizedInstantiables: [Instantiable],
+	plainTypeDeclarations: [PlainTypeDeclaration],
+	modulesRead: (String) -> TypeAccessProof.ModuleReach.ModulesRead,
+) -> [Instantiable] {
+	guard viewer.moduleName != nil else { return normalizedInstantiables }
+	var declarationIndicesByType = [TypeDescription: [Int]]()
+	for (index, instantiable) in normalizedInstantiables.enumerated() where !instantiable.mockOnly {
+		for instantiableType in Set(instantiable.instantiableTypes) {
+			declarationIndicesByType[instantiableType, default: []].append(index)
+		}
+	}
+	declarationIndicesByType = declarationIndicesByType.filter { $0.value.count > 1 }
+	guard !declarationIndicesByType.isEmpty else { return normalizedInstantiables }
+
+	let moduleReach = TypeAccessProof.ModuleReach(viewer: viewer, instantiables: normalizedInstantiables, plainTypeDeclarations: plainTypeDeclarations, modulesReadByRunOfModule: modulesRead)
+	let mentionedDeclarations = TypeAccessProof.MentionedDeclarations(instantiables: normalizedInstantiables, plainTypeDeclarations: plainTypeDeclarations, reach: moduleReach)
+	/// What a mention of `type` in the module named `moduleName` means.
+	func meaning(of type: TypeDescription, inModuleNamed moduleName: String?) -> TypeAccessProof.MentionMeaning {
+		mentionedDeclarations.meaning(of: type, mentionedFrom: .generatedCode(ofModuleNamed: moduleName, isRunsOwnModule: false))
+	}
+	/// How a mention of `instantiableType` in the module named `moduleName` reaches `declaration`, which fulfills it: whether
+	/// the module can write the name and construct the declaration. An extension's own level says nothing of the type it
+	/// extends, and a claim's name can be narrower than the type that claims it, so each is capped by the plain declaration
+	/// its module records, if it does.
+	func reach(of declaration: Instantiable, as instantiableType: TypeDescription, fromModuleNamed moduleName: String?) -> TypeAccessProof.ModuleReach.Reach {
+		guard let declaringModuleName = declaration.moduleName else { return .nameable }
+		let level = meaning(of: instantiableType, inModuleNamed: declaringModuleName).declarations
+			.filter { $0.moduleName == declaringModuleName }
+			.reduce(AccessLevel.effective(ofTypeDeclaredBy: declaration)) { $0.capped(by: $1.levelBeforeExtendedTypeCap) }
+		return moduleReach.reach(ofDeclarationsIn: declaringModuleName, at: level, from: moduleName)
+	}
+	func canName(_ instantiableType: TypeDescription, as declaration: Instantiable, fromModuleNamed moduleName: String?) -> Bool {
+		reach(of: declaration, as: instantiableType, fromModuleNamed: moduleName) == .nameable
+	}
+	/// The modules `declaration` means by `instantiableType`, where it is written. Empty when no module SafeDI reads declares
+	/// the name, as for a protocol of the standard library.
+	func modulesMeant(by instantiableType: TypeDescription, in declaration: Instantiable) -> Set<String> {
+		meaning(of: instantiableType, inModuleNamed: declaration.moduleName).moduleNames
+	}
+	/// The declaration told apart that a mention of `type` in the module named `moduleName`, which declares one of those told
+	/// apart, means: its own, or `nil` when the module can name another declaration of the name that means what its own
+	/// means (its own run's duplicate error), or the name may mean more than one declaration SafeDI records there.
+	func claimMentioned(by type: TypeDescription, fulfilledBy declarationIndices: [Int], distinguishedAs claims: [Int: DistinguishedClaim], inModuleNamed moduleName: String) -> DistinguishedClaim? {
+		let meaning = meaning(of: type, inModuleNamed: moduleName)
+		let mayMeanDistinguishedDeclaration = claims.keys.contains {
+			!modulesMeant(by: type, in: normalizedInstantiables[$0]).isDisjoint(with: meaning.moduleNamesItMayMean)
+		}
+		guard !mayMeanDistinguishedDeclaration || meaning.isSingleKnownDeclaration else { return nil }
+		// The module's own declaration is among the fulfillers.
+		let fulfillers = declarationIndices.filter {
+			canName(type, as: normalizedInstantiables[$0], fromModuleNamed: moduleName) && modulesMeant(by: type, in: normalizedInstantiables[$0]) == meaning.moduleNames
+		}
+		guard fulfillers.count == 1 else { return nil }
+		return claims[fulfillers[0]]
+	}
+	/// Whether a mention of `instantiableType` in the module named `moduleName`, which does not declare `declaration`, may
+	/// mean `declaration`, which `viewer` cannot name: the module may name the type it declares, or, for a claim, the
+	/// mention may mean what the claim claims and the module may construct the claimant.
+	func mayName(_ declaration: Instantiable, declaredInModuleNamed declaringModuleName: String, as instantiableType: TypeDescription, fromModuleNamed moduleName: String) -> Bool {
+		let meaning = meaning(of: instantiableType, inModuleNamed: moduleName)
+		if declaration.concreteInstantiable == instantiableType {
+			return meaning.moduleNamesItMayMean.contains(declaringModuleName)
+		} else {
+			let meant = modulesMeant(by: instantiableType, in: declaration)
+			return (meant == meaning.moduleNames || !meant.isDisjoint(with: meaning.moduleNamesItMayMean))
+				&& reach(of: declaration, as: instantiableType, fromModuleNamed: moduleName) != .unreachable
+		}
+	}
+
+	/// The modules other than `viewer` with a declaration that spells each type two or more declarations fulfill, the
+	/// modules with a declaration that instantiates it, and the type each `mockOnly` declaration of it provides the mock of,
+	/// by module.
+	var moduleNamesSpellingType = [TypeDescription: Set<String>]()
+	var moduleNamesInstantiatingType = [TypeDescription: Set<String>]()
+	var mockedTypesByModuleNameByType = [TypeDescription: [String: Set<TypeDescription>]]()
+	for instantiable in normalizedInstantiables {
+		guard let moduleName = instantiable.moduleName, moduleName != viewer.moduleName else { continue }
+		// A `mockOnly` declaration names the production declaration it provides a mock for.
+		let mockedTypes = instantiable.mockOnly ? instantiable.instantiableTypes : []
+		for mentionedType in (instantiable.typesMembersSpell + mockedTypes).flatMap(TypeAccessProof.mentionedTypes(in:)) where declarationIndicesByType[mentionedType] != nil {
+			moduleNamesSpellingType[mentionedType, default: []].insert(moduleName)
+		}
+		let instantiatedTypes = instantiable.dependencies.compactMap { dependency -> TypeDescription? in
+			switch dependency.source {
+			case .instantiated:
+				dependency.asInstantiatedType
+			case .aliased, .forwarded, .received:
+				nil
+			}
+		}
+		for instantiatedType in instantiatedTypes where declarationIndicesByType[instantiatedType] != nil {
+			moduleNamesInstantiatingType[instantiatedType, default: []].insert(moduleName)
+		}
+		for mockedType in mockedTypes where declarationIndicesByType[mockedType] != nil {
+			mockedTypesByModuleNameByType[mockedType, default: [:]][moduleName, default: []].insert(instantiable.concreteInstantiable)
+		}
+	}
+	/// The modules other than `claim`'s that may mean `declaration`, which `claim` tells apart, by `instantiableType`, which
+	/// `declaration` claims and `viewer` can write: those that instantiate the name, and those with a `mockOnly` declaration
+	/// of the name that provides `declaration`'s own type's mock. A `mockOnly` declaration of another type provides that
+	/// type's mock (`resolveSafeDIFulfilledTypes` merges a mock only into the production declaration of its type), which
+	/// means `declaration` nowhere.
+	func moduleNamesThatMayMean(_ declaration: Instantiable, claimedAs instantiableType: TypeDescription) -> Set<String> {
+		var moduleNames = moduleNamesInstantiatingType[instantiableType] ?? []
+		for (moduleName, mockedTypes) in mockedTypesByModuleNameByType[instantiableType] ?? [:] where mockedTypes.contains(declaration.concreteInstantiable) {
+			moduleNames.insert(moduleName)
+		}
+		return moduleNames
+	}
+
+	let fulfilledTypes = Set(normalizedInstantiables.flatMap(\.instantiableTypes))
+	var distinguishedClaimsByType = [TypeDescription: [Int: DistinguishedClaim]]()
+	var mentionsByModuleName = [String: Mentions]()
+	for (instantiableType, declarationIndices) in declarationIndicesByType {
+		var distinguishedClaims = [Int: DistinguishedClaim]()
+		var canBeDistinguished = true
+		let meaningToViewer = meaning(of: instantiableType, inModuleNamed: viewer.moduleName)
+		for index in declarationIndices where !canName(instantiableType, as: normalizedInstantiables[index], fromModuleNamed: viewer.moduleName) {
+			let declaration = normalizedInstantiables[index]
+			let meant = modulesMeant(by: instantiableType, in: declaration)
+			// A claim names a type `viewer` can write unless SafeDI reads a declaration of it that `viewer` cannot name. A
+			// type the declaration itself declares is the one `viewer` cannot name.
+			let isClaimOfNameViewerCanWrite = declaration.concreteInstantiable != instantiableType
+				&& (meant.isEmpty || !meant.isDisjoint(with: meaningToViewer.moduleNames))
+			// Another declaration `viewer` can name, which means a different type by the name, keeps a claimed name whole: a
+			// mention elsewhere of what the claim claims, which no module may settle, would resolve to that other declaration.
+			let competesWithDifferentType = declaration.concreteInstantiable != instantiableType && declarationIndices.contains {
+				canName(instantiableType, as: normalizedInstantiables[$0], fromModuleNamed: viewer.moduleName) && modulesMeant(by: instantiableType, in: normalizedInstantiables[$0]) != meant
+			}
+			// Every declaration `viewer` cannot name knows its module.
+			if !competesWithDifferentType,
+			   let moduleName = declaration.moduleName,
+			   let distinguishedType = instantiableType.qualified(byModuleNamed: moduleName),
+			   !fulfilledTypes.contains(distinguishedType),
+			   declaration.concreteInstantiable != instantiableType || (!declaration.generatesDependencyTree && declaration.generateMock != .public)
+			{
+				distinguishedClaims[index] = DistinguishedClaim(type: distinguishedType, moduleName: moduleName, viewerCanWriteName: isClaimOfNameViewerCanWrite)
+			} else {
+				canBeDistinguished = false
+			}
+		}
+		guard canBeDistinguished else { continue }
+		// What each declaring module that spells the name means by it.
+		let moduleNamesSpelling = moduleNamesSpellingType[instantiableType] ?? []
+		var mentionedClaimByModuleName = [String: DistinguishedClaim]()
+		var isMentionUndetermined = false
+		for moduleName in Set(distinguishedClaims.values.map(\.moduleName)) where moduleNamesSpelling.contains(moduleName) {
+			if let claim = claimMentioned(by: instantiableType, fulfilledBy: declarationIndices, distinguishedAs: distinguishedClaims, inModuleNamed: moduleName) {
+				mentionedClaimByModuleName[moduleName] = claim
+			} else {
+				isMentionUndetermined = true
+			}
+		}
+		// Another module that may name a declaration told apart keeps the name whole.
+		let mayBeMeantByAnotherModule = distinguishedClaims.contains { index, claim in
+			let mentioningModuleNames = claim.viewerCanWriteName ? moduleNamesThatMayMean(normalizedInstantiables[index], claimedAs: instantiableType) : moduleNamesSpelling
+			return mentioningModuleNames.contains { moduleName in
+				moduleName != claim.moduleName && mayName(normalizedInstantiables[index], declaredInModuleNamed: claim.moduleName, as: instantiableType, fromModuleNamed: moduleName)
+			}
+		}
+		if !isMentionUndetermined, !mayBeMeantByAnotherModule {
+			distinguishedClaimsByType[instantiableType] = distinguishedClaims
+			for (moduleName, claim) in mentionedClaimByModuleName {
+				mentionsByModuleName[moduleName, default: Mentions()].record(claim, mentionedAs: instantiableType)
+			}
+		}
+	}
+	guard !distinguishedClaimsByType.isEmpty else { return normalizedInstantiables }
+
+	return normalizedInstantiables.enumerated().map { index, instantiable in
+		let mentions = instantiable.moduleName.flatMap { mentionsByModuleName[$0] } ?? Mentions()
+		// A `mockOnly` declaration names the production declaration it provides a mock for, as any other mention does.
+		let ownReplacements: [TypeDescription: TypeDescription] = instantiable.mockOnly
+			? mentions.ofEveryName
+			: distinguishedClaimsByType.compactMapValues { $0[index]?.type }
+		guard !mentions.ofEveryName.isEmpty || !ownReplacements.isEmpty else { return instantiable }
+		return instantiable.distinguished(
+			asFulfilling: instantiable.instantiableTypes.map { ownReplacements[$0] ?? $0 },
+			replacingMentions: mentions.ofTypesViewerCannotName,
+			fulfillingInstantiationsOf: mentions.claimsOfNamesViewerCanWrite,
+		)
+	}
+}
+
+/// How the view of `distinguishingTypesUnnameable(from:among:plainTypeDeclarations:modulesRead:)` tells a declaration
+/// that the view's module cannot name apart under a name it would otherwise share.
+private struct DistinguishedClaim {
+	/// The name the declaration fulfills in the view.
+	let type: TypeDescription
+	/// The module that declares the declaration, whose own mentions of the name mean it.
+	let moduleName: String
+	/// Whether the type the declaration claims, under the name the view replaces, is a type the view's module can write:
+	/// a `public` protocol that a type the module cannot name fulfills. A mention of that name keeps its spelling, since
+	/// it means the type the view's module writes; only what instantiates it is fulfilled by `type`.
+	let viewerCanWriteName: Bool
+}
+
+/// What the members of a declaration of one module mean by the names the view distinguishes.
+private struct Mentions {
+	/// The distinguished name of each type the view's module cannot name, wherever a member spells it.
+	var ofTypesViewerCannotName = [TypeDescription: TypeDescription]()
+	/// The distinguished name of the declaration that fulfills each name that view's module can write, read only by a
+	/// dependency that instantiates the name.
+	var claimsOfNamesViewerCanWrite = [TypeDescription: TypeDescription]()
+
+	/// The distinguished name of the declaration each name means, whichever kind of name it is. The two kinds hold
+	/// different names, so neither overrides the other.
+	var ofEveryName: [TypeDescription: TypeDescription] {
+		ofTypesViewerCannotName.merging(claimsOfNamesViewerCanWrite) { first, _ in first }
+	}
+
+	/// Records that a mention of `type` means the declaration `claim` tells apart.
+	mutating func record(_ claim: DistinguishedClaim, mentionedAs type: TypeDescription) {
+		if claim.viewerCanWriteName {
+			claimsOfNamesViewerCanWrite[type] = claim.type
+		} else {
+			ofTypesViewerCannotName[type] = claim.type
+		}
+	}
+}
+
 /// The `@Instantiable` declaration that fulfills each type, merging a `mockOnly` declaration's mock into the
 /// production declaration for the same type. Throws when two production declarations fulfill one type, or
 /// when a type has more than one hand-written mock.
@@ -288,10 +550,11 @@ private enum CollectInstantiablesError: SourceLocatedError {
 	/// be another's. The message offers renaming, for types that have nothing to do with each other, beside keeping one.
 	case foundTypesOfOneNameInUnknownModules(TypeDescription, declaredAt: [Dependency.DeclarationLocation?], isEachInsideCompilerDecidedBlock: Bool)
 	/// Each of the two or more modules `moduleNames` lists, in sorted order, declares a type of this name, and those
-	/// `repeatingModuleNames` lists, in sorted order, declare it more than once.
+	/// `repeatingModuleNames` lists, in sorted order, declare it more than once. `isSeamOrPublicMockAmongThem` says whether
+	/// one is a seam or has a public mock, which keeps a name whole even when the module cannot name them.
 	/// `isEachInsideCompilerDecidedBlock` is as for `foundDuplicateInstantiable`: SafeDI cannot tell one type split by
 	/// platform across modules from two types that have nothing to do with each other, so the message offers both remedies.
-	case foundTypesOfOneNameInSeveralModules(TypeDescription, moduleNames: [String], repeatingModuleNames: [String], declaredAt: [Dependency.DeclarationLocation?], isEachInsideCompilerDecidedBlock: Bool)
+	case foundTypesOfOneNameInSeveralModules(TypeDescription, moduleNames: [String], repeatingModuleNames: [String], declaredAt: [Dependency.DeclarationLocation?], isSeamOrPublicMockAmongThem: Bool, isEachInsideCompilerDecidedBlock: Bool)
 	/// At least one declaration is an extension or a `fulfillingAdditionalTypes` claim of this name, and the declarations are
 	/// in the two or more modules `moduleNames` lists, in sorted order, or, when `moduleNames` is `nil`, at least one is in a
 	/// module SafeDI does not know. SafeDI reads only `@Instantiable` declarations here, so it cannot tell one type of this
@@ -339,6 +602,7 @@ private enum CollectInstantiablesError: SourceLocatedError {
 			moduleNames: distinctModuleNames,
 			repeatingModuleNames: repeatingModuleNames,
 			declaredAt: declaredAt,
+			isSeamOrPublicMockAmongThem: declarations.contains { $0.generatesDependencyTree || $0.generateMock == .public },
 			isEachInsideCompilerDecidedBlock: isEachInsideCompilerDecidedBlock,
 		)
 	}
@@ -361,12 +625,13 @@ private enum CollectInstantiablesError: SourceLocatedError {
 						: "Each type can be fulfilled by only one @\(InstantiableVisitor.macroName) declaration, across all modules. If they are different types, \(Self.renameRemedy(forTypeCount: declaredAt.count)). If they are one type, keep one, and remove the others’ @\(InstantiableVisitor.macroName)."),
 				declaredAt: declaredAt,
 			)
-		case let .foundTypesOfOneNameInSeveralModules(type, moduleNames, repeatingModuleNames, declaredAt, isEachInsideCompilerDecidedBlock):
+		case let .foundTypesOfOneNameInSeveralModules(type, moduleNames, repeatingModuleNames, declaredAt, isSeamOrPublicMockAmongThem, isEachInsideCompilerDecidedBlock):
 			Self.sourceDiagnostics(
 				message: Self.severalModulesMessage(
 					for: type,
 					moduleNames: moduleNames,
 					repeatingModuleNames: repeatingModuleNames,
+					isSeamOrPublicMockAmongThem: isSeamOrPublicMockAmongThem,
 					isEachInsideCompilerDecidedBlock: isEachInsideCompilerDecidedBlock,
 				),
 				declaredAt: declaredAt,
@@ -397,13 +662,15 @@ private enum CollectInstantiablesError: SourceLocatedError {
 		}
 	}
 
-	private static let nameRule = "SafeDI tells @\(InstantiableVisitor.macroName) types apart by name across every module a run reads"
+	private static let nameRule = "SafeDI tells apart by name the @\(InstantiableVisitor.macroName) types a module can name"
 	private static let placeOfPlatformDifference = "inside its body or its `\(InstantiableVisitor.instantiateMethodName)(…)` method"
 
-	private static func severalModulesMessage(for type: TypeDescription, moduleNames: [String], repeatingModuleNames: [String], isEachInsideCompilerDecidedBlock: Bool) -> String {
+	private static func severalModulesMessage(for type: TypeDescription, moduleNames: [String], repeatingModuleNames: [String], isSeamOrPublicMockAmongThem: Bool, isEachInsideCompilerDecidedBlock: Bool) -> String {
 		let declaredIn = "`\(type.asSource)` is declared in modules \(listed(moduleNames))"
 			+ (repeatingModuleNames.isEmpty ? ". " : ", and more than once in \(listed(repeatingModuleNames)). ")
-		let reason = nameRule + (isEachInsideCompilerDecidedBlock ? ", and reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`. " : ". ")
+		// `distinguishingTypesUnnameable(from:among:plainTypeDeclarations:modulesRead:)` leaves such a name whole.
+		let reason = nameRule + (isSeamOrPublicMockAmongThem ? ", and every seam and public mock a run reads" : "")
+			+ (isEachInsideCompilerDecidedBlock ? ", and reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`. " : ". ")
 		// A module's duplicates share a name whichever other module is renamed, so they are resolved first.
 		let rename = renameRemedy(forTypeCount: moduleNames.count)
 		let remedy = repeatingModuleNames.isEmpty
@@ -424,9 +691,11 @@ private enum CollectInstantiablesError: SourceLocatedError {
 			? rename
 			: "fulfill it once in \(repeatingModuleNames.count == 1 ? "" : "each of ")\(listed(repeatingModuleNames)), with any platform difference \(placeOfPlatformDifference), then \(rename)"
 		let keepOne = "keep one, and remove `\(type.asSource)` from the others’ `fulfillingAdditionalTypes` or remove their @\(InstantiableVisitor.macroName)."
+		// A declaration in a module SafeDI does not know competes with every other, whichever module the run is for.
+		let fulfillmentRule = "Each type can be fulfilled by only one @\(InstantiableVisitor.macroName) declaration" + (moduleNames == nil ? ", across all modules." : " a module can name.")
 		return "Found multiple @\(InstantiableVisitor.macroName) types or extensions that fulfill `\(type.asSource)`\(declaredIn). " + (isEachInsideCompilerDecidedBlock
 			? "Each is declared inside an `#if` that only the compiler decides, such as `#if os(iOS)`, and SafeDI reads every clause. If `\(type.asSource)` names one type that differs by platform, fulfill `\(type.asSource)` with one @\(InstantiableVisitor.macroName) declaration outside the `#if`, and put the platform difference \(placeOfPlatformDifference). If it names different types, \(remedy). Otherwise, \(keepOne)"
-			: "Each type can be fulfilled by only one @\(InstantiableVisitor.macroName) declaration, across all modules. If `\(type.asSource)` names different types, \(remedy). If it names one type, \(keepOne)")
+			: "\(fulfillmentRule) If `\(type.asSource)` names different types, \(remedy). If it names one type, \(keepOne)")
 	}
 
 	/// How to tell apart `typeCount` types, two or more, that share a name, as the end of a sentence without its period.

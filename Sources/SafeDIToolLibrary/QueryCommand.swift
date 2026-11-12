@@ -98,6 +98,8 @@ public struct QueryNeeds: AsyncParsableCommand {
 			instantiables: normalizingInstantiableTypes(
 				of: parsedModules.flatMap(\.moduleInfo.instantiables),
 				plainTypeDeclarations: parsedModules.flatMap(\.moduleInfo.plainTypeDeclarations),
+				// The query has no emitting module, and `--include` directories record no package.
+				reach: .unknown,
 			),
 		)
 		func generator(over typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]) -> DependencyTreeGenerator {
@@ -414,7 +416,7 @@ struct ParsedQueryModule {
 			isOwnFile: { filePath in attributionsByFilePath[filePath]?.moduleName == moduleName },
 			isReadableFile: { _ in false },
 			additionalMocksToGenerateLocation: nil,
-			moduleNamesReadByRunOfModule: { _ in [] },
+			modulesReadByRunOfModule: nil,
 		)
 	}
 }

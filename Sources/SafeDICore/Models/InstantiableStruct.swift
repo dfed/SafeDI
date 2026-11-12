@@ -81,7 +81,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	// MARK: Public
 
 	/// The types that can be fulfilled with this Instantiable.
-	public let instantiableTypes: [TypeDescription]
+	public private(set) var instantiableTypes: [TypeDescription]
 	/// The concrete type that fulfills `instantiableTypes`.
 	public var concreteInstantiable: TypeDescription {
 		instantiableTypes[0]
@@ -96,11 +96,11 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public let generatesDependencyTree: Bool
 	/// A memberwise initializer for the concrete instantiable type.
 	/// If `nil`, the Instantiable type is incorrectly configured.
-	public let initializer: Initializer?
+	public private(set) var initializer: Initializer?
 	/// The type declaration's initializers other than `initializer`, in declaration order, which SafeDI never
 	/// constructs the type with. An initializer SafeDI generates for the type must not redeclare one of them. Empty
 	/// for an extension-based instantiable.
-	public let otherInitializers: [Initializer]
+	public private(set) var otherInitializers: [Initializer]
 	/// The ordered dependencies of this Instantiable.
 	public private(set) var dependencies: [Dependency]
 	/// The declaration type of the Instantiable’s concrete type.
@@ -242,6 +242,84 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		return dependencies.filter { $0.source != .forwarded && !argumentLabels.contains($0.property.label) }
 	}
 
+	/// Each type a member of the declaration spells, which `distinguished(asFulfilling:replacingMentions:fulfillingInstantiationsOf:)`
+	/// replaces wherever it sits inside them.
+	public var typesMembersSpell: [TypeDescription] {
+		var types = [TypeDescription]()
+		for dependency in dependencies {
+			types.append(dependency.property.typeDescription)
+			switch dependency.source {
+			case let .instantiated(fulfillingTypeDescription, _):
+				if let fulfillingTypeDescription {
+					types.append(fulfillingTypeDescription)
+				}
+			case let .aliased(fulfillingProperty, _, _):
+				types.append(fulfillingProperty.typeDescription)
+			case .forwarded, .received:
+				break
+			}
+		}
+		for memberInitializer in [initializer, mockInitializer].compactMap(\.self) + otherInitializers {
+			types.append(contentsOf: memberInitializer.arguments.map(\.typeDescription))
+		}
+		if let mockReturnType {
+			types.append(mockReturnType)
+		}
+		return types
+	}
+
+	/// Returns a copy of this Instantiable that fulfills `instantiableTypes` in place of the types it fulfills, its first
+	/// entry remaining the concrete type, with each type `mentions` holds replaced wherever a member of the declaration
+	/// spells it, and each dependency that instantiates a type `instantiations` holds fulfilled by the type it holds there,
+	/// its property and everything else spelled as written. See `declaredName`.
+	public func distinguished(
+		asFulfilling instantiableTypes: [TypeDescription],
+		replacingMentions mentions: [TypeDescription: TypeDescription],
+		fulfillingInstantiationsOf instantiations: [TypeDescription: TypeDescription],
+	) -> Instantiable {
+		func replacedType(_ typeDescription: TypeDescription) -> TypeDescription {
+			typeDescription.replacingTypes(mentions) ?? typeDescription
+		}
+		func replacedArgument(_ argument: Initializer.Argument) -> Initializer.Argument {
+			argument.typeDescription.replacingTypes(mentions).map(argument.withUpdatedTypeDescription) ?? argument
+		}
+		var instantiable = self
+		if instantiableTypes[0] != concreteInstantiable {
+			instantiable.declaredName = concreteInstantiable
+		}
+		instantiable.instantiableTypes = instantiableTypes
+		instantiable.dependencies = dependencies.map { dependency in
+			let source: Dependency.Source = switch dependency.source {
+			case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
+				.instantiated(
+					fulfillingTypeDescription: instantiations[dependency.asInstantiatedType] ?? fulfillingTypeDescription.map(replacedType),
+					erasedToConcreteExistential: erasedToConcreteExistential,
+				)
+			case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
+				.aliased(
+					fulfillingProperty: fulfillingProperty.withUpdatedTypeDescription(replacedType(fulfillingProperty.typeDescription)),
+					erasedToConcreteExistential: erasedToConcreteExistential,
+					onlyIfAvailable: onlyIfAvailable,
+				)
+			case .forwarded, .received:
+				dependency.source
+			}
+			return Dependency(
+				property: dependency.property.withUpdatedTypeDescription(replacedType(dependency.property.typeDescription)),
+				source: source,
+				declarationLocation: dependency.declarationLocation,
+				identifierRange: dependency.identifierRange,
+				typeAnnotationRange: dependency.typeAnnotationRange,
+				bareAttributeRange: dependency.bareAttributeRange,
+			)
+		}
+		instantiable.initializer = initializer?.mapArguments(replacedArgument)
+		instantiable.otherInitializers = otherInitializers.compactMap { $0.mapArguments(replacedArgument) }
+		instantiable.mockInitializer = mockInitializer?.mapArguments(replacedArgument)
+		instantiable.mockReturnType = mockReturnType.map(replacedType)
+		return instantiable
+	}
+
 	/// Returns a copy of this Instantiable that declares only the dependencies `isKept` accepts.
 	public func keepingDependencies(where isKept: (Dependency) -> Bool) -> Instantiable {
 		var instantiable = self
@@ -266,6 +344,12 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// conditions the file is walked with: a walk that reaches the declaration at all records the same value, which keeps
 	/// scan's cache sound without any condition joining `consultedCompilationConditions`.
 	public var isInsideCompilerDecidedBlock = false
+
+	/// The name the declaring module gives this declaration's concrete type, when the run that read it spells the type
+	/// with the module's name, as `ModA.Store`, because another module also declares a type of that name and the module the
+	/// run looks from cannot name this one (`distinguishingTypesUnnameable(from:among:plainTypeDeclarations:modulesRead:)`).
+	/// `nil` otherwise. Never recorded in a `.safedi` file or scan's cache: it describes one run's view of the declaration.
+	public var declaredName: TypeDescription?
 
 	/// The path to the source file that declared this Instantiable, as the build system supplied it.
 	/// `scan` rewrites it to a project-relative form so cached module info matches manifest entries;

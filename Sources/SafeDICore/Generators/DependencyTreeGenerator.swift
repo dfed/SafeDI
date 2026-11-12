@@ -147,29 +147,32 @@ public actor DependencyTreeGenerator {
 		///   - additionalMocksToGenerateLocation: Where the `#SafeDIConfiguration` that lists the module's
 		///     `additionalMocksToGenerate` is declared, at which an error about a construction in a listed type's
 		///     generated mock is reported when the declaration that must change cannot be read.
-		///   - moduleNamesReadByRunOfModule: The modules whose declarations the run of `generate` for the named module
+		///   - modulesReadByRunOfModule: The modules whose declarations the run of `generate` for the named module
 		///     reads, itself included, from which it would build the tree of a seam it declares: a seam candidate's
 		///     module keeps a construction out of this module only when it reads the declaration of every type on the
-		///     path from the candidate to it (`SeamCandidateOnPaths`).
+		///     path from the candidate to it (`SeamCandidateOnPaths`); and whether SafeDI knows the module can import no
+		///     other, which lets a proof drop a declaration of a module the mentioning module does not read
+		///     (`TypeAccessProof.ModuleReach`). `nil` when SafeDI is not told, as `query needs` is not: no candidate's
+		///     module then reads another, and every mention reads every module.
 		public init(
 			identity: ModuleIdentity,
 			isOwnFile: @escaping @Sendable (String) -> Bool,
 			isReadableFile: @escaping @Sendable (String) -> Bool,
 			additionalMocksToGenerateLocation: Dependency.DeclarationLocation?,
-			moduleNamesReadByRunOfModule: @escaping @Sendable (_ moduleName: String) -> Set<String>,
+			modulesReadByRunOfModule: (@Sendable (_ moduleName: String) -> TypeAccessProof.ModuleReach.ModulesRead)?,
 		) {
 			self.identity = identity
 			self.isOwnFile = isOwnFile
 			self.isReadableFile = isReadableFile
 			self.additionalMocksToGenerateLocation = additionalMocksToGenerateLocation
-			self.moduleNamesReadByRunOfModule = moduleNamesReadByRunOfModule
+			self.modulesReadByRunOfModule = modulesReadByRunOfModule
 		}
 
 		let identity: ModuleIdentity
 		let isOwnFile: @Sendable (String) -> Bool
 		let isReadableFile: @Sendable (String) -> Bool
 		let additionalMocksToGenerateLocation: Dependency.DeclarationLocation?
-		let moduleNamesReadByRunOfModule: @Sendable (_ moduleName: String) -> Set<String>
+		let modulesReadByRunOfModule: (@Sendable (_ moduleName: String) -> TypeAccessProof.ModuleReach.ModulesRead)?
 	}
 
 	public struct GeneratedRoot: Sendable {
@@ -629,6 +632,18 @@ public actor DependencyTreeGenerator {
 		publicMockContext.unreadTypeComment
 	}
 
+	/// Which declarations a mention in each module of a view can name, the view being `viewer`'s, over `instantiables` and
+	/// `plainTypeDeclarations`; every one when the run is not told what each module reads, or knows no viewer.
+	private static func moduleReach(
+		viewedFrom viewer: ModuleIdentity?,
+		instantiables: [TypeDescription: Instantiable],
+		plainTypeDeclarations: [PlainTypeDeclaration],
+		modulesReadByRunOfModule: (@Sendable (_ moduleName: String) -> TypeAccessProof.ModuleReach.ModulesRead)?,
+	) -> TypeAccessProof.ModuleReach {
+		guard let viewer, let modulesReadByRunOfModule else { return .unknown }
+		return TypeAccessProof.ModuleReach(viewer: viewer, instantiables: instantiables.values, plainTypeDeclarations: plainTypeDeclarations, modulesReadByRunOfModule: modulesReadByRunOfModule)
+	}
+
 	private func makePublicMockContext() -> PublicMockContext {
 		var moduleNameByType = [TypeDescription: String]()
 		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
@@ -637,7 +652,12 @@ public actor DependencyTreeGenerator {
 			}
 		}
 		let moduleName = emittingModule?.identity.moduleName
-		let proof = TypeAccessProof(instantiables: typeDescriptionToFulfillingInstantiableMap, plainTypeDeclarations: plainTypeDeclarations, isOwnFile: emittingModule?.isOwnFile)
+		let proof = TypeAccessProof(
+			instantiables: typeDescriptionToFulfillingInstantiableMap,
+			plainTypeDeclarations: plainTypeDeclarations,
+			isOwnFile: emittingModule?.isOwnFile,
+			reach: Self.moduleReach(viewedFrom: emittingModule?.identity, instantiables: typeDescriptionToFulfillingInstantiableMap, plainTypeDeclarations: plainTypeDeclarations, modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule),
+		)
 		return PublicMockContext(
 			proof: proof,
 			unreadTypeComment: seams.carriesUnreadTypeComment ? UnreadTypeComment(proof: proof, mentioningModule: .generatedCode(ofModuleNamed: moduleName, isRunsOwnModule: true)) : nil,
@@ -1851,6 +1871,10 @@ public actor DependencyTreeGenerator {
 		struct InaccessibleConstruction: Hashable {
 			/// The type the generated code constructs.
 			let constructedType: TypeDescription
+			/// The name the declaring module gives `constructedType`, when this run spells it with the module's name because
+			/// another module declares a type of that name (`Instantiable.declaredName`). Widening such a type can make the
+			/// two compete in this module, so the error leads with a remedy that keeps it from this module, when there is one.
+			let constructedTypeDeclaredName: TypeDescription?
 			/// The declaration that must widen, with the level it has.
 			let accessNeed: AccessNeed
 			/// What the generated code needs of the declaration.
@@ -2032,7 +2056,7 @@ public actor DependencyTreeGenerator {
 				let fixedDeclaration: String
 				switch accessNeed.declaration {
 				case let .type(type):
-					if type == constructedType {
+					if type == constructedType || type == constructedTypeDeclaredName {
 						subject = constructedTypeName
 						inability = "construct it"
 						fixedDeclaration = constructedTypeName
@@ -2087,16 +2111,27 @@ public actor DependencyTreeGenerator {
 				// Reported in this module, the error names the module whose declaration must change.
 				let declaringModuleName = readableDeclarationLocation == nil ? declaringModule.moduleName.map { " in module `\($0)`" } ?? "" : ""
 				// A type another module declares could have that module build its tree, which reaches the declaration.
-				let seamRemedyText = seamRemedy.map { ", or declare `\($0.type.asSource)` with `generateDependencyTree: true`, so that module `\($0.moduleName)` generates its tree and this module calls the initializer it generates" } ?? ""
+				let seamRemedyClause = seamRemedy.map { "declare `\($0.type.asSource)` with `generateDependencyTree: true`, so that module `\($0.moduleName)` generates its tree and this module calls the initializer it generates" }
+				let seamRemedyText = seamRemedyClause.map { ", or \($0)" } ?? ""
 				// A mock could call a public mock of the type another module declares instead of building its tree.
-				let publicMockRemedy = if case let .withoutMock(type, declaringModuleName, needsPublicDeclaration, isSeam)? = publicMockCandidate {
+				let publicMockRemedyClause: String? = if case let .withoutMock(type, declaringModuleName, needsPublicDeclaration, isSeam)? = publicMockCandidate {
 					(needsPublicDeclaration
-						? ", or declare `\(type.asSource)` `public` with `generateMock: .public`"
-						: ", or give `\(type.asSource)` a public mock: `generateMock: .public`, or a hand-written public `mock`")
+						? "declare `\(type.asSource)` `public` with `generateMock: .public`"
+						: "give `\(type.asSource)` a public mock: `generateMock: .public`, or a hand-written public `mock`")
 						// A seam's tree is one a mock builds inline, which the user may not expect.
 						+ (isSeam ? ": mocks build a seam's tree inline, and this mock would call the mock \(declaringModuleName.map { "`\($0)`" } ?? "its module") generates instead" : "")
 				} else {
-					""
+					nil
+				}
+				let publicMockRemedy = publicMockRemedyClause.map { ", or \($0)" } ?? ""
+				// Widening one of several types of a name lets the module name it, and widening a second makes them
+				// compete, so the remedy that keeps the type out of this module comes first, and no fix-it widens it.
+				if let constructedTypeDeclaredName, let leadingRemedy = publicMockRemedyClause ?? seamRemedyClause {
+					return SourceDiagnostic(
+						severity: .error,
+						location: readableDeclarationLocation ?? referenceLocation,
+						message: "\(subject) is `\(accessNeed.level.spelling)`\(declaringModuleName), so \(reason). \(leadingRemedy.prefix(1).uppercased())\(leadingRemedy.dropFirst()). Making \(fixedDeclaration) `\(level)` instead also needs a new name, if \(module) can then name another type called `\(constructedTypeDeclaredName.asSource)`.",
+					)
 				}
 				if case let .publicMockOfUnknownModule(type, emittingModuleIsUnknown)? = publicMockCandidate {
 					// `publicMockNotCallableFromThisView`: the type's public mock is the fix, which SafeDI cannot call here.
@@ -3199,7 +3234,7 @@ public actor DependencyTreeGenerator {
 	/// build the type's tree, and this module call the initializer generated for it, so it keeps the construction out
 	/// of this module only when every path passes through it, and only when that module's own run of `generate` reads
 	/// the declaration of every type on each path from the candidate to the construction, the construction's own type
-	/// included (`EmittingModule.moduleNamesReadByRunOfModule`): it builds the tree from those declarations, as this
+	/// included (`EmittingModule.modulesReadByRunOfModule`): it builds the tree from those declarations, as this
 	/// run computes the seam's signature from them, and takes a builder for a type it does not see, which this module
 	/// fills, building that type and its tree itself. That initializer's widest tier is at the candidate type's
 	/// access, and it builds the tree, calls the candidate's own initializer, and takes each property the tree receives
@@ -3340,7 +3375,7 @@ public actor DependencyTreeGenerator {
 		/// `candidate`: see `SeamCandidateOnPaths`. A type whose module SafeDI does not know is read by no other module.
 		func candidatesModuleReads(_ child: Instantiable, _ candidate: Instantiable) -> Bool {
 			guard let childModuleName = child.moduleName, let candidateModuleName = candidate.moduleName else { return false }
-			let moduleNamesRead = moduleNamesReadByModuleName[candidateModuleName] ?? emittingModule.moduleNamesReadByRunOfModule(candidateModuleName)
+			let moduleNamesRead = moduleNamesReadByModuleName[candidateModuleName] ?? emittingModule.modulesReadByRunOfModule?(candidateModuleName).moduleNames ?? []
 			moduleNamesReadByModuleName[candidateModuleName] = moduleNamesRead
 			return moduleNamesRead.contains(childModuleName)
 		}
@@ -3492,7 +3527,7 @@ public actor DependencyTreeGenerator {
 					leavingOut: typesLeftOut,
 				)
 			}
-			guard !Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty, let ownPlan = try await foreignPublicMockPlan(of: type, declaredBy: foreignPublicMock, moduleNamesReadByRunOfModule: emittingModule.moduleNamesReadByRunOfModule) else { continue }
+			guard !Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty, let ownPlan = try await foreignPublicMockPlan(of: type, declaredBy: foreignPublicMock, modulesReadByRunOfModule: emittingModule.modulesReadByRunOfModule) else { continue }
 			let requirement = AccessLevel.required(toConstructFrom: emittingModule.identity, declaredIn: foreignPublicMock.declaringModule, isOwnFile: false)
 			// The narrowest tier the module reaches: every module reaches the `public` one.
 			let tier = ownPlan.plan.tiers.last { $0.satisfies(requirement) } ?? .public
@@ -3554,11 +3589,11 @@ public actor DependencyTreeGenerator {
 	/// The plan of the public mock that `foreignPublicMock`'s module generated for `type`, computed as that module
 	/// computed it, from the declarations it sees; `nil` when that module could not generate it, which its own run
 	/// reports.
-	/// - Parameter moduleNamesReadByRunOfModule: See `EmittingModule.init`.
+	/// - Parameter modulesReadByRunOfModule: See `EmittingModule.init`.
 	private func foreignPublicMockPlan(
 		of type: TypeDescription,
 		declaredBy foreignPublicMock: SeamResolution.ForeignPublicMock,
-		moduleNamesReadByRunOfModule: @escaping @Sendable (_ moduleName: String) -> Set<String>,
+		modulesReadByRunOfModule: (@Sendable (_ moduleName: String) -> TypeAccessProof.ModuleReach.ModulesRead)?,
 	) async throws -> OwnPublicMockPlan? {
 		guard let moduleName = foreignPublicMock.declaringModule.moduleName else { return nil }
 		let generator: DependencyTreeGenerator
@@ -3576,7 +3611,7 @@ public actor DependencyTreeGenerator {
 					isOwnFile: { _ in false },
 					isReadableFile: { _ in false },
 					additionalMocksToGenerateLocation: nil,
-					moduleNamesReadByRunOfModule: moduleNamesReadByRunOfModule,
+					modulesReadByRunOfModule: modulesReadByRunOfModule,
 				),
 				// The public mocks of the modules the declaring module sees, which its mock trees call in turn.
 				seams: SeamResolution(
@@ -3787,6 +3822,7 @@ public actor DependencyTreeGenerator {
 				guard !accessNeed.level.satisfies(requirement) else { continue }
 				inaccessibleConstructions.append(DependencyTreeGeneratorError.InaccessibleConstruction(
 					constructedType: instantiable.concreteInstantiable,
+					constructedTypeDeclaredName: instantiable.declaredName,
 					accessNeed: accessNeed,
 					requirement: requirement,
 					emittingModule: emittingModule.identity,
@@ -3981,6 +4017,7 @@ public actor DependencyTreeGenerator {
 				checkingModule: nil,
 				// Another module's seams are computed from its named module's declarations.
 				isOwnFile: nil,
+				modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule,
 			)
 			errors += computation.errors
 			for (seamType, seamRoot) in computation.seamRoots where !computation.failedSeams.contains(seamType) {
@@ -4020,6 +4057,7 @@ public actor DependencyTreeGenerator {
 			seams: seams,
 			checkingModule: emittingModuleToCheck,
 			isOwnFile: emittingModule?.isOwnFile,
+			modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule,
 		)
 		var errors = ownComputation.errors
 		// Each generated seam is computed again over the declarations its callers see, when those differ from this
@@ -4044,6 +4082,7 @@ public actor DependencyTreeGenerator {
 				seams: seams,
 				checkingModule: emittingModuleToCheck,
 				isOwnFile: emittingModule?.isOwnFile,
+				modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule,
 			)
 			for seamType in generatedSeamTypes.sorted() {
 				guard let seam = typeDescriptionToFulfillingInstantiableMap[seamType],
@@ -4393,10 +4432,16 @@ public actor DependencyTreeGenerator {
 		seams: SeamResolution,
 		checkingModule: EmittingModule?,
 		isOwnFile: (@Sendable (String) -> Bool)?,
+		modulesReadByRunOfModule: (@Sendable (_ moduleName: String) -> TypeAccessProof.ModuleReach.ModulesRead)?,
 	) throws -> SeamSignatureComputation {
 		let seamInstantiables = seamTypes.sorted().compactMap { instantiables[$0] }.filter(\.generatesDependencyTree)
 		// One proof of every type's access per declaration map, which every seam of the computation reads.
-		let proof = TypeAccessProof(instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, isOwnFile: isOwnFile)
+		let proof = TypeAccessProof(
+			instantiables: instantiables,
+			plainTypeDeclarations: plainTypeDeclarations,
+			isOwnFile: isOwnFile,
+			reach: moduleReach(viewedFrom: callerModule, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, modulesReadByRunOfModule: modulesReadByRunOfModule),
+		)
 		guard !seamInstantiables.isEmpty else { return SeamSignatureComputation(seamRoots: [:], errors: [], failedSeams: [], proof: proof) }
 		let ownSeamTypes = Set(seamInstantiables.map(\.concreteInstantiable))
 		let declaredTypeNames = namesOfTypesDeclaredAtFileScope(instantiables: Array(instantiables.values), plainTypeDeclarations: plainTypeDeclarations)
@@ -10134,10 +10179,12 @@ extension Instantiable {
 	/// its file, which is directly inside the extension – or, for an `@Instantiable` extension, the type it declares; `nil`
 	/// for a declaration outside every extension.
 	fileprivate var extendedType: TypeDescription? {
-		if declarationType.isExtension {
-			concreteInstantiable
+		// The extended type is the one the declaring module's declarations name, as its own name there records it.
+		let declaredType = declaredName ?? concreteInstantiable
+		return if declarationType.isExtension {
+			declaredType
 		} else if enclosingExtensionAccess != nil {
-			(0...enclosingTypeAccess.count).reduce(concreteInstantiable as TypeDescription?) { type, _ in type?.popNested }
+			(0...enclosingTypeAccess.count).reduce(declaredType as TypeDescription?) { type, _ in type?.popNested }
 		} else {
 			nil
 		}

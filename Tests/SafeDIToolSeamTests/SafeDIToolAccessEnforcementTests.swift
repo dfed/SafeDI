@@ -3937,9 +3937,517 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 	}
 
+	// MARK: Tests – Declarations a mention cannot name
+
+	@Test(arguments: [
+		(MultiModuleIntegration.moduleInfo, BrandThemeReach.moduleOfAnotherPackage),
+		(.swiftPackagePlugin, .moduleOfAnotherPackage),
+		(.swiftPackagePlugin, .moduleNotRead),
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesTypeOnPublicTier_whenOnlyRecordedDeclarationOfExtendedTypesNameIsOneItsExtensionCannotName(integration: MultiModuleIntegration, brandTheme: BrandThemeReach) async throws {
+		// `Styles` extends `Lib`'s `Theme`, which SafeDI does not read: `Brand`'s `package` `Theme` is one SafeDI knows `Styles`
+		// cannot name – a module of another package, or, under the target graph, a module `Styles` does not depend on – so
+		// it does not bound the type `Styles` declares.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.themeModules(brandTheme: brandTheme, stylesDeclaresTheme: false), integration: integration, filesToDelete: &filesToDelete)
+
+		// Without a target graph, the file names the types it counts `public` because SafeDI reads no declaration of them.
+		let comment = integration == .moduleInfo
+			? "    // SafeDI counts `Theme` as `public`: no module it reads declares it narrower. If `Theme` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+			: ""
+		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + """
+		#if canImport(Lib)
+		import Lib
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Screen {
+		\(comment)    public convenience init(theme: Theme) {
+		        let cache = Cache()
+		        self.init(theme: theme, cache: cache)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_DD923990A48765D6 {}
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingDeclarationOfModuleItsRunDoesNotList_whenExtendingModuleMayImportThatModule() async {
+		// Under module info, `Styles`' run lists no `Brand`, but SafeDI is not told that `Styles` cannot import it, so
+		// `Brand`'s `package` `Theme` counts.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: \(Self.screenThemeFromBrandMessage)
+			\(fixtures["Brand"]!["Theme.swift"]):1:1: note: `Theme` is declared `package` here.
+			\(fixtures["Brand"]!["Theme.swift"]):1:1-1:8: fixit: public
+			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `theme: Theme` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.themeModules(brandTheme: .moduleNotRead, stylesDeclaresTheme: false), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingImportedPackageType_whenExtendingModuleImportsModuleItsRunDoesNotList(integration: MultiModuleIntegration) async {
+		// `Styles` lists only `Mid` and imports `Brand`, beneath it, whose `package` `Theme` it extends. Under module info SafeDI
+		// is not told that `Styles` cannot import `Brand`; under the target graph `Brand` is among its dependencies.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			func path(of fileName: String, in moduleName: String) -> String {
+				switch integration {
+				case .moduleInfo:
+					fixtures[moduleName]![fileName]
+				case .swiftPackagePlugin:
+					NormalizedFilePath(fixtures[moduleName]!.compilerPath(of: fileName)).path
+				}
+			}
+			return """
+			\(path(of: "Screen.swift", in: "Feature")):3:1: \(Self.screenThemeFromBrandMessage)
+			\(path(of: "Theme.swift", in: "Brand")):1:1: note: `Theme` is declared `package` here.
+			\(path(of: "Theme.swift", in: "Brand")):1:1-1:8: fixit: public
+			\(path(of: "Screen.swift", in: "Feature")):10:5: note: `Screen` receives `theme: Theme` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.underListedThemeModules(receivesThemeOnlyIfAvailable: false), integration: integration, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesImportedPackageTypeOnPackageTier_whenExtendingModuleImportsModuleItsRunDoesNotList(integration: MultiModuleIntegration) async throws {
+		// As above, with `theme` received only if available: the `public` tier passes `nil` for it.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.underListedThemeModules(receivesThemeOnlyIfAvailable: true), integration: integration, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + """
+		#if canImport(Brand)
+		import Brand
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Screen {
+		    public convenience init() {
+		        self.init(theme: nil)
+		    }
+
+		    package convenience init(theme: Theme?) {
+		        let cache = Cache()
+		        self.init(theme: theme, cache: cache)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_27F6F01DC5D0EF8E {}
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases, [["Lib", "ModA"], ["ModA", "Lib"]])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesUnreadTypeOnPublicTier_whenOnlyInstantiableDeclarationOfItsNameIsPackageTypeOfAnotherPackage(integration: MultiModuleIntegration, readOrder: [String]) async throws {
+		// `Feature` cannot name `ModA`'s `package` `Store`, of another package, so its seam's `Store` is `Lib`'s, which SafeDI
+		// does not read.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.storeReceivingModules(featureDependencies: readOrder, receivesStoreOnlyIfAvailable: false), integration: integration, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "SeamF+SafeDI.swift": generatedFileHeader + """
+		#if canImport(Lib)
+		import Lib
+		#endif
+
+		extension SeamF {
+		\(Self.unreadStoreComment(integration: integration))    public convenience init(store: Store) {
+		        let inner = Inner(store: store)
+		        self.init(store: store, inner: inner)
+		    }
+		}
+
+		extension SeamF {
+		    public enum __safeDI_SeamF_19911CF36F34982A {}
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesForwardedValueToPublicTier_whenSeamReceivesUnreadTypeOnlyIfAvailableBesidePackageInstantiableOfItsName(integration: MultiModuleIntegration) async throws {
+		// The `public` tier takes `store`, which `App` forwards.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.storeReceivingModules(featureDependencies: ["Lib", "ModA"], receivesStoreOnlyIfAvailable: true), integration: integration, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "SeamF+SafeDI.swift": generatedFileHeader + """
+		#if canImport(Lib)
+		import Lib
+		#endif
+
+		extension SeamF {
+		\(Self.unreadStoreComment(integration: integration))    public convenience init(store: Store?) {
+		        let inner = Inner()
+		        self.init(store: store, inner: inner)
+		    }
+		}
+
+		extension SeamF {
+		    public enum __safeDI_SeamF_733E17E62B7A3AC5 {}
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesTypeOnPublicTier_whenItsExtendedTypesOnlyInstantiableDeclarationIsPackageTypeOfAnotherPackage(integration: MultiModuleIntegration) async throws {
+		// `Feature` extends `Lib`'s `Outer`: `ModA`'s `package` `Outer`, of another package, does not bound `Outer.Inner`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Lib", packageName: "ThirdParty", swiftFileContentByFilePath: ["Outer.swift": "public enum Outer {}"], isCheckoutPackage: true, runsSafeDI: false),
+				ModuleFixture(name: "ModA", packageName: "PackageA", swiftFileContentByFilePath: ["Outer.swift": "@Instantiable\npackage struct Outer: Instantiable {\n    package init() {}\n}"]),
+				ModuleFixture(
+					name: "Feature",
+					packageName: "Shop",
+					swiftFileContentByFilePath: [
+						"Inner.swift": "import Lib\n\nextension Outer {\n    @Instantiable\n    public struct Inner: Instantiable {\n        public init() {}\n    }\n}",
+						"Screen.swift": """
+						import Lib
+
+						@Instantiable(generateDependencyTree: true)
+						public final class Screen: Instantiable {
+						    init(inner: Outer.Inner, cache: Cache) {
+						        self.inner = inner
+						        self.cache = cache
+						    }
+
+						    @Received let inner: Outer.Inner
+						    @Instantiated let cache: Cache
+						}
+
+						@Instantiable
+						struct Cache: Instantiable {
+						    init() {}
+						}
+						""",
+						"UsesModA.swift": "import ModA\n\nenum UsesModA {}",
+					],
+					dependencies: ["Lib", "ModA"],
+				),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let comment = integration == .moduleInfo
+			? "    // SafeDI counts `Outer` as `public`: no module it reads declares it narrower. If `Outer` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+			: ""
+		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + """
+		#if canImport(Lib)
+		import Lib
+		#endif
+
+		extension Screen {
+		\(comment)    public convenience init(inner: Outer.Inner) {
+		        let cache = Cache()
+		        self.init(inner: inner, cache: cache)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_ECD4BD415105F519 {}
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases, BrandThemeReach.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingExtendingModulesDeclaration_whenExtendingModuleDeclaresTypeBesideDeclarationOfItsNameItCannotName(integration: MultiModuleIntegration, brandTheme: BrandThemeReach) async {
+		// `Styles`' own `package` `Theme` bounds the type its extension declares, which `Screen`'s `public` tier cannot take.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			func path(of fileName: String, in moduleName: String) -> String {
+				switch integration {
+				case .moduleInfo:
+					fixtures[moduleName]![fileName]
+				case .swiftPackagePlugin:
+					NormalizedFilePath(fixtures[moduleName]!.compilerPath(of: fileName)).path
+				}
+			}
+			return """
+			\(path(of: "Screen.swift", in: "Feature")):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Styles`. Declare `Theme` `public` in module `Styles`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(path(of: "ThemeInstantiable.swift", in: "Styles")):3:1: note: `Theme` is declared `package` here.
+			\(path(of: "ThemeInstantiable.swift", in: "Styles")):3:1-3:8: fixit: public
+			\(path(of: "Screen.swift", in: "Feature")):10:5: note: `Screen` receives `theme: Theme` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.themeModules(brandTheme: brandTheme, stylesDeclaresTheme: true), integration: integration, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// Why `Styles` cannot name `Brand`'s `package` `Theme`.
+	enum BrandThemeReach: CaseIterable, CustomTestStringConvertible, Sendable {
+		/// `Styles` does not read `Brand`, a module of its package.
+		case moduleNotRead
+		/// `Styles` reads `Brand`, a module of another package.
+		case moduleOfAnotherPackage
+
+		var testDescription: String {
+			"\(self)"
+		}
+	}
+
+	/// `Lib`, a package SwiftPM fetched, which declares a `public` `Theme` SafeDI does not read; `Brand`, which declares a
+	/// `package` `Theme` that `Styles` cannot name, as `brandTheme` says; `Styles`, which declares `Theme` `@Instantiable`
+	/// by an extension, of `Lib`'s `Theme`, or of its own `package` one when `stylesDeclaresTheme`; and `Feature`, of
+	/// `Styles`' package, which reads `Brand` too, whose seam `Screen` receives the `Theme` `Styles` declares.
+	private static func themeModules(brandTheme: BrandThemeReach, stylesDeclaresTheme: Bool) -> [ModuleFixture] {
+		let themeInstantiable = stylesDeclaresTheme
+			? """
+			import SafeDI
+
+			package struct Theme {
+			    package init() {}
+			}
+
+			@Instantiable
+			extension Theme: Instantiable {
+			    package static func instantiate() -> Theme {
+			        Theme()
+			    }
+			}
+			"""
+			: """
+			import Lib
+			import SafeDI
+
+			@Instantiable(conformsElsewhere: true)
+			extension Theme {
+			    public static func instantiate() -> Theme {
+			        Theme()
+			    }
+			}
+
+			extension Theme: @retroactive Instantiable {}
+			"""
+		let stylesDependencies = switch brandTheme {
+		case .moduleNotRead:
+			["Lib"]
+		case .moduleOfAnotherPackage:
+			["Lib", "Brand"]
+		}
+		return [
+			ModuleFixture(name: "Lib", packageName: "ThirdParty", swiftFileContentByFilePath: ["Theme.swift": "public struct Theme {\n    public init() {}\n}"], isCheckoutPackage: true, runsSafeDI: false),
+			ModuleFixture(
+				name: "Brand",
+				packageName: brandTheme == .moduleNotRead ? "Shop" : "Other",
+				swiftFileContentByFilePath: [
+					"Theme.swift": "package struct Theme {\n    package init() {}\n}",
+					"Palette.swift": "@Instantiable\npublic struct Palette: Instantiable {\n    public init() {}\n}",
+				],
+			),
+			ModuleFixture(name: "Styles", packageName: "Shop", swiftFileContentByFilePath: ["ThemeInstantiable.swift": themeInstantiable], dependencies: stylesDependencies),
+			ModuleFixture(
+				name: "Feature",
+				packageName: "Shop",
+				swiftFileContentByFilePath: [
+					"Screen.swift": """
+					\(stylesDeclaresTheme ? "import Styles" : "import Lib")
+
+					@Instantiable(generateDependencyTree: true)
+					public final class Screen: Instantiable {
+					    init(theme: Theme, cache: Cache) {
+					        self.theme = theme
+					        self.cache = cache
+					    }
+
+					    @Received let theme: Theme
+					    @Instantiated let cache: Cache
+					}
+
+					@Instantiable
+					struct Cache: Instantiable {
+					    init() {}
+					}
+					""",
+					"UsesBrand.swift": "import Brand\n\nenum UsesBrand {}",
+				],
+				dependencies: ["Lib", "Brand", "Styles"],
+			),
+		]
+	}
+
+	/// The error at `Screen` when the `Theme` it receives is `Brand`'s `package` one.
+	private static let screenThemeFromBrandMessage = "error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Brand`. Declare `Theme` `public` in module `Brand`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`."
+
+	/// `Brand`, which declares a `package` `Theme`; `Mid`, which depends on `Brand`; `Styles`, which lists only `Mid`,
+	/// imports `Brand`, and declares `Brand`'s `Theme` `@Instantiable` by an extension; and `Feature`, which lists `Brand`
+	/// and `Styles`, whose seam `Screen` receives `Theme`, only if available when `receivesThemeOnlyIfAvailable`. Every
+	/// module is in package `Shop`.
+	private static func underListedThemeModules(receivesThemeOnlyIfAvailable: Bool) -> [ModuleFixture] {
+		let themeType = receivesThemeOnlyIfAvailable ? "Theme?" : "Theme"
+		return [
+			ModuleFixture(
+				name: "Brand",
+				packageName: "Shop",
+				swiftFileContentByFilePath: [
+					"Theme.swift": "package struct Theme {\n    package init() {}\n}",
+					"Palette.swift": "@Instantiable\npublic struct Palette: Instantiable {\n    public init() {}\n}",
+				],
+			),
+			ModuleFixture(name: "Mid", packageName: "Shop", swiftFileContentByFilePath: ["Mid.swift": "import Brand\n\npublic enum Mid {}"], dependencies: ["Brand"]),
+			ModuleFixture(
+				name: "Styles",
+				packageName: "Shop",
+				swiftFileContentByFilePath: [
+					"ThemeInstantiable.swift": """
+					import Brand
+					import SafeDI
+
+					@Instantiable
+					extension Theme: Instantiable {
+					    package static func instantiate() -> Theme {
+					        Theme()
+					    }
+					}
+					""",
+				],
+				dependencies: ["Mid"],
+			),
+			ModuleFixture(
+				name: "Feature",
+				packageName: "Shop",
+				swiftFileContentByFilePath: [
+					"Screen.swift": """
+					import Brand
+
+					@Instantiable(generateDependencyTree: true)
+					public final class Screen: Instantiable {
+					    init(theme: \(themeType), cache: Cache) {
+					        self.theme = theme
+					        self.cache = cache
+					    }
+
+					    @Received\(receivesThemeOnlyIfAvailable ? "(onlyIfAvailable: true)" : "") let theme: \(themeType)
+					    @Instantiated let cache: Cache
+					}
+
+					@Instantiable
+					struct Cache: Instantiable {
+					    init() {}
+					}
+					""",
+				],
+				dependencies: ["Brand", "Styles"],
+			),
+		]
+	}
+
+	/// `Lib`, a package SwiftPM fetched, which declares a `public` `Store` SafeDI does not read; `ModA`, of package
+	/// `PackageA`, which declares an `@Instantiable` `package` `Store` and a seam that holds it; `Feature`, of package
+	/// `Shop`, which lists `featureDependencies`, and whose seam `SeamF` receives `Lib`'s `Store`, only if available when
+	/// `receivesStoreOnlyIfAvailable`, in a file that imports only `Lib`; and `App`, whose `Holder` forwards `Store` and
+	/// instantiates `SeamF`.
+	private static func storeReceivingModules(featureDependencies: [String], receivesStoreOnlyIfAvailable: Bool) -> [ModuleFixture] {
+		let storeType = receivesStoreOnlyIfAvailable ? "Store?" : "Store"
+		let inner = receivesStoreOnlyIfAvailable
+			? "@Instantiable\nstruct Inner: Instantiable {\n    init() {}\n}"
+			: """
+			import Lib
+
+			@Instantiable
+			struct Inner: Instantiable {
+			    init(store: Store) { self.store = store }
+			    @Received let store: Store
+			}
+			"""
+		return [
+			ModuleFixture(name: "Lib", packageName: "ThirdParty", swiftFileContentByFilePath: ["Store.swift": "public struct Store {\n    public init() {}\n}"], isCheckoutPackage: true, runsSafeDI: false),
+			ModuleFixture(
+				name: "ModA",
+				packageName: "PackageA",
+				swiftFileContentByFilePath: [
+					"Store.swift": "@Instantiable\npackage struct Store: Instantiable {\n    package init() {}\n}",
+					"SeamA.swift": "@Instantiable(generateDependencyTree: true)\npublic final class SeamA: Instantiable {\n    init(store: Store) { self.store = store }\n    @Instantiated let store: Store\n}",
+				],
+			),
+			ModuleFixture(
+				name: "Feature",
+				packageName: "Shop",
+				swiftFileContentByFilePath: [
+					"SeamF.swift": """
+					import Lib
+
+					@Instantiable(generateDependencyTree: true)
+					public final class SeamF: Instantiable {
+					    init(store: \(storeType), inner: Inner) {
+					        self.store = store
+					        self.inner = inner
+					    }
+
+					    @Received\(receivesStoreOnlyIfAvailable ? "(onlyIfAvailable: true)" : "") public let store: \(storeType)
+					    @Instantiated let inner: Inner
+					}
+					""",
+					"Inner.swift": inner,
+					"UsesModA.swift": "import ModA\n\nenum UsesModA {}",
+				],
+				dependencies: featureDependencies,
+			),
+			ModuleFixture(
+				name: "App",
+				packageName: "AppPackage",
+				swiftFileContentByFilePath: [
+					"Holder.swift": """
+					import Feature
+					import Lib
+
+					@Instantiable
+					public struct Holder: Instantiable {
+					    public init(store: Store, seamF: SeamF) {
+					        self.store = store
+					        self.seamF = seamF
+					    }
+
+					    @Forwarded let store: Store
+					    @Instantiated let seamF: SeamF
+					}
+					""",
+					"Root.swift": """
+					import Feature
+					import ModA
+
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(seamA: SeamA, makeHolder: Instantiator<Holder>) {
+					        self.seamA = seamA
+					        self.makeHolder = makeHolder
+					    }
+
+					    @Instantiated let seamA: SeamA
+					    @Instantiated let makeHolder: Instantiator<Holder>
+					}
+					""",
+				],
+				dependencies: ["Lib", "ModA", "Feature"],
+			),
+		]
+	}
+
+	/// The comment, under module info, that names `Store` as a type SafeDI counts `public` unread.
+	private static func unreadStoreComment(integration: MultiModuleIntegration) -> String {
+		integration == .moduleInfo
+			? "    // SafeDI counts `Store` as `public`: no module it reads declares it narrower. If `Store` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+			: ""
+	}
 
 	/// `Core`, in package `Shop`, whose `Outer.swift` holds `outerDeclaration`, whose `namespaceFiles` declare namespaces
 	/// inside extensions, each in a file without a SafeDI marker, and whose `Helper.swift` holds `helperFilePrefix` and then

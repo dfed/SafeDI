@@ -135,6 +135,7 @@ If your session started outside the worktree you are editing, scoped rules and n
 |---|---|
 | "Conditional compilation": `#if` handling, scan's cache, plugin build settings | `.claude/rules/conditional-compilation.md` |
 | module membership, "Access between modules", generated imports | `.claude/rules/module-membership-and-access.md` |
+| "Types a module cannot name": two modules' declarations of one name, the duplicate-name error | `.claude/rules/types-a-module-cannot-name.md` |
 | "Type requirements query": `SafeDITool query needs` | `.claude/rules/query-needs.md` |
 | "Serialization": `.safedi` files, the scan cache, `BinaryCoding` | `.claude/rules/serialization.md` |
 | "File path spelling": any path comparison, `#sourceLocation`, `// Declared at` | `.claude/rules/file-paths.md` |

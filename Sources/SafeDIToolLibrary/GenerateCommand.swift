@@ -318,11 +318,32 @@ public struct Generate: AsyncParsableCommand {
 			ownModuleDeclaresSeamOrPublicMock: module.instantiables.contains { $0.generatesDependencyTree || $0.generateMock == .public },
 		)
 
+		// The modules each module of the module infos this run reads depends on directly, which that module's run read:
+		// the module graph the views carry, which names every module of the closure once.
+		let dependencyModuleNamesByModuleName = moduleInfoView.identitiesByModuleName.mapValues(\.dependencyModuleNames)
+
 		// Each module's instantiables are already ordered by `parseSwiftFiles`, so the
 		// combined order depends only on the caller's dependent-module list.
-		let normalizedInstantiables = normalizingInstantiableTypes(
-			of: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables,
-			plainTypeDeclarations: dependentModuleInfo.flatMap(\.plainTypeDeclarations) + module.plainTypeDeclarations,
+		let plainTypeDeclarationsReadByThisRun = dependentModuleInfo.flatMap(\.plainTypeDeclarations) + module.plainTypeDeclarations
+		let unnormalizedInstantiablesReadByThisRun = dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
+		let ownModuleIdentity = ModuleIdentity(moduleName: module.moduleName, packageName: module.packageName)
+		func modulesRead(byRunOfModuleNamed moduleName: String) -> TypeAccessProof.ModuleReach.ModulesRead {
+			Self.modulesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
+		}
+		let normalizedInstantiables = distinguishingTypesUnnameable(
+			from: ownModuleIdentity,
+			among: normalizingInstantiableTypes(
+				of: unnormalizedInstantiablesReadByThisRun,
+				plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
+				reach: TypeAccessProof.ModuleReach(
+					viewer: ownModuleIdentity,
+					instantiables: unnormalizedInstantiablesReadByThisRun,
+					plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
+					modulesReadByRunOfModule: modulesRead(byRunOfModuleNamed:),
+				),
+			),
+			plainTypeDeclarations: plainTypeDeclarationsReadByThisRun,
+			modulesRead: modulesRead(byRunOfModuleNamed:),
 		)
 		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
 		let listedModuleNames = Set(listedModuleInfoFiles.map(\.file.moduleName))
@@ -356,9 +377,6 @@ public struct Generate: AsyncParsableCommand {
 		} else {
 			[]
 		}
-		// The modules each module of the module infos this run reads depends on directly, which that module's run read:
-		// the module graph the views carry, which names every module of the closure once.
-		let dependencyModuleNamesByModuleName = moduleInfoView.identitiesByModuleName.mapValues(\.dependencyModuleNames)
 		let seamResolution = try seamResolution(
 			normalizedInstantiables: normalizedInstantiables,
 			ownFilePaths: ownFilePaths,
@@ -407,8 +425,8 @@ public struct Generate: AsyncParsableCommand {
 					FileManager.default.isReadableFile(atPath: comparisonFilePaths.projectFilePath(of: filePath).path)
 				},
 				additionalMocksToGenerateLocation: sourceConfiguration?.declarationLocation,
-				moduleNamesReadByRunOfModule: { [membership] moduleName in
-					Self.moduleNamesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
+				modulesReadByRunOfModule: { [membership] moduleName in
+					Self.modulesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
 				},
 			),
 			seams: seamResolution,
@@ -1022,6 +1040,24 @@ public struct Generate: AsyncParsableCommand {
 				directModulesByName[moduleName] = dependentModule
 			}
 		}
+		let dependencyModuleNamesByModuleName = moduleInfoView.identitiesByModuleName.mapValues(\.dependencyModuleNames)
+		/// `instantiables` as the module named `moduleName` resolves them, and `plainTypeDeclarations` that they read.
+		func resolved(_ instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration], fromModuleNamed moduleName: String) throws -> [TypeDescription: Instantiable] {
+			let viewer = ModuleIdentity(moduleName: moduleName, packageName: instantiables.first { $0.moduleName == moduleName }?.packageName)
+			func modulesRead(byRunOfModuleNamed moduleName: String) -> TypeAccessProof.ModuleReach.ModulesRead {
+				Self.modulesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
+			}
+			return try resolveSafeDIFulfilledTypes(instantiables: distinguishingTypesUnnameable(
+				from: viewer,
+				among: normalizingInstantiableTypes(
+					of: instantiables,
+					plainTypeDeclarations: plainTypeDeclarations,
+					reach: TypeAccessProof.ModuleReach(viewer: viewer, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, modulesReadByRunOfModule: modulesRead(byRunOfModuleNamed:)),
+				),
+				plainTypeDeclarations: plainTypeDeclarations,
+				modulesRead: modulesRead(byRunOfModuleNamed:),
+			))
+		}
 		var generatedSeams = Set<TypeDescription>()
 		var foreignSeams = [TypeDescription: SeamResolution.ForeignSeam]()
 		var foreignPublicMocks = [TypeDescription: SeamResolution.ForeignPublicMock]()
@@ -1054,7 +1090,7 @@ public struct Generate: AsyncParsableCommand {
 				}
 				// A module info holds the module's declarations as the module read them, and the condition it read them under.
 				visible = try VisibleDeclarations(
-					instantiables: resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables, plainTypeDeclarations: visiblePlainTypeDeclarations)),
+					instantiables: resolved(instantiables, plainTypeDeclarations: visiblePlainTypeDeclarations, fromModuleNamed: moduleName),
 					plainTypeDeclarations: visiblePlainTypeDeclarations,
 					readFromModuleInfo: true,
 					mockCondition: MockCondition(identity.mockConditionalCompilation),
@@ -1072,7 +1108,7 @@ public struct Generate: AsyncParsableCommand {
 				}
 				let visiblePlainTypeDeclarations = plainTypeDeclarations.filter { $0.moduleName.map(visibleModuleNames.contains) == true }
 				visible = try VisibleDeclarations(
-					instantiables: resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables, plainTypeDeclarations: visiblePlainTypeDeclarations)),
+					instantiables: resolved(instantiables, plainTypeDeclarations: visiblePlainTypeDeclarations, fromModuleNamed: moduleName),
 					plainTypeDeclarations: visiblePlainTypeDeclarations,
 					readFromModuleInfo: false,
 					mockCondition: Self.mockCondition(of: moduleConfiguration),
@@ -1128,10 +1164,11 @@ public struct Generate: AsyncParsableCommand {
 		{
 			let callersVisibleModuleNames = Self.visibleModuleNames(from: moduleName, in: membership)
 			callersVisiblePlainTypeDeclarations = plainTypeDeclarations.filter { $0.moduleName.map(callersVisibleModuleNames.contains) == true }
-			callersVisibleInstantiables = try resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(
-				of: unnormalizedInstantiables.filter { $0.moduleName.map(callersVisibleModuleNames.contains) == true },
+			callersVisibleInstantiables = try resolved(
+				unnormalizedInstantiables.filter { $0.moduleName.map(callersVisibleModuleNames.contains) == true },
 				plainTypeDeclarations: callersVisiblePlainTypeDeclarations,
-			))
+				fromModuleNamed: moduleName,
+			)
 		} else {
 			callersVisibleInstantiables = nil
 		}
@@ -1241,16 +1278,20 @@ public struct Generate: AsyncParsableCommand {
 	/// module names (`dependencyModuleNamesByModuleName`), or else, under the target graph, every module the module
 	/// depends on, directly or not, whose files that run's input CSV lists (`visibleModuleNames(from:in:)`). These are
 	/// the modules whose declarations `seamResolution` computes the signature of a seam the module declares from
-	/// (`visibleDeclarations(ofModuleNamed:)`).
-	private static func moduleNamesRead(
+	/// (`visibleDeclarations(ofModuleNamed:)`). Only the target graph lists every module the module can import: a module
+	/// of a run given module info files can import a module beneath one it lists, which its run does not read.
+	private static func modulesRead(
 		byRunOfModuleNamed moduleName: String,
 		dependencyModuleNamesByModuleName: [String: [String]],
 		membership: ModuleMembership?,
-	) -> Set<String> {
+	) -> TypeAccessProof.ModuleReach.ModulesRead {
 		if let dependencyModuleNames = dependencyModuleNamesByModuleName[moduleName] {
-			Set([moduleName] + dependencyModuleNames)
+			TypeAccessProof.ModuleReach.ModulesRead(moduleNames: Set([moduleName] + dependencyModuleNames), includesEveryModuleItCanImport: false)
 		} else {
-			visibleModuleNames(from: moduleName, in: membership)
+			TypeAccessProof.ModuleReach.ModulesRead(
+				moduleNames: visibleModuleNames(from: moduleName, in: membership),
+				includesEveryModuleItCanImport: membership?.dependencyModuleNames(ofModuleNamed: moduleName) != nil,
+			)
 		}
 	}
 

@@ -24,8 +24,8 @@ import Testing
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
-/// SafeDI tells `@Instantiable` types apart by name across every module a run reads, so two unrelated types of one name
-/// in two modules are an error whose remedy is to tell them apart. Keeping one is the only remedy offered for declarations
+/// SafeDI tells apart by name the `@Instantiable` types a module can name, so two unrelated types of one name in two
+/// modules that one module can name are an error whose remedy is to tell them apart. Keeping one is the only remedy offered for declarations
 /// known to be in one module, which holds one type of a name.
 struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 	// MARK: Initialization
@@ -42,11 +42,11 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 
 	// MARK: Tests – Types of one name in several modules
 
-	@Test(arguments: MultiModuleIntegration.allCases, ["internal", "package", "public"])
+	@Test(arguments: MultiModuleIntegration.allCases, ["package", "public"])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_namesBothModulesAndOffersRename_whenTwoModulesDeclareTypeOfOneName(integration: MultiModuleIntegration, accessLevel: String) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			let message = "error: `Store` is declared in modules `App` and `Core`. SafeDI tells @Instantiable types apart by name across every module a run reads. Rename one."
+			let message = "error: `Store` is declared in modules `App` and `Core`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one."
 			return """
 			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
 			\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
@@ -68,7 +68,7 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_listsThreeModulesAndAsksToRenameAllButOne_whenThreeModulesDeclareTypeOfOneName(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			let message = "error: `Store` is declared in modules `App`, `Core`, and `Feature`. SafeDI tells @Instantiable types apart by name across every module a run reads. Rename all but one."
+			let message = "error: `Store` is declared in modules `App`, `Core`, and `Feature`. SafeDI tells apart by name the @Instantiable types a module can name. Rename all but one."
 			return """
 			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
 			\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
@@ -99,7 +99,7 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let sortedModuleNames = moduleNames.sorted()
 			let leadingModules = sortedModuleNames.dropLast().map { "`\($0)`" }.joined(separator: ", ")
-			let message = "error: `Store` is declared in modules \(leadingModules), and `\(sortedModuleNames[23])`. SafeDI tells @Instantiable types apart by name across every module a run reads. Rename all but one."
+			let message = "error: `Store` is declared in modules \(leadingModules), and `\(sortedModuleNames[23])`. SafeDI tells apart by name the @Instantiable types a module can name. Rename all but one."
 			return moduleNames
 				.map { "\(fixtures[$0]!["Store.swift"]):1:1: \(message)" }
 				.sorted()
@@ -124,7 +124,7 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 		// SafeDI cannot tell one type split by platform from two types that have nothing to do with each other, so the
 		// message gives the remedy for each.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			let message = "error: `Store` is declared in modules `App` and `Core`. SafeDI tells @Instantiable types apart by name across every module a run reads, and reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`. If they are one type that differs by platform, declare it with one @Instantiable declaration, in one of these modules and outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. If they are different types, rename one."
+			let message = "error: `Store` is declared in modules `App` and `Core`. SafeDI tells apart by name the @Instantiable types a module can name, and reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`. If they are one type that differs by platform, declare it with one @Instantiable declaration, in one of these modules and outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. If they are different types, rename one."
 			return """
 			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
 			\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):2:1: \(message)
@@ -149,7 +149,7 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 	mutating func generate_namesRepeatingModuleAndAsksToDeclareOnceThenRename_whenOneOfTwoModulesDeclaresTypeInEachClause(integration: MultiModuleIntegration) async {
 		// Renaming one of three declarations would leave two of one name.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			let message = "error: `Store` is declared in modules `App` and `Core`, and more than once in `App`. SafeDI tells @Instantiable types apart by name across every module a run reads. Declare it once in `App`, with any platform difference inside its body or its `instantiate(…)` method, then rename one."
+			let message = "error: `Store` is declared in modules `App` and `Core`, and more than once in `App`. SafeDI tells apart by name the @Instantiable types a module can name. Declare it once in `App`, with any platform difference inside its body or its `instantiate(…)` method, then rename one."
 			return """
 			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
 			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):7:1: \(message)
@@ -172,7 +172,7 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_offersOneDeclarationOrDeclaringOnceThenRename_whenRepeatingDeclarationsAreAllInsidePlatformBlocks(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			let message = "error: `Store` is declared in modules `App` and `Core`, and more than once in `App`. SafeDI tells @Instantiable types apart by name across every module a run reads, and reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`. If they are one type that differs by platform, declare it with one @Instantiable declaration, in one of these modules and outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. If they are different types, declare it once in `App`, with any platform difference inside its body or its `instantiate(…)` method, then rename one."
+			let message = "error: `Store` is declared in modules `App` and `Core`, and more than once in `App`. SafeDI tells apart by name the @Instantiable types a module can name, and reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`. If they are one type that differs by platform, declare it with one @Instantiable declaration, in one of these modules and outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. If they are different types, declare it once in `App`, with any platform difference inside its body or its `instantiate(…)` method, then rename one."
 			return """
 			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
 			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):7:1: \(message)
@@ -803,7 +803,7 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 	}
 
 	private static func claimsMessage(modules: String?, rename: String, for typeName: String = "Store") -> String {
-		"error: Found multiple @Instantiable types or extensions that fulfill `\(typeName)`\(modules.map { ", in modules \($0)" } ?? ""). Each type can be fulfilled by only one @Instantiable declaration, across all modules. If `\(typeName)` names different types, \(rename). If it names one type, keep one, and remove `\(typeName)` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
+		"error: Found multiple @Instantiable types or extensions that fulfill `\(typeName)`\(modules.map { ", in modules \($0)" } ?? ""). Each type can be fulfilled by only one @Instantiable declaration\(modules == nil ? ", across all modules" : " a module can name"). If `\(typeName)` names different types, \(rename). If it names one type, keep one, and remove `\(typeName)` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
 	}
 
 	private static func repeatedClaimMessage(for typeName: String) -> String {

@@ -894,9 +894,9 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 				}
 			}
 			let message = if declaresInPlatformBlocks {
-				"error: `Haptics` is declared in modules `App` and `Core`. SafeDI tells @Instantiable types apart by name across every module a run reads, and reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`. If they are one type that differs by platform, declare it with one @Instantiable declaration, in one of these modules and outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. If they are different types, rename one."
+				"error: `Haptics` is declared in modules `App` and `Core`. SafeDI tells apart by name the @Instantiable types a module can name, and reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`. If they are one type that differs by platform, declare it with one @Instantiable declaration, in one of these modules and outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. If they are different types, rename one."
 			} else {
-				"error: `Haptics` is declared in modules `App` and `Core`. SafeDI tells @Instantiable types apart by name across every module a run reads. Rename one."
+				"error: `Haptics` is declared in modules `App` and `Core`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one."
 			}
 			let line = declaresInPlatformBlocks ? 2 : 1
 			return """

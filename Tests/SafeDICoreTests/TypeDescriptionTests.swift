@@ -25,6 +25,50 @@ import Testing
 @testable import SafeDICore
 
 struct TypeDescriptionTests {
+	private static func parsedType(_ source: String) -> TypeDescription {
+		var parser = Parser(source)
+		return TypeSyntax.parse(from: &parser).typeDescription
+	}
+
+	@Test(arguments: [
+		("Store", "ModA.Store"),
+		("Box<Store>", "Box<ModA.Store>"),
+		("Outer.Box<Store>", "Outer.Box<ModA.Store>"),
+		("Store & Other", "ModA.Store & Other"),
+		("Store?", "ModA.Store?"),
+		("Store!", "ModA.Store!"),
+		("some Store", "some ModA.Store"),
+		("any Store", "any ModA.Store"),
+		("Store.Type", "ModA.Store.Type"),
+		("sending Store", "sending ModA.Store"),
+		("[Store]", "[ModA.Store]"),
+		("[Store: Int]", "[ModA.Store: Int]"),
+		("[Int: Store]", "[Int: ModA.Store]"),
+		("(Store, label: Store)", "(ModA.Store, label: ModA.Store)"),
+		("(Store) -> Void", "(ModA.Store) -> Void"),
+		("() throws(Store) -> Void", "() throws(ModA.Store) -> Void"),
+		("() -> Store", "() -> ModA.Store"),
+		("(Store...) -> Void", "(ModA.Store...) -> Void"),
+	])
+	func replacingTypes_replacesTheType_whereverTheReceiverNamesIt(source: String, expected: String) {
+		#expect(Self.parsedType(source).replacingTypes([.simple(name: "Store"): .nested(name: "Store", parentType: .simple(name: "ModA"))])?.asSource == expected)
+	}
+
+	@Test(arguments: ["Int", "Store.Config", "Box<Int>", "Outer.Box<Int>", "Int & Other", "Int?", "Int!", "some Int", "any Int", "Int.Type", "sending Int", "[Int]", "[Int: Int]", "(Int, label: Int)", "(Int) throws -> Int", "(Int...) -> Void", "Void"])
+	func replacingTypes_returnsNil_whenTheReceiverNamesNoType(source: String) {
+		#expect(Self.parsedType(source).replacingTypes([.simple(name: "Store"): .nested(name: "Store", parentType: .simple(name: "ModA"))]) == nil)
+	}
+
+	@Test(arguments: [("Store", "ModA.Store"), ("Feature.Store", "ModA.Feature.Store"), ("Box<Int>", "ModA.Box<Int>")])
+	func qualified_spellsTheModuleBeforeTheOutermostName_whenTheReceiverIsANamedType(source: String, expected: String) {
+		#expect(Self.parsedType(source).qualified(byModuleNamed: "ModA")?.asSource == expected)
+	}
+
+	@Test(arguments: ["any Store", "Store?", "[Store]", "Store & Other", "() -> Void", "(Int, Int)", "Void"])
+	func qualified_returnsNil_whenTheReceiverIsNotANamedType(source: String) {
+		#expect(Self.parsedType(source).qualified(byModuleNamed: "ModA") == nil)
+	}
+
 	@Test
 	func typeDescription_whenCalledOnATypeSyntaxNodeRepresentingAVoidTypeIdentifierSyntax_findsTheType() throws {
 		let content = """

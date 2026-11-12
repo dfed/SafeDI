@@ -975,6 +975,76 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		let mayWrapInstantiatedType: Bool
 	}
 
+	/// The receiver with each type `replacements` holds replaced, wherever in the receiver that type sits, or `nil` when it
+	/// holds none of them, so that a caller keeps the receiver without rebuilding it: `Instantiator<Store>?` becomes
+	/// `Instantiator<ModA.Store>?` when `replacements` maps `Store` to `ModA.Store`. A name after the outermost of a nested
+	/// type is a member of the type before it, so `Store.Config` is replaced only when `replacements` holds it whole.
+	public func replacingTypes(_ replacements: [TypeDescription: TypeDescription]) -> TypeDescription? {
+		// Only a named type is looked up: `any Store` equals `Store`, and its `any` is kept.
+		switch self {
+		case let .simple(name, generics):
+			return replacements[self] ?? generics.replacingElementsIfAny { $0.replacingTypes(replacements) }.map { .simple(name: name, generics: $0) }
+		case let .nested(name, parentType, generics):
+			return replacements[self] ?? generics.replacingElementsIfAny { $0.replacingTypes(replacements) }.map { .nested(name: name, parentType: parentType, generics: $0) }
+		case let .composition(types):
+			return Array(types).replacingElementsIfAny { $0.replacingTypes(replacements) }.map { .composition(UnorderedEquatingCollection($0)) }
+		case let .optional(type):
+			return type.replacingTypes(replacements).map { .optional($0) }
+		case let .implicitlyUnwrappedOptional(type):
+			return type.replacingTypes(replacements).map { .implicitlyUnwrappedOptional($0) }
+		case let .some(type):
+			return type.replacingTypes(replacements).map { .some($0) }
+		case let .any(type):
+			return type.replacingTypes(replacements).map { .any($0) }
+		case let .metatype(type, isType):
+			return type.replacingTypes(replacements).map { .metatype($0, isType: isType) }
+		case let .attributed(type, specifiers, attributes):
+			return type.replacingTypes(replacements).map { .attributed($0, specifiers: specifiers, attributes: attributes) }
+		case let .array(element):
+			return element.replacingTypes(replacements).map { .array(element: $0) }
+		case let .dictionary(key, value):
+			let replacedKey = key.replacingTypes(replacements)
+			let replacedValue = value.replacingTypes(replacements)
+			guard replacedKey != nil || replacedValue != nil else { return nil }
+			return .dictionary(key: replacedKey ?? key, value: replacedValue ?? value)
+		case let .tuple(elements):
+			return elements
+				.replacingElementsIfAny { element in
+					element.typeDescription.replacingTypes(replacements).map { TupleElement(label: element.label, $0) }
+				}
+				.map { .tuple($0) }
+		case let .closure(arguments, isAsync, doesThrow, thrownType, returnType):
+			let replacedArguments = arguments.replacingElementsIfAny { $0.replacingTypes(replacements) }
+			let replacedThrownType = thrownType?.replacingTypes(replacements)
+			let replacedReturnType = returnType.replacingTypes(replacements)
+			guard replacedArguments != nil || replacedThrownType != nil || replacedReturnType != nil else { return nil }
+			return .closure(
+				arguments: replacedArguments ?? arguments,
+				isAsync: isAsync,
+				doesThrow: doesThrow,
+				thrownType: replacedThrownType ?? thrownType,
+				returnType: replacedReturnType ?? returnType,
+			)
+		case let .variadic(type):
+			return type.replacingTypes(replacements).map { .variadic($0) }
+		case .unknown, .void:
+			return nil
+		}
+	}
+
+	/// The receiver spelled with `moduleName` before its outermost name, as a mention of the module's own type is
+	/// (`ModA.Store`, `ModA.Feature.Store`), or `nil` for a spelling that is not a named type.
+	public func qualified(byModuleNamed moduleName: String) -> TypeDescription? {
+		switch self {
+		case let .simple(name, generics):
+			.nested(name: name, parentType: .simple(name: moduleName), generics: generics)
+		case let .nested(name, parentType, generics):
+			parentType.qualified(byModuleNamed: moduleName).map { .nested(name: name, parentType: $0, generics: generics) }
+		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .variadic, .void:
+			nil
+		}
+	}
+
 	/// The generic argument that a type which instantiates another builds, or `nil` when the type named `name` with
 	/// `generics` is not such a type.
 	private static func builtGeneric(inGenerics generics: [TypeDescription], ofTypeNamed name: String) -> BuiltGeneric? {
