@@ -4072,6 +4072,127 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		}
 	}
 
+	// MARK: Tests – A cycle closed by another form of the declaration it repeats
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_settlesCycleParameters_whenLazilyInstantiatedDependencyClosesCycleOnConstantDeclaration() async throws {
+		// The preview lazily opens an editor of its own, which receives the preview's theme. The walk that finds the editor
+		// function's parameters meets the theme first at the lazy `editor`, which repeats the constant `editor` declaration.
+		let fixture = [
+			seamFixtureType(named: "App", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let theme: Theme", "@Instantiated let editor: Editor"]),
+			seamFixtureType(named: "Editor", isFinalClass: true, declarations: ["@Instantiated let previewBuilder: Instantiator<Preview>", "@Instantiated let toolbar: Toolbar"]),
+			seamFixtureType(named: "Preview", isFinalClass: true, declarations: ["@Instantiated let theme: Theme", "@Instantiated let editor: LazilyInstantiated<Editor>"]),
+			seamFixtureType(named: "Toolbar", isFinalClass: true, declarations: ["@Received let theme: Theme"]),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+		]
+		try await expectGeneratedTree(of: fixture, root: "App", equals: """
+		extension App {
+		    public convenience init() {
+		        let theme = Theme()
+		        func __safeDI_editor(theme: Theme) -> Editor {
+		            func __safeDI_previewBuilder() -> Preview {
+		                let theme = Theme()
+		                let editor = LazilyInstantiated<Editor> {
+		                    __safeDI_editor(theme: theme)
+		                }
+		                return Preview(theme: theme, editor: editor)
+		            }
+		            let previewBuilder = Instantiator<Preview>(__safeDI_previewBuilder)
+		            let toolbar = Toolbar(theme: theme)
+		            return Editor(previewBuilder: previewBuilder, toolbar: toolbar)
+		        }
+		        let editor: Editor = __safeDI_editor(theme: theme)
+		        self.init(theme: theme, editor: editor)
+		    }
+		}
+		""", buildsTheSameValuesAs: """
+		extension App {
+		    public convenience init() {
+		        func editor(theme: Theme) -> Editor {
+		            Editor(previewBuilder: Instantiator<Preview> {
+		                let previewTheme = Theme()
+		                return Preview(theme: previewTheme, editor: LazilyInstantiated<Editor> { editor(theme: previewTheme) })
+		            }, toolbar: Toolbar(theme: theme))
+		        }
+		        let theme = Theme()
+		        self.init(theme: theme, editor: editor(theme: theme))
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_settlesCycleParameters_whenConstantDependencyClosesCycleOnLazilyInstantiatedDeclaration() async throws {
+		// The preview opens an editor of its own, which receives the preview's theme. The walk that finds the editor
+		// function's parameters meets the theme first at the constant `editor`, which repeats the lazy `editor` declaration.
+		let fixture = [
+			seamFixtureType(named: "App", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let theme: Theme", "@Instantiated let editor: LazilyInstantiated<Editor>"]),
+			seamFixtureType(named: "Editor", isFinalClass: true, declarations: ["@Instantiated let previewBuilder: Instantiator<Preview>", "@Instantiated let toolbar: Toolbar"]),
+			seamFixtureType(named: "Preview", isFinalClass: true, declarations: ["@Instantiated let theme: Theme", "@Instantiated let editor: Editor"]),
+			seamFixtureType(named: "Toolbar", isFinalClass: true, declarations: ["@Received let theme: Theme"]),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+		]
+		try await expectGeneratedTree(of: fixture, root: "App", equals: """
+		extension App {
+		    public convenience init() {
+		        let theme = Theme()
+		        func __safeDI_editor(theme: Theme) -> Editor {
+		            func __safeDI_previewBuilder() -> Preview {
+		                let theme = Theme()
+		                let editor: Editor = __safeDI_editor(theme: theme)
+		                return Preview(theme: theme, editor: editor)
+		            }
+		            let previewBuilder = Instantiator<Preview>(__safeDI_previewBuilder)
+		            let toolbar = Toolbar(theme: theme)
+		            return Editor(previewBuilder: previewBuilder, toolbar: toolbar)
+		        }
+		        let editor = LazilyInstantiated<Editor> {
+		            __safeDI_editor(theme: theme)
+		        }
+		        self.init(theme: theme, editor: editor)
+		    }
+		}
+		""", buildsTheSameValuesAs: """
+		extension App {
+		    public convenience init() {
+		        func editor(theme: Theme) -> Editor {
+		            Editor(previewBuilder: Instantiator<Preview> {
+		                let previewTheme = Theme()
+		                return Preview(theme: previewTheme, editor: editor(theme: previewTheme))
+		            }, toolbar: Toolbar(theme: theme))
+		        }
+		        let theme = Theme()
+		        self.init(theme: theme, editor: LazilyInstantiated<Editor> { editor(theme: theme) })
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCaptureErrorAtToolbar_whenSendableLazilyInstantiatedDependencyClosesCycleOnConstantDeclarationPassingInstantiatorDeclaredOutsideIt() async {
+		// The preview's `SendableLazilyInstantiated` closure passes the preview's `themeBuilder`, declared outside it, to the
+		// editor function: the capture error, reported where the function's body first receives `themeBuilder`, the toolbar,
+		// through the chain from the editor the closure builds again.
+		let fixture = [
+			seamFixtureType(named: "App", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let themeBuilder: Instantiator<Theme>", "@Instantiated let editor: Editor"]),
+			seamFixtureType(named: "Editor", isFinalClass: true, declarations: ["@Instantiated let previewBuilder: Instantiator<Preview>", "@Instantiated let toolbar: Toolbar"], conformances: ", @unchecked Sendable"),
+			seamFixtureType(named: "Preview", isFinalClass: true, declarations: ["@Instantiated let themeBuilder: Instantiator<Theme>", "@Instantiated let editor: SendableLazilyInstantiated<Editor>"]),
+			seamFixtureType(named: "Toolbar", isFinalClass: true, declarations: ["@Received let themeBuilder: Instantiator<Theme>"]),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+		]
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Toolbar.swift"]):7:5: error: @Received property `themeBuilder: Instantiator<Theme>` cannot be received inside a `@Sendable` function in chain: App -> Editor -> Preview -> Editor -> Toolbar. SafeDI builds `editor: SendableLazilyInstantiated<Editor>` on `Preview` in a `@Sendable` function, which cannot capture `themeBuilder: Instantiator<Theme>` on `Preview`, because `Instantiator<Theme>` is not `Sendable`. Declare `themeBuilder` on `Preview`, and this property, as `SendableInstantiator<Theme>` to fix. `SendableInstantiator<Theme>` builds `Theme` in a `@Sendable` function, so what the tree of `Theme` receives from outside that function must be `Sendable` too.
+			\(fixtures["Preview.swift"]):8:5: note: `themeBuilder: Instantiator<Theme>` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
