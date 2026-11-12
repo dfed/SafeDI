@@ -76,6 +76,25 @@ let package = Package(
 				.product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
 				.product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
 			] + safeDICoreDependencies,
+			// The macros compile SafeDICore's sources through the `SafeDICore` symbolic link, except those only
+			// SafeDITool uses, which are most of what this target would otherwise compile. Sources/SafeDICore/BUILD.bazel
+			// excludes the same files, and `MacroTargetSourceTests` fails when a SafeDICore file is in neither list.
+			exclude: [
+				"SafeDICore/Generators",
+				"SafeDICore/Utilities",
+				"SafeDICore/Extensions/ImportDeclSyntaxExtensions.swift",
+				"SafeDICore/Models/AliasDeclarationReferences.swift",
+				"SafeDICore/Models/CycleParameter.swift",
+				"SafeDICore/Models/ImportStatement.swift",
+				"SafeDICore/Models/SafeDIToolManifest.swift",
+				"SafeDICore/Models/Scope.swift",
+				"SafeDICore/Models/SeamSignature.swift",
+				"SafeDICore/Models/SourceDiagnostic.swift",
+				"SafeDICore/Models/TypeAccessProof.swift",
+				"SafeDICore/Models/TypeRequirements.swift",
+				"SafeDICore/Models/WithoutPositions.swift",
+				"SafeDICore/Visitors/FileVisitor.swift",
+			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
 			],

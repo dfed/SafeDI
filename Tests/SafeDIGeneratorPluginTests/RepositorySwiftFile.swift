@@ -35,10 +35,6 @@ struct RepositorySwiftFile {
 	/// The Swift files under each of `directories`, which are relative to the repository root, in path order. A
 	/// symbolic link compiles a file that is checked where it lives, so no file reached through one is listed.
 	static func files(under directories: [String]) throws -> [RepositorySwiftFile] {
-		let repositoryRoot = URL(fileURLWithPath: #filePath)
-			.deletingLastPathComponent()
-			.deletingLastPathComponent()
-			.deletingLastPathComponent()
 		var files = [RepositorySwiftFile]()
 		for directory in directories {
 			let directoryURL = repositoryRoot.appendingPathComponent(directory)
@@ -61,6 +57,12 @@ struct RepositorySwiftFile {
 		}
 		return files.sorted { $0.path < $1.path }
 	}
+
+	/// The root of this repository's checkout.
+	static let repositoryRoot = URL(fileURLWithPath: #filePath)
+		.deletingLastPathComponent()
+		.deletingLastPathComponent()
+		.deletingLastPathComponent()
 
 	private struct CouldNotEnumerateDirectoryError: Error {
 		let directory: String
