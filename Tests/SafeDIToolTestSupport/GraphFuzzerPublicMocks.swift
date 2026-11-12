@@ -196,6 +196,9 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// existential hole beside `HoleFill`, or alone (D530-2).
 	case consumerReceivesLazilyInstantiatedWrapper
 	case consumerReachesHoleTypeUnderTwoLabels
+	/// On a stream of its own: a consumer reaching `T6` instantiates `T6Twin` too, a second public mock whose tree holds the
+	/// same hole.
+	case consumerReachesHoleTypeThroughTwoPublicMocks
 	case holeFakeBesideFill
 	case holeFakeAlone
 
@@ -349,12 +352,15 @@ enum GraphFuzzerPublicMockSpelling: CaseIterable {
 /// finding of this corpus is the feature's.
 ///
 /// Types are named after indices the rename-invariance oracle reverses: the `.public` types `T0` to `T2`, their
-/// children `T3` to `T5`, the `.public` type `T6` whose tree holds a hole, and the consumers `T7` (same package), `T8`
+/// children `T3` to `T5`, the `.public` type `T6` whose tree holds a hole (and `T6Twin`, whose tree holds the same one,
+/// renamed with it), and the consumers `T7` (same package), `T8`
 /// (another package) and `T9` (a type a `Sendable` wrapper builds), each held under the label `t<index>`, and the eraser
 /// `AnyT<index>` of a leaf a consumer reaches through an erasure, held under `anyT<index>`; the helper types keep their
 /// names.
 struct GraphFuzzerPublicMockDraw {
-	init(seed: UInt64) {
+	/// - Parameter omitsSecondHolePlace: Whether the draw leaves out `secondHolePlace`, drawing the rest as with it.
+	init(seed: UInt64, omitsSecondHolePlace: Bool = false) {
+		self.omitsSecondHolePlace = omitsSecondHolePlace
 		prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 		var random = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockRandomSeedMask)
 		var spellingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockSpellingRandomSeedMask)
@@ -366,6 +372,7 @@ struct GraphFuzzerPublicMockDraw {
 		var namespaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockNamespaceRandomSeedMask)
 		var unreadTypeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockUnreadTypeRandomSeedMask)
 		var seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.publicMockRandomSeedMask)
+		var secondCalledMockRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockSecondCalledMockRandomSeedMask)
 		draw(
 			random: &random,
 			spellingRandom: &spellingRandom,
@@ -377,6 +384,7 @@ struct GraphFuzzerPublicMockDraw {
 			namespaceRandom: &namespaceRandom,
 			unreadTypeRandom: &unreadTypeRandom,
 			seamDependencyRandom: &seamDependencyRandom,
+			secondCalledMockRandom: &secondCalledMockRandom,
 		)
 		// Which files move beneath the declaring module: decided after the rest of the draw, from a stream of its own, so
 		// that a graph without it is drawn as before. Each file is read as the drawn graph writes it.
@@ -419,6 +427,11 @@ struct GraphFuzzerPublicMockDraw {
 	/// enclosing it – by the name the fixture spells it with (`S1_Space.S1_Shelf` for a nested type): the ground truth
 	/// the access oracle checks generated declarations against. Every other type the graph declares is `public`.
 	private(set) var typeAccess = [String: GraphFuzzerGenerator.AccessLevel]()
+	/// The label that gives the graph its second place of the hole, which the name-stability oracle leaves out: `t6Twin`, under
+	/// which a consumer reaching `T6` instantiates `T6Twin`, a second public mock whose tree holds the same hole, or else
+	/// `t6Second`, under which it reaches `T6` a second time (D530-1), or `nil`.
+	private(set) var secondHolePlace: String?
+	private let omitsSecondHolePlace: Bool
 
 	static let publicMockRandomSeedMask: UInt64 = 0x7075626C69636D6B
 	static let publicMockSpellingRandomSeedMask: UInt64 = 0x7075626D6B73706C
@@ -458,6 +471,10 @@ struct GraphFuzzerPublicMockDraw {
 	/// `T6` under a second label (D530-1), and a `mockOnly` fake that fulfills `T6`'s existential hole beside the fill or
 	/// alone (D530-2): rolls added after the rest of the draw was pinned, so that its other shapes are drawn as before.
 	static let publicMockCallShapeRandomSeedMask: UInt64 = 0x7075626D6B63616C
+	/// Draws only whether the consumers that reach `T6` also instantiate `T6Twin`, a second `.public` type whose tree holds
+	/// the same hole as `T6`'s, so that a consumer calls two public mocks of one hole type: a roll added after the rest of
+	/// the draw was pinned, so that its other shapes are drawn as before.
+	static let publicMockSecondCalledMockRandomSeedMask: UInt64 = 0x7075626D6B74776E
 	/// What begins the comment in `T6`'s file that holds its hand-written caller's call, after the caller's module:
 	/// `// publicMockCaller in FuzzOther: S1_T6.mock(s1_HoleBuilder: …)`. `GraphFuzzerOracle.addingPublicMockCallers` reads it.
 	static let publicMockCallerMarker = "// publicMockCaller in "
@@ -654,6 +671,7 @@ struct GraphFuzzerPublicMockDraw {
 		namespaceRandom: inout GraphFuzzerRandomNumberGenerator,
 		unreadTypeRandom: inout GraphFuzzerRandomNumberGenerator,
 		seamDependencyRandom: inout GraphFuzzerRandomNumberGenerator,
+		secondCalledMockRandom: inout GraphFuzzerRandomNumberGenerator,
 	) {
 		// Both rolls are made in every graph, so the stream is consumed the same way whatever the rest of the draw.
 		let declaresSpaceInFileOfItsOwn = namespaceRandom.percentChance(50)
@@ -1006,6 +1024,8 @@ struct GraphFuzzerPublicMockDraw {
 		// ignores the scope it is handed (`publicMockCallerMarker`).
 		let callerModule = consumerModules.contains(.otherPackageCaller) ? GraphFuzzerModule.otherPackageCaller : .samePackageCaller
 		var holeLeaf: (declaration: InstantiableClass, spelling: HoleSpelling, position: HolePosition)?
+		/// The index in `declaringFiles` of `T6`'s file, which declares `T6Twin` too when a consumer reaches it.
+		var holeLeafFileIndex: Int?
 		if holeRandom.percentChance(40) {
 			let holeName = name("Hole")
 			let protocolName = name("HoleProtocol")
@@ -1116,6 +1136,7 @@ struct GraphFuzzerPublicMockDraw {
 				"\(declaration.name).mock(\(enumBuilderLabel): { _ in \(value) })"
 			}
 			let holeDeclaration = declaration
+			holeLeafFileIndex = declaringFiles.count
 			declaringFiles.append(File(module: .seamModule, declarations: [
 				Self.renderer(of: holeDeclaration),
 				{ _ in "\(Self.publicMockCallerMarker)\(callerModule.name): \(call)" },
@@ -1123,6 +1144,15 @@ struct GraphFuzzerPublicMockDraw {
 			holeLeaf = (declaration, spelling, position)
 		}
 
+		// On a stream of its own, made in every graph: whether each consumer that reaches `T6` instantiates `T6Twin` too, a
+		// second `.public` type declared in `T6`'s file with `T6`'s properties, so that its tree holds the same hole, and a
+		// consumer calls two public mocks of one hole type. It is the graph's second place of the hole, which the
+		// name-stability oracle leaves out: a consumer whose mock passes both mocks' places up names the builders it takes
+		// for them apart, after each called type, so adding it renames the first (a known issue). It names `T6Twin` only in
+		// `T6`'s file, which the consumer names already, so the files that move beneath the declaring module move without
+		// it too.
+		let drawsSecondCalledMock = secondCalledMockRandom.percentChance(20)
+		var consumerReachesSecondCalledMock = false
 		// The consumers: `T7` in the same package, `T8` in another, each reaching one leaf, or both of M8.9b's.
 		var consumerFiles = [File]()
 		let wrapperModule: GraphFuzzerModule? = isSendableGraph && random.percentChance(70) ? random.element(of: consumerModules) : nil
@@ -1229,10 +1259,25 @@ struct GraphFuzzerPublicMockDraw {
 			var holeFulfillerDeclarations = [(Rendering) -> String]()
 			if Self.drawsHoleConsumers, let holeLeaf, holeRandom.percentChance(60) {
 				leafProperties.append(Property(attribute: holeRandom.percentChance(50) ? "@Received" : "@Instantiated", label: "t6", type: holeLeaf.declaration.name))
+				if drawsSecondCalledMock {
+					consumerReachesSecondCalledMock = true
+					secondHolePlace = "t6Twin"
+					if !omitsSecondHolePlace {
+						leafProperties.append(Property(attribute: "@Instantiated", label: "t6Twin", type: name("T6Twin")))
+					}
+				}
 				// D530-1, on the call-shape stream: now and then the consumer instantiates `T6` under a second label too, so its
 				// mock calls `T6`'s mock twice, each call with fills of its own.
+				// It is the graph's second place of the hole, unless `T6Twin` is, which the name-stability oracle leaves out: two
+				// calls of one mock take one builder, so the place adds a case and renames nothing. It names `T6` as the first
+				// call does, so the files that move beneath the declaring module move without it too.
 				if callShapeRandom.percentChance(30) {
-					leafProperties.append(Property(attribute: "@Instantiated", label: "t6Second", type: holeLeaf.declaration.name))
+					if secondHolePlace == nil {
+						secondHolePlace = "t6Second"
+					}
+					if !omitsSecondHolePlace || secondHolePlace != "t6Second" {
+						leafProperties.append(Property(attribute: "@Instantiated", label: "t6Second", type: holeLeaf.declaration.name))
+					}
 				}
 				if !declared.contains("HoleFill"), holeRandom.percentChance(50) {
 					declared.insert("HoleFill")
@@ -1329,6 +1374,16 @@ struct GraphFuzzerPublicMockDraw {
 			if !holeFulfillerDeclarations.isEmpty {
 				consumerFiles.append(File(module: module, fileName: "\(prefix)HoleFill.swift", declarations: holeFulfillerDeclarations))
 			}
+		}
+
+		// `T6Twin`, beside `T6` in its file, declared whether or not the consumers instantiate it.
+		if consumerReachesSecondCalledMock, let holeLeaf, let holeLeafFileIndex {
+			var twin = instantiableClass("T6Twin")
+			twin.mockGeneration = holeLeaf.declaration.mockGeneration
+			twin.initializerAccess = holeLeaf.declaration.initializerAccess
+			twin.properties = holeLeaf.declaration.properties
+			twin.narrowestNamedAccess = holeLeaf.declaration.narrowestNamedAccess
+			declaringFiles[holeLeafFileIndex].declarations.insert(Self.renderer(of: twin), at: 1)
 		}
 
 		// The spelled values' named types proven `public` by a public initializer no tree reaches, as `BadgeHolder`
@@ -2233,6 +2288,9 @@ extension GraphFuzzerPublicMockDraw {
 				}
 				if content.contains(" let t6Second: \(holeLeafName)\n") {
 					features.insert(.consumerReachesHoleTypeUnderTwoLabels)
+				}
+				if content.contains(" let t6Twin: \(holeLeafName)Twin\n") {
+					features.insert(.consumerReachesHoleTypeThroughTwoPublicMocks)
 				}
 				guard fileName.hasSuffix("\(prefix)HoleFill.swift") else { continue }
 				fillModule = module

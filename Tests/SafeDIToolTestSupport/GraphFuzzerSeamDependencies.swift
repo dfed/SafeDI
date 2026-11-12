@@ -241,8 +241,12 @@ enum GraphFuzzerSeamDependencyDraw {
 	static func drawn(in fixture: GraphFuzzerFixture) -> (movesDeclaration: Bool, drawsChain: Bool) {
 		var drawn = (movesDeclaration: false, drawsChain: false)
 		let chainNames = [chainLinkSuffix, chainBaseSuffix, chainLeafSuffix].map { fixture.typeNamePrefix + $0 }
+		// The hole draw's `HoleDeep`, which it declares beneath the seam's module itself, is neither.
+		let holeDrawNames = [fixture.typeNamePrefix + "HoleDeep"]
 		for content in fixture.swiftFileContent {
-			guard let module = GraphFuzzerModule(declaredIn: content), module < .seamModule else { continue }
+			guard let module = GraphFuzzerModule(declaredIn: content), module < .seamModule,
+			      !declaredTypeNames(in: content, prefix: fixture.typeNamePrefix).contains(where: holeDrawNames.contains)
+			else { continue }
 			if declaredTypeNames(in: content, prefix: fixture.typeNamePrefix).contains(where: chainNames.contains) {
 				drawn.drawsChain = true
 			} else {

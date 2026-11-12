@@ -178,7 +178,18 @@ struct SafeDIToolGraphFuzzerTests {
 			.holeSecondHole,
 			.holeSendableDiamond,
 			.holeNestedSameLabelFill,
+			.holeSecondHoleType,
+			.holeLazyWrapperBesideByValuePlace,
+			.holeSendableLazyWrapperBesideByValuePlace,
+			.holeTwoSeamCycleWithSendableEdge,
+			.holeInnerSeamPlainAndSendableRoutes,
+			.holeInnerSeamWithBothEnums,
+			.holeInnerStagedPlaceOnSendableRoute,
+			.holePlaceInsideSendableFill,
 		]).subtracting(drawFeatures).sorted() == [])
+		// A graph with a hole whose builder labels and case names the name-stability oracle compared with those of the graph
+		// without its second place.
+		#expect(acceptedResults.contains { $0.isComparedWithoutSecondHolePlace })
 		// A split graph whose modules all name their package, which the SwiftPM plugin flow agreed on with the module-info
 		// flow, and one of them declaring a type in a flag's clause in the seam's module, whose decision the plugin flow
 		// asserts in the caller's module too.
@@ -236,6 +247,30 @@ struct SafeDIToolGraphFuzzerTests {
 			let pinnedCount = try #require(Self.seamCorpusDrawFeatureCounts[feature], "\(feature.rawValue) has no pinned count")
 			#expect(counts[feature, default: 0] == pinnedCount, "\(feature.rawValue) drawn in \(counts[feature, default: 0]) graphs")
 		}
+	}
+
+	@Test
+	func fixtureWithoutSecondHolePlace_leavesOutAPlace_whenSeamCorpusGraphDrawsANestedBuildersShape() {
+		// The name-stability oracle compares a graph with and without its second place of a hole, so every graph that draws
+		// one of the nested builders' shapes – the cycle of two seams and the place inside a `@Sendable` fill among them –
+		// must record a place to leave out, or the oracle never judges that shape.
+		let nestedBuildersShapes: Set<GraphFuzzerSeamDrawFeature> = [
+			.holeSecondHoleType,
+			.holeLazyWrapperBesideByValuePlace,
+			.holeSendableLazyWrapperBesideByValuePlace,
+			.holeTwoSeamCycleWithSendableEdge,
+			.holeInnerSeamPlainAndSendableRoutes,
+			.holeInnerSeamWithBothEnums,
+			.holeInnerStagedPlaceOnSendableRoute,
+			.holePlaceInsideSendableFill,
+		]
+		var seedsWithoutPlace = [UInt64: [GraphFuzzerSeamDrawFeature]]()
+		for seed in 0..<UInt64(Self.seamCorpusSeedCount) {
+			let shapes = GraphFuzzerFeature.seamDrawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])).intersection(nestedBuildersShapes)
+			guard !shapes.isEmpty, GraphFuzzerGenerator.fixtureWithoutSecondHolePlace(forSeed: seed, features: [.generateDependencyTree]) == nil else { continue }
+			seedsWithoutPlace[seed] = shapes.sorted()
+		}
+		#expect(seedsWithoutPlace == [:])
 	}
 
 	@Test
@@ -685,6 +720,103 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(sound.isInspectedByValueOracle)
 		let rejected = GraphFuzzerToolOutcome.rejected(diagnostics: "error")
 		#expect(GraphFuzzerToolRuns(fixture: fixture, firstOutcome: rejected, secondOutcome: rejected, inlineOutcome: inline).isInspectedByValueOracle == false)
+	}
+
+	/// A seam's generated file whose plain enum holds `cases`, each `case <name>(<name>_Values)`, and whose initializer
+	/// takes `builderLabel` over it.
+	private static func holeSeamFile(builderLabel: String, cases: [String]) -> String {
+		"""
+		extension S8_Feature {
+		    @frozen public enum SafeDIScope_S8_Service {
+		\(cases.map { "        case \($0)(\($0)_Values)\n\n        public struct \($0)_Values {\n            public let analytics: S8_Analytics\n        }" }.joined(separator: "\n\n"))
+		    }
+
+		    public init(\(builderLabel): @escaping (SafeDIScope_S8_Service) -> any S8_Service) {
+		        self.init(__safeDI_\(builderLabel): \(builderLabel))
+		    }
+
+		    init(__safeDI_\(builderLabel): @escaping (SafeDIScope_S8_Service) -> any S8_Service) {
+		        let service: any S8_Service = __safeDI_\(builderLabel)(.\(cases[0])(SafeDIScope_S8_Service.\(cases[0])_Values(analytics: S8_Analytics())))
+		        self.init(service: service)
+		    }
+		}
+
+		"""
+	}
+
+	@Test
+	func holeNameStabilityFailure_reportsRenamedCase_whenAddingSecondPlaceRenamesACaseOfTheGraphWithoutIt() {
+		// A hand-written caller that switches over a seam's enum names its cases, so adding a place beneath the seam may add a
+		// case but must rename none of the graph without it: here the larger graph names its first place's case apart.
+		let fixture = GraphFuzzerFixture(seed: 8, swiftFileContent: ["// module: FuzzFeature\n"])
+		let withoutPlace = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S8_Feature+SafeDI.swift": Self.holeSeamFile(builderLabel: "s8_ServiceBuilder", cases: ["service"])], warnings: [])
+		let withPlaceRenamingCase = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S8_Feature+SafeDI.swift": Self.holeSeamFile(builderLabel: "s8_ServiceBuilder", cases: ["service_S8_Feature", "secondService"])], warnings: [])
+
+		let runs = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: withPlaceRenamingCase, secondOutcome: withPlaceRenamingCase, withoutSecondHolePlaceOutcome: ("secondService", withoutPlace))
+
+		#expect(runs.holeNameStabilityFailure?.kind == .holeNamesChangeWithSecondPlace)
+		#expect(runs.holeNameStabilityFailure?.details.prefix { $0 != "\n" } == "Adding the second place `secondService` removes S8_Feature.SafeDIScope_S8_Service.service.")
+	}
+
+	@Test
+	func holeNameStabilityFailure_reportsRenamedBuilder_whenAddingSecondPlaceRenamesABuilderOfTheGraphWithoutIt() {
+		// A second hole type whose stem collides renames the builders of both, which a hand-written caller passes by label.
+		let fixture = GraphFuzzerFixture(seed: 8, swiftFileContent: ["// module: FuzzFeature\n"])
+		let withoutPlace = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S8_Feature+SafeDI.swift": Self.holeSeamFile(builderLabel: "s8_ServiceBuilder", cases: ["service"])], warnings: [])
+		let withPlaceRenamingBuilder = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S8_Feature+SafeDI.swift": Self.holeSeamFile(builderLabel: "s8_Service_S8_AnyServiceBuilder", cases: ["service"])], warnings: [])
+
+		let runs = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: withPlaceRenamingBuilder, secondOutcome: withPlaceRenamingBuilder, withoutSecondHolePlaceOutcome: ("secondService", withoutPlace))
+
+		#expect(runs.holeNameStabilityFailure?.details.prefix { $0 != "\n" } == "Adding the second place `secondService` removes S8_Feature(s8_ServiceBuilder:).")
+	}
+
+	@Test
+	func holeNameStabilityFailure_isNil_whenAddingSecondPlaceOnlyAddsACase() {
+		// The design's output stability: a new place of a hole type the seam already has adds a case and renames nothing.
+		let fixture = GraphFuzzerFixture(seed: 8, swiftFileContent: ["// module: FuzzFeature\n"])
+		let withoutPlace = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S8_Feature+SafeDI.swift": Self.holeSeamFile(builderLabel: "s8_ServiceBuilder", cases: ["service"])], warnings: [])
+		let withPlace = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S8_Feature+SafeDI.swift": Self.holeSeamFile(builderLabel: "s8_ServiceBuilder", cases: ["service", "secondService"])], warnings: [])
+
+		#expect(GraphFuzzerOracle.holeBuilderNames(in: ["FuzzFeature/S8_Feature+SafeDI.swift": Self.holeSeamFile(builderLabel: "s8_ServiceBuilder", cases: ["service"])]) == [
+			"S8_Feature(s8_ServiceBuilder:)",
+			"S8_Feature.SafeDIScope_S8_Service",
+			"S8_Feature.SafeDIScope_S8_Service.service",
+		])
+		#expect(GraphFuzzerToolRuns(fixture: fixture, firstOutcome: withPlace, secondOutcome: withPlace, withoutSecondHolePlaceOutcome: ("secondService", withoutPlace)).holeNameStabilityFailure == nil)
+	}
+
+	@Test
+	func holeBuilderNames_readsPublicMockBuildersAndScopes_whenMockTakesBuilderOverEnumOfItsPlaces() {
+		// A public mock takes its builders on lines of their own, and a consumer's mock a flat builder typed by the called
+		// mock's enum: both are names a hand-written caller spells.
+		let mockFile = """
+		#if DEBUG
+		extension S9_Panel {
+		    @frozen public enum SafeDIMockScope_S9_Service {
+		        case row_service(row_service_Values)
+		        indirect case panel(S9_Panel.SafeDIMockScope_S9_Service)
+		    }
+
+		    public static func mock(
+		        s9_ServiceBuilder: @escaping (S9_Panel.SafeDIMockScope_S9_Service) -> any S9_Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> S9_Panel {
+		        func __safeDI_build() -> S9_Panel {
+		            switch scope {
+		            case let .row_service(scope): fill(scope)
+		            }
+		        }
+		    }
+		}
+		#endif
+		"""
+
+		#expect(GraphFuzzerOracle.holeBuilderNames(in: ["FuzzFeature/S9_Panel+SafeDIMock.swift": mockFile]) == [
+			"S9_Panel(s9_ServiceBuilder:)",
+			"S9_Panel.SafeDIMockScope_S9_Service",
+			"S9_Panel.SafeDIMockScope_S9_Service.row_service",
+			"S9_Panel.SafeDIMockScope_S9_Service.panel",
+		])
 	}
 
 	@Test
@@ -1291,17 +1423,98 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(runs.wrapperParameterFailure == nil)
 	}
 
-	/// The runs of a graph of one mocked type, `S1_Probe`, that declares `property`, whose generated mock takes
-	/// `mockParameter`.
-	private static func mockedProbe(declaring property: String, mockParameter: String) -> GraphFuzzerToolRuns {
+	@Test
+	func wrapperParameterFailure_isNil_whenMockTakesLazilyInstantiatedPropertyATypeInItsTreeInstantiatesAndItCannotBuild() {
+		// `S1_HoleOwner`, which the mocked type builds through an instantiator, lazily instantiates a protocol beside its
+		// by-value place that no declaration the mock sees fulfills, so the mock takes the wrapper.
+		let runs = Self.mockedProbe(
+			declaring: "@Instantiated let holeOwnerBuilder: Instantiator<S1_HoleOwner>",
+			besideTypes: ["@Instantiable\npublic final class S1_HoleOwner: Instantiable {\n\t@Instantiated let holeService: any S1_HoleService\n\t@Instantiated let holeServiceLazy: LazilyInstantiated<any S1_HoleService>\n}\n"],
+			mockParameters: ["holeService: any S1_HoleService", "holeServiceLazy: LazilyInstantiated<any S1_HoleService>"],
+		)
+
+		#expect(runs.wrapperParameterFailure == nil)
+	}
+
+	@Test
+	func wrapperParameterFailure_reportsParameter_whenTypeInMockedTreeInstantiatesItsTypeUnderAnotherLabel() {
+		// A type in the tree that instantiates the wrapper under another label does not account for the parameter.
+		let runs = Self.mockedProbe(
+			declaring: "@Instantiated let holeOwner: S1_HoleOwner",
+			besideTypes: ["@Instantiable\npublic final class S1_HoleOwner: Instantiable {\n\t@Instantiated let holeServiceLazy: LazilyInstantiated<any S1_HoleService>\n\t@Received let value: LazilyInstantiated<any S1_HoleService>\n}\n"],
+			mockParameters: ["holeServiceLazy: LazilyInstantiated<any S1_HoleService>", "value: LazilyInstantiated<any S1_HoleService>"],
+		)
+
+		#expect(runs.wrapperParameterFailure?.details.prefix { $0 != "\n" } == "`S1_Probe.mock` takes `value: LazilyInstantiated<any S1_HoleService>`.")
+	}
+
+	@Test
+	func wrapperParameterFailure_reportsParameter_whenTypeInMockedTreeInstantiatesAWrapperTheMockCanBuild() {
+		// `S1_Impl` fulfills the wrapper's instance and forwards nothing, so the mock builds the wrapper.
+		let runs = Self.mockedProbe(
+			declaring: "@Instantiated let a: S1_A",
+			besideTypes: [
+				"@Instantiable\npublic final class S1_A: Instantiable {\n\t@Instantiated let x: LazilyInstantiated<S1_Impl>\n}\n",
+				"@Instantiable\npublic final class S1_Impl: Instantiable {\n\tpublic init() {}\n}\n",
+			],
+			mockParameters: ["x: LazilyInstantiated<S1_Impl>"],
+		)
+
+		#expect(runs.wrapperParameterFailure?.details.prefix { $0 != "\n" } == "`S1_Probe.mock` takes `x: LazilyInstantiated<S1_Impl>`.")
+	}
+
+	@Test
+	func wrapperParameterFailure_reportsParameter_whenTypeTheMockReceivesAndCannotBuildInstantiatesItsType() {
+		// The mock cannot build `S1_B`, which forwards a property, so it takes `b` and builds nothing `S1_B` instantiates.
+		let runs = Self.mockedProbe(
+			declaring: "@Received let b: S1_B",
+			besideTypes: ["@Instantiable\npublic final class S1_B: Instantiable {\n\t@Forwarded let f: Int\n\t@Instantiated let x: LazilyInstantiated<any S1_Svc>\n}\n"],
+			mockParameters: ["b: S1_B", "x: LazilyInstantiated<any S1_Svc>"],
+		)
+
+		#expect(runs.wrapperParameterFailure?.details.prefix { $0 != "\n" } == "`S1_Probe.mock` takes `x: LazilyInstantiated<any S1_Svc>`.")
+	}
+
+	@Test
+	func wrapperParameterFailure_reportsParameter_whenMockTakesSendableAutoclosureOfWrapperForReceive() {
+		let runs = Self.mockedProbe(
+			declaring: "@Received let value: SendableLazilyInstantiated<S1_Value>",
+			mockParameter: "value: @autoclosure @escaping @Sendable () -> SendableLazilyInstantiated<S1_Value>",
+		)
+
+		#expect(runs.wrapperParameterFailure?.details.prefix { $0 != "\n" } == "`S1_Probe.mock` takes `value: @autoclosure @escaping @Sendable () -> SendableLazilyInstantiated<S1_Value>`.")
+	}
+
+	@Test
+	func wrapperParameterFailure_isNil_whenMockTakesSendableAutoclosureOfWrapperATypeInItsTreeInstantiatesAndItCannotBuild() {
+		// Beneath a `Sendable` wrapper, the mock takes the wrapper `S1_HoleOwner` instantiates as a `@Sendable` autoclosure.
+		let runs = Self.mockedProbe(
+			declaring: "@Instantiated let holeOwnerBuilder: SendableInstantiator<S1_HoleOwner>",
+			besideTypes: ["@Instantiable\npublic final class S1_HoleOwner: Instantiable {\n\t@Instantiated let holeServiceLazy: SendableLazilyInstantiated<any S1_HoleService>\n}\n"],
+			mockParameters: ["holeServiceLazy: @autoclosure @escaping @Sendable () -> SendableLazilyInstantiated<any S1_HoleService>"],
+		)
+
+		#expect(runs.wrapperParameterFailure == nil)
+	}
+
+	/// The runs of a graph of one mocked type, `S1_Probe`, that declares `property`, beside the types `besideTypes`
+	/// declares, whose generated mock takes `mockParameters`.
+	private static func mockedProbe(declaring property: String, besideTypes: [String], mockParameters: [String]) -> GraphFuzzerToolRuns {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
 			"@Instantiable(generateMock: true)\npublic final class S1_Probe: Instantiable {\n\t\(property)\n}\n",
-		])
+		] + besideTypes)
+		let parameters = mockParameters.map { "        \($0),\n" }.joined()
 		let outcome = GraphFuzzerToolOutcome.accepted(
-			generatedFiles: ["S1_Probe+SafeDIMock.swift": "extension S1_Probe {\n    static func mock(\n        \(mockParameter),\n        safeDIOverrides: SafeDIOverrides = .init()\n    ) -> S1_Probe {}\n}\n"],
+			generatedFiles: ["S1_Probe+SafeDIMock.swift": "extension S1_Probe {\n    static func mock(\n\(parameters)        safeDIOverrides: SafeDIOverrides = .init()\n    ) -> S1_Probe {}\n}\n"],
 			warnings: [],
 		)
 		return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome)
+	}
+
+	/// The runs of a graph of one mocked type, `S1_Probe`, that declares `property`, whose generated mock takes
+	/// `mockParameter`.
+	private static func mockedProbe(declaring property: String, mockParameter: String) -> GraphFuzzerToolRuns {
+		mockedProbe(declaring: property, besideTypes: [], mockParameters: [mockParameter])
 	}
 
 	@Test
@@ -4526,32 +4739,37 @@ struct SafeDIToolGraphFuzzerTests {
 	/// every `GraphFuzzerSeamOutputFeature` – both kinds of pass-through, a call reading `.instance`, an `@escaping`
 	/// closure parameter, an `@escaping @Sendable` one, an optional closure, and the comment naming a type SafeDI reads no
 	/// declaration of (seeds 16 and 609) – graphs split across modules, with a caller in another package, a caller in the
-	/// seam's package without a package and a seam's module without one (seeds 19, 31, 98, 180, 609 and 743 between
+	/// seam's package without a package and a seam's module without one (seeds 19, 31, 180, 215, 609 and 743 between
 	/// them), the last two also accepted inline, so the batch compiles every module, compares a split graph's values and
 	/// compares one across the two integrations;
 	/// graphs with a hole whose code, between them, shows every `GraphFuzzerHoleOutputFeature` – a passed-up builder whose
 	/// fill re-enters the inner seam, a staged builder whose fill re-enters its seam, a fill passed to a seam that passes
-	/// its site up, also `@Sendable`, and a fill named apart (seeds 196, 277 and 743 between them) – and that draw, between
-	/// them, every roll of `addingHoleShapes` with an accepted variant (with seeds 19, 98, 605 and 743); a split graph that
+	/// its site up, also `@Sendable` (seeds 196, 277 and 743 between them) – and that draw, between them, every roll of
+	/// `addingHoleShapes` with an accepted variant (with seeds 19, 605 and 743), the nested builders' draws among them – a
+	/// second hole type (seed 215), a wrapper of the hole beside its by-value place (seeds 78 and 605; seeds 196 and 326
+	/// beside a mock of the seam, which takes the wrapper as its parameter), a cycle of two seams
+	/// with a `@Sendable` edge (seed 93), and an inner seam reached by a plain and a `@Sendable` route, passed up with both
+	/// enums, an inner staged place on a `@Sendable` route and a place inside a `@Sendable` fill (seed 304) – of which the
+	/// name-stability oracle compares one without its second place; a split graph that
 	/// declares a type in a flag's clause in the seam's module (`recordedInFlagClause`), which the two integrations agree
 	/// on once the plugin flow's assertions about that module's block are excused (seed 326); and a graph it rejects, which
 	/// `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks; and declarations moved beneath the seam's module
 	/// (seed 153) and a chain of seams through the three modules beneath it (seed 163), which a caller computes from the
 	/// seam's module's view (`GraphFuzzerSeamDependencyDraw`); and seams naming a type declared in a block that guards
 	/// mock-only declarations, whose other clauses declare it at the same level (seed 277), wider (seed 151) or narrower
-	/// (seed 298), or which has none while another file declares it where `DEBUG` is inactive (seeds 98 and 609, the
-	/// second in the seam's module), each compiled as a release build too. The union of the batches the hole rolls and the
-	/// seam tests' draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 151, 153, 163, 180, 196, 277, 298, 326, 605, 609, 743]
+	/// (seed 298), or which has none while another file declares it where `DEBUG` is inactive (seed 609, in the seam's
+	/// module), each compiled as a release build too. The union of the batches the hole rolls and the seam tests' draws
+	/// were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 78, 92, 93, 151, 153, 163, 180, 196, 215, 277, 298, 304, 326, 605, 609, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x8DAB09C5A80A95D1
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xBC45E5A841CA7CA2
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
 	/// `seamCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool`.
 	static let seamCorpusDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
 		.collidingFormsBeneathSeam: 67,
-		.innerSeam: 371,
+		.innerSeam: 408,
 		.instanceHeldByCaller: 393,
 		.instanceReceiveBeneathSeam: 242,
 		.otherKindWrapperReceiveBeneathSeam: 32,
@@ -4671,6 +4889,15 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeSecondHoleBeneathRedeclaredLabel: 2,
 		.holeSendableDiamond: 22,
 		.holeNestedSameLabelFill: 18,
+		.holeSecondHoleType: 49,
+		.holeSecondHoleTypeCollidingStem: 32,
+		.holeInnerSeamPlainAndSendableRoutes: 36,
+		.holeInnerSeamWithBothEnums: 17,
+		.holeTwoSeamCycleWithSendableEdge: 26,
+		.holeInnerStagedPlaceOnSendableRoute: 26,
+		.holeLazyWrapperBesideByValuePlace: 56,
+		.holeSendableLazyWrapperBesideByValuePlace: 27,
+		.holePlaceInsideSendableFill: 31,
 		.uncreatedAliasLabelLazilyInstantiatedBeside: 29,
 		.uncreatedAliasLabelReceivedBeside: 20,
 		.uncreatedAliasLabelOnMid: 6,
@@ -4749,7 +4976,52 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
 			seeds: labelSortedPassThroughSeedsWhoseMockParametersAlsoChange,
 		),
+		// The nested builders' design orders a seam's builders by label, so by their hole types' names, which the move
+		// across wrapper names reorders where two hole types take other letters.
+		GraphFuzzerKnownIssue(
+			reason: seamBuilderOrderReason,
+			signatures: [.renamedGraphDiffers(.dependencyTreeCode)],
+			seeds: [83, 273, 308, 391, 407, 556, 701, 930],
+		),
+		// The design's output stability, section 8: a second hole type whose stem collides with another's renames both.
+		GraphFuzzerKnownIssue(
+			reason: collidingHoleTypesReason,
+			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`")],
+			seeds: [98, 931],
+		),
+		// Both, where the colliding hole types' names take other letters than the first hole type's.
+		GraphFuzzerKnownIssue(
+			reason: "\(collidingHoleTypesReason); and \(seamBuilderOrderReason)",
+			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`"), .renamedGraphDiffers(.dependencyTreeCode)],
+			seeds: [481, 929],
+		),
+		// The colliding hole types in a graph whose mock shows the inherited shape of a mock's API, which the base corpus
+		// lists 338, 595 and 948 under.
+		GraphFuzzerKnownIssue(
+			reason: "\(collidingHoleTypesReason); and \(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
+			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`"), .renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
+			seeds: [338, 595, 836, 948],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(collidingHoleTypesReason); and \(lazyCycleConfigurationFieldReason)",
+			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`"), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
+			seeds: [311, 383],
+		),
+		// A seam that passes up the staged places of two inner seams labels each builder after the seam that holds the
+		// place, which the move across wrapper names reorders, in a mocked seam whose HolePing cycle shows the base
+		// corpus's shape of a lazy cycle's configuration field.
+		GraphFuzzerKnownIssue(
+			reason: "\(passedUpStagedBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
+			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
+			seeds: [135],
+		),
 	]
+
+	private static let passedUpStagedBuilderOrderReason = "A seam's staged builders are ordered by label, which names the seam that holds each staged place it passes up, so moving type names across wrapper names reorders them, its generated initializers and the calls of them"
+
+	private static let seamBuilderOrderReason = "A seam's builders are ordered by label, which its hole type's name begins, so moving type names across wrapper names reorders the builders of a seam with two hole types, its generated initializers and the calls of them"
+
+	private static let collidingHoleTypesReason = "Two hole types of one instantiated type take builders named apart by the type each returns, so adding the second renames the first's builder, enum and cases"
 
 	private static let labelSortedPassThroughReason = "A seam's pass-through parameters are sorted by label, so reversing the labels reorders its generated initializer and the calls of it"
 
@@ -4758,12 +5030,12 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Seeds of `knownIssues` that the seam corpus's run observed failing with the seam's own shape, or not failing
 	/// at all, since the seam's draw changed their graphs; the inherited lists leave them out. Observed, not derived: a
 	/// seed here that a run finds failing its inherited shape again is a new failure, and goes back.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 309, 364, 371, 381, 434, 476, 525, 545, 632, 714, 728, 735, 768, 774, 786, 808, 840, 847, 903]
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 309, 311, 338, 364, 371, 381, 383, 434, 476, 525, 545, 595, 632, 714, 728, 735, 768, 774, 786, 808, 836, 840, 847, 903, 948]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
 	private static let seamCorpusSeedsAddedToInheritedShapes: [String: [UInt64]] = [
-		lazyCycleConfigurationFieldReason: [135],
+		lazyCycleConfigurationFieldReason: [854],
 	]
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order
@@ -4863,7 +5135,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// the `session` their caller cannot name, M8.9b's, a leaf reached through an erased constant, and a hole's builder
 	/// passed up (seed 151); a consumer in another package filling a hole whose fill builds the `.public` type again
 	/// through an `Instantiator`, a fully lazy cycle (seed 197); a staged builder for a hole beneath a `Sendable` wrapper
-	/// (seed 211); a consumer in another package only and a differing mock condition (seed 253); a configuration's
+	/// (seed 59; seed 211, which showed it first, now draws `T6Twin` and is a known issue); a consumer in another package only and a differing mock condition (seed 253); a configuration's
 	/// module-level forwarder of a default's provider, and a hole's builder passed up into a `@Sendable` builder function
 	/// (seed 551); a third tier (seed 215); the comment naming a type SafeDI reads no declaration of (seed 10) – a graph the
 	/// public tier rejects (seed 7), and a graph whose configurations a renaming only reorders (seed 23); declarations moved
@@ -4871,9 +5143,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// which a consumer computes from the declaring module's view (`GraphFuzzerSeamDependencyDraw`). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
 	/// which `publicMockSmokeSeeds_exercisePublicMockFeature_inGraphsTheToolAccepts` checks. Pinned by
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
-	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 98, 142, 151, 197, 208, 211, 215, 253, 551]
+	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x4E8A6737AFD6152A
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x317D83B782EE90D2
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -4898,7 +5170,30 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.publicMockBuildsOtherValuesThanKnownRight(containing: "t1 > t4 > session")],
 			seeds: [95],
 		),
+		// The nested builders' design, as a seam orders its builders: a mock's parameters are sorted by label, and a builder's
+		// label begins with its hole type's name, which the move across wrapper names moves among the other labels.
+		GraphFuzzerKnownIssue(
+			reason: publicMockBuilderOrderReason,
+			signatures: [.renamedGraphDiffers(.mockCode)],
+			seeds: [176, 455, 685, 799],
+		),
+		// The design's output stability: an internal consumer that passes up the places of two public mocks of one hole
+		// type names the builders it takes for them apart, after each called type, so `T6Twin`'s call renames `T6`'s.
+		GraphFuzzerKnownIssue(
+			reason: passedUpBuildersNamedApartReason,
+			signatures: [.holeNamesChangeWithSecondPlace(containing: "`t6Twin`")],
+			seeds: [211, 230, 307, 333, 406, 486, 658, 692, 743, 748, 845, 960],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(passedUpBuildersNamedApartReason); and \(publicMockBuilderOrderReason)",
+			signatures: [.holeNamesChangeWithSecondPlace(containing: "`t6Twin`"), .renamedGraphDiffers(.mockCode)],
+			seeds: [19, 299, 456, 510, 597],
+		),
 	]
+
+	private static let publicMockBuilderOrderReason = "A mock's parameters are sorted by label, and a builder's label begins with its hole type's name, so moving type names across wrapper names moves a consumer's builder among its other parameters"
+
+	private static let passedUpBuildersNamedApartReason = "An internal consumer that passes up the places of two public mocks of one hole type names the builders it takes for them apart after each called type, so adding the second call renames the first's builder"
 
 	/// How many of the public mock corpus's graphs each shape of `GraphFuzzerPublicMockDraw` lands in, exactly, so a draw
 	/// that stops landing, or a change in a shape's share, fails
@@ -4912,6 +5207,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.consumerHoldsLazilyInstantiatedWrapper: 262,
 		.consumerHoldsOmittedValue: 188,
 		.consumerInstantiatesLeaf: 655,
+		.consumerReachesHoleTypeThroughTwoPublicMocks: 57,
 		.consumerReachesHoleTypeUnderTwoLabels: 87,
 		.consumerReachesHoleTypeWithFill: 155,
 		.consumerReachesHoleTypeWithoutFill: 166,
