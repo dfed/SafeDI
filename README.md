@@ -111,8 +111,9 @@ For previews and tests that need real data, pass forwarded values directly and u
 ## Features
 
 <table>
-<tr><td>✓ Thread safe</td><td>✓ Constructor injection</td><td>✓ Dependency inversion support</td><td>✓ Transitive dependency solving</td></tr>
-<tr><td>✓ Cycle detection</td><td>✓ Conditional compilation support</td><td>✓ Lazy shared dependencies</td><td>✓ Swift Package Manager, Xcode, Bazel, and Tuist</td></tr>
+<tr><td>✓ Compile-time validated graph</td><td>✓ Hierarchical dependency scoping</td><td>✓ Constructor injection</td><td>✓ Thread safe</td></tr>
+<tr><td>✓ Dependency inversion support</td><td>✓ Transitive dependency solving</td><td>✓ Cycle detection</td><td>✓ Generated mocks from your real graph</td></tr>
+<tr><td>✓ Multi-module support</td><td>✓ Conditional compilation support</td><td>✓ Lazy and on-demand instantiation</td><td>✓ Swift Package Manager, Xcode, Bazel, and Tuist</td></tr>
 </table>
 
 ## Getting started
