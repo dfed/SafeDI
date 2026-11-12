@@ -184,8 +184,11 @@ enum GraphFuzzerMirrorTypes {
 /// changes this model in the same pull request: the oracle cross-checks the model against every generated mock it
 /// compares (`mirrorModelDisagreesWithMock`), so a model left behind fails at once.
 struct GraphFuzzerMockMirrorModel {
+	/// `readsExistentialAndQualifiedSpellings` finds the scope of a type spelled `any P` or `Namespace.T` by `P` or `T`,
+	/// as the seam and public mock corpora spell types: the base corpus spells neither, so its model leaves it `false`.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	init(fixture: GraphFuzzerFixture) {
+	init(fixture: GraphFuzzerFixture, readsExistentialAndQualifiedSpellings: Bool = false) {
+		self.readsExistentialAndQualifiedSpellings = readsExistentialAndQualifiedSpellings
 		var types = [String: TypeDeclaration]()
 		var typeOrder = [String]()
 		var pendingArguments: String?
@@ -341,6 +344,25 @@ struct GraphFuzzerMockMirrorModel {
 	/// The concrete type a mock builds for an erased type, as `erasedToConcreteTypeMap`: the one concrete type the
 	/// module's `erasedToConcreteExistential` declarations erase to it, keyed by both forms of a lazily instantiated one.
 	let erasedToConcreteType: [String: String]
+	let readsExistentialAndQualifiedSpellings: Bool
+
+	/// The concrete type whose scope builds `type`, or `nil` when no declaration fulfills it.
+	func scopeTypeName(of type: String) -> String? {
+		if let scopeTypeName = scopeTypeNameByType[type] {
+			scopeTypeName
+		} else if readsExistentialAndQualifiedSpellings {
+			scopeTypeNameByType[Self.unqualifiedName(of: type)]
+		} else {
+			nil
+		}
+	}
+
+	/// `type` without `any` and, unless it is generic, without the types it is nested in.
+	static func unqualifiedName(of type: String) -> String {
+		let withoutAny = type.hasPrefix("any ") ? String(type.dropFirst("any ".count)) : type
+		guard !withoutAny.contains("<") else { return withoutAny }
+		return String(withoutAny.split(separator: ".").last ?? Substring(withoutAny))
+	}
 
 	/// The properties the scope of `typeName` generates, in declaration order, as `createMockTypeDescriptionToScopeMapping`
 	/// populates them: each instantiated dependency some scope builds, and each alias.
@@ -349,8 +371,8 @@ struct GraphFuzzerMockMirrorModel {
 			switch dependency.source {
 			case let .instantiated(fulfilledByType, isErased):
 				let declaredType = GraphFuzzerMirrorTypes.instantiatedType(of: dependency.property.type)
-				let scopeTypeName = fulfilledByType.map { scopeTypeNameByType[declaredType] ?? scopeTypeNameByType[GraphFuzzerMirrorTypes.instantiatedType(of: $0)] } ?? scopeTypeNameByType[declaredType]
-				return scopeTypeName.map { .instantiated(dependency.property, scopeTypeName: $0, isErased: isErased) }
+				let builtScopeTypeName = fulfilledByType.map { scopeTypeName(of: declaredType) ?? scopeTypeName(of: GraphFuzzerMirrorTypes.instantiatedType(of: $0)) } ?? scopeTypeName(of: declaredType)
+				return builtScopeTypeName.map { .instantiated(dependency.property, scopeTypeName: $0, isErased: isErased) }
 			case let .aliased(fulfillingProperty, onlyIfAvailable):
 				return .aliased(dependency.property, fulfillingProperty: fulfillingProperty, onlyIfAvailable: onlyIfAvailable)
 			case .received, .forwarded:
@@ -607,12 +629,12 @@ struct GraphFuzzerMockMirrorModel {
 	/// the mock cannot build it, as `scopeToPromote(for:)` and `mockCanBuild` decide.
 	func scopeToPromote(for property: GraphFuzzerMirrorProperty) -> (scopeTypeName: String, isErased: Bool)? {
 		let dependencyType = GraphFuzzerMirrorTypes.instantiatedType(of: property.type)
-		let scope: (scopeTypeName: String, isErased: Bool)? = if let scopeTypeName = scopeTypeNameByType[dependencyType] {
-			(scopeTypeName, false)
+		let scope: (scopeTypeName: String, isErased: Bool)? = if let builtScopeTypeName = scopeTypeName(of: dependencyType) {
+			(builtScopeTypeName, false)
 		} else if let concreteType = erasedToConcreteType[property.type] ?? property.lazilyInstantiatedInstance.flatMap({ erasedToConcreteType[$0.type] }),
-		          let scopeTypeName = scopeTypeNameByType[concreteType]
+		          let builtScopeTypeName = scopeTypeName(of: concreteType)
 		{
-			(scopeTypeName, true)
+			(builtScopeTypeName, true)
 		} else {
 			nil
 		}
