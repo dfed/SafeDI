@@ -2959,7 +2959,7 @@ public actor DependencyTreeGenerator {
 	/// another module's view is given too.
 	private let plainTypeDeclarations: [PlainTypeDeclaration]
 	/// The names the modules SafeDI read declare types by at file scope (`namesOfTypesDeclaredAtFileScope`).
-	private let declaredTypeNames: Set<String>
+	private let declaredTypeNames: DeclaredTypeNames
 	/// See `init`'s `viewInstantiablesByModuleName`.
 	private let viewInstantiablesByModuleName: [String: [Instantiable]]
 	/// See `init`'s `viewDeclaringModules`.
@@ -4901,7 +4901,7 @@ public actor DependencyTreeGenerator {
 		rootScope: Scope,
 		seamRoot: ScopeGenerator.SeamRoot,
 		startsCodeGeneration: Bool,
-		declaredTypeNames: Set<String>,
+		declaredTypeNames: DeclaredTypeNames,
 	) throws -> ScopeGenerator {
 		var nearestDeclarations = NearestDeclarations()
 		var lazilyInstantiatedInstanceProperties = Set<Property>()
@@ -6044,19 +6044,19 @@ public actor DependencyTreeGenerator {
 	/// The names `instantiables` and `plainTypeDeclarations` declare types by at file scope. A type of such a name hides the
 	/// standard library's type or the module of that name, so comparing an erased instantiator's first generic argument with
 	/// a built type's forwarded properties does not see through it. An extension declares no type of the name it extends.
-	private static func namesOfTypesDeclaredAtFileScope(instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration]) -> Set<String> {
-		var names = Set<String>()
+	private static func namesOfTypesDeclaredAtFileScope(instantiables: [Instantiable], plainTypeDeclarations: [PlainTypeDeclaration]) -> DeclaredTypeNames {
+		var moduleNamesByTypeName = [String: Set<String?>]()
 		for instantiable in instantiables where !instantiable.declarationType.isExtension {
 			if case let .simple(name, _) = instantiable.concreteInstantiable {
-				names.insert(name)
+				moduleNamesByTypeName[name, default: []].insert(instantiable.moduleName)
 			}
 		}
 		for declaration in plainTypeDeclarations where declaration.extendedType == nil {
 			if case let .simple(name, _) = declaration.typeDescription {
-				names.insert(name)
+				moduleNamesByTypeName[name, default: []].insert(declaration.moduleName)
 			}
 		}
-		return names
+		return DeclaredTypeNames(moduleNamesByTypeName: moduleNamesByTypeName)
 	}
 
 	/// The concrete type a mock builds `property` from when no `@Instantiable` fulfills its type, or `nil` when

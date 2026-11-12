@@ -2094,8 +2094,8 @@ struct TypeDescriptionTests {
 	])
 	func withoutSpellingDifferences_returnsSameType_whenSpellingsNameOneType(lhs: String, rhs: String) {
 		let moduleNames = ["Swift", "Feature"]
-		#expect(TypeSyntax(stringLiteral: lhs).typeDescription.withoutSpellingDifferences(qualifiedByModulesNamed: moduleNames, declaredTypeNames: [])
-			== TypeSyntax(stringLiteral: rhs).typeDescription.withoutSpellingDifferences(qualifiedByModulesNamed: moduleNames, declaredTypeNames: []))
+		#expect(TypeSyntax(stringLiteral: lhs).typeDescription.withoutSpellingDifferences(qualifiedByModulesNamed: moduleNames, declaredTypeNames: DeclaredTypeNames())
+			== TypeSyntax(stringLiteral: rhs).typeDescription.withoutSpellingDifferences(qualifiedByModulesNamed: moduleNames, declaredTypeNames: DeclaredTypeNames()))
 	}
 
 	@Test(arguments: [
@@ -2108,8 +2108,8 @@ struct TypeDescriptionTests {
 	])
 	func withoutSpellingDifferences_returnsDifferentTypes_whenSpellingsNameDifferentTypes(lhs: String, rhs: String) {
 		let moduleNames = ["Swift", "Feature"]
-		#expect(TypeSyntax(stringLiteral: lhs).typeDescription.withoutSpellingDifferences(qualifiedByModulesNamed: moduleNames, declaredTypeNames: [])
-			!= TypeSyntax(stringLiteral: rhs).typeDescription.withoutSpellingDifferences(qualifiedByModulesNamed: moduleNames, declaredTypeNames: []))
+		#expect(TypeSyntax(stringLiteral: lhs).typeDescription.withoutSpellingDifferences(qualifiedByModulesNamed: moduleNames, declaredTypeNames: DeclaredTypeNames())
+			!= TypeSyntax(stringLiteral: rhs).typeDescription.withoutSpellingDifferences(qualifiedByModulesNamed: moduleNames, declaredTypeNames: DeclaredTypeNames()))
 	}
 
 	@Test

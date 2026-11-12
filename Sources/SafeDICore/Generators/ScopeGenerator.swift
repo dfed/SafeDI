@@ -50,6 +50,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		holeCallArguments: [HoleCallArgument] = [],
 		passedUpHoles: [SeamSignature.Hole] = [],
 		stageCalls: [String] = [],
+		isBuiltByFill: Bool = false,
 		fill: (hole: SeamSignature.Hole, key: String, functionName: String, boundLabels: Set<String>, stageCalls: [Int: [String]])? = nil,
 		constructsWithHandWrittenMock: Bool = false,
 		cycleParameters: [CycleParameter] = [],
@@ -71,6 +72,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ownerPropertyStack = []
 		self.passedUpHoles = passedUpHoles
 		self.stageCalls = stageCalls
+		self.isBuiltByFill = isBuiltByFill
 		if let fill {
 			scopeData = .fill(hole: fill.hole, functionName: fill.functionName)
 			description = fill.hole.builderLabel
@@ -587,6 +589,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		holeCallArguments = []
 		passedUpHoles = []
 		stageCalls = []
+		isBuiltByFill = false
 		containsBuildSite = false
 		fieldsCarriedBySites = []
 		passesUpBuilder = false
@@ -609,6 +612,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		holeProperty: Property,
 		erasedToConcreteExistential: Bool,
 		site: SeamSignature.Hole?,
+		stageCalls: [String],
 		ownerPropertyStack: [Property],
 	) {
 		scopeData = .hole(property: holeProperty, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
@@ -626,10 +630,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleClosedOnDeclarations = []
 		isReferencedByCycleClosingScope = false
 		closedOnDeclaration = nil
-		declaration = nil
+		// A site that builds a wrapper declares a builder function, which a cycle-closing scope beneath a sibling must not
+		// resolve to. No cycle closes on it: a site has no tree beneath it.
+		declaration = holeProperty.propertyType.isConstant ? nil : BuiltDeclaration(property: holeProperty, concreteType: holeProperty.typeDescription.asInstantiatedType)
 		cycleClosedOnDeclarationsReferencedFromSendableFunction = []
 		buildsInSendableFunction = false
-		declaresBuilderFunction = false
+		declaresBuilderFunction = !holeProperty.propertyType.isConstant
 		childrenTakePartInCycle = false
 		typesDeclaredEscaping = []
 		cycleParameters = []
@@ -652,7 +658,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		publicMockCall = nil
 		holeCallArguments = []
 		passedUpHoles = []
-		stageCalls = []
+		self.stageCalls = stageCalls
+		isBuiltByFill = false
 		containsBuildSite = true
 		fieldsCarriedBySites = Set(site?.stages.joined().map(\.property) ?? [])
 		passesUpBuilder = false
@@ -2137,6 +2144,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The calls of a staged builder's stages made just before this scope's `@Sendable` builder function, each
 	/// binding the stage it returns: empty but where the seam's tree builds a hole beneath that function.
 	private let stageCalls: [String]
+	/// Whether a fill builds this scope's property: the fill returns the value a builder returns, so a wrapper's scope
+	/// declares its builder function and returns what the function builds, and leaves the wrapper to the seam.
+	private let isBuiltByFill: Bool
 	/// See `MockParameterNode.stageCalls`.
 	nonisolated var stageCallsBeforeBuilderFunction: [String] {
 		stageCalls
@@ -3053,12 +3063,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			     .sendableErasedInstantiator:
 				let forwardedProperties = forwardedProperties.sorted()
 				let forwardedPropertiesHaveLabels = forwardedProperties.count > 1
+				// The wrapper's closure spreads its argument; a fill, which leaves the wrapper to the seam, spreads its parameter.
+				let forwardedValue = isBuiltByFill ? Self.forwardedValueParameterName(forBuilding: property) : "$0"
 				let forwardedArguments = (
 					forwardedProperties.map {
 						if forwardedPropertiesHaveLabels {
-							"\($0.label.spelledAsArgumentLabel): $0.\($0.label)"
+							"\($0.label.spelledAsArgumentLabel): \(forwardedValue).\($0.label)"
 						} else {
-							"\($0.label.spelledAsArgumentLabel): $0"
+							"\($0.label.spelledAsArgumentLabel): \(forwardedValue)"
 						}
 					} + cycleParameterArguments(unavailableProperties: unavailableProperties),
 				).joined(separator: ", ")
@@ -3096,6 +3108,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 
 					"""
+				}
+
+				guard !isBuiltByFill else {
+					let builderCall = "\(functionName)(\(forwardedArguments))"
+					return "\(stageCallLines)\(functionDeclaration)return \(erasedToConcreteExistential ? "\(property.typeDescription.unwrapped.asInstantiatedType.asSource)(\(builderCall))" : builderCall)"
 				}
 
 				let typeDescription = property.typeDescription.asSource
@@ -3185,13 +3202,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
 				let functionParameters = cycleParameters.map(\.property)
 				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
+				let builderCall = "\(functionName)(\(cycleArguments))"
+				let lastLine = if isBuiltByFill {
+					"return \(erasedToConcreteExistential ? "\(property.typeDescription.asInstantiatedType.asSource)(\(builderCall))" : builderCall)"
+				} else {
+					"let \(property.label) = \(lazilyInstantiatedInstantiation)"
+				}
 
 				return """
 				\(stageCallLines)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
 				\(generatedProperties.joined(separator: "\n"))
 				\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)\(constructionLineEnd)
 				}
-				let \(property.label) = \(lazilyInstantiatedInstantiation)
+				\(lastLine)
 				"""
 			case .constant:
 				let callArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
@@ -3265,7 +3288,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case let .hole(property, _, site):
 			// A tree built only to compute the seam's signature has no site, and generates nothing.
 			guard let site else { return "" }
-			return Self.buildSiteCode(of: property, at: site)
+			return (stageCalls + [Self.buildSiteCode(of: property, at: site, functionName: builderFunctionNames.functionName)]).joined(separator: "\n")
 		case let .fill(hole, functionName):
 			return try await generateFillCode(
 				of: hole,
@@ -3357,22 +3380,60 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		"""
 	}
 
-	/// The binding a seam's tree makes at a site of `property`, a hole: the builder's last stage called with the
-	/// values in scope there. A constant is bound with its declared type, as inline binds an existential; a wrapper,
-	/// which the builder returns, without one.
-	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole) -> String {
+	/// The code a seam's tree generates at a site of `property`, a hole: the builder's last stage called with the
+	/// values in scope there. A constant is bound with its declared type, as inline binds an existential. An `Instantiator`
+	/// is built around a closure that makes the call, handing it `$0`, which no parameter of a function declared here could
+	/// take when it is a function type. Any other wrapper is built around a function that makes the call, as inline builds
+	/// a wrapper around its builder function, which is `@Sendable` for a `Sendable` wrapper and takes the value an erased
+	/// instantiator forwards.
+	/// - Parameter functionName: The name of that function where it differs from `functionName(toBuild:)`.
+	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole, functionName: String?) -> String {
 		let lastStageIndex = site.stages.count - 1
 		let stageFunction = site.stageFunctionName(at: lastStageIndex, ofFunctionNamed: site.internalName)
 		let arguments = site.stages[lastStageIndex].map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.label)" }.joined(separator: ", ")
-		let declaration = property.propertyType.isConstant ? "let \(property.asSource)" : "let \(property.label)"
-		return "\(declaration) = \(stageFunction)(\(site.stageStructType(at: lastStageIndex, qualifiedBy: nil).asSource)(\(arguments)))"
+		let scopeArgument = "\(site.stageStructType(at: lastStageIndex, qualifiedBy: nil).asSource)(\(arguments))"
+		let propertyType = property.propertyType
+		guard !propertyType.isConstant else {
+			return "let \(property.asSource) = \(stageFunction)(\(scopeArgument))"
+		}
+		let unwrappedType = property.typeDescription.unwrapped
+		// A type constructed by annotation spells its generic arguments only in the declaration's annotation.
+		let declaration = property.typeDescription.asSource == unwrappedType.spelledForConstruction ? "let \(property.label)" : "let \(property.asSource)"
+		guard !propertyType.forwardsPropertiesOfBuiltType else {
+			// The wrapper's closure takes `T.ForwardedProperties`, escaping when it is a function type, as no parameter of a
+			// function declared here could, since the seam cannot tell whether it is one (see
+			// `TypeDescription.seamBuilderTypeOfWrapper(takingScope:)`).
+			return """
+			\(declaration) = \(unwrappedType.spelledForConstruction) {
+			\(standardIndent)\(stageFunction)(\(scopeArgument), $0)
+			}
+			"""
+		}
+		let functionName = functionName ?? Self.functionName(toBuild: property)
+		let forwardedValue = forwardedValueParameterName(forBuilding: property)
+		let parameter = site.forwardedType.map { "\(forwardedValue): \($0.asSource)" } ?? ""
+		let callArguments = site.forwardedType == nil ? scopeArgument : "\(scopeArgument), \(forwardedValue)"
+		return """
+		\(propertyType.isSendable ? "@Sendable " : "")func \(functionName)(\(parameter)) -> \(site.builtType.asSource) {
+		\(standardIndent)\(stageFunction)(\(callArguments))
+		}
+		\(declaration) = \(unwrappedType.spelledForConstruction)(\(functionName))
+		"""
+	}
+
+	/// The name of the parameter that holds the value an instantiator forwards, in a function that builds a hole's
+	/// `property`: named apart from the function that builds the property, which it would hide, or be hidden by.
+	private static func forwardedValueParameterName(forBuilding property: Property) -> String {
+		let name = ReservedName.forwardedValueParameterName
+		return functionName(toBuild: property) == name ? "\(name)_" : name
 	}
 
 	/// The function a seam's caller generates to fill the builder for `hole`: it binds the fields of each stage's
 	/// struct that the tree of its one child, the hole's property, reads, returns each later stage as a `@Sendable`
-	/// function, and builds the property in the last, as inline builds it at the site. A stage of a builder the seam
-	/// whose tree holds the fill takes, for a site inside the fill, is called just before the `@Sendable` function of the
-	/// fill that starts the next (`fillStageCalls`).
+	/// function, and in the last builds the property as inline builds it at the site, and returns it, or, for a wrapper,
+	/// what the wrapper's builder function builds, handing that function the value an instantiator forwards. A stage of a
+	/// builder the seam whose tree holds the fill takes, for a site inside the fill, is called just before the `@Sendable`
+	/// function of the fill that starts the next (`fillStageCalls`).
 	private func generateFillCode(
 		of hole: SeamSignature.Hole,
 		functionName: String,
@@ -3404,19 +3465,33 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			enclosingFunctionNames: enclosingFunctionNames,
 			leadingMemberWhitespace: String(repeating: Self.standardIndent, count: lastStageIndex + 1),
 		)
+		// One function its fulfiller forwards is the forwarded value itself, which escapes into what the fill builds, so
+		// the value's type is a function type however it is spelled: for `Instantiator<T>`, `T.ForwardedProperties`.
+		let fulfillerForwardedDependencies = (child.builtInstantiable?.dependencies ?? []).filter { $0.source == .forwarded }
+		let fulfillerForwardsOneFunction = fulfillerForwardedDependencies.count == 1 && fulfillerForwardedDependencies[0].property.typeDescription.isClosure
 		// Built from the innermost stage out, each stage's function nested in the one before it.
 		var body = childCode.joined(separator: "\n").split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-		body.append(String(repeating: Self.standardIndent, count: lastStageIndex + 1) + "return \(property.label)")
+		// A wrapper's scope returns what its builder function builds, and a constant's has bound it.
+		if property.propertyType.isConstant {
+			body.append(String(repeating: Self.standardIndent, count: lastStageIndex + 1) + "return \(property.label)")
+		}
 		for (stageIndex, stageIsSendable) in sendableStages.enumerated().reversed() {
 			let indent = String(repeating: Self.standardIndent, count: stageIndex + 1)
 			let bindings = hole.stages[stageIndex].filter(isRead).map { "\(indent)let \($0.property.label) = \(scopeParameterName).\($0.property.label.spelledAsArgumentLabel)" }
 			let stageFunctionName = hole.stageFunctionName(at: stageIndex, ofFunctionNamed: functionName)
 			let returnType = stageIndex == lastStageIndex
-				? hole.property.typeDescription
-				: TypeDescription.attributed(hole.stageFunctionType(at: stageIndex + 1, qualifiedBy: hole.scopeSeamType), specifiers: [], attributes: ["Sendable"])
+				? hole.builtType
+				: hole.stageFunctionType(at: stageIndex + 1, qualifiedBy: hole.scopeSeamType).asSendableFunction
 			let decorator = stageIsSendable ? "@Sendable " : ""
 			let outerIndent = String(repeating: Self.standardIndent, count: stageIndex)
-			body = fillStageCalls[stageIndex, default: []].map { "\(outerIndent)\($0)" } + ["\(outerIndent)\(decorator)func \(stageFunctionName)(_ \(scopeParameterName): \(hole.stageStructType(at: stageIndex, qualifiedBy: hole.scopeSeamType).asSource)) -> \(returnType.asSource) {"]
+			var parameters = "_ \(scopeParameterName): \(hole.stageStructType(at: stageIndex, qualifiedBy: hole.scopeSeamType).asSource)"
+			if stageIndex == lastStageIndex, let forwardedType = hole.forwardedType {
+				let parameterType = fulfillerForwardsOneFunction && !forwardedType.isClosure
+					? TypeDescription.attributed(forwardedType, specifiers: [], attributes: ["escaping"])
+					: forwardedType
+				parameters += ", _ \(Self.forwardedValueParameterName(forBuilding: property)): \(parameterType.asSource)"
+			}
+			body = fillStageCalls[stageIndex, default: []].map { "\(outerIndent)\($0)" } + ["\(outerIndent)\(decorator)func \(stageFunctionName)(\(parameters)) -> \(returnType.asSource) {"]
 				+ bindings
 				+ body
 				+ ["\(outerIndent)}"]
@@ -4256,9 +4331,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let flatReceivedParameters = zip(flatReceivedProperties, flatReceivedNames).map { property, name in
 			(
 				label: name,
-				typeSource: sendablePassedUpBuilders.contains(property)
-					? TypeDescription.attributed(property.typeDescription, specifiers: [], attributes: ["escaping", "Sendable"]).asSource
-					: property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: parameters.typesDeclaredEscaping).asSource,
+				typeSource: (sendablePassedUpBuilders.contains(property) ? property.typeDescription.asSendableFunction : property.typeDescription).asFunctionParameter(amongTypesDeclaredEscaping: parameters.typesDeclaredEscaping).asSource,
 			)
 		}
 		let onlyIfAvailableOverrides = parameterNames.onlyIfAvailableOverrides
@@ -5450,6 +5523,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// For a site of a hole in a public mock's tree, rather than an alias: the hole, whose builder the site calls
 		/// with the values in scope there to bind `property`.
 		var holeSite: SeamSignature.Hole?
+		/// For a site of a hole held in a `Sendable` wrapper, the calls of its staged builder's stages made just before the
+		/// wrapper's `@Sendable` function (`SeamHoles.stageCalls(at:)`).
+		var stageCalls = [String]()
 	}
 
 	// MARK: OnlyIfAvailableOverride
@@ -5653,6 +5729,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					fulfillingPropertyIsLazilyInstantiatedInstance: false,
 					declarationReference: nil,
 					holeSite: site,
+					stageCalls: childGenerator.stageCallsBeforeBuilderFunction,
 				)))
 			} else if case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference) = childGenerator.scopeData {
 				items.append(.alias(MockAliasNode(
@@ -6509,6 +6586,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Each builder function is named after its disambiguated label, unless a cycle-closing
 		// scope beneath this level refers to an enclosing function of that name.
 		// Nearly every level holds no node of a cycle, and its nodes keep their names.
+		// A hole held in a wrapper declares a builder function too, which those scopes must not resolve to.
+		let holeSitesBuildingWrappers = items.holeSitesBuildingWrappers
 		let builderFunctionNamesByNode = propertyNodes.contains(where: { !$0.cycleClosedOnDeclarations.isEmpty || $0.isReferencedByCycleClosingScope })
 			? builderFunctionNames(
 				for: propertyNodes.map { node in
@@ -6522,11 +6601,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						isReferencedByCycleClosingScope: node.isReferencedByCycleClosingScope,
 						referencedFillNames: node.referencedFillNames,
 					)
+				} + holeSitesBuildingWrappers.map { alias in
+					BuilderFunctionCandidate(
+						property: alias.property,
+						declaration: BuiltDeclaration(property: alias.property, concreteType: alias.property.typeDescription.asInstantiatedType),
+						name: nil,
+						declaresFunction: true,
+						cycleClosedOnDeclarations: [],
+						isReferencedByCycleClosingScope: false,
+						referencedFillNames: [],
+					)
 				},
 				enclosingFunctionNames: enclosingFunctionNames,
 			)
 			: nil
 		var propertyNodeIndex = 0
+		var holeSiteBuildingWrapperIndex = 0
 
 		// Merge sibling-level disambiguations into the receiver-disambiguation
 		// map so consumers can rebind colliding sibling names back to their raw
@@ -6538,8 +6628,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for item in items {
 			switch item {
 			case let .alias(alias):
+				var holeFunctionName: String?
+				if let holeSite = alias.holeSite, !holeSite.property.propertyType.isConstant {
+					holeFunctionName = builderFunctionNamesByNode?[propertyNodes.count + holeSiteBuildingWrapperIndex].functionName
+					holeSiteBuildingWrapperIndex += 1
+				}
 				lines.append(emitAliasBinding(
 					alias,
+					holeFunctionName: holeFunctionName,
 					flatParameterDisambiguationMap: combinedDisambiguationMap,
 					lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
 					indent: indent,
@@ -6830,14 +6926,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// fulfiller is a renamed flat mock parameter or a disambiguated sibling.
 	/// The line refers to the alias's declaration as the production
 	/// dependency-tree output does.
+	/// - Parameter holeFunctionName: For a site of a hole held in a wrapper, the name of the function the wrapper is built
+	///   around where it differs from `functionName(toBuild:)`.
 	private static func emitAliasBinding(
 		_ alias: MockAliasNode,
+		holeFunctionName: String?,
 		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
 		indent: String,
 	) -> String {
 		if let holeSite = alias.holeSite {
-			return "\(indent)\(buildSiteCode(of: alias.property, at: holeSite))"
+			return (alias.stageCalls + buildSiteCode(of: alias.property, at: holeSite, functionName: holeFunctionName).split(separator: "\n").map(String.init))
+				.map { "\(indent)\($0)" }
+				.joined(separator: "\n")
 		}
 		guard !alias.isBoundToNil else {
 			return referencingDeclaration(of: "let \(alias.property.asSource) = nil", by: alias.declarationReference)
@@ -7525,6 +7626,18 @@ extension [ScopeGenerator.MockTreeItem] {
 		compactMap {
 			if case let .property(node) = $0 {
 				node
+			} else {
+				nil
+			}
+		}
+	}
+
+	/// The sites of holes among these items that are held in wrappers (see `ScopeGenerator.MockAliasNode.holeSite`), each
+	/// of which declares a builder function.
+	var holeSitesBuildingWrappers: [ScopeGenerator.MockAliasNode] {
+		compactMap {
+			if case let .alias(alias) = $0, alias.holeSite != nil, !alias.property.propertyType.isConstant {
+				alias
 			} else {
 				nil
 			}

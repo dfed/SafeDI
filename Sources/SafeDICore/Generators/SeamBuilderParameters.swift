@@ -125,15 +125,23 @@ extension DependencyTreeGenerator {
 		for (index, name) in zip(collidingIndices, collidingNames) {
 			builderLabels[index] = name
 		}
-		// A builder's name inside the initializer is renamed while a property of the tree would have a builder function
-		// of that name, which would shadow it.
-		// Nor may it equal a deferred parameter's name, which the parameters take first.
+		// A builder's name inside the initializer, and the name each later stage of it binds, is renamed while a property of
+		// the tree would have a builder function of that name, which would shadow it.
+		// Nor may it equal a deferred parameter's name, which the parameters take first, or a name another builder binds.
 		let builderFunctionNames = builderFunctionNamesOfProperties(in: generator).union(parameters.filter(\.isDeferred).map(\.internalName))
-		func internalName(ofBuilderLabeled builderLabel: String) -> String {
-			var name = ScopeGenerator.functionName(toBuildPropertyNamed: builderLabel)
-			while builderFunctionNames.contains(name) {
+		let unrenamedBuilderNames = builderLabels.map(ScopeGenerator.functionName(toBuildPropertyNamed:))
+		var namesBoundByEarlierBuilders = Set<String>()
+		func internalName(ofBuilderLabeled builderLabel: String, stages: [[SeamSignature.Hole.Field]]) -> String {
+			let unrenamedName = ScopeGenerator.functionName(toBuildPropertyNamed: builderLabel)
+			let reservedNames = builderFunctionNames.union(namesBoundByEarlierBuilders).union(unrenamedBuilderNames.filter { $0 != unrenamedName })
+			func stageFunctionNames(ofFunctionNamed name: String) -> [String] {
+				stages.indices.map { SeamSignature.Hole.stageFunctionName(at: $0, of: stages, ofFunctionNamed: name) }
+			}
+			var name = unrenamedName
+			while stageFunctionNames(ofFunctionNamed: name).contains(where: reservedNames.contains) {
 				name = "\(name)_".spelledAsJoinedIdentifier
 			}
+			namesBoundByEarlierBuilders.formUnion(stageFunctionNames(ofFunctionNamed: name))
 			return name
 		}
 		var siteCountByProperty = [OwnedProperty: Int]()
@@ -156,6 +164,9 @@ extension DependencyTreeGenerator {
 			let builderAccess = proof.access(ofParameterTyped: property.typeDescription, mentionedFrom: .declaration(seam), admittedModules: Set([seam.moduleName, content.owner.moduleName]))
 			let siteHole = SeamSignature.Hole(
 				ownerType: content.owner.concreteInstantiable,
+				// A seam in another module than the hole's owner respells the owner's types in its builder, where a bare name
+				// may mean a type of its own module that a `.safedi` does not record.
+				declaringModuleNames: seam.moduleName == content.owner.moduleName ? [seam.moduleName].compactMap(\.self) : [],
 				property: property,
 				instantiatedType: content.dependency?.asInstantiatedType ?? property.typeDescription.asInstantiatedType,
 				declarationLocation: content.dependency?.declarationLocation,
@@ -164,7 +175,7 @@ extension DependencyTreeGenerator {
 				declaredSitePath: content.site.declaredSitePath,
 				fillPropertyStack: content.site.fillPropertyStack,
 				builderLabel: builderLabels[index],
-				internalName: internalName(ofBuilderLabeled: builderLabels[index]),
+				internalName: internalName(ofBuilderLabeled: builderLabels[index], stages: content.stages),
 				scopeSeamType: seam.concreteInstantiable,
 				scopeSeamModule: seamModule,
 				typesToOwner: content.site.typesToOwner,
@@ -192,6 +203,8 @@ extension DependencyTreeGenerator {
 			)
 			holes.append(SeamSignature.Hole(
 				ownerType: inner.ownerType,
+				// This seam respells the hole's type in its own builder, as a seam in another module than the owner does.
+				declaringModuleNames: [],
 				property: inner.property,
 				instantiatedType: inner.instantiatedType,
 				declarationLocation: inner.declarationLocation,
@@ -200,7 +213,7 @@ extension DependencyTreeGenerator {
 				declaredSitePath: inner.declaredSitePath,
 				fillPropertyStack: inner.fillPropertyStack,
 				builderLabel: builderLabel,
-				internalName: internalName(ofBuilderLabeled: builderLabel),
+				internalName: internalName(ofBuilderLabeled: builderLabel, stages: inner.stages),
 				scopeSeamType: inner.scopeSeamType,
 				scopeSeamModule: inner.scopeSeamModule,
 				typesToOwner: passedUp.typesToCall + inner.typesToOwner,
@@ -636,6 +649,12 @@ extension DependencyTreeGenerator {
 				declare(pathDeclaration)
 			}
 		}
+		// A `Sendable` wrapper the seam builds around the builder is built in a `@Sendable` function of its own, which starts
+		// the last stage: what that function calls is a `@Sendable` function, and it carries nothing.
+		if site.property.propertyType.isSendable {
+			stage += 1
+			stageBoundaries.append(SeamSignature.Hole.StageBoundary(pathLength: site.sitePath.count))
+		}
 		var stages = Array(repeating: [SeamSignature.Hole.Field](), count: stage + 1)
 		var uncarriedDeclarations = [SeamSignature.Hole.UncarriedDeclaration]()
 		for label in labelsInBindingOrder {
@@ -884,7 +903,16 @@ extension DependencyTreeGenerator {
 			providedProperties.contains(property)
 				|| (property.typeDescription.isOptional && providedProperties.contains(property.asUnwrappedProperty))
 		}
+		/// Whether `property`, which a type in the fill's tree receives, is the hole's own property, or its instance.
+		func isHolesOwnProperty(_ property: Property) -> Bool {
+			[hole.property, hole.property.asLazilyInstantiatedInstanceProperty]
+				.compactMap(\.self)
+				.contains { $0 == property || $0 == property.asUnwrappedProperty }
+		}
 		func checkReceive(of property: Property, by instantiable: Instantiable, declaredAt declarationLocation: Dependency.DeclarationLocation?, onlyIfAvailable: Bool) {
+			// Inline, a receive only if available of the property the fill builds finds it still being built and is handed
+			// `nil`, which the fill's tree passes it too.
+			guard !onlyIfAvailable || !isHolesOwnProperty(property) else { return }
 			let reader = DependencyTreeGeneratorError.FillFinding.Reader(property: property, type: instantiable.concreteInstantiable, declarationLocation: declarationLocation)
 			let sameLabelFields = fields.filter { $0.property.label == property.label }
 			if let field = sameLabelFields.first(where: { field in
@@ -1192,6 +1220,7 @@ extension SeamSignature.Hole {
 		guard !declarations.isEmpty || isSendable != self.isSendable else { return self }
 		return SeamSignature.Hole(
 			ownerType: ownerType,
+			declaringModuleNames: declaringModuleNames,
 			property: property,
 			instantiatedType: instantiatedType,
 			declarationLocation: declarationLocation,

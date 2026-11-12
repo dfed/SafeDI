@@ -507,7 +507,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}
 
 		extension FeedScreen {
-		    public enum __safeDI_FeedScreen_mock_35666566CC8F41C0 {}
+		    public enum __safeDI_FeedScreen_mock_83A2A773E0818ACC {}
 		}
 		#endif
 		""")])

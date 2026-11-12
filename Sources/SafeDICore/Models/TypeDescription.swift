@@ -252,11 +252,17 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	/// depth: `Optional<Int>` is `Int?`, `Array<Int>` is `[Int]`, `Dictionary<String, Int>` is `[String: Int]`, a type
 	/// qualified by one of `moduleNames` is the type without that qualifier, and a type's attributes are in sorted order. A
 	/// name in `declaredTypeNames` is a type a module declares, which hides the standard library's type or the module of
-	/// that name, so neither is seen through.
+	/// that name, so neither is seen through. A type qualified by one of `declaringModuleNames` is the type without that
+	/// qualifier only when no other module declares a type of its name, since generated code spells a bare name in another
+	/// module than the one that wrote it, where that declaration would be what the name means.
 	/// Compare two of these to ask whether two spellings name one type; never spell a type with one.
-	func withoutSpellingDifferences(qualifiedByModulesNamed moduleNames: [String], declaredTypeNames: Set<String>) -> TypeDescription {
+	func withoutSpellingDifferences(
+		qualifiedByModulesNamed moduleNames: [String],
+		orDeclaringModulesNamed declaringModuleNames: [String] = [],
+		declaredTypeNames: DeclaredTypeNames,
+	) -> TypeDescription {
 		func withoutDifferences(_ type: TypeDescription) -> TypeDescription {
-			type.withoutSpellingDifferences(qualifiedByModulesNamed: moduleNames, declaredTypeNames: declaredTypeNames)
+			type.withoutSpellingDifferences(qualifiedByModulesNamed: moduleNames, orDeclaringModulesNamed: declaringModuleNames, declaredTypeNames: declaredTypeNames)
 		}
 		switch self {
 		case .void, .unknown:
@@ -279,7 +285,11 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 				.simple(name: name, generics: generics)
 			}
 		case let .nested(name, parentType, generics):
-			if case let .simple(parentName, parentGenerics) = parentType, parentGenerics.isEmpty, moduleNames.contains(parentName), !declaredTypeNames.contains(parentName) {
+			if case let .simple(parentName, parentGenerics) = parentType,
+			   parentGenerics.isEmpty,
+			   !declaredTypeNames.contains(parentName),
+			   moduleNames.contains(parentName) || (declaringModuleNames.contains(parentName) && !declaredTypeNames.isDeclared(name, outsideModuleNamed: parentName))
+			{
 				return withoutDifferences(.simple(name: name, generics: generics))
 			} else {
 				return .nested(name: name, parentType: withoutDifferences(parentType), generics: generics.map(withoutDifferences))
@@ -554,8 +564,107 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// The type a property of this type builds, exactly as it is spelled: `any Service` for
+	/// `LazilyInstantiated<any Service>` and `Service` for `ErasedInstantiator<Int, Service>?`. The receiver itself when
+	/// it is no wrapper of SafeDI's.
+	var builtTypeOfWrapper: TypeDescription {
+		guard case let .simple(name, generics) = unwrapped, let builtGeneric = Self.builtGeneric(inGenerics: generics, ofTypeNamed: name) else {
+			return self
+		}
+		return generics[builtGeneric.index]
+	}
+
+	/// The type of the value an instantiator of this type forwards: `ErasedInstantiator`'s first generic, unless it is
+	/// spelled `()` or `Void`, and `T.ForwardedProperties` for `Instantiator<T>`, whose `T` may forward nothing, which code
+	/// that sees only `T`'s conformance cannot tell. `nil` for every other type. Spelled as a function parameter takes it.
+	var forwardedTypeOfWrapper: TypeDescription? {
+		guard case let .simple(_, generics) = unwrapped, let firstGeneric = generics.first else { return nil }
+		switch propertyType {
+		case .instantiator, .sendableInstantiator:
+			return .nested(name: Dependency.forwardedPropertiesType, parentType: firstGeneric, generics: [])
+		case .erasedInstantiator, .sendableErasedInstantiator:
+			if case .void = firstGeneric {
+				return nil
+			} else {
+				return firstGeneric.asFunctionParameter
+			}
+		case .constant, .lazilyInstantiated, .sendableLazilyInstantiated:
+			return nil
+		}
+	}
+
+	/// The type of the builder of a hole held in this wrapper, when it is an instantiator of a type whose
+	/// `ForwardedProperties` code outside that type's module cannot see: runtime's `Instantiator<T>.SeamBuilder<Scope>`.
+	/// That `T.ForwardedProperties` may be a function type, which spelled directly in the builder's parameter list would
+	/// not escape, and which `@escaping` could not be written on where it is not one. `nil` for every other type.
+	func seamBuilderTypeOfWrapper(takingScope scope: TypeDescription) -> TypeDescription? {
+		guard propertyType.forwardsPropertiesOfBuiltType, case let .simple(_, generics) = unwrapped, let builtType = generics.first else { return nil }
+		return .nested(name: Dependency.seamBuilderType, parentType: .simple(name: Dependency.instantiatorType, generics: [builtType]), generics: [scope])
+	}
+
+	/// This function type, `@Sendable`. `@Sendable` cannot be written on a typealias, so a seam builder alias
+	/// (`seamBuilderTypeOfWrapper(takingScope:)`) is spelled by its `@Sendable` form.
+	var asSendableFunction: TypeDescription {
+		switch self {
+		case let .nested(_, parentType, generics) where isSeamBuilderAlias:
+			.nested(name: Dependency.sendableSeamBuilderType, parentType: parentType, generics: generics)
+		case .any,
+		     .array,
+		     .attributed,
+		     .closure,
+		     .composition,
+		     .dictionary,
+		     .implicitlyUnwrappedOptional,
+		     .metatype,
+		     .nested,
+		     .optional,
+		     .simple,
+		     .some,
+		     .tuple,
+		     .unknown,
+		     .variadic,
+		     .void:
+			.attributed(self, specifiers: [], attributes: ["Sendable"])
+		}
+	}
+
+	/// Whether this type is `@Sendable`, as `asSendableFunction` spells it.
+	var isSendableFunction: Bool {
+		switch self {
+		case let .attributed(_, _, attributes):
+			attributes.contains("Sendable")
+		case let .nested(name, _, _) where isSeamBuilderAlias:
+			name == Dependency.sendableSeamBuilderType
+		case .any,
+		     .array,
+		     .closure,
+		     .composition,
+		     .dictionary,
+		     .implicitlyUnwrappedOptional,
+		     .metatype,
+		     .nested,
+		     .optional,
+		     .simple,
+		     .some,
+		     .tuple,
+		     .unknown,
+		     .variadic,
+		     .void:
+			false
+		}
+	}
+
+	/// Whether this type is one of the generic function aliases `seamBuilderTypeOfWrapper(takingScope:)` spells, which
+	/// is a function type, as nothing a nested type's spelling shows says.
+	private var isSeamBuilderAlias: Bool {
+		guard case let .nested(name, .simple(Dependency.instantiatorType, _), _) = self else { return false }
+		return name == Dependency.seamBuilderType || name == Dependency.sendableSeamBuilderType
+	}
+
 	public var asFunctionParameter: TypeDescription {
 		switch self {
+		case .nested where isSeamBuilderAlias:
+			.attributed(self, specifiers: [], attributes: ["escaping"])
 		case .any,
 		     .array,
 		     .composition,

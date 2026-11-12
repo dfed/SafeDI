@@ -51,3 +51,17 @@ public final class Instantiator<T: Instantiable> {
 
 	private let instantiator: (T.ForwardedProperties) -> T
 }
+
+extension Instantiator {
+	/// The builder a generated initializer takes for a dependency held in an `Instantiator<T>` or a
+	/// `SendableInstantiator<T>` that its module cannot build. It receives the values in scope where the dependency is
+	/// built and what the instantiator was forwarded.
+	///
+	/// `T.ForwardedProperties` is spelled in this alias, over the generic parameter `T`, because a function type
+	/// spelled through a typealias in a parameter list does not escape, while one substituted for a generic parameter
+	/// does, and only `T`'s module can tell whether `T.ForwardedProperties` is a function type.
+	public typealias SeamBuilder<Scope> = (Scope, T.ForwardedProperties) -> T
+
+	/// The `@Sendable` form of `SeamBuilder`.
+	public typealias SendableSeamBuilder<Scope> = @Sendable (Scope, T.ForwardedProperties) -> T
+}

@@ -883,7 +883,7 @@ extension ScopeGenerator {
 				// The builder of a hole of another module's public mock the tree calls, which the mock passes up: it is as
 				// visible as that mock's computation proves, and a caller that sees a type fulfilling the hole fills it. One
 				// a `@Sendable` builder function captures is taken `@Sendable`, so a caller passes it up `@Sendable` too.
-				let builder = sendablePassedUpBuilders.contains(property) ? Property(label: property.label, typeDescription: .attributed(property.typeDescription, specifiers: [], attributes: ["Sendable"])) : property
+				let builder = sendablePassedUpBuilders.contains(property) ? Property(label: property.label, typeDescription: property.typeDescription.asSendableFunction) : property
 				leadingParameters.append(PublicMockParameter(name: name, type: builder.typeDescription, typeSource: builder.typeDescription.asFunctionParameter.asSource, defaultSource: nil, defaultKind: .none, access: hole.tierAccess, accessCause: hole.accessCause, role: .received(builder, isRequired: true), hole: hole))
 			} else if let mockDefault = flatReceivedParameterMockDefaults[property] {
 				// The mock builds the dependency with the hand-written mock when passed `nil`, as an internal mock defaults it.
@@ -941,7 +941,12 @@ extension ScopeGenerator {
 		var hash = SeamSignatureHash()
 		for parameter in parameters {
 			hash.combine(parameter.name)
-			hash.combine(parameter.type.withoutAny.asSource)
+			// A builder holds each later stage as its spelling, which only its hole can spell without `any`. A builder a
+			// `@Sendable` function captures is `@Sendable` by this mock's own tree, which only the parameter's type records.
+			let builderType = parameter.hole.map { hole in
+				parameter.type.isSendableFunction && !hole.isSendable ? hole.builderTypeWithoutAny.asSendableFunction : hole.builderTypeWithoutAny
+			}
+			hash.combine((builderType ?? parameter.type.withoutAny).asSource)
 			hash.combine(parameter.access.spelledOnGeneratedDeclaration)
 			hash.combine(parameter.defaultKind.rawValue)
 		}
@@ -1194,7 +1199,7 @@ struct PublicMockFinding: Hashable, Sendable {
 		case .instantiated:
 			"which \(receiverNames.first ?? typeName) instantiates and no `@Instantiable` declaration this module sees fulfills"
 		case let .builder(hole):
-			"which returns `\(hole.property.typeDescription.asSource)` for the hole `\(hole.property.label)`"
+			"which returns `\(hole.builtType.asSource)` for the hole `\(hole.property.label)`"
 		}
 		let parameterName = if case let .builder(hole) = parameter.kind {
 			hole.builderLabel

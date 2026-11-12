@@ -1045,14 +1045,14 @@ struct GraphFuzzerPublicMockDraw {
 				plainDeclarations.append(plainClass(holeName, access: .public))
 			case .instantiator:
 				holeType = "Instantiator<\(holeName)>"
-				value = "Instantiator<\(holeName)> { \(holeName)() }"
+				value = "\(holeName)()"
 				plainDeclarations.append(plainClass(holeName, access: .public, conformances: ["Instantiable"]))
 			case .existential:
 				holeType = "any \(protocolName)"
 				value = "\(conformerName)()"
 			case .erasedConstant, .erasedInstantiator:
 				holeType = spelling == .erasedConstant ? erasedName : "ErasedInstantiator<(), \(erasedName)>"
-				value = spelling == .erasedConstant ? "\(erasedName)(\(conformerName)())" : "ErasedInstantiator<(), \(erasedName)> { \(erasedName)(\(conformerName)()) }"
+				value = "\(erasedName)(\(conformerName)())"
 				attribute = "@Instantiated(fulfilledByType: \"\(fillName)\", erasedToConcreteExistential: true)"
 				plainDeclarations.append { rendering in
 					[
@@ -1103,11 +1103,12 @@ struct GraphFuzzerPublicMockDraw {
 				declaringFiles.append(File(module: .seamModule, declarations: [Self.renderer(of: host)]))
 			}
 			// The call: a builder for the hole, `<label>Builder`, handed the hole's scope struct, `SafeDIMockScope_<owner>_<label>`,
-			// staged around a `@Sendable` builder function.
+			// and an `Instantiator`'s forwarded value, staged around a `@Sendable` builder function. It returns the plain value.
 			let scopeType = "\(declaration.name).SafeDIMockScope_\(owner)_\(holeLabel)"
+			let forwardedParameter = spelling == .instantiator ? ", _: \(holeName).ForwardedProperties" : ""
 			let builder = position.isSendable
-				? "{ (_: \(scopeType).Outer) in { (_: \(scopeType).Inner) in \(value) } }"
-				: "{ (_: \(scopeType)) in \(value) }"
+				? "{ (_: \(scopeType).Outer) in { (_: \(scopeType).Inner\(forwardedParameter)) in \(value) } }"
+				: "{ (_: \(scopeType)\(forwardedParameter)) in \(value) }"
 			let call = "\(declaration.name).mock(\(holeLabel)Builder: \(builder))"
 			let holeDeclaration = declaration
 			declaringFiles.append(File(module: .seamModule, declarations: [

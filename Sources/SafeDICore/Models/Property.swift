@@ -345,6 +345,16 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 			}
 		}
 
+		/// Whether the wrapper forwards the `ForwardedProperties` of the type it builds, as `Instantiator<T>` does.
+		var forwardsPropertiesOfBuiltType: Bool {
+			switch self {
+			case .instantiator, .sendableInstantiator:
+				true
+			case .constant, .erasedInstantiator, .sendableErasedInstantiator, .lazilyInstantiated, .sendableLazilyInstantiated:
+				false
+			}
+		}
+
 		public var isLazilyInstantiated: Bool {
 			switch self {
 			case .lazilyInstantiated, .sendableLazilyInstantiated:
