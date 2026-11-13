@@ -126,7 +126,12 @@ enum BinaryFile {
 
 	/// A fingerprint of the layout of every type in ``schemaMembers``, so that a file written by a SafeDITool
 	/// whose stored types are written differently is never read, even when both report the same version.
-	static let schemaFingerprint = Array(schemaDescription.utf8).withUnsafeBytes(checksum(of:))
+	///
+	/// It is the ``checksum(of:)`` of ``schemaDescription``'s UTF-8 bytes, checked in rather than computed,
+	/// because describing the schema reflects on every member's type, and reflection scans the runtime's
+	/// protocol conformance tables: computing it took most of a small module's `generate`. A test computes it
+	/// and fails, giving the new value, when a stored type's layout changes.
+	static let schemaFingerprint: UInt64 = 0x51C9D9F6FDA486E2
 
 	/// The format version and every schema member's layout, one member per line: the name and type of each
 	/// field a struct writes, and the name and payload types of each case an enum writes, in the order written.
