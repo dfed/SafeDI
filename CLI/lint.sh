@@ -6,6 +6,10 @@
 # can overrun on large files.
 set -e
 pushd "$(git rev-parse --show-toplevel)" >/dev/null
+# SwiftPM leaves TemporaryDirectory.* folders in $TMPDIR on every run, and macOS empties the system temp folder at boot.
+mkdir -p CLI/.build
+export TMPDIR="$(mktemp -d "$PWD/CLI/.build/lint-tmp.XXXXXX")/"
+trap 'rm -rf "$TMPDIR"' EXIT
 if [[ "${1:-}" == "--check" ]]; then
 	swift run -c release --package-path CLI swiftformat --lint .
 else
