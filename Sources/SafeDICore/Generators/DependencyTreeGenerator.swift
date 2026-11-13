@@ -1386,10 +1386,10 @@ public actor DependencyTreeGenerator {
 		/// builds beside the mocked type – beneath a type in that tree that receives its label in a form no one declaration
 		/// provides together with it, with a note at that receive. See `ReceivedPropertyHiddenInMockTree`.
 		case receivedPropertyHiddenInMockTree(ReceivedPropertyHiddenInMockTree)
-		/// Reported at the first receive of each label that a type a dependency cycle builds again receives in forms the
-		/// one value SafeDI hands it cannot provide together, with a note at the declaration of the label the cycle builds
-		/// the type again beneath. See `UnpassableCycleLabel`.
-		case unpassableCycleLabels([UnpassableCycleLabel])
+		/// Reported at the first receive of a label that a type a dependency cycle builds again receives in forms the one
+		/// value SafeDI hands it cannot provide together, with a note at the declaration of the label the cycle builds the
+		/// type again beneath. See `UnpassableCycleLabel`.
+		case unpassableCycleLabel(UnpassableCycleLabel)
 		case instantiableHasForwardedProperty(ForwardedPropertyViolation)
 		/// Reported at the dependency declaration that closes the cycle – the `@Instantiated` or `@Received`
 		/// property whose type is already on the instantiation stack, and which is not an `@Instantiated`
@@ -1457,7 +1457,16 @@ public actor DependencyTreeGenerator {
 		/// that would let it skip work the one that threw did not finish, or which errors are found would depend on
 		/// that order too.
 		static func reportingAll(of errors: [DependencyTreeGeneratorError]) -> DependencyTreeGeneratorError? {
-			if errors.count > 1 {
+			// An error that joins errors already is joined error by error, so that an error two joins share – one label
+			// that the trees of two mock roots each find unpassable – is reported once.
+			let errors = errors.flatMap { error -> [DependencyTreeGeneratorError] in
+				if case let .independentErrors(errors) = error {
+					errors
+				} else {
+					[error]
+				}
+			}
+			return if errors.count > 1 {
 				.independentErrors(errors)
 			} else {
 				errors.first
@@ -1648,13 +1657,8 @@ public actor DependencyTreeGenerator {
 				forwardedPropertyHiddenInPromotedTree.sourceDiagnostics
 			case let .receivedPropertyHiddenInMockTree(receivedPropertyHiddenInMockTree):
 				receivedPropertyHiddenInMockTree.sourceDiagnostics
-			case let .unpassableCycleLabels(unpassableCycleLabels):
-				// The trees of several roots can each build the function whose label it is.
-				unpassableCycleLabels
-					.map(Self.sourceDiagnostics(of:))
-					.uniqued()
-					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
-					.flatMap(\.self)
+			case let .unpassableCycleLabel(unpassableCycleLabel):
+				Self.sourceDiagnostics(of: unpassableCycleLabel)
 			case let .instantiableHasForwardedProperty(violation):
 				violation.sourceDiagnostics
 			case let .constantDependencyCycleDetected(cycle, closingDependency):
@@ -2845,8 +2849,7 @@ public actor DependencyTreeGenerator {
 		}
 
 		/// An `error:` line at the first receive of `unpassableCycleLabel`'s label, which names every form the type built again
-		/// receives, and a `note:` at the declaration of the label it is built again beneath. Every such label is received
-		/// only if available in each form: validation rejects a required receive that a declaration between hides.
+		/// and the types it builds receive, and a `note:` at the declaration of the label it is built again beneath.
 		private static func sourceDiagnostics(of unpassableCycleLabel: UnpassableCycleLabel) -> [SourceDiagnostic] {
 			let receiver = unpassableCycleLabel.receiver
 			let redeclaration = unpassableCycleLabel.redeclaration
@@ -2857,7 +2860,7 @@ public actor DependencyTreeGenerator {
 				SourceDiagnostic(
 					severity: .error,
 					location: receiver.declarationLocation,
-					message: "@\(Dependency.Source.receivedRawValue) property `\(receiver.property.asSource)` is received in chain: \(receiver.chain.map(\.asSource).joined(separator: " -> ")). A dependency cycle builds \(builtType) again beneath `\(redeclaration.declaringType.asSource)`, which declares `\(redeclaration.property.asSource)` with the same label, and SafeDI hands each \(builtType) one value of `\(label)`. The types \(builtType) builds receive `\(label)` only if available as \(forms), which one value cannot carry together. Receive \(forms) under different labels to fix.",
+					message: "@\(Dependency.Source.receivedRawValue) property `\(receiver.property.asSource)` is received in chain: \(receiver.chain.map(\.asSource).joined(separator: " -> ")). A dependency cycle builds \(builtType) again beneath `\(redeclaration.declaringType.asSource)`, which declares `\(redeclaration.property.asSource)` with the same label, and SafeDI hands each \(builtType) one value of `\(label)`. \(builtType) and the types it builds receive `\(label)` as \(forms), which one value cannot carry together. Receive \(forms) under different labels to fix.",
 				),
 				SourceDiagnostic(
 					severity: .note,
@@ -3100,11 +3103,12 @@ public actor DependencyTreeGenerator {
 
 	/// Rejects each label that a type a dependency cycle builds again, in the trees `generators` root, receives in forms
 	/// no one value SafeDI hands it can provide together (see `UnpassableCycleLabel`). Each is reported once, in source
-	/// order, whichever trees hold it.
+	/// order, whichever trees hold it: the trees of several roots, production or mock, can each build the function whose
+	/// label it is.
 	private static func validateCycleLabelsArePassable(inTreesRootedAt generators: [ScopeGenerator]) throws {
-		let unpassableCycleLabels = generators.flatMap(\.unpassableCycleLabelsInTree)
-		guard unpassableCycleLabels.isEmpty else {
-			throw DependencyTreeGeneratorError.unpassableCycleLabels(unpassableCycleLabels)
+		let unpassableCycleLabels = generators.flatMap(\.unpassableCycleLabelsInTree).uniqued()
+		if let error = DependencyTreeGeneratorError.reportingAll(of: unpassableCycleLabels.map(DependencyTreeGeneratorError.unpassableCycleLabel)) {
+			throw error
 		}
 	}
 

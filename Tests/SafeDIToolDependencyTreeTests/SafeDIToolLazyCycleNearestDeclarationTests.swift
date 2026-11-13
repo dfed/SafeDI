@@ -4296,7 +4296,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		// The `C` that `S` builds again would receive `S`'s `Y`, and every `B` `nil`, but `A` is handed one value of `x`.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["B.swift"]):7:5: error: @Received property `x: X?` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: Y` with the same label, and SafeDI hands each `A` one value of `x`. The types `A` builds receive `x` only if available as `x: X?` and `x: Y?`, which one value cannot carry together. Receive `x: X?` and `x: Y?` under different labels to fix.
+			\(fixtures["B.swift"]):7:5: error: @Received property `x: X?` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: Y` with the same label, and SafeDI hands each `A` one value of `x`. `A` and the types it builds receive `x` as `x: X?` and `x: Y?`, which one value cannot carry together. Receive `x: X?` and `x: Y?` under different labels to fix.
 			\(fixtures["S.swift"]):8:5: note: `x: Y` is declared here
 			"""
 		}) {
@@ -4310,7 +4310,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		// `Root` instantiates `x: Y`, which the first `C` receives; the `C` that `S` builds again would receive `S`'s.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["B.swift"]):7:5: error: @Received property `x: X?` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: Y` with the same label, and SafeDI hands each `A` one value of `x`. The types `A` builds receive `x` only if available as `x: X?` and `x: Y?`, which one value cannot carry together. Receive `x: X?` and `x: Y?` under different labels to fix.
+			\(fixtures["B.swift"]):7:5: error: @Received property `x: X?` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: Y` with the same label, and SafeDI hands each `A` one value of `x`. `A` and the types it builds receive `x` as `x: X?` and `x: Y?`, which one value cannot carry together. Receive `x: X?` and `x: Y?` under different labels to fix.
 			\(fixtures["S.swift"]):8:5: note: `x: Y` is declared here
 			"""
 		}) {
@@ -4346,7 +4346,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		]
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["B.swift"]):7:5: error: @Received property `x: X?` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: X` with the same label, and SafeDI hands each `A` one value of `x`. The types `A` builds receive `x` only if available as `x: Instantiator<X>?` and `x: X?`, which one value cannot carry together. Receive `x: Instantiator<X>?` and `x: X?` under different labels to fix.
+			\(fixtures["B.swift"]):7:5: error: @Received property `x: X?` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: X` with the same label, and SafeDI hands each `A` one value of `x`. `A` and the types it builds receive `x` as `x: Instantiator<X>?` and `x: X?`, which one value cannot carry together. Receive `x: Instantiator<X>?` and `x: X?` under different labels to fix.
 			\(fixtures["S.swift"]):8:5: note: `x: X` is declared here
 			"""
 		}) {
@@ -4357,21 +4357,26 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsUnpassableLabelErrorNotingDeclarationFirstInSourceOrder_whenSeveralTypesBetweenDeclareLabel() async {
-		// Six types between `A` and the dependency that builds it again each declare `x: Y`, in an order unlike their names'.
+		// Six types between `A` and the dependency that builds it again each declare `x: Y`, in an order unlike their names'
+		// and in files whose order is unlike both: the first file declares `S5`.
 		let chain = ["S4", "S2", "S6", "S1", "S5", "S3"]
-		var fixture = Self.unrelatedFormsFixture(rootDeclares: []).filter { !$0.contains(" S: Instantiable") }
-		fixture[1] = fixture[1].replacingOccurrences(of: "Instantiator<S>", with: "Instantiator<\(chain[0])>")
+		let inFileOrder = ["S5", "S3", "S1", "S6", "S2", "S4"]
+		let fixture = Self.unrelatedFormsFixture(rootDeclares: [])
+			.filter { !$0.contains(" S: Instantiable") }
+			.map { $0.replacingOccurrences(of: "Instantiator<S>", with: "Instantiator<\(chain[0])>") }
+		var swiftFileContentByFilePath = [String: String]()
 		for (index, name) in chain.enumerated() {
 			let next = index + 1 < chain.count ? "@Instantiated let next: Instantiator<\(chain[index + 1])>" : "@Instantiated let aBuilder: Instantiator<A>"
-			fixture.append(seamFixtureType(named: name, isFinalClass: true, declarations: ["@Instantiated let x: Y", next]))
+			let fileNumber = (inFileOrder.firstIndex(of: name) ?? 0) + 1
+			swiftFileContentByFilePath["Declaration\(fileNumber).swift"] = seamFixtureType(named: name, isFinalClass: true, declarations: ["@Instantiated let x: Y", next])
 		}
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["B.swift"]):7:5: error: @Received property `x: X?` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S1`, which declares `x: Y` with the same label, and SafeDI hands each `A` one value of `x`. The types `A` builds receive `x` only if available as `x: X?` and `x: Y?`, which one value cannot carry together. Receive `x: X?` and `x: Y?` under different labels to fix.
-			\(fixtures["S1.swift"]):8:5: note: `x: Y` is declared here
+			\(fixtures["B.swift"]):7:5: error: @Received property `x: X?` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S5`, which declares `x: Y` with the same label, and SafeDI hands each `A` one value of `x`. `A` and the types it builds receive `x` as `x: X?` and `x: Y?`, which one value cannot carry together. Receive `x: X?` and `x: Y?` under different labels to fix.
+			\(fixtures["Declaration1.swift"]):8:5: note: `x: Y` is declared here
 			"""
 		}) {
-			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			try await executeSafeDIToolTest(swiftFileContent: fixture, swiftFileContentByFilePath: swiftFileContentByFilePath, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 	}
 
@@ -4382,7 +4387,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		// `x` is an optional wrapper, which offers no instance.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["B.swift"]):7:5: error: @Received property `x: LazilyInstantiated<X>` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: LazilyInstantiated<X>` with the same label, and SafeDI hands each `A` one value of `x`. The types `A` builds receive `x` only if available as `x: LazilyInstantiated<X>` and `x: X?`, which one value cannot carry together. Receive `x: LazilyInstantiated<X>` and `x: X?` under different labels to fix.
+			\(fixtures["B.swift"]):7:5: error: @Received property `x: LazilyInstantiated<X>` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: LazilyInstantiated<X>` with the same label, and SafeDI hands each `A` one value of `x`. `A` and the types it builds receive `x` as `x: LazilyInstantiated<X>` and `x: X?`, which one value cannot carry together. Receive `x: LazilyInstantiated<X>` and `x: X?` under different labels to fix.
 			\(fixtures["S.swift"]):8:5: note: `x: LazilyInstantiated<X>` is declared here
 			"""
 		}) {
@@ -4399,12 +4404,106 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n")
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["B.swift"]):7:5: error: @Received property `x: LazilyInstantiated<X>` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: LazilyInstantiated<X>` with the same label, and SafeDI hands each `A` one value of `x`. The types `A` builds receive `x` only if available as `x: LazilyInstantiated<X>` and `x: X?`, which one value cannot carry together. Receive `x: LazilyInstantiated<X>` and `x: X?` under different labels to fix.
+			\(fixtures["B.swift"]):7:5: error: @Received property `x: LazilyInstantiated<X>` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: LazilyInstantiated<X>` with the same label, and SafeDI hands each `A` one value of `x`. `A` and the types it builds receive `x` as `x: LazilyInstantiated<X>` and `x: X?`, which one value cannot carry together. Receive `x: LazilyInstantiated<X>` and `x: X?` under different labels to fix.
 			\(fixtures["S.swift"]):8:5: note: `x: LazilyInstantiated<X>` is declared here
 			"""
 		}) {
 			try await executeSafeDIToolTest(swiftFileContent: Self.wrapperAndInstanceFixture(top: top), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnpassableLabelError_whenTreeBuiltAgainRequiresInstanceBesideOptionalWrapperOnlyIfAvailable() async {
+		// `B` requires `x: X` and `C` receives `x: LazilyInstantiated<X>?` only if available. `Root` and `S` each declare
+		// `x: LazilyInstantiated<X>`, which provides both, but a parameter `x: X` cannot carry the wrapper `C` would get.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["B.swift"]):7:5: error: @Received property `x: X` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: LazilyInstantiated<X>` with the same label, and SafeDI hands each `A` one value of `x`. `A` and the types it builds receive `x` as `x: LazilyInstantiated<X>?` and `x: X`, which one value cannot carry together. Receive `x: LazilyInstantiated<X>?` and `x: X` under different labels to fix.
+			\(fixtures["S.swift"]):8:5: note: `x: LazilyInstantiated<X>` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: Self.requiredInstanceBesideOptionalWrapperFixture(rootGeneratesMock: false), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsUnpassableLabelError_whenMockedTypesTreeBuiltAgainRequiresInstanceBesideOptionalWrapperOnlyIfAvailable() async {
+		// As in production, a parameter `x: X` cannot carry the wrapper `C` would get from `S`.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["B.swift"]):7:5: error: @Received property `x: X` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: LazilyInstantiated<X>` with the same label, and SafeDI hands each `A` one value of `x`. `A` and the types it builds receive `x` as `x: LazilyInstantiated<X>?` and `x: X`, which one value cannot carry together. Receive `x: LazilyInstantiated<X>?` and `x: X` under different labels to fix.
+			\(fixtures["S.swift"]):8:5: note: `x: LazilyInstantiated<X>` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: Self.requiredInstanceBesideOptionalWrapperFixture(rootGeneratesMock: true), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnpassableLabelError_whenTreeBuiltAgainRequiresInstanceBesideAliasOfWrapperOnlyIfAvailable() async {
+		// `Root` declares `x: X`, which gives `C`'s alias `nil`; `S` declares `x: LazilyInstantiated<X>`, which would give
+		// the alias the wrapper that a parameter `x: X` cannot carry.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let b: B", "@Instantiated let c: C", "@Instantiated let sBuilder: Instantiator<S>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received let x: X"]),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: [#"@Received(fulfilledByDependencyNamed: "x", ofType: LazilyInstantiated<X>.self, onlyIfAvailable: true) let lazyX: LazilyInstantiated<X>?"#]),
+			seamFixtureType(named: "S", isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+		]
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["B.swift"]):7:5: error: @Received property `x: X` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: LazilyInstantiated<X>` with the same label, and SafeDI hands each `A` one value of `x`. `A` and the types it builds receive `x` as `x: LazilyInstantiated<X>` and `x: X`, which one value cannot carry together. Receive `x: LazilyInstantiated<X>` and `x: X` under different labels to fix.
+			\(fixtures["S.swift"]):8:5: note: `x: LazilyInstantiated<X>` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsEachUnpassableLabelErrorOnce_whenTreesOfTwoMockedTypesShareUnpassableLabel() async {
+		// The mocks of `P` and `Q` each build `A`, whose label `x` is unpassable; `P`'s also builds `D`, whose `z` is.
+		let p = seamFixtureType(named: "P", isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let dBuilder: Instantiator<D>"])
+			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n")
+		let fixture = Self.wrapperAndInstanceFixture(top: p) + [
+			seamFixtureType(named: "Q", isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"])
+				.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n"),
+			seamFixtureType(named: "D", isFinalClass: true, declarations: ["@Instantiated let e: E", "@Instantiated let f: F", "@Instantiated let tBuilder: Instantiator<T>"]),
+			seamFixtureType(named: "E", isFinalClass: true, declarations: [#"@Received(fulfilledByDependencyNamed: "z", ofType: LazilyInstantiated<Z>.self, onlyIfAvailable: true) let lazyZ: LazilyInstantiated<Z>?"#]),
+			seamFixtureType(named: "F", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let z: Z?"]),
+			seamFixtureType(named: "T", isFinalClass: true, declarations: ["@Instantiated let z: LazilyInstantiated<Z>", "@Instantiated let dBuilder: Instantiator<D>"]),
+			seamFixtureType(named: "Z", isFinalClass: true, declarations: []),
+		]
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["B.swift"]):7:5: error: @Received property `x: LazilyInstantiated<X>` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: LazilyInstantiated<X>` with the same label, and SafeDI hands each `A` one value of `x`. `A` and the types it builds receive `x` as `x: LazilyInstantiated<X>` and `x: X?`, which one value cannot carry together. Receive `x: LazilyInstantiated<X>` and `x: X?` under different labels to fix.
+			\(fixtures["S.swift"]):8:5: note: `x: LazilyInstantiated<X>` is declared here
+			\(fixtures["E.swift"]):7:5: error: @Received property `z: LazilyInstantiated<Z>` is received in chain: D -> E. A dependency cycle builds `D` again beneath `T`, which declares `z: LazilyInstantiated<Z>` with the same label, and SafeDI hands each `D` one value of `z`. `D` and the types it builds receive `z` as `z: LazilyInstantiated<Z>` and `z: Z?`, which one value cannot carry together. Receive `z: LazilyInstantiated<Z>` and `z: Z?` under different labels to fix.
+			\(fixtures["T.swift"]):8:5: note: `z: LazilyInstantiated<Z>` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	/// `Root`, which instantiates `x: LazilyInstantiated<X>` and `aBuilder`, and generates a mock when
+	/// `rootGeneratesMock`; `A` builds `B`, which requires `x: X`, `C`, which receives `x: LazilyInstantiated<X>?` only if
+	/// available, and `sBuilder`; `S` instantiates `x: LazilyInstantiated<X>` and closes the cycle on `A`.
+	private static func requiredInstanceBesideOptionalWrapperFixture(rootGeneratesMock: Bool) -> [String] {
+		[
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let aBuilder: Instantiator<A>"])
+				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: rootGeneratesMock ? "@Instantiable(isRoot: true, generateMock: true)" : "@Instantiable(isRoot: true)"),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let b: B", "@Instantiated let c: C", "@Instantiated let sBuilder: Instantiator<S>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received let x: X"]),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let x: LazilyInstantiated<X>?"]),
+			seamFixtureType(named: "S", isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+		]
 	}
 
 	/// A root that instantiates `aBuilder: Instantiator<A>`.

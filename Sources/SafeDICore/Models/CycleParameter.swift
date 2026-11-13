@@ -108,9 +108,14 @@ struct CycleParameter: Hashable, Sendable {
 	/// form does, so each scope that calls the function passes one value. Where a receiver requires the label, the
 	/// parameter takes the required form that provides every other required form, which each call's nearest declaration
 	/// provides, as validation has checked. A form received only if available that it does not provide is passed `nil` in
-	/// the function's body, as it is beneath any declaration that does not provide it. Where every form is received only
-	/// if available and no one parameter provides them all – such as `x: X?` and `x: Instantiator<X>?` – the label is
-	/// unpassable, which `DependencyTreeGenerator` reports (see `UnpassableCycleLabel`).
+	/// the function's body, as it is beneath any declaration that does not provide it, where no declaration that provides
+	/// the required forms could provide it too: such as `x: Y?` or `x: Instantiator<X>?` beside a required `x: X`. One
+	/// that such a declaration could provide – `x: LazilyInstantiated<X>?` beside a required `x: X` – would be handed a
+	/// value by a call whose nearest declaration provides it, which the parameter cannot carry, so the label is
+	/// unpassable. The parameter cannot tell which declarations its calls see, so a call whose nearest declaration
+	/// provides only the required form, where `nil` would be right, is rejected too. Where every form is received only if
+	/// available and no one parameter provides them all – such as `x: X?` and `x: Instantiator<X>?` – the label is
+	/// unpassable as well. `DependencyTreeGenerator` reports an unpassable label (see `UnpassableCycleLabel`).
 	static func parameters(
 		firstReceives: [(label: String, receiver: Receiver, redeclaration: Redeclaration)],
 		receivedProperties: Set<Property>,
@@ -137,9 +142,16 @@ struct CycleParameter: Hashable, Sendable {
 				.first { formsToProvide.isSubset(of: Self.forms(providedBy: $0)) }
 				.map { requiredForms.isEmpty && !$0.typeDescription.isOptional ? $0.asOptionalProperty : $0 }
 			let passedForms = property.map { forms.intersection(Self.forms(providedBy: $0, receivedForms: forms)) } ?? []
-			// An optional wrapper offers no instance, so a parameter made optional can provide fewer forms than the form it
-			// was made from.
-			guard let property, !requiredForms.isEmpty || passedForms == forms else {
+			let unpassedForms = forms.subtracting(passedForms)
+			let passesEveryFormACallCanProvide = if requiredForms.isEmpty {
+				// An optional wrapper offers no instance, so a parameter made optional can provide fewer forms than the form
+				// it was made from.
+				unpassedForms.isEmpty
+			} else {
+				// A form is passed `nil` only where no declaration that provides the required forms could provide it too.
+				!unpassedForms.contains { requiredForms.isSubset(of: Self.forms(providedBy: $0.asUnwrappedProperty)) }
+			}
+			guard let property, passesEveryFormACallCanProvide else {
 				unpassableLabels.append(UnpassableCycleLabel(builtType: builtType, receiver: receiver, forms: forms.sorted(), redeclaration: redeclaration))
 				continue
 			}
@@ -182,8 +194,8 @@ extension CycleParameter {
 
 /// A label the body of the builder function a lazy cycle closes on receives from the scopes enclosing the function, which
 /// a scope between the function and one of its cycle-closing scopes declares again, in forms no one parameter can pass:
-/// no one parameter provides every form a receiver requires or, where no receiver requires one, every form (see
-/// `CycleParameter.parameters`). The
+/// a form a receiver requires beside one the parameter cannot carry that a declaration providing it could provide too,
+/// or, where no receiver requires one, forms no one parameter provides together (see `CycleParameter.parameters`). The
 /// type a cycle-closing scope builds again would read the label from above the function instead of from its nearest
 /// declaration, so SafeDITool reports it.
 struct UnpassableCycleLabel: Hashable, Sendable {
