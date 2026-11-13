@@ -56,7 +56,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.generatedFiles == ["Root+SafeDI.swift": Self.rootEnteringFamilyAtConstant])
 		// Each `cBuilder.instantiate()` builds a new `C`, and in it a new `A` and `B`.
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -108,7 +108,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			}
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -407,7 +407,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 		])
 		#expect(output.warnings.isEmpty)
 		// Each `C` holds a wrapper whose instance is a new `A`, built the first time it is read.
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -454,7 +454,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			""",
 		])
 		#expect(output.warnings.isEmpty)
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -500,7 +500,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			}
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -561,7 +561,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#endif
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -626,7 +626,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#endif
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -779,7 +779,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			""" + "\n",
 		])
 		// The `B` built again receives the `session` of the `C` that builds it.
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			func makeA(session: Session) -> A {
 			    A(b: B(session: session, cBuilder: Instantiator<C> {
@@ -843,7 +843,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			}
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			func makeA(session: Session) -> A {
 			    A(b: B(session: session, cBuilder: Instantiator<C> {
@@ -1059,7 +1059,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			""",
 			"SafeDIMockConfiguration.swift": generatedFileHeader + Self.mockConfigurationsOfCAndB + "\n",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": Self.handBuiltFamily + """
 
 
@@ -1179,7 +1179,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#endif
 			""" + "\n",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": Self.handBuiltFamily + """
 
 
@@ -1454,7 +1454,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 		]
 		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let probe = "{ let calls = OverrideCalls(); let a = A.mock(safeDIOverrides: .init(b: .init { cBuilder in calls.count += 1; return B(cBuilder: cBuilder) })); _ = a.b.cBuilder.instantiate().a.b.cBuilder.instantiate(); return calls.count }()"
-		try expectValuesAgree(of: fixture, output: output, knownRight: [:], probes: [probe], knownRightExpressions: [probe: "3"])
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [:], probes: [probe], knownRightExpressions: [probe: "3"])
 	}
 
 	@Test
@@ -1864,7 +1864,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			}
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -2018,7 +2018,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#endif
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -2093,7 +2093,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			}
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -2170,7 +2170,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			}
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": Self.shadowedClosedOnFlowKnownRight,
 		], probes: ["Root()"])
 	}
@@ -2222,7 +2222,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#endif
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": Self.shadowedClosedOnFlowKnownRight + """
 
 
@@ -2303,7 +2303,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#endif
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": Self.shadowedClosedOnFlowKnownRight + """
 
 
@@ -2352,7 +2352,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			}
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -2398,7 +2398,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			}
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -2465,7 +2465,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			}
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -2521,7 +2521,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			""",
 		])
 		// The `LoggedInFlow` built again receives the `Session` its `Settings` holds.
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -2570,7 +2570,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			""",
 		])
 		// `D` receives the `A` its own `C` holds.
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -2615,7 +2615,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			""",
 		])
 		// `C` receives the `A` `B` is handed.
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": Self.forwardedNearerDeclarationKnownRight,
 		], probes: [Self.forwardedNearerDeclarationProbe])
 	}
@@ -2703,7 +2703,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#endif
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": Self.forwardedNearerDeclarationKnownRight + """
 
 
@@ -2820,7 +2820,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#endif
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			func makeC() -> C {
 			    let a = A(b: B(cBuilder: Instantiator<C>(makeC)))
@@ -2904,7 +2904,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			#endif
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			func makeC() -> C {
 			    let a = A(b: B(cBuilder: Instantiator<C>(makeC)))
@@ -3035,7 +3035,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			}
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -3089,7 +3089,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			}
 			""",
 		])
-		try expectValuesAgree(of: fixture, output: output, knownRight: [
+		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": """
 			extension Root {
 			    public convenience init() {
@@ -3419,9 +3419,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 		probes: [String],
 		knownRightExpressions: [String: String] = [:],
 		sourceLocation: SourceLocation = #_sourceLocation,
-	) throws {
+	) async throws {
 		let fixtureFiles = Self.fixtureFiles(fixture)
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: output.generatedFiles ?? [:]),
 			knownRight: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: knownRight),
 			probes: probes.map { DifferentialValueProbe(name: $0, expression: $0, knownRightExpression: knownRightExpressions[$0]) },

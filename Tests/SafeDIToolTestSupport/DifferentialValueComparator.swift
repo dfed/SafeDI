@@ -462,10 +462,10 @@ enum DifferentialValueOracle {
 		exempting exemptions: [DifferentialValueDifference] = [],
 		limits: DifferentialValueLimits = DifferentialValueLimits(),
 		filesToDelete: inout [URL],
-	) throws -> DifferentialValueComparison? {
+	) async throws -> DifferentialValueComparison? {
 		guard compileVerificationIsEnabled else { return nil }
 		let graph = DifferentialValueGraph(name: "", feature: feature, knownRight: knownRight, probes: probes, exemptions: exemptions)
-		return try results(of: [graph], limits: limits, filesToDelete: &filesToDelete)[0].get()
+		return try await results(of: [graph], limits: limits, filesToDelete: &filesToDelete)[0].get()
 	}
 
 	/// Compares each of `graphs`, exempting its exemptions, compiling the graphs whose paths have one layout into one
@@ -479,11 +479,11 @@ enum DifferentialValueOracle {
 		graphs: [DifferentialValueGraph],
 		limits: DifferentialValueLimits = DifferentialValueLimits(),
 		filesToDelete: inout [URL],
-	) throws -> [DifferentialValueGraphComparison]? {
+	) async throws -> [DifferentialValueGraphComparison]? {
 		guard compileVerificationIsEnabled else { return nil }
 		var comparisons = [(index: Int, comparison: DifferentialValueGraphComparison)]()
 		for batch in batchesByLayout(of: graphs) {
-			let batchResults = try results(of: batch.map { graphs[$0] }, limits: limits, filesToDelete: &filesToDelete)
+			let batchResults = try await results(of: batch.map { graphs[$0] }, limits: limits, filesToDelete: &filesToDelete)
 			for (index, result) in zip(batch, batchResults) {
 				comparisons.append((index, DifferentialValueGraphComparison(name: graphs[index].name, result: result)))
 			}
@@ -498,9 +498,9 @@ enum DifferentialValueOracle {
 		probes: [DifferentialValueProbe],
 		limits: DifferentialValueLimits = DifferentialValueLimits(),
 		filesToDelete: inout [URL],
-	) throws -> String? {
+	) async throws -> String? {
 		guard compileVerificationIsEnabled else { return nil }
-		return try describe(path, role: nil, probeGroups: [probes], limits: limits, filesToDelete: &filesToDelete)
+		return try await describe(path, role: nil, probeGroups: [probes], limits: limits, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: Private
@@ -526,9 +526,9 @@ enum DifferentialValueOracle {
 	/// exits. The SafeDI runtime is compiled from `Sources/SafeDI` because no build layout provides its object file in
 	/// one place: SwiftPM's build systems put the module's objects in different places, and the test bundle the graph
 	/// fuzzer's CI shards run carries only the `.swiftmodule`.
-	private static let runtime = Result { try compileRuntime() }
+	private static let runtime = SharedTestWork { try await compileRuntime() }
 
-	private static func compileRuntime() throws -> Runtime {
+	private static func compileRuntime() async throws -> Runtime {
 		guard let artifacts = SafeDIBuildArtifactLocator.locate() else {
 			throw DifferentialValueOracleError(
 				path: nil,
@@ -547,7 +547,7 @@ enum DifferentialValueOracle {
 		let describerFile = directory.appendingPathComponent("\(describerModuleName).swift")
 		try describerSource.write(to: describerFile, atomically: true, encoding: .utf8)
 		for (moduleName, sources) in [("SafeDI", try runtimeSources()), (describerModuleName, [describerFile])] {
-			let result = try compileSwift(
+			let result = try await compileSwift(
 				sources: sources,
 				outputDirectory: directory,
 				artifacts: SafeDIBuildArtifacts(swiftModuleSearchPath: directory, safeDIMacrosToolPath: artifacts.safeDIMacrosToolPath),
@@ -603,7 +603,7 @@ enum DifferentialValueOracle {
 		of graphs: [DifferentialValueGraph],
 		limits: DifferentialValueLimits,
 		filesToDelete: inout [URL],
-	) throws -> [Result<DifferentialValueComparison, DifferentialValueOracleError>] {
+	) async throws -> [Result<DifferentialValueComparison, DifferentialValueOracleError>] {
 		do {
 			let featureProbes: [DescribedProbe]
 			let knownRightProbes: [DescribedProbe]
@@ -613,13 +613,13 @@ enum DifferentialValueOracle {
 				let probeGroups = graphs.map { graph in
 					zip(graph.probes, graph.knownRightProbes ?? []).flatMap { [$0, $1] }
 				}
-				let pairedProbes = try describedProbes(of: merging(graphs.map(\.feature)), role: .feature, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
+				let pairedProbes = try await describedProbes(of: merging(graphs.map(\.feature)), role: .feature, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
 				featureProbes = pairedProbes.enumerated().filter { $0.offset.isMultiple(of: 2) }.map(\.element)
 				knownRightProbes = pairedProbes.enumerated().filter { !$0.offset.isMultiple(of: 2) }.map(\.element)
 			} else {
 				let probeGroups = graphs.map(\.probes)
-				featureProbes = try describedProbes(of: merging(graphs.map(\.feature)), role: .feature, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
-				knownRightProbes = try describedProbes(of: merging(graphs.map(\.knownRight)), role: .knownRight, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
+				featureProbes = try await describedProbes(of: merging(graphs.map(\.feature)), role: .feature, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
+				knownRightProbes = try await describedProbes(of: merging(graphs.map(\.knownRight)), role: .knownRight, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
 			}
 			var start = 0
 			return graphs.map { graph in
@@ -645,7 +645,7 @@ enum DifferentialValueOracle {
 			guard graphs.count > 1 else { return [.failure(error)] }
 			var resultsOfEachGraph = [Result<DifferentialValueComparison, DifferentialValueOracleError>]()
 			for graph in graphs {
-				resultsOfEachGraph += try results(of: [graph], limits: limits, filesToDelete: &filesToDelete)
+				resultsOfEachGraph += try await results(of: [graph], limits: limits, filesToDelete: &filesToDelete)
 			}
 			return resultsOfEachGraph
 		}
@@ -710,9 +710,9 @@ enum DifferentialValueOracle {
 		probeGroups: [[DifferentialValueProbe]],
 		limits: DifferentialValueLimits,
 		filesToDelete: inout [URL],
-	) throws -> [DescribedProbe] {
+	) async throws -> [DescribedProbe] {
 		let probes = probeGroups.flatMap(\.self)
-		let description = try describe(path, role: role, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
+		let description = try await describe(path, role: role, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
 		let sections = DescribedProbe.sections(of: description)
 		guard sections.count == probes.count else {
 			throw DifferentialValueOracleError(
@@ -734,8 +734,8 @@ enum DifferentialValueOracle {
 		probeGroups: [[DifferentialValueProbe]],
 		limits: DifferentialValueLimits,
 		filesToDelete: inout [URL],
-	) throws -> String {
-		let runtime = try runtime.get()
+	) async throws -> String {
+		let runtime = try await runtime.value
 		let pathName = role.map { "\($0.name) path" } ?? "path"
 		let directory = TestTemporaryDirectory.root.appendingPathComponent("safedi-differential-\(role?.rawValue ?? "path")-\(UUID().uuidString)")
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -757,7 +757,7 @@ enum DifferentialValueOracle {
 				try ("import SafeDI\n" + contents).write(to: file, atomically: true, encoding: .utf8)
 				sources.append(file)
 			}
-			let result = try compileSwift(
+			let result = try await compileSwift(
 				sources: sources,
 				outputDirectory: moduleDirectory,
 				artifacts: SafeDIBuildArtifacts(swiftModuleSearchPath: runtime.directory, safeDIMacrosToolPath: runtime.macrosToolPath),
@@ -796,7 +796,7 @@ enum DifferentialValueOracle {
 		linkArguments.append(contentsOf: objectFiles.map(\.path))
 		linkArguments.append(runtime.directory.appendingPathComponent("SafeDI.o").path)
 		linkArguments.append(runtime.directory.appendingPathComponent("\(describerModuleName).o").path)
-		let link = try runProcess(swiftCompilerCommand.executable, arguments: linkArguments)
+		let link = try await runProcess(swiftCompilerCommand.executable, arguments: linkArguments)
 		guard link.exitCode == 0 else {
 			throw DifferentialValueOracleError(
 				path: role,
@@ -805,7 +805,7 @@ enum DifferentialValueOracle {
 			)
 		}
 
-		let run = try runProcess(executable, arguments: [])
+		let run = try await runProcess(executable, arguments: [])
 		guard run.exitCode == 0 else {
 			// The describer sets an alarm for each probe, so a probe that runs past its time limit ends the process with
 			// `SIGALRM`, after the heading of the probe that was running.
@@ -1731,8 +1731,8 @@ func expectDifferentialValuesAgree(
 	limits: DifferentialValueLimits = DifferentialValueLimits(),
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
-) throws {
-	guard let comparison = try DifferentialValueOracle.compare(feature: feature, knownRight: knownRight, probes: probes, exempting: exemptions, limits: limits, filesToDelete: &filesToDelete) else { return }
+) async throws {
+	guard let comparison = try await DifferentialValueOracle.compare(feature: feature, knownRight: knownRight, probes: probes, exempting: exemptions, limits: limits, filesToDelete: &filesToDelete) else { return }
 	for difference in comparison.differences {
 		Issue.record(
 			"The feature path builds other values than the known-right path for \(difference)\n\(comparison.report)",

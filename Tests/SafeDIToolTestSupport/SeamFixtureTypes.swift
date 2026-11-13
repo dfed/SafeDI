@@ -64,7 +64,7 @@ func expectSeamBuildsInlineValues(
 	inlineOutput: TestOutput,
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
-) throws {
+) async throws {
 	func fixtureFiles(_ files: [String]) -> [String: String] {
 		var fixtureFiles = [String: String]()
 		for (index, file) in files.enumerated() {
@@ -76,7 +76,7 @@ func expectSeamBuildsInlineValues(
 		}
 		return fixtureFiles
 	}
-	try expectDifferentialValuesAgree(
+	try await expectDifferentialValuesAgree(
 		feature: DifferentialValuePath(fixtureFiles: fixtureFiles(files), generatedFiles: seamOutput.dependencyTreeFiles),
 		knownRight: DifferentialValuePath(fixtureFiles: fixtureFiles(inlineFixture(files)), generatedFiles: inlineOutput.dependencyTreeFiles),
 		probes: [DifferentialValueProbe("Root()")],

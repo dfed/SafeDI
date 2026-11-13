@@ -126,7 +126,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			}
 			""",
 		])
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.dependencyTreeFiles),
 			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(inlineFixture(fixture)), generatedFiles: inlineOutput.dependencyTreeFiles),
 			probes: [DifferentialValueProbe("Root()")],
@@ -219,7 +219,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			""",
 		])
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.dependencyTreeFiles),
 			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(inlineFixture(fixture)), generatedFiles: inlineOutput.dependencyTreeFiles),
 			probes: [DifferentialValueProbe("Root()")],
@@ -317,7 +317,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			}
 			""",
 		])
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.dependencyTreeFiles),
 			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(inlineFixture(fixture)), generatedFiles: inlineOutput.dependencyTreeFiles),
 			probes: [DifferentialValueProbe("Root()")],
@@ -436,7 +436,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		"""])
 		// An `ErasedInstantiator` is not traversed, so the probe holds the `Router` each `A` – the first, and the one `Mid`
 		// builds again – builds.
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: Self.differentialValuePath(of: output, modules: modules),
 			knownRight: Self.differentialValuePath(of: inlineOutput, modules: inlineModules),
 			probes: [DifferentialValueProbe(#"{ () -> (Router, Router) in let a = Root().aBuilder.instantiate(); let aBuiltAgain = a.midBuilder.instantiate().aBuilder.instantiate(); return (a.service.routerBuilder.instantiate().routing as! Router, aBuiltAgain.service.routerBuilder.instantiate().routing as! Router) }()"#)],
@@ -544,7 +544,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		"""])
 		// An `ErasedInstantiator` is not traversed, so the probe holds the `Router` each `A` – the first, and the one `Mid`
 		// builds again – builds.
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: Self.differentialValuePath(of: output, modules: modules),
 			knownRight: Self.differentialValuePath(of: inlineOutput, modules: inlineModules),
 			probes: [DifferentialValueProbe(#"{ () -> (Router, Router) in let a = Root().aBuilder.instantiate(); let aBuiltAgain = a.midBuilder.instantiate().aBuilder.instantiate(); return (a.service.routerBuilder.instantiate().routing as! Router, aBuiltAgain.service.routerBuilder.instantiate().routing as! Router) }()"#)],
@@ -636,7 +636,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			}
 			""",
 		])
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.dependencyTreeFiles),
 			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(inlineFixture(fixture)), generatedFiles: inlineOutput.dependencyTreeFiles),
 			probes: [DifferentialValueProbe("Root()")],
@@ -708,7 +708,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			""",
 		])
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.dependencyTreeFiles),
 			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(inlineFixture(fixture)), generatedFiles: inlineOutput.dependencyTreeFiles),
 			probes: [DifferentialValueProbe("Root()")],
@@ -844,7 +844,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		guard compileVerificationIsEnabled else { return }
 		let samePackageModules = Self.hubSpaceThemeModules(appPackage: "Shop", appFiles: Self.cycleBetweenAppFiles)
 		let samePackageOutput = try await executeSafeDIToolMultiModuleTest(modules: samePackageModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: Self.differentialValuePath(of: output, modules: modules),
 			knownRight: Self.differentialValuePath(of: samePackageOutput, modules: samePackageModules),
 			probes: [DifferentialValueProbe("Root()")],
@@ -1384,7 +1384,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		guard compileVerificationIsEnabled else { return }
 		let samePackageModules = Self.hubSpaceFilterModules(appPackage: "pkg", appFiles: appFiles)
 		let samePackageOutput = try await executeSafeDIToolMultiModuleTest(modules: samePackageModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: Self.differentialValuePath(of: output, modules: modules),
 			knownRight: Self.differentialValuePath(of: samePackageOutput, modules: samePackageModules),
 			probes: [DifferentialValueProbe("Screen.mock()")],
@@ -1538,7 +1538,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		guard compileVerificationIsEnabled else { return }
 		let samePackageModules = Self.hubSpaceFilterModules(appPackage: "pkg", appFiles: appFiles)
 		let samePackageOutput = try await executeSafeDIToolMultiModuleTest(modules: samePackageModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: Self.differentialValuePath(of: output, modules: modules),
 			knownRight: Self.differentialValuePath(of: samePackageOutput, modules: samePackageModules),
 			probes: [DifferentialValueProbe("Screen.mock()")],

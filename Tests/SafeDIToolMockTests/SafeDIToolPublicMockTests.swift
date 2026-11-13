@@ -11236,7 +11236,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				)
 			})
 		}
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: path(of: modules, output: output),
 			knownRight: path(of: inlineModules, output: inlineOutput),
 			probes: probes,

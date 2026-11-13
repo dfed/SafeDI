@@ -101,7 +101,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()")
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()")
 	}
 
 	@Test
@@ -146,7 +146,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()")
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()")
 	}
 
 	@Test
@@ -203,7 +203,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()")
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()")
 	}
 
 	@Test
@@ -265,7 +265,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()")
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()")
 	}
 
 	@Test
@@ -313,7 +313,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()")
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()")
 	}
 
 	// MARK: Tests – A mock of a type no root is, the receiver inside the alias's tree receiving it only if available
@@ -370,7 +370,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
 	}
 
 	@Test
@@ -416,7 +416,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
 	}
 
 	@Test
@@ -474,7 +474,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
 	}
 
 	@Test
@@ -534,7 +534,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
 	}
 
 	@Test
@@ -583,7 +583,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
 	}
 
 	// MARK: Tests – The receiver inside the alias's tree requiring it
@@ -804,7 +804,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()")
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()")
 	}
 
 	@Test
@@ -840,7 +840,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 		#expect(output.mockFiles == [
 			"Holder+SafeDIMock.swift": generatedFileHeader + Self.expectedLazyCycleAroundAliasMock(fulfillingProperty: fulfillingProperty, withSibling: outsideReceiver == .sibling, fixtures: output.fixtures),
 		], "Unexpected output \(output.mockFiles)")
-		try expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
 	}
 
 	@Test
@@ -924,7 +924,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
 	}
 
 	@Test
@@ -980,7 +980,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			""",
 		], "Unexpected output \(output.mockFiles)")
 		let fixtureFiles = Dictionary(uniqueKeysWithValues: fixture.enumerated().map { ("File\($0.offset).swift", $0.element) })
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: #require(output.generatedFiles)),
 			knownRight: DifferentialValuePath(
 				fixtureFiles: fixtureFiles,
@@ -1279,9 +1279,9 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 		mockedType: String,
 		productionExpression: String,
 		sourceLocation: SourceLocation = #_sourceLocation,
-	) throws {
+	) async throws {
 		let fixtureFiles = Dictionary(uniqueKeysWithValues: fixture.enumerated().map { ("File\($0.offset).swift", $0.element) })
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: #require(output.generatedFiles)),
 			knownRight: DifferentialValuePath(
 				fixtureFiles: fixtureFiles,

@@ -9588,23 +9588,24 @@ enum GraphFuzzerOracle {
 		isolatingValueGraphsOf isolatedSeeds: Set<UInt64> = [],
 		willRunSeed: @Sendable (UInt64) -> Void = { _ in },
 	) async throws -> [GraphFuzzerResult] {
+		await ProcessSlots.shared.takePlaceInLine(for: Test.current?.id)
 		var toolRuns = [GraphFuzzerToolRuns]()
 		for seed in seeds {
 			willRunSeed(seed)
 			await toolRuns.append(try self.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: features)))
 		}
-		return try results(of: toolRuns, isolatingValueGraphsOf: isolatedSeeds)
+		return try await results(of: toolRuns, isolatingValueGraphsOf: isolatedSeeds)
 	}
 
 	/// The oracle's verdict on graphs the tool already ran.
 	/// - Parameter isolatedSeeds: The seeds whose value graphs are each compared on their own.
-	static func results(of toolRuns: [GraphFuzzerToolRuns], isolatingValueGraphsOf isolatedSeeds: Set<UInt64> = []) throws -> [GraphFuzzerResult] {
+	static func results(of toolRuns: [GraphFuzzerToolRuns], isolatingValueGraphsOf isolatedSeeds: Set<UInt64> = []) async throws -> [GraphFuzzerResult] {
 		let compiledRuns = toolRuns.filter { $0.runsDifferFailure == nil }
 		// A graph that fails as a debug build is reported as one.
 		let compilationFailures = compileVerificationIsEnabled
-			? try compilationFailures(of: compiledRuns).merging(compilationFailures(of: compiledRuns.filter(\.fixture.compilesAsReleaseBuildToo), definesDebug: false)) { debugFailure, _ in debugFailure }
+			? try await compilationFailures(of: compiledRuns).merging(compilationFailures(of: compiledRuns.filter(\.fixture.compilesAsReleaseBuildToo), definesDebug: false)) { debugFailure, _ in debugFailure }
 			: [:]
-		let valueComparisons = try valueComparisons(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil }, isolatingValueGraphsOf: isolatedSeeds)
+		let valueComparisons = try await valueComparisons(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil }, isolatingValueGraphsOf: isolatedSeeds)
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
 			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.multiModuleFailures.first].compactMap(\.self) + renamedGraphFailures
@@ -9636,8 +9637,8 @@ enum GraphFuzzerOracle {
 	/// the tool generates. Nothing is exempted: a seam hands a hole's struct the memo of each value it defers, so a fill
 	/// creates the value where inline would. The graphs of one call are compared in one batch.
 	/// Nothing is compared when `compileVerificationIsEnabled` is `false`.
-	static func valueFailures(of toolRuns: [GraphFuzzerToolRuns]) throws -> [UInt64: GraphFuzzerFailure] {
-		try valueComparisons(of: toolRuns).failures
+	static func valueFailures(of toolRuns: [GraphFuzzerToolRuns]) async throws -> [UInt64: GraphFuzzerFailure] {
+		try await valueComparisons(of: toolRuns).failures
 	}
 
 	/// `valueFailures(of:)`, with the base corpus seeds whose value-oracle graph the comparator compared, failing or
@@ -9649,7 +9650,7 @@ enum GraphFuzzerOracle {
 	static func valueComparisons(
 		of toolRuns: [GraphFuzzerToolRuns],
 		isolatingValueGraphsOf isolatedSeeds: Set<UInt64> = [],
-	) throws -> (failures: [UInt64: GraphFuzzerFailure], comparedValueOracleSeeds: Set<UInt64>) {
+	) async throws -> (failures: [UInt64: GraphFuzzerFailure], comparedValueOracleSeeds: Set<UInt64>) {
 		let inspectedRuns = toolRuns.filter(\.isInspectedByValueOracle)
 		// A graph with a hole is compared with its visible build too, in which the seam builds the fulfilling type.
 		let visibleRuns = toolRuns.filter { runs in
@@ -9694,7 +9695,7 @@ enum GraphFuzzerOracle {
 				probes: storingFixture.differentialValueProbes(generatedFiles: holeFiles),
 			))
 		}
-		guard let comparisons = try compare(graphs + visibleGraphs + valueOracleGraphs, isolating: isolatedSeeds, filesToDelete: &filesToDelete) else { return ([:], []) }
+		guard let comparisons = try await compare(graphs + visibleGraphs + valueOracleGraphs, isolating: isolatedSeeds, filesToDelete: &filesToDelete) else { return ([:], []) }
 		let valueOracleComparisons = zip(valueOracleGraphs.map(\.runs), comparisons.suffix(valueOracleGraphs.count))
 		var failures = [UInt64: GraphFuzzerFailure]()
 		var comparedValueOracleSeeds = Set<UInt64>()
@@ -9775,7 +9776,7 @@ enum GraphFuzzerOracle {
 		_ graphs: [(runs: GraphFuzzerToolRuns, graph: DifferentialValueGraph)],
 		isolating isolatedSeeds: Set<UInt64>,
 		filesToDelete: inout [URL],
-	) throws -> [DifferentialValueGraphComparison]? {
+	) async throws -> [DifferentialValueGraphComparison]? {
 		var batches = [(indices: graphs.indices.filter { !isolatedSeeds.contains(graphs[$0].runs.fixture.seed) }, limits: DifferentialValueLimits())]
 		var isolatedSeedsInOrder = [UInt64]()
 		for (runs, _) in graphs where isolatedSeeds.contains(runs.fixture.seed) && !isolatedSeedsInOrder.contains(runs.fixture.seed) {
@@ -9786,7 +9787,7 @@ enum GraphFuzzerOracle {
 		}
 		var comparisons = [DifferentialValueGraphComparison?](repeating: nil, count: graphs.count)
 		for (indices, limits) in batches {
-			guard let batchComparisons = try DifferentialValueOracle.compare(graphs: indices.map { graphs[$0].graph }, limits: limits, filesToDelete: &filesToDelete) else { return nil }
+			guard let batchComparisons = try await DifferentialValueOracle.compare(graphs: indices.map { graphs[$0].graph }, limits: limits, filesToDelete: &filesToDelete) else { return nil }
 			for (index, comparison) in zip(indices, batchComparisons) {
 				comparisons[index] = comparison
 			}
@@ -10421,7 +10422,7 @@ enum GraphFuzzerOracle {
 	/// that depends on the iteration order of a `Set` or `Dictionary` of hashed values. This runs the
 	/// `SafeDITool` executable twice over the same fixture files and compares its exit status, diagnostics, and
 	/// combined output.
-	static func crossProcessFailure(of fixture: GraphFuzzerFixture) throws -> GraphFuzzerFailure? {
+	static func crossProcessFailure(of fixture: GraphFuzzerFixture) async throws -> GraphFuzzerFailure? {
 		guard let artifacts = SafeDIBuildArtifactLocator.locate() else {
 			throw GraphFuzzerInfrastructureError(description: "Could not locate SafeDI build artifacts to find the SafeDITool executable.")
 		}
@@ -10439,11 +10440,12 @@ enum GraphFuzzerOracle {
 		}
 		let inputsFile = directory.appendingPathComponent("inputs.csv")
 		try fixtureFiles.map(\.path).joined(separator: ",").write(to: inputsFile, atomically: true, encoding: .utf8)
-		let outputs = try (0..<2).map { run in
+		var outputs = [String]()
+		for run in 0..<2 {
 			let outputFile = directory.appendingPathComponent("Generated\(run).swift")
-			let result = try runProcess(toolURL, arguments: ["generate", inputsFile.path, "--combined-output", outputFile.path])
+			let result = try await runProcess(toolURL, arguments: ["generate", inputsFile.path, "--combined-output", outputFile.path])
 			let output = (try? String(contentsOf: outputFile, encoding: .utf8)) ?? ""
-			return "exit \(result.exitCode)\n\(result.stderr)\n\(output)"
+			outputs.append("exit \(result.exitCode)\n\(result.stderr)\n\(output)")
 		}
 		guard outputs[0] != outputs[1] else { return nil }
 		return GraphFuzzerFailure(seed: fixture.seed, kind: .runsDifferAcrossProcesses, details: "First process:\n\(outputs[0])\nSecond process:\n\(outputs[1])")
@@ -10735,7 +10737,7 @@ enum GraphFuzzerOracle {
 	/// that its fixture does not draw, as `verifyGeneratedCodeCompiles` fails a test (`warningsOnlyGeneratedCodeDraws`).
 	/// - Parameter definesDebug: Whether to compile as a debug build, which defines `DEBUG`, or as a release build, which
 	///   defines no condition, so that mock-only content and generated mocks are not compiled.
-	static func compilationFailures(of toolRuns: [GraphFuzzerToolRuns], definesDebug: Bool = true) throws -> [UInt64: GraphFuzzerFailure] {
+	static func compilationFailures(of toolRuns: [GraphFuzzerToolRuns], definesDebug: Bool = true) async throws -> [UInt64: GraphFuzzerFailure] {
 		guard !toolRuns.isEmpty else { return [:] }
 		guard let artifacts = SafeDIBuildArtifactLocator.locate() else {
 			throw GraphFuzzerInfrastructureError(
@@ -10816,7 +10818,7 @@ enum GraphFuzzerOracle {
 				guard !units.isEmpty else { continue }
 				let outputDirectory = fixtureDirectory.appendingPathComponent("compiled-\(configurationIndex)-\(module.name)")
 				try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-				let moduleCompilation = try compilation(
+				let moduleCompilation = try await compilation(
 					of: units,
 					outputDirectory: outputDirectory,
 					artifacts: artifacts,
@@ -10840,7 +10842,7 @@ enum GraphFuzzerOracle {
 			for (module, unit) in inputOnlyUnitsBySeed[seed] ?? [] {
 				let outputDirectory = seedDirectory.appendingPathComponent(module.name)
 				try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-				let unitCompilation = try compilation(
+				let unitCompilation = try await compilation(
 					of: [unit],
 					outputDirectory: outputDirectory,
 					artifacts: artifacts,
@@ -10946,9 +10948,9 @@ enum GraphFuzzerOracle {
 		emitsModule: Bool,
 		moduleSearchPaths: [URL],
 		definesDebug: Bool,
-	) throws -> UnitsCompilation {
-		func compile(_ units: [CompilationUnit]) throws -> SwiftCompileResult {
-			try compileSwift(
+	) async throws -> UnitsCompilation {
+		func compile(_ units: [CompilationUnit]) async throws -> SwiftCompileResult {
+			try await compileSwift(
 				sources: units.flatMap(\.sources),
 				outputDirectory: outputDirectory,
 				artifacts: artifacts,
@@ -10962,7 +10964,7 @@ enum GraphFuzzerOracle {
 		var remainingUnits = units
 		var compilation = UnitsCompilation()
 		while !remainingUnits.isEmpty {
-			let result = try compile(remainingUnits)
+			let result = try await compile(remainingUnits)
 			guard result.exitCode != 0 else {
 				for unit in remainingUnits {
 					try compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: result.stderr)
@@ -10993,7 +10995,7 @@ enum GraphFuzzerOracle {
 				// Nothing names a graph, so compile each graph on its own to find the failing ones.
 				var compilingUnits = [CompilationUnit]()
 				for unit in remainingUnits {
-					let unitResult = try compile([unit])
+					let unitResult = try await compile([unit])
 					if unitResult.exitCode != 0 {
 						compilation.failures[unit.seed] = UnitDiagnostics(standardError: unitResult.stderr)
 					} else {
@@ -11003,7 +11005,7 @@ enum GraphFuzzerOracle {
 				}
 				// The modules compiled after this one import the graphs that compile, together.
 				if emitsModule, !compilingUnits.isEmpty {
-					let result = try compile(compilingUnits)
+					let result = try await compile(compilingUnits)
 					if result.exitCode != 0 {
 						for unit in compilingUnits {
 							compilation.failures[unit.seed] = UnitDiagnostics(standardError: result.stderr)

@@ -348,6 +348,7 @@ func executeSafeDIToolMultiModuleTest(
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) async throws -> MultiModuleTestOutput {
+	await ProcessSlots.shared.takePlaceInLine(for: Test.current?.id)
 	let transitiveDependencies = try transitiveDependenciesByModuleName(of: modules)
 
 	let fixtureRoot = (TestFixtureLocation.parentDirectory ?? TestTemporaryDirectory.root).appendingPathComponent(UUID().uuidString)
@@ -592,7 +593,7 @@ func executeSafeDIToolMultiModuleTest(
 	let compilation: MultiModuleCompileOutcome? = switch compileVerification {
 	case .recordingIssues, .returningOutcomeOnly:
 		// A run given another run's module info is not compiled: it has no code for that module.
-		moduleInfoOverrides.isEmpty ? try verifyModulesCompile(
+		moduleInfoOverrides.isEmpty ? try await verifyModulesCompile(
 			writtenModules.map { module in
 				ModuleCompileSources(
 					moduleName: module.fixture.name,

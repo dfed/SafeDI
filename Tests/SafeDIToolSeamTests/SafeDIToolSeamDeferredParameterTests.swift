@@ -119,7 +119,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		}
 		""")
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(files), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		try expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -164,7 +164,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		}
 		""")
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(files), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		try expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -238,7 +238,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		}
 		""")
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(files), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		try expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -467,7 +467,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		}
 		""")
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(files), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		try expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: Hand-written initializers
@@ -685,7 +685,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			""",
 		])
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(files), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		try expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -751,7 +751,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			""",
 		])
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(files), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		try expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -817,7 +817,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			""",
 		])
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(files), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		try expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	/// `Root` builds `Outer`, a seam that holds `user` as a `LazilyInstantiated`, which is not `Sendable`, and builds
@@ -1220,7 +1220,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			""",
 		])
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(files), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		try expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: Tiers and modules
@@ -1491,7 +1491,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		])
 		#expect(output.warnings.map(\.formatted) == ["\(output.fixtures["Root.swift"]):8:5: warning: @Instantiated property `token: LazilyInstantiated<Secret>` is instantiated whenever `Root` is created: `Screen` is created with `Root` and receives the instance as `auth: any Auth`. To instantiate it lazily, receive `token: LazilyInstantiated<Secret>` on `Screen`."])
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(files), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		try expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -1524,7 +1524,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			""",
 		])
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(files), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		try expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -1621,7 +1621,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			""",
 		])
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(files), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		try expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: files, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: Deployment targets
@@ -1636,15 +1636,15 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			let files = Self.fixture(rootUser: "SendableLazilyInstantiated<User>", screenBuilder: "SendableInstantiator<Detail>")
 			let output = try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 			let seamFiles = (files.dropFirst() + [try #require(output.dependencyTreeFiles["Screen+SafeDI.swift"])]).map { "import SafeDI\n\n\($0)" }
-			let olderTargetErrors = try compileErrors(of: seamFiles, deploymentTarget: "14.0")
+			let olderTargetErrors = try await compileErrors(of: seamFiles, deploymentTarget: "14.0")
 			#expect(olderTargetErrors.contains { $0.contains("'SendableLazilyInstantiated' is only available in macOS 15.0 or newer") }, "\(olderTargetErrors)")
-			let newerTargetErrors = try compileErrors(of: seamFiles, deploymentTarget: "15.0")
+			let newerTargetErrors = try await compileErrors(of: seamFiles, deploymentTarget: "15.0")
 			#expect(newerTargetErrors == [])
 		}
 
 		/// The errors `swiftc` reports for `files`, type-checked against the SafeDI module the test build produced for a
 		/// macOS deployment target of `deploymentTarget` on this machine's architecture, as the verifier targets it.
-		private mutating func compileErrors(of files: [String], deploymentTarget: String) throws -> [String] {
+		private mutating func compileErrors(of files: [String], deploymentTarget: String) async throws -> [String] {
 			let directory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 			try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 			filesToDelete.append(directory)
@@ -1659,7 +1659,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			#else
 				let architecture = "x86_64"
 			#endif
-			let result = try runProcess(
+			let result = try await runProcess(
 				swiftCompilerCommand.executable,
 				arguments: swiftCompilerCommand.arguments + [
 					"-typecheck",

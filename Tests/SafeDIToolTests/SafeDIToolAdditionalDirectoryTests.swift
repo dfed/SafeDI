@@ -56,7 +56,7 @@ struct SafeDIToolAdditionalDirectoryTests: ~Copyable {
 		let outputWithoutScanCache = try project.removingGeneratedFiles()
 		#expect(outputWithoutScanCache == outputWithScanCache)
 		#expect(outputWithoutScanCache == Self.expectedOutput)
-		try verifyGeneratedCodeCompiles(
+		try await verifyGeneratedCodeCompiles(
 			inputSwiftFiles: project.targetFiles,
 			additionalDirectorySwiftFiles: [project.additionalDirectoryFile],
 			generatedFiles: outputWithoutScanCache,

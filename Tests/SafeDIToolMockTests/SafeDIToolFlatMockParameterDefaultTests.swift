@@ -84,7 +84,7 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		let path = try DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: #require(output.generatedFiles))
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: path,
 			knownRight: path,
 			probes: [DifferentialValueProbe(name: "Screen.mock()", expression: "Screen.mock()", knownRightExpression: "Screen(service: FakeService.mock())")],
@@ -188,7 +188,7 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		#endif
 		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
 		let path = try DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: #require(output.generatedFiles))
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: path,
 			knownRight: path,
 			probes: [DifferentialValueProbe(name: "Screen.mock()", expression: "Screen.mock()", knownRightExpression: "Screen(service: DefaultService.mock())")],
@@ -226,7 +226,7 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		#endif
 		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
 		let path = try DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: #require(output.generatedFiles))
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: path,
 			knownRight: path,
 			probes: [DifferentialValueProbe(name: "Screen.mock()", expression: "Screen.mock()", knownRightExpression: "Screen(service: FakeService.mock())")],

@@ -5542,7 +5542,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 	) async throws {
 		guard compileVerificationIsEnabled else { return }
 		let visibleOutput = try await executeSafeDIToolMultiModuleTest(modules: visibleModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: Self.differentialValuePath(of: output, modules: modules),
 			knownRight: Self.differentialValuePath(of: visibleOutput, modules: visibleModules),
 			probes: probes,

@@ -144,14 +144,14 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func verifyModulesCompile_compilesNothing_whenTheCacheHoldsTheCheckFromAnEarlierPass() throws {
+	func verifyModulesCompile_compilesNothing_whenTheCacheHoldsTheCheckFromAnEarlierPass() async throws {
 		var filesToDelete = [URL]()
 		defer { deleteAll(filesToDelete) }
 		let cacheFile = directory.appendingPathComponent("passed.txt")
 		let module = try compilingModule(generatedCode: "extension Fixture { func generated() -> Int { 1 } }\n")
 
-		let firstRun = try verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
-		let secondRun = try verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
+		let firstRun = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
+		let secondRun = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
 
 		#expect(try #require(firstRun).modules.map(\.exitCode) == [0])
 		#expect(try String(contentsOf: cacheFile, encoding: .utf8).split(separator: "\n").count == 1)
@@ -160,14 +160,14 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func verifyModulesCompile_recordsNothingInTheCache_whenGeneratedCodeFailsToCompile() throws {
+	func verifyModulesCompile_recordsNothingInTheCache_whenGeneratedCodeFailsToCompile() async throws {
 		var filesToDelete = [URL]()
 		defer { deleteAll(filesToDelete) }
 		let cacheFile = directory.appendingPathComponent("passed.txt")
 		let module = try compilingModule(generatedCode: "extension Fixture { func generated() -> Int { undeclared } }\n")
 
-		withKnownIssue("Generated code that does not compile records an issue") {
-			_ = try verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
+		await withKnownIssue("Generated code that does not compile records an issue") {
+			_ = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
 		}
 
 		#expect(!FileManager.default.fileExists(atPath: cacheFile.path))
@@ -175,14 +175,14 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func verifyModulesCompile_recordsNothingInTheCache_whenGeneratedCodeDrawsAWarning() throws {
+	func verifyModulesCompile_recordsNothingInTheCache_whenGeneratedCodeDrawsAWarning() async throws {
 		var filesToDelete = [URL]()
 		defer { deleteAll(filesToDelete) }
 		let cacheFile = directory.appendingPathComponent("passed.txt")
 		let module = try compilingModule(generatedCode: "extension Fixture { func generated() { let unused = 1 } }\n")
 
-		withKnownIssue("A warning in generated code records an issue") {
-			_ = try verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
+		await withKnownIssue("A warning in generated code records an issue") {
+			_ = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
 		}
 
 		#expect(!FileManager.default.fileExists(atPath: cacheFile.path))
@@ -190,15 +190,15 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func verifyModulesCompile_compilesAndRecordsNothing_whenItReturnsTheOutcomeOfACheckTheCacheHolds() throws {
+	func verifyModulesCompile_compilesAndRecordsNothing_whenItReturnsTheOutcomeOfACheckTheCacheHolds() async throws {
 		// A test that asserts on the outcome needs one, so a call that records no issues always compiles.
 		var filesToDelete = [URL]()
 		defer { deleteAll(filesToDelete) }
 		let cacheFile = directory.appendingPathComponent("passed.txt")
 		let module = try compilingModule(generatedCode: "extension Fixture { func generated() -> Int { 1 } }\n")
-		_ = try verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
+		_ = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
 
-		let outcome = try verifyModulesCompile([module], recordsIssues: false, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
+		let outcome = try await verifyModulesCompile([module], recordsIssues: false, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
 
 		#expect(try #require(outcome).modules.map(\.exitCode) == [0])
 		#expect(try String(contentsOf: cacheFile, encoding: .utf8).split(separator: "\n").count == 1)

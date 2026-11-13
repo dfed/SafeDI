@@ -49,8 +49,8 @@ struct TestTemporaryDirectoryTests: ~Copyable {
 	// MARK: Tests – Removing abandoned directories
 
 	@Test
-	func removeAbandonedRoots_removesTheDirectory_whenItsProcessNoLongerRuns() throws {
-		let root = try makeRoot(processIdentifier: exitedProcessIdentifier())
+	func removeAbandonedRoots_removesTheDirectory_whenItsProcessNoLongerRuns() async throws {
+		let root = try await makeRoot(processIdentifier: exitedProcessIdentifier())
 
 		TestTemporaryDirectory.removeAbandonedRoots(in: parentDirectory)
 
@@ -76,8 +76,8 @@ struct TestTemporaryDirectoryTests: ~Copyable {
 	}
 
 	@Test
-	func removeAbandonedRoots_keepsAnEntryNotNamedAsATestProcessDirectory() throws {
-		let directory = parentDirectory.appendingPathComponent("heavy-\(try exitedProcessIdentifier())")
+	func removeAbandonedRoots_keepsAnEntryNotNamedAsATestProcessDirectory() async throws {
+		let directory = try await parentDirectory.appendingPathComponent("heavy-\(exitedProcessIdentifier())")
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
 		TestTemporaryDirectory.removeAbandonedRoots(in: parentDirectory, now: Date().addingTimeInterval(25 * 60 * 60))
@@ -88,15 +88,15 @@ struct TestTemporaryDirectoryTests: ~Copyable {
 	// MARK: Tests – Running a process
 
 	@Test
-	func runProcess_givesTheProcessATemporaryDirectoryUnderTheRoot() throws {
-		let result = try runProcess(URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "printf %s \"$TMPDIR\""])
+	func runProcess_givesTheProcessATemporaryDirectoryUnderTheRoot() async throws {
+		let result = try await runProcess(URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "printf %s \"$TMPDIR\""])
 
 		#expect(result.stdout.hasPrefix(TestTemporaryDirectory.root.path + "/"), "Unexpected TMPDIR \(result.stdout)")
 	}
 
 	@Test
-	func runProcess_pointsTheProcessCoverageProfileIntoItsTemporaryDirectory() throws {
-		let result = try runProcess(URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "printf '%s\\n%s' \"$TMPDIR\" \"$LLVM_PROFILE_FILE\""])
+	func runProcess_pointsTheProcessCoverageProfileIntoItsTemporaryDirectory() async throws {
+		let result = try await runProcess(URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "printf '%s\\n%s' \"$TMPDIR\" \"$LLVM_PROFILE_FILE\""])
 		let lines = result.stdout.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
 		#expect(lines.count == 2, "Unexpected output \(result.stdout)")
@@ -104,8 +104,8 @@ struct TestTemporaryDirectoryTests: ~Copyable {
 	}
 
 	@Test
-	func runProcess_deletesWhatTheProcessWroteToItsTemporaryDirectory_whenTheProcessExits() throws {
-		let result = try runProcess(
+	func runProcess_deletesWhatTheProcessWroteToItsTemporaryDirectory_whenTheProcessExits() async throws {
+		let result = try await runProcess(
 			URL(fileURLWithPath: "/bin/sh"),
 			arguments: ["-c", "mkdir \"${TMPDIR}TemporaryDirectory.test\" && printf %s \"${TMPDIR}TemporaryDirectory.test\""],
 		)
@@ -127,13 +127,9 @@ struct TestTemporaryDirectoryTests: ~Copyable {
 	}
 
 	/// The identifier of a process that has exited, which no other process takes in the moment before the test reads it.
-	private func exitedProcessIdentifier() throws -> Int32 {
-		let process = Process()
-		process.executableURL = URL(fileURLWithPath: "/bin/sh")
-		process.arguments = ["-c", "exit 0"]
-		process.environment = TestTemporaryDirectory.environment(withTemporaryDirectory: parentDirectory)
-		try process.run()
-		process.waitUntilExit()
-		return process.processIdentifier
+	private func exitedProcessIdentifier() async throws -> Int32 {
+		// The shell prints its own process identifier, which is the identifier of the process `runProcess` launched.
+		let result = try await runProcess(URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "printf %s \"$$\""])
+		return try #require(Int32(result.stdout), "Unexpected output \(result.stdout)")
 	}
 }

@@ -183,7 +183,7 @@ struct SafeDIToolCompileVerifierTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func verifyModulesCompile_reportsGeneratedCodeWarning_whenSourceLocationDirectiveAttributesItToFixture() throws {
+	func verifyModulesCompile_reportsGeneratedCodeWarning_whenSourceLocationDirectiveAttributesItToFixture() async throws {
 		// The fixture is staged under another name, so the directive names a file the compile is not given, as a
 		// directive SafeDITool generates names the fixture `executeSafeDIToolTest` wrote.
 		let fixture = directory.appendingPathComponent("Fixture.swift")
@@ -195,7 +195,7 @@ struct SafeDIToolCompileVerifierTests: ~Copyable {
 			}
 		}
 
-		let compilation = try #require(try verifyModulesCompile(
+		let compilation = try #require(try await verifyModulesCompile(
 			[ModuleCompileSources(
 				moduleName: "Probe",
 				packageName: nil,
@@ -234,7 +234,7 @@ struct SafeDIToolCompileVerifierTests: ~Copyable {
 		let results = try await withThrowingTaskGroup(of: SwiftCompileResult.self) { group in
 			for _ in 0..<runCount {
 				group.addTask {
-					try runProcess(URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "echo \"\(line)\" >&2; echo done"])
+					try await runProcess(URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "echo \"\(line)\" >&2; echo done"])
 				}
 			}
 			return try await group.reduce(into: [SwiftCompileResult]()) { $0.append($1) }

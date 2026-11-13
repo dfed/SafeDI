@@ -164,7 +164,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		// The twin, whose `package` own initializer makes the package tier by itself: the same files, byte for byte.
 		#expect(try #require(twinOutput.modules["Feature"]).generatedFiles == expectedFeatureFiles[integration])
 		#expect(try #require(twinOutput.modules["Mid"]).generatedFiles == expectedMidFiles[integration])
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: Self.path(featureFiles: featureFiles, midFiles: [Self.midRoot, Self.midShell], output: output),
 			knownRight: Self.path(featureFiles: twinFeatureFiles, midFiles: [Self.midRoot, Self.midShell], output: twinOutput),
 			probes: [DifferentialValueProbe("MidRoot().shellBuilder.instantiate((theme: Theme(), title: \"title\"))")],
@@ -1354,7 +1354,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			],
 		]
 		#expect(try #require(inlineOutput.modules["Mid"]).generatedFiles == expectedInlineMidFiles[integration])
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: Self.path(featureFiles: featureFiles, midFiles: midFiles, output: output),
 			knownRight: Self.path(featureFiles: featureFiles, midFiles: inlineMidFiles, output: inlineOutput),
 			probes: [DifferentialValueProbe("MidRoot().holderBuilder.instantiate(Logger())")],
