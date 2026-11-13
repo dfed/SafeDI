@@ -10653,6 +10653,68 @@ import Testing
 		}
 
 		@Test
+		func declaration_producesDiagnostic_whenASCIIPropertyNameFollowsAnEquivalentNonASCIIPropertyName() {
+			// U+212A KELVIN SIGN is equal as a `String` to the letter K, which is ASCII.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Service: Instantiable {
+				    @Instantiated let \u{212A}: First
+				    @Instantiated let K: Second
+				    public init(\u{212A}: First, K: Second) {}
+				}
+				""",
+				expandedSource: """
+				public final class Service: Instantiable {
+				    let \u{212A}: First
+				    let K: Second
+				    public init(\u{212A}: First, K: Second) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The names `\u{212A}` (U+212A) and `K` (U+004B) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them.",
+						line: 4,
+						column: 23,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesDiagnostic_whenNonASCIIParameterNameFollowsAnEquivalentASCIIPropertyName() {
+			// Every name before the last is ASCII, so the last is compared with names spelled before any name needed comparing.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Service: Instantiable {
+				    @Instantiated let first: First
+				    @Instantiated let K: Second
+				    public init(first: First, K: Second, \u{212A}: Third = Third()) {}
+				}
+				""",
+				expandedSource: """
+				public final class Service: Instantiable {
+				    let first: First
+				    let K: Second
+				    public init(first: First, K: Second, \u{212A}: Third = Third()) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The names `K` (U+004B) and `\u{212A}` (U+212A) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them.",
+						line: 5,
+						column: 42,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func declaration_expandsWithoutIssue_whenTwoPropertyNamesAreByteIdentical() {
 			// The compiler reports the redeclaration of a name spelled the same way twice in one clause.
 			assertMacroExpansion(
