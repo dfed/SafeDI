@@ -60,6 +60,8 @@ public struct Generate: AsyncParsableCommand {
 
 	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path — one header, bodies joined in source-file order, deterministic for stable inputs. Intended for build systems that need rule outputs statically declared at analysis time (Bazel). Requires 'swift-sources-file-path' or '--include'. Cannot be combined with '--output-directory' or '--swift-manifest' — those are per-file emission modes. May be combined with '--module-info-output'. The combined file is written only when its bytes change, so a build that compares modification times recompiles only what changed.") var combinedOutput: String?
 
+	@Option(help: "PROTOTYPE. With '--combined-output', writes the mocks generated for the module's own source files into this many files beside the combined output, named '<combined output without .swift>.mocks.<index>.swift' (index from 0), each source file's mocks in the file a stable hash of its path picks. Every one of these files is written, holding only its header when no mock lands in it, so a build system can declare them in advance. The combined file keeps the dependency trees, the additional mocks and the mock configuration.") var combinedOutputMockFileCount: Int?
+
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
 
 	@Option(help: "The name of the module this run generates code for: the module that compiles the files the input CSV and '--include' name. Each of those files' declarations, and the '--module-info-output' file, record it, so a module that reads the file knows which module declares each type. Files reached through a #SafeDIConfiguration's additionalDirectoriesToInclude belong to another module. Without this option and '--package-name', a run with '--swift-manifest' or '--output-directory' reads the module of each file from the target graph the SafeDIGenerator plugin writes beside its input CSV. Either way, the '--module-info-output' file also records, as modules this one depends on, the module each '--dependent-module-info-file-path' file, and each '--transitive-module-info-file-path' file this run reads, records.") var moduleName: String?
@@ -166,6 +168,14 @@ public struct Generate: AsyncParsableCommand {
 		// needed (or meaningful) when the whole output is one file.
 		if combinedOutput != nil, outputDirectory != nil || swiftManifest != nil {
 			throw ValidationError("--combined-output is mutually exclusive with --output-directory and --swift-manifest. Use --combined-output alone for a single output file, or one of the others for per-file outputs.")
+		}
+		if let combinedOutputMockFileCount {
+			guard combinedOutput != nil else {
+				throw ValidationError("--combined-output-mock-file-count requires --combined-output.")
+			}
+			guard combinedOutputMockFileCount >= 1 else {
+				throw ValidationError("--combined-output-mock-file-count must be at least 1.")
+			}
 		}
 
 		// The conditions the compiler receives, when the build system expanded them into this command's
@@ -476,6 +486,12 @@ public struct Generate: AsyncParsableCommand {
 				"""
 				if let combinedOutput {
 					try errorContent.write(toPath: combinedOutput)
+					// PROTOTYPE: every declared mock file exists, without code, so none keeps an earlier build's.
+					if let combinedOutputMockFileCount {
+						for index in 0..<combinedOutputMockFileCount {
+							try Self.mockFileWithoutCode.write(toPath: Self.mockFilePath(index: index, besideCombinedOutput: combinedOutput))
+						}
+					}
 				} else if let manifest {
 					// Every planned output, so that none is missing or keeps the code of an earlier build.
 					for outputFilePath in (manifest.dependencyTreeGeneration + manifest.mockGeneration).map(\.outputFilePath) + [manifest.mockConfigurationOutputFilePath].compactMap(\.self) {
@@ -610,13 +626,16 @@ public struct Generate: AsyncParsableCommand {
 				// made from its body. Generated mocks compile only where the
 				// mock condition is active, so they import what the module's
 				// `#if` blocks select there.
-				var writes: [(destination: URL?, holdsMockCode: Bool, body: String, fulfillers: Set<FulfillerImports.Fulfiller>)] = []
-				func appendWrite(destination: URL?, holdsMockCode: Bool, roots: [DependencyTreeGenerator.GeneratedRoot]) {
+				// `mockSourceFilePath` is the source file whose mocks a combined-output write holds, which
+				// `--combined-output-mock-file-count` places by.
+				var writes: [(destination: URL?, holdsMockCode: Bool, body: String, fulfillers: Set<FulfillerImports.Fulfiller>, mockSourceFilePath: String?)] = []
+				func appendWrite(destination: URL?, holdsMockCode: Bool, roots: [DependencyTreeGenerator.GeneratedRoot], mockSourceFilePath: String? = nil) {
 					writes.append((
 						destination: destination,
 						holdsMockCode: holdsMockCode,
 						body: roots.map(\.code).sorted().joined(separator: "\n\n"),
 						fulfillers: Set(roots.flatMap(\.fulfillers)),
+						mockSourceFilePath: mockSourceFilePath,
 					))
 				}
 
@@ -728,13 +747,14 @@ public struct Generate: AsyncParsableCommand {
 								holdsMockCode: true,
 								body: mockResult.mockConfigurationCode ?? "",
 								fulfillers: mockResult.mockConfigurationFulfillers,
+								mockSourceFilePath: nil,
 							))
 						}
 					} else {
 						// Combined mode: per-source mocks sorted, then
 						// per-type-name additional mocks sorted.
 						for sourceFile in currentModuleMockSourceFiles {
-							appendWrite(destination: nil, holdsMockCode: true, roots: sourceFileToMockExtensions[sourceFile, default: []])
+							appendWrite(destination: nil, holdsMockCode: true, roots: sourceFileToMockExtensions[sourceFile, default: []], mockSourceFilePath: sourceFile)
 						}
 						// Skip types already emitted via the per-source loop.
 						for typeName in Set(additionalMocksToGenerate).sorted()
@@ -745,7 +765,7 @@ public struct Generate: AsyncParsableCommand {
 						if let mockConfigurationCode = mockResult.mockConfigurationCode,
 						   !mockConfigurationCode.isEmpty
 						{
-							writes.append((destination: nil, holdsMockCode: true, body: mockConfigurationCode, fulfillers: mockResult.mockConfigurationFulfillers))
+							writes.append((destination: nil, holdsMockCode: true, body: mockConfigurationCode, fulfillers: mockResult.mockConfigurationFulfillers, mockSourceFilePath: nil))
 						}
 					}
 				}
@@ -758,21 +778,49 @@ public struct Generate: AsyncParsableCommand {
 					// header-only file so the build system's declared
 					// output is populated. A file that holds mocks imports
 					// what both the dependency tree and the mocks need.
-					let bodies = writes.map(\.body).filter { !$0.isEmpty }
+					// PROTOTYPE: with `--combined-output-mock-file-count`, each source file's mocks leave the
+					// combined file for the mock file a stable hash of its path picks.
+					let combinedWrites = if combinedOutputMockFileCount != nil {
+						writes.filter { $0.mockSourceFilePath == nil }
+					} else {
+						writes
+					}
+					let combinedHoldsMockCode = if combinedOutputMockFileCount != nil {
+						combinedWrites.contains(where: \.holdsMockCode)
+					} else {
+						hasAnyMockGeneration
+					}
+					if let combinedOutputMockFileCount {
+						var writesByMockFile = [[(body: String, fulfillers: Set<FulfillerImports.Fulfiller>)]](repeating: [], count: combinedOutputMockFileCount)
+						for write in writes {
+							if let mockSourceFilePath = write.mockSourceFilePath {
+								writesByMockFile[Self.mockFileIndex(ofSourceFilePath: mockSourceFilePath, mockFileCount: combinedOutputMockFileCount)].append((body: write.body, fulfillers: write.fulfillers))
+							}
+						}
+						for (index, mockFileWrites) in writesByMockFile.enumerated() {
+							let mockCode = UnreadTypeComment.resolvingMarkers(in: mockFileWrites.map(\.body).filter { !$0.isEmpty }.joined(separator: "\n\n"))
+							let header = await generator.fileHeader(
+								for: .mock(code: mockCode, mockConditionalCompilation: mockConditionalCompilation),
+								building: Set(mockFileWrites.flatMap(\.fulfillers)),
+							)
+							try Data((header + compileTimeAssertions + mockCode).utf8).writeIfChanged(toPath: Self.mockFilePath(index: index, besideCombinedOutput: combinedOutput))
+						}
+					}
+					let bodies = combinedWrites.map(\.body).filter { !$0.isEmpty }
 					// One comment names the types the file's `public` declarations name that SafeDI reads no declaration of.
 					let combinedBody = UnreadTypeComment.resolvingMarkers(in: bodies.joined(separator: "\n\n"))
 					// The header reads the dependency-tree code apart from the mock code, which compiles only under the mock
 					// condition.
-					let combinedContent: DependencyTreeGenerator.GeneratedFileContent = if hasAnyMockGeneration {
+					let combinedContent: DependencyTreeGenerator.GeneratedFileContent = if combinedHoldsMockCode {
 						.dependencyTreeAndMock(
-							dependencyTreeCode: UnreadTypeComment.resolvingMarkers(in: writes.filter { !$0.holdsMockCode }.map(\.body).joined(separator: "\n\n")),
-							mockCode: UnreadTypeComment.resolvingMarkers(in: writes.filter(\.holdsMockCode).map(\.body).joined(separator: "\n\n")),
+							dependencyTreeCode: UnreadTypeComment.resolvingMarkers(in: combinedWrites.filter { !$0.holdsMockCode }.map(\.body).joined(separator: "\n\n")),
+							mockCode: UnreadTypeComment.resolvingMarkers(in: combinedWrites.filter(\.holdsMockCode).map(\.body).joined(separator: "\n\n")),
 							mockConditionalCompilation: mockConditionalCompilation,
 						)
 					} else {
 						.dependencyTree(code: combinedBody)
 					}
-					let code = await generator.fileHeader(for: combinedContent, building: Set(writes.flatMap(\.fulfillers))) + compileTimeAssertions + combinedBody
+					let code = await generator.fileHeader(for: combinedContent, building: Set(combinedWrites.flatMap(\.fulfillers))) + compileTimeAssertions + combinedBody
 					// Written only when its bytes change, so a build that compares modification times, as Xcode does for a
 					// script phase's outputs, recompiles the module only when its generated code changed. Bazel removes an
 					// action's outputs before it runs, so every Bazel run writes the file it declares.
@@ -1915,4 +1963,31 @@ struct UnreadableModuleInfoError: Error, CustomStringConvertible {
 	var description: String {
 		"Could not read the SafeDI module info file at \(path): \(reason) \(BinaryFile.unreadableFileExplanation)"
 	}
+}
+
+// PROTOTYPE: `--combined-output-mock-file-count`.
+extension Generate {
+	/// The mock file a source file's mocks go to: a 64-bit FNV-1a hash of its path as the input names it, the same on
+	/// every platform and in every process, modulo the file count.
+	static func mockFileIndex(ofSourceFilePath sourceFilePath: String, mockFileCount: Int) -> Int {
+		var hash: UInt64 = 0xCBF29CE484222325
+		for byte in sourceFilePath.utf8 {
+			hash ^= UInt64(byte)
+			hash = hash &* 0x00000100000001B3
+		}
+		return Int(hash % UInt64(mockFileCount))
+	}
+
+	/// `<combined output without .swift>.mocks.<index>.swift`.
+	static func mockFilePath(index: Int, besideCombinedOutput combinedOutput: String) -> String {
+		let stem = combinedOutput.hasSuffix(".swift") ? String(combinedOutput.dropLast(".swift".count)) : combinedOutput
+		return "\(stem).mocks.\(index).swift"
+	}
+
+	static let mockFileWithoutCode = """
+	// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+	// Any modifications made to this file will be overwritten on subsequent builds.
+	// Please refrain from editing this file directly.
+
+	"""
 }
