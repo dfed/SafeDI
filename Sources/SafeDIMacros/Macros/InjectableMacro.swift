@@ -331,7 +331,7 @@ public struct InjectableMacro: PeerMacro {
 		{
 			remainingArguments[lastRemainingIndex].trailingComma = lastArgument.trailingComma
 		}
-		return LabeledExprListSyntax(remainingArguments)
+		return remainingArguments
 	}
 
 	/// `type` with every optional spelling around it removed (`X?`, `X!`, and `Optional<X>`), or `nil` when it is

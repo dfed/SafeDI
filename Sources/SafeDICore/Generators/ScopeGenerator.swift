@@ -1502,7 +1502,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		var findings = OmissionFindings<SeamTierOmission>()
 		for child in orderedChildren {
-			guard case let .property(childInstantiable, childProperty, _, _, isPropertyCycle, seamCall) = child.generator.scopeData else { continue }
+			guard case let .property(childInstantiable, _, _, _, isPropertyCycle, seamCall) = child.generator.scopeData else { continue }
 			if isPropertyCycle {
 				// A scope that closes a cycle constructs nothing: it calls the builder function of the declaration it repeats.
 				findings.recordCalls(by: child, of: child.generator.closedOnDeclaration.flatMap { enclosingCycleFunctions[$0] }, among: childDeclarationsByLabel)
@@ -6366,7 +6366,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					insideSendableScope: childInsideSendable,
 					propertiesGeneratedLater: childBodyPropertiesGeneratedLater,
 				)
-				let childConstructionUnavailableProperties = await childGenerator.bodyUnavailableProperties(childUnavailableProperties)
+				let childConstructionUnavailableProperties = childGenerator.bodyUnavailableProperties(childUnavailableProperties)
 
 				// Determine which initializer to use for construction arguments and defaults.
 				// When the child has a compatible mock method, it fully controls the
