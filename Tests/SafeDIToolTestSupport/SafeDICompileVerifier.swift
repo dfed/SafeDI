@@ -167,12 +167,16 @@ private func locateBuildArtifacts(sourceLocation: SourceLocation) -> SafeDIBuild
 }
 
 /// How the compiler that verifies a module is configured beyond the conditions it defines: the language mode, the
-/// upcoming features it enables, and whether each file is given `import SafeDI`.
+/// upcoming features it enables, the module's default isolation, and whether each file is given `import SafeDI`.
 struct VerificationCompilerSettings {
 	/// The `-swift-version` the module compiles in.
 	var swiftLanguageMode = "6"
 	/// The upcoming features the compile enables, each passed as `-enable-upcoming-feature`.
 	var upcomingFeatures = [String]()
+	/// The isolation the module's declarations default to, passed as `-default-isolation` (`MainActor`, as SwiftPM's
+	/// `defaultIsolation(MainActor.self)` and a new Xcode 26 app target set it), or `nil` to pass none, so that they
+	/// are nonisolated by default.
+	var defaultIsolation: String?
 	/// Whether `stageCompileSources` prepends `import SafeDI` to every file. A fixture that spells its own import of
 	/// SafeDI, as one that gives an import an access level must, since an import without one beside it is ambiguous,
 	/// passes `false`, and its generated files import SafeDI as the fixture's files do.
@@ -333,6 +337,7 @@ private func compileModule(
 			definesDebug: module.definesDebug,
 			swiftLanguageMode: module.compilerSettings.swiftLanguageMode,
 			upcomingFeatures: module.compilerSettings.upcomingFeatures,
+			defaultIsolation: module.compilerSettings.defaultIsolation,
 		)
 	}
 
@@ -633,6 +638,8 @@ func stageCompileSources(
 ///     condition `activeCompilationConditions` spells `DEBUG`.
 ///   - swiftLanguageMode: The `-swift-version` to compile in.
 ///   - upcomingFeatures: The upcoming features to enable, each passed as `-enable-upcoming-feature`.
+///   - defaultIsolation: The isolation the module's declarations default to, passed as `-default-isolation`, or `nil`
+///     to pass none.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func compileSwift(
 	sources: [URL],
@@ -648,6 +655,7 @@ func compileSwift(
 	definesDebug: Bool = true,
 	swiftLanguageMode: String = "6",
 	upcomingFeatures: [String] = [],
+	defaultIsolation: String? = nil,
 ) throws -> SwiftCompileResult {
 	var arguments = swiftCompilerCommand.arguments
 	arguments.append(contentsOf: [
@@ -666,6 +674,9 @@ func compileSwift(
 	])
 	for upcomingFeature in upcomingFeatures {
 		arguments.append(contentsOf: ["-enable-upcoming-feature", upcomingFeature])
+	}
+	if let defaultIsolation {
+		arguments.append(contentsOf: ["-default-isolation", defaultIsolation])
 	}
 	if definesDebug {
 		arguments.append("-DDEBUG")

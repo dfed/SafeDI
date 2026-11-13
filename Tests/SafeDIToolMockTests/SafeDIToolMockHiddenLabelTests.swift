@@ -1980,7 +1980,7 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            promoted: __safeDI_Promoted_MockConfiguration = .init()
 		        ) {

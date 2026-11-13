@@ -576,7 +576,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            user: (() -> User)? = nil
 		        ) {
@@ -1818,7 +1818,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init() {
 		            self.badgeBuilder = nil
 		        }
@@ -1987,7 +1987,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init() {
 		            self.badge = nil
 		        }

@@ -187,7 +187,7 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            database: (() -> Database)? = nil,
 		            cache: ((Database, Logger?) -> Cache)? = nil,

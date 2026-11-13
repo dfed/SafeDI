@@ -1666,7 +1666,7 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 	#if DEBUG
 	extension Feature {
 	    /// Overrides for the mock dependency tree.
-	    public struct SafeDIOverrides {
+	    nonisolated public struct SafeDIOverrides {
 	        public init(
 	            thing: __safeDI_App_DefaultThing_MockConfiguration = .init()
 	        ) {
@@ -1697,7 +1697,7 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 	private static let publicMockedFeatureConfiguration = """
 	#if DEBUG
 	/// Configuration for how `DefaultThing` is constructed within the public mock trees of module `App`.
-	public struct __safeDI_App_DefaultThing_MockConfiguration {
+	nonisolated public struct __safeDI_App_DefaultThing_MockConfiguration {
 	    public init(
 	        clock: (() -> Clock)? = nil,
 	        _ safeDIBuilder: ((Clock) -> DefaultThing)? = nil

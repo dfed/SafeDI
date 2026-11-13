@@ -448,7 +448,7 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Session` is constructed within the public mock trees of this module.
-			public struct __safeDI_Session_MockConfiguration {
+			nonisolated public struct __safeDI_Session_MockConfiguration {
 			    public init(
 			        `inout`: Int? = nil,
 			        _ safeDIBuilder: ((Int) -> Session)? = nil
@@ -480,7 +480,7 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_default() -> String? { "default" }
 
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            session: __safeDI_Session_MockConfiguration = .init(),
 			            `default`: String? = Service.__safeDI_publicMockDefault_default()

@@ -477,7 +477,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		    }
 
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            innerScreen: ((Clock) -> InnerScreen)? = nil
 		        ) {

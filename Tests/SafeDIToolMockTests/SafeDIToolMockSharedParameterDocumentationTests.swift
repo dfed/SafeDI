@@ -1397,7 +1397,7 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            zebra: (([String]) -> Zebra)? = nil,
 		            apple: (([String]) -> Apple)? = nil

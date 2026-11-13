@@ -727,7 +727,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Outer {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            screen: (() -> Screen)? = nil
 		        ) {
@@ -801,7 +801,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#if DEBUG
 			extension Service {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            zebra: (() -> Zebra)? = nil,
 			            apple: (() -> Apple)? = nil,
@@ -941,7 +941,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Holder {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            child: __safeDI_Core_Child_MockConfiguration = .init()
 		        ) {
@@ -975,7 +975,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		let childConfiguration = """
 		#if DEBUG
 		/// Configuration for how `Child` is constructed within the public mock trees of module `Core`.
-		public struct __safeDI_Core_Child_MockConfiguration {
+		nonisolated public struct __safeDI_Core_Child_MockConfiguration {
 		    public init() {
 		        self.grand = nil
 		        self.safeDIBuilder = nil
@@ -1093,7 +1093,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#if DEBUG
 			extension Service {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            analytics: (() -> Analytics)? = nil
 			        ) {
@@ -1158,7 +1158,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
-			public struct __safeDI_Child_MockConfiguration {
+			nonisolated public struct __safeDI_Child_MockConfiguration {
 			    public init(
 			        capacity: Int? = nil
 			    ) {
@@ -1196,7 +1196,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#if DEBUG
 			extension Service {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            child: __safeDI_Child_MockConfiguration = .init()
 			        ) {
@@ -1268,7 +1268,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#if DEBUG
 			extension Root {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            childBuilder: __safeDI_Child_MockConfiguration = .init()
 			        ) {
@@ -1305,7 +1305,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Grand` is constructed within the public mock trees of this module.
-			public struct __safeDI_Grand_MockConfiguration {
+			nonisolated public struct __safeDI_Grand_MockConfiguration {
 			    public init(
 			        capacity: @autoclosure @escaping @Sendable () -> Int? = nil,
 			        label: @autoclosure @escaping @Sendable () -> String? = __safeDI_Grand_mockDefault_label(),
@@ -1334,7 +1334,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			@usableFromInline nonisolated func __safeDI_Grand_mockDefault_label() -> String? { Grand.__safeDI_mockDefault_label() }
 
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
-			public struct __safeDI_Child_MockConfiguration {
+			nonisolated public struct __safeDI_Child_MockConfiguration {
 			    public init(
 			        grand: __safeDI_Grand_MockConfiguration = .init(),
 			        _ safeDIBuilder: (@Sendable (Grand) -> Child)? = nil
@@ -1529,7 +1529,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#if DEBUG
 			extension Root {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init() {
 			            self.child = nil
 			        }
@@ -1625,7 +1625,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Config` is constructed within the public mock trees of this module.
-			public struct __safeDI_Config_MockConfiguration {
+			nonisolated public struct __safeDI_Config_MockConfiguration {
 			    public init(
 			        capacity: Int? = nil,
 			        _ safeDIBuilder: ((Int) -> Config)? = nil
@@ -1666,7 +1666,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            config: __safeDI_Config_MockConfiguration = .init(),
 			            child: ((Config, Config) -> Child)? = nil,
@@ -1789,7 +1789,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#if DEBUG
 			extension Root {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            shelf: __safeDI_Shelf_MockConfiguration = .init(),
 			            service: __safeDI_ConcreteService_MockConfiguration = .init(),
@@ -1839,7 +1839,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Shelf` is constructed within the public mock trees of this module.
-			public struct __safeDI_Shelf_MockConfiguration {
+			nonisolated public struct __safeDI_Shelf_MockConfiguration {
 			    public init(
 			        capacity: Int? = nil,
 			        label: String? = nil,
@@ -1866,7 +1866,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 
 			/// Configuration for how `ConcreteService` is constructed within the public mock trees of this module.
-			public struct __safeDI_ConcreteService_MockConfiguration {
+			nonisolated public struct __safeDI_ConcreteService_MockConfiguration {
 			    public init(
 			        retries: Int? = nil,
 			        _ safeDIBuilder: ((Int) -> ConcreteService)? = nil
@@ -1889,7 +1889,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 
 			/// Configuration for how `Feed.ViewModel` is constructed within the public mock trees of this module.
-			public struct __safeDI_Feed_ViewModel_MockConfiguration {
+			nonisolated public struct __safeDI_Feed_ViewModel_MockConfiguration {
 			    public init(
 			        title: String? = __safeDI_Feed_ViewModel_mockDefault_title(),
 			        _ safeDIBuilder: ((String?) -> Feed.ViewModel)? = nil
@@ -1913,7 +1913,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			@usableFromInline nonisolated func __safeDI_Feed_ViewModel_mockDefault_title() -> String? { Feed.ViewModel.__safeDI_mockDefault_title() }
 
 			/// Configuration for how `Feed_ViewModel` is constructed within the public mock trees of this module.
-			public struct __safeDI_Feed_ViewModel__MockConfiguration {
+			nonisolated public struct __safeDI_Feed_ViewModel__MockConfiguration {
 			    public init(
 			        title: String? = __safeDI_Feed_ViewModel__mockDefault_title(),
 			        _ safeDIBuilder: ((String?) -> Feed_ViewModel)? = nil
@@ -1959,7 +1959,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#if DEBUG
 			extension A {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            b: __safeDI_B_MockConfiguration = .init()
 			        ) {
@@ -1997,7 +1997,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `A` is constructed within the public mock trees of this module.
-			public struct __safeDI_A_MockConfiguration {
+			nonisolated public struct __safeDI_A_MockConfiguration {
 			    public init(
 			        b: __safeDI_B_MockConfiguration = .init(),
 			        _ safeDIBuilder: ((B) -> A)? = nil
@@ -2018,7 +2018,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 
 			/// Configuration for how `C` is constructed within the public mock trees of this module.
-			public struct __safeDI_C_MockConfiguration {
+			nonisolated public struct __safeDI_C_MockConfiguration {
 			    public init(
 			        _ safeDIBuilder: ((A) -> C)? = nil
 			    ) {
@@ -2036,7 +2036,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 
 			/// Configuration for how `B` is constructed within the public mock trees of this module.
-			public struct __safeDI_B_MockConfiguration {
+			nonisolated public struct __safeDI_B_MockConfiguration {
 			    public init(
 			        cBuilder: __safeDI_C_MockConfiguration = .init(),
 			        _ safeDIBuilder: ((Instantiator<C>) -> B)? = nil
@@ -2082,7 +2082,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#if DEBUG
 			extension A {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            session: (() -> Session)? = nil,
 			            b: __safeDI_B_MockConfiguration = .init()
@@ -2127,7 +2127,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `C` is constructed within the public mock trees of this module.
-			public struct __safeDI_C_MockConfiguration {
+			nonisolated public struct __safeDI_C_MockConfiguration {
 			    public init(
 			        session: (() -> Session)? = nil,
 			        _ safeDIBuilder: ((Session, LazilyInstantiated<B>) -> C)? = nil
@@ -2148,7 +2148,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 
 			/// Configuration for how `B` is constructed within the public mock trees of this module.
-			public struct __safeDI_B_MockConfiguration {
+			nonisolated public struct __safeDI_B_MockConfiguration {
 			    public init(
 			        cBuilder: __safeDI_C_MockConfiguration = .init(),
 			        _ safeDIBuilder: ((Session, Instantiator<C>) -> B)? = nil
@@ -2174,7 +2174,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#if DEBUG
 			extension A {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            session: (() -> Session)? = nil,
 			            b: __safeDI_B_MockConfiguration = .init()
@@ -2215,7 +2215,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `C` is constructed within the public mock trees of this module.
-			public struct __safeDI_C_MockConfiguration {
+			nonisolated public struct __safeDI_C_MockConfiguration {
 			    public init(
 			        session: (() -> Session)? = nil,
 			        _ safeDIBuilder: ((Session, B) -> C)? = nil
@@ -2236,7 +2236,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 
 			/// Configuration for how `B` is constructed within the public mock trees of this module.
-			public struct __safeDI_B_MockConfiguration {
+			nonisolated public struct __safeDI_B_MockConfiguration {
 			    public init(
 			        cBuilder: __safeDI_C_MockConfiguration = .init(),
 			        _ safeDIBuilder: ((Session, Instantiator<C>) -> B)? = nil
@@ -2302,7 +2302,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_tag() -> String? { "tag" }
 
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            bBuilder: __safeDI_B_MockConfiguration = .init(),
 			            tag: String? = A.__safeDI_publicMockDefault_tag()
@@ -2342,7 +2342,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `A` is constructed within the public mock trees of this module.
-			public struct __safeDI_A_MockConfiguration {
+			nonisolated public struct __safeDI_A_MockConfiguration {
 			    public init(
 			        bBuilder: __safeDI_B_MockConfiguration = .init(),
 			        label: String? = nil,
@@ -2374,7 +2374,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			@usableFromInline nonisolated func __safeDI_A_mockDefault_tag() -> String? { A.__safeDI_mockDefault_tag() }
 
 			/// Configuration for how `B` is constructed within the public mock trees of this module.
-			public struct __safeDI_B_MockConfiguration {
+			nonisolated public struct __safeDI_B_MockConfiguration {
 			    public init(
 			        _ safeDIBuilder: ((Instantiator<A>) -> B)? = nil
 			    ) {
@@ -2438,7 +2438,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            childBuilder: (@Sendable (Thing) -> Child)? = nil
 			        ) {
@@ -2560,7 +2560,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    @usableFromInline @MainActor static func __safeDI_publicMockDefault_label() -> String? { Defaults.label }
 
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            vm: __safeDI_Core_ViewModel_MockConfiguration = .init()
 			        ) {
@@ -2596,7 +2596,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    nonisolated static func __safeDI_publicMockDefault_policy() -> Policy? { Defaults.policy }
 
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            logger: __safeDI_Core_FakeLogger_MockConfiguration = .init(),
 			            analytics: (() -> Analytics)? = nil,
@@ -2678,7 +2678,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 			#if DEBUG
 			/// Configuration for how `ViewModel` is constructed within the public mock trees of module `Core`.
-			public struct __safeDI_Core_ViewModel_MockConfiguration {
+			nonisolated public struct __safeDI_Core_ViewModel_MockConfiguration {
 			    public init(
 			        title: String? = __safeDI_Core_ViewModel_mockDefault_title()
 			    ) {
@@ -2709,7 +2709,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			@usableFromInline nonisolated func __safeDI_Core_ViewModel_mockDefault_title() -> String? { ViewModel.__safeDI_mockDefault_title() }
 
 			/// Configuration for how `FakeLogger` is constructed within the public mock trees of module `Core`.
-			public struct __safeDI_Core_FakeLogger_MockConfiguration {
+			nonisolated public struct __safeDI_Core_FakeLogger_MockConfiguration {
 			    public init(
 			        verbose: Bool? = nil
 			    ) {
@@ -2739,7 +2739,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 
 			/// Configuration for how `TokenCache` is constructed within the public mock trees of module `Core`.
-			public struct __safeDI_Core_TokenCache_MockConfiguration {
+			nonisolated public struct __safeDI_Core_TokenCache_MockConfiguration {
 			    public init(
 			        capacity: Int? = nil
 			    ) {
@@ -2805,7 +2805,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#if DEBUG
 			extension Root {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            childBuilder: __safeDI_Child_MockConfiguration = .init()
 			        ) {
@@ -2836,7 +2836,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
-			public struct __safeDI_Child_MockConfiguration {
+			nonisolated public struct __safeDI_Child_MockConfiguration {
 			    public init(
 			        onTap: @autoclosure @escaping @Sendable () -> (() -> Void)? = __safeDI_Child_mockDefault_onTap(),
 			        _ safeDIBuilder: (@Sendable ((() -> Void)?) -> Child)? = nil
@@ -2912,7 +2912,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#if DEBUG
 			extension Root {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            child: __safeDI_Child_MockConfiguration = .init()
 			        ) {
@@ -2943,7 +2943,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
-			public struct __safeDI_Child_MockConfiguration {
+			nonisolated public struct __safeDI_Child_MockConfiguration {
 			    public init(
 			        onTap: Handler? = nil,
 			        _ safeDIBuilder: ((@escaping Handler) -> Child)? = nil
@@ -3122,7 +3122,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    @usableFromInline @MainActor static func __safeDI_publicMockDefault_label() -> String? { defaultLabel }
 
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            theme: (() -> Theme)? = nil
 			        ) {
@@ -3244,7 +3244,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_label() -> String? { "label" }
 
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            theme: (() -> Theme)? = nil,
 			            label: String? = ProfileView.__safeDI_publicMockDefault_label()
@@ -3319,7 +3319,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    @usableFromInline @MainActor static func __safeDI_publicMockDefault_label() -> String? { defaultLabel }
 
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            theme: (() -> Theme)? = nil
 			        ) {
@@ -3349,7 +3349,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    @usableFromInline @MainActor static func __safeDI_publicMockDefault_label() -> String? { defaultLabel }
 
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            theme: (() -> Theme)? = nil
 			        ) {
@@ -3575,7 +3575,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    @usableFromInline nonisolated static func __safeDI_publicMockDefault_title() -> String? { "service" }
 
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            auth: (() -> Auth)? = nil,
 		            inner: (() -> Outer.Inner)? = nil,
@@ -3676,7 +3676,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		#if DEBUG
 		/// Configuration for how `Leaf` is constructed within the public mock trees of module `Core`.
-		public struct __safeDI_Core_Leaf_MockConfiguration {
+		nonisolated public struct __safeDI_Core_Leaf_MockConfiguration {
 		    public init(
 		        capacity: Int? = nil,
 		        onDone: (() -> Void)? = nil,
@@ -3784,7 +3784,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    @MainActor static func __safeDI_publicMockDefault_label() -> Label? { defaultLabel }
 
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            theme: (() -> Theme)? = nil
 		        ) {
@@ -3873,7 +3873,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            analytics: (() -> Analytics)? = nil
 			        ) {
@@ -4027,7 +4027,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Service {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init() {
 		            self.userService = nil
 		        }
@@ -4129,7 +4129,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil
 		        ) {
@@ -4368,7 +4368,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            profileBuilder: ((UserService) -> Profile)? = nil,
 			            settings: ((Clock) -> Settings)? = nil
@@ -4737,7 +4737,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init()
@@ -5213,7 +5213,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init()
@@ -5378,7 +5378,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init()
@@ -5488,7 +5488,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init()
@@ -5585,7 +5585,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init()
@@ -5682,7 +5682,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
@@ -5785,7 +5785,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            filter: (() -> FilterProtocol)? = nil,
@@ -5994,7 +5994,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            filter: (() -> FilterProtocol)? = nil,
@@ -6108,7 +6108,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init()
@@ -6186,7 +6186,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            filter: (() -> FilterProtocol)? = nil,
@@ -6312,7 +6312,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
@@ -6439,7 +6439,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
@@ -6716,7 +6716,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init()
@@ -7012,7 +7012,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init()
@@ -7076,7 +7076,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            service0: Service0.SafeDIOverrides = .init(),
 		            service1: Service1.SafeDIOverrides = .init(),
@@ -8356,7 +8356,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Dashboard {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init()
@@ -8548,7 +8548,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Outer {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            service: Service.SafeDIOverrides = .init()
 		        ) {
@@ -9889,7 +9889,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
@@ -10215,7 +10215,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            shared: (() -> SharedThing)? = nil
 		        ) {
@@ -10278,7 +10278,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension Service {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            session: (() -> Session)? = nil
 		        ) {
@@ -10355,7 +10355,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if DEBUG
 		extension ProfileView {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init() {
 		            self.store = nil
 		        }

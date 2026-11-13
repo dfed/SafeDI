@@ -370,7 +370,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 				#if DEBUG
 				extension Service {
 				    /// Overrides for the mock dependency tree.
-				    public struct SafeDIOverrides {
+				    nonisolated public struct SafeDIOverrides {
 				        public init(
 				            gaugeBuilder: (() -> Gauge)? = nil
 				        ) {
@@ -1478,7 +1478,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			wrapped("""
 			extension Holder {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            child: __safeDI_Feature_Child_MockConfiguration = .init()
 			        ) {
@@ -1511,7 +1511,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		var childPublicConfiguration: String {
 			wrapped("""
 			/// Configuration for how `Child` is constructed within the public mock trees of module `Feature`.
-			public struct __safeDI_Feature_Child_MockConfiguration {
+			nonisolated public struct __safeDI_Feature_Child_MockConfiguration {
 			    public init(
 			        date: Date? = nil,
 			        _ safeDIBuilder: ((Date) -> Child)? = nil
@@ -1914,7 +1914,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            service: Service.SafeDIOverrides = .init()
 		        ) {

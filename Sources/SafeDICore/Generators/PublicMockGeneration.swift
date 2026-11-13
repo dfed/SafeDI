@@ -242,7 +242,11 @@ extension ScopeGenerator {
 
 		var lines = [String]()
 		lines.append("/// Configuration for how `\(concreteType.asSource)` is constructed within the public mock trees of \(context.moduleName.map { "module `\($0)`" } ?? "this module").")
-		lines.append("public struct \(configurationTypeName) {")
+		// `nonisolated`, so that a module whose declarations default to the main actor does not put this file-scope struct
+		// there, out of reach of the nonisolated code that builds and reads it. Its defaults are `nil`, `.init()` and
+		// nonisolated providers, never an expression the configured type spells, unlike an internal mock's configuration,
+		// which keeps the configured type's isolation (`generateConfigurationStruct`).
+		lines.append("nonisolated public struct \(configurationTypeName) {")
 		lines.append(contentsOf: publicStructBody(members: members, indent: standardIndent))
 		lines.append("}")
 		lines.append("")
@@ -1163,7 +1167,10 @@ extension ScopeGenerator {
 		} + defaultFields
 		var lines = [String]()
 		lines.append("\(indent)/// Overrides for the mock dependency tree.")
-		lines.append("\(indent)public struct SafeDIOverrides {")
+		// `nonisolated`, as the module-level configuration is: in a module whose declarations default to the main actor, a
+		// mocked type on the main actor would put it there, where another module's configuration, whose default builds it,
+		// cannot reach it.
+		lines.append("\(indent)nonisolated public struct SafeDIOverrides {")
 		lines.append(contentsOf: publicStructBody(members: members, indent: "\(indent)\(standardIndent)"))
 		lines.append("\(indent)}")
 		return lines.joined(separator: "\n")
