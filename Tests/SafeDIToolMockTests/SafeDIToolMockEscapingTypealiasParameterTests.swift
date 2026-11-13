@@ -857,7 +857,6 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 
 		let generatedFiles = try #require(output.modules["Mid"]).generatedFiles
 		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "Mid", imports: ["Feature"], mockedTypeName: "Middle", code: Self.middleMock(under: integration)), "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -871,7 +870,6 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 
 		let generatedFiles = try #require(output.modules["Mid"]).generatedFiles
 		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "Mid", imports: ["Feature"], mockedTypeName: "Middle", code: Self.middleMock(under: integration, isPublic: true)), "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -885,7 +883,6 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 
 		let generatedFiles = try #require(output.modules["Mid"]).generatedFiles
 		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "Mid", imports: ["Feature"], mockedTypeName: "Middle", code: Self.middleMock(under: integration)), "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -926,7 +923,6 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		}
 		#endif
 		"""), "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -940,7 +936,6 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 
 		let generatedFiles = try #require(output.modules["Mid"]).generatedFiles
 		#expect(generatedFiles == Self.mockFiles(under: integration, moduleName: "Mid", imports: ["Feature"], mockedTypeName: "Middle", code: Self.middleMock(under: integration, onTapType: "Space.OnTap", calledGuardHash: "9E97244FDF6BDF5D")), "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -991,7 +986,6 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		}
 		#endif
 		"""), "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1031,7 +1025,6 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		    public enum __safeDI_Middle_620B4A759064B3AE {}
 		}
 		"""], "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Private
@@ -1140,13 +1133,5 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		case .swiftPackagePlugin:
 			["\(mockedTypeName)+SafeDIMock.swift": header + code, "SafeDIMockConfiguration.swift": header]
 		}
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
 	}
 }

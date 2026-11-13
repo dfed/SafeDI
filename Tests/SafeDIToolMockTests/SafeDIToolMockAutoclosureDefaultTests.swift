@@ -1083,7 +1083,6 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 				"Screen+SafeDIMock.swift": generatedFileHeader + appImports + "\n\n" + screenMock,
 			])
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	private static let publicMockModules = [
@@ -1124,11 +1123,4 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 	// MARK: Private
 
 	private var filesToDelete: [URL]
-
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
-	}
 }

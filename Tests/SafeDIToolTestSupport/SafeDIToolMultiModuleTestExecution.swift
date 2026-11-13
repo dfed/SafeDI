@@ -203,10 +203,13 @@ enum MultiModuleIntegration: CaseIterable {
 /// Whether `executeSafeDIToolMultiModuleTest` compiles the modules, and what it does when one does not compile.
 enum MultiModuleCompileVerification {
 	/// Compiles the modules in order, stopping at the first failure, and records an `Issue` for a failure or a
-	/// warning in generated code, as `executeSafeDIToolTest` does.
+	/// warning in generated code, as `executeSafeDIToolTest` does. The outcome is not returned: the `Issue` reports
+	/// it, so a test needs no check of its own that the modules compiled, and modules that compiled without a warning
+	/// in an earlier run are not compiled again when a `PassedCompileCheckCache` holds them.
 	case recordingIssues
 	/// Compiles the modules in order, stopping at the first failure, and returns the outcome without recording an
-	/// `Issue`, for a test that expects a module not to compile.
+	/// `Issue`, for a test that expects a module not to compile, or that checks which modules were compiled. These
+	/// modules are compiled on every run.
 	case returningOutcomeOnly
 	/// Does not compile.
 	case skipped
@@ -250,8 +253,9 @@ struct MultiModuleTestOutput {
 	let modules: [String: ModuleTestOutput]
 	/// The modules' names, in the order they were given and processed.
 	let moduleNames: [String]
-	/// How the modules compiled, or `nil` when they were not compiled: verification was skipped or disabled, or
-	/// the build artifacts could not be found.
+	/// How the modules compiled under `.returningOutcomeOnly`, or `nil` when they were not compiled that way:
+	/// verification was skipped or disabled, the build artifacts could not be found, or the test passed
+	/// `.recordingIssues`, which reports a failure as an `Issue` instead.
 	let compilation: MultiModuleCompileOutcome?
 	/// The temporary directory everything the test wrote lies under.
 	let fixtureRoot: URL
@@ -613,7 +617,7 @@ func executeSafeDIToolMultiModuleTest(
 	return MultiModuleTestOutput(
 		modules: outputs,
 		moduleNames: modules.map(\.name),
-		compilation: compilation,
+		compilation: compileVerification == .returningOutcomeOnly ? compilation : nil,
 		fixtureRoot: fixtureRoot,
 	)
 }

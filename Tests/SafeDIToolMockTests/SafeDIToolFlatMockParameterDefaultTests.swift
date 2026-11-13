@@ -575,7 +575,6 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		}
 		#endif
 		"""), "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -599,7 +598,6 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		}
 		#endif
 		"""), "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -624,7 +622,6 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		}
 		#endif
 		"""), "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -662,7 +659,6 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		}
 		#endif
 		"""), "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -710,7 +706,6 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		}
 		#endif
 		"""), "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – Public mocks
@@ -750,7 +745,6 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		}
 		#endif
 		"""), "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -798,7 +792,6 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		}
 		#endif
 		"""), "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -865,7 +858,6 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 			["Screen+SafeDIMock.swift": header + code, "SafeDIMockConfiguration.swift": header]
 		}
 		#expect(generatedFiles == expectedFiles, "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -899,7 +891,6 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		}
 		#endif
 		"""), "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1261,13 +1252,5 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		case .swiftPackagePlugin:
 			["\(mockedTypeName)+SafeDIMock.swift": header + code, "SafeDIMockConfiguration.swift": header]
 		}
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
 	}
 }

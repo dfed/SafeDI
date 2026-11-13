@@ -453,10 +453,6 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			]
 		}
 		#expect(output.modules.mapValues(\.generatedFiles) == expectedGeneratedFiles)
-		if compileVerificationIsEnabled {
-			let compilation = try #require(output.compilation)
-			#expect(compilation.modules.map(\.exitCode) == [0, 0])
-		}
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)

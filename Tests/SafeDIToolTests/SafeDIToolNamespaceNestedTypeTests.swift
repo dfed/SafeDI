@@ -1614,7 +1614,6 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 		}
 		#endif
 		""")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1664,7 +1663,6 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 		}
 		#endif
 		""")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1777,7 +1775,6 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 				"SafeDIMockConfiguration.swift": generatedFileHeader + imports,
 			])
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Private
@@ -1854,13 +1851,5 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 				"SafeDIMockConfiguration.swift": generatedFileHeader + imports,
 			], sourceLocation: sourceLocation)
 		}
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
 	}
 }

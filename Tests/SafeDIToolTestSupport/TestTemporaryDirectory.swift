@@ -60,12 +60,19 @@ enum TestTemporaryDirectory {
 	/// The environment of a process a test launches, which is this process's environment with `TMPDIR` set to
 	/// `temporaryDirectory`, so that what the process writes to its temporary directory, as the `TemporaryDirectory.*`
 	/// folders `swiftc` leaves behind, lands under `root` and goes when the caller deletes `temporaryDirectory`.
+	///
+	/// `LLVM_PROFILE_FILE` points into `temporaryDirectory` too. A build for coverage instruments the macro plugin and
+	/// `SafeDITool`, which tests launch, and a launched process would otherwise write its coverage profile where the
+	/// test process writes its own, so the suite's coverage would count lines only a launched process ran: lines that a
+	/// skipped compile, or a compile check that passed in an earlier run, would then stop counting. The suite's coverage
+	/// is what the test process itself runs.
 	static func environment(
 		withTemporaryDirectory temporaryDirectory: URL,
 		from environment: [String: String] = ProcessInfo.processInfo.environment,
 	) -> [String: String] {
 		var environment = environment
 		environment["TMPDIR"] = temporaryDirectory.path + "/"
+		environment["LLVM_PROFILE_FILE"] = temporaryDirectory.appendingPathComponent("default-%p.profraw").path
 		return environment
 	}
 

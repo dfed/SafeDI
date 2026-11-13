@@ -102,7 +102,6 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 			}
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -335,7 +334,6 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 		    }
 		}
 		""")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -398,7 +396,6 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 		    }
 		}
 		""")
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: A seam of a module no module name or target graph names
@@ -500,7 +497,6 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 				""",
 			])
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Private
@@ -623,12 +619,5 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 		case .swiftPackagePlugin:
 			NormalizedFilePath(fixtures[moduleName]!.compilerPath(of: fileName)).path
 		}
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
 	}
 }

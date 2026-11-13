@@ -225,8 +225,6 @@ struct SafeDIToolSeamHarnessOptionTests: ~Copyable {
 		}
 		#expect(releaseOutput.modules["Feature"]?.generatedFiles == debugOutput.modules["Feature"]?.generatedFiles)
 		#expect(releaseOutput.modules["App"]?.generatedFiles == debugOutput.modules["App"]?.generatedFiles)
-		try expectEveryModuleCompiled(debugOutput)
-		try expectEveryModuleCompiled(releaseOutput)
 	}
 
 	// MARK: No module name
@@ -234,11 +232,4 @@ struct SafeDIToolSeamHarnessOptionTests: ~Copyable {
 	// MARK: Private
 
 	private var filesToDelete: [URL]
-
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
-	}
 }

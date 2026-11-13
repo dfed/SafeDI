@@ -396,9 +396,6 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			}
 			""",
 		])
-		if compileVerificationIsEnabled {
-			#expect(try #require(output.compilation).modules.map(\.exitCode) == [0, 0])
-		}
 	}
 
 	// MARK: Private

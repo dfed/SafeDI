@@ -287,8 +287,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		}
 		#expect(releaseOutput.modules["Feature"]?.generatedFiles == debugOutput.modules["Feature"]?.generatedFiles)
 		#expect(releaseOutput.modules["App"]?.generatedFiles == debugOutput.modules["App"]?.generatedFiles)
-		try expectEveryModuleCompiled(debugOutput)
-		try expectEveryModuleCompiled(releaseOutput)
 	}
 
 	@Test
@@ -461,7 +459,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		case .swiftPackagePlugin:
 			#expect(output.modules["Feature"]?.generatedFiles == ["Screen+SafeDI.swift": seamFile(consumerPath: fixtures.compilerPath(of: "Consumer.swift"))])
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: R1: extensions
@@ -919,7 +916,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			}
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1152,7 +1148,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    public enum __safeDI_Service_C770BA85936CC78A {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1212,7 +1207,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			}
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2018,7 +2012,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    }
 		}
 		""", under: integration))
-		try expectEveryModuleCompiled(output)
 	}
 
 	/// Where `App`'s tree holds `theme` for `Service`'s own only-if-available receive.
@@ -2193,7 +2186,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    }
 		}
 		""", under: integration))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -2223,7 +2215,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    }
 		}
 		""", under: integration))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -2255,7 +2246,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    }
 		}
 		""", under: integration))
-		try expectEveryModuleCompiled(output)
 	}
 
 	/// `Feature`'s public seam `Service`, whose `Badge` receives `theme: Hub.Theme?` only if available on a `package`
@@ -2347,7 +2337,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			}
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2576,7 +2565,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			}
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Holder.swift"]):12:5: error: `Holder` provides `theme: Hub.Theme`, but no initializer SafeDI generated for `Shell` takes it: `Shell`'s dependency tree calls the `public` initializer SafeDI generated for `Service` in module `Base`, the narrowest one module `Mid` can call, which takes `theme` only on its `package` initializer, so calling it would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Hub.Theme` is `package` as far as SafeDI can tell: it is declared inside an extension of `Hub`, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(theme:)`). If `Hub` can be `public`, spell the extension's access level (`public extension Hub { … }`, dropping the modifier on `Theme` that Swift then reports as redundant; the compiler rejects a level wider than `Hub`'s), or declare `Theme` in `Hub`'s body or at top level; mention `Hub.Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
@@ -2719,7 +2707,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			}
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	/// `Feature`'s public seam `Service`, whose `Badge` receives `theme: [3 of Int]` and `color: [4 of Int]`, spellings
@@ -3022,7 +3009,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			}
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3097,7 +3083,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			}
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: R8: the mock condition
@@ -3223,7 +3208,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			}
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3316,7 +3300,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			}
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3359,7 +3342,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3592,7 +3574,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		"""
 		#expect(output.modules["FeedModule"]?.generatedFiles == [integration == .moduleInfo ? "FeedModule.swift" : "FeedScreen+SafeDI.swift": feedFile])
 		#expect(output.modules["App"]?.generatedFiles == [integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": appFile])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3649,7 +3630,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    public enum __safeDI_Service_BC9F4F791E8F6B4E {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3700,7 +3680,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		}
 		"""].joined()
 		#expect(output.modules["Feature"]?.generatedFiles == [expectedFeatureFileName: expectedFeatureFile])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3734,7 +3713,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    public enum __safeDI_Service_BC9F4F791E8F6B4E {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3757,7 +3735,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    public enum __safeDI_ProfileView_38882A8C29DA6D12 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3780,7 +3757,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    public enum __safeDI_ProfileView_38882A8C29DA6D12 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3821,7 +3797,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		}
 		"""].joined()
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": expectedAppFile])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3929,7 +3904,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		}
 		"""].joined()
 		#expect(subprojectOutput.modules["Subproject"]?.generatedFiles == ["Subproject.swift": expectedSubprojectFile])
-		try expectEveryModuleCompiled(subprojectOutput)
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let noteStoragePath = fixtures["Subproject"]!["NoteStorage.swift"]
 			return """
@@ -4373,7 +4347,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    public enum __safeDI_Service_F2C72F9BD3F5798E {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -4415,7 +4388,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    public enum __safeDI_ProfileView_C933DB709369908C {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -4494,7 +4466,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    public enum __safeDI_Service_8E429FFB2D7F8CA5 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -5133,12 +5104,5 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		case .swiftPackagePlugin:
 			NormalizedFilePath(moduleFixtures.compilerPath(of: file)).path
 		}
-	}
-
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
 	}
 }

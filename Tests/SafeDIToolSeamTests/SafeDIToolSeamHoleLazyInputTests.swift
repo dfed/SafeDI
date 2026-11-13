@@ -126,7 +126,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -163,7 +162,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -251,7 +249,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -317,7 +314,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -442,7 +438,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -568,7 +563,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app, probes: ["Root()", "OtherRoot()"])
 	}
 
@@ -669,7 +663,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -764,7 +757,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -849,7 +841,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -932,7 +923,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -1049,7 +1039,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -1153,7 +1142,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			]
 		}
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, expectedFeatureFiles)
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -1210,7 +1198,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -1357,13 +1344,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		if let generatedFiles, generatedFiles != expected {
 			Issue.record(Comment(rawValue: generatedFiles.sorted { $0.key < $1.key }.map { "=== \($0.key)\n\($0.value)" }.joined(separator: "\n")), sourceLocation: sourceLocation)
 		}
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
 	}
 
 	// MARK: Private

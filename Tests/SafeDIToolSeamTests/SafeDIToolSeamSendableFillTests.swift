@@ -552,7 +552,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": route.hostCode])
 		expectGeneratedCode(of: output, module: "App", imports: ["Feature", "Middle"], rootFiles: ["Root": route.rootCode])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -648,7 +647,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -766,7 +764,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -973,7 +970,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: adjusted.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": wrapper.hostCode])
 		expectGeneratedCode(of: output, module: "App", imports: ["Feature", "Middle"], rootFiles: ["Root": wrapper.rootCode])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Which fills are `@Sendable`
@@ -1064,7 +1060,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -1156,7 +1151,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -1258,7 +1252,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -1356,7 +1349,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Shapes beside these, which compiled before a fill counted as a `@Sendable` function
@@ -1436,7 +1428,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1514,7 +1505,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1587,7 +1577,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -1635,7 +1624,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -1726,7 +1714,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_9E9D9EBB91B93B33 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -1792,7 +1779,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: A place in a `@Sendable` fill whose builder is `@Sendable` for another reason
@@ -1909,7 +1895,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -1998,7 +1983,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			}
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -2067,7 +2051,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_0BE9624E3D02D360 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -2147,7 +2130,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_0358E601680BB949 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -2446,7 +2428,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		]
 		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Feature", imports: [], rootFiles: ["Seam1": field.seamCode])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2521,7 +2502,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2607,7 +2587,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_CAA239727FBFCC06 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: A `@Sendable` fill beneath a `@Sendable` builder function
@@ -2696,7 +2675,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -2771,7 +2749,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_D8B73ED70185DC4D {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -2846,7 +2823,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_1F3370B92A0A8E82 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -2935,7 +2911,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_1AF2C76943211E42 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -3011,7 +2986,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_6A22390C4918F370 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -3098,7 +3072,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_5B068A1FBECC5F0D {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -3177,7 +3150,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_941FCAED062F4376 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: A field a site carries beneath a nearer declaration of its label
@@ -3376,7 +3348,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": nearerDeclaration.hostCode])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -3437,7 +3408,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_C2B8446A21A9B91D {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -3520,7 +3490,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3566,7 +3535,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_D1DBA7F623008717 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3639,7 +3607,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_CBF29CE484222325 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: A value labeled as the fill's parameter
@@ -3689,7 +3656,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_CBF29CE484222325 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -3737,7 +3703,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_CBF29CE484222325 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -3786,7 +3751,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    public enum __safeDI_Host_CBF29CE484222325 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, fixture)
 	}
 
@@ -3802,13 +3766,6 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		if let generatedFiles, generatedFiles != expected {
 			Issue.record(Comment(rawValue: generatedFiles.sorted { $0.key < $1.key }.map { "=== \($0.key)\n\($0.value)" }.joined(separator: "\n")), sourceLocation: sourceLocation)
 		}
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
 	}
 
 	/// Expects the values `output`, the run of `fixture`, builds for `Root` to equal those of the same graph in one module.

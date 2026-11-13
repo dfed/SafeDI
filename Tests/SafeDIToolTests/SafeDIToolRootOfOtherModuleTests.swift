@@ -75,7 +75,6 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 				"Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n",
 			])
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -93,7 +92,6 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 		#expect(output.modules["App"]?.generatedFiles["FeatureRoot+SafeDI.swift"] == generatedFileHeader + Self.importBlock("Feature") + "\n\n" + """
 		// SafeDI generates FeatureRoot's init() only in Feature, the module that declares FeatureRoot. If FeatureRoot() does not compile, add the SafeDI plugin to the target that declares FeatureRoot.
 		""")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -115,7 +113,6 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 			""",
 			"Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -144,7 +141,6 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 			"FeatureRoot+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n",
 			"Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: A root of a module SafeDI does not know
@@ -241,12 +237,5 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 		import \(moduleName)
 		#endif
 		"""
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
 	}
 }

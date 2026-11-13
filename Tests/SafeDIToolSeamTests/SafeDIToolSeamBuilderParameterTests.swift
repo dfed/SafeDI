@@ -77,7 +77,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			}
 			""",
 		]))
-		try expectEveryModuleCompiled(output)
 		// The Manual's seam section shows this example's generated code under the plugin, read here so it cannot drift.
 		guard integration == .swiftPackagePlugin else { return }
 		let manual = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Documentation/Manual.md"), encoding: .utf8)
@@ -117,7 +116,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    @Instantiated private let feedScreen: FeedScreen
 		}
 		"""
-		let output = try await executeSafeDIToolMultiModuleTest(
+		_ = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Core", packageName: "Shop", swiftFileContent: [seamFixtureType(named: "Session", isFinalClass: true, declarations: [])]),
 				ModuleFixture(name: "Feed", packageName: "Shop", swiftFileContentByFilePath: ["FeedScreen.swift": "import Core\n\n" + feed], dependencies: ["Core"]),
@@ -127,7 +126,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: A root that cannot fill a hole
@@ -386,7 +384,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -463,7 +460,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -771,7 +767,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    public enum __safeDI_ServiceS_836BCA846AEE8A8D {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -831,7 +826,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: Self.wrapperFeature + Self.wrapperFulfillers, app: [Self.wrapperRoot]))
 	}
 
@@ -990,7 +984,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		// The comparator does not call an erased instantiator, so the probes call each one.
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
@@ -1097,7 +1090,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -1176,7 +1168,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -1217,7 +1208,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -1264,7 +1254,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -1306,7 +1295,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
 	}
 
@@ -1388,7 +1376,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
 	}
 
@@ -1476,7 +1463,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		// The comparator does not call an erased instantiator, so the probe calls the fill's twice down.
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [Self.canonicalRoot]), probes: [
 			DifferentialValueProbe("Root()"),
@@ -1527,7 +1513,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -1580,7 +1565,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -1655,7 +1639,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			    }
 			}
 			"""]))
-			try expectEveryModuleCompiled(output)
 			try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 		}
 	}
@@ -1777,7 +1760,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1816,7 +1798,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -1935,7 +1916,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: holeModules, visibleModules: modules(feature: feature + mid + fulfillers, mid: [], app: [root]))
 	}
 
@@ -2013,7 +1993,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
 	}
 
@@ -2151,7 +2130,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2223,7 +2201,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		// The comparator does not call an erased instantiator, so the probes call the router at each site, whose
 		// `flowBuilder` the comparator calls, building a second `Flow` with its own scopes.
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]), probes: [
@@ -2294,7 +2271,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -2364,7 +2340,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    public enum __safeDI_Service_22325BA99FC58F78 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -2464,7 +2439,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: holeModules, visibleModules: Self.threeModules(feature: feature + mid + fulfillers, mid: [], app: [root]))
 	}
 
@@ -2515,7 +2489,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + app.dropLast(), app: [app[2]]))
 	}
 
@@ -2610,7 +2583,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -2662,7 +2634,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 		"""])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.reenteringServiceAppFiles)
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
 	}
 
@@ -2785,7 +2756,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
 	}
 
@@ -2914,7 +2884,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -3002,7 +2971,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
 	}
 
@@ -3155,7 +3123,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -3311,7 +3278,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [Self.canonicalRoot]))
 	}
 
@@ -3555,7 +3521,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [Self.canonicalRoot]))
 	}
 
@@ -3766,7 +3731,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tiers and field access
@@ -3950,7 +3914,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -4001,7 +3964,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    public enum __safeDI_Service_53462F75F3031892 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -4104,7 +4066,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 		#endif
 		""")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -4267,7 +4228,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -4319,7 +4279,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -4383,7 +4342,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [Self.canonicalRoot]))
 	}
 
@@ -4447,7 +4405,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    public enum __safeDI_Shell_CA9EFBA51198D2E1 {}
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: [
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature + [tracker, userService]),
 			ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: ["import Feature\n\n" + shell], dependencies: ["Feature"]),
@@ -4574,7 +4531,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    public enum __safeDI_Service_D8E8DFCE0954DB42 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Shapes the coverage of the rebase onto row 4b reached
@@ -4642,7 +4598,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -4680,7 +4635,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: Self.canonicalFeature + fulfillers, app: [Self.canonicalRoot]))
 	}
 
@@ -5534,12 +5488,5 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		if let generatedFiles, generatedFiles != expected {
 			Issue.record(Comment(rawValue: generatedFiles.sorted { $0.key < $1.key }.map { "=== \($0.key)\n\($0.value)" }.joined(separator: "\n")), sourceLocation: sourceLocation)
 		}
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
 	}
 }

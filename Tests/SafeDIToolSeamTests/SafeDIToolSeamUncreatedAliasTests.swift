@@ -3687,9 +3687,6 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 			""",
 		])
-		if compileVerificationIsEnabled {
-			#expect(try #require(output.compilation).modules.map(\.exitCode) == [0, 0])
-		}
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3731,9 +3728,6 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 			""",
 		])
-		if compileVerificationIsEnabled {
-			#expect(try #require(output.compilation).modules.map(\.exitCode) == [0, 0, 0])
-		}
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases, Holder.allCases)
@@ -4025,9 +4019,6 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			],
 		]
 		#expect(try #require(output.modules["App"]).generatedFiles == expectedAppFiles["\(integration)-\(holder)"])
-		if compileVerificationIsEnabled {
-			#expect(try #require(output.compilation).modules.map(\.exitCode) == [0, 0])
-		}
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases, Holder.allCases)
@@ -4325,9 +4316,6 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			],
 		]
 		#expect(try #require(output.modules["App"]).generatedFiles == expectedAppFiles["\(integration)-\(holder)"])
-		if compileVerificationIsEnabled {
-			#expect(try #require(output.compilation).modules.map(\.exitCode) == [0, 0])
-		}
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -4451,9 +4439,6 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			],
 		]
 		#expect(try #require(output.modules["App"]).generatedFiles == expectedAppFiles["\(integration)"])
-		if compileVerificationIsEnabled {
-			#expect(try #require(output.compilation).modules.map(\.exitCode) == [0, 0, 0])
-		}
 	}
 
 	// MARK: Private

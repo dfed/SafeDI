@@ -1478,9 +1478,6 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			],
 		]
 		#expect(try #require(output.modules["App"]).generatedFiles == expectedAppFiles[integration])
-		if compileVerificationIsEnabled {
-			#expect(try #require(output.compilation).modules.map(\.exitCode) == [0, 0])
-		}
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1639,9 +1636,6 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			],
 		]
 		#expect(try #require(output.modules["Feature"]).generatedFiles == expectedFeatureFiles[integration])
-		if compileVerificationIsEnabled {
-			#expect(try #require(output.compilation).modules.map(\.exitCode) == [0, 0])
-		}
 	}
 
 	// MARK: Private

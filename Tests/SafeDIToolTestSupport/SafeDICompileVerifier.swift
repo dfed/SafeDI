@@ -47,6 +47,10 @@ import Testing
 ///
 /// Set the `SAFEDI_SKIP_COMPILE_CHECK` environment variable (to any value) to
 /// disable the verification pass for faster local iteration.
+///
+/// - Parameter passedCheckCache: The checks that passed in earlier runs, by default the one the
+///   `SAFEDI_COMPILE_CHECK_PASSED_CACHE` environment variable names (none when it is unset). When it holds this
+///   check, nothing is compiled; when the check passes, it is recorded there.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func verifyGeneratedCodeCompiles(
 	inputSwiftFiles: [URL],
@@ -55,28 +59,33 @@ func verifyGeneratedCodeCompiles(
 	activeCompilationConditions: [String] = [],
 	mockConditionalCompilation: String?,
 	compilerSettings: VerificationCompilerSettings = VerificationCompilerSettings(),
+	passedCheckCache: PassedCompileCheckCache? = .current,
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) throws {
 	guard compileVerificationIsEnabled, let artifacts = locateBuildArtifacts(sourceLocation: sourceLocation) else { return }
 
-	let outcome = try compileModule(
-		ModuleCompileSources(
-			moduleName: standaloneVerificationModuleName,
-			packageName: nil,
-			dependencyModuleNames: [],
-			inputSwiftFiles: inputSwiftFiles + additionalDirectorySwiftFiles,
-			generatedFiles: generatedFiles,
-			activeCompilationConditions: activeCompilationConditions,
-			mockConditionalCompilation: mockConditionalCompilation,
-			compilerSettings: compilerSettings,
-		),
-		moduleSearchPaths: [],
-		emitsModule: false,
-		artifacts: artifacts,
-		filesToDelete: &filesToDelete,
+	let module = ModuleCompileSources(
+		moduleName: standaloneVerificationModuleName,
+		packageName: nil,
+		dependencyModuleNames: [],
+		inputSwiftFiles: inputSwiftFiles + additionalDirectorySwiftFiles,
+		generatedFiles: generatedFiles,
+		activeCompilationConditions: activeCompilationConditions,
+		mockConditionalCompilation: mockConditionalCompilation,
+		compilerSettings: compilerSettings,
 	)
+	let check = try CompileCheckModule(sources: module, staged: stageCompileSources(of: module, filesToDelete: &filesToDelete), emitsModule: false)
+	let passedCheckKey = try passedCheckCache.map { _ in try PassedCompileCheckCache.key(of: [check]) }
+	if let passedCheckCache, let passedCheckKey, passedCheckCache.holds(passedCheckKey) {
+		return
+	}
+
+	let outcome = try compileModule(check, moduleSearchPaths: [], artifacts: artifacts)
 	outcome.recordIssues(skippingVerificationBy: "pass `skipCompileVerification: true`", sourceLocation: sourceLocation)
+	if let passedCheckCache, let passedCheckKey, outcome.compiledWithoutGeneratedCodeWarnings {
+		try passedCheckCache.recordPass(of: passedCheckKey)
+	}
 }
 
 /// Compiles each of `modules` in order, each against the modules it depends on, and records an `Issue` for each
@@ -90,27 +99,41 @@ func verifyGeneratedCodeCompiles(
 /// module that names it in `dependencyModuleNames` searches. So `canImport(M)` holds in a module only for the
 /// modules it depends on, and an import of any other module fails, as it does in a build.
 ///
-/// - Parameter recordsIssues: Whether a failure records an `Issue`. A test that expects a module not to compile
-///   passes `false` and asserts on the returned outcome instead.
-/// - Returns: Each module's outcome, or `nil` when compile verification is disabled or the build artifacts
-///   cannot be found, which records an `Issue` as it does for one module.
+/// - Parameters:
+///   - recordsIssues: Whether a failure records an `Issue`. A test that expects a module not to compile
+///     passes `false` and asserts on the returned outcome instead.
+///   - passedCheckCache: The checks that passed in earlier runs, as `verifyGeneratedCodeCompiles` takes it. Only a
+///     call that records issues uses it: when it holds the check, nothing is compiled, and when every module compiles
+///     without a warning in generated code, the check is recorded there. A call that returns its outcome to assert on
+///     always compiles.
+/// - Returns: Each module's outcome, or `nil` when compile verification is disabled, the build artifacts
+///   cannot be found, which records an `Issue` as it does for one module, or `passedCheckCache` holds the check.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func verifyModulesCompile(
 	_ modules: [ModuleCompileSources],
 	recordsIssues: Bool,
+	passedCheckCache: PassedCompileCheckCache? = .current,
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) throws -> MultiModuleCompileOutcome? {
 	guard compileVerificationIsEnabled, let artifacts = locateBuildArtifacts(sourceLocation: sourceLocation) else { return nil }
 
-	var outcomes = [ModuleCompileOutcome]()
+	var checks = [CompileCheckModule]()
 	for module in modules {
+		try checks.append(CompileCheckModule(sources: module, staged: stageCompileSources(of: module, filesToDelete: &filesToDelete), emitsModule: true))
+	}
+	let passedCheckCache = recordsIssues ? passedCheckCache : nil
+	let passedCheckKey = try passedCheckCache.map { _ in try PassedCompileCheckCache.key(of: checks) }
+	if let passedCheckCache, let passedCheckKey, passedCheckCache.holds(passedCheckKey) {
+		return nil
+	}
+
+	var outcomes = [ModuleCompileOutcome]()
+	for check in checks {
 		let outcome = try compileModule(
-			module,
-			moduleSearchPaths: outcomes.filter { module.dependencyModuleNames.contains($0.moduleName) }.map(\.directory),
-			emitsModule: true,
+			check,
+			moduleSearchPaths: outcomes.filter { check.sources.dependencyModuleNames.contains($0.moduleName) }.map(\.directory),
 			artifacts: artifacts,
-			filesToDelete: &filesToDelete,
 		)
 		if recordsIssues {
 			outcome.recordIssues(skippingVerificationBy: "pass `compileVerification: .skipped`", sourceLocation: sourceLocation)
@@ -118,6 +141,9 @@ func verifyModulesCompile(
 		outcomes.append(outcome)
 		// A later module would import a module that did not build, so its failure would say nothing new.
 		guard outcome.failure == nil else { break }
+	}
+	if let passedCheckCache, let passedCheckKey, outcomes.count == checks.count, outcomes.allSatisfy(\.compiledWithoutGeneratedCodeWarnings) {
+		try passedCheckCache.recordPass(of: passedCheckKey)
 	}
 	return MultiModuleCompileOutcome(modules: outcomes)
 }
@@ -173,6 +199,14 @@ struct ModuleCompileSources {
 	var definesDebug = true
 	/// The language mode, upcoming features, and staging of the compile.
 	var compilerSettings = VerificationCompilerSettings()
+
+	/// The conditions the compile is given: `activeCompilationConditions` and, in a debug build, the condition generated
+	/// mocks are wrapped in (`#if <mockConditionalCompilation>`), so the mocks compile too, as the module's mock-enabled
+	/// configuration does. A release build defines neither the mock condition nor `DEBUG`, which `compileSwift` defines
+	/// by `definesDebug` alone.
+	var compilationConditions: [String] {
+		activeCompilationConditions + (definesDebug ? [mockConditionalCompilation].compactMap(\.self) : [])
+	}
 }
 
 /// Why a module did not compile.
@@ -202,6 +236,11 @@ struct ModuleCompileOutcome {
 
 	var standardError: String {
 		result.stderr
+	}
+
+	/// Whether the module compiled and its generated code drew no warning: what a passed compile check records.
+	var compiledWithoutGeneratedCodeWarnings: Bool {
+		failure == nil && generatedCodeWarnings.isEmpty
 	}
 
 	/// Records what `verifyGeneratedCodeCompiles` records: a failure, attributed to the inputs or to the
@@ -260,35 +299,36 @@ struct MultiModuleCompileOutcome {
 	}
 }
 
-/// Stages and compiles one module's inputs and generated files together, against the modules whose staging
-/// directories `moduleSearchPaths` names. When that fails, the inputs are compiled alone to attribute the
-/// failure; the extra subprocess is only paid when something is broken.
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-private func compileModule(
-	_ module: ModuleCompileSources,
-	moduleSearchPaths: [URL],
-	emitsModule: Bool,
-	artifacts: SafeDIBuildArtifacts,
-	filesToDelete: inout [URL],
-) throws -> ModuleCompileOutcome {
-	let staged = try stageCompileSources(
+/// Stages one module's sources as `stageCompileSources` does, with the module's staging settings.
+private func stageCompileSources(of module: ModuleCompileSources, filesToDelete: inout [URL]) throws -> StagedCompileSources {
+	try stageCompileSources(
 		inputSwiftFiles: module.inputSwiftFiles,
 		generatedFiles: module.generatedFiles,
 		prependsSafeDIImport: module.compilerSettings.prependsSafeDIImport,
 		filesToDelete: &filesToDelete,
 	)
-	// Generated mock code is wrapped in `#if <mockConditionalCompilation>`, so define that condition
-	// to compile the mocks too, as the module's mock-enabled configuration does. A release build defines neither.
-	let compilationConditions = module.activeCompilationConditions + (module.definesDebug ? [module.mockConditionalCompilation].compactMap(\.self) : [])
+}
+
+/// Compiles one staged module's inputs and generated files together, against the modules whose staging
+/// directories `moduleSearchPaths` names. When that fails, the inputs are compiled alone to attribute the
+/// failure; the extra subprocess is only paid when something is broken.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+private func compileModule(
+	_ check: CompileCheckModule,
+	moduleSearchPaths: [URL],
+	artifacts: SafeDIBuildArtifacts,
+) throws -> ModuleCompileOutcome {
+	let module = check.sources
+	let staged = check.staged
 	func compile(_ sources: [URL]) throws -> SwiftCompileResult {
 		try compileSwift(
 			sources: sources,
 			outputDirectory: staged.directory,
 			artifacts: artifacts,
-			activeCompilationConditions: compilationConditions,
+			activeCompilationConditions: module.compilationConditions,
 			moduleName: module.moduleName,
 			packageName: module.packageName,
-			emitsModule: emitsModule,
+			emitsModule: check.emitsModule,
 			moduleSearchPaths: moduleSearchPaths,
 			definesDebug: module.definesDebug,
 			swiftLanguageMode: module.compilerSettings.swiftLanguageMode,
@@ -553,7 +593,8 @@ func stageCompileSources(
 		try (prependedImport + String(contentsOf: sourceFile, encoding: .utf8)).write(to: destination, atomically: true, encoding: .utf8)
 		return destination
 	}
-	let generatedCompileFiles = try generatedFiles.map { fileName, contents in
+	// In name order, so the compiler is given the files in the same order on every run.
+	let generatedCompileFiles = try generatedFiles.sorted(by: { $0.key < $1.key }).map { fileName, contents in
 		let destination = scratchDirectory.appendingPathComponent(fileName)
 		try (prependedImport + contents).write(to: destination, atomically: true, encoding: .utf8)
 		return destination

@@ -266,7 +266,6 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			#expect(output.modules["Feature"]?.generatedFiles == ["Screen+SafeDI.swift": generatedFileHeader + Self.screenInitializer])
 			#expect(output.modules["App"]?.generatedFiles == ["Root+SafeDI.swift": generatedFileHeader + rootCode])
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – A hand-written call
@@ -337,7 +336,6 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 		    public enum __safeDI_Screen_DB875D4EBE21120B {}
 		}
 		"""])
-		try expectEveryModuleCompiled(before)
 		guard compileVerificationIsEnabled else { return }
 		let compilation = try #require(after.compilation)
 		#expect(compilation.modules.map(\.moduleName) == ["Feature", "Legacy"])
@@ -563,11 +561,5 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 			}
 			""",
 		]
-	}
-
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
 	}
 }

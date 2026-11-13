@@ -87,7 +87,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		    public enum __safeDI_Screen_78E35F6751F3A2C5 {}
 		}
 		"""), "Unexpected output \(file)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -127,7 +126,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		    public enum __safeDI_Screen_620B4A759064B3AE {}
 		}
 		"""), "Unexpected output \(file)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -187,7 +185,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		    public enum __safeDI_Screen_BECF708EDD1150DB {}
 		}
 		"""), "Unexpected output \(file)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -201,7 +198,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 
 		let file = try generatedFile(ofModuleNamed: "Feature", typeName: "Screen", in: output, under: integration)
 		#expect(file == Self.expectedFile(code: Self.tieredScreenCode), "Unexpected output \(file)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -229,7 +225,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 
 		let file = try generatedFile(ofModuleNamed: "Feature", typeName: "Screen", in: output, under: integration)
 		#expect(file == Self.expectedFile(code: Self.tieredScreenCodeWithPlainInitializers), "Unexpected output \(file)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -284,7 +279,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		    }
 		}
 		"""), "Unexpected output \(file)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -351,7 +345,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		    public enum __safeDI_Outer_620B4A759064B3AE {}
 		}
 		"""), "Unexpected output \(file)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -422,7 +415,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		    public enum __safeDI_Screen_35392AC4A24860DB {}
 		}
 		"""), "Unexpected output \(file)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -499,7 +491,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		    public enum __safeDI_Screen_DD790B818D2088B3 {}
 		}
 		"""), "Unexpected output \(file)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -556,7 +547,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		    public enum __safeDI_Screen_8B7DDFC30AB0E0DC {}
 		}
 		"""), "Unexpected output \(file)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -607,7 +597,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		    public enum __safeDI_Screen_5B08F57331B6EB31 {}
 		}
 		"""), "Unexpected output \(file)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Private
@@ -745,13 +734,5 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		case .swiftPackagePlugin:
 			"If this line does not compile, add the SafeDI plugin to the target that declares \(typeName)."
 		}
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
 	}
 }

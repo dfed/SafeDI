@@ -2,8 +2,8 @@
 # Scripts/changed-line-coverage.sh [BASE]   (default origin/main)
 # Runs the full suite with coverage as CI does and prints every added or changed line under Sources/ and Plugins/
 # that no test executed. The plugin compiles SafeDICore and SafeDIToolLibrary files through symlinks; a line counts as
-# executed when either copy executed it. Exit 1 when any line is unexecuted. SAFEDI_SKIP_COMPILE_CHECK=1 is honored
-# as in CI.
+# executed when either copy executed it. Exit 1 when any line is unexecuted. SAFEDI_SKIP_COMPILE_CHECK=1 and
+# SAFEDI_COMPILE_CHECK_PASSED_CACHE are honored; neither changes what coverage counts.
 set -euo pipefail
 base=${1:-origin/main}
 root=$(git rev-parse --show-toplevel); cd "$root"

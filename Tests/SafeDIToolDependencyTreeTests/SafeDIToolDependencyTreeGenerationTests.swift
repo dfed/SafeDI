@@ -2475,7 +2475,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2890,10 +2889,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		for moduleName in output.moduleNames {
 			#expect(try #require(output.modules[moduleName]).warnings == [])
 		}
-		if compileVerificationIsEnabled {
-			let compilation = try #require(output.compilation)
-			#expect(compilation.modules.map(\.exitCode) == [0, 0, 0])
-		}
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3065,10 +3060,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		#expect(output.modules.mapValues(\.generatedFiles) == expectedGeneratedFiles)
 		for moduleName in output.moduleNames {
 			#expect(try #require(output.modules[moduleName]).warnings == [])
-		}
-		if compileVerificationIsEnabled {
-			let compilation = try #require(output.compilation)
-			#expect(compilation.modules.map(\.exitCode) == [0, 0, 0])
 		}
 	}
 
@@ -3460,10 +3451,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		for moduleName in output.moduleNames {
 			#expect(try #require(output.modules[moduleName]).warnings == [])
 		}
-		if compileVerificationIsEnabled {
-			let compilation = try #require(output.compilation)
-			#expect(compilation.modules.map(\.exitCode) == [0, 0, 0])
-		}
 	}
 
 	@Test
@@ -3574,7 +3561,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Receivers that leave the seam on some path
@@ -4574,10 +4560,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// A warning cites the path the file was parsed under: the compiler's spelling, normalized.
 		let rootPath = NormalizedFilePath(app.fixtures.compilerPath(of: "Root.swift")).path
 		#expect(app.warnings.map(\.formatted) == [cell.rootWarning?.replacingOccurrences(of: "<ROOT-PATH>", with: rootPath)].compactMap(\.self))
-		if compileVerificationIsEnabled {
-			let compilation = try #require(output.compilation)
-			#expect(compilation.modules.map(\.exitCode) == [0, 0])
-		}
 	}
 
 	/// A mix of `user`'s forms that is two parameters under one label: the receives the seam's error names, in tree
@@ -5275,10 +5257,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		for moduleName in output.moduleNames {
 			#expect(try #require(output.modules[moduleName]).warnings == [])
 		}
-		if compileVerificationIsEnabled {
-			let compilation = try #require(output.compilation)
-			#expect(compilation.modules.map(\.exitCode) == [0, 0])
-		}
 	}
 
 	@Test
@@ -5341,7 +5319,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -7871,10 +7848,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			]
 		}
 		#expect(output.modules.mapValues(\.generatedFiles) == expectedGeneratedFiles)
-		if compileVerificationIsEnabled {
-			let compilation = try #require(output.compilation)
-			#expect(compilation.modules.map(\.exitCode) == [0, 0])
-		}
 	}
 
 	@Test
@@ -9265,14 +9238,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		case .swiftPackagePlugin:
 			NormalizedFilePath(fixtures[moduleName]!.compilerPath(of: fileName)).path
 		}
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
 	}
 
 	private static func importBlock(_ moduleName: String) -> String {
