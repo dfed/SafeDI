@@ -9055,12 +9055,76 @@ public actor DependencyTreeGenerator {
 				return labels
 			}
 		}
-		/// Whether the tree `scope` builds reads a label new to it: one of `newLabels`, or the label of one of
-		/// `newReceivableProperties`. See `validateTreeBuiltAgainByCycle`.
+		/// Whether the tree `scope` builds reads a label new to it that a judgement of `validateTreeBuiltAgainByCycle` can fire
+		/// for: one of `newLabels`, or the label of one of `newReceivableProperties`, that is not among
+		/// `labelsNoJudgementFiresFor()`.
 		func treeReadsAnything(ofTreeRootedAt scope: Scope, newLabels: some Collection<String>, newReceivableProperties: Set<Property>) -> Bool {
 			guard !newLabels.isEmpty || !newReceivableProperties.isEmpty else { return false }
 			let readLabels = labelsRead(inTreeOf: scope)
-			return newLabels.contains(where: readLabels.contains) || newReceivableProperties.contains { readLabels.contains($0.label) }
+			func canBeJudged(_ label: String) -> Bool {
+				readLabels.contains(label) && !labelsNoJudgementFiresFor().contains(label)
+			}
+			return newLabels.contains(where: canBeJudged) || newReceivableProperties.contains { canBeJudged($0.label) }
+		}
+		/// See `labelsNoJudgementFiresFor()`.
+		var memoizedLabelsNoJudgementFiresFor: Set<String>?
+		/// The labels for which neither judgement of `validateTreeBuiltAgainByCycle` can fire anywhere in the trees of these
+		/// roots, whatever is new where: every declaration of the label is one that every read of it accepts, as
+		/// `recordHiddenReceives` accepts the closest declaration, so no declaration of it hides a read; and no tree built for a
+		/// property of the label reads it, so no declaration of it is still being built where it is read. A value redeclared
+		/// between screens with its own type, such as a flow's state, is such a label. The answer reads every scope the roots
+		/// reach and no walk's outcome, so it is computed once, when a walk first finds a read label new.
+		func labelsNoJudgementFiresFor() -> Set<String> {
+			if let memoizedLabelsNoJudgementFiresFor {
+				return memoizedLabelsNoJudgementFiresFor
+			} else {
+				var declarationsByLabel = [String: [(property: Property, lazilyInstantiatedInstanceProperty: Property?)]]()
+				var acceptedPropertiesOfReadsByLabel = [String: [Set<Property>]]()
+				var scopesBuiltByLabel = [String: [Scope]]()
+				var reachedScopes = Set<Scope>()
+				var scopesToVisit = [Scope]()
+				for rootScope in rootScopes + additionalMockRootScopes where reachedScopes.insert(rootScope.scope).inserted {
+					scopesToVisit.append(rootScope.scope)
+				}
+				while let reachedScope = scopesToVisit.popLast() {
+					for dependency in reachedScope.instantiable.dependencies {
+						// What `enterDeclarations` enters as a closest declaration.
+						if reachedScope.createdProperties.contains(dependency.property) {
+							declarationsByLabel[dependency.property.label, default: []].append((dependency.property, dependency.lazilyInstantiatedInstanceProperty))
+						}
+						// What `recordHiddenReceives` accepts for each read.
+						switch dependency.source {
+						case .received:
+							acceptedPropertiesOfReadsByLabel[dependency.property.label, default: []].append([dependency.property, dependency.property.asUnwrappedProperty])
+						case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+							acceptedPropertiesOfReadsByLabel[fulfillingProperty.label, default: []].append(onlyIfAvailable
+								? Set(fulfillingProperty.formsReadByOnlyIfAvailableReceive)
+								: [fulfillingProperty, fulfillingProperty.asUnwrappedProperty])
+						case .instantiated, .forwarded:
+							break
+						}
+					}
+					for case let .instantiated(childProperty, childScope, _) in reachedScope.propertiesToGenerate {
+						scopesBuiltByLabel[childProperty.label, default: []].append(childScope)
+						if reachedScopes.insert(childScope).inserted {
+							scopesToVisit.append(childScope)
+						}
+					}
+				}
+				var labels = Set<String>()
+				for (label, acceptedPropertiesOfReads) in acceptedPropertiesOfReadsByLabel {
+					let everyDeclarationIsAccepted = declarationsByLabel[label, default: []].allSatisfy { declaration in
+						acceptedPropertiesOfReads.allSatisfy {
+							$0.contains(declaration.property) || declaration.lazilyInstantiatedInstanceProperty.map($0.contains) == true
+						}
+					}
+					if everyDeclarationIsAccepted, scopesBuiltByLabel[label, default: []].allSatisfy({ !labelsRead(inTreeOf: $0).contains(label) }) {
+						labels.insert(label)
+					}
+				}
+				memoizedLabelsNoJudgementFiresFor = labels
+				return labels
+			}
 		}
 		/// Validates the tree rooted at `rootScope`, scope by scope, depth first in the order each scope declares its
 		/// children. It keeps its own stack of the scopes left to validate, since a tree can be as deep as the module
@@ -9278,8 +9342,9 @@ public actor DependencyTreeGenerator {
 		///
 		/// The walk's work grows with every path the scopes it re-enters can be reached by, so a tree whose judgements cannot
 		/// change is not walked: at its start and before each child it pushes, the walk stops unless the tree reads a label
-		/// new to it (`labelsRead(inTreeOf:)`). Both of the walk's judgements fire only for a receive whose label is new, and
-		/// the new labels only shrink going down, so a tree that reads none has nothing to report, on any path.
+		/// new to it (`labelsRead(inTreeOf:)`) that a judgement can fire for (`labelsNoJudgementFiresFor()`). Both of the
+		/// walk's judgements fire only for a receive whose label is new, and the new labels only shrink going down, so a tree
+		/// that reads none has nothing to report, on any path.
 		func validateTreeBuiltAgainByCycle(
 			of scope: Scope,
 			for property: Property,

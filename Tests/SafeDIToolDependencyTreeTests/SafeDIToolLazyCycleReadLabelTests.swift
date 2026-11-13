@@ -24,9 +24,11 @@ import Testing
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
-/// The walk of a tree a lazy cycle builds again is skipped where nothing the tree reads is new to it. Each test but the
-/// last gives the walk one diagnostic to find, read in one way a set of the labels a tree reads could leave out: leaving
-/// the label out skips the walk that reports it. The last gives the walk nothing to find, on a shape it cannot finish.
+/// The walk of a tree a lazy cycle builds again is skipped where nothing the tree reads is new to it, or where what is new
+/// is a label no judgement of the walk can fire for. Each test of a diagnostic gives the walk one to find, read in one way
+/// a set of the labels a tree reads could leave out, or in one way a label can stay where a judgement fires: a mistake in
+/// either set skips the walk that reports it. Each test of a dependency tree gives the walk nothing to find, on a shape it
+/// cannot finish.
 struct SafeDIToolLazyCycleReadLabelTests: ~Copyable {
 	// MARK: Initialization
 
@@ -223,6 +225,86 @@ struct SafeDIToolLazyCycleReadLabelTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": generatedFileHeader + Self.screensAndHubDependencyTree(screenCount: screenCount)])
 	}
 
+	// MARK: Tests – A label no judgement fires for
+
+	// Every screen receives `context`, and `Hub` declares it again between the last screen and the cycle that builds it again,
+	// so every tree a cycle builds again reads a label new to it. The walk is skipped anyway for a label no judgement can fire
+	// for: one whose every declaration every read accepts, and that no tree built for it reads. The first two tests break the
+	// first condition and give the walk the hidden-label errors it then must find; the cycle error of
+	// `generate_throwsCycleError_whenByValueReceiveOfLazilyInstantiatedDeclarationStillBeingBuiltIsReadThroughItsLabel` is
+	// one only a label that a tree built for it reads can give.
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHiddenError_whenRedeclaredLabelHasADeclarationOfAnotherType() async {
+		// `Hub` declares `context: OtherContext`, which no screen's receive of `context: Context` accepts.
+		var fixture = Self.screensAndHubFixture(
+			screenCount: 2,
+			sharedContext: (screenDeclaration: "@Received let context: Context", hubDeclaration: "@Instantiated let context: OtherContext"),
+		)
+		fixture.append(seamFixtureType(named: "OtherContext", isFinalClass: true, declarations: []))
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Screen00.swift"]):10:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Instantiator<Screen01> -> Instantiator<Screen00> -> Instantiator<Screen01> -> Screen00. `Hub` declares `context: OtherContext` with the same label, so the types below `Hub` receive `context: OtherContext` instead. Give `context: OtherContext` on `Hub` a different label to fix.
+			\(fixtures["Hub.swift"]):12:5: note: `context: OtherContext` is declared here
+			\(fixtures["Screen00.swift"]):10:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Instantiator<Screen01> -> Screen00. `Hub` declares `context: OtherContext` with the same label, so the types below `Hub` receive `context: OtherContext` instead. Give `context: OtherContext` on `Hub` a different label to fix.
+			\(fixtures["Hub.swift"]):12:5: note: `context: OtherContext` is declared here
+			\(fixtures["Screen01.swift"]):11:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Instantiator<Screen01> -> Instantiator<Screen00> -> Screen01. `Hub` declares `context: OtherContext` with the same label, so the types below `Hub` receive `context: OtherContext` instead. Give `context: OtherContext` on `Hub` a different label to fix.
+			\(fixtures["Hub.swift"]):12:5: note: `context: OtherContext` is declared here
+			\(fixtures["Screen01.swift"]):11:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Screen01. `Hub` declares `context: OtherContext` with the same label, so the types below `Hub` receive `context: OtherContext` instead. Give `context: OtherContext` on `Hub` a different label to fix.
+			\(fixtures["Hub.swift"]):12:5: note: `context: OtherContext` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHiddenError_whenRequiredAliasReadsLabelDeclaredInAFormOnlyAReceiveOnlyIfAvailableReads() async {
+		// `Hub` forwards `context: Context?`, which a receive of `context` only if available would read, but each screen's
+		// required alias of `context: Context` does not.
+		let fixture = Self.screensAndHubFixture(
+			screenCount: 2,
+			sharedContext: (
+				screenDeclaration: #"@Received(fulfilledByDependencyNamed: "context", ofType: Context.self) let renamedContext: Context"#,
+				hubDeclaration: "@Forwarded let context: Context?",
+			),
+		)
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Screen00.swift"]):10:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Instantiator<Screen01> -> Instantiator<Screen00> -> Instantiator<Screen01> -> Screen00. `Hub` declares `context: Context?` with the same label, so the types below `Hub` receive `context: Context?` instead. Give `context: Context?` on `Hub` a different label to fix.
+			\(fixtures["Hub.swift"]):12:5: note: `context: Context?` is declared here
+			\(fixtures["Screen00.swift"]):10:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Instantiator<Screen01> -> Screen00. `Hub` declares `context: Context?` with the same label, so the types below `Hub` receive `context: Context?` instead. Give `context: Context?` on `Hub` a different label to fix.
+			\(fixtures["Hub.swift"]):12:5: note: `context: Context?` is declared here
+			\(fixtures["Screen01.swift"]):11:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Instantiator<Screen01> -> Instantiator<Screen00> -> Screen01. `Hub` declares `context: Context?` with the same label, so the types below `Hub` receive `context: Context?` instead. Give `context: Context?` on `Hub` a different label to fix.
+			\(fixtures["Hub.swift"]):12:5: note: `context: Context?` is declared here
+			\(fixtures["Screen01.swift"]):11:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Screen01. `Hub` declares `context: Context?` with the same label, so the types below `Hub` receive `context: Context?` instead. Give `context: Context?` on `Hub` a different label to fix.
+			\(fixtures["Hub.swift"]):12:5: note: `context: Context?` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesDependencyTreeWithoutWalkingCycles_whenEveryDeclarationOfRedeclaredLabelIsOneEveryReadAccepts() async throws {
+		// Without the skip this shape takes over ten minutes: every tree reads `context`, which `Hub` declares again, so the
+		// walk runs, and its work grows with the number of subsets of the hub's labels it can reach. With the skip the test
+		// finishes in well under a second. As above, the size is the assertion.
+		let screenCount = 24
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.screensAndHubFixture(
+				screenCount: screenCount,
+				sharedContext: (screenDeclaration: "@Received let context: Context", hubDeclaration: "@Instantiated let context: Context"),
+			),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": generatedFileHeader + Self.screensAndHubDependencyTree(screenCount: screenCount, sharesContext: true)])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -247,18 +329,29 @@ struct SafeDIToolLazyCycleReadLabelTests: ~Copyable {
 	/// `Root` opens `Screen00`. Each of `screenCount` screens declares a `Service` of its own, opens the four screens above it
 	/// and opens the next screen, the last of which opens `Hub`. `Hub` declares every screen's `Service` again and opens
 	/// the last screen, so the cycle it closes has one new label per screen.
-	private static func screensAndHubFixture(screenCount: Int) -> [String] {
+	/// - Parameter sharedContext: When not `nil`, `Root` also declares `context: Context`, each screen also makes
+	///   `screenDeclaration` after its `Service`, and `Hub` makes `hubDeclaration` after the screens' `Service`s.
+	private static func screensAndHubFixture(screenCount: Int, sharedContext: (screenDeclaration: String, hubDeclaration: String)? = nil) -> [String] {
+		var rootDeclarations = ["@Instantiated let \(screenLabel(0)): Instantiator<\(screenName(0))>"]
+		var hubDeclarations = (0..<screenCount).map { "@Instantiated let \(serviceLabel($0)): Service" }
+		if let sharedContext {
+			rootDeclarations.insert("@Instantiated let context: Context", at: 0)
+			hubDeclarations.append(sharedContext.hubDeclaration)
+		}
+		hubDeclarations.append("@Instantiated let \(screenLabel(screenCount - 1)): Instantiator<\(screenName(screenCount - 1))>")
 		var fixture = [
-			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let \(screenLabel(0)): Instantiator<\(screenName(0))>"]),
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: rootDeclarations),
 			seamFixtureType(named: "Service", isFinalClass: true, declarations: []),
-			seamFixtureType(
-				named: "Hub",
-				isFinalClass: true,
-				declarations: (0..<screenCount).map { "@Instantiated let \(serviceLabel($0)): Service" } + ["@Instantiated let \(screenLabel(screenCount - 1)): Instantiator<\(screenName(screenCount - 1))>"],
-			),
+			seamFixtureType(named: "Hub", isFinalClass: true, declarations: hubDeclarations),
 		]
+		if sharedContext != nil {
+			fixture.append(seamFixtureType(named: "Context", isFinalClass: true, declarations: []))
+		}
 		for index in 0..<screenCount {
 			var declarations = ["@Instantiated let \(serviceLabel(index)): Service"]
+			if let sharedContext {
+				declarations.append(sharedContext.screenDeclaration)
+			}
 			declarations += screenIndicesOpenedAbove(index).map { "@Instantiated let \(screenLabel($0)): Instantiator<\(screenName($0))>" }
 			declarations.append(index + 1 < screenCount ? "@Instantiated let \(screenLabel(index + 1)): Instantiator<\(screenName(index + 1))>" : "@Instantiated let hub: Instantiator<Hub>")
 			fixture.append(seamFixtureType(named: screenName(index), isFinalClass: true, declarations: declarations))
@@ -268,38 +361,65 @@ struct SafeDIToolLazyCycleReadLabelTests: ~Copyable {
 
 	/// The dependency tree of `screensAndHubFixture`: the screens' builder functions nest, each screen's reference to a screen
 	/// above it calls that screen's enclosing function, and `Hub`'s builder function is the innermost.
-	private static func screensAndHubDependencyTree(screenCount: Int) -> String {
+	/// - Parameter sharesContext: Whether the fixture has `sharedContext` with a receive of `context: Context` on each screen
+	///   and a declaration of it on `Hub`. Each screen's builder function then takes the `context` it is passed, which is
+	///   `Hub`'s inside `Hub`'s builder function and `Root`'s everywhere else.
+	private static func screensAndHubDependencyTree(screenCount: Int, sharesContext: Bool = false) -> String {
 		func indentation(_ level: Int) -> String {
 			String(repeating: "    ", count: level)
 		}
+		func instantiatorLines(ofScreen index: Int, at level: Int) -> [String] {
+			if sharesContext {
+				[
+					"\(indentation(level))let \(screenLabel(index)) = Instantiator<\(screenName(index))> {",
+					"\(indentation(level + 1))__safeDI_\(screenLabel(index))(context: context)",
+					"\(indentation(level))}",
+				]
+			} else {
+				["\(indentation(level))let \(screenLabel(index)) = Instantiator<\(screenName(index))>(__safeDI_\(screenLabel(index)))"]
+			}
+		}
 		var lines = ["extension Root {", "    public convenience init() {"]
+		if sharesContext {
+			lines.append("        let context = Context()")
+		}
 		for index in 0..<screenCount {
-			lines.append("\(indentation(2 + index))func __safeDI_\(screenLabel(index))() -> \(screenName(index)) {")
+			lines.append("\(indentation(2 + index))func __safeDI_\(screenLabel(index))(\(sharesContext ? "context: Context" : "")) -> \(screenName(index)) {")
 			lines.append("\(indentation(3 + index))let \(serviceLabel(index)) = Service()")
-			lines += screenIndicesOpenedAbove(index).map {
-				"\(indentation(3 + index))let \(screenLabel($0)) = Instantiator<\(screenName($0))>(__safeDI_\(screenLabel($0)))"
+			for indexAbove in screenIndicesOpenedAbove(index) {
+				lines += instantiatorLines(ofScreen: indexAbove, at: 3 + index)
 			}
 		}
 		let hubIndentation = indentation(2 + screenCount)
 		let hubBodyIndentation = indentation(3 + screenCount)
 		lines.append("\(hubIndentation)func __safeDI_hub() -> Hub {")
 		lines += (0..<screenCount).map { "\(hubBodyIndentation)let \(serviceLabel($0)) = Service()" }
+		if sharesContext {
+			lines.append("\(hubBodyIndentation)let context = Context()")
+		}
 		let lastScreen = screenCount - 1
-		lines.append("\(hubBodyIndentation)let \(screenLabel(lastScreen)) = Instantiator<\(screenName(lastScreen))>(__safeDI_\(screenLabel(lastScreen)))")
-		let hubArguments = (0..<screenCount).map { "\(serviceLabel($0)): \(serviceLabel($0))" } + ["\(screenLabel(lastScreen)): \(screenLabel(lastScreen))"]
+		lines += instantiatorLines(ofScreen: lastScreen, at: 3 + screenCount)
+		var hubArguments = (0..<screenCount).map { "\(serviceLabel($0)): \(serviceLabel($0))" }
+		if sharesContext {
+			hubArguments.append("context: context")
+		}
+		hubArguments.append("\(screenLabel(lastScreen)): \(screenLabel(lastScreen))")
 		lines.append("\(hubBodyIndentation)return Hub(\(hubArguments.joined(separator: ", ")))")
 		lines.append("\(hubIndentation)}")
 		lines.append("\(hubIndentation)let hub = Instantiator<Hub>(__safeDI_hub)")
 		for index in (0..<screenCount).reversed() {
 			let body = indentation(3 + index)
 			var arguments = ["\(serviceLabel(index)): \(serviceLabel(index))"]
+			if sharesContext {
+				arguments.append("context: context")
+			}
 			arguments += screenIndicesOpenedAbove(index).map { "\(screenLabel($0)): \(screenLabel($0))" }
 			arguments.append(index + 1 < screenCount ? "\(screenLabel(index + 1)): \(screenLabel(index + 1))" : "hub: hub")
 			lines.append("\(body)return \(screenName(index))(\(arguments.joined(separator: ", ")))")
 			lines.append("\(indentation(2 + index))}")
-			lines.append("\(indentation(2 + index))let \(screenLabel(index)) = Instantiator<\(screenName(index))>(__safeDI_\(screenLabel(index)))")
+			lines += instantiatorLines(ofScreen: index, at: 2 + index)
 		}
-		lines.append("        self.init(\(screenLabel(0)): \(screenLabel(0)))")
+		lines.append("        self.init(\(sharesContext ? "context: context, " : "")\(screenLabel(0)): \(screenLabel(0)))")
 		lines.append("    }")
 		lines.append("}")
 		return lines.joined(separator: "\n")
