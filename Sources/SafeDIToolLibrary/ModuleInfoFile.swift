@@ -144,6 +144,29 @@ public struct ModuleInfoFile: Codable, Sendable {
 		)
 	}
 
+	/// This file without source positions: what `--split-module-info-positions` writes to the `.safedi` its dependents
+	/// read whatever they generate, so an edit that moves declarations without changing them leaves it byte-identical.
+	func withoutPositions() -> ModuleInfoFile {
+		ModuleInfoFile(
+			moduleName: moduleName,
+			packageName: packageName,
+			dependencyModuleNames: dependencyModuleNames,
+			imports: imports,
+			mockImports: mockImports,
+			instantiables: instantiables.map { $0.withoutPositions() },
+			configurations: configurations.map { configuration in
+				var stripped = configuration
+				stripped.declarationLocation = nil
+				return stripped
+			},
+			filesWithUnexpectedNodes: filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause,
+			plainTypeDeclarations: plainTypeDeclarations.map { $0.withoutPositions() },
+			view: view,
+		)
+	}
+
 	/// Whether the module declares a type whose signature a dependent computes from the modules this one depends on: a
 	/// seam (`generateDependencyTree: true`) or a public mock (`generateMock: .public`).
 	var declaresSeamOrPublicMock: Bool {

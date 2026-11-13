@@ -68,6 +68,10 @@ public struct Generate: AsyncParsableCommand {
 
 	@Flag(help: "States that the compiler is handed every input Swift file, including the files behind dependent module info, at exactly the path this tool is handed. Generated code then wraps each `@Received(fulfilledByDependencyNamed:ofType:)` assignment in a `#sourceLocation` directive naming that path, so the compiler reports a type mismatch at the declaration. Without a build tool plugin’s manifest, this tool also prints each error and warning at the path it was handed, as the compiler prints its own. Without this flag, and without a build tool plugin’s manifest, the assignment names the declaration in a comment instead, because the compiler warns at a directive whose path differs from the one it was handed, and errors and warnings name each file by its absolute path.") var compilerReceivesInputPathsUnchanged = false
 
+	@Flag(help: "Prototype: writes '--module-info-output' without source positions and the positions to a sidecar beside it, the path with `positions` appended, and reads a module info file's sidecar, when one exists, in place of the file.") var splitModuleInfoPositions = false
+
+	@Option(help: "Prototype: where to write, one per line, the module info files and position sidecars this run was handed whose bytes did not affect what it wrote, for Bazel's `unused_inputs_list`. Written only when the run succeeds.") var unusedInputsListOutput: String?
+
 	// MARK: Internal
 
 	public func run() async throws {
@@ -287,7 +291,7 @@ public struct Generate: AsyncParsableCommand {
 		} else {
 			parsedModuleInfo = initialModule
 		}
-		let dependentModuleInfoFiles = try await moduleInfoFilesIncludingThoseBeneath(
+		let (dependentModuleInfoFiles, opensFilesBeneath) = try await moduleInfoFilesIncludingThoseBeneath(
 			listedFiles: listedModuleInfoFiles,
 			listedPaths: listedModuleInfoPaths,
 			ownModule: parsedModuleInfo,
@@ -808,9 +812,24 @@ public struct Generate: AsyncParsableCommand {
 		// read; and only when its bytes change, so a dependent whose build compares modification times reruns only when
 		// what the file describes changed.
 		if let moduleInfoDestination {
-			try ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, view: moduleInfoView.view)
-				.moduleInfoData
-				.writeIfChanged(toPath: moduleInfoDestination.path)
+			let moduleInfoFile = ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, view: moduleInfoView.view)
+			if splitModuleInfoPositions {
+				try moduleInfoFile.withoutPositions().moduleInfoData.writeIfChanged(toPath: moduleInfoDestination.path)
+				try moduleInfoFile.moduleInfoData.writeIfChanged(toPath: moduleInfoDestination.path + "positions")
+			} else {
+				try moduleInfoFile.moduleInfoData.writeIfChanged(toPath: moduleInfoDestination.path)
+			}
+		}
+		if let unusedInputsListOutput {
+			try unusedModuleInfoInputs(
+				listedPaths: listedModuleInfoPaths,
+				opensFilesBeneath: opensFilesBeneath,
+				filesRead: dependentModuleInfoFiles,
+				hasWarnings: !warnings.isEmpty,
+			)
+			.map { $0 + "\n" }
+			.joined()
+			.write(toPath: unusedInputsListOutput)
 		}
 		return Output(warnings: warnings, module: module, dependentModules: dependentModuleInfo)
 	}
@@ -1740,6 +1759,7 @@ public struct Generate: AsyncParsableCommand {
 	/// - Throws: When a file cannot be read.
 	private func loadSafeDIModuleInfo(at paths: [String], readingViews: Bool = true) async throws -> [(file: ModuleInfoFile, path: String)] {
 		let moduleInfoURLs = paths.map(\.asFileURL)
+		let readsSidecar = splitModuleInfoPositions
 		return try await withThrowingTaskGroup(
 			of: (index: Int, file: ModuleInfoFile).self,
 			returning: [(file: ModuleInfoFile, path: String)].self,
@@ -1747,7 +1767,12 @@ public struct Generate: AsyncParsableCommand {
 			for (index, moduleInfoURL) in moduleInfoURLs.enumerated() {
 				taskGroup.addTask {
 					do {
-						let data = try Data(contentsOf: moduleInfoURL)
+						let sidecarPath = moduleInfoURL.path + "positions"
+						let data = if readsSidecar, FileManager.default.fileExists(atPath: sidecarPath) {
+							try Data(contentsOf: sidecarPath.asFileURL)
+						} else {
+							try Data(contentsOf: moduleInfoURL)
+						}
 						return try (index: index, file: readingViews ? ModuleInfoFile(moduleInfoData: data) : ModuleInfoFile(moduleInfoDataWithoutView: data))
 					} catch let error as BinaryFileReadError {
 						throw UnreadableModuleInfoError(path: moduleInfoURL.path, reason: error)
@@ -1772,18 +1797,78 @@ public struct Generate: AsyncParsableCommand {
 		listedFiles: [(file: ModuleInfoFile, path: String)],
 		listedPaths: [String],
 		ownModule: ModuleInfo,
-	) async throws -> [(file: ModuleInfoFile, path: String)] {
+	) async throws -> (files: [(file: ModuleInfoFile, path: String)], opensFilesBeneath: Bool) {
 		var selection = ModulesBeneathSelection(ownModule: ownModule, listedFiles: listedFiles.map(\.file))
 		guard transitiveModuleInfoFilePath != nil, selection.reachesTypeNothingReadDeclares() else {
-			return listedFiles
+			return (listedFiles, false)
 		}
 		let otherPaths = try Set(moduleInfoPaths(listedIn: transitiveModuleInfoFilePath)).subtracting(listedPaths).sorted()
 		let otherFiles = try await loadSafeDIModuleInfo(at: otherPaths, readingViews: false)
 		let pathsToRead = selection.indicesOfFilesToRead(among: otherFiles.map(\.file)).sorted().map { otherPaths[$0] }
 		let filesToRead = try await loadSafeDIModuleInfo(at: pathsToRead)
-		return zip(listedPaths + pathsToRead, listedFiles + filesToRead)
+		return (zip(listedPaths + pathsToRead, listedFiles + filesToRead)
 			.sorted { $0.0 < $1.0 }
-			.map(\.1)
+			.map(\.1), true)
+	}
+
+	/// The module info files and position sidecars this run was handed whose bytes did not affect what it wrote.
+	///
+	/// A file beneath is unused when the run never opened the files beneath. A sidecar is unused when the run printed no
+	/// warning – a warning can point into, or be chosen by positions in, any module read – and the combined output names
+	/// none of the module's files in a `#sourceLocation` directive or a `// Declared at` comment, the only places a position
+	/// of another module reaches generated code. Errors need nothing: a run that fails writes no list, and Bazel caches
+	/// nothing of it.
+	private func unusedModuleInfoInputs(
+		listedPaths: [String],
+		opensFilesBeneath: Bool,
+		filesRead: [(file: ModuleInfoFile, path: String)],
+		hasWarnings: Bool,
+	) throws -> [String] {
+		let pathsBeneath = try Set(moduleInfoPaths(listedIn: transitiveModuleInfoFilePath)).subtracting(listedPaths).sorted()
+		let generatedCode = try combinedOutput.map { try String(contentsOfFile: $0, encoding: .utf8) } ?? ""
+		let namedFilePaths = Self.filePathsNamingPositions(in: generatedCode)
+		let filesReadByPath = Dictionary(filesRead.map { ($0.path, $0.file) }, uniquingKeysWith: { first, _ in first })
+		var unused = [String]()
+		for path in listedPaths + pathsBeneath {
+			let sidecarPath = path + "positions"
+			let hasSidecar = FileManager.default.fileExists(atPath: sidecarPath)
+			if !opensFilesBeneath, !listedPaths.contains(path) {
+				unused.append(path)
+				if hasSidecar { unused.append(sidecarPath) }
+				continue
+			}
+			guard hasSidecar, !hasWarnings else { continue }
+			guard let file = filesReadByPath[path.asFileURL.path] ?? filesReadByPath[path] else {
+				// Opened only to find what the trees need, which reads no position.
+				unused.append(sidecarPath)
+				continue
+			}
+			let namesPosition = file.instantiables.contains { instantiable in
+				[instantiable.sourceFilePath, instantiable.declarationLocation?.filePath].contains { $0.map(namedFilePaths.contains) ?? false }
+					|| instantiable.dependencies.contains { $0.declarationLocation.map { namedFilePaths.contains($0.filePath) } ?? false }
+			}
+			if !namesPosition {
+				unused.append(sidecarPath)
+			}
+		}
+		return unused
+	}
+
+	/// The files `code` names with a line: in a `#sourceLocation(file:line:)` directive or a `// Declared at <path>:<line>`
+	/// comment. One pass over the lines that hold either marker, so the cost does not grow with the files read.
+	private static func filePathsNamingPositions(in code: String) -> Set<String> {
+		var filePaths = Set<String>()
+		let directive = "#sourceLocation(file: \""
+		let comment = "// Declared at "
+		for line in code.split(separator: "\n") where line.contains("#sourceLocation(file:") || line.contains(comment) {
+			if let start = line.range(of: directive)?.upperBound, let end = line[start...].firstIndex(of: "\"") {
+				filePaths.insert(String(line[start..<end]))
+			}
+			if let start = line.range(of: comment)?.upperBound, let end = line[start...].lastIndex(of: ":") {
+				filePaths.insert(String(line[start..<end]))
+			}
+		}
+		return filePaths
 	}
 
 	/// Where `--module-info-output` writes the module's info, and the module it names, or `nil` when the run writes none.
