@@ -3038,6 +3038,8 @@ public actor DependencyTreeGenerator {
 
 	private var rootScopeGenerators: [RootScopeInfo] {
 		get throws {
+			// The trees of the foreign seams with holes, built inline with the fills this module generates.
+			var inlineForeignSeamTrees = [ScopeGenerator]()
 			let rootScopeGenerators: [RootScopeInfo] = try {
 				// The roots' trees and the generated seams' trees build exactly the reachable types, the foreign seams
 				// their trees call included. First, before any seam signature is computed: a seam's parameters are keyed
@@ -3070,6 +3072,7 @@ public actor DependencyTreeGenerator {
 					validation: &childrenRequiringEachOtherValidation,
 				)
 				try validateCyclesFromRootsOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, receivedPropertiesCache: &receivedPropertiesCache)
+				inlineForeignSeamTrees = try inlineTreesOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap)
 				self.validatedScopes = Set(typeDescriptionToScopeMap.values)
 				// A module whose declarations hold no seam generates from the validated scopes, as it always has.
 				// One that holds a seam generates from a second map, in which every reach of a seam is a call to
@@ -3100,7 +3103,7 @@ public actor DependencyTreeGenerator {
 				}
 				return try seamWorldRootScopeGenerators()
 			}()
-			try Self.validateCycleLabelsArePassable(inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator))
+			try Self.validateCycleLabelsArePassable(inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator) + inlineForeignSeamTrees)
 			return rootScopeGenerators
 		}
 	}
@@ -3108,7 +3111,7 @@ public actor DependencyTreeGenerator {
 	/// Rejects each label that a type a dependency cycle builds again, in the trees `generators` root, receives in forms
 	/// no one value SafeDI hands it can provide together (see `UnpassableCycleLabel`). Each is reported once, in source
 	/// order, whichever trees hold it: the trees of several roots, production or mock, can each build the function whose
-	/// label it is.
+	/// label it is, and so can the inline tree of a foreign seam with holes (`inlineTreesOfForeignSeamsWithHoles(in:)`).
 	private static func validateCycleLabelsArePassable(inTreesRootedAt generators: [ScopeGenerator]) throws {
 		let unpassableCycleLabels = generators.flatMap(\.unpassableCycleLabelsInTree).uniqued()
 		if let error = DependencyTreeGeneratorError.reportingAll(of: unpassableCycleLabels.map(DependencyTreeGeneratorError.unpassableCycleLabel)) {
@@ -8686,9 +8689,7 @@ public actor DependencyTreeGenerator {
 		in typeDescriptionToScopeMap: [TypeDescription: Scope],
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 	) throws {
-		guard !seams.foreignSeams.isEmpty else { return }
-		let foreignSeamRoots = try foreignSeamRoots.get()
-		let seamTypesWithHoles = foreignSeamRoots.keys.filter { (foreignSeamRoots[$0] ?? nil)?.signature.holes.isEmpty == false }.sorted()
+		let seamTypesWithHoles = try foreignSeamTypesWithHoles()
 		guard !seamTypesWithHoles.isEmpty else { return }
 		let rootScopes = seamTypesWithHoles.compactMap { typeDescriptionToScopeMap[$0] }.map { scope in
 			var receivedFromOutside = Set<Property>()
@@ -8701,6 +8702,33 @@ public actor DependencyTreeGenerator {
 			return ValidatedRootScope(scope: scope, boundProperties: [], isMock: false, receivedFromOutside: receivedFromOutside)
 		}
 		try validatePropertiesAreFulfillable(onRootScopes: rootScopes, typeDescriptionToScopeMap: typeDescriptionToScopeMap, cyclesOnly: true)
+	}
+
+	/// The foreign seams whose initializers take a builder, in type order.
+	private func foreignSeamTypesWithHoles() throws -> [TypeDescription] {
+		guard !seams.foreignSeams.isEmpty else { return [] }
+		let foreignSeamRoots = try foreignSeamRoots.get()
+		return foreignSeamRoots.keys.filter { (foreignSeamRoots[$0] ?? nil)?.signature.holes.isEmpty == false }.sorted()
+	}
+
+	/// The generators, whose code is never started, of the tree of each foreign seam whose initializer takes a builder,
+	/// from the seam's root over the validated scopes, which build the seam inline with the fills this module generates,
+	/// in type order. `validateCycleLabelsArePassable` judges them: inline, the builder function a lazy cycle in the
+	/// seam's tree closes on takes a label as a parameter whose forms include those a fill inside it receives, while the
+	/// seam's own module, which cannot see the fill, judged the parameter without them. So a fill that receives the label
+	/// in a form no one parameter carries together with the forms the seam's tree receives is rejected as its inline build
+	/// is, with the same error. A hole this module does not fill has no scope, and its tree ends there.
+	private func inlineTreesOfForeignSeamsWithHoles(in typeDescriptionToScopeMap: [TypeDescription: Scope]) throws -> [ScopeGenerator] {
+		try foreignSeamTypesWithHoles().compactMap { typeDescriptionToScopeMap[$0] }.map { scope in
+			try scope.createScopeGenerator(
+				for: nil,
+				lazilyInstantiatedInstanceProperties: [],
+				erasedToConcreteExistential: false,
+				startsCodeGeneration: false,
+				validatesForwardedProperties: false,
+				declaredTypeNames: declaredTypeNames,
+			)
+		}
 	}
 
 	/// An alias that a receive of its property resolves to: the nearest scope above the receiver that provides the
