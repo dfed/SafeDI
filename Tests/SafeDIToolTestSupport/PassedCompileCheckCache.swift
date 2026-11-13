@@ -126,6 +126,7 @@ struct PassedCompileCheckCache: Sendable {
 				compilationConditions: Set(module.sources.compilationConditions).subtracting(["DEBUG"]).sorted(),
 				swiftLanguageMode: module.sources.compilerSettings.swiftLanguageMode,
 				upcomingFeatures: module.sources.compilerSettings.upcomingFeatures,
+				defaultIsolation: module.sources.compilerSettings.defaultIsolation,
 				inputFiles: files(module.staged.inputFiles),
 				generatedFiles: files(module.staged.generatedFiles.sorted { $0.lastPathComponent < $1.lastPathComponent }),
 			))
@@ -183,6 +184,8 @@ private struct CompileCheckDescription: Encodable {
 		let compilationConditions: [String]
 		let swiftLanguageMode: String
 		let upcomingFeatures: [String]
+		/// Encoded only when set, so that a check that sets none keeps the key it had before the setting existed.
+		let defaultIsolation: String?
 		let inputFiles: [File]
 		let generatedFiles: [File]
 	}

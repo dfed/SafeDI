@@ -1465,7 +1465,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			    }
 
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            analytics: (() -> Analytics)? = nil
 			        ) {
@@ -1552,7 +1552,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            again: __safeDI_Middle_MockConfiguration = .init()
 		        ) {

@@ -1119,7 +1119,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            filter: (() -> FilterProtocol)? = nil
 		        ) {

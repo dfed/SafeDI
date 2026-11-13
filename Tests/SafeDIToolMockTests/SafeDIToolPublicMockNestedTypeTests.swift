@@ -248,7 +248,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
-			public struct __safeDI_Child_MockConfiguration {
+			nonisolated public struct __safeDI_Child_MockConfiguration {
 			    public init(
 			        style: Child.Style? = nil,
 			        accent: Child.Style? = __safeDI_Child_mockDefault_accent(),
@@ -323,7 +323,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Gadget` is constructed within the public mock trees of this module.
-			public struct __safeDI_Gadget_MockConfiguration {
+			nonisolated public struct __safeDI_Gadget_MockConfiguration {
 			    public init(
 			        mode: Gadget.Mode? = nil,
 			        _ safeDIBuilder: ((Gadget.Mode) -> Gadget)? = nil
@@ -389,7 +389,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
-			public struct __safeDI_Child_MockConfiguration {
+			nonisolated public struct __safeDI_Child_MockConfiguration {
 			    public init(
 			        onTap: Child.Handler? = nil,
 			        onFinish: Child.Handler? = nil,
@@ -480,7 +480,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Outer.Child` is constructed within the public mock trees of this module.
-			public struct __safeDI_Outer_Child_MockConfiguration {
+			nonisolated public struct __safeDI_Outer_Child_MockConfiguration {
 			    public init(
 			        theme: Outer.Child.Theme? = nil,
 			        mode: Outer.Mode? = nil,
@@ -593,7 +593,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_label() -> Root.Label? { .short }
 
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            child: (() -> Child)? = nil,
 			            label: Root.Label? = Root.__safeDI_publicMockDefault_label()
@@ -632,7 +632,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			#if DEBUG
 			extension Shell {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            root: __safeDI_Root_MockConfiguration = .init()
 			        ) {
@@ -662,7 +662,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Root` is constructed within the public mock trees of this module.
-			public struct __safeDI_Root_MockConfiguration {
+			nonisolated public struct __safeDI_Root_MockConfiguration {
 			    public init(
 			        child: (() -> Child)? = nil,
 			        label: Root.Label? = __safeDI_Root_mockDefault_label()
@@ -875,7 +875,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			#if DEBUG
 			extension Root {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            badge: __safeDI_Badge_MockConfiguration = .init(),
 			            child: __safeDI_Child_MockConfiguration = .init()
@@ -911,7 +911,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Badge` is constructed within the public mock trees of this module.
-			public struct __safeDI_Badge_MockConfiguration {
+			nonisolated public struct __safeDI_Badge_MockConfiguration {
 			    public init(
 			        tint: Badge.Tint? = nil,
 			        _ safeDIBuilder: ((Badge.Tint) -> Badge)? = nil
@@ -934,7 +934,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			}
 
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
-			public struct __safeDI_Child_MockConfiguration {
+			nonisolated public struct __safeDI_Child_MockConfiguration {
 			    public init(
 			        onSelect: ((Child.Theme) -> Void)? = nil,
 			        _ safeDIBuilder: ((@escaping (Child.Theme) -> Void) -> Child)? = nil
@@ -1022,7 +1022,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
-			public struct __safeDI_Child_MockConfiguration {
+			nonisolated public struct __safeDI_Child_MockConfiguration {
 			    public init(
 			        box: Child.Box<Child.Theme>? = nil,
 			        themes: [Child.Theme]? = nil,
@@ -1100,7 +1100,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			#if DEBUG
 			extension Root {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            childBuilder: __safeDI_Child_MockConfiguration = .init()
 			        ) {
@@ -1131,7 +1131,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
-			public struct __safeDI_Child_MockConfiguration {
+			nonisolated public struct __safeDI_Child_MockConfiguration {
 			    public init(
 			        theme: @autoclosure @escaping @Sendable () -> Child.Theme? = nil,
 			        _ safeDIBuilder: (@Sendable (Child.Theme) -> Child)? = nil
@@ -1211,7 +1211,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
-			public struct __safeDI_Child_MockConfiguration {
+			nonisolated public struct __safeDI_Child_MockConfiguration {
 			    public init(
 			        theme: Child.Theme? = nil,
 			        mode: Mode? = nil,
@@ -1380,7 +1380,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            child: __safeDI_App_Child_MockConfiguration = .init()
 		        ) {
@@ -1409,7 +1409,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 		let configuration = """
 		#if DEBUG
 		/// Configuration for how `Child` is constructed within the public mock trees of module `App`.
-		public struct __safeDI_App_Child_MockConfiguration {
+		nonisolated public struct __safeDI_App_Child_MockConfiguration {
 		    public init(
 		        theme: Child.Theme? = nil,
 		        _ safeDIBuilder: ((Child.Theme) -> Child)? = nil
@@ -1466,7 +1466,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            \(label): \(configurationTypeName) = .init()
 		        ) {
@@ -1518,7 +1518,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 	/// The module-level configuration of `childWithNestedTheme` that a public mock of this module generates.
 	private static let childThemePublicConfiguration = """
 	/// Configuration for how `Child` is constructed within the public mock trees of this module.
-	public struct __safeDI_Child_MockConfiguration {
+	nonisolated public struct __safeDI_Child_MockConfiguration {
 	    public init(
 	        theme: Child.Theme? = nil,
 	        _ safeDIBuilder: ((Child.Theme) -> Child)? = nil

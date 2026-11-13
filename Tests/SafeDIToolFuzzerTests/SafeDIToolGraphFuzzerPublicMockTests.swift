@@ -168,7 +168,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		// enclosing types included; an unspelled declaration, or one as wide as its types, is not reported.
 		let generatedFile = """
 		extension S1_Service {
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            session: S1_Session? = nil,
 		            theme: S1_Theme? = nil
@@ -214,7 +214,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		// default may name an `internal` type's provider, as a module-level configuration's does once its member's type is
 		// proven `package`, while its parameter types, and a `public` declaration's defaults, are still checked.
 		let generatedFile = """
-		public struct __safeDI_FuzzFeature_S1_T4_MockConfiguration {
+		nonisolated public struct __safeDI_FuzzFeature_S1_T4_MockConfiguration {
 		    package init(
 		        policy: S1_Policy? = S1_T4.__safeDI_mockDefault_policy(),
 		        tag: S1_Tag? = nil

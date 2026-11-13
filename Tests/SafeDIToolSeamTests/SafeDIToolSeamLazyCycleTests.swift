@@ -1422,7 +1422,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            aBuilder: __safeDI_App_A_MockConfiguration = .init()
 		        ) {
@@ -1465,7 +1465,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 
 		#if DEBUG
 		/// Configuration for how `AppFilter` is constructed within the public mock trees of module `App`.
-		public struct __safeDI_App_AppFilter_MockConfiguration {
+		nonisolated public struct __safeDI_App_AppFilter_MockConfiguration {
 		    public init(
 		        _ safeDIBuilder: ((Instantiator<A>) -> AppFilter)? = nil
 		    ) {
@@ -1483,7 +1483,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		}
 
 		/// Configuration for how `Mid` is constructed within the public mock trees of module `App`.
-		public struct __safeDI_App_Mid_MockConfiguration {
+		nonisolated public struct __safeDI_App_Mid_MockConfiguration {
 		    public init(
 		        filter: __safeDI_App_AppFilter_MockConfiguration = .init()
 		    ) {
@@ -1511,7 +1511,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		}
 
 		/// Configuration for how `A` is constructed within the public mock trees of module `App`.
-		public struct __safeDI_App_A_MockConfiguration {
+		nonisolated public struct __safeDI_App_A_MockConfiguration {
 		    public init(
 		        service: Service.SafeDIOverrides = .init(),
 		        midBuilder: __safeDI_App_Mid_MockConfiguration = .init(),
@@ -1868,7 +1868,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            aBuilder: __safeDI_App_A_MockConfiguration = .init()
 		        ) {
@@ -1910,7 +1910,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 
 		#if DEBUG
 		/// Configuration for how `Mid` is constructed within the public mock trees of module `App`.
-		public struct __safeDI_App_Mid_MockConfiguration {
+		nonisolated public struct __safeDI_App_Mid_MockConfiguration {
 		    public init(
 		        _ safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)? = nil
 		    ) {
@@ -1928,7 +1928,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		}
 
 		/// Configuration for how `A` is constructed within the public mock trees of module `App`.
-		public struct __safeDI_App_A_MockConfiguration {
+		nonisolated public struct __safeDI_App_A_MockConfiguration {
 		    public init(
 		        service: Service.SafeDIOverrides = .init(),
 		        midBuilder: __safeDI_App_Mid_MockConfiguration = .init(),

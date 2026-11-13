@@ -66,7 +66,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            row: __safeDI_Core_Row_MockConfiguration = .init()
 		        ) {
@@ -99,7 +99,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		/// Configuration for how `Row` is constructed within the public mock trees of module `Core`.
-		public struct __safeDI_Core_Row_MockConfiguration {
+		nonisolated public struct __safeDI_Core_Row_MockConfiguration {
 		    public init(
 		        token: (() -> Token)? = nil,
 		        _ safeDIBuilder: ((Token, any Service) -> Row)? = nil
@@ -542,7 +542,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Shelf {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            crate: Crate.SafeDIOverrides = .init()
 		        ) {
@@ -720,7 +720,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            panel: Panel.SafeDIOverrides = .init()
 		        ) {
@@ -821,7 +821,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            row: ((ServiceBuilder, any Service) -> Row)? = nil
 		        ) {
@@ -1405,7 +1405,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            serviceBuilder: (() -> Thing)? = nil,
 		            panel: Panel.SafeDIOverrides = .init()
@@ -1631,7 +1631,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init() {
 		            self.badge = nil
 		        }
@@ -1845,7 +1845,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	    }
 
 	    /// Overrides for the mock dependency tree.
-	    public struct SafeDIOverrides {
+	    nonisolated public struct SafeDIOverrides {
 	        public init(
 	            panel: Panel.SafeDIOverrides = .init(),
 	            held: (@Sendable () -> Panel.SafeDIOverrides)? = nil

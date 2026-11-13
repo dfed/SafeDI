@@ -7025,6 +7025,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var lines = [String]()
 
 		lines.append("\(indent)/// Configuration for how this type is constructed within a mock tree.")
+		// Not `nonisolated`, unlike a public mock's configuration (`publicConfigurationDeclarations`): its initializer spells
+		// the defaults the configured type's declaration spells, which may read the state of the actor the type is on. So in a
+		// module whose declarations default to the main actor, the configuration of a type on the main actor is there too.
 		lines.append("\(indent)struct \(MockParameterNode.configurationStructName) {")
 
 		// Build init parameters in order: children, defaults, builder (last).

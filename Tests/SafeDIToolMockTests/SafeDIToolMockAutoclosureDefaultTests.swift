@@ -711,7 +711,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
-			public struct __safeDI_Child_MockConfiguration {
+			nonisolated public struct __safeDI_Child_MockConfiguration {
 			    public init(
 			        capacity: (() -> Int)? = nil
 			    ) {
@@ -746,7 +746,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			#if DEBUG
 			extension Service {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            child: __safeDI_Child_MockConfiguration = .init()
 			        ) {
@@ -923,7 +923,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			"SafeDIMockConfiguration.swift": generatedFileHeader + """
 			#if DEBUG
 			/// Configuration for how `Child` is constructed within the public mock trees of this module.
-			public struct __safeDI_Child_MockConfiguration {
+			nonisolated public struct __safeDI_Child_MockConfiguration {
 			    public init(
 			        limit: @autoclosure @escaping @Sendable () -> (() -> Int?)? = nil
 			    ) {
@@ -958,7 +958,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			#if DEBUG
 			extension Service {
 			    /// Overrides for the mock dependency tree.
-			    public struct SafeDIOverrides {
+			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            childBuilder: __safeDI_Child_MockConfiguration = .init()
 			        ) {
@@ -1007,7 +1007,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 		#if DEBUG
 		extension Service {
 		    /// Overrides for the mock dependency tree.
-		    public struct SafeDIOverrides {
+		    nonisolated public struct SafeDIOverrides {
 		        public init() {
 		            self.session = nil
 		        }

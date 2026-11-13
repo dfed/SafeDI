@@ -1092,7 +1092,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		#if DEBUG
 		extension Middle {
 		    /// Overrides for the mock dependency tree.
-		    \(modifier)struct SafeDIOverrides {
+		    \(isPublic ? "nonisolated public " : "")struct SafeDIOverrides {
 		        \(modifier)init(
 		            inner: Inner.SafeDIOverrides = .init()
 		        ) {
