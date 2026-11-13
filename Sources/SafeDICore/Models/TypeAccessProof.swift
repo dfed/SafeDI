@@ -941,7 +941,11 @@ extension TypeAccessProof {
 	/// outermost. Normalization qualifies every type the declarations spell with it
 	/// (`normalizingInstantiableTypes(of:plainTypeDeclarations:)`), so the code SafeDI generates outside a declaration,
 	/// and the access the proof reads, name the type the declaration names.
-	public struct NestedTypeQualifier: Sendable {
+	///
+	/// It is a class so that each closure its qualification passes down a type holds one reference to it: as a struct,
+	/// every call copied its sets and dictionaries into the closure, retaining each and releasing it again, once per type
+	/// a declaration spells.
+	public final class NestedTypeQualifier: Sendable {
 		/// A qualifier over the declarations of one run, before normalization: `instantiables`, unnormalized, and
 		/// `plainTypeDeclarations`, each with the module that declares it.
 		///
@@ -975,7 +979,7 @@ extension TypeAccessProof {
 
 		/// `type`, which a member of `enclosingType` spells, with the type it instantiates qualified among the instantiable
 		/// types as `TypeDescription.qualifyingInstantiatedType(within:amongInstantiableTypes:searchingTypesEnclosingIt:namesOfNestedInstantiableTypes:)`
-		/// qualifies it, or `nil` when no option of the instantiated type is one.
+		/// qualifies it, or `nil` when that keeps the name as written.
 		/// - Parameter searchingTypesEnclosingIt: Whether the member is written inside the types enclosing `enclosingType`,
 		///   rather than in an extension at file scope.
 		public func qualifyingInstantiatedType(
@@ -1007,6 +1011,9 @@ extension TypeAccessProof {
 			// name, unless the outermost of those types has a module's name: a mention spelled with a module's name first
 			// names that module's declarations, top-level ones too (`PlainTypeDeclarations.candidates`).
 			let searchesEveryName = enclosingType.outermostTypeName.map(plainTypeDeclarations.moduleNames.contains) ?? false
+			// Most types name nothing a nested declaration has the name of, and walking one to nest its names copies what
+			// the closure below holds at every level, so such a type is found by a walk that builds and copies nothing.
+			guard searchesEveryName || type.namesOutermostName(where: mayNameNestedType) else { return nil }
 			return type.nestingOutermostNamesIfAny { name in
 				guard searchesEveryName || mayNameNestedType(name) else { return nil }
 				// The options run from the most qualified outward and end with the name as written, which is kept.
@@ -1022,9 +1029,11 @@ extension TypeAccessProof {
 		/// Whether `name` may be the name of a nested instantiable type or of a nested plain declaration a mention can find,
 		/// which a declaration records without its backticks.
 		private func mayNameNestedType(_ name: String) -> Bool {
-			let spelling = name.spelledWithoutBackticks
-			// A raw identifier holding a period cannot be told from the names around it in a declaration's key.
-			return spelling.utf8.contains(UInt8(ascii: ".")) || namesOfNestedTypes.contains(spelling)
+			// A raw identifier holding a period cannot be told from the names around it in a declaration's key. Removing
+			// backticks removes no period, so the name as written is searched for one.
+			guard !name.utf8.contains(UInt8(ascii: ".")) else { return true }
+			// Many runs read no nested type, and then no name is hashed.
+			return !namesOfNestedTypes.isEmpty && namesOfNestedTypes.contains(name.spelledWithoutBackticks)
 		}
 
 		private let instantiableTypes: Set<TypeDescription>

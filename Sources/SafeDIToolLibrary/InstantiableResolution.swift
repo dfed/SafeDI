@@ -42,16 +42,13 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable], 
 		// An extension-based declaration's members are written in an extension at file scope.
 		let searchingTypesEnclosingIt = !unnormalizedInstantiable.declarationType.isExtension
 		/// The instantiated type of `typeDescription` qualified among the instantiable types, or `nil` when no option
-		/// of it is one or the option is the type as written.
+		/// of it is one or the option is the type as written, which is kept rather than rebuilt.
 		func qualifyingInstantiatedType(_ typeDescription: TypeDescription) -> TypeDescription? {
 			nestedTypeQualifier.qualifyingInstantiatedType(
 				in: typeDescription,
 				writtenWithin: unnormalizedInstantiable.concreteInstantiable,
 				searchingTypesEnclosingIt: searchingTypesEnclosingIt,
 			)
-			// Every option but the type as written nests a name the type as written does not, so an option `==` finds
-			// the same is the type as written, which is kept rather than rebuilt.
-			.flatMap { $0 == typeDescription ? nil : $0 }
 		}
 		/// `typeDescription`, which a member of the declaration spells, qualified as the compiler resolves it there, or
 		/// `nil` when that qualifies nothing, so that what spells it is kept rather than rebuilt.
