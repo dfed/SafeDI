@@ -1,0 +1,82 @@
+name: Verify
+
+# Runs SafeDI's tests on Linux by hand, for one branch, so a change can be
+# checked without waiting on a local machine. Dispatch it on the branch to
+# test, for example `gh workflow run verify.yml --ref my-branch -f
+# filter=SafeDIToolSeam`; an empty filter runs the whole suite. It runs the
+# same build as "Build and Test on Linux" in ci.yml, so it restores main's
+# build and passed-compile-check caches, and pull request checks are
+# unaffected.
+#
+# A dispatched run checks out and caches under the ref it is dispatched on, so
+# its caches are scoped to that branch and never become main's. Dispatching
+# takes write access to the repository, and the ref must be a branch or tag of
+# this repository, so a fork's code cannot run here. The job reads the
+# repository and nothing else: no secrets, and the filter reaches the shell
+# through an environment variable, never interpolated into the script.
+on:
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: A `swift test --filter` pattern, or empty for the whole suite.
+        required: false
+        default: ''
+
+permissions: {}
+
+jobs:
+  verify:
+    # Nothing here needs macOS, so it uses the Linux test job's container.
+    name: Verify on Linux
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    env:
+      # The same arguments as "Build and Test on Linux", so main's caches apply.
+      SWIFT_TEST_ARGUMENTS: -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Cache Build Directory
+        uses: actions/cache@v6
+        with:
+          path: .build
+          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/ci.yml') }}
+          restore-keys: |
+            spm-release-${{ runner.os }}-swift-6.2-
+      - name: Resolve Package Dependencies
+        uses: ./.github/actions/retry
+        with:
+          command: swift package resolve
+      - name: Compute Compile Check Identity
+        id: compile-check-identity
+        run: |
+          identity=$(.github/scripts/compile-check-identity.sh $SWIFT_TEST_ARGUMENTS)
+          test "${#identity}" -eq 64
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+      - name: Restore Passed Compile Checks
+        uses: actions/cache/restore@v6
+        with:
+          path: .compile-check-cache
+          key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-
+      - name: Test
+        timeout-minutes: 60
+        env:
+          FILTER: ${{ inputs.filter }}
+          SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
+        run: |
+          if [ -n "$FILTER" ]; then
+            swift test $SWIFT_TEST_ARGUMENTS --filter "$FILTER"
+          else
+            swift test $SWIFT_TEST_ARGUMENTS
+          fi
+      - name: Save Passed Compile Checks
+        if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .compile-check-cache
+          key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
