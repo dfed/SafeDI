@@ -346,6 +346,27 @@ public struct SeamSignature: Sendable {
 			public let reason: Reason
 		}
 
+		/// A declaration a cycle in the seam's tree hands the site's owner when it builds it again: the site lies in the body
+		/// of a builder function a cycle-closing scope calls, and a scope between that function and the cycle-closing scope
+		/// declares the label, while the label's nearest declaration at the site is outside the function. Inline, the type
+		/// built again receives that declaration through the function's parameter; a fill, which reads the scope struct or
+		/// the caller's scope, reads the same value at every level of the cycle.
+		public struct CycleReentryDeclaration: Sendable {
+			/// The declaration between the function and the cycle-closing scope, or, where a scope between takes the label as
+			/// a parameter of a builder function a cycle nested inside closes on, the declaration that cycle passes it.
+			public let property: Property
+			public let declaringType: TypeDescription
+			public let declarationLocation: Dependency.DeclarationLocation?
+			/// The type whose builder function takes the label as a parameter between the function and the cycle-closing
+			/// scope, when a cycle nested inside passes it `property`, or `nil` when `declaringType` is between itself.
+			public let parameterTakingType: TypeDescription?
+			/// The property whose builder function the cycle closes on, and the type that declares it.
+			public let closedOnProperty: Property
+			public let closedOnDeclaringType: TypeDescription
+			/// The type that instantiates `closedOnProperty` again, closing the cycle.
+			public let reenteringType: TypeDescription
+		}
+
 		/// A type on the way from the seam that takes a hole's builder to the hole's owner, with the module that declares it.
 		public struct PathType: Sendable {
 			public init(type: TypeDescription, moduleName: String?) {
@@ -379,6 +400,7 @@ public struct SeamSignature: Sendable {
 			tierAccess: AccessLevel,
 			accessCause: TypeAccessProof.Cause? = nil,
 			uncarriedDeclarations: [UncarriedDeclaration],
+			cycleReentryDeclarations: [CycleReentryDeclaration],
 			innerSeamType: TypeDescription? = nil,
 			passedUpRoute: [DeclaredProperty] = [],
 			isSendable: Bool = false,
@@ -406,6 +428,7 @@ public struct SeamSignature: Sendable {
 			self.tierAccess = tierAccess
 			self.accessCause = accessCause
 			self.uncarriedDeclarations = uncarriedDeclarations
+			self.cycleReentryDeclarations = cycleReentryDeclarations
 			self.innerSeamType = innerSeamType
 			self.passedUpRoute = passedUpRoute
 			self.isSendable = isSendable
@@ -485,6 +508,9 @@ public struct SeamSignature: Sendable {
 		public let accessCause: TypeAccessProof.Cause?
 		/// The declarations on the site's path a fill cannot read from the scope struct.
 		public internal(set) var uncarriedDeclarations: [UncarriedDeclaration]
+		/// The declarations a cycle in the tree of the seam that holds the site hands the site's owner when it builds it
+		/// again, which a fill cannot read, the first of each label.
+		public let cycleReentryDeclarations: [CycleReentryDeclaration]
 		/// The seam the tree calls that presented the hole first, when this one passes it up, or `nil` for a site of this
 		/// seam's own tree.
 		public let innerSeamType: TypeDescription?
@@ -1044,11 +1070,12 @@ public struct SeamSignature: Sendable {
 		}
 
 		/// A hole's call shape, which a hole that changes changes what the seam's callers and the seams that pass it up
-		/// compute, and the labels of its uncarried declarations, which only accumulate where a seam's tree reaches the
-		/// seam again and hands the builder back.
+		/// compute, and the labels of its uncarried and cycle re-entry declarations, which only accumulate where a seam's tree
+		/// reaches the seam again and hands the builder back.
 		public struct Hole: Hashable, Sendable {
 			public let callShape: CallShape.Hole
 			public let uncarriedLabels: Set<String>
+			public let cycleReentryLabels: Set<String>
 		}
 
 		public let parameters: [Parameter]
@@ -1080,7 +1107,7 @@ public struct SeamSignature: Sendable {
 		let callShape = callShape
 		return SettledContent(
 			parameters: settledContent(of: parameters),
-			holes: holes.map { SettledContent.Hole(callShape: CallShape.Hole($0), uncarriedLabels: Set($0.uncarriedDeclarations.map(\.property.label))) },
+			holes: holes.map { SettledContent.Hole(callShape: CallShape.Hole($0), uncarriedLabels: Set($0.uncarriedDeclarations.map(\.property.label)), cycleReentryLabels: Set($0.cycleReentryDeclarations.map(\.property.label))) },
 			builders: callShape.builders,
 			scopeEnums: callShape.scopeEnums,
 			tiers: tiers,

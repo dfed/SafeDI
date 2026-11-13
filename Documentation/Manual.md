@@ -1894,6 +1894,7 @@ Each of these errors says what to change.
 - **A name hidden from its receiver.** A type between the seam and the receiver, the seam included, declares the name with a property that does not provide it.
 - **An initializer the generated one would collide with**, such as an initializer in the seam’s body that a call with the readable labels could also reach, in a module that sets `generatePlainDependencyTreeInitializers: true`. Without the setting, the seam can keep such an initializer for the code that already calls it. A tier that takes no argument is `init()` either way, so a hand-written `init()` collides with it.
 - **A hole’s implementation that reads a value bound on the way to a seam built again.** When a seam’s tree builds the seam again, directly or through another seam of its module, the builders it took are handed on to that call. So the caller that fills a builder cannot hand its implementation a value the tree declares on that path.
+- **A hole’s implementation that reads a value a cycle in the seam’s tree declares again.** Inline, the type an `Instantiator` or lazy cycle builds again receives the values declared along the cycle, but a builder hands its implementation the same values at every level of the cycle.
 
 #### Trees a seam builds differently
 
