@@ -122,7 +122,7 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: ((Int?, String) -> Screen)?
+		        private(set) var childBuilder: ((Int?, String) -> Screen)?
 		    }
 
 		    static func mock(
@@ -502,7 +502,7 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: (() -> Screen)?
+		        private(set) var childBuilder: (() -> Screen)?
 		    }
 
 		    static func mock(
@@ -649,7 +649,7 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: ((@escaping () throws(Failure) -> Void, String) -> Screen)?
+		        private(set) var childBuilder: ((@escaping () throws(Failure) -> Void, String) -> Screen)?
 		    }
 
 		    static func mock(
@@ -789,7 +789,7 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: ((nonisolated(nonsending) @escaping () async -> Void, String) -> Screen)?
+		        private(set) var childBuilder: ((nonisolated(nonsending) @escaping () async -> Void, String) -> Screen)?
 		    }
 
 		    static func mock(
@@ -1246,7 +1246,7 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		            self.builder = builder
 		        }
 
-		        let builder: ErasedInstantiator<Child.ForwardedProperties, Base>?
+		        private(set) var builder: ErasedInstantiator<Child.ForwardedProperties, Base>?
 		    }
 
 		    static func mock(
@@ -1727,9 +1727,9 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		            self.receiverB = receiverB
 		        }
 
-		        let receiverA: ((ErasedInstantiator<Child.ForwardedProperties, Screen>) -> ReceiverA)?
-		        let x: ((Int, String) -> Child)?
-		        let receiverB: ((Instantiator<Child>) -> ReceiverB)?
+		        private(set) var receiverA: ((ErasedInstantiator<Child.ForwardedProperties, Screen>) -> ReceiverA)?
+		        private(set) var x: ((Int, String) -> Child)?
+		        private(set) var receiverB: ((Instantiator<Child>) -> ReceiverB)?
 		    }
 
 		    static func mock(
@@ -1835,10 +1835,10 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		            self.editor_ErasedInstantiator__Child_ForwardedProperties__Screen = editor_ErasedInstantiator__Child_ForwardedProperties__Screen
 		        }
 
-		        let editor: (() -> EditorNode)?
-		        let holder: ((EditorNode) -> Holder)?
-		        let sub: ((ErasedInstantiator<Child.ForwardedProperties, Screen>?) -> Sub)?
-		        let editor_ErasedInstantiator__Child_ForwardedProperties__Screen: ErasedInstantiator<Child.ForwardedProperties, Screen>?
+		        private(set) var editor: (() -> EditorNode)?
+		        private(set) var holder: ((EditorNode) -> Holder)?
+		        private(set) var sub: ((ErasedInstantiator<Child.ForwardedProperties, Screen>?) -> Sub)?
+		        private(set) var editor_ErasedInstantiator__Child_ForwardedProperties__Screen: ErasedInstantiator<Child.ForwardedProperties, Screen>?
 		    }
 
 		    static func mock(

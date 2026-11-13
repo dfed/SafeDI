@@ -124,7 +124,8 @@ extension ScopeGenerator {
 
 	/// The initializers and stored members of a public struct, indented by `indent`: one initializer per level of
 	/// `publicInitializerLevels(of:)`, each taking every member at or above its level, in member order, and assigning
-	/// each member it omits its `omittedValue`.
+	/// each member it omits its `omittedValue`. Each member is `private(set)`, as an internal configuration's fields are
+	/// (`generateConfigurationStruct`).
 	static func publicStructBody(members: [PublicStructMember], indent: String) -> [String] {
 		let memberIndent = "\(indent)\(standardIndent)"
 		var lines = [String]()
@@ -152,7 +153,7 @@ extension ScopeGenerator {
 				lines.append("\(indent)/// \(documentation)")
 			}
 			let accessPrefix = member.access == .internal ? "" : "\(member.access.spelledOnGeneratedDeclaration) "
-			lines.append("\(indent)\(accessPrefix)let \(member.name): \(member.typeSource)")
+			lines.append("\(indent)\(accessPrefix)private(set) var \(member.name): \(member.typeSource)")
 		}
 		return lines
 	}

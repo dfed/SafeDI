@@ -9311,7 +9311,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		            self.parentBuilder = parentBuilder
 		        }
 
-		        let parentBuilder: Parent.SafeDIMockConfiguration
+		        private(set) var parentBuilder: Parent.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -11115,7 +11115,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        let service: (() -> Service)?
+		        private(set) var service: (() -> Service)?
 		    }
 
 		    static func mock(

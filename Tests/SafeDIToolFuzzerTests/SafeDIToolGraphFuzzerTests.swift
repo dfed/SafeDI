@@ -1801,10 +1801,10 @@ struct SafeDIToolGraphFuzzerTests {
 		            self.t1Builder = t1Builder
 		        }
 
-		        let t6: (() -> S2420_T6)?
-		        let t2: S2420_T2.SafeDIMockConfiguration
-		        let anyT1: (() -> S2420_AnyT1)?
-		        let t1Builder: (() -> S2420_T1)?
+		        private(set) var t6: (() -> S2420_T6)?
+		        private(set) var t2: S2420_T2.SafeDIMockConfiguration
+		        private(set) var anyT1: (() -> S2420_AnyT1)?
+		        private(set) var t1Builder: (() -> S2420_T1)?
 		    }
 
 		    static func mock(

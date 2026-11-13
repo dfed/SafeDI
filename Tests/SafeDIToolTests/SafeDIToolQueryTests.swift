@@ -142,8 +142,8 @@ struct SafeDIToolQueryTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        let logger: (() -> Logger)?
-		        let service: Service.SafeDIMockConfiguration
+		        private(set) var logger: (() -> Logger)?
+		        private(set) var service: Service.SafeDIMockConfiguration
 		    }
 
 		    static func mock(

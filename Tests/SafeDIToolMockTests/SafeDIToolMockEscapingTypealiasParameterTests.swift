@@ -113,7 +113,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
-		        let screenBuilder: ((@escaping OnTap) -> Screen)?
+		        private(set) var screenBuilder: ((@escaping OnTap) -> Screen)?
 		    }
 
 		    static func mock(
@@ -216,7 +216,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            self.screen = screen
 		        }
 
-		        let screen: ((@escaping OnTap) -> Screen)?
+		        private(set) var screen: ((@escaping OnTap) -> Screen)?
 		    }
 
 		    static func mock(
@@ -242,9 +242,9 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let screen: ((@escaping OnTap) -> Screen)?
+		        private(set) var screen: ((@escaping OnTap) -> Screen)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((@escaping OnTap, Int, Screen) -> Parent)?
+		        private(set) var safeDIBuilder: ((@escaping OnTap, Int, Screen) -> Parent)?
 		    }
 		}
 		#endif
@@ -264,7 +264,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            self.parentBuilder = parentBuilder
 		        }
 
-		        let parentBuilder: Parent.SafeDIMockConfiguration
+		        private(set) var parentBuilder: Parent.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -341,7 +341,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            self.screen = screen
 		        }
 
-		        let screen: ((@escaping OnTap) -> Screen)?
+		        private(set) var screen: ((@escaping OnTap) -> Screen)?
 		    }
 
 		    static func mock(
@@ -462,7 +462,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            self.screen = screen
 		        }
 
-		        let screen: ((@escaping () -> Void) -> Screen)?
+		        private(set) var screen: ((@escaping () -> Void) -> Screen)?
 		    }
 
 		    static func mock(
@@ -487,9 +487,9 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let screen: ((@escaping () -> Void) -> Screen)?
+		        private(set) var screen: ((@escaping () -> Void) -> Screen)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((@escaping () -> Void, Screen) -> Parent)?
+		        private(set) var safeDIBuilder: ((@escaping () -> Void, Screen) -> Parent)?
 		    }
 		}
 		#endif
@@ -509,7 +509,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            self.parentBuilder = parentBuilder
 		        }
 
-		        let parentBuilder: Parent.SafeDIMockConfiguration
+		        private(set) var parentBuilder: Parent.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -615,7 +615,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            self.screen = screen
 		        }
 
-		        let screen: ((@escaping OnTap) -> Screen)?
+		        private(set) var screen: ((@escaping OnTap) -> Screen)?
 		    }
 
 		    static func mock(
@@ -640,9 +640,9 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let screen: ((@escaping OnTap) -> Screen)?
+		        private(set) var screen: ((@escaping OnTap) -> Screen)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((@escaping OnTap, Screen) -> Parent)?
+		        private(set) var safeDIBuilder: ((@escaping OnTap, Screen) -> Parent)?
 		    }
 		}
 		#endif
@@ -662,7 +662,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            self.parentBuilder = parentBuilder
 		        }
 
-		        let parentBuilder: Parent.SafeDIMockConfiguration
+		        private(set) var parentBuilder: Parent.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -829,7 +829,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            self.screen = screen
 		        }
 
-		        let screen: ((@escaping OnTap) -> Screen)?
+		        private(set) var screen: ((@escaping OnTap) -> Screen)?
 		    }
 
 		    static func mock(
@@ -906,7 +906,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            self.innerBuilder = innerBuilder
 		        }
 
-		        let innerBuilder: Inner.SafeDIOverrides
+		        private(set) var innerBuilder: Inner.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -972,7 +972,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            self.middle = middle
 		        }
 
-		        let middle: Middle.SafeDIOverrides
+		        private(set) var middle: Middle.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -1099,7 +1099,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		            self.inner = inner
 		        }
 
-		        \(modifier)let inner: Inner.SafeDIOverrides
+		        \(modifier)private(set) var inner: Inner.SafeDIOverrides
 		    }
 
 		    \(modifier)static func mock(

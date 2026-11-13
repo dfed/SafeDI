@@ -91,7 +91,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.shared = shared
 		        }
 
-		        let shared: (() -> Shared)?
+		        private(set) var shared: (() -> Shared)?
 		    }
 
 		    static func mock(
@@ -116,9 +116,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let flag: Bool
+		        private(set) var flag: Bool
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Shared, Bool) -> Child)?
+		        private(set) var safeDIBuilder: ((Shared, Bool) -> Child)?
 		    }
 		}
 		#endif
@@ -141,8 +141,8 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let shared: (() -> Shared)?
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var shared: (() -> Shared)?
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -226,9 +226,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let config: String
+		        private(set) var config: String
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((String) -> Child)?
+		        private(set) var safeDIBuilder: ((String) -> Child)?
 		    }
 		}
 		#endif
@@ -249,7 +249,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -307,7 +307,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        private(set) var childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -353,9 +353,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let flag: Bool
+		        private(set) var flag: Bool
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((String, Bool) -> Child)?
+		        private(set) var safeDIBuilder: ((String, Bool) -> Child)?
 		    }
 		}
 		#endif
@@ -407,7 +407,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -442,7 +442,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.grandchild = grandchild
 		        }
 
-		        let grandchild: Grandchild.SafeDIMockConfiguration
+		        private(set) var grandchild: Grandchild.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -469,9 +469,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let grandchild: Grandchild.SafeDIMockConfiguration
+		        private(set) var grandchild: Grandchild.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Grandchild) -> Child)?
+		        private(set) var safeDIBuilder: ((Grandchild) -> Child)?
 		    }
 		}
 		#endif
@@ -506,9 +506,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let viewModel: String
+		        private(set) var viewModel: String
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((String) -> Grandchild)?
+		        private(set) var safeDIBuilder: ((String) -> Grandchild)?
 		    }
 		}
 		#endif
@@ -555,7 +555,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: (() -> Child)?
+		        private(set) var child: (() -> Child)?
 		    }
 
 		    static func mock(
@@ -609,7 +609,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        private(set) var childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -680,8 +680,8 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.childB = childB
 		        }
 
-		        let childA: ChildA.SafeDIMockConfiguration
-		        let childB: ChildB.SafeDIMockConfiguration
+		        private(set) var childA: ChildA.SafeDIMockConfiguration
+		        private(set) var childB: ChildB.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -742,7 +742,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -785,9 +785,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let viewModel: String?
+		        private(set) var viewModel: String?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((String?) -> Child)?
+		        private(set) var safeDIBuilder: ((String?) -> Child)?
 		    }
 		}
 		#endif
@@ -847,8 +847,8 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.childB = childB
 		        }
 
-		        let childA: ChildA.SafeDIMockConfiguration
-		        let childB: ChildB.SafeDIMockConfiguration
+		        private(set) var childA: ChildA.SafeDIMockConfiguration
+		        private(set) var childB: ChildB.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -915,7 +915,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        private(set) var childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -978,7 +978,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        private(set) var childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1038,7 +1038,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1111,7 +1111,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1139,9 +1139,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((String, Child) -> Parent)?
+		        private(set) var safeDIBuilder: ((String, Child) -> Parent)?
 		    }
 		}
 		#endif
@@ -1213,8 +1213,8 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.childB = childB
 		        }
 
-		        let childA: ChildA.SafeDIMockConfiguration
-		        let childB: ChildB.SafeDIMockConfiguration
+		        private(set) var childA: ChildA.SafeDIMockConfiguration
+		        private(set) var childB: ChildB.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1285,7 +1285,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1359,7 +1359,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1423,7 +1423,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1499,10 +1499,10 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let onCancel: @MainActor (String) -> Void
-		        let onSubmit: @MainActor (String) throws -> Void
+		        private(set) var onCancel: @MainActor (String) -> Void
+		        private(set) var onSubmit: @MainActor (String) throws -> Void
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((@escaping @MainActor (String) -> Void, @escaping @MainActor (String) throws -> Void) -> Child)?
+		        private(set) var safeDIBuilder: ((@escaping @MainActor (String) -> Void, @escaping @MainActor (String) throws -> Void) -> Child)?
 		    }
 		}
 		#endif
@@ -1548,7 +1548,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1685,15 +1685,15 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let onTap: Handler
-		        let onFinish: Handler
-		        let onSend: SendableHandler
-		        let onMain: MainActorHandler
-		        let onText: Callback<String>
-		        let onNested: Child.Nested
-		        let onHandle: Handler?
+		        private(set) var onTap: Handler
+		        private(set) var onFinish: Handler
+		        private(set) var onSend: SendableHandler
+		        private(set) var onMain: MainActorHandler
+		        private(set) var onText: Callback<String>
+		        private(set) var onNested: Child.Nested
+		        private(set) var onHandle: Handler?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((@escaping Handler, @escaping Handler, @escaping SendableHandler, @escaping MainActorHandler, @escaping Callback<String>, @escaping Child.Nested, Handler?) -> Child)?
+		        private(set) var safeDIBuilder: ((@escaping Handler, @escaping Handler, @escaping SendableHandler, @escaping MainActorHandler, @escaping Callback<String>, @escaping Child.Nested, Handler?) -> Child)?
 		    }
 		}
 		#endif
@@ -1714,7 +1714,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1806,7 +1806,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.widgetBuilder = widgetBuilder
 		        }
 
-		        let widgetBuilder: Widget.SafeDIMockConfiguration
+		        private(set) var widgetBuilder: Widget.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1839,9 +1839,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let onTap: Handler
+		        private(set) var onTap: Handler
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((@escaping Handler) -> Widget)?
+		        private(set) var safeDIBuilder: ((@escaping Handler) -> Widget)?
 		    }
 		}
 		#endif
@@ -1909,7 +1909,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1942,9 +1942,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let onTap: Handler
+		        private(set) var onTap: Handler
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((@escaping Handler) -> Child)?
+		        private(set) var safeDIBuilder: ((@escaping Handler) -> Child)?
 		    }
 		}
 		#endif
@@ -2019,9 +2019,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        let childA: ((Service?) -> ChildA)?
-		        let childB: ChildB.SafeDIMockConfiguration
-		        let service: Service?
+		        private(set) var childA: ((Service?) -> ChildA)?
+		        private(set) var childB: ChildB.SafeDIMockConfiguration
+		        private(set) var service: Service?
 		    }
 
 		    static func mock(
@@ -2095,7 +2095,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -2123,9 +2123,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((String, Child) -> Feature)?
+		        private(set) var safeDIBuilder: ((String, Child) -> Feature)?
 		    }
 		}
 		#endif
@@ -2171,7 +2171,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -2213,9 +2213,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let isLoggingEnabled: Bool
+		        private(set) var isLoggingEnabled: Bool
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Bool) -> Child)?
+		        private(set) var safeDIBuilder: ((Bool) -> Child)?
 		    }
 		}
 		#endif
@@ -2263,7 +2263,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: (() -> Child)?
+		        private(set) var child: (() -> Child)?
 		    }
 
 		    static func mock(
@@ -2329,7 +2329,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: (() -> Child)?
+		        private(set) var child: (() -> Child)?
 		    }
 
 		    static func mock(
@@ -2400,7 +2400,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: (() -> Child)?
+		        private(set) var child: (() -> Child)?
 		    }
 
 		    static func mock(
@@ -2463,7 +2463,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -2532,7 +2532,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -2601,7 +2601,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -2683,8 +2683,8 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        let database: (() -> Database)?
-		        let service: Service.SafeDIMockConfiguration
+		        private(set) var database: (() -> Database)?
+		        private(set) var service: Service.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -2717,9 +2717,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let title: String
+		        private(set) var title: String
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Database, String) -> Service)?
+		        private(set) var safeDIBuilder: ((Database, String) -> Service)?
 		    }
 		}
 		#endif
@@ -2840,8 +2840,8 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        let database: (() -> Database)?
-		        let service: Service.SafeDIMockConfiguration
+		        private(set) var database: (() -> Database)?
+		        private(set) var service: Service.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -2874,9 +2874,9 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let title: String
+		        private(set) var title: String
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Database, String) -> Service)?
+		        private(set) var safeDIBuilder: ((Database, String) -> Service)?
 		    }
 		}
 		#endif

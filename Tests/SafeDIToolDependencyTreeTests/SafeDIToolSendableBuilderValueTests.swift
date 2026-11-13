@@ -96,7 +96,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        private(set) var childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -135,10 +135,10 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let grandchild: (@Sendable () -> Grandchild)?
-		        let formatter: @Sendable () -> Formatter
+		        private(set) var grandchild: (@Sendable () -> Grandchild)?
+		        private(set) var formatter: @Sendable () -> Formatter
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: (@Sendable (Grandchild, Formatter) -> Child)?
+		        private(set) var safeDIBuilder: (@Sendable (Grandchild, Formatter) -> Child)?
 		    }
 		}
 		#endif
@@ -199,7 +199,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        private(set) var childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -239,9 +239,9 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let formatter: @Sendable () -> Formatter
+		        private(set) var formatter: @Sendable () -> Formatter
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: (@Sendable (Formatter) -> Grandchild)?
+		        private(set) var safeDIBuilder: (@Sendable (Formatter) -> Grandchild)?
 		    }
 		}
 
@@ -256,9 +256,9 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let grandchild: Grandchild.SafeDIMockConfiguration
+		        private(set) var grandchild: Grandchild.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: (@Sendable (Grandchild) -> Child)?
+		        private(set) var safeDIBuilder: (@Sendable (Grandchild) -> Child)?
 		    }
 		}
 		#endif
@@ -309,7 +309,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: Child.SafeDIMockConfiguration
+		        private(set) var child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -344,9 +344,9 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let formatter: @Sendable () -> Formatter
+		        private(set) var formatter: @Sendable () -> Formatter
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: (@Sendable (Formatter) -> Child)?
+		        private(set) var safeDIBuilder: (@Sendable (Formatter) -> Child)?
 		    }
 		}
 		#endif
@@ -408,7 +408,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        private(set) var childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -443,7 +443,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.grandchild = grandchild
 		        }
 
-		        let grandchild: (() -> Grandchild)?
+		        private(set) var grandchild: (() -> Grandchild)?
 		    }
 
 		    static func mock(
@@ -470,10 +470,10 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let grandchild: (@Sendable () -> Grandchild)?
-		        let formatter: @Sendable () -> Formatter
+		        private(set) var grandchild: (@Sendable () -> Grandchild)?
+		        private(set) var formatter: @Sendable () -> Formatter
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: (@Sendable (Grandchild, Formatter) -> Child)?
+		        private(set) var safeDIBuilder: (@Sendable (Grandchild, Formatter) -> Child)?
 		    }
 		}
 		#endif
@@ -534,7 +534,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        private(set) var childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -570,10 +570,10 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let grandchild: (() -> Grandchild)?
-		        let formatter: Formatter
+		        private(set) var grandchild: (() -> Grandchild)?
+		        private(set) var formatter: Formatter
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Grandchild, Formatter) -> Child)?
+		        private(set) var safeDIBuilder: ((Grandchild, Formatter) -> Child)?
 		    }
 		}
 		#endif
@@ -647,7 +647,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.bBuilder = bBuilder
 		        }
 
-		        let bBuilder: B.SafeDIMockConfiguration
+		        private(set) var bBuilder: B.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -683,10 +683,10 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let bBuilder: B.SafeDIMockConfiguration
-		        let formatter: @Sendable () -> Formatter
+		        private(set) var bBuilder: B.SafeDIMockConfiguration
+		        private(set) var formatter: @Sendable () -> Formatter
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: (@Sendable (SendableInstantiator<B>, Formatter) -> A)?
+		        private(set) var safeDIBuilder: (@Sendable (SendableInstantiator<B>, Formatter) -> A)?
 		    }
 		}
 		#endif
@@ -706,7 +706,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        private(set) var aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -740,7 +740,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: (@Sendable (SendableInstantiator<A>) -> B)?
+		        private(set) var safeDIBuilder: (@Sendable (SendableInstantiator<A>) -> B)?
 		    }
 		}
 		#endif
@@ -801,7 +801,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        private(set) var childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -836,9 +836,9 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let onTap: @Sendable () -> (() -> Void)?
+		        private(set) var onTap: @Sendable () -> (() -> Void)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: (@Sendable ((() -> Void)?) -> Child)?
+		        private(set) var safeDIBuilder: (@Sendable ((() -> Void)?) -> Child)?
 		    }
 		}
 		#endif
@@ -920,7 +920,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        private(set) var childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -967,13 +967,13 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let onSend: @Sendable () -> (@Sendable () -> Void)?
-		        let onHandle: @Sendable () -> Handler?
-		        let onPress: @Sendable () -> Handler
-		        let onText: @Sendable () -> ((String) -> Void)?
-		        let onMain: @Sendable () -> (@MainActor () -> Void)?
+		        private(set) var onSend: @Sendable () -> (@Sendable () -> Void)?
+		        private(set) var onHandle: @Sendable () -> Handler?
+		        private(set) var onPress: @Sendable () -> Handler
+		        private(set) var onText: @Sendable () -> ((String) -> Void)?
+		        private(set) var onMain: @Sendable () -> (@MainActor () -> Void)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: (@Sendable ((@Sendable () -> Void)?, Handler?, @escaping Handler, ((String) -> Void)?, (@MainActor () -> Void)?) -> Child)?
+		        private(set) var safeDIBuilder: (@Sendable ((@Sendable () -> Void)?, Handler?, @escaping Handler, ((String) -> Void)?, (@MainActor () -> Void)?) -> Child)?
 		    }
 		}
 		#endif
@@ -1055,7 +1055,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        private(set) var childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1099,12 +1099,12 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let onFinish: @Sendable () -> Handler
-		        let onSend: @Sendable () -> SendableHandler
-		        let onMain: @Sendable () -> MainActorHandler
-		        let onText: @Sendable () -> Callback<String>
+		        private(set) var onFinish: @Sendable () -> Handler
+		        private(set) var onSend: @Sendable () -> SendableHandler
+		        private(set) var onMain: @Sendable () -> MainActorHandler
+		        private(set) var onText: @Sendable () -> Callback<String>
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: (@Sendable (@escaping Handler, @escaping SendableHandler, @escaping MainActorHandler, @escaping Callback<String>) -> Child)?
+		        private(set) var safeDIBuilder: (@Sendable (@escaping Handler, @escaping SendableHandler, @escaping MainActorHandler, @escaping Callback<String>) -> Child)?
 		    }
 		}
 		#endif
@@ -1158,7 +1158,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: (@Sendable (Service) -> Child)?
+		        private(set) var childBuilder: (@Sendable (Service) -> Child)?
 		    }
 
 		    static func mock(
@@ -1223,7 +1223,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: (@Sendable (Engine) -> Child)?
+		        private(set) var childBuilder: (@Sendable (Engine) -> Child)?
 		    }
 
 		    static func mock(
@@ -1287,7 +1287,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: (@Sendable (ErasedInstantiator<Void, Service>) -> Child)?
+		        private(set) var childBuilder: (@Sendable (ErasedInstantiator<Void, Service>) -> Child)?
 		    }
 
 		    static func mock(
@@ -1353,7 +1353,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: (@Sendable (Service) -> ChildProtocol)?
+		        private(set) var childBuilder: (@Sendable (Service) -> ChildProtocol)?
 		    }
 
 		    static func mock(
@@ -1416,7 +1416,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: (@Sendable (Service) -> Child)?
+		        private(set) var child: (@Sendable (Service) -> Child)?
 		    }
 
 		    static func mock(
@@ -1480,7 +1480,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: ((Service) -> Child)?
+		        private(set) var childBuilder: ((Service) -> Child)?
 		    }
 
 		    static func mock(
@@ -1540,7 +1540,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: ((ErasedInstantiator<Void, Service>) -> Child)?
+		        private(set) var childBuilder: ((ErasedInstantiator<Void, Service>) -> Child)?
 		    }
 
 		    static func mock(
@@ -1606,7 +1606,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: (@Sendable (Service) -> Child)?
+		        private(set) var childBuilder: (@Sendable (Service) -> Child)?
 		    }
 
 		    static func mock(
@@ -1685,8 +1685,8 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let sibling: ((Service) -> Sibling)?
-		        let childBuilder: (@Sendable (Service) -> Child)?
+		        private(set) var sibling: ((Service) -> Sibling)?
+		        private(set) var childBuilder: (@Sendable (Service) -> Child)?
 		    }
 
 		    static func mock(
@@ -1767,7 +1767,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        private(set) var childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1849,7 +1849,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        private(set) var childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1937,7 +1937,7 @@ struct SafeDIToolSendableBuilderValueTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: Child.SafeDIMockConfiguration
+		        private(set) var childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(

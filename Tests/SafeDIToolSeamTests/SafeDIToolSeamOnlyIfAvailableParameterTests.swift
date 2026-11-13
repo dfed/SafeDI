@@ -198,9 +198,9 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 		            self.user = user
 		        }
 
-		        public let database: (() -> Database)?
-		        public let cache: ((Database, Logger?) -> Cache)?
-		        public let user: (() -> User)?
+		        public private(set) var database: (() -> Database)?
+		        public private(set) var cache: ((Database, Logger?) -> Cache)?
+		        public private(set) var user: (() -> User)?
 		    }
 
 		    public static func mock(
