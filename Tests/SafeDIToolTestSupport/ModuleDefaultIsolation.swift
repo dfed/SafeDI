@@ -31,7 +31,7 @@ enum ModuleDefaultIsolation: CaseIterable, CustomTestStringConvertible, Sendable
 	func compilerSettings(prependsSafeDIImport: Bool = true) -> VerificationCompilerSettings {
 		switch self {
 		case .nonisolated:
-			VerificationCompilerSettings(prependsSafeDIImport: prependsSafeDIImport)
+			VerificationCompilerSettings(defaultIsolation: nil, prependsSafeDIImport: prependsSafeDIImport)
 		case .mainActor:
 			VerificationCompilerSettings(defaultIsolation: "MainActor", prependsSafeDIImport: prependsSafeDIImport)
 		}

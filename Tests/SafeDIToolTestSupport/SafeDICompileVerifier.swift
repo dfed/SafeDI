@@ -169,14 +169,17 @@ private func locateBuildArtifacts(sourceLocation: SourceLocation) -> SafeDIBuild
 /// How the compiler that verifies a module is configured beyond the conditions it defines: the language mode, the
 /// upcoming features it enables, the module's default isolation, and whether each file is given `import SafeDI`.
 struct VerificationCompilerSettings {
-	/// The `-swift-version` the module compiles in.
-	var swiftLanguageMode = "6"
+	/// The `-swift-version` the module compiles in: by default the one `CompileCheckConcurrency.current` names.
+	var swiftLanguageMode = CompileCheckConcurrency.current.swiftLanguageMode
 	/// The upcoming features the compile enables, each passed as `-enable-upcoming-feature`.
 	var upcomingFeatures = [String]()
 	/// The isolation the module's declarations default to, passed as `-default-isolation` (`MainActor`, as SwiftPM's
 	/// `defaultIsolation(MainActor.self)` and a new Xcode 26 app target set it), or `nil` to pass none, so that they
-	/// are nonisolated by default.
-	var defaultIsolation: String?
+	/// are nonisolated by default. By default the one `CompileCheckConcurrency.current` names.
+	var defaultIsolation: String? = CompileCheckConcurrency.current.defaultIsolation
+	/// The concurrency arguments `CompileCheckConcurrency.current` adds to every compile of generated code, passed after
+	/// `upcomingFeatures`, so that a test that names its own upcoming features still compiles under the combination.
+	var concurrencyArguments = CompileCheckConcurrency.current.additionalArguments
 	/// Whether `stageCompileSources` prepends `import SafeDI` to every file. A fixture that spells its own import of
 	/// SafeDI, as one that gives an import an access level must, since an import without one beside it is ambiguous,
 	/// passes `false`, and its generated files import SafeDI as the fixture's files do.
@@ -338,6 +341,7 @@ private func compileModule(
 			swiftLanguageMode: module.compilerSettings.swiftLanguageMode,
 			upcomingFeatures: module.compilerSettings.upcomingFeatures,
 			defaultIsolation: module.compilerSettings.defaultIsolation,
+			concurrencyArguments: module.compilerSettings.concurrencyArguments,
 		)
 	}
 
@@ -640,6 +644,12 @@ func stageCompileSources(
 ///   - upcomingFeatures: The upcoming features to enable, each passed as `-enable-upcoming-feature`.
 ///   - defaultIsolation: The isolation the module's declarations default to, passed as `-default-isolation`, or `nil`
 ///     to pass none.
+///   - concurrencyArguments: Further concurrency arguments, passed after `upcomingFeatures`.
+///
+/// The language mode, default isolation and concurrency arguments default to the combination
+/// `CompileCheckConcurrency.current` names, so every compile of generated code – the verifier's, the graph fuzzer's
+/// and the differential value comparator's – compiles under it. A compile of SafeDI's own code passes
+/// `CompileCheckConcurrency.swift6`'s settings instead.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func compileSwift(
 	sources: [URL],
@@ -653,9 +663,10 @@ func compileSwift(
 	enablesTesting: Bool = false,
 	parsesAsLibrary: Bool = false,
 	definesDebug: Bool = true,
-	swiftLanguageMode: String = "6",
+	swiftLanguageMode: String = CompileCheckConcurrency.current.swiftLanguageMode,
 	upcomingFeatures: [String] = [],
-	defaultIsolation: String? = nil,
+	defaultIsolation: String? = CompileCheckConcurrency.current.defaultIsolation,
+	concurrencyArguments: [String] = CompileCheckConcurrency.current.additionalArguments,
 ) throws -> SwiftCompileResult {
 	var arguments = swiftCompilerCommand.arguments
 	arguments.append(contentsOf: [
@@ -675,6 +686,7 @@ func compileSwift(
 	for upcomingFeature in upcomingFeatures {
 		arguments.append(contentsOf: ["-enable-upcoming-feature", upcomingFeature])
 	}
+	arguments.append(contentsOf: concurrencyArguments)
 	if let defaultIsolation {
 		arguments.append(contentsOf: ["-default-isolation", defaultIsolation])
 	}
@@ -740,3 +752,84 @@ let swiftCompilerCommand: (executable: URL, arguments: [String]) = {
 		(URL(fileURLWithPath: "/usr/bin/xcrun"), ["swiftc"])
 	#endif
 }()
+
+/// The concurrency settings every compile of generated code is given, chosen by the `SAFEDI_COMPILE_CHECK_CONCURRENCY`
+/// environment variable: one of the combinations a real project is likely to build with. Unset, it is `swift6`: the
+/// Swift 6 language mode with declarations nonisolated by default. A test that names a language mode or a default
+/// isolation of its own keeps it; the combination's other arguments are added to its compile too.
+enum CompileCheckConcurrency: String, CaseIterable, Sendable {
+	/// Swift 6 language mode, nonisolated by default.
+	case swift6
+	/// Swift 6 language mode, on the main actor by default (`-default-isolation MainActor`).
+	case swift6MainActor = "swift6-main-actor"
+	/// Swift 6 language mode with the upcoming features Xcode 26's "Approachable Concurrency" setting enables.
+	case swift6Approachable = "swift6-approachable"
+	/// Swift 6 language mode with "Approachable Concurrency", on the main actor by default.
+	case swift6ApproachableMainActor = "swift6-approachable-main-actor"
+	/// Swift 5 language mode with minimal concurrency checking: the language mode's defaults.
+	case swift5Minimal = "swift5-minimal"
+	/// Swift 5 language mode with complete concurrency checking (`-strict-concurrency=complete`).
+	case swift5Complete = "swift5-complete"
+	/// What a new Xcode 26 app target builds with: Swift 5 language mode, "Approachable Concurrency", main actor by
+	/// default, and `MemberImportVisibility`.
+	case swift5Xcode26App = "swift5-xcode26-app"
+
+	/// The environment variable that names the combination.
+	static let environmentVariable = "SAFEDI_COMPILE_CHECK_CONCURRENCY"
+
+	/// The combination `SAFEDI_COMPILE_CHECK_CONCURRENCY` names, or `swift6` when it is unset or empty. A name that is
+	/// none of the combinations' stops the test process, so that a misspelled name never runs the suite under `swift6`.
+	static let current: CompileCheckConcurrency = {
+		guard let name = ProcessInfo.processInfo.environment[environmentVariable], !name.isEmpty else { return .swift6 }
+		guard let combination = CompileCheckConcurrency(rawValue: name) else {
+			fatalError("\(environmentVariable)=\(name) names none of \(allCases.map(\.rawValue).joined(separator: ", ")).")
+		}
+		return combination
+	}()
+
+	var swiftLanguageMode: String {
+		switch self {
+		case .swift6, .swift6MainActor, .swift6Approachable, .swift6ApproachableMainActor:
+			"6"
+		case .swift5Minimal, .swift5Complete, .swift5Xcode26App:
+			"5"
+		}
+	}
+
+	var defaultIsolation: String? {
+		switch self {
+		case .swift6, .swift6Approachable, .swift5Minimal, .swift5Complete:
+			nil
+		case .swift6MainActor, .swift6ApproachableMainActor, .swift5Xcode26App:
+			"MainActor"
+		}
+	}
+
+	/// The arguments beyond the language mode and default isolation.
+	var additionalArguments: [String] {
+		let upcomingFeatures: [String] = switch self {
+		case .swift6, .swift6MainActor, .swift5Minimal, .swift5Complete:
+			[]
+		case .swift6Approachable, .swift6ApproachableMainActor:
+			// The features "Approachable Concurrency" enables that Swift 6 does not already.
+			["NonisolatedNonsendingByDefault", "InferIsolatedConformances"]
+		case .swift5Xcode26App:
+			[
+				"DisableOutwardActorInference",
+				"GlobalActorIsolatedTypesUsability",
+				"InferIsolatedConformances",
+				"InferSendableFromCaptures",
+				"NonisolatedNonsendingByDefault",
+				"MemberImportVisibility",
+			]
+		}
+		var arguments = upcomingFeatures.flatMap { ["-enable-upcoming-feature", $0] }
+		switch self {
+		case .swift5Complete:
+			arguments.append("-strict-concurrency=complete")
+		case .swift6, .swift6MainActor, .swift6Approachable, .swift6ApproachableMainActor, .swift5Minimal, .swift5Xcode26App:
+			break
+		}
+		return arguments
+	}
+}

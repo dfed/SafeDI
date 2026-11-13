@@ -127,6 +127,7 @@ struct PassedCompileCheckCache: Sendable {
 				swiftLanguageMode: module.sources.compilerSettings.swiftLanguageMode,
 				upcomingFeatures: module.sources.compilerSettings.upcomingFeatures,
 				defaultIsolation: module.sources.compilerSettings.defaultIsolation,
+				concurrencyArguments: module.sources.compilerSettings.concurrencyArguments.isEmpty ? nil : module.sources.compilerSettings.concurrencyArguments,
 				inputFiles: files(module.staged.inputFiles),
 				generatedFiles: files(module.staged.generatedFiles.sorted { $0.lastPathComponent < $1.lastPathComponent }),
 			))
@@ -186,6 +187,8 @@ private struct CompileCheckDescription: Encodable {
 		let upcomingFeatures: [String]
 		/// Encoded only when set, so that a check that sets none keeps the key it had before the setting existed.
 		let defaultIsolation: String?
+		/// Encoded only when there are some, for `defaultIsolation`'s reason.
+		let concurrencyArguments: [String]?
 		let inputFiles: [File]
 		let generatedFiles: [File]
 	}

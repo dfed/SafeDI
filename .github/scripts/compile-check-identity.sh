@@ -6,8 +6,9 @@
 # SafeDI's runtime library and macro plugin (which compiles SafeDICore through a
 # symbolic link), the package manifest and its resolved dependencies, the sources
 # of the compile verifier and its cache, the arguments the test step builds with
-# (TEST_ARGUMENT…), the compiler's version and default target, and on macOS the
-# SDK. A job keys its cache of passed compile checks on this hash, so a change to
+# (TEST_ARGUMENT…), the concurrency combination generated code compiles under
+# (SAFEDI_COMPILE_CHECK_CONCURRENCY, so each combination's job caches apart), the
+# compiler's version and default target, and on macOS the SDK. A job keys its cache of passed compile checks on this hash, so a change to
 # any of these starts from an empty cache and compiles every check.
 #
 # Reads files rather than `git ls-tree`: in a container job, git refuses to read
@@ -32,6 +33,7 @@ fi
 
 {
 	echo "Test arguments: $*"
+	echo "Concurrency combination: ${SAFEDI_COMPILE_CHECK_CONCURRENCY:-}"
 	find Sources/SafeDI Sources/SafeDICore Sources/SafeDIMacros -type f -name '*.swift' -print0 \
 		| LC_ALL=C sort -z \
 		| sha256_of_files

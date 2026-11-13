@@ -122,7 +122,7 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 	func key_differs_whenTheCompileSetsADefaultIsolation() throws {
 		let root = try makeRoot(named: "root")
 		let module = try stagedModule(in: root, generatedCode: "extension Fixture {}\n")
-		let mainActorByDefault = CompileCheckModule(
+		let otherIsolation = CompileCheckModule(
 			sources: ModuleCompileSources(
 				moduleName: module.sources.moduleName,
 				packageName: nil,
@@ -131,13 +131,14 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 				generatedFiles: module.sources.generatedFiles,
 				activeCompilationConditions: [],
 				mockConditionalCompilation: nil,
-				compilerSettings: VerificationCompilerSettings(defaultIsolation: "MainActor"),
+				// The other isolation than the one the combination SAFEDI_COMPILE_CHECK_CONCURRENCY names sets by default.
+				compilerSettings: VerificationCompilerSettings(defaultIsolation: module.sources.compilerSettings.defaultIsolation == nil ? "MainActor" : nil),
 			),
 			staged: module.staged,
 			emitsModule: false,
 		)
 
-		#expect(try PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path]) != PassedCompileCheckCache.key(of: [mainActorByDefault], fixtureRoots: [root.path]))
+		#expect(try PassedCompileCheckCache.key(of: [module], fixtureRoots: [root.path]) != PassedCompileCheckCache.key(of: [otherIsolation], fixtureRoots: [root.path]))
 	}
 
 	// MARK: Tests – Skipping and recording checks

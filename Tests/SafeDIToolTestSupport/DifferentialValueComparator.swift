@@ -554,6 +554,10 @@ enum DifferentialValueOracle {
 				moduleName: moduleName,
 				emitsModule: true,
 				parsesAsLibrary: true,
+				// SafeDI and the describer are SafeDI's own code, which builds in its own package's settings.
+				swiftLanguageMode: CompileCheckConcurrency.swift6.swiftLanguageMode,
+				defaultIsolation: CompileCheckConcurrency.swift6.defaultIsolation,
+				concurrencyArguments: CompileCheckConcurrency.swift6.additionalArguments,
 			)
 			guard result.exitCode == 0 else {
 				throw DifferentialValueOracleError(
