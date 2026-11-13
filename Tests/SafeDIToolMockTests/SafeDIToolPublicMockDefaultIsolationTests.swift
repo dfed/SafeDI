@@ -47,11 +47,11 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 
 	// MARK: Tests
 
-	@Test(arguments: MultiModuleIntegration.allCases, DefaultIsolationCase.allCases)
+	@Test(arguments: MultiModuleIntegration.allCases, ModuleDefaultIsolationPair.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_publicMockCompilesForCallerInAnotherPackage_whenEitherModuleDefaultsToMainActor(
 		integration: MultiModuleIntegration,
-		isolation: DefaultIsolationCase,
+		isolation: ModuleDefaultIsolationPair,
 	) async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
@@ -59,14 +59,14 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 					name: "Core",
 					packageName: "pkg",
 					swiftFileContentByFilePath: ["Screen.swift": Self.screen],
-					compilerSettings: isolation.declaringModuleSettings,
+					compilerSettings: isolation.declaringModule.compilerSettings(prependsSafeDIImport: false),
 				),
 				ModuleFixture(
 					name: "App",
 					packageName: "app",
 					swiftFileContentByFilePath: ["Caller.swift": Self.screenCaller],
 					dependencies: ["Core"],
-					compilerSettings: isolation.callingModuleSettings,
+					compilerSettings: isolation.callingModule.compilerSettings(prependsSafeDIImport: false),
 				),
 			],
 			integration: integration,
@@ -76,23 +76,23 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 		#expect(output.modules["Core"]?.generatedFiles == Self.screenFiles(integration: integration))
 	}
 
-	@Test(arguments: DefaultIsolationCase.allCases)
+	@Test(arguments: ModuleDefaultIsolationPair.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_publicMockCompiles_whenItsTreeBuildsAnotherModulesTypesAndEitherModuleDefaultsToMainActor(isolation: DefaultIsolationCase) async throws {
+	mutating func generate_publicMockCompiles_whenItsTreeBuildsAnotherModulesTypesAndEitherModuleDefaultsToMainActor(isolation: ModuleDefaultIsolationPair) async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(
 					name: "Core",
 					packageName: "pkg",
 					swiftFileContentByFilePath: ["Screen.swift": Self.screen],
-					compilerSettings: isolation.declaringModuleSettings,
+					compilerSettings: isolation.declaringModule.compilerSettings(prependsSafeDIImport: false),
 				),
 				ModuleFixture(
 					name: "App",
 					packageName: "app",
 					swiftFileContentByFilePath: ["Home.swift": Self.home],
 					dependencies: ["Core"],
-					compilerSettings: isolation.callingModuleSettings,
+					compilerSettings: isolation.callingModule.compilerSettings(prependsSafeDIImport: false),
 				),
 			],
 			integration: .moduleInfo,
@@ -102,23 +102,23 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.homeFile])
 	}
 
-	@Test(arguments: DefaultIsolationCase.allCases)
+	@Test(arguments: ModuleDefaultIsolationPair.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_publicMockCompiles_whenItsConfigurationHoldsOverridesOfMainActorPublicMockAndEitherModuleDefaultsToMainActor(isolation: DefaultIsolationCase) async throws {
+	mutating func generate_publicMockCompiles_whenItsConfigurationHoldsOverridesOfMainActorPublicMockAndEitherModuleDefaultsToMainActor(isolation: ModuleDefaultIsolationPair) async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(
 					name: "Core",
 					packageName: "pkg",
 					swiftFileContentByFilePath: ["Card.swift": Self.card],
-					compilerSettings: isolation.declaringModuleSettings,
+					compilerSettings: isolation.declaringModule.compilerSettings(prependsSafeDIImport: false),
 				),
 				ModuleFixture(
 					name: "App",
 					packageName: "app",
 					swiftFileContentByFilePath: ["Page.swift": Self.page],
 					dependencies: ["Core"],
-					compilerSettings: isolation.callingModuleSettings,
+					compilerSettings: isolation.callingModule.compilerSettings(prependsSafeDIImport: false),
 				),
 			],
 			integration: .moduleInfo,
@@ -127,33 +127,6 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 
 		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": Self.cardFile])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.pageFile])
-	}
-
-	// MARK: Isolation cases
-
-	/// The isolation each of the two modules' declarations default to: the main actor, or none.
-	struct DefaultIsolationCase: CustomTestStringConvertible, Sendable {
-		static let allCases = [
-			DefaultIsolationCase(declaringModuleIsMainActorByDefault: true, callingModuleIsMainActorByDefault: true),
-			DefaultIsolationCase(declaringModuleIsMainActorByDefault: true, callingModuleIsMainActorByDefault: false),
-			DefaultIsolationCase(declaringModuleIsMainActorByDefault: false, callingModuleIsMainActorByDefault: true),
-			DefaultIsolationCase(declaringModuleIsMainActorByDefault: false, callingModuleIsMainActorByDefault: false),
-		]
-
-		let declaringModuleIsMainActorByDefault: Bool
-		let callingModuleIsMainActorByDefault: Bool
-
-		var declaringModuleSettings: VerificationCompilerSettings {
-			VerificationCompilerSettings(defaultIsolation: declaringModuleIsMainActorByDefault ? "MainActor" : nil, prependsSafeDIImport: false)
-		}
-
-		var callingModuleSettings: VerificationCompilerSettings {
-			VerificationCompilerSettings(defaultIsolation: callingModuleIsMainActorByDefault ? "MainActor" : nil, prependsSafeDIImport: false)
-		}
-
-		var testDescription: String {
-			"Core \(declaringModuleIsMainActorByDefault ? "on the main actor" : "nonisolated") by default, App \(callingModuleIsMainActorByDefault ? "on the main actor" : "nonisolated") by default"
-		}
 	}
 
 	// MARK: Fixtures

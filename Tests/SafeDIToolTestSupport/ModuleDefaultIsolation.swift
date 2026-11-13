@@ -50,3 +50,19 @@ enum ModuleDefaultIsolation: CaseIterable, CustomTestStringConvertible, Sendable
 		}
 	}
 }
+
+/// The isolation the declarations of a module that declares a type, and of a module that uses it, default to.
+struct ModuleDefaultIsolationPair: CustomTestStringConvertible, Sendable {
+	static let allCases = ModuleDefaultIsolation.allCases.flatMap { declaringModule in
+		ModuleDefaultIsolation.allCases.map { callingModule in
+			ModuleDefaultIsolationPair(declaringModule: declaringModule, callingModule: callingModule)
+		}
+	}
+
+	let declaringModule: ModuleDefaultIsolation
+	let callingModule: ModuleDefaultIsolation
+
+	var testDescription: String {
+		"declaring module \(declaringModule.testDescription), calling module \(callingModule.testDescription)"
+	}
+}
