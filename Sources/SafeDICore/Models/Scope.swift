@@ -374,8 +374,9 @@ final class Scope: Hashable {
 	/// those parameters, and count what they pass among the properties they receive. Nearly every tree has no such
 	/// scope and is created once. A pass changes a scope's parameters only through the parameters of the functions it
 	/// is nested in or that are nested in it, which only add to what it receives or declares, so the passes end once
-	/// the parameters at each level of nesting have settled. A pass that is not the last kicks off code generation
-	/// that nothing reads.
+	/// the parameters at each level of nesting have settled. The first pass starts each generator's code as the
+	/// generator is created, since nearly every tree takes one pass; a later pass starts none until the passes end,
+	/// and then only the last pass's, since nothing reads the code of a pass that is not the last.
 	func createScopeGenerator(
 		for property: Property?,
 		nearestDeclarations: NearestDeclarations = [:],
@@ -389,7 +390,11 @@ final class Scope: Hashable {
 	) throws -> ScopeGenerator {
 		var previousPassGenerator: ScopeGenerator?
 		var scopeGenerator: ScopeGenerator
+		var generatorsToStart: [ScopeGenerator]?
 		repeat {
+			if previousPassGenerator != nil {
+				generatorsToStart = []
+			}
 			scopeGenerator = try createScopeGenerator(
 				for: property,
 				nearestDeclarations: nearestDeclarations,
@@ -401,14 +406,20 @@ final class Scope: Hashable {
 				startsCodeGeneration: startsCodeGeneration,
 				declaredTypeNames: declaredTypeNames,
 				previousPassGenerator: previousPassGenerator,
+				generatorsToStart: &generatorsToStart,
 			)
 			previousPassGenerator = scopeGenerator
 		} while scopeGenerator.cycleParametersChangedInTree || scopeGenerator.fillStructBoundLabelsChangedInTree
+		for generator in generatorsToStart ?? [] {
+			ScopeGeneratorUnderConstruction.startCodeGeneration(of: generator)
+		}
 		return scopeGenerator
 	}
 
 	/// One pass of `createScopeGenerator`, which reads the parameters of the builder functions lazy cycles close on
 	/// from `previousPassGenerator`, the tree the pass before created, or finds none when there is no pass before.
+	/// - Parameter generatorsToStart: `nil` to start each generator's code as it is created, or where to collect the
+	///   generators whose code to start, in the order they are created.
 	private func createScopeGenerator(
 		for property: Property?,
 		nearestDeclarations: NearestDeclarations,
@@ -420,6 +431,7 @@ final class Scope: Hashable {
 		startsCodeGeneration: Bool,
 		declaredTypeNames: DeclaredTypeNames,
 		previousPassGenerator: ScopeGenerator?,
+		generatorsToStart: inout [ScopeGenerator]?,
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: self,
@@ -471,7 +483,7 @@ final class Scope: Hashable {
 					scope: fill.scope,
 				))
 			} else {
-				let scopeGenerator = scopeGeneratorsUnderConstruction.removeLast().scopeGenerator()
+				let scopeGenerator = scopeGeneratorsUnderConstruction.removeLast().scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart)
 				if scopeGeneratorsUnderConstruction.isEmpty {
 					return scopeGenerator
 				} else {
@@ -983,8 +995,9 @@ private struct ScopeGeneratorUnderConstruction {
 		}
 	}
 
-	/// Creates the scope's generator once `childGenerators` holds a generator for each of `propertiesToGenerate`.
-	func scopeGenerator() -> ScopeGenerator {
+	/// Creates the scope's generator once `childGenerators` holds a generator for each of `propertiesToGenerate`, and starts
+	/// its code, or adds it to `generatorsToStart` when that is not `nil`.
+	func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [ScopeGenerator]?) -> ScopeGenerator {
 		// Every fill this call passes is an enclosing call's or its own.
 		let fillNames = holeArguments.isEmpty ? [:] : enclosingFillsOfThisCall
 		let builtGenerator = ScopeGenerator(
@@ -1052,12 +1065,20 @@ private struct ScopeGeneratorUnderConstruction {
 			builtGenerator
 		}
 		if !forMockGeneration, startsCodeGeneration, fill == nil {
-			_ = Task.detached {
-				// Kick off code generation.
-				try await scopeGenerator.generateCode()
+			if generatorsToStart != nil {
+				generatorsToStart?.append(scopeGenerator)
+			} else {
+				Self.startCodeGeneration(of: scopeGenerator)
 			}
 		}
 		return scopeGenerator
+	}
+
+	/// Kicks off the generation of `scopeGenerator`'s code, which a later request for the code reads from its cache.
+	static func startCodeGeneration(of scopeGenerator: ScopeGenerator) {
+		_ = Task.detached {
+			try await scopeGenerator.generateCode()
+		}
 	}
 
 	private let scope: Scope
