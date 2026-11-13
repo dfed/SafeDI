@@ -91,7 +91,7 @@ Generated code must be able to call each type’s initializer. The access that t
 - Built in another module of the same package: `package`, `public`, or `open`.
 - Built in a module of another package: `public` or `open`.
 
-A type is built in the module of the root whose tree contains it, or of the mock that builds it. For example, a root’s tree can build an `internal` type of the root’s own module, but a type from another module of the package needs a `package` initializer. A [seam](#generating-a-dependency-tree-per-module), covered later, builds its tree in its own module.
+A type is built in the module of the root whose tree contains it, or of the mock that builds it. A [seam](#generating-a-dependency-tree-per-module), covered later, builds its tree in its own module.
 
 The same access applies to every type enclosing the built type, and to whatever generated code calls in place of the initializer: an extension’s `instantiate(…)` method, or a [hand-written mock](#hand-written-mocks) method. SafeDI reports each declaration that needs wider access and names the change to make: the `@Instantiable` macro as you type, and `SafeDITool` when you build.
 
@@ -316,8 +316,6 @@ public final class MyPresenter: Instantiable {
 }
 ```
 
-A seam whose initializers are `@MainActor` must be called from the main actor. So the root, or the other seam, whose tree reaches it needs `@MainActor` too. SafeDI does not check this; the generated call fails to compile.
-
 `generatedAttributes` is the shorthand for giving both the same text, and cannot be combined with either of the other two.
 
 ```swift
@@ -478,7 +476,7 @@ SafeDI generates a `ForwardedProperties` typealias for every `@Instantiable` typ
 
 An `Instantiator` also lets types create one another, which forms a dependency cycle. For example, a `ProfileView` can instantiate an `Instantiator<FollowersView>`, and a `FollowersView` an `Instantiator<ProfileView>`. SafeDI accepts a cycle when at least one `@Instantiated` property along it is an `Instantiator`, an `ErasedInstantiator`, or a `Sendable` twin of either. Each time that property builds its type, the other types along the cycle are built again, as new instances.
 
-Inside a cycle, a `@Received` property still takes the nearest declaration above it. Say `Screen` receives `session` and instantiates an `Instantiator<Step>`, and `Step` instantiates its own `session` and an `Instantiator<Screen>`. A `Screen` that `Step` builds receives `Step`’s `session`. SafeDI reports an error if `Screen` and the types it builds receive `session` as two types one value cannot provide; receive them under different labels.
+Inside a cycle, a `@Received` property still takes the nearest declaration above it. Say `Screen` receives `session` and instantiates an `Instantiator<Step>`, and `Step` instantiates its own `session` and an `Instantiator<Screen>`. A `Screen` that `Step` builds receives `Step`’s `session`.
 
 A `@Received` property cannot close a cycle. If `Child` receives `parent`, and that `parent` is the `Parent` still being built above it, SafeDI reports an error. Declare `@Received(onlyIfAvailable: true) let parent: Parent?` instead, and `Child` gets `nil` for it, as [Conditionally receiving dependencies](#conditionally-receiving-dependencies) describes.
 
@@ -1064,13 +1062,11 @@ To give every type its own instance, as the app does, declare a [`mockOnly`](#th
 
 **Dependencies received only if available.** A `@Received(onlyIfAvailable: true)` dependency gets an optional entry only when every type in the tree that receives it, renames included, receives it only if available. It has no entry of its own when the mock builds it anyway: when the mocked type instantiates it, or another type in the tree requires it. When nothing fulfills it and another type requires it, it is a required flat parameter. Where production passes a receiver `nil`, such as one built inside the instance it receives, the mock passes `nil` too.
 
-**Renames.** A dependency the mock builds beside the mocked type has no entry for a label the mocked type renames when it receives that label as the rename’s type or its optional form: it gets the rename, as types beneath the mocked type do. Otherwise, a `@Received` dependency is resolved from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` can build `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`. An entry for a composition such as `(EventTracker & CrashReporter).self` does not cover its members. Otherwise the mock takes `crashReporter` as a required parameter. Because each received dependency is resolved on its own, a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each; pass one instance through `safeDIOverrides` if a test needs them to coincide.
+**Renames.** A mock resolves each `@Received` dependency from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` builds `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`, and otherwise takes it as a required parameter. An entry for a composition such as `(EventTracker & CrashReporter).self` does not cover its members. So a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each; pass one instance through `safeDIOverrides` if a test needs them to coincide.
 
-**Order.** The `SafeDIOverrides` entries follow the order the mock builds in: the mocked type’s own `@Instantiated` dependencies first, then the dependencies its tree receives, each after those it is built from, in the order you declare the properties. Flat parameters, and the `onlyIfAvailable` entries of dependencies the mock does not build, are in label order. When two dependencies the mock builds receive each other only if available, the one received later is passed `nil`, as [under a root](#conditionally-receiving-dependencies).
+The mocked type’s own renames are the exception. When the mocked type declares a rename, a dependency the mock builds beside it that receives the rename’s label, as the rename’s type or its optional form, has no entry for that label: it gets the rename, as types beneath the mocked type do.
 
 **Names.** When two flat `mock()` parameters, or two entries of one `SafeDIOverrides` or `SafeDIMockConfiguration`, share a label, each is named by its label followed by its type, spelled as an identifier: received dependencies named `items` of types `[String]` and `Set<String>` become `items_Array_String` and `items_Set__String`. A mock builds every form in which its tree receives one label: when one type requires `x: X` and another requires `x: Instantiator<X>`, the mock builds both, as `x_X` and `x_Instantiator__X`. An optional form beside its non-optional form, and the instance of a `LazilyInstantiated`, are not forms of their own.
-
-Within the mock’s tree, a type beneath one that receives a label must receive it in a form the same declaration provides, unless both receive it only if available. When `Feed` receives `session: Instantiator<Session>` and a type `Feed` builds receives `session: Session`, no one declaration above `Feed` provides both, so SafeDI reports an error, as it would wherever `Feed` is built. Receive the two under different labels. Two types that are not built one inside the other may receive one label in different forms, as `x_X` and `x_Instantiator__X` above show.
 
 #### Receiving a type-erased dependency
 
@@ -1251,9 +1247,7 @@ List each type by its declared name, with enclosing types and without the module
 
 ### Public mocks
 
-`generateMock: .public` gives other modules, in this package or another, a `mock()` they can call. SafeDI generates that `public` `mock()` in the module that declares the type. (`generateMock: true` is the same as `.internal`.) The type must be `public` or `open`, or declared with no access level directly inside a `public extension`. Every type enclosing it, and the type an extension declaring it extends, must be `public` too. The type cannot be generic or nested in a generic type. SafeDI reports each of these with a fix-it.
-
-Generated mocks never call a [seam’s](#generating-a-dependency-tree-per-module) generated initializer. A mock in another module builds the seam’s whole tree itself, so every type in that tree must be visible to the mock’s module, unless the seam has a public mock, which the mock calls when it cannot build the tree itself.
+`generateMock: .public` gives other modules, in this package or another, a `mock()` they can call. SafeDI generates that `public` `mock()` in the module that declares the type. (`generateMock: true` is the same as `.internal`.) The type and every type enclosing it must be `public` or `open`, and none of them generic; SafeDI reports otherwise with a fix-it.
 
 ```swift
 @Instantiable(generateMock: .public)
@@ -1297,17 +1291,15 @@ The parameters come in this order: `@Forwarded` properties; default-valued initi
 - A parameter an internal mock [defaults to a hand-written mock](#dependency-kinds-in-the-generated-mock) is `T? = nil` too, and `nil` calls that mock.
 - `SafeDIOverrides` is `public`, with each member as visible as the types it names, and an initializer for each access its members have.
 
-**Holes and errors.**
+**Holes.**
 
 - A [hole](#generating-a-dependency-tree-per-module) – here, a type the tree instantiates that no `@Instantiable` or `mockOnly` declaration the module sees fulfills – takes a required builder, as it does for a seam, with the same labels, cases and stages. Its scope types are nested in the mocked type: `SafeDIMockScope_<Type>`, `SafeDISendableMockScope_<Type>` and `SafeDIStagedMockScope_<Type>_<case>`. A `mockOnly` stub that fulfills the hole’s type, in the module or one it depends on, removes the builder: the mock builds the stub, and production still fills the hole.
-- A required parameter that no `public` tier can take, such as a `@Forwarded` property of a `package` type, is an error at the `generateMock:` argument, which says how to widen it.
-- `generateMock: .public` on a seam makes its generated initializer `public` too, so each protocol a hole names and each type its tree receives from outside must be `public` as well. The error at the seam lists the alternatives.
 
 Each generated call of a public mock names an empty enum that encodes the mock’s signature, so a call generated against an older signature fails to compile at the call.
 
 #### Calling a public mock from another module
 
-Another module calls a public mock like any `public` method, from a module that depends on the declaring module, inside the declaring module’s `mockConditionalCompilation`. A module of another package – one compiled with a different `-package-name`, or none, as [Access levels](#access-levels) describes – reaches only the `public` tier. Under SwiftPM it depends on the declaring module through a [library product of its package](#swift-package). For `FeedScreen`, which [Adopting SafeDI in a large codebase](#adopting-safedi-in-a-large-codebase) declares with a hole, `service: FeedService`, a test passes a stub:
+Another module calls a public mock like any `public` method, inside the declaring module’s `mockConditionalCompilation`; a module of another SwiftPM package depends on a [library product](#swift-package) of the declaring package. For `FeedScreen`, which [Adopting SafeDI in a large codebase](#adopting-safedi-in-a-large-codebase) declares with a hole, `service: FeedService`, a test passes a stub:
 
 ```swift
 // In a package that depends on Feed's library product.
@@ -1365,7 +1357,7 @@ SafeDI’s code generation runs `SafeDITool` in your build. Xcode projects and S
 
 SafeDI generates code for a type only in the module that declares it: a root’s `init()`, the initializer of a type with `generateDependencyTree: true`, and the `mock()` of a type with `generateMock`. So run SafeDI on every target that depends on the `SafeDI` library, even one that declares none of them yet: a target that gains one later then needs no change to its build.
 
-Under Bazel and Tuist, run SafeDI on every first-party Swift module, even one that declares no `@Instantiable` type, and give each module a list of the modules it depends on, as [Which modules to list](#which-modules-to-list) describes. SafeDI reads nothing of a module it does not run on, so a `package` type there can fail to compile in a generated initializer or mock ([Access of generated parameters](#access-of-generated-parameters)).
+Under Bazel and Tuist, run SafeDI on every first-party Swift module, even one that declares no `@Instantiable` type, and give each module a list of the modules it depends on, as [Which modules to list](#which-modules-to-list) describes; [Access of generated parameters](#access-of-generated-parameters) says why.
 
 A module needs a `SafeDIConfiguration.swift` only to set one of [its parameters](#safediconfiguration).
 
@@ -1430,8 +1422,6 @@ If your first-party code is entirely contained in a Swift Package with one or mo
 
 To generate mocks in other modules, see [Cross-module mock generation](#cross-module-mock-generation).
 
-If a target that declares a type with `generateDependencyTree: true` or `generateMock: .public` lacks the plugin, every call of that type’s generated initializer or public mock fails to compile with `type 'FeedScreen' has no member '__safeDI_FeedScreen_…'`. A comment on that line says to add the plugin to the target that declares the type.
-
 A module that another package uses, such as one that declares a [public mock](#calling-a-public-mock-from-another-module), must be a library product of its package. The other package depends on that product, and needs no SafeDI dependency or plugin of its own to call the mock. A path dependency’s package identity comes from its folder name:
 
 ```swift
@@ -1488,7 +1478,7 @@ The macro accepts every `swift_library` attribute and declares two targets: the 
 - `visibility`: as on the library, since the modules that list the rule must see it.
 - `module_name` (required): the library’s `module_name` attribute, or the name `derive_swift_module_name` from `@rules_swift//swift:module_name.bzl` gives the library’s label.
 
-See [`bazel/safedi.bzl`](../bazel/safedi.bzl). If a library is compiled without the rule’s output in its `srcs`, every call of its seams and public mocks fails to compile with `type 'Screen' has no member '__safeDI_Screen_…'` (or `has no member 'mock'`).
+See [`bazel/safedi.bzl`](../bazel/safedi.bzl).
 
 For [Stardoc](https://github.com/bazelbuild/stardoc) and other `bzl_library` tooling, a `bzl_library` of your own that loads `safedi.bzl` can list `@safedi//bazel:safedi` in its `deps`.
 
@@ -1576,7 +1566,7 @@ An Xcode script phase that runs `SafeDITool` can keep `ENABLE_USER_SCRIPT_SANDBO
 | --- | --- |
 | `--combined-output <file>` | Everything in one file whose path is known in advance, for a build system that declares rule outputs up front. It cannot be combined with the other two. |
 | `--output-directory <existing directory>` | One file per source file, as the `SafeDIGenerator` plugin writes them, named as [Finding the generated code](#finding-the-generated-code) describes. `generate` runs `scan` itself and writes its manifest and cache there. When the input CSV lists files of other modules too, pass the module’s own files to `--mock-scoped-files`. |
-| `--swift-manifest <manifest>` | The outputs listed by a manifest you had `scan` write. A manifest you write by hand is deprecated: `generate` warns, and SafeDI 3.0 rejects it. |
+| `--swift-manifest <manifest>` | The outputs listed by a manifest you had `scan` write. A manifest you write by hand is deprecated, and `generate` warns. |
 
 `generate` writes every output it plans, without code when its input declares no such type under the active compilation conditions. It also takes:
 
@@ -1588,12 +1578,12 @@ An Xcode script phase that runs `SafeDITool` can keep `ENABLE_USER_SCRIPT_SANDBO
 | `--package-name` | That module’s package, exactly as the compiler’s `-package-name` names it, such as an Xcode target’s `SWIFT_PACKAGE_NAME`. Omit it when the compiler receives no `-package-name`. |
 | `--module-info-output` | Where to write this module’s `.safedi` file, for the modules that list it. |
 | `--dependent-module-info-file-path` | A file listing the `.safedi` file of each module this one [lists](#which-modules-to-list). |
-| `--transitive-module-info-file-path` | A file listing the `.safedi` file of every module beneath this one, as the Bazel rule passes. |
+| `--transitive-module-info-file-path` | A file listing the `.safedi` file of every module this one depends on, directly or through other modules, as the Bazel rule passes. |
 | `--compiler-receives-input-paths-unchanged` | Better error locations, when your build allows it; see below. |
 
-`--module-name` and `--package-name` tell `SafeDITool` which module and package declare each type it reads, which decides the access its generated code needs ([Access levels](#access-levels)). A module given `--module-name` and no `--package-name` has no package.
+`--module-name` and `--package-name` tell `SafeDITool` which module and package declare each type it reads, which decides the access its generated code needs ([Access levels](#access-levels)).
 
-`generate --additional-imported-modules` is deprecated, warns, and is removed in SafeDI 3.0: list those modules in the module’s [`#SafeDIConfiguration`](#safediconfiguration) `additionalImportedModules`, which imports them whichever build runs SafeDI.
+`generate --additional-imported-modules` is deprecated and warns: list those modules in the module’s [`#SafeDIConfiguration`](#safediconfiguration) `additionalImportedModules`, which imports them whichever build runs SafeDI.
 
 `SafeDITool` can parse all of your Swift files in one run or, for better performance, run once per module: each producing module writes a `.safedi` file with `--module-info-output`, and each consuming module passes the `.safedi` of each module it [lists](#which-modules-to-list) through `--dependent-module-info-file-path`, so it resolves the types declared upstream without parsing their sources:
 
@@ -1851,13 +1841,7 @@ A target that calls another module’s seam also shares its `mockConditionalComp
 
 ## Reference
 
-The rules in this section are the detail behind the sections above, which point here where they apply. They use a few terms:
-
-- **Seam:** a type declared with `generateDependencyTree: true`, whose own module generates its tree as an initializer that other trees call ([Generating a dependency tree per module](#generating-a-dependency-tree-per-module)).
-- **Inline:** built by the caller’s own generated code, type by type, as a tree without seams is.
-- **Tier:** the initializers, or the public `mock()` method, SafeDI generates for one access level when their parameters differ in access ([Access of generated parameters](#access-of-generated-parameters)).
-- **Hole:** a type a seam’s tree or a public mock’s tree instantiates that no declaration its module sees fulfills. The generated initializer or mock takes one builder for each such type, named for the type, such as `serviceBuilder`.
-- **Beneath:** a module is beneath another when the other depends on it, directly or through other modules.
+The rules in this section are the detail behind the sections above, which point here where they apply.
 
 ### Access of generated parameters
 
@@ -1878,8 +1862,6 @@ SafeDI can take a type as wider than the compiler does. The compiler then report
 
 - A type of a module your files import below `public` (`internal import UIKit`), or an `@_spi` type. SafeDI takes both as `public`.
 - A type SafeDI sees no declaration of: one a macro generates, or one in a file the build does not list for SafeDI. Run SafeDI on the module that declares it and list that module among this module’s SafeDI dependencies ([Which modules to list](#which-modules-to-list)), or, under the Xcode project plugin, add its directory to `additionalDirectoriesToInclude`. For a type a macro generates, name a type SafeDI reads in its place.
-- A type whose name follows a comment after its keyword (`struct /* … */ Token`), in a file that mentions neither `@Instantiable` nor `#SafeDIConfiguration`. SafeDI reads such a file only when a text search finds a type’s keyword followed by a name it looks for, or, under Bazel, Tuist, and a custom build that writes `.safedi` files, the word `package`. Put the name right after the keyword.
-- A type your module declares in only some clauses of a platform condition, when another module declares a narrower type of the same name. SafeDI takes your module’s declaration; on a platform whose clause lacks it, the compiler finds the other module’s. Declare the type in every clause, or rename one of the two.
 
 ### Where a seam differs from building its tree inline
 
@@ -2075,7 +2057,7 @@ We’ve tied everything together with an example multi-user notes application ba
 
 ## Under the hood
 
-SafeDI has a `SafeDITool` executable that the `SafeDIGenerator` plugin utilizes to read code and generate a dependency tree. The executable heavily utilizes asynchronous processing to avoid `SafeDITool` becoming a bottleneck in your build. It parses a Swift file with `SwiftSyntax` only when the file contains `@Instantiable` or `#SafeDIConfiguration`, or when a quick text search shows the file may declare a type whose access SafeDI checks, such as a protocol an `@Instantiable` type depends on. [Access of generated parameters](#access-of-generated-parameters) names a type that search misses.
+SafeDI has a `SafeDITool` executable that the `SafeDIGenerator` plugin utilizes to read code and generate a dependency tree. The executable heavily utilizes asynchronous processing to avoid `SafeDITool` becoming a bottleneck in your build. It parses a Swift file with `SwiftSyntax` only when the file contains `@Instantiable` or `#SafeDIConfiguration`, or when a quick text search shows the file may declare a type whose access SafeDI checks, such as a protocol an `@Instantiable` type depends on.
 
 `SafeDITool` utilizes Apple’s [SwiftSyntax](https://github.com/apple/swift-syntax) library to parse your code and find your `@Instantiable` types’ initializers and dependencies. With this information, SafeDI generates a graph of your project’s dependencies and validates it during `SafeDITool` execution. If the graph is invalid, `SafeDITool` reports each problem as a compiler diagnostic, offers a fix-it where the repair is unambiguous, and exits non-zero. Source code is only generated if the dependency graph is valid.
 
