@@ -1100,7 +1100,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        private(set) var aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1139,7 +1139,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		        private(set) var safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
 		    }
 		}
 
@@ -1156,10 +1156,10 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let service: Service.SafeDIOverrides
-		        let midBuilder: Mid.SafeDIMockConfiguration
+		        private(set) var service: Service.SafeDIOverrides
+		        private(set) var midBuilder: Mid.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        private(set) var safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
 		    }
 		}
 		#endif
@@ -1194,7 +1194,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        private(set) var aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1233,7 +1233,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<Filter>, Instantiator<A>) -> Mid)?
+		        private(set) var safeDIBuilder: ((Instantiator<Filter>, Instantiator<A>) -> Mid)?
 		    }
 		}
 
@@ -1250,10 +1250,10 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let service: Service.SafeDIOverrides
-		        let midBuilder: Mid.SafeDIMockConfiguration
+		        private(set) var service: Service.SafeDIOverrides
+		        private(set) var midBuilder: Mid.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        private(set) var safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
 		    }
 		}
 		#endif
@@ -1298,7 +1298,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        private(set) var aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1339,7 +1339,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Instantiator<A>) -> AppFilter)?
+		        private(set) var safeDIBuilder: ((Instantiator<A>) -> AppFilter)?
 		    }
 		}
 
@@ -1354,9 +1354,9 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let filter: AppFilter.SafeDIMockConfiguration
+		        private(set) var filter: AppFilter.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)?
+		        private(set) var safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)?
 		    }
 		}
 
@@ -1373,10 +1373,10 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let service: Service.SafeDIOverrides
-		        let midBuilder: Mid.SafeDIMockConfiguration
+		        private(set) var service: Service.SafeDIOverrides
+		        private(set) var midBuilder: Mid.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        private(set) var safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
 		    }
 		}
 		#endif
@@ -1429,7 +1429,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        public let aBuilder: __safeDI_App_A_MockConfiguration
+		        public private(set) var aBuilder: __safeDI_App_A_MockConfiguration
 		    }
 
 		    public static func mock(
@@ -1473,7 +1473,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    }
 
 		    /// Overrides how `AppFilter` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Instantiator<A>) -> AppFilter)?
+		    public private(set) var safeDIBuilder: ((Instantiator<A>) -> AppFilter)?
 		}
 
 		extension AppFilter {
@@ -1499,9 +1499,9 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        self.safeDIBuilder = safeDIBuilder
 		    }
 
-		    public let filter: __safeDI_App_AppFilter_MockConfiguration
+		    public private(set) var filter: __safeDI_App_AppFilter_MockConfiguration
 		    /// Overrides how `Mid` is constructed. Parameters match the type’s initializer or custom mock method.
-		    let safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)?
+		    private(set) var safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)?
 		}
 
 		extension Mid {
@@ -1522,10 +1522,10 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        self.safeDIBuilder = safeDIBuilder
 		    }
 
-		    public let service: Service.SafeDIOverrides
-		    public let midBuilder: __safeDI_App_Mid_MockConfiguration
+		    public private(set) var service: Service.SafeDIOverrides
+		    public private(set) var midBuilder: __safeDI_App_Mid_MockConfiguration
 		    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		    public private(set) var safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
 		}
 
 		extension A {
@@ -1589,7 +1589,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        private(set) var aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1628,7 +1628,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		        private(set) var safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
 		    }
 		}
 
@@ -1645,10 +1645,10 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let service: Service.SafeDIOverrides
-		        let midBuilder: Mid.SafeDIMockConfiguration
+		        private(set) var service: Service.SafeDIOverrides
+		        private(set) var midBuilder: Mid.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        private(set) var safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
 		    }
 		}
 		#endif
@@ -1682,7 +1682,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
+		        private(set) var aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1722,7 +1722,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		        private(set) var safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
 		    }
 		}
 
@@ -1739,10 +1739,10 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let service: Service.SafeDIOverrides
-		        let midBuilder: Mid.SafeDIMockConfiguration
+		        private(set) var service: Service.SafeDIOverrides
+		        private(set) var midBuilder: Mid.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		        private(set) var safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
 		    }
 		}
 		#endif
@@ -1779,8 +1779,8 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
-		        let filter: Filter?
+		        private(set) var aBuilder: A.SafeDIMockConfiguration
+		        private(set) var filter: Filter?
 		    }
 
 		    static func mock(
@@ -1820,7 +1820,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		        private(set) var safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
 		    }
 		}
 
@@ -1837,10 +1837,10 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let service: Service.SafeDIOverrides
-		        let midBuilder: Mid.SafeDIMockConfiguration
+		        private(set) var service: Service.SafeDIOverrides
+		        private(set) var midBuilder: Mid.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Filter?, Service, Instantiator<Mid>) -> A)?
+		        private(set) var safeDIBuilder: ((Filter?, Service, Instantiator<Mid>) -> A)?
 		    }
 		}
 		#endif
@@ -1875,7 +1875,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        public let aBuilder: __safeDI_App_A_MockConfiguration
+		        public private(set) var aBuilder: __safeDI_App_A_MockConfiguration
 		    }
 
 		    public static func mock(
@@ -1918,7 +1918,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    }
 
 		    /// Overrides how `Mid` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
+		    public private(set) var safeDIBuilder: ((Filter, Instantiator<A>) -> Mid)?
 		}
 
 		extension Mid {
@@ -1939,10 +1939,10 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        self.safeDIBuilder = safeDIBuilder
 		    }
 
-		    public let service: Service.SafeDIOverrides
-		    public let midBuilder: __safeDI_App_Mid_MockConfiguration
+		    public private(set) var service: Service.SafeDIOverrides
+		    public private(set) var midBuilder: __safeDI_App_Mid_MockConfiguration
 		    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
+		    public private(set) var safeDIBuilder: ((Service, Instantiator<Mid>) -> A)?
 		}
 
 		extension A {

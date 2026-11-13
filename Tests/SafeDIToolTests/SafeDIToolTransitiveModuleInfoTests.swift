@@ -261,7 +261,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		            self.feedScreen = feedScreen
 		        }
 
-		        let feedScreen: ((Clock) -> FeedScreen)?
+		        private(set) var feedScreen: ((Clock) -> FeedScreen)?
 		    }
 
 		    static func mock(
@@ -484,7 +484,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		            self.innerScreen = innerScreen
 		        }
 
-		        public let innerScreen: ((Clock) -> InnerScreen)?
+		        public private(set) var innerScreen: ((Clock) -> InnerScreen)?
 		    }
 
 		    public static func mock(
@@ -538,7 +538,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		            self.feedScreen = feedScreen
 		        }
 
-		        let feedScreen: FeedScreen.SafeDIMockConfiguration
+		        private(set) var feedScreen: FeedScreen.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -570,9 +570,9 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let clock: (() -> Clock)?
+		        private(set) var clock: (() -> Clock)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Clock) -> InnerScreen)?
+		        private(set) var safeDIBuilder: ((Clock) -> InnerScreen)?
 		    }
 		}
 
@@ -587,9 +587,9 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let innerScreen: InnerScreen.SafeDIMockConfiguration
+		        private(set) var innerScreen: InnerScreen.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((InnerScreen) -> FeedScreen)?
+		        private(set) var safeDIBuilder: ((InnerScreen) -> FeedScreen)?
 		    }
 		}
 		#endif
@@ -1588,7 +1588,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			            self.thing = thing
 			        }
 
-			        let thing: (() -> AnyThing)?
+			        private(set) var thing: (() -> AnyThing)?
 			    }
 
 			    static func mock(
@@ -1903,7 +1903,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 	            self.feedScreen = feedScreen
 	        }
 
-	        let feedScreen: FeedScreen.SafeDIMockConfiguration
+	        private(set) var feedScreen: FeedScreen.SafeDIMockConfiguration
 	    }
 
 	    static func mock(
@@ -1931,9 +1931,9 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 	            self.safeDIBuilder = safeDIBuilder
 	        }
 
-	        let clock: (() -> Clock)?
+	        private(set) var clock: (() -> Clock)?
 	        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-	        let safeDIBuilder: ((Clock) -> FeedScreen)?
+	        private(set) var safeDIBuilder: ((Clock) -> FeedScreen)?
 	    }
 	}
 	#endif

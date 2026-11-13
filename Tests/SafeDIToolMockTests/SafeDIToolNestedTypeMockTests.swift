@@ -97,7 +97,7 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		            self.consumer = consumer
 		        }
 
-		        let consumer: Feature.Consumer.SafeDIMockConfiguration
+		        private(set) var consumer: Feature.Consumer.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -164,7 +164,7 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		            self.consumer = consumer
 		        }
 
-		        let consumer: (() -> Feature.Detail.Consumer)?
+		        private(set) var consumer: (() -> Feature.Detail.Consumer)?
 		    }
 
 		    static func mock(
@@ -225,7 +225,7 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		            self.consumer = consumer
 		        }
 
-		        let consumer: (() -> Feature.Consumer)?
+		        private(set) var consumer: (() -> Feature.Consumer)?
 		    }
 
 		    static func mock(
@@ -286,7 +286,7 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		            self.consumer = consumer
 		        }
 
-		        let consumer: (() -> Feature.Consumer)?
+		        private(set) var consumer: (() -> Feature.Consumer)?
 		    }
 
 		    static func mock(
@@ -384,7 +384,7 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		            self.consumer = consumer
 		        }
 
-		        let consumer: (() -> Feature.Consumer)?
+		        private(set) var consumer: (() -> Feature.Consumer)?
 		    }
 
 		    static func mock(
@@ -449,7 +449,7 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		            self.consumer = consumer
 		        }
 
-		        let consumer: (() -> Feature.Consumer)?
+		        private(set) var consumer: (() -> Feature.Consumer)?
 		    }
 
 		    static func mock(
@@ -519,7 +519,7 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		            self.consumer = consumer
 		        }
 
-		        let consumer: (() -> Feature.ConsumerProtocol)?
+		        private(set) var consumer: (() -> Feature.ConsumerProtocol)?
 		    }
 
 		    static func mock(
@@ -597,8 +597,8 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		            self.consumer = consumer
 		        }
 
-		        let service: (() -> Feature.Service)?
-		        let consumer: ((Feature.Service) -> Feature.Consumer)?
+		        private(set) var service: (() -> Feature.Service)?
+		        private(set) var consumer: ((Feature.Service) -> Feature.Consumer)?
 		    }
 
 		    static func mock(
@@ -677,8 +677,8 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		            self.consumer = consumer
 		        }
 
-		        let service: (() -> Feature.Service)?
-		        let consumer: ((Feature.Service) -> Feature.Consumer)?
+		        private(set) var service: (() -> Feature.Service)?
+		        private(set) var consumer: ((Feature.Service) -> Feature.Consumer)?
 		    }
 
 		    static func mock(

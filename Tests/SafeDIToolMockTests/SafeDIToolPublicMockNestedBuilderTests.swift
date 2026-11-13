@@ -73,7 +73,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.row = row
 		        }
 
-		        public let row: __safeDI_Core_Row_MockConfiguration
+		        public private(set) var row: __safeDI_Core_Row_MockConfiguration
 		    }
 
 		    public static func mock(
@@ -108,9 +108,9 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        self.safeDIBuilder = safeDIBuilder
 		    }
 
-		    public let token: (() -> Token)?
+		    public private(set) var token: (() -> Token)?
 		    /// Overrides how `Row` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((Token, any Service) -> Row)?
+		    public private(set) var safeDIBuilder: ((Token, any Service) -> Row)?
 		}
 
 		extension Row {
@@ -329,7 +329,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.board = board
 		        }
 
-		        let board: (@Sendable () -> Board.SafeDIOverrides)?
+		        private(set) var board: (@Sendable () -> Board.SafeDIOverrides)?
 		    }
 
 		    static func mock(
@@ -376,7 +376,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.board = board
 		        }
 
-		        let board: Board.SafeDIOverrides
+		        private(set) var board: Board.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -549,7 +549,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.crate = crate
 		        }
 
-		        public let crate: Crate.SafeDIOverrides
+		        public private(set) var crate: Crate.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -589,7 +589,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.shelf = shelf
 		        }
 
-		        let shelf: Shelf.SafeDIOverrides
+		        private(set) var shelf: Shelf.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -727,7 +727,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.panel = panel
 		        }
 
-		        public let panel: Panel.SafeDIOverrides
+		        public private(set) var panel: Panel.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -828,7 +828,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.row = row
 		        }
 
-		        public let row: ((ServiceBuilder, any Service) -> Row)?
+		        public private(set) var row: ((ServiceBuilder, any Service) -> Row)?
 		    }
 
 		    public static func mock(
@@ -1049,8 +1049,8 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.panel = panel
 		        }
 
-		        let serviceBuilder: (() -> Thing)?
-		        let panel: Panel.SafeDIOverrides
+		        private(set) var serviceBuilder: (() -> Thing)?
+		        private(set) var panel: Panel.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -1171,7 +1171,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.middle = middle
 		        }
 
-		        let middle: Middle.SafeDIMockConfiguration
+		        private(set) var middle: Middle.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1208,10 +1208,10 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let serviceBuilder: (() -> Thing)?
-		        let panel: Panel.SafeDIOverrides
+		        private(set) var serviceBuilder: (() -> Thing)?
+		        private(set) var panel: Panel.SafeDIOverrides
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((Thing, Panel) -> Middle)?
+		        private(set) var safeDIBuilder: ((Thing, Panel) -> Middle)?
 		    }
 		}
 		#endif
@@ -1272,8 +1272,8 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.deck = deck
 		        }
 
-		        let panel: Panel.SafeDIOverrides
-		        let deck: ((@escaping (Deck.SafeDIMockScope_Service) -> any Service) -> Deck)?
+		        private(set) var panel: Panel.SafeDIOverrides
+		        private(set) var deck: ((@escaping (Deck.SafeDIMockScope_Service) -> any Service) -> Deck)?
 		    }
 
 		    static func mock(
@@ -1345,9 +1345,9 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.panel = panel
 		        }
 
-		        let serviceBuilder: (() -> Thing)?
-		        let serviceBuilder_Panel: (() -> Thing)?
-		        let panel: Panel.SafeDIOverrides
+		        private(set) var serviceBuilder: (() -> Thing)?
+		        private(set) var serviceBuilder_Panel: (() -> Thing)?
+		        private(set) var panel: Panel.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -1414,8 +1414,8 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.panel = panel
 		        }
 
-		        public let serviceBuilder: (() -> Thing)?
-		        public let panel: Panel.SafeDIOverrides
+		        public private(set) var serviceBuilder: (() -> Thing)?
+		        public private(set) var panel: Panel.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -1560,7 +1560,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		            self.host = host
 		        }
 
-		        let host: ((@escaping (Host.SafeDIMockScope_TapService) -> AnyService, @escaping (Host.SafeDIStagedMockScope_TapService_sendableMaker.Stage1) -> Host.SafeDIStagedMockScope_TapService_sendableMaker.SendableLastStage<OnTap>) -> Host)?
+		        private(set) var host: ((@escaping (Host.SafeDIMockScope_TapService) -> AnyService, @escaping (Host.SafeDIStagedMockScope_TapService_sendableMaker.Stage1) -> Host.SafeDIStagedMockScope_TapService_sendableMaker.SendableLastStage<OnTap>) -> Host)?
 		    }
 
 		    static func mock(
@@ -1636,7 +1636,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	            self.panel = panel
 	        }
 
-	        let panel: Panel.SafeDIOverrides
+	        private(set) var panel: Panel.SafeDIOverrides
 	    }
 
 	"""
@@ -1685,8 +1685,8 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	            self.held = held
 	        }
 
-	        public let panel: Panel.SafeDIOverrides
-	        public let held: (@Sendable () -> Panel.SafeDIOverrides)?
+	        public private(set) var panel: Panel.SafeDIOverrides
+	        public private(set) var held: (@Sendable () -> Panel.SafeDIOverrides)?
 	    }
 
 	"""
@@ -1952,7 +1952,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	            self.board = board
 	        }
 
-	        let board: Board.SafeDIOverrides
+	        private(set) var board: Board.SafeDIOverrides
 	    }
 
 	"""

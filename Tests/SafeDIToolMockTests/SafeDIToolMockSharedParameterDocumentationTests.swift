@@ -93,8 +93,8 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.apple = apple
 		        }
 
-		        let zebra: ((AnyUserService) -> Zebra)?
-		        let apple: ((AnyUserService) -> Apple)?
+		        private(set) var zebra: ((AnyUserService) -> Zebra)?
+		        private(set) var apple: ((AnyUserService) -> Apple)?
 		    }
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
@@ -203,12 +203,12 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.lime = lime
 		        }
 
-		        let mango: ((AnyUserService) -> Mango)?
-		        let apple: ((AnyUserService) -> Apple)?
-		        let zebra: ((AnyUserService) -> Zebra)?
-		        let kiwi: ((AnyUserService) -> Kiwi)?
-		        let banana: ((AnyUserService) -> Banana)?
-		        let lime: ((AnyUserService) -> Lime)?
+		        private(set) var mango: ((AnyUserService) -> Mango)?
+		        private(set) var apple: ((AnyUserService) -> Apple)?
+		        private(set) var zebra: ((AnyUserService) -> Zebra)?
+		        private(set) var kiwi: ((AnyUserService) -> Kiwi)?
+		        private(set) var banana: ((AnyUserService) -> Banana)?
+		        private(set) var lime: ((AnyUserService) -> Lime)?
 		    }
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
@@ -290,8 +290,8 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.apple = apple
 		        }
 
-		        let zebra: Zebra.SafeDIMockConfiguration
-		        let apple: ((AnyUserService) -> Apple)?
+		        private(set) var zebra: Zebra.SafeDIMockConfiguration
+		        private(set) var apple: ((AnyUserService) -> Apple)?
 		    }
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
@@ -365,8 +365,8 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.zebra = zebra
 		        }
 
-		        let apple: ((AnyUserService) -> Apple)?
-		        let zebra: ((Apple, AnyUserService) -> Zebra)?
+		        private(set) var apple: ((AnyUserService) -> Apple)?
+		        private(set) var zebra: ((Apple, AnyUserService) -> Zebra)?
 		    }
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
@@ -452,9 +452,9 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.settings = settings
 		        }
 
-		        let zebra: Zebra.SafeDIMockConfiguration
-		        let apple: Apple.SafeDIMockConfiguration
-		        let settings: ((AnyUserService) -> Settings)?
+		        private(set) var zebra: Zebra.SafeDIMockConfiguration
+		        private(set) var apple: Apple.SafeDIMockConfiguration
+		        private(set) var settings: ((AnyUserService) -> Settings)?
 		    }
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
@@ -539,8 +539,8 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.apple = apple
 		        }
 
-		        let zebra: Zebra.SafeDIMockConfiguration
-		        let apple: Apple.SafeDIMockConfiguration
+		        private(set) var zebra: Zebra.SafeDIMockConfiguration
+		        private(set) var apple: Apple.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -623,8 +623,8 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.apple = apple
 		        }
 
-		        let zebra: ((AnyUserService, AnyAnalytics) -> Zebra)?
-		        let apple: ((AnyUserService, AnyLogger, AnyAnalytics) -> Apple)?
+		        private(set) var zebra: ((AnyUserService, AnyAnalytics) -> Zebra)?
+		        private(set) var apple: ((AnyUserService, AnyLogger, AnyAnalytics) -> Apple)?
 		    }
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
@@ -699,8 +699,8 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.apple = apple
 		        }
 
-		        let zebraBuilder: (@Sendable (AnyUserService) -> Zebra)?
-		        let apple: ((AnyUserService) -> Apple)?
+		        private(set) var zebraBuilder: (@Sendable (AnyUserService) -> Zebra)?
+		        private(set) var apple: ((AnyUserService) -> Apple)?
 		    }
 
 		    static func mock(
@@ -776,8 +776,8 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.apple = apple
 		        }
 
-		        let zebra: ((AnyUserService) -> Zebra)?
-		        let apple: ((AnyUserService) -> Apple)?
+		        private(set) var zebra: ((AnyUserService) -> Zebra)?
+		        private(set) var apple: ((AnyUserService) -> Apple)?
 		    }
 
 		    /// - Parameter class: Passed to every type that creates this dependency:
@@ -848,8 +848,8 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.apple = apple
 		        }
 
-		        let zebra: ((AnyUserService) -> Zebra)?
-		        let apple: ((AnyUserService) -> Apple)?
+		        private(set) var zebra: ((AnyUserService) -> Zebra)?
+		        private(set) var apple: ((AnyUserService) -> Apple)?
 		    }
 
 		    /// - Parameter userService_AnyUserService: Passed to every type that creates this dependency:
@@ -916,8 +916,8 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.apple = apple
 		        }
 
-		        let zebra: ((LazilyInstantiated<Engine>) -> Zebra)?
-		        let apple: ((LazilyInstantiated<Engine>) -> Apple)?
+		        private(set) var zebra: ((LazilyInstantiated<Engine>) -> Zebra)?
+		        private(set) var apple: ((LazilyInstantiated<Engine>) -> Apple)?
 		    }
 
 		    /// - Parameter engine: Passed to every type that creates this dependency:
@@ -987,8 +987,8 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.apple = apple
 		        }
 
-		        let zebra: ((AnyUserService) -> Feature.Zebra)?
-		        let apple: ((AnyUserService) -> Feature.Apple)?
+		        private(set) var zebra: ((AnyUserService) -> Feature.Zebra)?
+		        private(set) var apple: ((AnyUserService) -> Feature.Apple)?
 		    }
 
 		    /// - Parameter userService: Passed to every type that creates this dependency:
@@ -1064,8 +1064,8 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.apple = apple
 		        }
 
-		        let zebra: Zebra.SafeDIMockConfiguration
-		        let apple: Apple.SafeDIMockConfiguration
+		        private(set) var zebra: Zebra.SafeDIMockConfiguration
+		        private(set) var apple: Apple.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1146,8 +1146,8 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.apple = apple
 		        }
 
-		        let zebra: ((Engine) -> Zebra)?
-		        let apple: Apple.SafeDIMockConfiguration
+		        private(set) var zebra: ((Engine) -> Zebra)?
+		        private(set) var apple: Apple.SafeDIMockConfiguration
 		    }
 
 		    /// - Parameter engine: Passed to every type that creates this dependency:
@@ -1228,8 +1228,8 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.kiwi = kiwi
 		        }
 
-		        let b: B.SafeDIMockConfiguration
-		        let kiwi: ((Engine) -> Kiwi)?
+		        private(set) var b: B.SafeDIMockConfiguration
+		        private(set) var kiwi: ((Engine) -> Kiwi)?
 		    }
 
 		    /// - Parameter engine: Passed to every type that creates this dependency:
@@ -1328,9 +1328,9 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.apple = apple
 		        }
 
-		        let userService: (() -> AnyUserService)?
-		        let zebra: Zebra.SafeDIMockConfiguration
-		        let apple: Apple.SafeDIMockConfiguration
+		        private(set) var userService: (() -> AnyUserService)?
+		        private(set) var zebra: Zebra.SafeDIMockConfiguration
+		        private(set) var apple: Apple.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1406,8 +1406,8 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		            self.apple = apple
 		        }
 
-		        public let zebra: (([String]) -> Zebra)?
-		        public let apple: (([String]) -> Apple)?
+		        public private(set) var zebra: (([String]) -> Zebra)?
+		        public private(set) var apple: (([String]) -> Apple)?
 		    }
 
 		    /// - Parameter tags: Passed to every type that creates this dependency:

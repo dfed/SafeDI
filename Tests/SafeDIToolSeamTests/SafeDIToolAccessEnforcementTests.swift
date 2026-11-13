@@ -276,7 +276,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			            self.engine = engine
 			        }
 
-			        let engine: Engine.SafeDIMockConfiguration
+			        private(set) var engine: Engine.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -303,7 +303,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			            self.service = service
 			        }
 
-			        let service: (() -> Service)?
+			        private(set) var service: (() -> Service)?
 			    }
 
 			    static func mock(
@@ -327,9 +327,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        let service: (() -> Service)?
+			        private(set) var service: (() -> Service)?
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        let safeDIBuilder: ((Service) -> Engine)?
+			        private(set) var safeDIBuilder: ((Service) -> Engine)?
 			    }
 			}
 			#endif
@@ -3179,7 +3179,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        let service: (() -> Service)?
+		        private(set) var service: (() -> Service)?
 		    }
 
 		    static func mock(

@@ -377,7 +377,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 				            self.gaugeBuilder = gaugeBuilder
 				        }
 
-				        public let gaugeBuilder: (() -> Gauge)?
+				        public private(set) var gaugeBuilder: (() -> Gauge)?
 				    }
 
 				    public static func mock(
@@ -1485,7 +1485,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			            self.child = child
 			        }
 
-			        public let child: __safeDI_Feature_Child_MockConfiguration
+			        public private(set) var child: __safeDI_Feature_Child_MockConfiguration
 			    }
 
 			    public static func mock(
@@ -1521,9 +1521,9 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Child`'s `date`.
-			    public let date: Date?
+			    public private(set) var date: Date?
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public let safeDIBuilder: ((Date) -> Child)?
+			    public private(set) var safeDIBuilder: ((Date) -> Child)?
 			}
 
 			extension Child {
@@ -1627,9 +1627,9 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 				            self.safeDIBuilder = safeDIBuilder
 				        }
 
-				        let date: Date
+				        private(set) var date: Date
 				        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-				        let safeDIBuilder: ((Date) -> Child)?
+				        private(set) var safeDIBuilder: ((Date) -> Child)?
 				    }
 				}
 				#endif
@@ -1675,8 +1675,8 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			            self.panel = panel
 			        }
 
-			        let child: \(childOverride)
-			        let panel: Panel.SafeDIMockConfiguration
+			        private(set) var child: \(childOverride)
+			        private(set) var panel: Panel.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -1820,9 +1820,9 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 	            self.safeDIBuilder = safeDIBuilder
 	        }
 
-	        let gauge: (() -> Gauge)?
+	        private(set) var gauge: (() -> Gauge)?
 	        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-	        let safeDIBuilder: ((Gauge) -> Panel)?
+	        private(set) var safeDIBuilder: ((Gauge) -> Panel)?
 	    }
 	}
 	#endif
@@ -1921,7 +1921,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        public let service: Service.SafeDIOverrides
+		        public private(set) var service: Service.SafeDIOverrides
 		    }
 
 		\(unreadTypeComment)    public static func mock(
@@ -2004,7 +2004,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 	            self.child = child
 	        }
 
-	        let child: Child.SafeDIMockConfiguration
+	        private(set) var child: Child.SafeDIMockConfiguration
 	    }
 
 	    static func mock(
@@ -2033,9 +2033,9 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 	            self.safeDIBuilder = safeDIBuilder
 	        }
 
-	        let date: Date
+	        private(set) var date: Date
 	        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-	        let safeDIBuilder: ((Date) -> Child)?
+	        private(set) var safeDIBuilder: ((Date) -> Child)?
 	    }
 	}
 	#endif

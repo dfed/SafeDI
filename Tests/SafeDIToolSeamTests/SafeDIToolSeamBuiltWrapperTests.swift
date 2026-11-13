@@ -1472,7 +1472,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			            self.analytics = analytics
 			        }
 
-			        public let analytics: (() -> Analytics)?
+			        public private(set) var analytics: (() -> Analytics)?
 			    }
 
 			    public static func mock(
@@ -1559,7 +1559,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            self.again = again
 		        }
 
-		        public let again: __safeDI_Middle_MockConfiguration
+		        public private(set) var again: __safeDI_Middle_MockConfiguration
 		    }
 
 		    public static func mock(

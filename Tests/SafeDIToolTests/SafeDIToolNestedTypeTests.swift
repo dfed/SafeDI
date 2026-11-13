@@ -945,7 +945,7 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		            self.serviceBuilder = serviceBuilder
 		        }
 
-		        let serviceBuilder: (() -> Feature.Service)?
+		        private(set) var serviceBuilder: (() -> Feature.Service)?
 		    }
 
 		    static func mock(
@@ -1004,7 +1004,7 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		            self.serviceBuilder = serviceBuilder
 		        }
 
-		        let serviceBuilder: (() -> Feature.Service)?
+		        private(set) var serviceBuilder: (() -> Feature.Service)?
 		    }
 
 		    static func mock(
@@ -1066,7 +1066,7 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        let service: (() -> Consumer.ServiceProtocol)?
+		        private(set) var service: (() -> Consumer.ServiceProtocol)?
 		    }
 
 		    static func mock(
@@ -1327,7 +1327,7 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        let service: (() -> Feature.Service)?
+		        private(set) var service: (() -> Feature.Service)?
 		    }
 
 		    static func mock(
@@ -1386,7 +1386,7 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        let service: (() -> Feature.Service)?
+		        private(set) var service: (() -> Feature.Service)?
 		    }
 
 		    static func mock(
@@ -1469,7 +1469,7 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: ((Child.Config) -> Child)?
+		        private(set) var childBuilder: ((Child.Config) -> Child)?
 		    }
 
 		    static func mock(
@@ -1537,7 +1537,7 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        let child: ((Child.Config) -> Child)?
+		        private(set) var child: ((Child.Config) -> Child)?
 		    }
 
 		    static func mock(
@@ -1619,7 +1619,7 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: ((Feature.Child.Config) -> Feature.Child)?
+		        private(set) var childBuilder: ((Feature.Child.Config) -> Feature.Child)?
 		    }
 
 		    static func mock(
@@ -1707,7 +1707,7 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        let childBuilder: (([Child.Service]) -> Child)?
+		        private(set) var childBuilder: (([Child.Service]) -> Child)?
 		    }
 
 		    static func mock(

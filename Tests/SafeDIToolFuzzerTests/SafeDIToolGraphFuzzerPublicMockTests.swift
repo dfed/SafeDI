@@ -176,9 +176,9 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		            self.session = session
 		        }
 
-		        package let session: S1_Session?
-		        public let shelf: S1_Space.S1_Shelf?
-		        let policy: S1_Policy?
+		        package private(set) var session: S1_Session?
+		        public private(set) var shelf: S1_Space.S1_Shelf?
+		        private(set) var policy: S1_Policy?
 		    }
 
 		    public enum __safeDI_S1_Service_mock_0123456789ABCDEF {}
@@ -202,7 +202,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		)
 		#expect(findings == [
 			"FuzzFeature/S1_Service+SafeDIMock.swift: `public init( session: S1_Session? = nil, theme: S1_Theme? = nil )` is `public`, but `S1_Session` is `package`.",
-			"FuzzFeature/S1_Service+SafeDIMock.swift: `public let shelf: S1_Space.S1_Shelf?` is `public`, but `S1_Space.S1_Shelf` is `internal`.",
+			"FuzzFeature/S1_Service+SafeDIMock.swift: `public private(set) var shelf: S1_Space.S1_Shelf?` is `public`, but `S1_Space.S1_Shelf` is `internal`.",
 			"FuzzFeature/S1_Service+SafeDIMock.swift: `@MainActor public static func mock( theme: S1_Theme? = nil, session: S1_Session? = nil, safeDIOverrides: SafeDIOverrides = .init() ) -> S1_Service` is `public`, but `S1_Session` is `package`.",
 			"FuzzFeature/S1_Service+SafeDIMock.swift: `package static func mock(policy: S1_Policy? = nil) -> S1_Service` is `package`, but `S1_Policy` is `internal`.",
 		])

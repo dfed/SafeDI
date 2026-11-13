@@ -77,9 +77,9 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            self.serviceAlias = serviceAlias
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
-			        let sibling: ((Service?) -> Sibling)?
-			        let serviceAlias: Service?
+			        private(set) var child: Child.SafeDIMockConfiguration
+			        private(set) var sibling: ((Service?) -> Sibling)?
+			        private(set) var serviceAlias: Service?
 			    }
 
 			    static func mock(
@@ -126,7 +126,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            self.child = child
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
+			        private(set) var child: Child.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -176,9 +176,9 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            self.leafBuilderAlias = leafBuilderAlias
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
-			        let sibling: ((Instantiator<Leaf>?) -> Sibling)?
-			        let leafBuilderAlias: Instantiator<Leaf>?
+			        private(set) var child: Child.SafeDIMockConfiguration
+			        private(set) var sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			        private(set) var leafBuilderAlias: Instantiator<Leaf>?
 			    }
 
 			    static func mock(
@@ -235,9 +235,9 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            self.leafBuilderAlias = leafBuilderAlias
 			        }
 
-			        let leafBuilder: ((Instantiator<Leaf>?) -> Leaf)?
-			        let child: Child.SafeDIMockConfiguration
-			        let leafBuilderAlias: Instantiator<Leaf>?
+			        private(set) var leafBuilder: ((Instantiator<Leaf>?) -> Leaf)?
+			        private(set) var child: Child.SafeDIMockConfiguration
+			        private(set) var leafBuilderAlias: Instantiator<Leaf>?
 			    }
 
 			    static func mock(
@@ -290,7 +290,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            self.child = child
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
+			        private(set) var child: Child.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -346,9 +346,9 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            self.serviceAlias = serviceAlias
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
-			        let sibling: ((Service?) -> Sibling)?
-			        let serviceAlias: Service?
+			        private(set) var child: Child.SafeDIMockConfiguration
+			        private(set) var sibling: ((Service?) -> Sibling)?
+			        private(set) var serviceAlias: Service?
 			    }
 
 			    static func mock(
@@ -396,7 +396,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            self.child = child
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
+			        private(set) var child: Child.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -447,9 +447,9 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            self.leafBuilderAlias = leafBuilderAlias
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
-			        let sibling: ((Instantiator<Leaf>?) -> Sibling)?
-			        let leafBuilderAlias: Instantiator<Leaf>?
+			        private(set) var child: Child.SafeDIMockConfiguration
+			        private(set) var sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			        private(set) var leafBuilderAlias: Instantiator<Leaf>?
 			    }
 
 			    static func mock(
@@ -504,9 +504,9 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            self.leafBuilderAlias = leafBuilderAlias
 			        }
 
-			        let leafBuilder: ((Instantiator<Leaf>?) -> Leaf)?
-			        let child: Child.SafeDIMockConfiguration
-			        let leafBuilderAlias: Instantiator<Leaf>?
+			        private(set) var leafBuilder: ((Instantiator<Leaf>?) -> Leaf)?
+			        private(set) var child: Child.SafeDIMockConfiguration
+			        private(set) var leafBuilderAlias: Instantiator<Leaf>?
 			    }
 
 			    static func mock(
@@ -560,7 +560,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            self.child = child
 			        }
 
-			        let child: Child.SafeDIMockConfiguration
+			        private(set) var child: Child.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -782,8 +782,8 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            self.child = child
 			        }
 
-			        let serviceAlias: ((Service?) -> Service)?
-			        let child: Child.SafeDIMockConfiguration
+			        private(set) var serviceAlias: ((Service?) -> Service)?
+			        private(set) var child: Child.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -891,9 +891,9 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            self.aBuilder = aBuilder
 			        }
 
-			        let serviceAlias: ((Service?) -> Service)?
-			        let other: ((Service) -> Other)?
-			        let aBuilder: A.SafeDIMockConfiguration
+			        private(set) var serviceAlias: ((Service?) -> Service)?
+			        private(set) var other: ((Service) -> Other)?
+			        private(set) var aBuilder: A.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -949,7 +949,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			            self.aBuilder = aBuilder
 			        }
 
-			        let aBuilder: A.SafeDIMockConfiguration
+			        private(set) var aBuilder: A.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -1037,8 +1037,8 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 		            self.\(label)Alias = \(label)Alias
 		        }
 
-		        let aBuilder: A.SafeDIMockConfiguration
-		        let \(label)Alias: \(type)?
+		        private(set) var aBuilder: A.SafeDIMockConfiguration
+		        private(set) var \(label)Alias: \(type)?
 		    }
 
 		    static func mock(

@@ -428,7 +428,7 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 			            self.x = x
 			        }
 
-			        let x: X?
+			        private(set) var x: X?
 			    }
 
 			    static func mock(

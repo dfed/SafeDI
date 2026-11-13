@@ -1419,8 +1419,8 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            self.promoted = promoted
 		        }
 
-		        let leaf: (() -> Leaf)?
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        private(set) var leaf: (() -> Leaf)?
+		        private(set) var promoted: Promoted.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1513,7 +1513,7 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            self.promoted = promoted
 		        }
 
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        private(set) var promoted: Promoted.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1593,7 +1593,7 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            self.middle = middle
 		        }
 
-		        let middle: Middle.SafeDIMockConfiguration
+		        private(set) var middle: Middle.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1673,8 +1673,8 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            self.promoted = promoted
 		        }
 
-		        let leaf: (() -> Leaf)?
-		        let promoted: Promoted.SafeDIMockConfiguration
+		        private(set) var leaf: (() -> Leaf)?
+		        private(set) var promoted: Promoted.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1748,9 +1748,9 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            self.count_String = count_String
 		        }
 
-		        let child: ((Bool?) -> Child)?
-		        let count_Bool: Bool?
-		        let count_String: String?
+		        private(set) var child: ((Bool?) -> Child)?
+		        private(set) var count_Bool: Bool?
+		        private(set) var count_String: String?
 		    }
 
 		    static func mock(
@@ -1824,9 +1824,9 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            self.count_String = count_String
 		        }
 
-		        let middle: Middle.SafeDIMockConfiguration
-		        let count_Bool: Bool?
-		        let count_String: String?
+		        private(set) var middle: Middle.SafeDIMockConfiguration
+		        private(set) var count_Bool: Bool?
+		        private(set) var count_String: String?
 		    }
 
 		    static func mock(
@@ -1904,9 +1904,9 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            self.count_String = count_String
 		        }
 
-		        let promoted: Promoted.SafeDIMockConfiguration
-		        let count_Bool: Bool?
-		        let count_String: String?
+		        private(set) var promoted: Promoted.SafeDIMockConfiguration
+		        private(set) var count_Bool: Bool?
+		        private(set) var count_String: String?
 		    }
 
 		    static func mock(
@@ -1987,7 +1987,7 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            self.promoted = promoted
 		        }
 
-		        public let promoted: __safeDI_Promoted_MockConfiguration
+		        public private(set) var promoted: __safeDI_Promoted_MockConfiguration
 		    }
 
 		    public static func mock(
