@@ -325,6 +325,8 @@ public final class Root: Instantiable { … }
 
 Each argument must be a string literal.
 
+In a module whose declarations default to the main actor (`-default-isolation MainActor`, which new Xcode 26 app targets use), give each type that conforms only to `Instantiable` `generatedAttributes: "@MainActor"`, because otherwise it is inferred `nonisolated` and its generated code cannot call its main-actor dependencies.
+
 When a type’s hand-written mock is in a separate [`mockOnly` declaration](#splitting-production-and-mock-declarations), put `mockAttributes` on the production declaration: the generated `mock()` takes its attributes from there.
 
 ### @Instantiated
@@ -1488,7 +1490,7 @@ Bazel runs the prebuilt `SafeDITool` from the SafeDI release on macOS (arm64 or 
 common --@safedi//bazel:prefer_prebuilt_safeditool=false
 ```
 
-A build that takes SafeDI from a checkout of its repository rather than from a release – through `local_path_override`, `git_override`, or an `archive_override` of a GitHub archive – always builds `SafeDITool` from that checkout.
+A build that takes SafeDI from a checkout of its repository rather than from a release – through `local_path_override`, `git_override`, or an `archive_override` of one of GitHub’s generated source archives (`archive/refs/tags/…`) – always builds `SafeDITool` from that checkout. An `archive_override` of the release’s own `SafeDI-<version>.tar.gz` uses the prebuilt tool.
 
 #### Tuist
 
