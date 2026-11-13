@@ -253,7 +253,8 @@ public struct SeamSignature: Sendable {
 			/// names is `public`.
 			public let accessCause: TypeAccessProof.Cause?
 			/// The type whose declaration of the value the field carries: for a parameter that passes a receive through
-			/// the seam, the first type in the tree that receives it.
+			/// the seam, the first type in the tree that receives it, and for a parameter of a builder function a lazy cycle
+			/// closes on, the first type in the function's body that receives it.
 			public let declaringType: TypeDescription
 			public let declarationLocation: Dependency.DeclarationLocation?
 			/// Whether the field passes through a parameter the seam's tree receives only if available, so a caller

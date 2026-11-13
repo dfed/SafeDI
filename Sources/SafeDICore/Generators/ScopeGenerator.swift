@@ -3075,7 +3075,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Whether this scope declares a builder function a lazy cycle closes on that takes parameters (see `CycleParameter`).
-	nonisolated private var declaresCycleParameters: Bool {
+	nonisolated var declaresCycleParameters: Bool {
 		!cycleParameters.isEmpty && !closesPropertyCycle
 	}
 
