@@ -792,7 +792,6 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – the types the builder takes
@@ -1440,7 +1439,6 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			#expect(output.modules["App"]?.generatedFiles["Root+SafeDIMock.swift"] == generatedFileHeader + imports + rootMock)
 			#expect(output.modules["App"]?.generatedFiles["SafeDIMockConfiguration.swift"] == generatedFileHeader + imports + configuration + "\n")
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Private
@@ -1542,11 +1540,4 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 	    }
 	}
 	"""
-
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
-	}
 }

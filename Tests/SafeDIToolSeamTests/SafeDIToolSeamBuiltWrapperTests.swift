@@ -365,7 +365,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -446,7 +445,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Forwarded values
@@ -548,7 +546,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -618,7 +615,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -694,7 +690,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -732,7 +727,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -800,7 +794,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -876,7 +869,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -978,7 +970,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -1092,7 +1083,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -1164,7 +1154,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    public enum __safeDI_Host_094DDB4818B218A9 {}
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -1328,7 +1317,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -1363,7 +1351,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    )
 		}
 		"""
-		let output = try await executeSafeDIToolMultiModuleTest(
+		_ = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature, swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n"]),
 				ModuleFixture(name: "App", packageName: "Other", swiftFileContentByFilePath: ["Caller.swift": caller], dependencies: ["Feature"]),
@@ -1371,7 +1359,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Cycle-closing names
@@ -1424,7 +1411,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    public enum __safeDI_Host_9FE2126BB7E4D67C {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Public mocks
@@ -1664,7 +1650,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -1733,7 +1718,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -1802,7 +1786,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -1872,7 +1855,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -1940,7 +1922,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -2011,7 +1992,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -2053,7 +2033,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    )
 		}
 		"""
-		let output = try await executeSafeDIToolMultiModuleTest(
+		_ = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature, swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n"]),
 				ModuleFixture(name: "App", packageName: "Other", swiftFileContentByFilePath: ["Caller.swift": caller], dependencies: ["Feature"]),
@@ -2061,7 +2041,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2081,7 +2060,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    )
 		}
 		"""
-		let output = try await executeSafeDIToolMultiModuleTest(
+		_ = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature, swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n"]),
 				ModuleFixture(name: "App", packageName: "Other", swiftFileContentByFilePath: ["Caller.swift": caller], dependencies: ["Feature"]),
@@ -2089,7 +2068,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2105,7 +2083,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let fulfillers = [Self.defaultActionPanel(forwarding: "() -> Void")]
 		let modules = SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: fulfillers + [Self.root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -2126,7 +2103,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let fulfillers = [Self.defaultActionPanel(forwarding: "() -> Void", receivesAnalytics: false)]
 		let modules = SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: fulfillers + [Self.root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -2197,7 +2173,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let consumer = seamFixtureType(named: "AppScreen", declarations: ["@Instantiated let screen: \(screenType)"], conformances: ", @unchecked Sendable")
 			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n")
 		// A consumer that sees the fulfiller fills the builder.
-		let filling = try await executeSafeDIToolMultiModuleTest(
+		_ = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
 				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Feature\n\n" + Self.defaultActionPanel(forwarding: "() -> Void", receivesAnalytics: false), "import Feature\n\n" + consumer], dependencies: ["Feature"]),
@@ -2205,9 +2181,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		try expectEveryModuleCompiled(filling)
 		// One that does not passes the builder up, `@Sendable` when a `@Sendable` builder function makes the call.
-		let passingUp = try await executeSafeDIToolMultiModuleTest(
+		_ = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
 				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Feature\n\n" + consumer], dependencies: ["Feature"]),
@@ -2215,7 +2190,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		try expectEveryModuleCompiled(passingUp)
 	}
 
 	// MARK: A receive of the hole's own property
@@ -2255,7 +2229,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -2274,7 +2247,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		]
 		let modules = SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: fulfillers + [Self.root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -2335,7 +2307,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    public enum __safeDI_Host_5F0B61825D2B7EA7 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2419,7 +2390,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    public enum __safeDI_InnerSeam_2982FB4F39114BA5 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -2498,7 +2468,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2586,7 +2555,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    public enum __safeDI_Host_62C9E0825185E8BD {}
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: holeModules,
@@ -2676,7 +2644,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 		}
 		"""]))
-		try expectEveryModuleCompiled(output)
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -2693,12 +2660,11 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			otherFiles: [Self.labelDeclaration],
 		)
 		let fulfillers = [seamFixtureType(named: "NamedGadget", declarations: ["@Forwarded let label: Feature.Label"], conformances: ", Gadget")]
-		let output = try await executeSafeDIToolMultiModuleTest(
+		_ = try await executeSafeDIToolMultiModuleTest(
 			modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: fulfillers + [Self.root]),
 			integration: .swiftPackagePlugin,
 			filesToDelete: &filesToDelete,
 		)
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2983,12 +2949,5 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		if let generatedFiles, generatedFiles != expected {
 			Issue.record(Comment(rawValue: generatedFiles.sorted { $0.key < $1.key }.map { "=== \($0.key)\n\($0.value)" }.joined(separator: "\n")), sourceLocation: sourceLocation)
 		}
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
 	}
 }

@@ -62,7 +62,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(window: window, cache: cache)
 		    }
 		""", guardHash: "564C5E6539CF6AA0"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -86,7 +85,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(badge: badge, cache: cache)
 		    }
 		""", guardHash: "48814468D463AD3C"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -106,7 +104,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(image: image, window: window, cache: cache)
 		    }
 		""", guardHash: "883DBB4A829093BB"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -126,7 +123,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(window: window, cache: cache)
 		    }
 		""", guardHash: "39C26C2DBA820CDB"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -146,7 +142,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(windowBuilder: windowBuilder, cache: cache)
 		    }
 		""", guardHash: "00E0E32C7CA70EA2"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -166,7 +161,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(scene: scene, cache: cache)
 		    }
 		""", guardHash: "8DB59C18389CF5B8"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -190,7 +184,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(images: images, render: render, pair: pair, kind: kind, cache: cache)
 		    }
 		""", guardHash: "A4E2907D006619BA"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -253,7 +246,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(renderer: renderer, sendableRenderer: sendableRenderer, cache: cache)
 		    }
 		""", guardHash: "56F483A97F6A2895"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -273,7 +265,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(window: window, cache: cache)
 		    }
 		""", guardHash: "81946861C06808EE"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -298,7 +289,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(store: store, cache: cache)
 		    }
 		""", guardHash: "765860960C8098A5"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -328,7 +318,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(window: window, cache: cache)
 		    }
 		""", guardHash: "564C5E6539CF6AA0"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -349,7 +338,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(badge: badge, cache: cache)
 		    }
 		""", guardHash: "5532E29B9382037A"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -399,7 +387,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(image: image, service: service, cache: cache)
 		    }
 		""", guardHash: "3EA8086D06C81EDC"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -434,7 +421,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(renderer: renderer, cache: cache)
 		    }
 		""", guardHash: "16232CF7C01DA9E6"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: E: a `package` type of a module that does not run SafeDI
@@ -565,7 +551,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		case .swiftPackagePlugin:
 			#expect(output.modules["Feature"]?.generatedFiles["Screen+SafeDIMock.swift"] == generatedFileHeader + Self.importLines(["Kit"]) + mockCode)
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -621,7 +606,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		case .swiftPackagePlugin:
 			#expect(output.modules["Feature"]?.generatedFiles["Screen+SafeDIMock.swift"] == generatedFileHeader + Self.importLines(["Kit"]) + mockCode)
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: EX: a type declared inside an extension counts at its own level, capped by the extended type's
@@ -648,7 +632,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(mode: mode, cache: cache)
 		    }
 		""", guardHash: "C474C12E18F8A008"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -715,7 +698,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(config: config, id: id, cache: cache)
 		    }
 		""", guardHash: "1A021706E12F6E19"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -757,7 +739,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(badge: badge, cache: cache)
 		    }
 		""", guardHash: "5532E29B9382037A"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -813,7 +794,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(ledger: ledger, label: label, cache: cache)
 		    }
 		""", guardHash: "7A983275AFD4BE17"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -843,7 +823,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(ledger: ledger, cache: cache)
 		    }
 		""", guardHash: "1F00F75275E5B6DA"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -868,7 +847,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(ledger: ledger, cache: cache)
 		    }
 		""", guardHash: "CDFBE3593701EF44"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: C: a typealias is recorded as any plain declaration is
@@ -891,7 +869,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(userID: userID, cache: cache)
 		    }
 		""", guardHash: "60EECB42C345EC34"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -942,7 +919,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(token: token, cache: cache)
 		    }
 		""", guardHash: "16885A1AAD60582A"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -989,7 +965,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(id: id, cache: cache)
 		    }
 		""", guardHash: "D129C3323EC9D95A"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1128,7 +1103,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(result: result, cache: cache)
 		    }
 		""", guardHash: "E5902820E96A4498"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1203,7 +1177,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(interval: interval, cache: cache)
 		    }
 		""", guardHash: "A40FBF1797F7E662"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1264,7 +1237,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(theme: theme, cache: cache)
 		    }
 		""", guardHash: "717280493A095F31"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: F: the comment
@@ -1290,7 +1262,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(zebra: zebra, apple: apple, mango: mango, kiwi: kiwi, berry: berry, fig: fig, date: date, cache: cache)
 		    }
 		""", guardHash: "32C36057D4C81D7E"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1320,7 +1291,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(window: window, token: token, cache: cache)
 		    }
 		""", guardHash: "A8DF3FE04EBB7091"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: W: a run that writes a `.safedi` without a target graph keeps only `package` declarations
@@ -1352,7 +1322,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(palette: palette, cache: cache)
 		    }
 		""", guardHash: "A9677D0B9731F23E"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1383,7 +1352,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(inner: inner, cache: cache)
 		    }
 		""", guardHash: "9E4F1AEB56A64027"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1410,7 +1378,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(palette: palette, cache: cache)
 		    }
 		""", guardHash: "B31AFC0310819646"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1467,7 +1434,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(kind: kind, cache: cache)
 		    }
 		""", guardHash: "85F866D535705A4E"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1498,7 +1464,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(commented: commented, cache: cache)
 		    }
 		""", guardHash: "C7131F41728A076A"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1525,7 +1490,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(token: token, cache: cache)
 		    }
 		""", guardHash: "16885A1AAD60582A"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1566,7 +1530,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(token: token, cache: cache)
 		    }
 		""", guardHash: "1EB503BFA23A82BA"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1587,7 +1550,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(token: token, cache: cache)
 		    }
 		""", guardHash: "1EB503BFA23A82BA"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1613,7 +1575,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(token: token, cache: cache)
 		    }
 		""", guardHash: "BEC07F255DE644F9"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1643,7 +1604,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(token: token, cache: cache)
 		    }
 		""", guardHash: "16885A1AAD60582A"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: B: a declaration inside an `#if` block counts as the clause SafeDI reads declares it
@@ -1702,7 +1662,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(handler: handler, cache: cache)
 		    }
 		""", guardHash: "ABC0ED47A0A8DC7D"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: X: a declaration of a module SafeDI knows no name of
@@ -1740,7 +1699,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(store: store, cache: cache)
 		    }
 		""", guardHash: "CDA3953F87466B1A"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: A: nested seams
@@ -1791,7 +1749,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    public enum __safeDI_Frame_48814468D463AD3C {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: P: public mocks, continued
@@ -1829,7 +1786,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1897,7 +1853,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1938,7 +1893,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1973,7 +1927,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2013,7 +1966,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2064,7 +2016,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: B: continued
@@ -2115,7 +2066,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(pair: pair, cache: cache)
 		    }
 		""", guardHash: "A922157A7E1D440B"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -2140,7 +2090,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(window: window, cache: cache)
 		    }
 		""", guardHash: "564C5E6539CF6AA0"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: U: continued
@@ -2169,7 +2118,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(badge: badge, cache: cache)
 		    }
 		""", guardHash: "5BD700ACBBEE0733"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: X: continued
@@ -2391,7 +2339,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		if integration == .moduleInfo {
 			#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + Self.inactiveAssertion("FLAG")])
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -2416,7 +2363,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		if integration == .moduleInfo {
 			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.isEmpty == true)
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -2447,7 +2393,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.level) == [.package])
 			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.declarationStartLocation?.line) == [2])
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: [[String](), ["B"], ["A", "B"]])
@@ -2505,7 +2450,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			""", guardHash: "717280493A095F31")
 		}
 		#expect(output.modules["Feature"]?.generatedFiles == expected)
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -2536,7 +2480,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(theme: theme, cache: cache)
 		    }
 		""", guardHash: "27F6F01DC5D0EF8E"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: [true, false])
@@ -2580,7 +2523,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			""", guardHash: "717280493A095F31")
 		}
 		#expect(output.modules["Feature"]?.generatedFiles == expected)
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -2730,7 +2672,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: IFM: a plain declaration in a block that guards mock-only declarations
@@ -2762,7 +2703,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			        self.init(endpoint: endpoint, cache: cache)
 			    }
 			""", guardHash: "F321CFD3D66D9F0E"))
-			try expectEveryModuleCompiled(output)
 		}
 	}
 
@@ -2787,7 +2727,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			        self.init(endpoint: endpoint, cache: cache)
 			    }
 			""", guardHash: "15EDDFEBDF684859"))
-			try expectEveryModuleCompiled(output)
 		}
 	}
 
@@ -2813,7 +2752,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			        self.init(endpoint: endpoint, cache: cache)
 			    }
 			""", guardHash: "F321CFD3D66D9F0E"))
-			try expectEveryModuleCompiled(output)
 		}
 	}
 
@@ -2838,7 +2776,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			        self.init(theme: theme, cache: cache)
 			    }
 			""", guardHash: "717280493A095F31"))
-			try expectEveryModuleCompiled(output)
 		}
 	}
 
@@ -2856,7 +2793,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.packageThemeTiers(integration))
-			try expectEveryModuleCompiled(output)
 		}
 	}
 
@@ -2875,7 +2811,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.packageThemeTiers(integration))
-			try expectEveryModuleCompiled(output)
 		}
 	}
 
@@ -2931,7 +2866,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				    }
 				""", guardHash: "717280493A095F31")
 				#expect(output.modules["Feature"]?.generatedFiles == expectedFiles)
-				try expectEveryModuleCompiled(output)
 			}
 		}
 	}
@@ -2950,7 +2884,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.packageConfigTiers(integration))
-			try expectEveryModuleCompiled(output)
 		}
 	}
 
@@ -2968,7 +2901,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.packageConfigTiers(integration))
-			try expectEveryModuleCompiled(output)
 		}
 	}
 
@@ -2987,7 +2919,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.packageConfigTiers(integration))
-			try expectEveryModuleCompiled(output)
 		}
 	}
 
@@ -3122,7 +3053,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			case .swiftPackagePlugin:
 				#expect(output.modules["Feature"]?.generatedFiles == ["Screen+SafeDIMock.swift": mockCode, "SafeDIMockConfiguration.swift": generatedFileHeader + Self.importLines(["Core"])])
 			}
-			try expectEveryModuleCompiled(output)
 		}
 	}
 
@@ -3174,7 +3104,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			        self.init(window: window, cache: cache)
 			    }
 			""", guardHash: "564C5E6539CF6AA0"))
-			try expectEveryModuleCompiled(output)
 		}
 	}
 
@@ -3193,7 +3122,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.packageThemeTiers(integration))
-			try expectEveryModuleCompiled(output)
 		}
 	}
 
@@ -3219,7 +3147,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			        self.init(theme: theme, cache: cache)
 			    }
 			""", guardHash: "717280493A095F31"))
-			try expectEveryModuleCompiled(output)
 		}
 	}
 
@@ -3252,7 +3179,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(token: token, cache: cache)
 		    }
 		""", guardHash: "1EB503BFA23A82BA"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3418,7 +3344,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(window: window, cache: cache)
 		    }
 		""", guardHash: "39C26C2DBA820CDB"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3480,7 +3405,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(theme: theme, cache: cache)
 		    }
 		""", guardHash: "DD923990A48765D6"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3508,7 +3432,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(theme: theme, cache: cache)
 		    }
 		""", guardHash: "DD923990A48765D6"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -4170,6 +4093,8 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 	}
 
+	/// Expects every module of `output`, a run compiled with `.returningOutcomeOnly`, to have compiled. A run under
+	/// `.recordingIssues` needs no such check: a module that fails to compile records an `Issue`.
 	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
 		guard compileVerificationIsEnabled else { return }
 		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)

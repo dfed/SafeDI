@@ -60,7 +60,6 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		let appView = try #require(output.modules["App"]?.moduleInfoFile?.view)
 		#expect(appView.moduleGraph.map(\.moduleName) == ["Core", "Feed", "Session"])
 		#expect(appView.declarations.map(\.moduleName) == ["Core", "Feed", "Session"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -74,7 +73,6 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles == ["Root+SafeDI.swift": Self.appCallingFeedScreenFromPlugin])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -97,7 +95,6 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		)
 		#expect(output.modules["Feed"]?.moduleInfoFile?.dependencyModuleNames == ["Core"])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.appCallingFeedScreen(guardHash: "029593DA1BB2FBD5")])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: [false, true])
@@ -233,7 +230,6 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles.keys.sorted() == ["App.swift"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -249,7 +245,6 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		// `Session`'s seam takes `token: Token?`, which `FeedScreen` passes on: the same signature as when `Session` is built
 		// inline.
 		#expect(appFiles == (integration == .moduleInfo ? ["App.swift": Self.appCallingFeedScreen()] : ["Root+SafeDI.swift": Self.appCallingFeedScreenFromPlugin]))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: [(MultiModuleIntegration.moduleInfo, false), (.moduleInfo, true), (.swiftPackagePlugin, false)])
@@ -266,7 +261,6 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		#expect(output.modules["App"]?.generatedFiles == (integration == .moduleInfo
 				? ["App.swift": Self.appCallingFeedServiceMock(carriesPluginComment: false)]
 				: ["AppFeature+SafeDIMock.swift": Self.appCallingFeedServiceMock(carriesPluginComment: true), "SafeDIMockConfiguration.swift": Self.publicMockChainImports + "\n\n"]))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: ["internal ", "", "private "])
@@ -327,7 +321,6 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(viewOutput)
 	}
 
 	@Test
@@ -357,7 +350,6 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -417,7 +409,6 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – Access and spelling read through a view
@@ -478,7 +469,6 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -580,7 +570,6 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		#expect(viewOutput.modules["App"]?.generatedFiles == (integration == .moduleInfo
 				? ["App.swift": appMock]
 				: ["AppFeature+SafeDIMock.swift": appMock, "SafeDIMockConfiguration.swift": imports + "\n\n"]))
-		try expectEveryModuleCompiled(viewOutput)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -639,7 +628,6 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(viewOutput)
 	}
 
 	// MARK: Tests – Names
@@ -756,7 +744,6 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			    }
 			}
 			"""])
-			try expectEveryModuleCompiled(output)
 		case .swiftPackagePlugin:
 			// The plugin's graph lists `Session` among `App`'s modules, whose `Settings` therefore fulfills `App`'s too.
 			await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
@@ -1002,13 +989,5 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 	/// hold.
 	private static func withoutFixtureRoot(_ bytes: [UInt8], _ output: MultiModuleTestOutput) -> [UInt8] {
 		Array(String(decoding: bytes, as: UTF8.self).replacingOccurrences(of: output.fixtureRoot.path, with: "").utf8)
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
 	}
 }

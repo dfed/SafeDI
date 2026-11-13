@@ -95,6 +95,15 @@ struct TestTemporaryDirectoryTests: ~Copyable {
 	}
 
 	@Test
+	func runProcess_pointsTheProcessCoverageProfileIntoItsTemporaryDirectory() throws {
+		let result = try runProcess(URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "printf '%s\\n%s' \"$TMPDIR\" \"$LLVM_PROFILE_FILE\""])
+		let lines = result.stdout.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+
+		#expect(lines.count == 2, "Unexpected output \(result.stdout)")
+		#expect(lines.last == (lines.first ?? "") + "default-%p.profraw", "Unexpected output \(result.stdout)")
+	}
+
+	@Test
 	func runProcess_deletesWhatTheProcessWroteToItsTemporaryDirectory_whenTheProcessExits() throws {
 		let result = try runProcess(
 			URL(fileURLWithPath: "/bin/sh"),

@@ -52,7 +52,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		)
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.appBuildingFeedScreen])
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Deep", "Middle"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -90,7 +89,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		    }
 		}
 		""")])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: [
@@ -129,7 +127,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}
 		""")])
 		#expect(output.modules["App"]?.generateOutput?.dependentModules.map(\.moduleName) == ["Base", "Left", "Right"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: [
@@ -177,7 +174,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		    }
 		}
 		""")])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -213,7 +209,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		    }
 		}
 		""")])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – A complete hand-written list
@@ -240,7 +235,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		)
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.appBuildingFeedScreen])
 		#expect(Self.withoutFixtureRoot(output, module: "App") == Self.withoutFixtureRoot(reference, module: "App"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – A module with no tree
@@ -282,7 +276,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		""")])
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Middle"])
 		#expect(output.modules["App"]?.generateOutput?.dependentModules.map(\.moduleName) == ["Middle"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -346,7 +339,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 		\(Self.screenMockBuildingClock)
 		""") + "\n"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -386,7 +378,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}
 		#endif
 		""")])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – Seams and public mocks of a middle module
@@ -443,7 +434,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		    }
 		}
 		""")])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: [false, true])
@@ -604,7 +594,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}
 		#endif
 		""") + "\n"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – One name through both sets
@@ -643,7 +632,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}
 		""")])
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Left", "Right"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -694,7 +682,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		    }
 		}
 		""")])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -713,7 +700,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["MidLeft", "MidRight"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -765,7 +751,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Top"]?.moduleInfoFile?.dependencyModuleNames == ["Mid"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -797,7 +782,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}
 		""")])
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Middle"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – A seam's initializer
@@ -855,7 +839,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		let output = try await run(modulesBeneath: { $0 })
 		#expect(output.modules["Consumer"]?.generatedFiles == reference.modules["Consumer"]?.generatedFiles)
 		#expect(Self.withoutFixtureRoot(output, module: "Consumer") == Self.withoutFixtureRoot(reference, module: "Consumer"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – A module beneath that declares a root
@@ -885,7 +868,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		)
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Deep", "Deeper", "Middle"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – A seam another module generates
@@ -907,7 +889,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		)
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Core", "Deep", "Impl", "SeamModule"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -939,7 +920,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		)
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Core", "Deep", "Impl", "InnerSeamModule", "OuterSeamModule", "PlainModule"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -966,7 +946,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		)
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["SeamModule"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: [["Core", "Impl", "OuterSeamModule"], ["Core", "Impl", "InnerSeamModule", "OuterSeamModule"], ["Core", "Impl", "OuterSeamModule", "PlainModule"]])
@@ -997,7 +976,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		)
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Core", "Impl", "InnerSeamModule", "OuterSeamModule", "PlainModule"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1026,7 +1004,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		)
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Core", "Impl", "SeamModule", "Sub"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1055,7 +1032,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		)
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Core", "Impl", "SeamModule", "Sub"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1087,7 +1063,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		)
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Core", "Impl", "InnerSeamModule", "OuterSeamModule", "PlainModule", "Sub"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1107,7 +1082,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["OuterSeamModule"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1139,7 +1113,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		)
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Core", "Impl", "InnerSeamModule", "LogImpl", "OuterSeamModule", "Sub"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1165,7 +1138,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Core", "FillingSeamModule", "Impl", "InnerSeamModule"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – Access of a declaration beneath
@@ -1193,7 +1165,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – How the module was read
@@ -1321,7 +1292,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}
 		""")])
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Models", "Sub"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: [
@@ -1499,7 +1469,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		)
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Contracts", "Impl", "Sub"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1538,7 +1507,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		""")])
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Contracts", "Impl", "Top"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1568,7 +1536,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		)
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Feature", "Impl", "Top"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1679,7 +1646,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2002,15 +1968,6 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		)
 		#expect(output.modules[moduleName]?.generatedFiles == reference.modules[moduleName]?.generatedFiles, sourceLocation: sourceLocation)
 		#expect(output.modules[moduleName]?.moduleInfoFile?.dependencyModuleNames == expectedDependencies, sourceLocation: sourceLocation)
-		try expectEveryModuleCompiled(output, sourceLocation: sourceLocation)
-	}
-
-	/// Expects every module of `output` to have compiled, when this run verifies compilation.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
 	}
 }
 

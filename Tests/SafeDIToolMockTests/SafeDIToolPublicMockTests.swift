@@ -285,7 +285,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		case .swiftPackagePlugin:
 			#expect(output.modules["Feature"]?.generatedFiles["Shelf+SafeDIMock.swift"] == generatedFileHeader + mockCode)
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -654,7 +653,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -753,7 +751,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1058,7 +1055,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				"SafeDIMockConfiguration.swift": generatedFileHeader + appImports,
 			])
 		}
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [
 			DifferentialValueProbe("Screen.mock()"),
 			DifferentialValueProbe("Holder.mock()"),
@@ -1422,7 +1418,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#endif
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2775,7 +2770,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#endif
 			""" + "\n",
 		])
-		try expectEveryModuleCompiled(output)
 		// The public mocks build what `Core`'s internal mocks of the same declarations build.
 		try await expectValuesAgreeWithInlineMocks(of: Self.canonicalModules(appCaller: Self.canonicalAppCaller).filter { $0.name == "Core" }, output: output, probes: [DifferentialValueProbe("Service.mock()"), DifferentialValueProbe("Dashboard.mock()")])
 	}
@@ -3734,7 +3728,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		@usableFromInline nonisolated func __safeDI_Core_Leaf_mockDefault_label() -> String? { Leaf.__safeDI_mockDefault_label() }
 		#endif
 		""" + "\n"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3821,7 +3814,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("mockDashboard()")])
 	}
 
@@ -4062,7 +4054,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -4190,7 +4181,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		""")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: ["any Gadget", "Gadget"])
@@ -4542,7 +4532,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -4598,7 +4587,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -4683,7 +4671,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -4792,7 +4779,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -4868,7 +4854,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -5053,7 +5038,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -5198,7 +5182,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -5274,7 +5257,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()"), Self.screenMockPassingFilter])
 	}
 
@@ -5343,7 +5325,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -5449,7 +5430,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()"), Self.screenMockPassingFilter])
 	}
 
@@ -5566,7 +5546,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()"), Self.screenMockPassingFilter])
 	}
 
@@ -5664,7 +5643,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()"), Self.screenMockPassingFilter])
 	}
 
@@ -5767,7 +5745,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()"), Self.screenMockPassingFilter])
 	}
 
@@ -5875,7 +5852,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()"), Self.screenMockPassingFilterToBuildInstead])
 	}
 
@@ -5976,7 +5952,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [
 			DifferentialValueProbe("Screen.mock()"),
 			DifferentialValueProbe("Screen.mock(safeDIOverrides: .init(filter: { ProbeFilter() }))"),
@@ -6089,7 +6064,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		// M8.32's stated divergence: each call hands `Cache`'s mock the instance of the one wrapper, which the mock wraps
 		// again; the instance is the one the inline mock shares.
 		let probes = [DifferentialValueProbe("Screen.mock()"), Self.screenMockPassingFilterToBuildInstead]
@@ -6178,7 +6152,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -6260,7 +6233,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -6323,7 +6295,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -6388,7 +6359,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -6450,7 +6420,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -6537,7 +6506,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -6634,7 +6602,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -6716,7 +6683,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -6794,7 +6760,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()"), Self.screenMockPassingFilter])
 	}
 
@@ -6898,7 +6863,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -6970,7 +6934,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -7026,7 +6989,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -7080,7 +7042,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -7166,7 +7127,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -7214,7 +7174,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -7290,7 +7249,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Root.mock()")])
 	}
 
@@ -7474,7 +7432,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: [
@@ -7546,7 +7503,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -7688,7 +7644,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				"Caller+SafeDIMock.swift": generatedFileHeader + imports + "\n\n" + screenMock,
 			])
 		}
-		try expectEveryModuleCompiled(output)
 		guard integration == .moduleInfo else { return }
 		// M8.32, a stated divergence: the call hands `Service`'s mock the instance of `Screen`'s `analytics`, which the
 		// mock wraps again, reading it as it does; the instance is the one the inline mock shares.
@@ -7798,7 +7753,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		case .swiftPackagePlugin:
 			#expect(output.modules["App"]?.generatedFiles["Screen+SafeDIMock.swift"] == generatedFileHeader + screenMock)
 		}
-		try expectEveryModuleCompiled(output)
 		guard integration == .moduleInfo else { return }
 		// M8.32's stated divergence: the call reads the instance of `Screen`'s `analytics` when `Service`'s mock is built,
 		// and the mock wraps it again; the instance is the one the inline mock shares.
@@ -7907,7 +7861,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -7995,7 +7948,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -8082,7 +8034,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Panel.mock()")])
 	}
 
@@ -8304,7 +8255,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -8476,7 +8426,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -8576,7 +8525,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -8658,7 +8606,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -8745,7 +8692,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			""",
 			"SafeDIMockConfiguration.swift": generatedFileHeader + imports + "\n\n",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -8915,7 +8861,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		""" + "\n"])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -8982,7 +8927,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -9102,7 +9046,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -9171,7 +9114,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -9292,7 +9234,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -9343,7 +9284,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			""",
 			"SafeDIMockConfiguration.swift": header,
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -9413,7 +9353,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -9492,7 +9431,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -9597,7 +9535,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -9695,7 +9632,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -9743,7 +9679,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -9791,7 +9726,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	/// As `generate_passesPublicMockValueItsTreeCreates_whenMockBuildsReceivedDependencyBesideMockedType`, with `Service` receiving `analytics` as a `LazilyInstantiated`.
@@ -9841,7 +9775,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	/// As `generate_passesPublicMockValueItsTreeCreates_whenMockBuildsReceivedDependencyBesideMockedType`, with `Service` receiving an `Instantiator<Analytics>`.
@@ -9891,7 +9824,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -9939,7 +9871,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	/// As `generate_passesPublicMockValueItsTreeCreates_whenMockBuildsReceivedDependencyBesideMockedType`, with `Screen`'s mock public: it takes no parameter for the `analytics` it creates.
@@ -9992,7 +9923,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -10086,7 +10016,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#endif
 
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -10182,7 +10111,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – plain declarations prove a parameter's type
@@ -10335,7 +10263,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				"SafeDIMockConfiguration.swift": generatedFileHeader + imports,
 			])
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -10463,7 +10390,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		case .swiftPackagePlugin:
 			#expect(output.modules["Feature"]?.generatedFiles["ProfileView+SafeDIMock.swift"] == generatedFileHeader + mockCode)
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Private
@@ -11123,7 +11049,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		try expectEveryModuleCompiled(output)
 		let generatedCode = try #require(output.modules["App"]?.generatedFiles["App.swift"])
 		let guardRange = try #require(generatedCode.range(of: "__safeDI_Screen_mock_[0-9A-F]{16}", options: .regularExpression))
 		return String(generatedCode[guardRange])
@@ -11674,11 +11599,4 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	    @Received let service: Service
 	}
 	"""
-
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
-	}
 }

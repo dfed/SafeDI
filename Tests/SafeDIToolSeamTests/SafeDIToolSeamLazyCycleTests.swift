@@ -393,10 +393,6 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    }
 		}
 		"""])
-		if compileVerificationIsEnabled {
-			let compilation = try #require(output.compilation)
-			#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 })
-		}
 		let inlineModules = [ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Service.swift": inlineFixture([core])[0]].merging(Self.fixtureFiles(app)) { first, _ in first })]
 		let inlineOutput = try await executeSafeDIToolMultiModuleTest(modules: inlineModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		let inlineAppOutput = try #require(inlineOutput.modules["App"])
@@ -510,10 +506,6 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    }
 		}
 		"""])
-		if compileVerificationIsEnabled {
-			let compilation = try #require(output.compilation)
-			#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 })
-		}
 		let inlineModules = [ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Service.swift": inlineFixture([core])[0]].merging(Self.fixtureFiles(app)) { first, _ in first })]
 		let inlineOutput = try await executeSafeDIToolMultiModuleTest(modules: inlineModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		let inlineAppOutput = try #require(inlineOutput.modules["App"])
@@ -850,7 +842,6 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		}
 		"""])
 		guard compileVerificationIsEnabled else { return }
-		#expect(try #require(output.compilation).failure == nil)
 		let samePackageModules = Self.hubSpaceThemeModules(appPackage: "Shop", appFiles: Self.cycleBetweenAppFiles)
 		let samePackageOutput = try await executeSafeDIToolMultiModuleTest(modules: samePackageModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		try expectDifferentialValuesAgree(
@@ -982,10 +973,6 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    }
 		}
 		"""])
-		if compileVerificationIsEnabled {
-			let compilation = try #require(output.compilation)
-			#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 })
-		}
 	}
 
 	@Test
@@ -1395,7 +1382,6 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		#endif
 		""" + "\n"])
 		guard compileVerificationIsEnabled else { return }
-		#expect(try #require(output.compilation).failure == nil)
 		let samePackageModules = Self.hubSpaceFilterModules(appPackage: "pkg", appFiles: appFiles)
 		let samePackageOutput = try await executeSafeDIToolMultiModuleTest(modules: samePackageModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		try expectDifferentialValuesAgree(
@@ -1550,7 +1536,6 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		#endif
 		""" + "\n"])
 		guard compileVerificationIsEnabled else { return }
-		#expect(try #require(output.compilation).failure == nil)
 		let samePackageModules = Self.hubSpaceFilterModules(appPackage: "pkg", appFiles: appFiles)
 		let samePackageOutput = try await executeSafeDIToolMultiModuleTest(modules: samePackageModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		try expectDifferentialValuesAgree(

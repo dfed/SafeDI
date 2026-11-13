@@ -747,6 +747,10 @@ jobs:
     runs-on: macos-26
     permissions:
       contents: read
+    env:
+      # What the test step passes `swift test`, which the compile check
+      # identity below hashes too.
+      SWIFT_TEST_ARGUMENTS: -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -785,6 +789,33 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: xcrun swift package resolve
+      # Compile verification skips each check that passed in an earlier
+      # run of the same build (PassedCompileCheckCache.swift), which the
+      # file SAFEDI_COMPILE_CHECK_PASSED_CACHE names lists. The cache is
+      # keyed on what the file's checks were compiled with: SafeDI's
+      # runtime and macro sources, the manifest, the verifier, the test
+      # arguments, the compiler and the SDK. A change to any of them starts
+      # from an empty file. A pull request restores its own branch's latest
+      # entry, or its base branch's, never another pull request's. The save
+      # runs even when tests fail or the run is cancelled: the file then
+      # holds the checks that passed before that.
+      - name: Compute Compile Check Identity
+        id: compile-check-identity
+        run: |
+          # Assign first, so a failing script fails this step: inside `echo`, a
+          # failed command substitution would write a partial identity, and a
+          # partial identity could reuse checks another compiler passed.
+          # shellcheck disable=SC2086 # The arguments are words to split.
+          identity=$(.github/scripts/compile-check-identity.sh $SWIFT_TEST_ARGUMENTS)
+          test "${#identity}" -eq 64
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+      - name: Restore Passed Compile Checks
+        uses: actions/cache/restore@v6
+        with:
+          path: .compile-check-cache
+          key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-
       # One pass, with compile verification. The passes that catch output
       # differing between processes (per-process hash seeds) run on Linux,
       # in "Repeat Tests on Linux", where runners are plentiful: on this
@@ -813,7 +844,17 @@ jobs:
       # have been measured.
       - name: Build and Test Framework
         timeout-minutes: 60
-        run: xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
+        env:
+          SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
+        run: |
+          # shellcheck disable=SC2086 # The arguments are words to split.
+          xcrun swift test $SWIFT_TEST_ARGUMENTS
+      - name: Save Passed Compile Checks
+        if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .compile-check-cache
+          key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Prepare Coverage Reports
         run: ./Scripts/prepare-coverage-reports.sh
       - name: Upload Coverage Reports
@@ -836,6 +877,10 @@ jobs:
     container: swift:6.2
     permissions:
       contents: read
+    env:
+      # What the test step passes `swift test`, which the compile check
+      # identity below hashes too.
+      SWIFT_TEST_ARGUMENTS: -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -853,13 +898,42 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: swift package resolve
+      # Passed compile checks are cached as in the macOS job, under a key of
+      # this runner's operating system.
+      - name: Compute Compile Check Identity
+        id: compile-check-identity
+        run: |
+          # Assign first, so a failing script fails this step: inside `echo`, a
+          # failed command substitution would write a partial identity, and a
+          # partial identity could reuse checks another compiler passed.
+          # shellcheck disable=SC2086 # The arguments are words to split.
+          identity=$(.github/scripts/compile-check-identity.sh $SWIFT_TEST_ARGUMENTS)
+          test "${#identity}" -eq 64
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+      - name: Restore Passed Compile Checks
+        uses: actions/cache/restore@v6
+        with:
+          path: .compile-check-cache
+          key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-
       # Atomic coverage counter updates, for the reason the macOS job gives.
       # A time limit for the macOS job's reason: twice the longest
       # successful run of this step over the same 177 CI runs, in which 84
       # runs took 5.8 to 26.4 minutes (median 14.8, 95th percentile 24.1).
       - name: Build and Test Framework
         timeout-minutes: 55
-        run: swift test -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
+        env:
+          SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
+        run: |
+          # shellcheck disable=SC2086 # The arguments are words to split.
+          swift test $SWIFT_TEST_ARGUMENTS
+      - name: Save Passed Compile Checks
+        if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .compile-check-cache
+          key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
       # The graph fuzzer's shards and "Repeat Tests on Linux" run this job's
       # test bundle rather than building their own: the bundle, SafeDITool and
       # the macro plugin (which the fuzzer's compiler runs use), and SafeDI's
@@ -1134,6 +1208,11 @@ jobs:
       # A time limit for the macOS job's reason: twice the longest
       # successful run of this step over the same 177 CI runs, in which 88
       # runs took 2.8 to 15.9 minutes (median 8.2, 95th percentile 13.0).
+      #
+      # No cache of passed compile checks here, deliberately: this job
+      # compiles every test's generated code on every run, so a check the
+      # pinned jobs skip because it passed in an earlier run is still
+      # compiled once per run, by a third compiler.
       - name: Build and Test Framework
         timeout-minutes: 35
         run: swift test --traits sourceBuild

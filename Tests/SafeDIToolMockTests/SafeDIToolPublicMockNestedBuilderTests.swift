@@ -121,13 +121,12 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		#endif
 
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_compilesHandWrittenCallerThatSwitchesOverTheEnum_whenAModuleCallsAPublicMockByHand() async throws {
-		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(app: [
+		_ = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(app: [
 			"""
 			import Core
 
@@ -149,7 +148,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			}
 			""",
 		]), integration: .moduleInfo, filesToDelete: &filesToDelete)
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – an internal caller
@@ -184,7 +182,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
@@ -193,7 +190,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	mutating func generate_takesTheCalledMocksBuilderAsAFlatParameter_whenInternalCallerSeesNoTypeThatFulfillsTheHole() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(app: [Self.screen]), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.screenTakingTheBuilder])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -227,7 +223,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -256,7 +251,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		]), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		// The fill of either place would call `Gadget`'s mock, whose `gizmo` `App` cannot fill, so both pass up.
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.screenTakingTheBuilder])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – a public caller
@@ -291,7 +285,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -355,7 +348,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -420,7 +412,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("BoardScreen.mock()")])
 	}
 
@@ -480,7 +471,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -613,7 +603,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -652,7 +641,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -694,7 +682,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -702,7 +689,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	mutating func generate_passesThePlaceUp_whenInternalCallersFulfillerInstantiatesATypeNothingFulfills() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(app: [Self.screen, Self.defaultServiceInstantiatingGizmo]), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.screenTakingTheBuilder])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -783,7 +769,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -866,7 +851,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1085,7 +1069,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1134,7 +1117,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1235,7 +1217,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		#endif
 
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1317,7 +1298,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1387,7 +1367,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1456,7 +1435,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – forwarded values
@@ -1616,7 +1594,6 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Private
@@ -2041,12 +2018,5 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 			sourceLocation: sourceLocation,
 		)
-	}
-
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
 	}
 }

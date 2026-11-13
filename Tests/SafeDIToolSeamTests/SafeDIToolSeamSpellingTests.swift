@@ -1019,9 +1019,6 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			],
 		]
 		#expect(try #require(output.modules["App"]).generatedFiles == expectedAppFiles[integration]?[spelling])
-		if compileVerificationIsEnabled {
-			#expect(try #require(output.compilation).modules.map(\.exitCode) == [0, 0, 0])
-		}
 		// The inline twin: `App` builds `List`'s tree itself, passing the value `Screen` forwards straight to `Row`.
 		let inlineOutput = try await executeSafeDIToolMultiModuleTest(
 			modules: [
@@ -1302,9 +1299,6 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			],
 		]
 		#expect(try #require(inlineOutput.modules["App"]).generatedFiles == expectedInlineAppFiles[integration]?[spelling])
-		if compileVerificationIsEnabled {
-			#expect(try #require(inlineOutput.compilation).modules.map(\.exitCode) == [0, 0, 0])
-		}
 	}
 
 	/// `Root` holds an instantiator of `Screen`, which forwards `forwarded` and instantiates the seam `List`, which

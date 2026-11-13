@@ -1073,7 +1073,6 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		case .swiftPackagePlugin:
 			#expect(output.modules["App"]?.generatedFiles["Root+SafeDIMock.swift"] == generatedFileHeader + mockCode, "Unexpected output \(output.modules["App"]?.generatedFiles ?? [:])")
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1149,7 +1148,6 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		case .swiftPackagePlugin:
 			#expect(output.modules["Feature"]?.generatedFiles["Root+SafeDIMock.swift"] == generatedFileHeader + mockCode, "Unexpected output \(output.modules["Feature"]?.generatedFiles ?? [:])")
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1254,17 +1252,9 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		}
 		#endif
 		"""], "Unexpected output \(output.modules["App"]?.generatedFiles ?? [:])")
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Private
 
 	private var filesToDelete: [URL]
-
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
-	}
 }

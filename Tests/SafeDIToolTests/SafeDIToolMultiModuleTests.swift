@@ -152,7 +152,8 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.transitiveChain,
 			integration: integration,
-			compileVerification: .recordingIssues,
+			// The outcome shows which modules were compiled, which `.recordingIssues` does not return.
+			compileVerification: .returningOutcomeOnly,
 			filesToDelete: &filesToDelete,
 		)
 
@@ -160,6 +161,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		let compilation = try #require(output.compilation)
 		#expect(compilation.modules.map(\.moduleName) == ["Core", "Middle", "App"])
 		#expect(compilation.modules.map(\.exitCode) == [0, 0, 0])
+		#expect(compilation.modules.map(\.generatedCodeWarnings) == [[], [], []])
 		#expect(compilation.failure == nil)
 	}
 
@@ -812,7 +814,8 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 				Self.consumer(of: "PackageHelper", inPackage: "Pipeline"),
 			],
 			integration: integration,
-			compileVerification: .recordingIssues,
+			// The outcome shows which modules were compiled, which `.recordingIssues` does not return.
+			compileVerification: .returningOutcomeOnly,
 			filesToDelete: &filesToDelete,
 		)
 
@@ -821,6 +824,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		let compilation = try #require(output.compilation)
 		#expect(compilation.modules.map(\.moduleName) == ["Helpers", "App"])
 		#expect(compilation.modules.map(\.exitCode) == [0, 0])
+		#expect(compilation.modules.map(\.generatedCodeWarnings) == [[], []])
 		#expect(compilation.failure == nil)
 	}
 

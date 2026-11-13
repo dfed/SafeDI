@@ -168,7 +168,6 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(), integration: integration, filesToDelete: &filesToDelete)
 		#expect(try #require(output.modules["Feature"]).generatedFiles == Self.featureFiles(integration, screen: Self.screenWithoutPlainInitializer))
 		#expect(try #require(output.modules["App"]).generatedFiles == Self.appFiles(integration))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: On
@@ -230,7 +229,6 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(try #require(output.modules["Feature"]).generatedFiles == Self.featureFiles(.moduleInfo, screen: Self.screenWithPlainInitializer))
-		try expectEveryModuleCompiled(output)
 	}
 
 	/// `Feature`, with `featureConfiguration`, and `Caller`, which does not use SafeDI yet and calls `Screen` by hand.
@@ -285,7 +283,6 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 		], integration: integration, filesToDelete: &filesToDelete)
 		#expect(try #require(output.modules["Feature"]).generatedFiles == Self.featureFiles(integration, screen: Self.screenWithoutPlainInitializer))
 		#expect(try #require(output.modules["App"]).generatedFiles == Self.appFiles(integration))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -651,7 +648,6 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 		    }
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Which module's configuration decides
@@ -664,7 +660,6 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(appConfiguration: Self.optingIn), integration: integration, filesToDelete: &filesToDelete)
 		#expect(try #require(output.modules["Feature"]).generatedFiles == Self.featureFiles(integration, screen: Self.screenWithoutPlainInitializer))
 		#expect(try #require(output.modules["App"]).generatedFiles == Self.appFiles(integration))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -675,7 +670,6 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(featureConfiguration: Self.optingIn), integration: integration, filesToDelete: &filesToDelete)
 		#expect(try #require(output.modules["Feature"]).generatedFiles == Self.featureFiles(integration, screen: Self.screenWithPlainInitializer))
 		#expect(try #require(output.modules["App"]).generatedFiles == Self.appFiles(integration))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -697,11 +691,4 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 	// MARK: Private
 
 	private var filesToDelete: [URL]
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
-	}
 }

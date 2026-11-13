@@ -1056,7 +1056,6 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			}
 			""",
 		]))
-		try Self.expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1163,7 +1162,6 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			}
 			""",
 		]))
-		try Self.expectEveryModuleCompiled(output)
 	}
 
 	// MARK: A lazy cycle that re-enters the seam
@@ -1334,7 +1332,6 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			}
 			""",
 		]))
-		try Self.expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases, [false, true])
@@ -1398,7 +1395,6 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			}
 			""",
 		]))
-		try Self.expectEveryModuleCompiled(output)
 	}
 
 	// MARK: The seam's own aliases of a pass-through
@@ -1696,12 +1692,5 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		    public init() {}
 		}
 		"""
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private static func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
 	}
 }

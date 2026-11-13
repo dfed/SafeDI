@@ -61,7 +61,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases, FulfilledProperty.allCases)
@@ -77,7 +76,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(integration: integration, importing: property.expectedImports, property.expectedBody))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -109,7 +107,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -141,7 +138,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -160,7 +156,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			"Feature+SafeDIMock.swift": Self.generatedFile(importing: ["Contracts", "Impl"], Self.mockedFeatureMock),
 			"SafeDIMockConfiguration.swift": Self.generatedFile(importing: ["Contracts", "Impl"], Self.mockedFeatureConfiguration),
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -178,7 +173,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		#expect(output.modules["App"]?.generatedFiles == [
 			"App.swift": Self.generatedFile(importing: ["Contracts", "Impl"], Self.mockedFeatureMock + "\n\n" + Self.mockedFeatureConfiguration),
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -219,7 +213,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -267,7 +260,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			}
 			"""),
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – Nothing changes for a build that compiles
@@ -302,7 +294,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -326,7 +317,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -364,7 +354,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -387,7 +376,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -409,7 +397,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -434,7 +421,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -464,7 +450,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – What makes the fulfiller visible
@@ -496,7 +481,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -527,7 +511,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -551,7 +534,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		import struct Reexport.DefaultThing
 		#endif
 		""", body: Self.rootBody))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -584,7 +566,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases, [true, false])
@@ -649,7 +630,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -696,7 +676,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -734,7 +713,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -769,7 +747,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – Which module declares the name
@@ -800,7 +777,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: [["Alpha", "Zulu"], ["Zulu", "Alpha"]])
@@ -857,7 +833,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -899,7 +874,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			"""),
 			"SafeDIMockConfiguration.swift": Self.generatedFile(importing: ["Contracts", "Other"], ""),
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – A type another type’s declaration fulfills
@@ -924,7 +898,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -976,7 +949,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			"""),
 			"SafeDIMockConfiguration.swift": Self.generatedFile(importing: ["Contracts"], ""),
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -999,7 +971,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – A module named with a keyword
@@ -1031,7 +1002,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1061,7 +1031,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – An added import agrees with the module's files SafeDI does not read
@@ -1097,7 +1066,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		import Reexport
 		#endif
 		""", body: Self.rootBody))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases, UnreadFileImport.allCases)
@@ -1127,7 +1095,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		\(unreadFileImport.expectedGeneratedImport)
 		#endif
 		""", body: Self.rootBody))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1156,7 +1123,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		internal import Impl
 		#endif
 		""", body: Self.rootBody))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1190,7 +1156,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			"Root+SafeDIMock.swift": generatedFileHeader + header + "\n\n" + Self.mockedRootMock(propertyType: "AnyThing", defaultConstruction: "AnyThing(DefaultThing())"),
 			"SafeDIMockConfiguration.swift": Self.generatedFile(importing: ["Contracts"], ""),
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1221,7 +1186,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1243,7 +1207,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(integration: .swiftPackagePlugin, importing: ["Contracts"], Self.rootBody))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1265,7 +1228,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(integration: .swiftPackagePlugin, importing: ["Contracts"], Self.rootBody))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: [0, 11, 23])
@@ -1296,7 +1258,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		internal import Impl
 		#endif
 		""", body: Self.rootBody))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: OwnTypeThatShadowsNothing.allCases)
@@ -1318,7 +1279,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(integration: .swiftPackagePlugin, importing: ["Contracts", "Impl"], Self.rootBody))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – A mock imports the module of each type it names
@@ -1366,7 +1326,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		}
 		#endif
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1418,7 +1377,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		}
 		#endif
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1441,7 +1399,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			rootBody: Self.rootBody,
 			mockBody: Self.mockedRootMock(propertyType: "AnyThing", defaultConstruction: "AnyThing(DefaultThing.fake())"),
 		))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1471,7 +1428,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			""",
 			mockBody: Self.mockedRootMock(propertyType: "DefaultThing", defaultConstruction: "DefaultThing.fake()"),
 		))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1501,7 +1457,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			""",
 			mockBody: Self.mockedRootMock(propertyType: "DefaultThing", defaultConstruction: "DefaultThing.fake()"),
 		))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -1554,7 +1509,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		#endif
 
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – A listed mock imports the module of the type it extends
@@ -1571,7 +1525,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["TestSupport"]?.generatedFiles == Self.testSupportFiles(integration: integration, mockBody: Self.sideFeatureMock(declaringPanel: false), configuration: nil))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1610,7 +1563,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		#endif
 
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1626,7 +1578,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles == Self.publicMockedFeatureFiles(integration: integration))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Private
@@ -2035,13 +1986,6 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		case .swiftPackagePlugin:
 			["\(rootFileName)+SafeDI.swift": file]
 		}
-	}
-
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
 	}
 }
 

@@ -70,7 +70,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -119,7 +118,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			["Root+SafeDI.swift": generatedFileHeader + code]
 		}
 		#expect(try #require(output.modules["App"]).generatedFiles == expectedGeneratedFiles)
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -154,7 +152,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -339,7 +336,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			""",
 			"SafeDIMockConfiguration.swift": header,
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -383,7 +379,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			""",
 			"SafeDIMockConfiguration.swift": header,
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -465,7 +460,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – Constructions that do not compile
@@ -663,7 +657,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			#expect(output.modules["Core"]?.generatedFiles == ["Service+SafeDI.swift": generatedFileHeader + seamCode])
 			#expect(output.modules["App"]?.generatedFiles == ["AppRoot+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + rootCode])
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -822,7 +815,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			#expect(output.modules["Core"]?.generatedFiles == ["Service+SafeDI.swift": coreFile])
 			#expect(output.modules["App"]?.generatedFiles == ["Root+SafeDI.swift": appFile])
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: ThirdModuleReach.cellsWhereCoreDoesNotReadBase)
@@ -919,7 +911,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		#expect(output.modules["Core"]?.moduleInfoFile?.dependencyModuleNames == (["Base"] + reach.coreDependencies).sorted())
 		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + reach.importBlocksOfCoresGeneratedFileReadingBaseFromBeneath + "\n\n" + seamCode])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + reach.importBlocksOfAppsGeneratedFile + "\n\n" + rootCode])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: FormatterConstruction.neighborsOfConstant, MultiModuleIntegration.allCases)
@@ -1131,7 +1122,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			#expect(output.modules["FeatureImpl"]?.generatedFiles == ["DefaultUserService+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n" + featureImplCode])
 			#expect(output.modules["App"]?.generatedFiles == ["Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n" + Self.importBlock("FeatureImpl") + "\n\n" + rootCode])
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: TokenCacheConstruction.allCases)
@@ -2248,7 +2238,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			}
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2334,7 +2323,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			}
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2628,7 +2616,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -2709,7 +2696,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Tests – Mocks
@@ -3102,7 +3088,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			#endif
 			""",
 		])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3213,7 +3198,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			["Screen+SafeDIMock.swift": screenMock, "SafeDIMockConfiguration.swift": header]
 		}
 		#expect(try #require(output.modules["App"]).generatedFiles == expectedGeneratedFiles)
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3288,7 +3272,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		    }
 		}
 		"""))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3452,7 +3435,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 		"""
 		#expect(try #require(output.modules["App"]).generatedFiles == [integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": code])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3706,7 +3688,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(under: integration, constructing: "\(chain.extendedType).Helper"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: ExtensionNamespaceChain.allCases, MultiModuleIntegration.allCases)
@@ -3719,7 +3700,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(under: integration, constructing: "\(chain.extendedType).Helper"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3764,7 +3744,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		)
 		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Outer.Namespace", "Outer"])
 		#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(under: .moduleInfo, constructing: "Outer.Namespace.Helper"))
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3992,7 +3971,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		case .swiftPackagePlugin:
 			#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(under: integration, constructing: "Outer.Namespace.Helper", assertions: ["FLAG"]))
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -4058,7 +4036,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		    public enum __safeDI_Screen_DD923990A48765D6 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -4135,7 +4112,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		    public enum __safeDI_Screen_27F6F01DC5D0EF8E {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases, [["Lib", "ModA"], ["ModA", "Lib"]])
@@ -4163,7 +4139,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		    public enum __safeDI_SeamF_19911CF36F34982A {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -4190,7 +4165,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		    public enum __safeDI_SeamF_733E17E62B7A3AC5 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -4255,7 +4229,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		    public enum __safeDI_Screen_ECD4BD415105F519 {}
 		}
 		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases, BrandThemeReach.allCases)
@@ -5296,13 +5269,5 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		import \(moduleName)
 		#endif
 		"""
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
 	}
 }

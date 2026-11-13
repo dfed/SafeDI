@@ -389,9 +389,6 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		case .swiftPackagePlugin:
 			#expect(generatedFiles["Receiver+SafeDIMock.swift"] == header + Self.forwardedTupleReceiverMock, "Unexpected output \(generatedFiles)")
 		}
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation)
-		#expect(compilation.failure == nil)
 	}
 
 	@Test
@@ -1533,9 +1530,6 @@ struct SafeDIToolForwardedTupleElementTests: ~Copyable {
 		}
 		"""
 		#expect(generatedFiles[integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"] == expectedRoot, "Unexpected output \(generatedFiles)")
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation)
-		#expect(compilation.failure == nil)
 	}
 
 	@Test(arguments: ["X.ForwardedProperties", "Child.ForwardedProperties"])

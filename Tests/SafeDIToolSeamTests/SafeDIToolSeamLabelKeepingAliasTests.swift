@@ -2098,9 +2098,6 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			}
 			""",
 		])
-		if compileVerificationIsEnabled {
-			#expect(try #require(output.compilation).modules.map(\.exitCode) == [0, 0, 0])
-		}
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -2171,9 +2168,6 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			}
 			""",
 		])
-		if compileVerificationIsEnabled {
-			#expect(try #require(output.compilation).modules.map(\.exitCode) == [0, 0, 0])
-		}
 	}
 
 	// MARK: Private

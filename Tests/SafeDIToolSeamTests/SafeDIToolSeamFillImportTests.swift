@@ -82,7 +82,6 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		    }
 		}
 		""")], "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -129,7 +128,6 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		    public enum __safeDI_OuterSeam_CBF29CE484222325 {}
 		}
 		""")], "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -170,7 +168,6 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		    }
 		}
 		""")], "Unexpected output \(generatedFiles)")
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Private
@@ -202,13 +199,5 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 
 	private static func generatedFile(importing moduleNames: [String], _ body: String) -> String {
 		generatedFileHeader + moduleNames.map { "#if canImport(\($0))\nimport \($0)\n#endif" }.joined(separator: "\n") + "\n\n" + body
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
-		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
 	}
 }

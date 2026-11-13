@@ -164,8 +164,6 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		// The twin, whose `package` own initializer makes the package tier by itself: the same files, byte for byte.
 		#expect(try #require(twinOutput.modules["Feature"]).generatedFiles == expectedFeatureFiles[integration])
 		#expect(try #require(twinOutput.modules["Mid"]).generatedFiles == expectedMidFiles[integration])
-		try expectEveryModuleCompiled(output)
-		try expectEveryModuleCompiled(twinOutput)
 		try expectDifferentialValuesAgree(
 			feature: Self.path(featureFiles: featureFiles, midFiles: [Self.midRoot, Self.midShell], output: output),
 			knownRight: Self.path(featureFiles: twinFeatureFiles, midFiles: [Self.midRoot, Self.midShell], output: twinOutput),
@@ -361,7 +359,6 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			],
 		]
 		#expect(try #require(output.modules["Mid"]).generatedFiles == expectedMidFiles[integration])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -550,7 +547,6 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			],
 		]
 		#expect(try #require(output.modules["App"]).generatedFiles == expectedAppFiles[integration])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: R6(1): tiers an own initializer as wide as the type leaves as they are
@@ -743,7 +739,6 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			],
 		]
 		#expect(try #require(output.modules["Mid"]).generatedFiles == expectedMidFiles[integration])
-		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: R6: a caller in another package calls each seam's public tier
@@ -1001,7 +996,6 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			],
 		]
 		#expect(try #require(output.modules["App"]).generatedFiles == expectedAppFiles[integration])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1360,8 +1354,6 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			],
 		]
 		#expect(try #require(inlineOutput.modules["Mid"]).generatedFiles == expectedInlineMidFiles[integration])
-		try expectEveryModuleCompiled(output)
-		try expectEveryModuleCompiled(inlineOutput)
 		try expectDifferentialValuesAgree(
 			feature: Self.path(featureFiles: featureFiles, midFiles: midFiles, output: output),
 			knownRight: Self.path(featureFiles: featureFiles, midFiles: inlineMidFiles, output: inlineOutput),
@@ -1464,12 +1456,5 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 			DifferentialValueModule(name: "Feature", packageName: "Shop", fixtureFiles: fixtureFiles(featureFiles), generatedFiles: #require(output.modules["Feature"]).generatedFiles),
 			DifferentialValueModule(name: "Mid", packageName: "Shop", dependencyModuleNames: ["Feature"], fixtureFiles: fixtureFiles(midFiles), generatedFiles: #require(output.modules["Mid"]).generatedFiles),
 		])
-	}
-
-	/// Expects every module to have compiled, when compile verification runs.
-	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
-		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
 	}
 }
