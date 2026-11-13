@@ -3986,7 +3986,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder
-		        @Sendable func __safeDI_childBuilder(name: String) -> Child {
+		        @Sendable nonisolated func __safeDI_childBuilder(name: String) -> Child {
 		            if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(name) } else { Child(name: name) }
 		        }
 		        let childBuilder = SendableInstantiator<Child> {
@@ -4506,7 +4506,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_childABuilder__safeDIBuilder = safeDIOverrides.childABuilder
-		        @Sendable func __safeDI_childABuilder(recreated: Recreated) -> ChildAProtocol {
+		        @Sendable nonisolated func __safeDI_childABuilder(recreated: Recreated) -> ChildAProtocol {
 		            if let safeDIBuilder = __safeDI_childABuilder__safeDIBuilder { safeDIBuilder(recreated) } else { ChildA(recreated: recreated) }
 		        }
 		        let childABuilder = SendableErasedInstantiator<Recreated, ChildAProtocol> {
@@ -4615,7 +4615,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let __safeDI_parentBuilder__parentBuilder_childBuilder_safeDIBuilder = safeDIOverrides.parentBuilder.childBuilder.safeDIBuilder
 		        let __safeDI_parentBuilder__parentBuilder_childBuilder_helper_safeDIBuilder = safeDIOverrides.parentBuilder.childBuilder.helper
 		        let __safeDI_parentBuilder__safeDIBuilder = safeDIOverrides.parentBuilder.safeDIBuilder
-		        @Sendable func __safeDI_parentBuilder() -> Parent {
+		        @Sendable nonisolated func __safeDI_parentBuilder() -> Parent {
 		            func __safeDI_childBuilder(name: String) -> AnyChild {
 		                let helper = if let safeDIBuilder = __safeDI_parentBuilder__parentBuilder_childBuilder_helper_safeDIBuilder { safeDIBuilder() } else { Helper() }
 		                return if let safeDIBuilder = __safeDI_parentBuilder__parentBuilder_childBuilder_safeDIBuilder { AnyChild(safeDIBuilder(name, helper)) } else { AnyChild(ConcreteChild(name: name, helper: helper)) }
@@ -5323,7 +5323,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }
 		        let __safeDI_interceptorBuilder__interceptorBuilder_logger_safeDIBuilder = safeDIOverrides.interceptorBuilder.logger
 		        let __safeDI_interceptorBuilder__safeDIBuilder = safeDIOverrides.interceptorBuilder.safeDIBuilder
-		        @Sendable func __safeDI_interceptorBuilder() -> Interceptor {
+		        @Sendable nonisolated func __safeDI_interceptorBuilder() -> Interceptor {
 		            let logger = if let safeDIBuilder = __safeDI_interceptorBuilder__interceptorBuilder_logger_safeDIBuilder { safeDIBuilder() } else { Logger() }
 		            return if let safeDIBuilder = __safeDI_interceptorBuilder__safeDIBuilder { safeDIBuilder(logger) } else { Interceptor(logger: logger) }
 		        }
@@ -12421,8 +12421,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> A {
 		        let __safeDI_bBuilder__safeDIBuilder = safeDIOverrides.bBuilder.safeDIBuilder
-		        @Sendable func __safeDI_bBuilder() -> B {
-		            @Sendable func __safeDI_aBuilder() -> A {
+		        @Sendable nonisolated func __safeDI_bBuilder() -> B {
+		            @Sendable nonisolated func __safeDI_aBuilder() -> A {
 		                let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
 		                return A(bBuilder: bBuilder)
 		            }
@@ -15086,7 +15086,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let __safeDI_factory__factory_child_safeDIBuilder = safeDIOverrides.factory.child.safeDIBuilder
 		        let __safeDI_factory__factory_child_leaf_safeDIBuilder = safeDIOverrides.factory.child.leaf
 		        let __safeDI_factory__safeDIBuilder = safeDIOverrides.factory.safeDIBuilder
-		        @Sendable func __safeDI_factory(name: String) -> Parent {
+		        @Sendable nonisolated func __safeDI_factory(name: String) -> Parent {
 		            func __safeDI_child() -> Child {
 		                let leaf = if let safeDIBuilder = __safeDI_factory__factory_child_leaf_safeDIBuilder { safeDIBuilder() } else { Leaf() }
 		                return if let safeDIBuilder = __safeDI_factory__factory_child_safeDIBuilder { safeDIBuilder(leaf) } else { Child(leaf: leaf) }
@@ -15411,8 +15411,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Root {
 		        let __safeDI_aBuilder__aBuilder_bBuilder_safeDIBuilder = safeDIOverrides.aBuilder.bBuilder.safeDIBuilder
 		        let __safeDI_aBuilder__safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder
-		        @Sendable func __safeDI_aBuilder() -> A {
-		            @Sendable func __safeDI_bBuilder() -> B {
+		        @Sendable nonisolated func __safeDI_aBuilder() -> A {
+		            @Sendable nonisolated func __safeDI_bBuilder() -> B {
 		                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		                return if let safeDIBuilder = __safeDI_aBuilder__aBuilder_bBuilder_safeDIBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
 		            }

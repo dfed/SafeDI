@@ -1702,7 +1702,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		    ) -> Root {
 		        let engine = if let safeDIBuilder = safeDIOverrides.engine { safeDIBuilder() } else { Engine() }
 		        let __safeDI_childServiceBuilder__safeDIBuilder = safeDIOverrides.childServiceBuilder
-		        @Sendable func __safeDI_childServiceBuilder() -> ChildServiceProtocol {
+		        @Sendable nonisolated func __safeDI_childServiceBuilder() -> ChildServiceProtocol {
 		            if let safeDIBuilder = __safeDI_childServiceBuilder__safeDIBuilder { safeDIBuilder(engine) } else { ChildService.customMock(engine: engine) }
 		        }
 		        let childServiceBuilder = SendableErasedInstantiator<Void, ChildServiceProtocol>(__safeDI_childServiceBuilder)

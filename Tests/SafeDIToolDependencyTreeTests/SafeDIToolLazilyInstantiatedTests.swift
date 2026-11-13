@@ -551,7 +551,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            Analytics()
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        @Sendable func __safeDI_settingsBuilder(analytics: LazilyInstantiated<Analytics>) -> Settings {
+		        @Sendable nonisolated func __safeDI_settingsBuilder(analytics: LazilyInstantiated<Analytics>) -> Settings {
 		            let toggle = Toggle(analytics: analytics.instance)
 		            return Settings(analytics: analytics, toggle: toggle)
 		        }
@@ -612,7 +612,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_analytics() -> Analytics {
-		            @Sendable func __safeDI_uploaderBuilder() -> Uploader {
+		            @Sendable nonisolated func __safeDI_uploaderBuilder() -> Uploader {
 		                Uploader(analytics: nil)
 		            }
 		            let uploaderBuilder = SendableInstantiator<Uploader>(__safeDI_uploaderBuilder)
@@ -822,7 +822,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
-		        @Sendable func __safeDI_analytics() -> Analytics {
+		        @Sendable nonisolated func __safeDI_analytics() -> Analytics {
 		            Analytics()
 		        }
 		        let analytics = SendableLazilyInstantiated<Analytics>(__safeDI_analytics)
@@ -5222,7 +5222,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let __safeDI_tracker__safeDIBuilder = safeDIOverrides.tracker
-		        @Sendable func __safeDI_tracker() -> Tracker {
+		        @Sendable nonisolated func __safeDI_tracker() -> Tracker {
 		            if let safeDIBuilder = __safeDI_tracker__safeDIBuilder { safeDIBuilder() } else { Tracker() }
 		        }
 		        let tracker = SendableLazilyInstantiated<Tracker>(__safeDI_tracker)
@@ -5317,7 +5317,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    ) -> Screen {
 		        let tracker_LazilyInstantiated__Tracker: LazilyInstantiated<Tracker>? = safeDIOverrides.tracker_LazilyInstantiated__Tracker
 		        let __safeDI_tracker__safeDIBuilder = safeDIOverrides.tracker
-		        @Sendable func __safeDI_tracker() -> Tracker {
+		        @Sendable nonisolated func __safeDI_tracker() -> Tracker {
 		            if let safeDIBuilder = __safeDI_tracker__safeDIBuilder { safeDIBuilder() } else { Tracker() }
 		        }
 		        let tracker = SendableLazilyInstantiated<Tracker>(__safeDI_tracker)
@@ -9477,7 +9477,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let __safeDI_session_SendableLazilyInstantiated__Session__safeDIBuilder = safeDIOverrides.session_SendableLazilyInstantiated__Session
-		        @Sendable func __safeDI_session_SendableLazilyInstantiated__Session() -> Session {
+		        @Sendable nonisolated func __safeDI_session_SendableLazilyInstantiated__Session() -> Session {
 		            if let safeDIBuilder = __safeDI_session_SendableLazilyInstantiated__Session__safeDIBuilder { safeDIBuilder() } else { Session() }
 		        }
 		        let session_SendableLazilyInstantiated__Session = SendableLazilyInstantiated<Session>(__safeDI_session_SendableLazilyInstantiated__Session)

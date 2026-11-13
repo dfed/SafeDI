@@ -1243,11 +1243,11 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		    internal convenience init(__safeDI_c: @autoclosure @escaping @Sendable () -> User, __safeDI_secret: @autoclosure @escaping @Sendable () -> Secret?) {
 		        let c = SendableLazilyInstantiated<User>(__safeDI_c)
 		        let secret = SendableLazilyInstantiated<Secret?>(__safeDI_secret)
-		        @Sendable func __safeDI_readerBuilder() -> Reader {
+		        @Sendable nonisolated func __safeDI_readerBuilder() -> Reader {
 		            Reader(c: c.instance)
 		        }
 		        let readerBuilder = SendableInstantiator<Reader>(__safeDI_readerBuilder)
-		        @Sendable func __safeDI_secretBuilder() -> SecretReader {
+		        @Sendable nonisolated func __safeDI_secretBuilder() -> SecretReader {
 		            SecretReader(secret: secret.instance)
 		        }
 		        let secretBuilder = SendableInstantiator<SecretReader>(__safeDI_secretBuilder)

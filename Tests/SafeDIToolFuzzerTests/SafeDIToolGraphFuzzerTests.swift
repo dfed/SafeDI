@@ -1712,7 +1712,7 @@ struct SafeDIToolGraphFuzzerTests {
 		extension S731_Root0 {
 		    public convenience init() {
 		        let t1 = S731_T1()
-		        @Sendable func __safeDI_lazyT0() -> S731_T0 {
+		        @Sendable nonisolated func __safeDI_lazyT0() -> S731_T0 {
 		            #sourceLocation(file: "S731_T0.swift", line: 9)
 		            let anyT1Alias: S731_AnyT1? = S731_AnyT1(t1)
 		            #sourceLocation()

@@ -145,7 +145,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				    public init(__safeDI_gadgetBuilder_part: @escaping (SafeDIStagedScope_Gadget_part.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_part.Stage2) -> any Gadget) {
 				        let analytics = Analytics()
 				        let __safeDI_gadgetBuilder_part_Stage2 = __safeDI_gadgetBuilder_part(SafeDIStagedScope_Gadget_part.Stage1(analytics: analytics))
-				        @Sendable func __safeDI_part() -> any Gadget {
+				        @Sendable nonisolated func __safeDI_part() -> any Gadget {
 				            __safeDI_gadgetBuilder_part_Stage2(SafeDIStagedScope_Gadget_part.Stage2())
 				        }
 				        let part = SendableLazilyInstantiated<any Gadget>(__safeDI_part)
@@ -270,8 +270,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				"""
 				            func __safeDI_gadgetBuilder_part(_ scope: Host.SafeDIStagedScope_Gadget_part.Stage1) -> @Sendable (Host.SafeDIStagedScope_Gadget_part.Stage2) -> any Gadget {
 				                let analytics = scope.analytics
-				                @Sendable func __safeDI_gadgetBuilder_part_Stage2(_ scope: Host.SafeDIStagedScope_Gadget_part.Stage2) -> any Gadget {
-				                    @Sendable func __safeDI_part() -> DefaultGadget {
+				                @Sendable nonisolated func __safeDI_gadgetBuilder_part_Stage2(_ scope: Host.SafeDIStagedScope_Gadget_part.Stage2) -> any Gadget {
+				                    @Sendable nonisolated func __safeDI_part() -> DefaultGadget {
 				                        DefaultGadget(analytics: analytics)
 				                    }
 				                    return __safeDI_part()
@@ -298,8 +298,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				"""
 				            func __safeDI_panelBuilder_part(_ scope: Host.SafeDIStagedScope_Panel_part.Stage1) -> Host.SafeDIStagedScope_Panel_part.SendableLastStage<Panel.ForwardedProperties> {
 				                let analytics = scope.analytics
-				                @Sendable func __safeDI_panelBuilder_part_Stage2(_ scope: Host.SafeDIStagedScope_Panel_part.Stage2, _ __safeDI_forwarded: Panel.ForwardedProperties) -> Panel {
-				                    @Sendable func __safeDI_part(name: String) -> DefaultPanel {
+				                @Sendable nonisolated func __safeDI_panelBuilder_part_Stage2(_ scope: Host.SafeDIStagedScope_Panel_part.Stage2, _ __safeDI_forwarded: Panel.ForwardedProperties) -> Panel {
+				                    @Sendable nonisolated func __safeDI_part(name: String) -> DefaultPanel {
 				                        DefaultPanel(name: name, analytics: analytics)
 				                    }
 				                    return __safeDI_part(name: __safeDI_forwarded)
@@ -326,8 +326,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				"""
 				            func __safeDI_namedGadgetBuilder_part(_ scope: Host.SafeDIStagedScope_NamedGadget_part.Stage1) -> Host.SafeDIStagedScope_NamedGadget_part.SendableLastStage<String> {
 				                let analytics = scope.analytics
-				                @Sendable func __safeDI_namedGadgetBuilder_part_Stage2(_ scope: Host.SafeDIStagedScope_NamedGadget_part.Stage2, _ __safeDI_forwarded: String) -> AnyGadget {
-				                    @Sendable func __safeDI_part(name: String) -> NamedGadget {
+				                @Sendable nonisolated func __safeDI_namedGadgetBuilder_part_Stage2(_ scope: Host.SafeDIStagedScope_NamedGadget_part.Stage2, _ __safeDI_forwarded: String) -> AnyGadget {
+				                    @Sendable nonisolated func __safeDI_part(name: String) -> NamedGadget {
 				                        NamedGadget(name: name, analytics: analytics)
 				                    }
 				                    return AnyGadget(__safeDI_part(name: __safeDI_forwarded))
@@ -753,8 +753,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_E8EFEB05B6482AF3.self\(seamCallComment(seam: "Host"))
 		            func __safeDI_loopingGadgetBuilder_again(_ scope: Host.SafeDIStagedScope_LoopingGadget_again.Stage1) -> Host.SafeDIStagedScope_LoopingGadget_again.SendableLastStage<String> {
-		                @Sendable func __safeDI_loopingGadgetBuilder_again_Stage2(_ scope: Host.SafeDIStagedScope_LoopingGadget_again.Stage2, _ __safeDI_forwarded: String) -> any Gadget {
-		                    @Sendable func __safeDI_again(name: String) -> LoopingGadget {
+		                @Sendable nonisolated func __safeDI_loopingGadgetBuilder_again_Stage2(_ scope: Host.SafeDIStagedScope_LoopingGadget_again.Stage2, _ __safeDI_forwarded: String) -> any Gadget {
+		                    @Sendable nonisolated func __safeDI_again(name: String) -> LoopingGadget {
 		                        let again = SendableErasedInstantiator<String, any Gadget> {
 		                            __safeDI_again(name: $0)
 		                        }
@@ -832,7 +832,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    public init(__safeDI_panelBuilder_ownerBuilder_held: @escaping (SafeDIStagedScope_Panel_ownerBuilder_held.Stage1) -> SafeDIStagedScope_Panel_ownerBuilder_held.SendableLastStage<Panel.ForwardedProperties>) {
 		        let analytics = Analytics()
 		        let __safeDI_panelBuilder_ownerBuilder_held_Stage2 = __safeDI_panelBuilder_ownerBuilder_held(SafeDIStagedScope_Panel_ownerBuilder_held.Stage1(analytics: analytics))
-		        @Sendable func __safeDI_ownerBuilder() -> Owner {
+		        @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
 		            let held = Instantiator<Panel> {
 		                __safeDI_panelBuilder_ownerBuilder_held_Stage2(SafeDIStagedScope_Panel_ownerBuilder_held.Stage2(), $0)
 		            }
@@ -854,7 +854,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            _ = Host.__safeDI_Host_75B9CC236048004D.self\(seamCallComment(seam: "Host"))
 		            func __safeDI_panelBuilder_ownerBuilder_held(_ scope: Host.SafeDIStagedScope_Panel_ownerBuilder_held.Stage1) -> Host.SafeDIStagedScope_Panel_ownerBuilder_held.SendableLastStage<Panel.ForwardedProperties> {
 		                let analytics = scope.analytics
-		                @Sendable func __safeDI_panelBuilder_ownerBuilder_held_Stage2(_ scope: Host.SafeDIStagedScope_Panel_ownerBuilder_held.Stage2, _ __safeDI_forwarded: Panel.ForwardedProperties) -> Panel {
+		                @Sendable nonisolated func __safeDI_panelBuilder_ownerBuilder_held_Stage2(_ scope: Host.SafeDIStagedScope_Panel_ownerBuilder_held.Stage2, _ __safeDI_forwarded: Panel.ForwardedProperties) -> Panel {
 		                    func __safeDI_held(name: String) -> DefaultPanel {
 		                        DefaultPanel(name: name, analytics: analytics)
 		                    }
@@ -927,7 +927,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    public init(__safeDI_panelBuilder_ownerBuilder_held: @escaping (SafeDIStagedScope_Panel_ownerBuilder_held.Stage1) -> @Sendable (SafeDIStagedScope_Panel_ownerBuilder_held.Stage2) -> SafeDIStagedScope_Panel_ownerBuilder_held.SendableLastStage<Panel.ForwardedProperties>) {
 		        let analytics = Analytics()
 		        let __safeDI_panelBuilder_ownerBuilder_held_Stage2 = __safeDI_panelBuilder_ownerBuilder_held(SafeDIStagedScope_Panel_ownerBuilder_held.Stage1(analytics: analytics))
-		        @Sendable func __safeDI_ownerBuilder() -> Owner {
+		        @Sendable nonisolated func __safeDI_ownerBuilder() -> Owner {
 		            let tally = Tally()
 		            let __safeDI_panelBuilder_ownerBuilder_held_Stage3 = __safeDI_panelBuilder_ownerBuilder_held_Stage2(SafeDIStagedScope_Panel_ownerBuilder_held.Stage2(tally: tally))
 		            let held = SendableInstantiator<Panel> {
@@ -951,10 +951,10 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            _ = Host.__safeDI_Host_8FC3ABBEA15B3FD1.self\(seamCallComment(seam: "Host"))
 		            func __safeDI_panelBuilder_ownerBuilder_held(_ scope: Host.SafeDIStagedScope_Panel_ownerBuilder_held.Stage1) -> @Sendable (Host.SafeDIStagedScope_Panel_ownerBuilder_held.Stage2) -> Host.SafeDIStagedScope_Panel_ownerBuilder_held.SendableLastStage<Panel.ForwardedProperties> {
 		                let analytics = scope.analytics
-		                @Sendable func __safeDI_panelBuilder_ownerBuilder_held_Stage2(_ scope: Host.SafeDIStagedScope_Panel_ownerBuilder_held.Stage2) -> Host.SafeDIStagedScope_Panel_ownerBuilder_held.SendableLastStage<Panel.ForwardedProperties> {
+		                @Sendable nonisolated func __safeDI_panelBuilder_ownerBuilder_held_Stage2(_ scope: Host.SafeDIStagedScope_Panel_ownerBuilder_held.Stage2) -> Host.SafeDIStagedScope_Panel_ownerBuilder_held.SendableLastStage<Panel.ForwardedProperties> {
 		                    let tally = scope.tally
-		                    @Sendable func __safeDI_panelBuilder_ownerBuilder_held_Stage3(_ scope: Host.SafeDIStagedScope_Panel_ownerBuilder_held.Stage3, _ __safeDI_forwarded: Panel.ForwardedProperties) -> Panel {
-		                        @Sendable func __safeDI_held(name: String) -> DefaultPanel {
+		                    @Sendable nonisolated func __safeDI_panelBuilder_ownerBuilder_held_Stage3(_ scope: Host.SafeDIStagedScope_Panel_ownerBuilder_held.Stage3, _ __safeDI_forwarded: Panel.ForwardedProperties) -> Panel {
+		                        @Sendable nonisolated func __safeDI_held(name: String) -> DefaultPanel {
 		                            DefaultPanel(name: name, analytics: analytics, tally: tally)
 		                        }
 		                        return __safeDI_held(name: __safeDI_forwarded)
@@ -1133,9 +1133,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            _ = Inner.__safeDI_Inner_8F27C91B16119DEE.self\(seamCallComment(seam: "Inner"))
 		            func __safeDI_widgetBuilder_widget(_ scope: Inner.SafeDIStagedScope_Widget_widget.Stage1) -> @Sendable (Inner.SafeDIStagedScope_Widget_widget.Stage2) -> any Widget {
 		                let __safeDI_gadgetBuilder_inner_widget_gadget_Stage2 = __safeDI_gadgetBuilder_inner_widget_gadget(SafeDIStagedScope_Gadget_inner_widget_gadget.Stage1())
-		                @Sendable func __safeDI_widgetBuilder_widget_Stage2(_ scope: Inner.SafeDIStagedScope_Widget_widget.Stage2) -> any Widget {
+		                @Sendable nonisolated func __safeDI_widgetBuilder_widget_Stage2(_ scope: Inner.SafeDIStagedScope_Widget_widget.Stage2) -> any Widget {
 		                    let __safeDI_gadgetBuilder_inner_widget_gadget_Stage3 = __safeDI_gadgetBuilder_inner_widget_gadget_Stage2(SafeDIStagedScope_Gadget_inner_widget_gadget.Stage2())
-		                    @Sendable func __safeDI_widget() -> DefaultWidget {
+		                    @Sendable nonisolated func __safeDI_widget() -> DefaultWidget {
 		                        let gadget: any Gadget = __safeDI_gadgetBuilder_inner_widget_gadget_Stage3(SafeDIStagedScope_Gadget_inner_widget_gadget.Stage3())
 		                        return DefaultWidget(gadget: gadget)
 		                    }
@@ -1703,8 +1703,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            _ = Host.__safeDI_Host_BACB6B8528A3CCD8.self\(seamCallComment(seam: "Host"))
 		            func __safeDI_actionPanelBuilder_part(_ scope: Host.SafeDIStagedScope_ActionPanel_part.Stage1) -> Host.SafeDIStagedScope_ActionPanel_part.SendableLastStage<ActionPanel.ForwardedProperties> {
 		                let analytics = scope.analytics
-		                @Sendable func __safeDI_actionPanelBuilder_part_Stage2(_ scope: Host.SafeDIStagedScope_ActionPanel_part.Stage2, _ __safeDI_forwarded: @escaping ActionPanel.ForwardedProperties) -> ActionPanel {
-		                    @Sendable func __safeDI_part(forwardedAction: @escaping @Sendable () -> Void) -> DefaultActionPanel {
+		                @Sendable nonisolated func __safeDI_actionPanelBuilder_part_Stage2(_ scope: Host.SafeDIStagedScope_ActionPanel_part.Stage2, _ __safeDI_forwarded: @escaping ActionPanel.ForwardedProperties) -> ActionPanel {
+		                    @Sendable nonisolated func __safeDI_part(forwardedAction: @escaping @Sendable () -> Void) -> DefaultActionPanel {
 		                        DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
 		                    }
 		                    return __safeDI_part(forwardedAction: __safeDI_forwarded)
@@ -1840,8 +1840,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            _ = Host.__safeDI_Host_BACB6B8528A3CCD8.self\(seamCallComment(seam: "Host"))
 		            func __safeDI_actionPanelBuilder_part(_ scope: Host.SafeDIStagedScope_ActionPanel_part.Stage1) -> Host.SafeDIStagedScope_ActionPanel_part.SendableLastStage<ActionPanel.ForwardedProperties> {
 		                let analytics = scope.analytics
-		                @Sendable func __safeDI_actionPanelBuilder_part_Stage2(_ scope: Host.SafeDIStagedScope_ActionPanel_part.Stage2, _ __safeDI_forwarded: @escaping ActionPanel.ForwardedProperties) -> ActionPanel {
-		                    @Sendable func __safeDI_part(forwardedAction: @escaping SendableOnTap) -> DefaultActionPanel {
+		                @Sendable nonisolated func __safeDI_actionPanelBuilder_part_Stage2(_ scope: Host.SafeDIStagedScope_ActionPanel_part.Stage2, _ __safeDI_forwarded: @escaping ActionPanel.ForwardedProperties) -> ActionPanel {
+		                    @Sendable nonisolated func __safeDI_part(forwardedAction: @escaping SendableOnTap) -> DefaultActionPanel {
 		                        DefaultActionPanel(forwardedAction: forwardedAction, analytics: analytics)
 		                    }
 		                    return __safeDI_part(forwardedAction: __safeDI_forwarded)
@@ -1977,8 +1977,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            _ = Host.__safeDI_Host_CA57A5BDABAF2C42.self\(seamCallComment(seam: "Host"))
 		            func __safeDI_tapGadgetBuilder_part(_ scope: Host.SafeDIStagedScope_TapGadget_part.Stage1) -> Host.SafeDIStagedScope_TapGadget_part.SendableLastStage<SendableOnTap> {
 		                let analytics = scope.analytics
-		                @Sendable func __safeDI_tapGadgetBuilder_part_Stage2(_ scope: Host.SafeDIStagedScope_TapGadget_part.Stage2, _ __safeDI_forwarded: @escaping SendableOnTap) -> AnyGadget {
-		                    @Sendable func __safeDI_part(onTap: @escaping SendableOnTap) -> TapGadget {
+		                @Sendable nonisolated func __safeDI_tapGadgetBuilder_part_Stage2(_ scope: Host.SafeDIStagedScope_TapGadget_part.Stage2, _ __safeDI_forwarded: @escaping SendableOnTap) -> AnyGadget {
+		                    @Sendable nonisolated func __safeDI_part(onTap: @escaping SendableOnTap) -> TapGadget {
 		                        TapGadget(onTap: onTap, analytics: analytics)
 		                    }
 		                    return AnyGadget(__safeDI_part(onTap: __safeDI_forwarded))
@@ -2291,7 +2291,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    public init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget, __safeDI_gadgetBuilder_slazy: @escaping (SafeDIStagedScope_Gadget_slazy.Stage1) -> @Sendable (SafeDIStagedScope_Gadget_slazy.Stage2) -> any Gadget) {
 		        let analytics = Analytics()
 		        let __safeDI_gadgetBuilder_slazy_Stage2 = __safeDI_gadgetBuilder_slazy(SafeDIStagedScope_Gadget_slazy.Stage1(analytics: analytics))
-		        @Sendable func __safeDI_slazy() -> any Gadget {
+		        @Sendable nonisolated func __safeDI_slazy() -> any Gadget {
 		            __safeDI_gadgetBuilder_slazy_Stage2(SafeDIStagedScope_Gadget_slazy.Stage2())
 		        }
 		        let slazy = SendableLazilyInstantiated<any Gadget>(__safeDI_slazy)
@@ -2345,7 +2345,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        }
 		        let s: InnerSeam = __safeDI_s()
 		        let __safeDI_gadgetBuilder_a_Stage2 = __safeDI_gadgetBuilder_a(SafeDIStagedScope_Gadget_a.Stage1(s: s))
-		        @Sendable func __safeDI_a() -> any Gadget {
+		        @Sendable nonisolated func __safeDI_a() -> any Gadget {
 		            __safeDI_gadgetBuilder_a_Stage2(SafeDIStagedScope_Gadget_a.Stage2())
 		        }
 		        let a = SendableLazilyInstantiated<any Gadget>(__safeDI_a)
@@ -2416,10 +2416,10 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    public init() {
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_4C8838A6786F4042.self\(seamCallComment(seam: "Host"))
-		            @Sendable func __safeDI_gadgetBuilder_a(_ scope: Host.SafeDIStagedScope_Gadget_a.Stage1) -> @Sendable (Host.SafeDIStagedScope_Gadget_a.Stage2) -> any Gadget {
-		                @Sendable func __safeDI_gadgetBuilder_a_Stage2(_ scope: Host.SafeDIStagedScope_Gadget_a.Stage2) -> any Gadget {
-		                    @Sendable func __safeDI_a() -> DefaultGadget {
-		                        @Sendable func __safeDI_hostMaker() -> Host {
+		            @Sendable nonisolated func __safeDI_gadgetBuilder_a(_ scope: Host.SafeDIStagedScope_Gadget_a.Stage1) -> @Sendable (Host.SafeDIStagedScope_Gadget_a.Stage2) -> any Gadget {
+		                @Sendable nonisolated func __safeDI_gadgetBuilder_a_Stage2(_ scope: Host.SafeDIStagedScope_Gadget_a.Stage2) -> any Gadget {
+		                    @Sendable nonisolated func __safeDI_a() -> DefaultGadget {
+		                        @Sendable nonisolated func __safeDI_hostMaker() -> Host {
 		                            _ = Host.__safeDI_Host_4C8838A6786F4042.self\(seamCallComment(seam: "Host"))
 		                            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host, __safeDI_gadgetBuilder_a: __safeDI_gadgetBuilder_a)
 		                        }
@@ -2430,16 +2430,16 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                }
 		                return __safeDI_gadgetBuilder_a_Stage2
 		            }
-		            @Sendable func __safeDI_gadgetBuilder_Host(_ scope: Host.SafeDIScope_Gadget) -> any Gadget {
+		            @Sendable nonisolated func __safeDI_gadgetBuilder_Host(_ scope: Host.SafeDIScope_Gadget) -> any Gadget {
 		                switch scope {
 		                case let .s(scope): return __safeDI_gadgetBuilder_InnerSeam(scope)
 		                }
 		            }
-		            @Sendable func __safeDI_gadgetBuilder_InnerSeam(_ scope: InnerSeam.SafeDIScope_Gadget) -> any Gadget {
+		            @Sendable nonisolated func __safeDI_gadgetBuilder_InnerSeam(_ scope: InnerSeam.SafeDIScope_Gadget) -> any Gadget {
 		                switch scope {
 		                case .i_a:
 		                    func __safeDI_a() -> DefaultGadget {
-		                        @Sendable func __safeDI_hostMaker() -> Host {
+		                        @Sendable nonisolated func __safeDI_hostMaker() -> Host {
 		                            _ = Host.__safeDI_Host_4C8838A6786F4042.self\(seamCallComment(seam: "Host"))
 		                            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host, __safeDI_gadgetBuilder_a: __safeDI_gadgetBuilder_a)
 		                        }
@@ -2450,7 +2450,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                    return a
 		                case .x_a:
 		                    func __safeDI_a() -> DefaultGadget {
-		                        @Sendable func __safeDI_hostMaker() -> Host {
+		                        @Sendable nonisolated func __safeDI_hostMaker() -> Host {
 		                            _ = Host.__safeDI_Host_4C8838A6786F4042.self\(seamCallComment(seam: "Host"))
 		                            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host, __safeDI_gadgetBuilder_a: __safeDI_gadgetBuilder_a)
 		                        }
@@ -2515,15 +2515,15 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        func __safeDI_s() -> InnerSeam {
 		            _ = InnerSeam.__safeDI_InnerSeam_8881FEFF4115FBA8.self\(seamCallComment(seam: "InnerSeam"))
 		            let __safeDI_gadgetBuilder_s_i_a_a_Stage2 = __safeDI_gadgetBuilder_s_i_a_a(SafeDIStagedScope_Gadget_s_i_a_a.Stage1())
-		            @Sendable func __safeDI_p1Builder_InnerSeam_i_a(_ scope: InnerSeam.SafeDIScope_P1.i_a_Values) -> any P1 {
+		            @Sendable nonisolated func __safeDI_p1Builder_InnerSeam_i_a(_ scope: InnerSeam.SafeDIScope_P1.i_a_Values) -> any P1 {
 		                func __safeDI_a() -> P1Impl {
-		                    @Sendable func __safeDI_maker() -> InnerSeam {
+		                    @Sendable nonisolated func __safeDI_maker() -> InnerSeam {
 		                        _ = InnerSeam.__safeDI_InnerSeam_8881FEFF4115FBA8.self\(seamCallComment(seam: "InnerSeam"))
 		                        return InnerSeam(__safeDI_p1Builder: __safeDI_p1Builder_InnerSeam, __safeDI_p2Builder: __safeDI_p2Builder_InnerSeam)
 		                    }
 		                    let maker = SendableInstantiator<InnerSeam>(__safeDI_maker)
 		                    let __safeDI_gadgetBuilder_s_i_a_a_Stage3 = __safeDI_gadgetBuilder_s_i_a_a_Stage2(SafeDIStagedScope_Gadget_s_i_a_a.Stage2(maker: maker))
-		                    @Sendable func __safeDI_a() -> any Gadget {
+		                    @Sendable nonisolated func __safeDI_a() -> any Gadget {
 		                        __safeDI_gadgetBuilder_s_i_a_a_Stage3(SafeDIStagedScope_Gadget_s_i_a_a.Stage3())
 		                    }
 		                    let a = SendableLazilyInstantiated<any Gadget>(__safeDI_a)
@@ -2532,12 +2532,12 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                let a: any P1 = __safeDI_a()
 		                return a
 		            }
-		            @Sendable func __safeDI_p1Builder_InnerSeam(_ scope: InnerSeam.SafeDIScope_P1) -> any P1 {
+		            @Sendable nonisolated func __safeDI_p1Builder_InnerSeam(_ scope: InnerSeam.SafeDIScope_P1) -> any P1 {
 		                switch scope {
 		                case let .i_a(scope): return __safeDI_p1Builder_InnerSeam_i_a(scope)
 		                }
 		            }
-		            @Sendable func __safeDI_p2Builder_InnerSeam(_ scope: InnerSeam.SafeDIScope_P2) -> any P2 {
+		            @Sendable nonisolated func __safeDI_p2Builder_InnerSeam(_ scope: InnerSeam.SafeDIScope_P2) -> any P2 {
 		                switch scope {
 		                case .x_a:
 		                    let a: any P2 = P2Impl()

@@ -1115,7 +1115,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    ) -> Root {
 			        let __safeDI_childBuilder__childBuilder_theme = safeDIOverrides.childBuilder.theme
 			        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
-			        @Sendable func __safeDI_childBuilder() -> Child {
+			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 			            Child.__safeDI_init(theme: __safeDI_childBuilder__childBuilder_theme(), safeDIBuilder: __safeDI_childBuilder__safeDIBuilder)
 			        }
 			        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)

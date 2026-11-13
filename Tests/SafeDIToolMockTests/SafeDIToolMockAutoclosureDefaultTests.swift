@@ -461,7 +461,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
-			        @Sendable func __safeDI_serviceBuilder() -> Service {
+			        @Sendable nonisolated func __safeDI_serviceBuilder() -> Service {
 			            Service()
 			        }
 			        let serviceBuilder = SendableInstantiator<Service>(__safeDI_serviceBuilder)
@@ -488,7 +488,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    ) -> Root {
 			        let __safeDI_serviceBuilder__serviceBuilder_retries = safeDIOverrides.serviceBuilder.retries
 			        let __safeDI_serviceBuilder__safeDIBuilder = safeDIOverrides.serviceBuilder.safeDIBuilder
-			        @Sendable func __safeDI_serviceBuilder() -> Service {
+			        @Sendable nonisolated func __safeDI_serviceBuilder() -> Service {
 			            if let safeDIBuilder = __safeDI_serviceBuilder__safeDIBuilder { safeDIBuilder(__safeDI_serviceBuilder__serviceBuilder_retries()) } else { Service(retries: __safeDI_serviceBuilder__serviceBuilder_retries()) }
 			        }
 			        let serviceBuilder = SendableInstantiator<Service>(__safeDI_serviceBuilder)
@@ -973,7 +973,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    ) -> Service {
 			        let __safeDI_childBuilder__childBuilder_limit = safeDIOverrides.childBuilder.limit
 			        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
-			        @Sendable func __safeDI_childBuilder() -> Child {
+			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 			            Child.__safeDI_init(limit: __safeDI_childBuilder__childBuilder_limit(), safeDIBuilder: __safeDI_childBuilder__safeDIBuilder)
 			        }
 			        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)

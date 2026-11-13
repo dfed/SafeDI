@@ -1204,7 +1204,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            return Inner(__safeDI_serviceBuilder: { __safeDI_serviceBuilder(.plain($0)) })
 			        }
 			        let plain: Inner = __safeDI_plain()
-			        @Sendable func __safeDI_held() -> Inner {
+			        @Sendable nonisolated func __safeDI_held() -> Inner {
 			            _ = Inner.__safeDI_Inner_C117FA38A959D655.self
 			            return Inner(__safeDI_serviceBuilder: { __safeDI_serviceSendableBuilder(.held($0)) })
 			        }
@@ -1250,14 +1250,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			                case let .plain(scope): return __safeDI_serviceBuilder_Inner(scope)
 			                }
 			            }
-			            @Sendable func __safeDI_serviceBuilder_Inner(_ scope: Inner.SafeDIScope_Service) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Inner(_ scope: Inner.SafeDIScope_Service) -> any Service {
 			                switch scope {
 			                case .service:
 			                    let service: any Service = DefaultService()
 			                    return service
 			                }
 			            }
-			            @Sendable func __safeDI_serviceSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Service) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Service) -> any Service {
 			                switch scope {
 			                case let .held(scope): return __safeDI_serviceBuilder_Inner(scope)
 			                }
@@ -1346,7 +1346,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            return Deep(__safeDI_serviceBuilder: { __safeDI_serviceBuilder(.plain($0)) })
 			        }
 			        let plain: Deep = __safeDI_plain()
-			        @Sendable func __safeDI_held() -> Deep {
+			        @Sendable nonisolated func __safeDI_held() -> Deep {
 			            _ = Deep.__safeDI_Deep_D1509515408C937F.self
 			            return Deep(__safeDI_serviceBuilder: { __safeDI_serviceSendableBuilder(.held($0)) })
 			        }
@@ -1378,19 +1378,19 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			                case let .plain(scope): return __safeDI_serviceBuilder_Deep(scope)
 			                }
 			            }
-			            @Sendable func __safeDI_serviceBuilder_Deep(_ scope: Deep.SafeDIScope_Service) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceBuilder_Deep(_ scope: Deep.SafeDIScope_Service) -> any Service {
 			                switch scope {
 			                case .service:
 			                    let service: any Service = DefaultService()
 			                    return service
 			                }
 			            }
-			            @Sendable func __safeDI_serviceSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Service) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host(_ scope: Host.SafeDISendableScope_Service) -> any Service {
 			                switch scope {
 			                case let .inner_Sendable(scope): return __safeDI_serviceSendableBuilder_Inner(scope)
 			                }
 			            }
-			            @Sendable func __safeDI_serviceSendableBuilder_Inner(_ scope: Inner.SafeDISendableScope_Service) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Inner(_ scope: Inner.SafeDISendableScope_Service) -> any Service {
 			                switch scope {
 			                case let .held(scope): return __safeDI_serviceBuilder_Deep(scope)
 			                }
@@ -1430,7 +1430,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceBuilder_job_service: @escaping (SafeDIStagedScope_Service_job_service.Stage1) -> @Sendable (SafeDIStagedScope_Service_job_service.Stage2) -> any Service) {
 			        let __safeDI_serviceBuilder_job_service_Stage2 = __safeDI_serviceBuilder_job_service(SafeDIStagedScope_Service_job_service.Stage1())
-			        @Sendable func __safeDI_job() -> Job {
+			        @Sendable nonisolated func __safeDI_job() -> Job {
 			            let service: any Service = __safeDI_serviceBuilder_job_service_Stage2(SafeDIStagedScope_Service_job_service.Stage2())
 			            return Job(service: service)
 			        }
@@ -1453,7 +1453,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_BA388D81BCFF9A39.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            func __safeDI_serviceBuilder_job_service(_ scope: Host.SafeDIStagedScope_Service_job_service.Stage1) -> @Sendable (Host.SafeDIStagedScope_Service_job_service.Stage2) -> any Service {
-			                @Sendable func __safeDI_serviceBuilder_job_service_Stage2(_ scope: Host.SafeDIStagedScope_Service_job_service.Stage2) -> any Service {
+			                @Sendable nonisolated func __safeDI_serviceBuilder_job_service_Stage2(_ scope: Host.SafeDIStagedScope_Service_job_service.Stage2) -> any Service {
 			                    let service: any Service = DefaultService()
 			                    return service
 			                }
@@ -1652,7 +1652,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_serviceSendableBuilder: @escaping @Sendable (SafeDISendableScope_Service) -> any Service) {
-			        @Sendable func __safeDI_aBuilder() -> A {
+			        @Sendable nonisolated func __safeDI_aBuilder() -> A {
 			            _ = A.__safeDI_A_106E557EBC4D65C3.self
 			            return A(__safeDI_serviceBuilder: { __safeDI_serviceSendableBuilder(.aBuilder($0)) }, __safeDI_serviceSendableBuilder: { __safeDI_serviceSendableBuilder(.aBuilder_Sendable($0)) })
 			        }
@@ -1674,19 +1674,19 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    public init() {
 			        func __safeDI_a() -> A {
 			            _ = A.__safeDI_A_106E557EBC4D65C3.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable func __safeDI_serviceBuilder_A(_ scope: A.SafeDIScope_Service) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceBuilder_A(_ scope: A.SafeDIScope_Service) -> any Service {
 			                switch scope {
 			                case .service:
 			                    let service: any Service = DefaultService()
 			                    return service
 			                }
 			            }
-			            @Sendable func __safeDI_serviceSendableBuilder_A(_ scope: A.SafeDISendableScope_Service) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_A(_ scope: A.SafeDISendableScope_Service) -> any Service {
 			                switch scope {
 			                case let .bBuilder_Sendable(scope): return __safeDI_serviceSendableBuilder_B(scope)
 			                }
 			            }
-			            @Sendable func __safeDI_serviceSendableBuilder_B(_ scope: B.SafeDISendableScope_Service) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_B(_ scope: B.SafeDISendableScope_Service) -> any Service {
 			                switch scope {
 			                case let .aBuilder(scope): return __safeDI_serviceBuilder_A(scope)
 			                case let .aBuilder_Sendable(scope): return __safeDI_serviceSendableBuilder_A(scope)
@@ -2166,13 +2166,13 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_serviceBuilder_job_service: @escaping (SafeDIStagedScope_Service_job_service.Stage1) -> @Sendable (SafeDIStagedScope_Service_job_service.Stage2) -> any Service, __safeDI_serviceBuilder_job_service_: @escaping (SafeDIStagedScope_Service_job_service_.Stage1) -> @Sendable (SafeDIStagedScope_Service_job_service_.Stage2) -> any Service) {
 		        let __safeDI_serviceBuilder_job_service_Stage2 = __safeDI_serviceBuilder_job_service(SafeDIStagedScope_Service_job_service.Stage1())
-		        @Sendable func __safeDI_job() -> Job {
+		        @Sendable nonisolated func __safeDI_job() -> Job {
 		            let service: any Service = __safeDI_serviceBuilder_job_service_Stage2(SafeDIStagedScope_Service_job_service.Stage2())
 		            return Job(service: service)
 		        }
 		        let job = SendableInstantiator<Job>(__safeDI_job)
 		        let __safeDI_serviceBuilder_job_service__Stage2 = __safeDI_serviceBuilder_job_service_(SafeDIStagedScope_Service_job_service_.Stage1(job: job))
-		        @Sendable func __safeDI_job_service() -> any Service {
+		        @Sendable nonisolated func __safeDI_job_service() -> any Service {
 		            __safeDI_serviceBuilder_job_service__Stage2(SafeDIStagedScope_Service_job_service_.Stage2())
 		        }
 		        let job_service = SendableLazilyInstantiated<any Service>(__safeDI_job_service)
@@ -2324,7 +2324,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			                return pod_service_Stage2
 			            }
 			            func __safeDI_serviceBuilder_Staged_pod_service_(_ scope_: Staged.SafeDIStagedScope_Service_pod_service.Stage1) -> @Sendable (Staged.SafeDIStagedScope_Service_pod_service.Stage2) -> any Service {
-			                @Sendable func __safeDI_serviceBuilder_Staged_pod_service__Stage2(_ scope_: Staged.SafeDIStagedScope_Service_pod_service.Stage2) -> any Service {
+			                @Sendable nonisolated func __safeDI_serviceBuilder_Staged_pod_service__Stage2(_ scope_: Staged.SafeDIStagedScope_Service_pod_service.Stage2) -> any Service {
 			                    let service: any Service = DefaultService()
 			                    return service
 			                }
@@ -3217,7 +3217,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    public init(__safeDI_Type Type: Kind, __safeDI_init `init`: Name, __safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service, __safeDI_serviceBuilder_job_service: @escaping (SafeDIStagedScope_Service_job_service.Stage1) -> @Sendable (SafeDIStagedScope_Service_job_service.Stage2) -> any Service) {
 			        let zsvc: any Service = __safeDI_serviceBuilder(.zsvc(SafeDIScope_Service.zsvc_Values(Type: Type, init: `init`)))
 			        let __safeDI_serviceBuilder_job_service_Stage2 = __safeDI_serviceBuilder_job_service(SafeDIStagedScope_Service_job_service.Stage1(Type: Type, init: `init`, zsvc: zsvc))
-			        @Sendable func __safeDI_job() -> Job {
+			        @Sendable nonisolated func __safeDI_job() -> Job {
 			            let service: any Service = __safeDI_serviceBuilder_job_service_Stage2(SafeDIStagedScope_Service_job_service.Stage2())
 			            return Job(service: service)
 			        }
@@ -3244,7 +3244,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            func __safeDI_serviceBuilder_job_service(_ scope: Host.SafeDIStagedScope_Service_job_service.Stage1) -> @Sendable (Host.SafeDIStagedScope_Service_job_service.Stage2) -> any Service {
 			                let Type = scope.Type
 			                let `init` = scope.`init`
-			                @Sendable func __safeDI_serviceBuilder_job_service_Stage2(_ scope: Host.SafeDIStagedScope_Service_job_service.Stage2) -> any Service {
+			                @Sendable nonisolated func __safeDI_serviceBuilder_job_service_Stage2(_ scope: Host.SafeDIStagedScope_Service_job_service.Stage2) -> any Service {
 			                    let service: any Service = DefaultService(Type: Type, init: `init`)
 			                    return service
 			                }

@@ -1032,7 +1032,7 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		    ) -> Root {
 		        let __safeDI_thingBuilder__thingBuilder_default_safeDIBuilder = safeDIOverrides.thingBuilder.`default`
 		        let __safeDI_thingBuilder__safeDIBuilder = safeDIOverrides.thingBuilder.safeDIBuilder
-		        @Sendable func __safeDI_thingBuilder() -> Thing {
+		        @Sendable nonisolated func __safeDI_thingBuilder() -> Thing {
 		            let `default` = if let safeDIBuilder = __safeDI_thingBuilder__thingBuilder_default_safeDIBuilder { safeDIBuilder() } else { Leaf() }
 		            return if let safeDIBuilder = __safeDI_thingBuilder__safeDIBuilder { safeDIBuilder(`default`) } else { Thing(default: `default`) }
 		        }

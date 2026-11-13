@@ -476,7 +476,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		        let config = LazilyInstantiated<Config>(__safeDI_config)
 		        func __safeDI_owner() -> ServiceOwner {
 		            let __safeDI_serviceBuilder_owner_service_Stage2 = __safeDI_serviceBuilder_owner_service(SafeDIStagedScope_Service_owner_service.Stage1(onForward: onForward, config: config))
-		            @Sendable func __safeDI_service() -> any Service {
+		            @Sendable nonisolated func __safeDI_service() -> any Service {
 		                __safeDI_serviceBuilder_owner_service_Stage2(SafeDIStagedScope_Service_owner_service.Stage2())
 		            }
 		            let service = SendableLazilyInstantiated<any Service>(__safeDI_service)
@@ -585,7 +585,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_onTap: @autoclosure @escaping @Sendable () -> SendableTap) {
 		        let onTap = SendableLazilyInstantiated<SendableTap>(__safeDI_onTap)
-		        @Sendable func __safeDI_readerBuilder() -> SendableReader {
+		        @Sendable nonisolated func __safeDI_readerBuilder() -> SendableReader {
 		            SendableReader(onTap: onTap.instance)
 		        }
 		        let readerBuilder = SendableInstantiator<SendableReader>(__safeDI_readerBuilder)

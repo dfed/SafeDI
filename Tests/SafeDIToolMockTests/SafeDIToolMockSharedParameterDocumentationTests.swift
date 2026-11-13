@@ -709,7 +709,7 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		    ) -> Screen {
 		        let __safeDI_userService = userService
 		        let __safeDI_zebraBuilder__safeDIBuilder = safeDIOverrides.zebraBuilder
-		        @Sendable func __safeDI_zebraBuilder() -> Zebra {
+		        @Sendable nonisolated func __safeDI_zebraBuilder() -> Zebra {
 		            let userService = __safeDI_userService()
 		            return if let safeDIBuilder = __safeDI_zebraBuilder__safeDIBuilder { safeDIBuilder(userService) } else { Zebra(userService: userService) }
 		        }

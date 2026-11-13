@@ -1531,7 +1531,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		        let serviceBuilder = LazilyInstantiated<Thing?>(__safeDI_serviceBuilder)
 		        let badge = Badge(serviceBuilder: serviceBuilder.instance)
 		        let __safeDI_serviceBuilder_service_Stage2 = __safeDI_serviceBuilder_service(SafeDIStagedScope_Service_service.Stage1(serviceBuilder: serviceBuilder, badge: badge))
-		        @Sendable func __safeDI_service() -> any Service {
+		        @Sendable nonisolated func __safeDI_service() -> any Service {
 		            __safeDI_serviceBuilder_service_Stage2(SafeDIStagedScope_Service_service.Stage2())
 		        }
 		        let service = SendableLazilyInstantiated<any Service>(__safeDI_service)
@@ -1553,8 +1553,8 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_B6CC9A154A8FE04A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_service_ServiceBuilder_service(_ scope: Host.SafeDIStagedScope_Service_service.Stage1) -> @Sendable (Host.SafeDIStagedScope_Service_service.Stage2) -> any Service {
-		                @Sendable func __safeDI_service_ServiceBuilder_service_Stage2(_ scope: Host.SafeDIStagedScope_Service_service.Stage2) -> any Service {
-		                    @Sendable func __safeDI_service() -> ServiceImpl {
+		                @Sendable nonisolated func __safeDI_service_ServiceBuilder_service_Stage2(_ scope: Host.SafeDIStagedScope_Service_service.Stage2) -> any Service {
+		                    @Sendable nonisolated func __safeDI_service() -> ServiceImpl {
 		                        ServiceImpl()
 		                    }
 		                    return __safeDI_service()
@@ -1578,8 +1578,8 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_B6CC9A154A8FE04A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_serviceBuilder_service(_ scope: Host.SafeDIStagedScope_Service_service.Stage1) -> @Sendable (Host.SafeDIStagedScope_Service_service.Stage2) -> any Service {
-		                @Sendable func __safeDI_serviceBuilder_service_Stage2(_ scope: Host.SafeDIStagedScope_Service_service.Stage2) -> any Service {
-		                    @Sendable func __safeDI_service() -> ServiceImpl {
+		                @Sendable nonisolated func __safeDI_serviceBuilder_service_Stage2(_ scope: Host.SafeDIStagedScope_Service_service.Stage2) -> any Service {
+		                    @Sendable nonisolated func __safeDI_service() -> ServiceImpl {
 		                        ServiceImpl()
 		                    }
 		                    return __safeDI_service()
