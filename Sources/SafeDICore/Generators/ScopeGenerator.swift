@@ -3729,7 +3729,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					"\(functionName)(\(callArguments))"
 				}
 
-				return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
+				// A function a cycle closes on from inside a `Sendable` wrapper is `@Sendable`, so the stage it starts is
+				// called before it, as before a wrapper's function.
+				return "\(stageCallLines)\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
 			}
 		case let .hole(property, _, site):
 			// A tree built only to compute the seam's signature has no site, and generates nothing.
