@@ -1285,7 +1285,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        let __safeDI_childBuilder__childBuilder_grand_capacity = safeDIOverrides.childBuilder.grand.capacity
 			        let __safeDI_childBuilder__childBuilder_grand_label = safeDIOverrides.childBuilder.grand.label
 			        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
-			        @Sendable func __safeDI_childBuilder() -> Child {
+			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 			            func __safeDI_grand() -> Grand {
 			                return Grand.__safeDI_init(capacity: __safeDI_childBuilder__childBuilder_grand_capacity(), label: __safeDI_childBuilder__childBuilder_grand_label(), safeDIBuilder: __safeDI_childBuilder__childBuilder_grand_safeDIBuilder)
 			            }
@@ -2455,7 +2455,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        let __safeDI_thingBuilder_childBuilder_thing = thingBuilder_childBuilder_thing
 			        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder
 			        let __safeDI_thingBuilder_childBuilder_thing_Stage2 = __safeDI_thingBuilder_childBuilder_thing(SafeDIStagedMockScope_Thing_childBuilder_thing.Stage1())
-			        @Sendable func __safeDI_childBuilder() -> Child {
+			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 			            let thing: Thing = __safeDI_thingBuilder_childBuilder_thing_Stage2(SafeDIStagedMockScope_Thing_childBuilder_thing.Stage2())
 			            return if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(thing) } else { Child(thing: thing) }
 			        }
@@ -2820,7 +2820,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    ) -> Root {
 			        let __safeDI_childBuilder__childBuilder_onTap = safeDIOverrides.childBuilder.onTap
 			        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
-			        @Sendable func __safeDI_childBuilder() -> Child {
+			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 			            Child.__safeDI_init(onTap: __safeDI_childBuilder__childBuilder_onTap(), safeDIBuilder: __safeDI_childBuilder__safeDIBuilder)
 			        }
 			        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
@@ -4219,7 +4219,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    ) -> Service {
 			        let __safeDI_gadgetBuilder_held = gadgetBuilder_held
 			        let __safeDI_gadgetBuilder_held_Stage2 = __safeDI_gadgetBuilder_held(SafeDIStagedMockScope_Gadget_held.Stage1())
-			        @Sendable func __safeDI_held() -> \(gadget) {
+			        @Sendable nonisolated func __safeDI_held() -> \(gadget) {
 			            __safeDI_gadgetBuilder_held_Stage2(SafeDIStagedMockScope_Gadget_held.Stage2())
 			        }
 			        let held = SendableLazilyInstantiated<\(gadget)>(__safeDI_held)
@@ -7494,7 +7494,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        _ = Service.__safeDI_Service_mock_D6EB7379965966B0.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let __safeDI_serviceBuilder__safeDIBuilder = safeDIOverrides.serviceBuilder
-		        @Sendable func __safeDI_serviceBuilder() -> Service {
+		        @Sendable nonisolated func __safeDI_serviceBuilder() -> Service {
 		            Service.mock(defaultUserServiceBuilder: defaultUserServiceBuilder, analytics: analytics, safeDIOverrides: __safeDI_serviceBuilder__safeDIBuilder?() ?? .init())
 		        }
 		        let serviceBuilder = SendableInstantiator<Service>(__safeDI_serviceBuilder)
@@ -8824,7 +8824,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        let __safeDI_wrapperBuilder__wrapperBuilder_analytics_safeDIBuilder = safeDIOverrides.wrapperBuilder.analytics
 		        let __safeDI_wrapperBuilder__wrapperBuilder_service_safeDIBuilder = safeDIOverrides.wrapperBuilder.service
 		        let __safeDI_wrapperBuilder__safeDIBuilder = safeDIOverrides.wrapperBuilder.safeDIBuilder
-		        @Sendable func __safeDI_wrapperBuilder() -> Wrapper {
+		        @Sendable nonisolated func __safeDI_wrapperBuilder() -> Wrapper {
 		            func __safeDI_analytics() -> Analytics {
 		                if let safeDIBuilder = __safeDI_wrapperBuilder__wrapperBuilder_analytics_safeDIBuilder { safeDIBuilder() } else { Analytics() }
 		            }
@@ -9037,7 +9037,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        let erased = ErasedInstantiator<(), AnyServicing>(__safeDI_erased)
 		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let __safeDI_sendableErased__safeDIBuilder = safeDIOverrides.sendableErased
-		        @Sendable func __safeDI_sendableErased() -> AnyServicing {
+		        @Sendable nonisolated func __safeDI_sendableErased() -> AnyServicing {
 		            AnyServicing(Service.mock(analytics: analytics, safeDIOverrides: __safeDI_sendableErased__safeDIBuilder?() ?? .init()))
 		        }
 		        let sendableErased = SendableErasedInstantiator<(), AnyServicing>(__safeDI_sendableErased)

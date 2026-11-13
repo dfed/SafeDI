@@ -7166,9 +7166,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		let otherSeamsStruct = try! NSRegularExpression(pattern: #"@escaping (?:@Sendable )?\((\w+)\.SafeDI(?:Sendable|Staged)?Scope_"#)
 		let enumCaseOfInnerSeam = try! NSRegularExpression(pattern: #"^ +(?:indirect )?case \w+\(\w+\.SafeDI(?:Sendable)?Scope_"#)
 		// A fill takes a case's payload or a stage's struct; a dispatcher, the enum, which is no fill.
-		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Scope_\w+\.\w+_Values|StagedScope_\w+\.Stage1)"#)
-		let dispatcherDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+\) -> "#)
-		let enclosingDispatcherDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func __safeDI_\w+\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+\) -> "#)
+		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable nonisolated )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Scope_\w+\.\w+_Values|StagedScope_\w+\.Stage1)"#)
+		let dispatcherDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable nonisolated )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+\) -> "#)
+		let enclosingDispatcherDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable nonisolated )?func __safeDI_\w+\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+\) -> "#)
 		// A case holding its fill's body ends its line at the colon; one that calls a fill or a dispatcher returns on its line.
 		let inlinedFillCase = try! NSRegularExpression(pattern: #"^( *)case (?:let )?\.[^:]+:$"#)
 		func firstMatch(_ expression: NSRegularExpression, in line: String) -> [String]? {

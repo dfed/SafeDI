@@ -203,7 +203,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
 			        let __safeDI_uploaderBuilder_panelBuilder_uploader_Stage2 = __safeDI_uploaderBuilder_panelBuilder_uploader(SafeDIStagedScope_Uploader_panelBuilder_uploader.Stage1(exportService: exportService, screenBuilder: screenBuilder))
-			        @Sendable func __safeDI_panelBuilder() -> Panel {
+			        @Sendable nonisolated func __safeDI_panelBuilder() -> Panel {
 			            let uploader: any Uploader = __safeDI_uploaderBuilder_panelBuilder_uploader_Stage2(SafeDIStagedScope_Uploader_panelBuilder_uploader.Stage2())
 			            return Panel(uploader: uploader)
 			        }
@@ -221,14 +221,14 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			"Root": """
 			extension Root {
 			    public convenience init() {
-			        @Sendable func __safeDI_exportService() -> ExportService {
+			        @Sendable nonisolated func __safeDI_exportService() -> ExportService {
 			            ExportService()
 			        }
 			        let exportService = SendableLazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_exportFeature() -> ExportFeature {
 			            _ = ExportFeature.__safeDI_ExportFeature_29F6DE7C0A1F158C.self\(Self.pluginComment(integration))
 			            func __safeDI_uploaderBuilder_panelBuilder_uploader(_ scope: ExportFeature.SafeDIStagedScope_Uploader_panelBuilder_uploader.Stage1) -> @Sendable (ExportFeature.SafeDIStagedScope_Uploader_panelBuilder_uploader.Stage2) -> any Uploader {
-			                @Sendable func __safeDI_uploaderBuilder_panelBuilder_uploader_Stage2(_ scope: ExportFeature.SafeDIStagedScope_Uploader_panelBuilder_uploader.Stage2) -> any Uploader {
+			                @Sendable nonisolated func __safeDI_uploaderBuilder_panelBuilder_uploader_Stage2(_ scope: ExportFeature.SafeDIStagedScope_Uploader_panelBuilder_uploader.Stage2) -> any Uploader {
 			                    func __safeDI_uploader() -> DefaultUploader {
 			                        func __safeDI_jobBuilder() -> UploadJob {
 			                            UploadJob(exportService: exportService.instance)
@@ -286,7 +286,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			"Root": """
 			extension Root {
 			    public convenience init() {
-			        @Sendable func __safeDI_exportService() -> ExportService {
+			        @Sendable nonisolated func __safeDI_exportService() -> ExportService {
 			            ExportService()
 			        }
 			        let exportService = SendableLazilyInstantiated<ExportService>(__safeDI_exportService)
@@ -296,7 +296,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                switch scope {
 			                case .uploader:
 			                    func __safeDI_uploader() -> DefaultUploader {
-			                        @Sendable func __safeDI_jobBuilder() -> UploadJob {
+			                        @Sendable nonisolated func __safeDI_jobBuilder() -> UploadJob {
 			                            UploadJob(exportService: exportService.instance)
 			                        }
 			                        let jobBuilder = SendableInstantiator<UploadJob>(__safeDI_jobBuilder)

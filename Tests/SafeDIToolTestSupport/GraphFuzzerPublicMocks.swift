@@ -2405,7 +2405,7 @@ extension GraphFuzzerPublicMockDraw {
 				}
 				guard isConsumerFile else { continue }
 				// A fill, handed a place's values or a stage's struct, or a dispatcher, which a call declares only with a fill.
-				if line.hasPrefix("func __safeDI_") || line.hasPrefix("@Sendable func __safeDI_"), line.contains("(_ scope: "), line.contains("MockScope_") {
+				if line.hasPrefix("func __safeDI_") || line.hasPrefix("@Sendable nonisolated func __safeDI_"), line.contains("(_ scope: "), line.contains("MockScope_") {
 					features.insert(.consumerFillsHole)
 				}
 				for leafIndex in leafIndices {

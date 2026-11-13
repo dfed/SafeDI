@@ -272,7 +272,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        let panel = Panel.mock(serviceBuilder: { __safeDI_serviceBuilder(.panel($0)) }, safeDIOverrides: safeDIOverrides.panel)
 		        _ = Panel.\(Self.panelGuard).self\(Self.comment("Core"))
 		        let __safeDI_held__safeDIBuilder = safeDIOverrides.held
-		        @Sendable func __safeDI_held() -> Panel {
+		        @Sendable nonisolated func __safeDI_held() -> Panel {
 		            Panel.mock(serviceBuilder: { __safeDI_serviceSendableBuilder(.held($0)) }, safeDIOverrides: __safeDI_held__safeDIBuilder?() ?? .init())
 		        }
 		        let held = SendableInstantiator<Panel>(__safeDI_held)
@@ -339,7 +339,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    ) -> BoardScreen {
 		        _ = Board.\(Self.boardGuard).self\(Self.comment("Mid"))
 		        let __safeDI_board__safeDIBuilder = safeDIOverrides.board
-		        @Sendable func __safeDI_board() -> Board {
+		        @Sendable nonisolated func __safeDI_board() -> Board {
 		            Board.mock(serviceBuilder: serviceBuilder, serviceSendableBuilder: serviceSendableBuilder, safeDIOverrides: __safeDI_board__safeDIBuilder?() ?? .init())
 		        }
 		        let board = SendableInstantiator<Board>(__safeDI_board)
@@ -388,7 +388,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                case let .panel(scope): return __safeDI_serviceBuilder_Panel(scope)
 		                }
 		            }
-		            @Sendable func __safeDI_serviceBuilder_Panel(_ scope: Panel.SafeDIMockScope_Service) -> any Service {
+		            @Sendable nonisolated func __safeDI_serviceBuilder_Panel(_ scope: Panel.SafeDIMockScope_Service) -> any Service {
 		                switch scope {
 		                case .row_service:
 		                    let service: any Service = DefaultService()
@@ -398,7 +398,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                    return service
 		                }
 		            }
-		            @Sendable func __safeDI_serviceSendableBuilder_Board(_ scope: Board.SafeDISendableMockScope_Service) -> any Service {
+		            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Board(_ scope: Board.SafeDISendableMockScope_Service) -> any Service {
 		                switch scope {
 		                case let .held(scope): return __safeDI_serviceBuilder_Panel(scope)
 		                }
@@ -446,7 +446,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        }
 		        let panel: Panel = __safeDI_panel()
 		        let __safeDI_held__safeDIBuilder = safeDIOverrides.held
-		        @Sendable func __safeDI_held() -> Panel {
+		        @Sendable nonisolated func __safeDI_held() -> Panel {
 		            func __safeDI_serviceBuilder_Panel_row_service(_ scope: Panel.SafeDIMockScope_Service.row_service_Values) -> any Service {
 		                let token = scope.token
 		                let service: any Service = DefaultService(token: token)
@@ -658,7 +658,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                case let .panel(scope): return __safeDI_serviceBuilder_Panel(scope)
 		                }
 		            }
-		            @Sendable func __safeDI_serviceBuilder_Panel(_ scope: Panel.SafeDIMockScope_Service) -> any Service {
+		            @Sendable nonisolated func __safeDI_serviceBuilder_Panel(_ scope: Panel.SafeDIMockScope_Service) -> any Service {
 		                switch scope {
 		                case .row_service:
 		                    let service: any Service = FakeService.mock()
@@ -668,7 +668,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                    return service
 		                }
 		            }
-		            @Sendable func __safeDI_serviceSendableBuilder_Board(_ scope: Board.SafeDISendableMockScope_Service) -> any Service {
+		            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Board(_ scope: Board.SafeDISendableMockScope_Service) -> any Service {
 		                switch scope {
 		                case let .held(scope): return __safeDI_serviceBuilder_Panel(scope)
 		                }
@@ -1568,8 +1568,8 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    ) -> HostScreen {
 		        func __safeDI_host() -> Host {
 		            func __safeDI_tapServiceBuilder_sendableMaker(_ scope: Host.SafeDIStagedMockScope_TapService_sendableMaker.Stage1) -> Host.SafeDIStagedMockScope_TapService_sendableMaker.SendableLastStage<OnTap> {
-		                @Sendable func __safeDI_tapServiceBuilder_sendableMaker_Stage2(_ scope: Host.SafeDIStagedMockScope_TapService_sendableMaker.Stage2, _ __safeDI_forwarded: @escaping OnTap) -> AnyService {
-		                    @Sendable func __safeDI_sendableMaker(onTap: @escaping OnTap) -> TapService {
+		                @Sendable nonisolated func __safeDI_tapServiceBuilder_sendableMaker_Stage2(_ scope: Host.SafeDIStagedMockScope_TapService_sendableMaker.Stage2, _ __safeDI_forwarded: @escaping OnTap) -> AnyService {
+		                    @Sendable nonisolated func __safeDI_sendableMaker(onTap: @escaping OnTap) -> TapService {
 		                        TapService(onTap: onTap)
 		                    }
 		                    return AnyService(__safeDI_sendableMaker(onTap: __safeDI_forwarded))

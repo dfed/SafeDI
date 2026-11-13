@@ -502,7 +502,7 @@ extension ScopeGenerator {
 	/// non-optional default, which the function resolves, and the provider's value for an optional one.
 	static func publicBuilderArguments(
 		for node: MockParameterNode,
-		nodePath: String,
+		nodePath: MockOverridePath,
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
 		uncoveredDependencyNames: [String: [TypeDescription: String]],
 		sendableOverrideExtractor: SendableOverrideExtractor?,
@@ -512,9 +512,6 @@ extension ScopeGenerator {
 		// Each label names one dependency: `validateDependencyLabelsAreDistinct` rejects a declaration in a generated tree that repeats one.
 		let dependenciesByLabel = Dictionary(grouping: node.dependencies, by: \.property.label).compactMapValues(\.first)
 		let defaultParametersByLabel = Dictionary(grouping: node.defaultParameters, by: \.label).compactMapValues(\.first)
-		let relativePath = nodePath
-			.replacingOccurrences(of: "\(ReservedName.mockOverridesParameterName).", with: "")
-			.replacingOccurrences(of: ".", with: "_")
 		let storesDefaultsAsClosures = emission.sendableConfigurationTypeNames.contains(node.concreteType.asSource)
 		return node.callSiteArguments.map { argument in
 			if let dependency = dependenciesByLabel[argument.innerLabel] {
@@ -527,9 +524,9 @@ extension ScopeGenerator {
 				)
 			} else if overrideReachable {
 				let expression = if let sendableOverrideExtractor {
-					sendableOverrideExtractor.extract("\(nodePath).\(argument.label)", localNameSuffix: "\(relativePath)_\(argument.label)")
+					sendableOverrideExtractor.extract("\(nodePath.expression).\(argument.label)", localNameSuffix: "\(nodePath.relativeName)_\(argument.label)")
 				} else {
-					"\(nodePath).\(argument.label)"
+					"\(nodePath.expression).\(argument.label)"
 				}
 				return storesDefaultsAsClosures ? "\(expression)()" : expression
 			} else if let defaultParameter = defaultParametersByLabel[argument.label]?.publicMockForm,

@@ -237,9 +237,9 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 	    public init(__safeDI_tag: @autoclosure @escaping @Sendable () -> Tag, __safeDI_apiBuilder_aBuilder_api: @escaping (SafeDIStagedScope_Api_aBuilder_api.Stage1) -> @Sendable (SafeDIStagedScope_Api_aBuilder_api.Stage2) -> any Api) {
 	        let tag = SendableLazilyInstantiated<Tag>(__safeDI_tag)
 	        let __safeDI_apiBuilder_aBuilder_api_Stage2 = __safeDI_apiBuilder_aBuilder_api(SafeDIStagedScope_Api_aBuilder_api.Stage1())
-	        @Sendable func __safeDI_aBuilder(tag: Tag) -> A {
+	        @Sendable nonisolated func __safeDI_aBuilder(tag: Tag) -> A {
 	            let reader = TagReader(tag: tag)
-	            @Sendable func __safeDI_bBuilder(tag: Tag) -> B {
+	            @Sendable nonisolated func __safeDI_bBuilder(tag: Tag) -> B {
 	                let aBuilder = SendableInstantiator<A> {
 	                    __safeDI_aBuilder(tag: tag)
 	                }
@@ -277,7 +277,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		        func __safeDI_hub() -> Hub {
 		            _ = Hub.__safeDI_Hub_CE1237D4AE25666D.self\(callComment)
 		            func __safeDI_apiBuilder_aBuilder_api(_ scope: Hub.SafeDIStagedScope_Api_aBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedScope_Api_aBuilder_api.Stage2) -> any Api {
-		                @Sendable func __safeDI_apiBuilder_aBuilder_api_Stage2(_ scope: Hub.SafeDIStagedScope_Api_aBuilder_api.Stage2) -> any Api {
+		                @Sendable nonisolated func __safeDI_apiBuilder_aBuilder_api_Stage2(_ scope: Hub.SafeDIStagedScope_Api_aBuilder_api.Stage2) -> any Api {
 		                    \(fillCode)
 		                    return api
 		                }

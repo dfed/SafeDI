@@ -991,7 +991,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 			let passUpParameter = takesPassUp ? ", \(passUp): () -> \(returnType.asSource)" : ""
-			var lines = ["\(indent)\(isSendable ? "@Sendable " : "")func \(functionName)(_ scope: \(enumType.asSource)\(passUpParameter)) -> \(returnType.asSource) {", "\(caseIndent)switch scope {"]
+			var lines = ["\(indent)\(isSendable ? ScopeGenerator.sendableFunctionDecorator : "")func \(functionName)(_ scope: \(enumType.asSource)\(passUpParameter)) -> \(returnType.asSource) {", "\(caseIndent)switch scope {"]
 			lines += caseLines
 			lines += ["\(caseIndent)}", "\(indent)}"]
 			return lines.joined(separator: "\n")
@@ -3381,6 +3381,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	static let standardIndent = "    "
 
+	/// What every `@Sendable` local function generated code declares starts with. `nonisolated`, because a local function
+	/// in a context on a global actor is on that actor too, `@Sendable` or not, and the compiler rejects a synchronous
+	/// `@Sendable` local function on an actor: in a module whose declarations default to the main actor, every generated
+	/// initializer and `mock()` of a type nothing else isolates is on the main actor, and so is one of a type declared
+	/// `@MainActor`, or bound to it through `generatedInitializerAttributes` or `mockAttributes`, in any module. A
+	/// synchronous `@Sendable` local function that compiles is nonisolated already, so the keyword changes nothing there.
+	static let sendableFunctionDecorator = "@Sendable nonisolated "
+
 	// MARK: Code Generation
 
 	/// Generates code for this scope. Dependency-tree mode emits the full subtree
@@ -3540,7 +3548,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
 				}
 				let functionDecorator = if buildsInSendableFunction {
-					"@Sendable "
+					Self.sendableFunctionDecorator
 				} else {
 					""
 				}
@@ -3641,7 +3649,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					leadingMemberWhitespace: Self.standardIndent,
 				)
 				let functionDecorator = if buildsInSendableFunction {
-					"@Sendable "
+					Self.sendableFunctionDecorator
 				} else {
 					""
 				}
@@ -3682,7 +3690,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					leadingMemberWhitespace: Self.standardIndent,
 				)
 				let functionDecorator = if buildsInSendableFunction {
-					"@Sendable "
+					Self.sendableFunctionDecorator
 				} else {
 					""
 				}
@@ -3946,7 +3954,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		let functionName = functionName ?? site.wrapperFunctionName ?? Self.functionName(toBuild: property)
 		return """
-		\(propertyType.isSendable ? "@Sendable " : "")func \(functionName)() -> \(site.builtType.asSource) {
+		\(propertyType.isSendable ? Self.sendableFunctionDecorator : "")func \(functionName)() -> \(site.builtType.asSource) {
 		\(standardIndent)\(buildExpression(forwarding: nil))
 		}
 		\(declaration) = \(unwrappedType.spelledForConstruction)(\(functionName))
@@ -4018,7 +4026,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let returnType = stageIndex == lastStageIndex
 				? hole.builtType
 				: hole.stageFunctionType(at: stageIndex + 1, qualifiedBy: hole.scopeSeamType, isSendable: true)
-			let decorator = stageIsSendable ? "@Sendable " : ""
+			let decorator = stageIsSendable ? Self.sendableFunctionDecorator : ""
 			let outerIndent = String(repeating: Self.standardIndent, count: stageIndex)
 			var parameters = "_ \(scopeParameterName): \(hole.stageStructType(at: stageIndex, qualifiedBy: hole.scopeSeamType).asSource)"
 			if stageIndex == lastStageIndex, let forwardedType = hole.forwardedType {
@@ -5104,6 +5112,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					rootChildren: treePropertyNodes,
 					rootLabelMap: rootLabelMap,
 					onlyIfAvailableOverrides: onlyIfAvailableOverrides,
+					configurationHolder: .overrides(of: instantiable),
 					indent: indent,
 				))
 			}
@@ -5309,11 +5318,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for (fillingGenerator, propertiesGeneratedLater) in rootItems.fillingGenerators {
 				try await fillingGenerator.prepareFillCode(propertiesGeneratedLater: propertiesGeneratedLater)
 			}
+			// The configurations the overrides hold as optionals are resolved once, before any builder function
+			// (`DeferredConfigurations`). A public mock's overrides hold none.
+			let deferredConfigurations: DeferredConfigurations.Walk? = if publicMock == nil {
+				DeferredConfigurations.Walk(
+					holder: .overrides(of: instantiable),
+					bindings: DeferredConfigurations.Bindings(
+						takenNames: Set(treePropertyNodes.map {
+							Self.functionName(toBuildPropertyNamed: Self.disambiguatedLabel(for: $0, labelMap: rootLabelMap))
+						} + sendableAutoclosureParameters.values.map(\.localName)),
+					),
+				)
+			} else {
+				nil
+			}
 			let bodyBindings = await Self.generateMockBodyBindings(
 				items: rootItems,
 				propertyNodeLabelMap: rootLabelMap,
-				parentPath: ReservedName.mockOverridesParameterName,
+				parentPath: .root,
 				indent: bodyIndent,
+				deferredConfigurations: deferredConfigurations,
 				flatParameterDisambiguationMap: treeDisambiguationMap,
 				lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNameMap,
 				uncoveredDependencyNames: uncoveredDependencyNameMap,
@@ -5331,6 +5355,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					)
 				},
 			)
+			for line in deferredConfigurations?.bindings.lines ?? [] {
+				lines.append("\(bodyIndent)\(line)")
+			}
 			lines.append(contentsOf: bodyBindings)
 		} else {
 			lines.append(contentsOf: lazilyInstantiatedBindings)
@@ -5623,6 +5650,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let concreteType: TypeDescription
 		/// The file that declares `concreteType`, as `Instantiable.sourceFilePath` records it.
 		let sourceFilePath: String?
+		/// The global actor the declaration of `concreteType` spells (`Instantiable.declaredGlobalActorIsolation`), which
+		/// the types nested in the type's extensions, its `SafeDIMockConfiguration` among them, are on in a module whose
+		/// declarations default to the main actor (`DeferredConfigurations`).
+		let globalActorIsolation: String?
 		/// Where the hand-written mock `useMockInitializer` selects is declared, when the type has one.
 		let mockDeclarationLocation: Dependency.DeclarationLocation?
 		/// How the node calls the public mock another module generated for its type, which the tree cannot build
@@ -6418,6 +6449,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					customMockName: childInstantiable.customMockName,
 					concreteType: childInstantiable.concreteInstantiable,
 					sourceFilePath: childInstantiable.sourceFilePath,
+					globalActorIsolation: childInstantiable.declaredGlobalActorIsolation,
 					mockDeclarationLocation: childInstantiable.mockDeclarationLocation,
 					publicMockCall: childGenerator.publicMockCall,
 					stageCalls: childGenerator.stageCallsBeforeBuilderFunction,
@@ -6949,6 +6981,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		rootChildren: [MockParameterNode],
 		rootLabelMap: [String: [TypeDescription: String]],
 		onlyIfAvailableOverrides: [OnlyIfAvailableOverride],
+		configurationHolder: DeferredConfigurations.Holder,
 		indent: String,
 	) -> String {
 		let innerIndent = "\(indent)\(standardIndent)"
@@ -6964,6 +6997,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
 			if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: child.requiresSendable) {
 				return "\(memberIndent)\(label): \(publicMockOverridesMember.type) = \(publicMockOverridesMember.defaultValue)"
+			} else if configurationHolder.defersConfiguration(of: child) {
+				return "\(memberIndent)\(label): \(child.configurationTypeName)? = nil"
 			} else if child.needsConfigurationStruct {
 				return "\(memberIndent)\(label): \(child.configurationTypeName) = .init()"
 			} else {
@@ -6991,6 +7026,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
 			if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: child.requiresSendable) {
 				lines.append("\(innerIndent)private(set) var \(label): \(publicMockOverridesMember.type)")
+			} else if configurationHolder.defersConfiguration(of: child) {
+				lines.append("\(innerIndent)private(set) var \(label): \(child.configurationTypeName)?")
 			} else if child.needsConfigurationStruct {
 				lines.append("\(innerIndent)private(set) var \(label): \(child.configurationTypeName)")
 			} else {
@@ -7027,7 +7064,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(indent)/// Configuration for how this type is constructed within a mock tree.")
 		// Not `nonisolated`, unlike a public mock's configuration (`publicConfigurationDeclarations`): its initializer spells
 		// the defaults the configured type's declaration spells, which may read the state of the actor the type is on. So in a
-		// module whose declarations default to the main actor, the configuration of a type on the main actor is there too.
+		// module whose declarations default to the main actor, the configuration of a type on the main actor is there too,
+		// and a holder off that actor holds it as an optional that `mock()` resolves (`DeferredConfigurations`).
 		lines.append("\(indent)struct \(MockParameterNode.configurationStructName) {")
 
 		// Build init parameters in order: children, defaults, builder (last).
@@ -7052,11 +7090,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			))
 		}
 		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
+		let configurationHolder = DeferredConfigurations.Holder.configuration(of: node)
 		for child in nonCycleChildren {
 			let label = disambiguatedLabel(for: child, labelMap: childLabelMap)
 			if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: requiresSendable || child.requiresSendable) {
 				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(publicMockOverridesMember.type) = \(publicMockOverridesMember.defaultValue)")
 				storedProperties.append("\(innerIndent)private(set) var \(label): \(publicMockOverridesMember.type)")
+			} else if configurationHolder.defersConfiguration(of: child) {
+				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.configurationTypeName)? = nil")
+				storedProperties.append("\(innerIndent)private(set) var \(label): \(child.configurationTypeName)?")
 			} else if child.needsConfigurationStruct {
 				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.configurationTypeName) = .init()")
 				storedProperties.append("\(innerIndent)private(set) var \(label): \(child.configurationTypeName)")
@@ -7207,8 +7249,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private static func generateMockBodyBindings(
 		items: [MockTreeItem],
 		propertyNodeLabelMap: [String: [TypeDescription: String]]? = nil,
-		parentPath: String,
+		parentPath: MockOverridePath,
 		indent: String,
+		deferredConfigurations: DeferredConfigurations.Walk?,
 		ancestorTypes: Set<String> = [],
 		sendableOverrideExtractor: SendableOverrideExtractor? = nil,
 		flatParameterDisambiguationMap: [String: [TypeDescription: String]] = [:],
@@ -7309,7 +7352,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let thisOverrideReachable = overridePathReachable && !isBackEdge
 
 				let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
-				let nodePath = "\(parentPath).\(disambiguated)"
+				// A deferred configuration is read from the local `mock()` binds it to, where its override is read at all.
+				let nodePath = if thisOverrideReachable, let deferredConfigurations {
+					deferredConfigurations.path(of: node, at: parentPath.appending(disambiguated))
+				} else {
+					parentPath.appending(disambiguated)
+				}
 				// When this node's label collides with a sibling, use the
 				// disambiguated label for the outer `let` binding and for the
 				// inner `__safeDI_<name>` function so neither redeclares across
@@ -7324,9 +7372,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					builderFunctionNames.functionName ?? Self.functionName(toBuildPropertyNamed: disambiguated)
 				}
 
-				let relativePath = nodePath
-					.replacingOccurrences(of: "\(ReservedName.mockOverridesParameterName).", with: "")
-					.replacingOccurrences(of: ".", with: "_")
+				let relativePath = nodePath.relativeName
 
 				// The optional override closure to consult, or `nil` when there is
 				// none to consult: a cycle node constructs itself directly, and a
@@ -7338,11 +7384,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					nil
 				} else if let sendableOverrideExtractor {
 					sendableOverrideExtractor.extract(
-						node.overridePath(nodePath: nodePath),
+						node.overridePath(nodePath: nodePath.expression),
 						localNameSuffix: "\(relativePath)_\(ReservedName.configurationBuilderPropertyName)",
 					)
 				} else {
-					node.overridePath(nodePath: nodePath)
+					node.overridePath(nodePath: nodePath.expression)
 				}
 
 				let nodeHandWrittenMockDefaultParameters = handWrittenMockDefaultParameters[node.concreteType, default: []]
@@ -7398,6 +7444,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						functionName: functionName,
 						enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 						nodePath: nodePath,
+						deferredConfigurations: deferredConfigurations?.beneath(node),
 						overrideExpression: overrideExpression,
 						arguments: arguments,
 						sendableAutoclosureBindings: sendableAutoclosureBindings,
@@ -7469,7 +7516,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 						lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
 					).joined(separator: ", ")
-					let functionDecorator = node.buildsInSendableFunction ? "@Sendable " : ""
+					let functionDecorator = node.buildsInSendableFunction ? Self.sendableFunctionDecorator : ""
 
 					let receiverBindings = emitReceiverBindings(
 						for: node.dependencies,
@@ -7493,6 +7540,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						items: node.children,
 						parentPath: nodePath,
 						indent: innerIndent,
+						deferredConfigurations: deferredConfigurations?.beneath(node),
 						ancestorTypes: childAncestors,
 						sendableOverrideExtractor: sendableOverrideExtractor ?? startedSendableOverrideExtractor,
 						flatParameterDisambiguationMap: functionDisambiguationMap,
@@ -7710,7 +7758,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `@autoclosure` parameter as a closure, which the argument calls too.
 	private static func resolveBuilderArguments(
 		for node: MockParameterNode,
-		nodePath: String,
+		nodePath: MockOverridePath,
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
 		uncoveredDependencyNames: [String: [TypeDescription: String]],
 		sendableOverrideExtractor: SendableOverrideExtractor?,
@@ -7720,9 +7768,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) -> [String] {
 		// Each label names one dependency: `validateDependencyLabelsAreDistinct` rejects a declaration in a generated tree that repeats one.
 		let dependenciesByLabel = Dictionary(grouping: node.dependencies, by: \.property.label).compactMapValues(\.first)
-		let relativePath = nodePath
-			.replacingOccurrences(of: "\(ReservedName.mockOverridesParameterName).", with: "")
-			.replacingOccurrences(of: ".", with: "_")
 		let argumentsToSurface = node.surfacedCallSiteArguments(
 			overrideReachable: overrideReachable,
 			handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
@@ -7756,13 +7801,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else if let sendableOverrideExtractor {
 				readingDefault(
 					sendableOverrideExtractor.extract(
-						"\(nodePath).\(argument.label)",
-						localNameSuffix: "\(relativePath)_\(argument.label)",
+						"\(nodePath.expression).\(argument.label)",
+						localNameSuffix: "\(nodePath.relativeName)_\(argument.label)",
 					),
 					of: argument,
 				)
 			} else {
-				readingDefault("\(nodePath).\(argument.label)", of: argument)
+				readingDefault("\(nodePath.expression).\(argument.label)", of: argument)
 			}
 		}
 	}
@@ -7872,7 +7917,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		outerBindingName: String,
 		functionName: String,
 		enclosingFunctionNames: [BuiltDeclaration: String],
-		nodePath: String,
+		nodePath: MockOverridePath,
+		deferredConfigurations: DeferredConfigurations.Walk?,
 		overrideExpression: String?,
 		arguments: [String],
 		sendableAutoclosureBindings: [String],
@@ -7950,7 +7996,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		).joined(separator: ", ")
 
 		let functionDecorator = if node.buildsInSendableFunction {
-			"@Sendable "
+			Self.sendableFunctionDecorator
 		} else {
 			""
 		}
@@ -7982,6 +8028,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				items: node.children,
 				parentPath: nodePath,
 				indent: innerIndent,
+				deferredConfigurations: deferredConfigurations,
 				ancestorTypes: functionAncestors,
 				sendableOverrideExtractor: sendableOverrideExtractor ?? startedSendableOverrideExtractor,
 				flatParameterDisambiguationMap: builderDisambiguationMap,
@@ -8107,7 +8154,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// when its type has a configuration (`publicBuilderArguments`), and otherwise `resolveBuilderArguments`'.
 	private static func mockBuilderArguments(
 		for node: MockParameterNode,
-		nodePath: String,
+		nodePath: MockOverridePath,
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
 		uncoveredDependencyNames: [String: [TypeDescription: String]],
 		sendableOverrideExtractor: SendableOverrideExtractor?,

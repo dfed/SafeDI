@@ -142,7 +142,19 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// Whether the `mock()` generated for this type is isolated to a global actor: the type declaration spells one, or
 	/// `mockAttributes` does.
 	public var generatedMockIsGlobalActorIsolated: Bool {
-		(declarationIsolation.map { $0 != "nonisolated" } ?? false) || Initializer.globalActorAttribute(in: mockAttributes) != nil
+		declaredGlobalActorIsolation != nil || Initializer.globalActorAttribute(in: mockAttributes) != nil
+	}
+
+	/// The global actor attribute the type declaration spells (`"@MainActor"`), or `nil` when `declarationIsolation` is
+	/// `nonisolated` or `nil`.
+	public var declaredGlobalActorIsolation: String? {
+		declarationIsolation == "nonisolated" ? nil : declarationIsolation
+	}
+
+	/// Whether the `mock()` generated for this type is on a global actor only through `mockAttributes`: the type
+	/// declaration spells no global actor, and `mockAttributes` does.
+	public var generatedMockIsGlobalActorIsolatedOnlyThroughMockAttributes: Bool {
+		declaredGlobalActorIsolation == nil && Initializer.globalActorAttribute(in: mockAttributes) != nil
 	}
 
 	/// Whether to generate a `mock()` method for this type, and with what access: the `generateMock:` argument.

@@ -209,7 +209,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
-		        @Sendable func __safeDI_detailBuilder() -> Detail {
+		        @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
 		            Detail(user: user.instance)
 		        }
 		        let detailBuilder = SendableInstantiator<Detail>(__safeDI_detailBuilder)
@@ -224,7 +224,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
 		extension Root {
 		    public init() {
-		        @Sendable func __safeDI_user() -> User {
+		        @Sendable nonisolated func __safeDI_user() -> User {
 		            User()
 		        }
 		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
@@ -284,7 +284,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_user __safeDI_user_: @autoclosure @escaping () -> User) {
 		        let user = LazilyInstantiated<User>(__safeDI_user_)
-		        @Sendable func __safeDI_panelBuilder() -> Panel {
+		        @Sendable nonisolated func __safeDI_panelBuilder() -> Panel {
 		            let user = User()
 		            let detail = Detail(user: user)
 		            return Panel(user: user, detail: detail)
@@ -702,7 +702,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
-			        @Sendable func __safeDI_detailBuilder() -> Detail {
+			        @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
 			            Detail(user: user.instance)
 			        }
 			        let detailBuilder = SendableInstantiator<Detail>(__safeDI_detailBuilder)
@@ -717,7 +717,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public init() {
-			        @Sendable func __safeDI_user() -> User {
+			        @Sendable nonisolated func __safeDI_user() -> User {
 			            User()
 			        }
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
@@ -783,7 +783,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public init() {
-			        @Sendable func __safeDI_user() -> User {
+			        @Sendable nonisolated func __safeDI_user() -> User {
 			            User()
 			        }
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
@@ -802,7 +802,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 			    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User) {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
-			        @Sendable func __safeDI_inner() -> Inner {
+			        @Sendable nonisolated func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_08AA1A656B91D4BA.self
 			            return Inner(__safeDI_user: user.instance)
 			        }
@@ -917,7 +917,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public init(__safeDI_panelBuilder_panel: @escaping (SafeDIStagedScope_Panel_panel.Stage1) -> @Sendable (SafeDIStagedScope_Panel_panel.Stage2) -> any Panel) {
 				        let __safeDI_panelBuilder_panel_Stage2 = __safeDI_panelBuilder_panel(SafeDIStagedScope_Panel_panel.Stage1())
-				        @Sendable func __safeDI_panel() -> any Panel {
+				        @Sendable nonisolated func __safeDI_panel() -> any Panel {
 				            __safeDI_panelBuilder_panel_Stage2(SafeDIStagedScope_Panel_panel.Stage2())
 				        }
 				        let panel = SendableLazilyInstantiated<any Panel>(__safeDI_panel)
@@ -942,7 +942,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 				    public init(__safeDI_panelBuilder_detailBuilder_panel: @escaping (SafeDIStagedScope_Panel_detailBuilder_panel.Stage1) -> @Sendable (SafeDIStagedScope_Panel_detailBuilder_panel.Stage2) -> any Panel) {
 				        let __safeDI_panelBuilder_detailBuilder_panel_Stage2 = __safeDI_panelBuilder_detailBuilder_panel(SafeDIStagedScope_Panel_detailBuilder_panel.Stage1())
-				        @Sendable func __safeDI_detailBuilder() -> Detail {
+				        @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
 				            let panel: any Panel = __safeDI_panelBuilder_detailBuilder_panel_Stage2(SafeDIStagedScope_Panel_detailBuilder_panel.Stage2())
 				            return Detail(panel: panel)
 				        }
@@ -964,8 +964,8 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			case .sendableLazilyInstantiated:
 				"""
 				            func __safeDI_panelBuilder_panel(_ scope: Inner.SafeDIStagedScope_Panel_panel.Stage1) -> @Sendable (Inner.SafeDIStagedScope_Panel_panel.Stage2) -> any Panel {
-				                @Sendable func __safeDI_panelBuilder_panel_Stage2(_ scope: Inner.SafeDIStagedScope_Panel_panel.Stage2) -> any Panel {
-				                    @Sendable func __safeDI_panel() -> DefaultPanel {
+				                @Sendable nonisolated func __safeDI_panelBuilder_panel_Stage2(_ scope: Inner.SafeDIStagedScope_Panel_panel.Stage2) -> any Panel {
+				                    @Sendable nonisolated func __safeDI_panel() -> DefaultPanel {
 				                        DefaultPanel(user: user.instance)
 				                    }
 				                    return __safeDI_panel()
@@ -977,7 +977,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			case .stagedBeneathSendableInstantiator:
 				"""
 				            func __safeDI_panelBuilder_detailBuilder_panel(_ scope: Inner.SafeDIStagedScope_Panel_detailBuilder_panel.Stage1) -> @Sendable (Inner.SafeDIStagedScope_Panel_detailBuilder_panel.Stage2) -> any Panel {
-				                @Sendable func __safeDI_panelBuilder_detailBuilder_panel_Stage2(_ scope: Inner.SafeDIStagedScope_Panel_detailBuilder_panel.Stage2) -> any Panel {
+				                @Sendable nonisolated func __safeDI_panelBuilder_detailBuilder_panel_Stage2(_ scope: Inner.SafeDIStagedScope_Panel_detailBuilder_panel.Stage2) -> any Panel {
 				                    let panel: any Panel = DefaultPanel(user: user.instance)
 				                    return panel
 				                }
@@ -1042,7 +1042,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			"Root": """
 			extension Root {
 			    public init() {
-			        @Sendable func __safeDI_user() -> User {
+			        @Sendable nonisolated func __safeDI_user() -> User {
 			            User()
 			        }
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
@@ -1342,6 +1342,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		// each deferred parameter, under either flow.
 		let sendablePrefix = sendable ? "Sendable" : ""
 		let sendableAttribute = sendable ? "@Sendable " : ""
+		let sendableFunctionAttribute = sendable ? "@Sendable nonisolated " : ""
 		let guardName = sendable ? "__safeDI_Screen_E3C8CCA558CCA81B" : "__safeDI_Screen_3192EA1C03ABD98F"
 		let output = try await executeSafeDIToolMultiModuleTest(modules: [
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
@@ -1363,7 +1364,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping \(sendableAttribute)() -> Database, __safeDI_logger: @autoclosure @escaping \(sendableAttribute)() -> Logger?) {
 			        let database = \(sendablePrefix)LazilyInstantiated<Database>(__safeDI_database)
 			        let logger = \(sendablePrefix)LazilyInstantiated<Logger?>(__safeDI_logger)
-			        \(sendableAttribute)func __safeDI_cacheBuilder() -> Cache {
+			        \(sendableFunctionAttribute)func __safeDI_cacheBuilder() -> Cache {
 			            Cache(database: database.instance, logger: logger.instance)
 			        }
 			        let cacheBuilder = \(sendablePrefix)Instantiator<Cache>(__safeDI_cacheBuilder)
@@ -1381,7 +1382,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        let user = User()
-			        \(sendableAttribute)func __safeDI_database() -> Database {
+			        \(sendableFunctionAttribute)func __safeDI_database() -> Database {
 			            Database()
 			        }
 			        let database = \(sendablePrefix)LazilyInstantiated<Database>(__safeDI_database)

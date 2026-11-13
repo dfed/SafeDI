@@ -120,7 +120,7 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 
 		extension Feature.Root {
 		    public convenience init() {
-		        @Sendable func __safeDI_serviceBuilder() -> Feature.Service {
+		        @Sendable nonisolated func __safeDI_serviceBuilder() -> Feature.Service {
 		            Feature.Service()
 		        }
 		        let serviceBuilder = SendableInstantiator<Feature.Service>(__safeDI_serviceBuilder)
@@ -226,7 +226,7 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 
 		extension Feature.Root {
 		    public convenience init() {
-		        @Sendable func __safeDI_serviceBuilder() -> Feature.Service {
+		        @Sendable nonisolated func __safeDI_serviceBuilder() -> Feature.Service {
 		            Feature.Service()
 		        }
 		        let serviceBuilder = SendableErasedInstantiator<(), AnyService> {
@@ -1160,7 +1160,7 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 
 		extension Feature.Root {
 		    public convenience init() {
-		        @Sendable func __safeDI_service() -> Feature.Service {
+		        @Sendable nonisolated func __safeDI_service() -> Feature.Service {
 		            Feature.Service()
 		        }
 		        let service = SendableLazilyInstantiated<any Feature.ServiceProtocol>(__safeDI_service)

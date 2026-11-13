@@ -510,7 +510,7 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_leafBuilder__safeDIBuilder = safeDIOverrides.leafBuilder
-			        @Sendable func __safeDI_leafBuilder() -> Leaf {
+			        @Sendable nonisolated func __safeDI_leafBuilder() -> Leaf {
 			            if let safeDIBuilder = __safeDI_leafBuilder__safeDIBuilder { safeDIBuilder() } else { Leaf() }
 			        }
 			        let leafBuilder = SendableInstantiator<Leaf>(__safeDI_leafBuilder)
