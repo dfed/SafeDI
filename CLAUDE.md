@@ -13,7 +13,7 @@ swift test --traits sourceBuild    # Run all tests
 swift test --traits sourceBuild --enable-code-coverage  # Coverage report
 ```
 
-SwiftPM itself leaves a few `TemporaryDirectory.*` folders in `$TMPDIR` on every `swift test`, so point `TMPDIR` at a folder outside both the system temporary directory and the checkout when you run tests locally (`mkdir -p ~/Library/Caches/SafeDITests/swiftpm && TMPDIR=~/Library/Caches/SafeDITests/swiftpm swift test …`), and empty it afterwards. Inside the checkout, a test on an older branch that still writes fixtures to `TMPDIR` would have them read as part of the project.
+SwiftPM itself leaves a few `TemporaryDirectory.*` folders in `$TMPDIR` on every `swift` command (`build`, `test`, `run`), so point `TMPDIR` at a folder outside both the system temporary directory and the checkout when you run one locally (`mkdir -p ~/Library/Caches/SafeDITests/swiftpm && TMPDIR=~/Library/Caches/SafeDITests/swiftpm swift test …`), and empty it afterwards; `./CLI/lint.sh` already does this for its own run, in a folder under the gitignored `CLI/.build` that it removes when it exits. Inside the checkout, a test on an older branch that still writes fixtures to `TMPDIR` would have them read as part of the project.
 
 The `sourceBuild` trait is required for local development to compile SafeDITool from source. Without it, the plugin uses the prebuilt binary from the artifact bundle.
 
