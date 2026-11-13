@@ -30,6 +30,8 @@
 struct CycleParameter: Hashable, Sendable {
 	/// A receive of a parameter's label in the function's body.
 	struct Receiver: Hashable, Sendable {
+		/// The property received: the fulfilling property for an aliased dependency, the declared property otherwise.
+		let property: Property
 		/// Where the receiving dependency is declared.
 		let declarationLocation: Dependency.DeclarationLocation?
 		/// The types from the type the function builds to the receiving type, both included.
@@ -56,6 +58,9 @@ struct CycleParameter: Hashable, Sendable {
 	/// `ScopeGenerator.inOrderTheBodyFirstReceives`), which a diagnostic about what a cycle-closing scope passes the
 	/// parameter is reported at.
 	let receiver: Receiver
+	/// The declaration of the parameter's label between the scope that declares the function and one of its
+	/// cycle-closing scopes that precedes the others in source order, which a diagnostic about the label notes.
+	let redeclaration: Redeclaration
 
 	/// Whether every scope that calls the function passes a value: a receiver in its body requires the label.
 	var isRequired: Bool {
@@ -67,7 +72,14 @@ struct CycleParameter: Hashable, Sendable {
 	/// declaration. A parameter made optional also provides the non-optional form it was made from, which the
 	/// function's body reads as a value that may be `nil`, as a seam's tree reads an optional parameter.
 	var providedForms: Set<Property> {
-		var providedForms = Self.forms(providedBy: property)
+		Self.forms(providedBy: property, receivedForms: receivedForms)
+	}
+
+	/// The forms a parameter of `property` provides to a function's body that receives `receivedForms` of its label: those
+	/// a declaration of `property` provides, and, for an optional one, the non-optional form it is made from where the
+	/// body receives it.
+	private static func forms(providedBy property: Property, receivedForms: Set<Property>) -> Set<Property> {
+		var providedForms = forms(providedBy: property)
 		if case let .optional(unwrapped) = property.typeDescription, receivedForms.contains(Property(label: property.label, typeDescription: unwrapped)) {
 			providedForms.insert(property.asUnwrappedProperty)
 		}
@@ -89,48 +101,100 @@ struct CycleParameter: Hashable, Sendable {
 
 	/// The parameters of the builder function of a scope whose tree receives `receivedProperties` from the scopes
 	/// enclosing it, for each label of `firstReceives` – those a scope between it and one of its cycle-closing scopes
-	/// declares that the tree receives, each with its first receive – in that order.
+	/// declares that the tree receives, each with its first receive and that declaration – in that order, and the labels
+	/// among them that no one parameter can pass.
 	///
-	/// A label is a parameter only when one form the tree receives provides every other: a declaration of that form
-	/// does, so each scope that calls the function passes one value. A label received in forms no one declaration
-	/// provides – such as `x: X?` and `x: Instantiator<X>?`, each received only if available – is not a parameter, and
-	/// the function's body reads it from the scopes enclosing the function, as it does a label no scope between
-	/// declares again.
+	/// A parameter takes the form of its label that provides every other form the tree receives: a declaration of that
+	/// form does, so each scope that calls the function passes one value. Where a receiver requires the label, the
+	/// parameter takes the required form that provides every other required form, which each call's nearest declaration
+	/// provides, as validation has checked. A form received only if available that it does not provide is passed `nil` in
+	/// the function's body, as it is beneath any declaration that does not provide it. Where every form is received only
+	/// if available and no one parameter provides them all – such as `x: X?` and `x: Instantiator<X>?` – the label is
+	/// unpassable, which `DependencyTreeGenerator` reports (see `UnpassableCycleLabel`).
 	static func parameters(
-		firstReceives: [(label: String, receiver: Receiver)],
+		firstReceives: [(label: String, receiver: Receiver, redeclaration: Redeclaration)],
 		receivedProperties: Set<Property>,
 		requiredReceivedProperties: Set<Property>,
 		requiredAliasFulfillingProperties: Set<Property>,
 		onlyIfAvailableUnwrappedReceivedProperties: Set<Property>,
-	) -> [CycleParameter] {
+		builtType: TypeDescription,
+	) -> (parameters: [CycleParameter], unpassableLabels: [UnpassableCycleLabel]) {
 		let labels = Set(firstReceives.map(\.label))
 		var formsByLabel = [String: Set<Property>]()
 		for receivedProperty in receivedProperties where labels.contains(receivedProperty.label) {
 			formsByLabel[receivedProperty.label, default: []].insert(receivedProperty)
 		}
-		return firstReceives.compactMap { label, receiver in
+		var parameters = [CycleParameter]()
+		var unpassableLabels = [UnpassableCycleLabel]()
+		for (label, receiver, redeclaration) in firstReceives {
 			let forms = formsByLabel[label, default: []]
-			// A label received in forms no one declaration provides is left out: a deliberate gap (see above).
-			let providingForm = forms.sorted().first { forms.isSubset(of: Self.forms(providedBy: $0)) }
-			guard let providingForm else { return nil }
 			let requiredForms = forms.intersection(requiredReceivedProperties)
-			let requiredAliasFulfillingForms = forms.intersection(requiredAliasFulfillingProperties)
-			let isProvidingFormRequired = requiredForms.contains(providingForm)
-			let property = isProvidingFormRequired || providingForm.typeDescription.isOptional
-				? providingForm
-				: providingForm.asOptionalProperty
-			// An optional wrapper offers no instance, so a parameter made optional provides only the form it was made from.
-			guard property == providingForm || forms.isSubset(of: [providingForm, property]) else { return nil }
-			return CycleParameter(
+			// The forms the parameter must provide: those a receiver requires, or every form where none is required.
+			let formsToProvide = requiredForms.isEmpty ? forms : requiredForms
+			// A parameter no receiver requires is made optional, since a scope that calls the function may then have nothing
+			// to pass.
+			let property = formsToProvide.sorted()
+				.first { formsToProvide.isSubset(of: Self.forms(providedBy: $0)) }
+				.map { requiredForms.isEmpty && !$0.typeDescription.isOptional ? $0.asOptionalProperty : $0 }
+			let passedForms = property.map { forms.intersection(Self.forms(providedBy: $0, receivedForms: forms)) } ?? []
+			// An optional wrapper offers no instance, so a parameter made optional can provide fewer forms than the form it
+			// was made from.
+			guard let property, !requiredForms.isEmpty || passedForms == forms else {
+				unpassableLabels.append(UnpassableCycleLabel(builtType: builtType, receiver: receiver, forms: forms.sorted(), redeclaration: redeclaration))
+				continue
+			}
+			parameters.append(CycleParameter(
 				property: property,
-				receivedForms: forms,
+				receivedForms: passedForms,
 				requiredForms: requiredForms,
-				requiredAliasFulfillingForms: requiredAliasFulfillingForms,
-				onlyIfAvailableUnwrappedForms: Set(forms.map(\.asUnwrappedProperty)).intersection(onlyIfAvailableUnwrappedReceivedProperties),
+				requiredAliasFulfillingForms: passedForms.intersection(requiredAliasFulfillingProperties),
+				onlyIfAvailableUnwrappedForms: Set(passedForms.map(\.asUnwrappedProperty)).intersection(onlyIfAvailableUnwrappedReceivedProperties),
 				receiver: receiver,
-			)
+				redeclaration: redeclaration,
+			))
+		}
+		return (parameters, unpassableLabels)
+	}
+}
+
+extension CycleParameter {
+	/// A declaration of a label between the scope a lazy cycle closes on and one of its cycle-closing scopes, which the
+	/// tree that cycle-closing scope builds again reads in place of the declarations above the function it closes on.
+	struct Redeclaration: Hashable, Sendable {
+		/// The declared property.
+		let property: Property
+		/// The type that declares it.
+		let declaringType: TypeDescription
+		/// Where it is declared, or `nil` for a declaration no `@Instantiable` type spells.
+		let declarationLocation: Dependency.DeclarationLocation?
+
+		/// The one of `self` and `other` that comes first in source order, then in property order, so that which of several
+		/// declarations a diagnostic notes never depends on the order a walk met them in.
+		func preceding(_ other: Redeclaration) -> Redeclaration {
+			if declarationLocation == other.declarationLocation {
+				(other.property, other.declaringType) < (property, declaringType) ? other : self
+			} else {
+				Dependency.DeclarationLocation.precedesInSourceOrder(declarationLocation, other.declarationLocation) ? self : other
+			}
 		}
 	}
+}
+
+/// A label the body of the builder function a lazy cycle closes on receives from the scopes enclosing the function, which
+/// a scope between the function and one of its cycle-closing scopes declares again, in forms no one parameter can pass:
+/// no one parameter provides every form a receiver requires or, where no receiver requires one, every form (see
+/// `CycleParameter.parameters`). The
+/// type a cycle-closing scope builds again would read the label from above the function instead of from its nearest
+/// declaration, so SafeDITool reports it.
+struct UnpassableCycleLabel: Hashable, Sendable {
+	/// The type the function builds.
+	let builtType: TypeDescription
+	/// The first receive of the label in the function's body.
+	let receiver: CycleParameter.Receiver
+	/// The forms of the label the function's body receives, in property order.
+	let forms: [Property]
+	/// The declaration of the label between the function and one of its cycle-closing scopes.
+	let redeclaration: CycleParameter.Redeclaration
 }
 
 /// The parameters of the builder function a lazy cycle closes on, as the scopes beneath the function see them while
