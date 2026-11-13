@@ -48,8 +48,8 @@ extension ScopeGenerator {
 	/// is on that actor too, so the configuration of such a type has an initializer on that actor, which the default
 	/// argument of a holder off that actor cannot call: "main actor-isolated default value in a nonisolated context". The
 	/// configuration cannot be `nonisolated` instead, since its initializer spells the defaults the configured type
-	/// spells, which may read that actor's state. `mock()`, which builds the type, is on its actor wherever the tree
-	/// compiles, so it can call the initializer. A field is deferred when:
+	/// spells, which may read that actor's state. `mock()` can call the initializer wherever its construction of the type
+	/// is on that actor, as it is wherever the type's initializer is on the actor too. A field is deferred when:
 	/// - the child's type declaration spells a global actor that the declaration of the type whose extension holds the
 	///   field does not spell: the mocked type, for `SafeDIOverrides`, or the parent node's type. This reads only the two
 	///   types, so a type's `SafeDIMockConfiguration` is the same in every mock; or
@@ -61,6 +61,12 @@ extension ScopeGenerator {
 	/// default argument did, and still evaluates the configured type's defaults once per `mock()` call. A public mock's
 	/// overrides and configurations are `nonisolated` and hold no configured type's defaults, so none of their fields is
 	/// deferred.
+	///
+	/// In a module whose declarations default to the main actor, two shapes stay uncompilable, as they were with the
+	/// default argument (`mock-generation.md` records them): a type on a global actor whose initializer is `nonisolated`,
+	/// built by a `mock()` off that actor, where resolving its configuration calls the configuration's initializer off
+	/// its actor; and, on Swift 6.2 and 6.3, any internal mock with overrides of a type nothing isolates, whose nested
+	/// structs those compilers put on the main actor while its `mock()` is not.
 	enum DeferredConfigurations {
 		/// What holds the configurations of the nodes at one level of a mock's tree: the `SafeDIOverrides` of the mocked
 		/// type, or the `SafeDIMockConfiguration` of a node's type.

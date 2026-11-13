@@ -28,8 +28,9 @@ public enum ReservedName: Hashable, Sendable {
 	/// A name that begins with `builderFunctionNamePrefix`, the prefix of each builder function a generated `init()`
 	/// or `mock()` declares (`__safeDI_<label>`, next to the `let <label>` it builds), of the locals a `@Sendable`
 	/// builder function captures, of the local a `mock()` reads each `@Sendable` autoclosure parameter into, of the
-	/// local a `mock()` binds each configuration its overrides hold as an optional to, of the `__safeDI_<Seam>_<hash>` enum a seam's module generates beside the seam's initializers, and of the argument
-	/// labels of the initializer of a seam that only generated code calls (`seamGeneratedOnlyArgumentLabel(of:)`).
+	/// local a `mock()` binds each configuration its overrides hold as an optional to, of the `__safeDI_<Seam>_<hash>`
+	/// enum a seam's module generates beside the seam's initializers, and of the argument labels of the initializer of a
+	/// seam that only generated code calls (`seamGeneratedOnlyArgumentLabel(of:)`).
 	case builderFunctionName
 	/// `mockOverridesParameterName`, the parameter through which a generated `mock()` takes its overrides. A mock
 	/// parameter of the same name redeclares it, and a binding of the same name in the mock's body hides it from the

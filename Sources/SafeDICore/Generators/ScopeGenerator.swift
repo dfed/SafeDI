@@ -3381,12 +3381,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	static let standardIndent = "    "
 
-	/// What every `@Sendable` local function generated code declares starts with. `nonisolated`, because a local function
-	/// in a context on a global actor is on that actor too, `@Sendable` or not, and the compiler rejects a synchronous
-	/// `@Sendable` local function on an actor: in a module whose declarations default to the main actor, every generated
-	/// initializer and `mock()` of a type nothing else isolates is on the main actor, and so is one of a type declared
-	/// `@MainActor`, or bound to it through `generatedInitializerAttributes` or `mockAttributes`, in any module. A
-	/// synchronous `@Sendable` local function that compiles is nonisolated already, so the keyword changes nothing there.
+	/// What every `@Sendable` local function generated code declares starts with. `nonisolated`, because in a module whose
+	/// declarations default to the main actor, a local function in a context on the main actor is on the main actor too,
+	/// `@Sendable` or not, and the compiler rejects a synchronous `@Sendable` local function there ("main actor-isolated
+	/// synchronous local function cannot be marked as '@Sendable'"). In such a module every generated initializer and
+	/// `mock()` of a type nothing else isolates is on the main actor, and so is one of a type declared `@MainActor`, or
+	/// bound to it through `generatedInitializerAttributes` or `mockAttributes`. Everywhere else a synchronous `@Sendable`
+	/// local function is nonisolated already, so the keyword changes nothing there.
 	static let sendableFunctionDecorator = "@Sendable nonisolated "
 
 	// MARK: Code Generation
