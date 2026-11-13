@@ -1893,16 +1893,88 @@ struct TypeDescriptionTests {
 		#expect(nested.asSource == expected)
 	}
 
+	// MARK: - namesOutermostName
+
+	@Test(arguments: [
+		"Theme",
+		"Box<Theme>",
+		"Inner.Palette<Theme>",
+		"Swift.Result<Theme, Failure>",
+		"Theme?",
+		"Theme!",
+		"some Delegate",
+		"any Delegate",
+		"Delegate & Sendable",
+		"Theme.Type",
+		"inout Theme",
+		"@escaping (Theme) async throws -> Inner.Palette",
+		"(Theme...) throws(Failure) -> Palette",
+		"[Theme]",
+		"[Failure: Theme]",
+		"(Theme, label: Theme)",
+		"Void",
+		"~Copyable",
+	])
+	func namesOutermostName_visitsTheNamesNestingOutermostNamesVisits_whereverTheyAreInTheType(source: String) {
+		let typeDescription = TypeSyntax(stringLiteral: source).typeDescription
+		var namesNestingVisits = [String]()
+		_ = typeDescription.nestingOutermostNamesIfAny { name in
+			namesNestingVisits.append(name)
+			return nil
+		}
+
+		var namesVisited = [String]()
+		let namesName = typeDescription.namesOutermostName { name in
+			namesVisited.append(name)
+			return false
+		}
+
+		#expect(!namesName)
+		#expect(namesVisited.sorted() == namesNestingVisits.sorted())
+	}
+
+	@Test(arguments: [
+		"Theme",
+		"Box<Theme>",
+		"Inner.Palette<Theme>",
+		"Child.Theme",
+		"Swift.Result<Failure, Theme>",
+		"Theme?",
+		"Theme!",
+		"some Theme",
+		"any Theme",
+		"Sendable & Theme",
+		"Theme.Type",
+		"inout Theme",
+		"(Failure) -> Theme",
+		"(Failure) throws(Theme) -> Failure",
+		"(Theme...) -> Failure",
+		"[Theme]",
+		"[Failure: Theme]",
+		"(Failure, label: Theme)",
+		"Failure",
+		"Void",
+	])
+	func namesOutermostName_holdsExactlyWhenNestingOutermostNamesNestsAName_whenOneNameIsNested(source: String) {
+		let typeDescription = TypeSyntax(stringLiteral: source).typeDescription
+
+		let namesTheme = typeDescription.namesOutermostName { $0 == "Theme" }
+
+		let nestsTheme = typeDescription.nestingOutermostNamesIfAny { $0 == "Theme" ? .simple(name: "Child") : nil } != nil
+		#expect(namesTheme == nestsTheme)
+	}
+
 	// MARK: - qualifyingInstantiatedType
 
 	@Test(arguments: [
 		("Service", "Feature.Service"),
 		("Instantiator<Service>?", "Instantiator<Feature.Service>?"),
 		("LazilyInstantiated<any Service>", "LazilyInstantiated<any Feature.Service>"),
-		("Other", "Other"),
-		("Instantiator<Other>", "Instantiator<Other>"),
+		// The name as written is kept, so the type is not rebuilt.
+		("Other", nil),
+		("Instantiator<Other>", nil),
 		("Inner.Service", "Feature.Inner.Service"),
-		("any Other", "any Other"),
+		("any Other", nil),
 		("[Other]", nil),
 		("Missing", nil),
 	] as [(String, String?)])

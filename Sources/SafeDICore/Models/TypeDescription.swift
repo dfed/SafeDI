@@ -115,25 +115,29 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	///   - namesOfNestedInstantiableTypes: The name of each nested type among `instantiableTypes`, without the type
 	///     enclosing it. Every option but the name as written nests the instantiated type's own name, so when no nested
 	///     instantiable type has that name, the options before it are not searched.
-	/// - Returns: The qualified type, or `nil` when no option of the instantiated type is an instantiable type.
+	/// - Returns: The qualified type, or `nil` when the name as written is the most qualified option that is an
+	///   instantiable type, or when no option is one, so that a caller keeps the receiver without rebuilding it.
 	func qualifyingInstantiatedType(
 		within parentType: TypeDescription,
 		amongInstantiableTypes instantiableTypes: Set<TypeDescription>,
 		searchingTypesEnclosingIt: Bool,
 		namesOfNestedInstantiableTypes: Set<String>,
 	) -> TypeDescription? {
-		replacingInstantiatedType { instantiatedType in
-			let searchesNestedOptions = instantiatedType.simpleNameAndGenerics.map { namesOfNestedInstantiableTypes.contains($0.name) } ?? false
-			guard searchesNestedOptions else {
-				// The name as written is the only option that can be an instantiable type.
-				return instantiableTypes.contains(instantiatedType) ? instantiatedType : nil
-			}
+		// With no nested instantiable type, every instantiated type keeps its name as written.
+		guard !namesOfNestedInstantiableTypes.isEmpty else { return nil }
+		return replacingInstantiatedType { instantiatedType in
+			// Every option but the last, the name as written, nests the instantiated type's own name in `parentType` or a
+			// type enclosing it, and the receiver keeps the name as written either way, so only those are searched.
+			guard let name = instantiatedType.simpleNameAndGenerics?.name,
+			      namesOfNestedInstantiableTypes.contains(name)
+			else { return nil }
 			let options = Self.nestedOptions(
 				referencedType: instantiatedType,
 				within: parentType,
-			)
-			// A member of an extension is written at file scope: the extended type's own members, then the top level.
-			return (searchingTypesEnclosingIt ? options : Array(options.prefix(1) + options.suffix(1)))
+			).dropLast()
+			// A member of an extension is written at file scope: only the extended type's own members come before the
+			// top level.
+			return (searchingTypesEnclosingIt ? options : options.prefix(1))
 				.first(where: instantiableTypes.contains)
 		}
 	}
@@ -1346,6 +1350,39 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			thrownType: nestedThrownType ?? thrownType,
 			returnType: nestedReturnType ?? returnType,
 		)
+	}
+
+	/// Whether `predicate` holds for an outermost name the receiver spells: one of the names, and only those, that
+	/// `nestingOutermostNamesIfAny(in:)` passes to its `enclosingType`, so the two walk the receiver alike and change
+	/// together. It builds nothing, so a caller can tell cheaply that nesting would keep every name as written.
+	public func namesOutermostName(where predicate: (String) -> Bool) -> Bool {
+		switch self {
+		case let .simple(name, generics):
+			predicate(name) || generics.contains { $0.namesOutermostName(where: predicate) }
+		case let .nested(_, parentType, generics):
+			parentType.namesOutermostName(where: predicate) || generics.contains { $0.namesOutermostName(where: predicate) }
+		case let .composition(types):
+			types.contains { $0.namesOutermostName(where: predicate) }
+		case let .optional(type),
+		     let .implicitlyUnwrappedOptional(type),
+		     let .some(type),
+		     let .any(type),
+		     let .metatype(type, _),
+		     let .attributed(type, _, _),
+		     let .array(type),
+		     let .variadic(type):
+			type.namesOutermostName(where: predicate)
+		case let .dictionary(key, value):
+			key.namesOutermostName(where: predicate) || value.namesOutermostName(where: predicate)
+		case let .tuple(elements):
+			elements.contains { $0.typeDescription.namesOutermostName(where: predicate) }
+		case let .closure(arguments, _, _, thrownType, returnType):
+			arguments.contains { $0.namesOutermostName(where: predicate) }
+				|| (thrownType?.namesOutermostName(where: predicate) ?? false)
+				|| returnType.namesOutermostName(where: predicate)
+		case .unknown, .void:
+			false
+		}
 	}
 
 	/// The names of a simple or nested type from the outermost, such as `["Child", "Config"]` for `Child.Config`, or
