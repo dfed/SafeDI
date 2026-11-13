@@ -1,0 +1,2 @@
+load(":defs.bzl", "probe")
+probe(name = "p", used = "a.txt", unused_input = "b.txt")
