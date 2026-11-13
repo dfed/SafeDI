@@ -134,7 +134,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				if let reservation = ReservedName(reserving: identifier.text) {
 					diagnose(identifier.text, reservedAs: reservation, at: identifier)
 				}
-				diagnoseNameEncodedDifferently(identifier.text.spelledAsIdentifier, at: identifier)
+				diagnoseNameEncodedDifferently(identifier.text, at: identifier)
 				dependencies.append(
 					Dependency(
 						property: Property(
@@ -539,8 +539,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public static let macroName = "Instantiable"
 	public static let instantiateMethodName = "instantiate"
 	public static let mockMethodName = "mock"
-	/// The spellings of the names SafeDI matches by name that the declaration has spelled so far, each once.
-	private var spellingsOfMatchedNames = [String]()
+	/// The names SafeDI matches by name that the declaration has spelled so far, each once, without the backticks they
+	/// were written with. Two names have one `spelledAsIdentifier` spelling exactly when they have the same bytes here.
+	private var matchedNamesWithoutBackticks = [String]()
+	/// The `spelledAsIdentifier` spelling of each of `matchedNamesWithoutBackticks`, at the same position, once one of
+	/// them holds a byte outside ASCII; `nil` before. Two names of ASCII bytes alone are equal as `String`s only when
+	/// their bytes are, so until then no name can be encoded differently from another, and no name is spelled.
+	private var spellingsOfMatchedNames: [String]?
 	/// Names the overrides of a generated mock cannot declare as they spell them: `Type` and `Protocol` are no member
 	/// names unescaped, and an initializer parameter named `self` hides the instance it assigns to.
 	private static let namesGeneratedMocksCannotDeclare: Set = ["self", "Type", "Protocol"]
@@ -694,29 +699,40 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		for parameter in parameters {
 			let name = parameter.secondName ?? parameter.firstName
 			if name.tokenKind != .wildcard {
-				diagnoseNameEncodedDifferently(name.spelledAsParameterName, at: name)
+				diagnoseNameEncodedDifferently(name.text, at: name)
 			}
 		}
 	}
 
-	/// Diagnoses `spelledName`, a name SafeDI matches by name – a dependency's, an alias's fulfilling property's, or
-	/// a parameter's of an initializer, `instantiate(…)`, or a hand-written mock – at `node`, when it is equal as a
-	/// `String` to a name the declaration spells before it but differs from it in UTF-8 bytes. Swift compares names
-	/// byte for byte, so the declaration compiles, while SafeDI, which matches names as `String`s, would take the two
-	/// for one. Each spelling is reported once, where it first appears. No fix-it is offered: neither spelling is
-	/// evidently the one to keep.
-	private func diagnoseNameEncodedDifferently(_ spelledName: String, at node: some SyntaxProtocol) {
-		guard !spellingsOfMatchedNames.contains(where: { $0.utf8.elementsEqual(spelledName.utf8) }) else {
+	/// Diagnoses `name`, a name SafeDI matches by name – a dependency's, an alias's fulfilling property's, or a
+	/// parameter's of an initializer, `instantiate(…)`, or a hand-written mock – as written, at `node`, when its
+	/// `spelledAsIdentifier` spelling is equal as a `String` to that of a name the declaration spells before it but
+	/// differs from it in UTF-8 bytes. Swift compares names byte for byte, so the declaration compiles, while SafeDI,
+	/// which matches names as `String`s, would take the two for one. Each spelling is reported once, where it first
+	/// appears. No fix-it is offered: neither spelling is evidently the one to keep.
+	private func diagnoseNameEncodedDifferently(_ name: String, at node: some SyntaxProtocol) {
+		// Spelling a name lexes it, so names are compared without backticks, which needs no lexing, and spelled
+		// only once one holds a byte outside ASCII.
+		let nameWithoutBackticks = name.spelledWithoutBackticks
+		guard !matchedNamesWithoutBackticks.contains(where: { $0.utf8.elementsEqual(nameWithoutBackticks.utf8) }) else {
 			return
 		}
-		if let earlierName = spellingsOfMatchedNames.first(where: { $0 == spelledName }) {
+		matchedNamesWithoutBackticks.append(nameWithoutBackticks)
+		if spellingsOfMatchedNames == nil, nameWithoutBackticks.utf8.contains(where: { $0 >= 0x80 }) {
+			spellingsOfMatchedNames = matchedNamesWithoutBackticks.dropLast().map(\.spelledAsIdentifier)
+		}
+		guard spellingsOfMatchedNames != nil else {
+			return
+		}
+		let spelledName = nameWithoutBackticks.spelledAsIdentifier
+		if let earlierName = spellingsOfMatchedNames?.first(where: { $0 == spelledName }) {
 			hasNamesEncodedDifferently = true
 			diagnostics.append(Diagnostic(
 				node: node,
 				message: FixableInstantiableError.namesEncodedDifferently(earlierName: earlierName, laterName: spelledName).diagnostic,
 			))
 		}
-		spellingsOfMatchedNames.append(spelledName)
+		spellingsOfMatchedNames?.append(spelledName)
 	}
 
 	/// Diagnoses `parameter`, a dependency parameter of `instantiate(…)` named `_`, among `parameters`, the method's
