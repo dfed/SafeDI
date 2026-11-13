@@ -107,35 +107,6 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsFillReadsValueACycleDeclaresAgain_whenFillRequiresLabelTheSeamTakesAsDeferredParameter() async {
-		// `A`'s `reader` makes `tag` a parameter of the function the cycle closes on, but `Hub` defers its `tag`, which a
-		// fill reads from the caller's scope at every level, where inline the `A` that `B` builds again hands `LiveApi` `B`'s.
-		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"""
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag`, which `B` declares between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`'s `tag`, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `tag` on `B` another label, or make an @Instantiable declaration that fulfills `Api` one module `Feature` reads.
-			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` declares `tag: Tag` here.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: Self.modules(
-					feature: [
-						"public protocol Api {}",
-						Self.tag,
-						seamFixtureType(named: "TagReader", declarations: ["@Received public let tag: Tag"]),
-						seamFixtureType(named: "A", declarations: ["@Forwarded public let name: String", "@Instantiated public let reader: TagReader", "@Instantiated public let api: any Api", "@Instantiated public let bBuilder: Instantiator<B>"]),
-						seamFixtureType(named: "B", declarations: ["@Forwarded public let tag: Tag", "@Instantiated public let aBuilder: Instantiator<A>"]),
-						seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let aBuilder: Instantiator<A>"]),
-					],
-					app: [Self.liveApi(["@Received public let tag: Tag"]), Self.root(["@Instantiated public let tag: Tag"])],
-				),
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFillReadsValueACycleDeclaresAgain_whenHoleSitsOnLazyCycle() async {
 		// `B`'s `a` closes on `Hub`'s `a`, a lazily instantiated `A`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
@@ -189,8 +160,10 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFillReadsValueACycleDeclaresAgain_whenLabelIsParameterOfNestedCycleBetween() async {
-		// `C` builds `B` again, so `B`'s function takes `count`, which `C` forwards. Inline, the `A` that `B` builds again
-		// hands `LiveApi` the `count` `B`'s function was passed, `C`'s from the second level on; the fill would read `nil`.
+		// `C` builds `B` again, so `B`'s function takes `count`, which `X` passes it first and `C` from then on. `B` receives
+		// `count` from `X`, inside the function `B`'s `aBuilder` closes on, so that function takes no `count` and the scope
+		// carries none. Inline, `LiveApi` makes `A`'s function take `count`, and the `A` that `B` builds again hands it the
+		// `count` `B`'s function was passed; the fill would read `nil`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B`'s builder function takes as a parameter between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again, because a cycle inside `B`'s tree passes it (`C` declares `count: Int`). Inline, the `A` built again receives the `count` that parameter is passed, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `count` on `C` another label, or make an @Instantiable declaration that fulfills `Api` one module `Feature` reads.
@@ -201,7 +174,8 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 				modules: Self.modules(
 					feature: [
 						"public protocol Api {}",
-						seamFixtureType(named: "A", declarations: ["@Instantiated public let api: any Api", "@Instantiated public let bBuilder: Instantiator<B>"]),
+						seamFixtureType(named: "A", declarations: ["@Instantiated public let api: any Api", "@Instantiated public let xBuilder: Instantiator<X>"]),
+						seamFixtureType(named: "X", declarations: ["@Forwarded public let count: Int", "@Instantiated public let bBuilder: Instantiator<B>"]),
 						seamFixtureType(named: "B", declarations: ["@Received(onlyIfAvailable: true) public let count: Int?", "@Instantiated public let cBuilder: Instantiator<C>", "@Instantiated public let aBuilder: Instantiator<A>"]),
 						seamFixtureType(named: "C", declarations: ["@Forwarded public let count: Int", "@Instantiated public let bBuilder: Instantiator<B>"]),
 						seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let aBuilder: Instantiator<A>"]),
@@ -218,7 +192,8 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFillReadsValueACycleDeclaresAgain_whenLabelIsParameterOfCycleNestedTwiceBetween() async {
 		// `D` builds `C` again, so `C`'s function takes `count`, which `D` forwards, and `C` builds `B` again, so `B`'s
-		// function takes `count` too, which `C`'s parameter passes it: the value `B`'s parameter carries is `D`'s.
+		// function takes `count` too, which `C`'s parameter passes it: the value `B`'s parameter carries is `D`'s. `B` receives
+		// `count` from `X`, inside the function `B`'s `aBuilder` closes on, so that function takes no `count`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B`'s builder function takes as a parameter between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again, because a cycle inside `B`'s tree passes it (`D` declares `count: Int`). Inline, the `A` built again receives the `count` that parameter is passed, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `count` on `D` another label, or make an @Instantiable declaration that fulfills `Api` one module `Feature` reads.
@@ -229,7 +204,8 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 				modules: Self.modules(
 					feature: [
 						"public protocol Api {}",
-						seamFixtureType(named: "A", declarations: ["@Instantiated public let api: any Api", "@Instantiated public let bBuilder: Instantiator<B>"]),
+						seamFixtureType(named: "A", declarations: ["@Instantiated public let api: any Api", "@Instantiated public let xBuilder: Instantiator<X>"]),
+						seamFixtureType(named: "X", declarations: ["@Forwarded public let count: Int", "@Instantiated public let bBuilder: Instantiator<B>"]),
 						seamFixtureType(named: "B", declarations: ["@Received(onlyIfAvailable: true) public let count: Int?", "@Instantiated public let cBuilder: Instantiator<C>", "@Instantiated public let aBuilder: Instantiator<A>"]),
 						seamFixtureType(named: "C", declarations: ["@Received(onlyIfAvailable: true) public let count: Int?", "@Instantiated public let dBuilder: Instantiator<D>", "@Instantiated public let bBuilder: Instantiator<B>"]),
 						seamFixtureType(named: "D", declarations: ["@Forwarded public let count: Int", "@Instantiated public let cBuilder: Instantiator<C>"]),
@@ -292,6 +268,87 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			fulfiller: Self.liveApi(["@Received public let tag: Tag"]),
 			root: Self.root([]),
 			probe: Self.aApiAtEachLevel(forwarding: "Tag(value: \"two\")"),
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillBuildsInlineValues_whenFillRequiresLabelTheSeamTakesAsDeferredParameter() async throws {
+		// `A`'s `reader` makes `tag` a parameter of the function the cycle closes on, which hides the `tag` `Hub` defers: the
+		// field holds the parameter, `Root`'s at the first level and `B`'s where `B` builds `A` again, as inline hands it.
+		let feature = [
+			"public protocol Api {}",
+			Self.tag,
+			seamFixtureType(named: "TagReader", declarations: ["@Received public let tag: Tag"]),
+			seamFixtureType(named: "A", declarations: ["@Forwarded public let name: String", "@Instantiated public let reader: TagReader", "@Instantiated public let api: any Api", "@Instantiated public let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "B", declarations: ["@Forwarded public let tag: Tag", "@Instantiated public let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let aBuilder: Instantiator<A>"]),
+		]
+		try await expectValuesEqualInlineBuild(
+			feature: feature,
+			fulfiller: Self.liveApi(["@Received public let tag: Tag"]),
+			root: Self.root(["@Instantiated public let tag: Tag"]),
+			probe: Self.aApiAtEachLevel(forwarding: "Tag(value: \"two\")"),
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillBuildsInlineValues_whenLabelIsParameterOfNestedCycleBetweenAndOfFunctionTheCycleClosesOn() async throws {
+		// `C` builds `B` again, so `B`'s function takes `count`, which `C` forwards. `B` receives `count` from above `A`, so the
+		// function `B`'s `aBuilder` closes on takes `count` too, and the field holds it: `nil` at the first level, and the
+		// `count` `B`'s function was passed where `B` builds `A` again.
+		let feature = [
+			"public protocol Api {}",
+			seamFixtureType(named: "A", declarations: ["@Instantiated public let api: any Api", "@Instantiated public let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "B", declarations: ["@Received(onlyIfAvailable: true) public let count: Int?", "@Instantiated public let cBuilder: Instantiator<C>", "@Instantiated public let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "C", declarations: ["@Forwarded public let count: Int", "@Instantiated public let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let aBuilder: Instantiator<A>"]),
+		]
+		try await expectValuesEqualInlineBuild(
+			feature: feature,
+			fulfiller: Self.liveApi(["@Received(onlyIfAvailable: true) public let count: Int?"]),
+			root: Self.root([]),
+			probe: DifferentialValueProbe(
+				name: "A's api at each level",
+				expression: """
+				{ () -> [String] in
+				    let b = Root().hub.aBuilder.instantiate().bBuilder.instantiate()
+				    let b2 = b.cBuilder.instantiate(2).bBuilder.instantiate()
+				    return [b.aBuilder.instantiate().api, b2.aBuilder.instantiate().api, b2.aBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate(3).bBuilder.instantiate().aBuilder.instantiate().api].map { "\\($0)" }
+				}()
+				""",
+			),
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillBuildsInlineValues_whenLabelIsParameterOfCycleNestedTwiceBetweenAndOfFunctionTheCycleClosesOn() async throws {
+		// `D` builds `C` again and `C` builds `B` again, so both functions take `count`, which `D` forwards. `B` receives
+		// `count` from above `A`, so the function `B`'s `aBuilder` closes on takes `count` too, and the field holds it.
+		let feature = [
+			"public protocol Api {}",
+			seamFixtureType(named: "A", declarations: ["@Instantiated public let api: any Api", "@Instantiated public let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "B", declarations: ["@Received(onlyIfAvailable: true) public let count: Int?", "@Instantiated public let cBuilder: Instantiator<C>", "@Instantiated public let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "C", declarations: ["@Received(onlyIfAvailable: true) public let count: Int?", "@Instantiated public let dBuilder: Instantiator<D>", "@Instantiated public let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "D", declarations: ["@Forwarded public let count: Int", "@Instantiated public let cBuilder: Instantiator<C>"]),
+			seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let aBuilder: Instantiator<A>"]),
+		]
+		try await expectValuesEqualInlineBuild(
+			feature: feature,
+			fulfiller: Self.liveApi(["@Received(onlyIfAvailable: true) public let count: Int?"]),
+			root: Self.root([]),
+			probe: DifferentialValueProbe(
+				name: "A's api at each level",
+				expression: """
+				{ () -> [String] in
+				    let c = Root().hub.aBuilder.instantiate().bBuilder.instantiate().cBuilder.instantiate()
+				    let b2 = c.dBuilder.instantiate(3).cBuilder.instantiate().bBuilder.instantiate()
+				    return [c.bBuilder.instantiate().aBuilder.instantiate().api, b2.aBuilder.instantiate().api].map { "\\($0)" }
+				}()
+				""",
+			),
 		)
 	}
 

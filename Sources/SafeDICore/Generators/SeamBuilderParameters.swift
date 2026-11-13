@@ -446,7 +446,8 @@ extension DependencyTreeGenerator {
 	}
 
 	/// The declarations the scope of `generator` binds for the scopes beneath it, each with `reason`: its children and
-	/// aliases, its forwarded properties when `includingForwardedProperties`, and, for a fill, every field of the filled
+	/// aliases, its forwarded properties when `includingForwardedProperties`, the parameters of its builder function when
+	/// a lazy cycle closes on it (`CycleParameter`), and, for a fill, every field of the filled
 	/// seam's struct the fill binds (`ScopeGenerator.fillBoundFields`) and what that seam's path declares beside them,
 	/// which together are what the filled seam's tree binds or is building where the fill is called. A field bound from
 	/// a deferred parameter that the fill reads from the caller's scope is the caller's declaration, bound above.
@@ -490,6 +491,24 @@ extension DependencyTreeGenerator {
 				))
 			}
 		}
+		// The parameters of the builder function a lazy cycle closes on bind their labels for every scope in its body, as
+		// `fields(of:)` counts them, each declared, as far as a fill's reader is told, by the first type in the function's
+		// body that receives it.
+		if generator.declaresCycleParameters {
+			// A receiver's chain ends at the receiving type.
+			let parametersWithReceivingType = generator.cycleParameters.compactMap { parameter in
+				parameter.receiver.chain.last.map { (parameter: parameter, receivingType: $0) }
+			}
+			for (parameter, receivingType) in parametersWithReceivingType {
+				declarations.append(SeamSignature.Hole.UncarriedDeclaration(
+					property: parameter.property,
+					declaringType: receivingType,
+					declarationLocation: parameter.receiver.declarationLocation,
+					builtAfter: nil,
+					reason: reason,
+				))
+			}
+		}
 		return declarations
 	}
 
@@ -520,7 +539,8 @@ extension DependencyTreeGenerator {
 		var deferral = SeamSignature.Parameter.Deferral.none
 		var builtAfter: Property?
 		var reason = SeamSignature.Hole.UncarriedDeclaration.Reason.other
-		/// The position on the site's path of the scope that declares it, or `-1` for a parameter of the seam.
+		/// The position on the site's path of the scope that declares it, or whose builder function takes it as a parameter, or
+		/// `-1` for a parameter of the seam.
 		var frameLevel = -1
 	}
 
@@ -572,15 +592,12 @@ extension DependencyTreeGenerator {
 		var stage = 0
 		var stageBoundaries = [SeamSignature.Hole.StageBoundary]()
 		var depth = 0
-		// The path length at each scope on the path, where its builder function is declared.
-		var depthByLevel = [Int]()
 		// The scopes on the path below the root whose builder function a cycle-closing scope in their tree calls, each with
 		// its level on the path and the type that declares its property.
 		var scopesACycleClosesOn = [(level: Int, generator: ScopeGenerator, declaration: ScopeGenerator.BuiltDeclaration, declaringType: TypeDescription)]()
 		// The type that declares the properties of the previous frame's children: the next frame's declaring type.
 		var childDeclaringType = seam.concreteInstantiable
 		for (level, frame) in site.frames.enumerated() {
-			defer { depthByLevel.append(depth) }
 			if level > 0, let declaration = frame.generator.declarationACycleClosesOn {
 				scopesACycleClosesOn.append((level, frame.generator, declaration, childDeclaringType))
 			}
@@ -662,6 +679,29 @@ extension DependencyTreeGenerator {
 					declare(declaration(of: dependency.property, isBoundBeforeSite: true))
 				}
 			}
+			// The parameters of a builder function a lazy cycle closes on follow its forwarded ones, and hide every other
+			// declaration of their labels, a deferred parameter's memo included: a field of such a label holds the value the
+			// function was passed, as inline's site reads it. A parameter is declared, as far as a fill's reader is told, by
+			// the first type in the function's body that receives it.
+			if frame.generator.declaresCycleParameters {
+				// A receiver's chain ends at the receiving type.
+				let parametersWithReceivingType = frame.generator.cycleParameters.compactMap { parameter in
+					parameter.receiver.chain.last.map { (parameter: parameter, receivingType: $0) }
+				}
+				for (parameter, receivingType) in parametersWithReceivingType {
+					let parameterAccess = access(of: parameter.property, declaredBy: instantiables[receivingType]?.moduleName)
+					declare(PathDeclaration(
+						property: parameter.property,
+						isBoundBeforeSite: true,
+						stage: stage,
+						access: parameterAccess.level,
+						accessCause: parameterAccess.cause,
+						declaringType: receivingType,
+						declarationLocation: parameter.receiver.declarationLocation,
+						frameLevel: level,
+					))
+				}
+			}
 			let pathPosition = frame.nextPosition - 1
 			let pathProperty = frame.orderedChildren[pathPosition].generator.property
 			let carrierProperties = frame.orderedChildren.compactMap { $0.generator.containsBuildSite ? $0.generator.property : nil }
@@ -715,23 +755,16 @@ extension DependencyTreeGenerator {
 		}
 		// A scope on the path whose builder function a cycle-closing scope in its tree calls is built again there, and handed,
 		// for each label a scope between the two declares, that declaration (`CycleParameter`). A label whose nearest
-		// declaration at the site is inside the function is bound again at each level, and so is a field that a stage called
-		// inside the function binds from the function's own parameter of the label. Any other value a fill reads is the
-		// same at every level.
+		// declaration at the site is inside the function, the function's own parameter of the label included, is bound again
+		// at each level. Any other value a fill reads is the same at every level.
 		var cycleReentryDeclarations = [SeamSignature.Hole.CycleReentryDeclaration]()
 		for (level, generator, closedOnDeclaration, closedOnDeclaringType) in scopesACycleClosesOn {
 			let declarationsBetween = declarationsBetweenByClosedOnScope[ObjectIdentifier(generator)] ?? declarationsBetween(closedOnScope: generator, closedOnDeclaration: closedOnDeclaration)
 			declarationsBetweenByClosedOnScope[ObjectIdentifier(generator)] = declarationsBetween
-			let parameterLabels = Set(generator.cycleParameters.map(\.property.label))
 			/// Whether the site reads the value of `label` bound inside the function.
 			func isBoundInsideFunction(_ label: String) -> Bool {
 				guard let nearest = nearestDeclarations[label] else { return false }
-				// A stage before the last is called just before the `@Sendable` function that starts the next, in the body of
-				// the scope above that function; the last is called at the site.
-				let stageCallDepth = nearest.stage < stageBoundaries.count ? stageBoundaries[nearest.stage].pathLength - 1 : depth
-				// A field bound from a parameter the seam defers is not read: a fill reads the caller's value instead.
 				return nearest.frameLevel >= level
-					|| (nearest.isBoundBeforeSite && nearest.deferral == .none && parameterLabels.contains(label) && stageCallDepth >= depthByLevel[level])
 			}
 			for between in declarationsBetween
 				where between.property.label != site.property.label
