@@ -2388,6 +2388,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let cycleClosedOnDeclarations: Set<BuiltDeclaration>
 	/// Whether a cycle-closing scope in this subtree refers to this scope's builder function.
 	private let isReferencedByCycleClosingScope: Bool
+	/// This scope's `declaration`, when a cycle-closing scope in this subtree refers to its builder function, or `nil`.
+	nonisolated var declarationACycleClosesOn: BuiltDeclaration? {
+		isReferencedByCycleClosingScope ? declaration : nil
+	}
+
 	/// For a scope that closes a property cycle, the declaration it repeats, whose builder function it calls or hands to
 	/// its wrapper: the declaration of its own property, as cycle validation sees both, built for the same concrete type
 	/// – the wrapper, where the entry it repeats is a lazily instantiated declaration's instance. A constant and a lazily
