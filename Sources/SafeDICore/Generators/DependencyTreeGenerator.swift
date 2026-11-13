@@ -2182,8 +2182,12 @@ public actor DependencyTreeGenerator {
 					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix\(seamRemedyText)\(publicMockRemedy)."
 				case .public:
 					// Across a named module SafeDI is told no package of, a `package` declaration needs `public` unless the
-					// module is compiled with a package SafeDI was not told.
-					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix\(ModuleIdentity.passingPackageRemedy(forModulesNamed: ModuleIdentity.namesOfModulesWithoutPackage(emitter: emittingModule, declarer: declaringModule, requirement: requirement, declaredLevel: accessNeed.level)).map { ", or \($0)" } ?? "")\(seamRemedyText)\(publicMockRemedy)."
+					// module belongs in the other's package, which the declaration's level makes the likelier fix.
+					if let packageNameRemedy = ModuleIdentity.packageNameRemedy(emitter: emittingModule, declarer: declaringModule, requirement: requirement, declaredLevel: accessNeed.level) {
+						"\(packageNameRemedy.prefix(1).uppercased())\(packageNameRemedy.dropFirst()), or make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix\(seamRemedyText)\(publicMockRemedy)."
+					} else {
+						"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix\(seamRemedyText)\(publicMockRemedy)."
+					}
 				case .packageUnverified:
 					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix, or `\(AccessLevel.public.spelling)` if the two modules are in different packages\(seamRemedyText)\(publicMockRemedy)."
 				}

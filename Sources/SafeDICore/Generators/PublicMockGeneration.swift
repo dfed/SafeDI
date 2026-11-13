@@ -1563,17 +1563,18 @@ extension ScopeGenerator.PublicMockTierOmission {
 		let neededLevel = AccessLevel.level(satisfying: parameter.nestedOmission?.requirement ?? call.requirement)
 		let causeText = parameter.accessCause.map { " " + SeamAccessExplanation.causeSentence($0, receivers: receivers.map { SeamAccessExplanation.Receiver(declaringType: $0.declaringType, aliasProperty: nil, isInstantiateMethodParameter: false) }) } ?? ""
 		var remedies = [String]()
+		// A caller that needs `public` across a module SafeDI is told no package of needs only `package` if that module
+		// belongs in the other's package, which reaches the parameter on a `package` tier and which the parameter's
+		// `package` tier makes the likelier fix, so that remedy comes first. A parameter on no tier is omitted by a call
+		// in the mock's tree, whose modules this call does not decide.
+		if parameter.nestedOmission == nil, let packageNameRemedy = ModuleIdentity.packageNameRemedy(emitter: call.callerModule, declarer: call.declaringModule, requirement: call.requirement, declaredLevel: parameter.access) {
+			remedies.append(packageNameRemedy)
+		}
 		let unverifiedPackage = call.requirement == .packageUnverified ? ", or `public` if the two modules are in different packages" : ""
 		if case let .signatures(_, _, provers, _)? = parameter.accessCause, let first = provers.first, first.cap == nil {
 			remedies.append("widen \(first.name) to `\(neededLevel.spelledOnGeneratedDeclaration)`\(unverifiedPackage)")
 		}
 		remedies += SeamAccessExplanation.causeRemedies(parameter.accessCause, neededLevel: neededLevel)
-		// A caller that needs `public` across a module SafeDI is told no package of needs only `package` if that module
-		// has one, which reaches the parameter only on a `package` tier. A parameter on no tier is omitted by a call in
-		// the mock's tree, whose modules this call does not decide.
-		if parameter.nestedOmission == nil, let packageRemedy = ModuleIdentity.passingPackageRemedy(forModulesNamed: ModuleIdentity.namesOfModulesWithoutPackage(emitter: call.callerModule, declarer: call.declaringModule, requirement: call.requirement, declaredLevel: parameter.access)) {
-			remedies.append(packageRemedy)
-		}
 		remedies.append("stop providing \(label) on this path")
 		let what: String
 		if let nested = parameter.nestedOmission {

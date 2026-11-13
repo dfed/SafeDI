@@ -36,10 +36,8 @@ public struct ModuleIdentity: Hashable, Sendable {
 	/// that is why the code `emitter` generates cannot use a declaration of `declarer` at `declaredLevel`:
 	/// `requirement`, which `AccessLevel.required(toConstructFrom:declaredIn:isOwnFile:)` gave for the two, is `public`,
 	/// one of them has no package, and `declaredLevel` is `package`, which would suffice were the two in one package.
-	/// Empty otherwise, since a narrower declaration needs widening whatever the packages are. A module compiled with
-	/// `-package-name` whose run is not told it is the one case where the requirement is wrong, which a diagnostic that
-	/// asks for `public` names as its other remedy (`passingPackageRemedy(forModulesNamed:)`).
-	public static func namesOfModulesWithoutPackage(emitter: ModuleIdentity, declarer: ModuleIdentity, requirement: AccessRequirement, declaredLevel: AccessLevel) -> [String] {
+	/// Empty otherwise, since a narrower declaration needs widening whatever the packages are.
+	static func namesOfModulesWithoutPackage(emitter: ModuleIdentity, declarer: ModuleIdentity, requirement: AccessRequirement, declaredLevel: AccessLevel) -> [String] {
 		switch requirement {
 		case .public:
 			switch declaredLevel {
@@ -53,17 +51,24 @@ public struct ModuleIdentity: Hashable, Sendable {
 		}
 	}
 
-	/// The remedy a diagnostic that asks for `public` access across the modules `moduleNames` names, which SafeDITool
-	/// was not told the package of, offers beside it: telling SafeDITool the package each is compiled in, should one be.
-	/// `nil` for no module.
-	public static func passingPackageRemedy(forModulesNamed moduleNames: [String]) -> String? {
-		let ways = "(`package_name` on `safedi_swift_library`, `--package-name`)"
-		if moduleNames.count == 1, let moduleName = moduleNames.first {
-			return "pass module `\(moduleName)`'s package to SafeDI \(ways) if it is compiled with `-package-name`"
+	/// The remedy a diagnostic that asks for `public` access across `emitter` and `declarer` offers first when SafeDITool
+	/// was not told the package of one of them and the declaration is `package`
+	/// (`namesOfModulesWithoutPackage(emitter:declarer:requirement:declaredLevel:)`): giving the module, or both, the
+	/// package name, should the two be in one package. It comes first because a `package` declaration says its author
+	/// meant the two modules to share a package, so a module whose build names no package is the likelier cause. It
+	/// names the setting of each integration whose runs can need it, those that pass `--module-name`: Tuist, Bazel and
+	/// a custom build. The SwiftPM plugin knows the package of every module it names, and the Xcode project plugin
+	/// names no module. `nil` when the requirement is not for that reason.
+	public static func packageNameRemedy(emitter: ModuleIdentity, declarer: ModuleIdentity, requirement: AccessRequirement, declaredLevel: AccessLevel) -> String? {
+		let moduleNames = namesOfModulesWithoutPackage(emitter: emitter, declarer: declarer, requirement: requirement, declaredLevel: declaredLevel)
+		let ways = "(`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build)"
+		// A `public` requirement between modules one of which has no package names both modules.
+		if moduleNames.count == 1, let moduleName = moduleNames.first, let otherModuleName = [emitter, declarer].first(where: { $0.packageName != nil })?.moduleName {
+			return "give module `\(moduleName)` the package name of module `\(otherModuleName)` \(ways) if the two are in one package"
 		} else if moduleNames.isEmpty {
 			return nil
 		} else {
-			return "pass the packages of modules \(moduleNames.map { "`\($0)`" }.joined(separator: " and ")) to SafeDI \(ways) if they are compiled with `-package-name`"
+			return "give modules \(moduleNames.map { "`\($0)`" }.joined(separator: " and ")) the same package name \(ways) if they are in one package"
 		}
 	}
 }
