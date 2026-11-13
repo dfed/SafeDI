@@ -739,6 +739,11 @@ jobs:
     # Codecov report behind the README badge always comes from a real
     # test run.
     if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    # Runs on macOS because it builds and tests SafeDI with Xcode's Swift,
+    # the compiler adopters use, and compiles every test's generated code
+    # with it: Xcode's Swift 6.2 and Linux's have disagreed about the same
+    # code (#525; CLAUDE.md's rule on an actor's `lazy var`). It also
+    # uploads the `macos` coverage flag that codecov.yml waits for.
     runs-on: macos-26
     permissions:
       contents: read
@@ -780,13 +785,10 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: xcrun swift package resolve
-      # Run tests a few times to ensure code-gen is stable. The repeat
-      # passes exist to catch output that differs between processes
-      # (per-process hash seeds), and every pass still compares generated
-      # output against the expected strings. Compile verification runs
-      # only on the first pass: it compiles each generated output with
-      # swiftc, and recompiling a string the later passes have already
-      # proven identical adds nothing except ~70% of the pass's runtime.
+      # One pass, with compile verification. The passes that catch output
+      # differing between processes (per-process hash seeds) run on Linux,
+      # in "Repeat Tests on Linux", where runners are plentiful: on this
+      # macOS runner the four of them took 9 minutes of every run.
       #
       # Coverage counters are plain loads and stores, and Swift Testing
       # runs tests in parallel, so a counter that many tests increment
@@ -802,17 +804,16 @@ jobs:
       # flag through; the swiftbuild build system drops it.
       #
       # The time limit stops a test that hangs rather than letting it hold
-      # the runner for GitHub's six-hour default. It is twice the longest
-      # successful run of this step over the 177 completed CI runs from
-      # 2026-11-02 to 2026-11-05: 63 runs took 9.9 to 37.2 minutes
-      # (median 24.1, 95th percentile 32.3).
+      # the runner for GitHub's six-hour default. Over the 177 completed CI
+      # runs from 2026-11-02 to 2026-11-05, 63 runs of this step, which then
+      # also ran four passes without compile verification, took 9.9 to 37.2
+      # minutes (median 24.1, 95th percentile 32.3). Without those passes
+      # (9.0 minutes in run 43207169056) the longest would have been about
+      # 28 minutes; twice that is the limit until runs of the single pass
+      # have been measured.
       - name: Build and Test Framework
-        timeout-minutes: 75
-        run: |
-          xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
-          for _ in {1..4}; do
-            SAFEDI_SKIP_COMPILE_CHECK=1 xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
-          done
+        timeout-minutes: 60
+        run: xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
       - name: Prepare Coverage Reports
         run: ./Scripts/prepare-coverage-reports.sh
       - name: Upload Coverage Reports
@@ -859,9 +860,10 @@ jobs:
       - name: Build and Test Framework
         timeout-minutes: 55
         run: swift test -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
-      # The graph fuzzer's shards run this job's test bundle rather than
-      # building their own: the bundle, SafeDITool and the macro plugin (which
-      # the fuzzer's compiler runs use), and SafeDI's module.
+      # The graph fuzzer's shards and "Repeat Tests on Linux" run this job's
+      # test bundle rather than building their own: the bundle, SafeDITool and
+      # the macro plugin (which the fuzzer's compiler runs use), and SafeDI's
+      # module.
       - name: Package Test Bundle for the Graph Fuzzer
         run: |
           products=.build/x86_64-unknown-linux-gnu/release
@@ -895,6 +897,48 @@ jobs:
           verbose: true
           os: linux
           flags: linux
+
+  # Runs the whole suite four more times, each in a process of its own, to
+  # catch generated code or diagnostics that differ between processes:
+  # Swift seeds hashing per process, so an order that leaks from a `Set` or
+  # `Dictionary` changes from one pass to the next, and every pass compares
+  # generated output against the expected strings. Compile verification is
+  # off: it compiles strings these passes have already proven identical to
+  # the ones "Build and Test on Linux" compiled. The passes run the test
+  # bundle that job built, as the graph fuzzer's shards do, and run beside
+  # the shards, so they add no time to the run. Coverage is not collected:
+  # the bundle is built for coverage, so its profiles go to the runner's
+  # temporary directory.
+  linux-repeat:
+    name: Repeat Tests on Linux
+    needs: [changes, linux]
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux.result == 'success' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Download Test Bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: graph-fuzzer-test-bundle
+      - name: Unpack Test Bundle
+        run: tar -xzf graph-fuzzer-test-bundle.tar.gz
+      # No pass of the suite without compile verification has been timed on
+      # Linux; on the 3-core macOS runner one took 2.2 minutes. The limit is
+      # provisional until this step's runs have been measured.
+      - name: Run Tests Four Times
+        timeout-minutes: 30
+        env:
+          SAFEDI_SKIP_COMPILE_CHECK: 1
+          LLVM_PROFILE_FILE: ${{ runner.temp }}/repeat-tests-%p.profraw
+        run: |
+          for pass in 1 2 3 4; do
+            echo "Pass $pass of 4"
+            .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing
+          done
 
   # Builds SafeDITool exactly as publish.yml's Linux jobs build the release
   # binary, so a compiler crash that only that build meets fails a pull
