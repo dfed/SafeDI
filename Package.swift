@@ -76,9 +76,13 @@ let package = Package(
 				.product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
 				.product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
 			] + safeDICoreDependencies,
-			// The macros compile SafeDICore's sources through the `SafeDICore` symbolic link, except those only
-			// SafeDITool uses, which are most of what this target would otherwise compile. Sources/SafeDICore/BUILD.bazel
-			// excludes the same files, and `MacroTargetSourceTests` fails when a SafeDICore file is in neither list.
+			// Every project that uses SafeDI compiles this macro plugin from source, and no file that uses SafeDI's
+			// macros can compile until it is built, so its compile time adds to every clean build. The macros compile
+			// SafeDICore's sources through the `SafeDICore` symbolic link. This list leaves out the ones only
+			// SafeDITool uses: most of SafeDICore, and most of this target's compile time.
+			// Sources/SafeDICore/BUILD.bazel excludes the same files. `MacroTargetSourceTests` fails when the two
+			// lists differ, or when this target compiles a SafeDICore file missing from its list of the files the
+			// macros use, so that a new file gets sorted into one list or the other.
 			exclude: [
 				"SafeDICore/Generators",
 				"SafeDICore/Utilities",

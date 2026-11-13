@@ -6,7 +6,9 @@ load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 # here and let SafeDIMacros pull them into its own compile unit.
 #
 # The macros leave out the sources only SafeDITool uses, as the
-# SafeDIMacros target's `exclude` list in Package.swift does.
+# SafeDIMacros target's `exclude` list in Package.swift does: the macro
+# plugin is built before any file that uses SafeDI's macros can compile,
+# so every source it leaves out shortens every clean build.
 # `MacroTargetSourceTests` checks that the two lists agree.
 filegroup(
     name = "SafeDICoreSources",
