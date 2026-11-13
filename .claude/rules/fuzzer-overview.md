@@ -2,7 +2,6 @@
 paths:
   - "Tests/**/GraphFuzzer*.swift"
   - "Tests/**/*GraphFuzzer*Tests.swift"
-  - "Tests/**/SeamFixtureTypes.swift"
   - ".github/workflows/{ci,graph-fuzzer}.yml"
   - ".github/scripts/*graph-fuzzer*"
   - "Scripts/fuzz-corpus.sh"
