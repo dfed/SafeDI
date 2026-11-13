@@ -473,6 +473,9 @@ public struct SeamSignature: Sendable {
 		/// The label the generated initializer takes the place's builder under: for a place in a seam's plain scope enum, that
 		/// enum's builder's label.
 		public internal(set) var builderLabel: String
+		/// The label each narrower tier takes the place's builder under, where it differs from `builderLabel`
+		/// (`Builder.narrowerTierLabels`).
+		var narrowerTierBuilderLabels = [AccessLevel: String]()
 		/// The name the generated initializer binds the builder to.
 		public internal(set) var internalName: String
 		/// The seam whose extension declares the scope struct: this seam, or the inner seam a passed-up hole is from.
@@ -534,6 +537,19 @@ public struct SeamSignature: Sendable {
 		/// spelled canonically, so `Box<any P>` and `Box<P>`, or `P & Q` and `Q & P`, are one hole type.
 		public var holeType: HoleType {
 			HoleType(instantiatedType: instantiatedType.spelledCanonically, builtType: builtType.spelledCanonically)
+		}
+
+		/// The label the tier at `tier` takes the place's builder under.
+		func builderLabel(inTierAt tier: AccessLevel) -> String {
+			narrowerTierBuilderLabels[tier] ?? builderLabel
+		}
+
+		/// The place as the tier at `tier` takes its builder, which a call of that tier passes by `builderLabel`.
+		func atTier(_ tier: AccessLevel) -> Hole {
+			var hole = self
+			hole.builderLabel = builderLabel(inTierAt: tier)
+			hole.narrowerTierBuilderLabels = [:]
+			return hole
 		}
 
 		/// A property on the way to a site, the type that declares it, and where, when that is known. For a property of a
@@ -864,6 +880,7 @@ public struct SeamSignature: Sendable {
 		}
 
 		public let kind: Kind
+		/// The label the widest tier takes the builder under.
 		public let label: String
 		public let internalName: String
 		/// The parameter's type, as the initializer's signature spells it.
@@ -877,10 +894,38 @@ public struct SeamSignature: Sendable {
 		public let accessCause: TypeAccessProof.Cause?
 		/// The inner seam whose enum narrows the builder, or `nil` when a place does.
 		public let narrowingInnerSeam: TypeDescription?
+		/// The label each narrower tier takes the builder under, where it differs from `label`: each tier names its builders
+		/// apart from its own parameters and those of the tiers wider than it, so a narrower parameter never renames a wider
+		/// tier's builder.
+		var narrowerTierLabels = [AccessLevel: String]()
 
 		/// The label the initializer only generated code calls takes the builder under.
 		public var generatedOnlyArgumentLabel: String {
 			ReservedName.seamGeneratedOnlyArgumentLabel(of: label)
+		}
+
+		/// The label the tier at `tier` takes the builder under.
+		func label(inTierAt tier: AccessLevel) -> String {
+			narrowerTierLabels[tier] ?? label
+		}
+
+		/// The label the initializer only generated code calls at `tier` takes the builder under.
+		func generatedOnlyArgumentLabel(inTierAt tier: AccessLevel) -> String {
+			ReservedName.seamGeneratedOnlyArgumentLabel(of: label(inTierAt: tier))
+		}
+
+		/// The builder as the tier at `tier` takes it, which a call of that tier passes by `label`.
+		func atTier(_ tier: AccessLevel) -> Builder {
+			Builder(
+				kind: kind,
+				label: label(inTierAt: tier),
+				internalName: internalName,
+				parameterType: parameterType,
+				parameterTypeWithoutAny: parameterTypeWithoutAny,
+				tierAccess: tierAccess,
+				accessCause: accessCause,
+				narrowingInnerSeam: narrowingInnerSeam,
+			)
 		}
 	}
 
@@ -939,6 +984,7 @@ public struct SeamSignature: Sendable {
 		public struct Hole: Hashable, Sendable {
 			public init(_ hole: SeamSignature.Hole) {
 				builderLabel = hole.builderLabel
+				narrowerTierBuilderLabels = TierLabel.sorted(hole.narrowerTierBuilderLabels)
 				type = hole.builderTypeWithoutAny(qualifiedBy: hole.scopeSeamType).asSource
 				tierAccess = hole.tierAccess
 				fields = hole.stages.map { stage in
@@ -953,20 +999,34 @@ public struct SeamSignature: Sendable {
 			}
 
 			public let builderLabel: String
+			public let narrowerTierBuilderLabels: [TierLabel]
 			public let type: String
 			public let tierAccess: AccessLevel
 			public let fields: [[Field]]
+		}
+
+		/// A label a narrower tier takes a builder under, where it differs from the widest tier's.
+		public struct TierLabel: Hashable, Sendable {
+			public let tier: AccessLevel
+			public let label: String
+
+			/// `labels`, widest tier first.
+			static func sorted(_ labels: [AccessLevel: String]) -> [TierLabel] {
+				labels.map { TierLabel(tier: $0.key, label: $0.value) }.sorted { $0.tier > $1.tier }
+			}
 		}
 
 		/// A builder the initializer takes: its label, the type its signature spells without `any`, and its tier access.
 		public struct Builder: Hashable, Sendable {
 			public init(_ builder: SeamSignature.Builder) {
 				label = builder.label
+				narrowerTierLabels = TierLabel.sorted(builder.narrowerTierLabels)
 				type = builder.parameterTypeWithoutAny.asSource
 				tierAccess = builder.tierAccess
 			}
 
 			public let label: String
+			public let narrowerTierLabels: [TierLabel]
 			public let type: String
 			public let tierAccess: AccessLevel
 		}
@@ -1152,6 +1212,10 @@ public struct SeamSignature: Sendable {
 			hash.combine(builder.label)
 			hash.combine(builder.type)
 			hash.combine(builder.tierAccess.spelledOnGeneratedDeclaration)
+			// Only where a narrower tier takes the builder under another label, so every other seam hashes what it always hashed.
+			for tierLabel in builder.narrowerTierLabels {
+				hash.combine("\(tierLabel.tier.spelledOnGeneratedDeclaration) \(tierLabel.label)")
+			}
 		}
 		combine(scopeEnums: callShape.scopeEnums, holes: callShape.holes, into: &hash)
 		return "\(ReservedName.builderFunctionNamePrefix)\(seamType.asIdentifier)_\(hash.hexadecimal)".spelledAsJoinedIdentifier

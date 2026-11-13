@@ -580,8 +580,11 @@ struct PublicMockParameter: Sendable {
 		case provider
 	}
 
-	/// The parameter's name, which is also its argument label.
-	let name: String
+	/// The parameter's name, which is also its argument label: the widest tier's that takes it.
+	var name: String
+	/// For a builder, the name each narrower tier takes it under, where it differs from `name`
+	/// (`SeamSignature.Builder.narrowerTierLabels`).
+	var narrowerTierNames = [AccessLevel: String]()
 	/// The parameter's type as the signature spells it.
 	let type: TypeDescription
 	/// The parameter's type as the signature spells it, `@escaping` and `@autoclosure` included.
@@ -617,7 +620,7 @@ struct PublicMockParameter: Sendable {
 	}
 
 	/// What the parameter stands for, which decides what a mock tree that calls the public mock passes for it.
-	let role: Role
+	var role: Role
 	/// For a received dependency taken as `T? = nil`, whether the mock builds it when passed `nil`, rather than passing
 	/// `nil` on to the receivers in its tree, which receive it only if available.
 	var isBuiltWhenNil = false
@@ -632,6 +635,24 @@ struct PublicMockParameter: Sendable {
 	/// The lines that document the parameter above each tier that takes it
 	/// (`MockRootParameters.UncoveredParameter.sharedValueDocumentation`).
 	var sharedValueDocumentation = [String]()
+
+	/// The name the tier at `tier` takes the parameter under.
+	func name(inTier tier: AccessLevel) -> String {
+		narrowerTierNames[tier] ?? name
+	}
+
+	/// The parameter as the tier at `tier` takes it, under that tier's name.
+	func atTier(_ tier: AccessLevel) -> PublicMockParameter {
+		var parameter = self
+		parameter.name = name(inTier: tier)
+		parameter.narrowerTierNames = [:]
+		parameter.builder = builder?.atTier(tier)
+		parameter.hole = hole?.atTier(tier)
+		if case let .received(property, isRequired) = role, builder != nil {
+			parameter.role = .received(Property(label: parameter.name, typeDescription: property.typeDescription), isRequired: isRequired)
+		}
+		return parameter
+	}
 
 	/// What a parameter of a public mock stands for.
 	enum Role: Sendable {
@@ -686,9 +707,9 @@ struct PublicMockPlan: Sendable {
 		CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums)
 	}
 
-	/// The parameters the tier at `tier` takes.
+	/// The parameters the tier at `tier` takes, under that tier's names.
 	func parameters(ofTier tier: AccessLevel) -> [PublicMockParameter] {
-		parameters.filter { $0.access >= tier }
+		parameters.filter { $0.access >= tier }.map { $0.atTier(tier) }
 	}
 }
 
@@ -947,7 +968,6 @@ extension ScopeGenerator {
 		// by the name the sites and calls call it by, bound before anything else.
 		let holes = shapedBuilders?.holes ?? []
 		let builders = shapedBuilders?.builders ?? []
-		defaultResolutions.insert(contentsOf: builders.map { "\(bodyIndent)let \($0.internalName) = \($0.label)" }, at: 0)
 		for builder in builders {
 			// The function type the builder is, without `@escaping`, which a caller's leaf receives it as.
 			let functionType = builder.parameterType.strippingEscaping
@@ -964,6 +984,7 @@ extension ScopeGenerator {
 				builder: builder,
 				hole: holes.first { shapedBuilders?.builderBySite[$0.site]?.label == builder.label },
 			))
+			leadingParameters[leadingParameters.count - 1].narrowerTierNames = builder.narrowerTierLabels
 		}
 
 		// The received dependencies the mock builds and those received only if available, each `T? = nil`, by name.
@@ -986,9 +1007,16 @@ extension ScopeGenerator {
 			parameters.append(PublicMockParameter(name: ReservedName.mockOverridesParameterName, type: overridesType, typeSource: overridesType.asSource, defaultSource: ".init()", defaultKind: .expression, access: .public, role: .overrides))
 		}
 		let tiers = [AccessLevel.public] + Set(parameters.map(\.access)).filter { $0 < .public }.sorted(by: >)
+		// The narrowest tier's body binds each builder by the name that tier takes it under.
+		let narrowestTier = tiers[tiers.count - 1]
+		defaultResolutions.insert(contentsOf: builders.map { "\(bodyIndent)let \($0.internalName) = \($0.label(inTierAt: narrowestTier))" }, at: 0)
 		var hash = SeamSignatureHash()
 		for parameter in parameters {
 			hash.combine(parameter.name)
+			// Only where a narrower tier takes a builder under another name, so every other mock hashes what it always hashed.
+			for tierName in SeamSignature.CallShape.TierLabel.sorted(parameter.narrowerTierNames) {
+				hash.combine("\(tierName.tier.spelledOnGeneratedDeclaration) \(tierName.label)")
+			}
 			hash.combine((parameter.typeWithoutAny ?? parameter.type.withoutAny).asSource)
 			hash.combine(parameter.access.spelledOnGeneratedDeclaration)
 			hash.combine(parameter.defaultKind.rawValue)
@@ -1088,18 +1116,18 @@ extension ScopeGenerator {
 			if index == plan.tiers.count - 1 {
 				lines.append(contentsOf: narrowestBody)
 			} else {
-				let takenNames = Set(parameters.map(\.name))
 				// An omitted parameter that defaults to a provider is passed the provider's value, the declaration's
-				// default, which `nil` would replace.
-				let arguments = plan.parameters(ofTier: plan.tiers[index + 1]).map { parameter in
-					let value = if takenNames.contains(parameter.name) {
-						parameter.name
+				// default, which `nil` would replace. A builder can take another name in the narrower tier.
+				let narrowerTier = plan.tiers[index + 1]
+				let arguments = plan.parameters.filter { $0.access >= narrowerTier }.map { parameter in
+					let value = if parameter.access >= tier {
+						parameter.name(inTier: tier)
 					} else if parameter.defaultKind == .provider, let defaultSource = parameter.defaultSource {
 						defaultSource
 					} else {
 						"nil"
 					}
-					return "\(parameter.name.spelledAsArgumentLabel): \(value)"
+					return "\(parameter.name(inTier: narrowerTier).spelledAsArgumentLabel): \(value)"
 				}
 				lines.append("\(bodyIndent)\(typeName).mock(\(arguments.joined(separator: ", ")))")
 			}

@@ -4107,19 +4107,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Every initializer carries the attributes a root's generated `init()` carries: a caller can reach any of them,
 		// and each calls another.
 		let attributesPrefix = instantiable.generatedInitializerAttributes.isEmpty ? "" : "\(instantiable.generatedInitializerAttributes) "
-		// Every tier takes every builder, after its parameters: a hole is required. An initializer people call declares no
-		// underscored name, which would keep it out of the module's symbol graph.
-		let plainBuilderParameters = signature.builders.map { "\($0.label.spelledAsArgumentLabel): \($0.parameterType.asSource)" }
-		let generatedOnlyBuilderParameters = signature.builders.map { builder in
-			"\(builder.internalName == builder.generatedOnlyArgumentLabel ? builder.internalName : "\(builder.generatedOnlyArgumentLabel) \(builder.internalName)"): \(builder.parameterType.asSource)"
+		// Every tier takes every builder, after its parameters: a hole is required. Each tier takes a builder under its own
+		// label (`SeamSignature.Builder.narrowerTierLabels`). An initializer people call declares no underscored name, which
+		// would keep it out of the module's symbol graph.
+		func plainBuilderParameters(inTierAt tier: AccessLevel) -> [String] {
+			signature.builders.map { "\($0.label(inTierAt: tier).spelledAsArgumentLabel): \($0.parameterType.asSource)" }
+		}
+		func generatedOnlyBuilderParameters(inTierAt tier: AccessLevel) -> [String] {
+			signature.builders.map { builder in
+				let label = builder.generatedOnlyArgumentLabel(inTierAt: tier)
+				return "\(builder.internalName == label ? builder.internalName : "\(label) \(builder.internalName)"): \(builder.parameterType.asSource)"
+			}
 		}
 		// No parameter has a default: every call writes every argument, so a hand-written call fails to compile when the
 		// tree comes to take another parameter, rather than passing `nil` for it.
-		func plainParameterList(of parameters: [SeamSignature.Parameter]) -> String {
-			(parameters.map { $0.plainSpelling(amongTypesDeclaredEscaping: typesDeclaredEscaping) } + plainBuilderParameters).joined(separator: ", ")
+		func plainParameterList(of parameters: [SeamSignature.Parameter], inTierAt tier: AccessLevel) -> String {
+			(parameters.map { $0.plainSpelling(amongTypesDeclaredEscaping: typesDeclaredEscaping) } + plainBuilderParameters(inTierAt: tier)).joined(separator: ", ")
 		}
-		func generatedOnlyParameterList(of parameters: [SeamSignature.Parameter]) -> String {
-			(parameters.map { $0.generatedOnlySpelling(amongTypesDeclaredEscaping: typesDeclaredEscaping) } + generatedOnlyBuilderParameters).joined(separator: ", ")
+		func generatedOnlyParameterList(of parameters: [SeamSignature.Parameter], inTierAt tier: AccessLevel) -> String {
+			(parameters.map { $0.generatedOnlySpelling(amongTypesDeclaredEscaping: typesDeclaredEscaping) } + generatedOnlyBuilderParameters(inTierAt: tier)).joined(separator: ", ")
 		}
 		// The narrowest tier holds each deferred parameter in a `LazilyInstantiated` under its label, which the tree reads
 		// wherever it reads the label, in parameter order – except a parameter the seam's own alias of its label reads.
@@ -4163,7 +4169,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 					return "\(parameter.generatedOnlyArgumentLabel): \(value)"
 				}
-				let builderArguments = signature.builders.map { "\($0.generatedOnlyArgumentLabel): \($0.internalName)" }
+				let narrowerTier = signature.tiers[index + 1]
+				let builderArguments = signature.builders.map { "\($0.generatedOnlyArgumentLabel(inTierAt: narrowerTier)): \($0.internalName)" }
 				body = "\(bodyIndent)self.init(\((parameterArguments + builderArguments).joined(separator: ", ")))"
 			}
 			let marker = tier == .public
@@ -4195,7 +4202,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			let generatedOnlyInitializer = """
 			\(generatedOnlyDocumentation)
-			\(declarationPrefix)(\(generatedOnlyParameterList(of: parameters))) {
+			\(declarationPrefix)(\(generatedOnlyParameterList(of: parameters, inTierAt: tier))) {
 			\(body)
 			\(Self.standardIndent)}
 			"""
@@ -4203,10 +4210,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// The plain initializer forwards its values, so the closures the other one holds capture its own parameters
 				// and never what its caller wrote.
 				let forwardedArguments = parameters.map { "\($0.generatedOnlyArgumentLabel): \($0.property.label)" }
-					+ signature.builders.map { "\($0.generatedOnlyArgumentLabel): \($0.label)" }
+					+ signature.builders.map { "\($0.generatedOnlyArgumentLabel(inTierAt: tier)): \($0.label(inTierAt: tier))" }
 				initializers.append("""
 				\(marker ?? "")\(plainDocumentation)
-				\(declarationPrefix)(\(plainParameterList(of: parameters))) {
+				\(declarationPrefix)(\(plainParameterList(of: parameters, inTierAt: tier))) {
 				\(bodyIndent)self.init(\(forwardedArguments.joined(separator: ", ")))
 				\(Self.standardIndent)}
 				""")

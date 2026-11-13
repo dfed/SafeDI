@@ -1596,7 +1596,176 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		"""])
 	}
 
+	// MARK: Tests – each tier names its builders apart from its own parameters and wider ones only
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsPublicTiersBuilderLabelAndEnum_whenPackageParameterTakesBuildersLabel() async throws {
+		// `Badge`, a `package` type in `Panel`'s mock tree, receives `serviceBuilder` only if available, so only the mock's
+		// `package` tier takes it. The `public` tier names its builder `serviceBuilder` over `SafeDIMockScope_Service`, as it
+		// would without `Badge`; the `package` tier names the same builder apart from its parameter. Neither caller can
+		// construct `Panel`, whose initializer is `internal`: `Mid`, in `Panel`'s package, calls the `package` tier, and
+		// `App`, in another package, the `public` one.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [Self.panelBesideBadgeReceivingServiceBuilder]),
+				ModuleFixture(name: "Mid", packageName: "pkg", swiftFileContent: [Self.screen], dependencies: ["Core"]),
+				ModuleFixture(name: "App", packageName: "app", swiftFileContent: [Self.screen], dependencies: ["Core"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Panel {
+		    @frozen public enum SafeDIMockScope_Service {
+		        case service(service_Values)
+
+		        public struct service_Values {
+		            package let badge: Badge
+		        }
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    public struct SafeDIOverrides {
+		        public init() {
+		            self.badge = nil
+		        }
+
+		        package init(
+		            badge: ((Thing?) -> Badge)? = nil
+		        ) {
+		            self.badge = badge
+		        }
+
+		        package private(set) var badge: ((Thing?) -> Badge)?
+		    }
+
+		    public static func mock(
+		        serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Panel {
+		        Panel.mock(service_ServiceBuilder: serviceBuilder, serviceBuilder: nil, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    package static func mock(
+		        service_ServiceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+		        serviceBuilder: Thing? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Panel {
+		        let __safeDI_serviceBuilder = service_ServiceBuilder
+		        let badge = if let safeDIBuilder = safeDIOverrides.badge { safeDIBuilder(serviceBuilder) } else { Badge(serviceBuilder: serviceBuilder) }
+		        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIMockScope_Service.service_Values(badge: badge)))
+		        return Panel(service: service, badge: badge)
+		    }
+		}
+
+		extension Panel {
+		    public enum __safeDI_Panel_mock_61A401DADCD3362C {}
+		}
+		#endif
+		"""])
+		#expect(output.modules["Mid"]?.generatedFiles == ["Mid.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            panel: Panel.SafeDIOverrides = .init()
+		        ) {
+		            self.panel = panel
+		        }
+
+		        private(set) var panel: Panel.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        service_ServiceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        _ = Panel.__safeDI_Panel_mock_61A401DADCD3362C.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let panel = Panel.mock(service_ServiceBuilder: service_ServiceBuilder, serviceBuilder: nil, safeDIOverrides: safeDIOverrides.panel)
+		        return Screen(panel: panel)
+		    }
+		}
+		#endif
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            panel: Panel.SafeDIOverrides = .init()
+		        ) {
+		            self.panel = panel
+		        }
+
+		        private(set) var panel: Panel.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        _ = Panel.__safeDI_Panel_mock_61A401DADCD3362C.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let panel = Panel.mock(serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides.panel)
+		        return Screen(panel: panel)
+		    }
+		}
+		#endif
+		"""])
+	}
+
 	// MARK: Private
+
+	/// `Panel`, whose public mock's tree builds `service`, a hole, and `badge`, whose `package` type receives
+	/// `serviceBuilder: Thing?` only if available.
+	private static let panelBesideBadgeReceivingServiceBuilder = """
+	import SafeDI
+
+	public protocol Service: Sendable {}
+
+	package struct Thing {}
+
+	@Instantiable
+	package struct Badge: Instantiable {
+	    package init(serviceBuilder: Thing?) {
+	        self.serviceBuilder = serviceBuilder
+	    }
+
+	    @Received(onlyIfAvailable: true) let serviceBuilder: Thing?
+	}
+
+	@Instantiable(generateMock: .public)
+	public struct Panel: Instantiable {
+	    init(service: any Service, badge: Badge) {
+	        self.service = service
+	        self.badge = badge
+	    }
+
+	    @Instantiated let service: any Service
+	    @Instantiated let badge: Badge
+	}
+	"""
 
 	private var filesToDelete: [URL]
 

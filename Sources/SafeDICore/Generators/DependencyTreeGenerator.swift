@@ -2439,7 +2439,7 @@ public actor DependencyTreeGenerator {
 					receivers = []
 					let (_, requiredBy, publicMockRequirement) = tierRequirement(tier)
 					let causeText = builder.accessCause.map { " " + SeamAccessExplanation.causeSentence($0, receivers: []) } ?? ""
-					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder.label): \(builder.parameterType.asSource)`, whose scope holds the builders of `\(innerSeam.asSource)`, a seam visible only at `\(builder.tierAccess.spelledOnGeneratedDeclaration)` access.\(publicMockRequirement)\(causeText) Declare \(seamName) at `\(builder.tierAccess.spelledOnGeneratedDeclaration)` access, or make `\(innerSeam.asSource)` `\(tier.spelledOnGeneratedDeclaration)`."
+					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder.label(inTierAt: tier)): \(builder.parameterType.asSource)`, whose scope holds the builders of `\(innerSeam.asSource)`, a seam visible only at `\(builder.tierAccess.spelledOnGeneratedDeclaration)` access.\(publicMockRequirement)\(causeText) Declare \(seamName) at `\(builder.tierAccess.spelledOnGeneratedDeclaration)` access, or make `\(innerSeam.asSource)` `\(tier.spelledOnGeneratedDeclaration)`."
 				case let .tierOmitsBuilder(hole, builder, tier):
 					// Explained as a required parameter's omission is, by the shared formatter, with the builder's remedy in
 					// the place of a pass-through's.
@@ -2452,12 +2452,12 @@ public actor DependencyTreeGenerator {
 						neededLevel: tier,
 						parameterLevel: hole.tierAccess,
 						seam: seam.concreteInstantiable,
-						parameter: Property(label: builder?.label ?? hole.builderLabel, typeDescription: builder?.parameterType ?? hole.builderType(qualifiedBy: hole.scopeSeamType)),
+						parameter: Property(label: builder?.label(inTierAt: tier) ?? hole.builderLabel(inTierAt: tier), typeDescription: builder?.parameterType ?? hole.builderType(qualifiedBy: hole.scopeSeamType)),
 						receivers: [],
 						parameterKind: .builder(fulfilledType: hole.instantiatedType, seamModuleName: seam.moduleName, isPassedUp: hole.innerSeamType != nil),
 						seamAccessIsRequiredByPublicMock: isRequiredByPublicMock,
 					)
-					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder?.label ?? hole.builderLabel): \((builder?.parameterType ?? hole.builderType(qualifiedBy: hole.scopeSeamType)).asSource)`, the builder for `\(hole.ownerType.asSource)`'s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(publicMockRequirement)\(causeText) \(remedies)"
+					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder?.label(inTierAt: tier) ?? hole.builderLabel(inTierAt: tier)): \((builder?.parameterType ?? hole.builderType(qualifiedBy: hole.scopeSeamType)).asSource)`, the builder for `\(hole.ownerType.asSource)`'s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(publicMockRequirement)\(causeText) \(remedies)"
 					declarationNotes = SeamAccessExplanation.declarationNotes(for: hole.accessCause, neededLevel: tier)
 				case let .parameters(.initializerCollides(parameters, builderLabels, handWrittenInitializer)):
 					receivers = []
@@ -3648,8 +3648,8 @@ public actor DependencyTreeGenerator {
 				callerModuleMockCondition: seams.currentModuleMockCondition,
 				receiversByLabel: ownPlan.receiversByLabel,
 				typesDeclaredEscaping: ownPlan.typesDeclaredEscaping.intersection(tierParameters.map(\.type)),
-				holes: ownPlan.plan.holes + ownPlan.plan.unpresentedHoles,
-				builders: ownPlan.plan.builders,
+				holes: (ownPlan.plan.holes + ownPlan.plan.unpresentedHoles).map { $0.atTier(tier) },
+				builders: ownPlan.plan.builders.map { $0.atTier(tier) },
 				scopeEnums: ownPlan.plan.scopeEnums,
 			)
 		}
@@ -4893,8 +4893,8 @@ public actor DependencyTreeGenerator {
 					builtInlineSeamComment: builtInlineSeamComment(leafInstantiable),
 					seamCall: SeamCall(
 						parameters: signature.parameters(ofTierAt: tier),
-						holes: signature.holes,
-						builders: signature.builders,
+						holes: signature.holes.map { $0.atTier(tier) },
+						builders: signature.builders.map { $0.atTier(tier) },
 						scopeEnums: signature.scopeEnums,
 						guardTypeName: signature.guardTypeName,
 						comment: seams.foreignSeams[instantiable.concreteInstantiable]?.callComment ?? .noComment,
@@ -5498,9 +5498,9 @@ public actor DependencyTreeGenerator {
 		// and skips the check, reaches the signature the seam's own module generates. It reads only the initializers of
 		// the declaration SafeDI reads: a hand-written twin in an extension SafeDI does not read is a redeclaration the
 		// compiler reports.
-		let builderLabels = shapedBuilders.builders.map(\.label)
 		for tier in tiers {
 			let tierParameters = parameters.filter { $0.tierAccess >= tier }
+			let builderLabels = shapedBuilders.builders.map { $0.label(inTierAt: tier) }
 			let tierLabels = tierParameters.map(\.property.label) + builderLabels
 			if generatesPlainInitializers || tierLabels.isEmpty,
 			   let handWrittenInitializer = seam.otherInitializers.first(where: { Self.initializer($0, isCallableWithLabels: tierLabels) })
@@ -6179,13 +6179,13 @@ public actor DependencyTreeGenerator {
 			instantiables: typeDescriptionToFulfillingInstantiableMap,
 		)
 		let treeFunctionNames = Self.builderFunctionNamesOfProperties(in: generator, includingHoleSites: false)
-		func shapedBuilders(namedApartFrom otherParameterLabels: Set<String>) -> ShapedBuilders {
+		func shapedBuilders(namedApartFrom otherParameters: [(label: String, access: AccessLevel)]) -> ShapedBuilders {
 			Self.shapedBuilders(
 				of: instantiable,
 				generator: generator,
 				holes: holes,
 				parameters: [],
-				otherParameterLabels: otherParameterLabels,
+				otherParameters: otherParameters,
 				treeFunctionNames: treeFunctionNames,
 				proof: publicMockContext.proof,
 				instantiables: typeDescriptionToFulfillingInstantiableMap,
@@ -6195,17 +6195,18 @@ public actor DependencyTreeGenerator {
 		}
 		let builders = shapedBuilders(namedApartFrom: [])
 		let builtGenerator = try mockRootGenerator(builders: builders)
-		// The builders follow every other parameter, and are named apart from them as a seam's are from its parameters. A
-		// builder's name changes no other parameter's, so the tree is built again only when a builder takes another name.
+		// The builders follow every other parameter, and each tier's are named apart from the parameters it takes as a seam's
+		// are. A builder's name changes no other parameter's, so the tree is built again only when a builder takes another
+		// name in some tier.
 		let parameters = await builtGenerator.mockRootParameters(instantiable: instantiable, mockDefaults: flatParameterMockDefaults)
-		let otherParameterLabels = ScopeGenerator.publicMockPlan(
+		let otherParameters = ScopeGenerator.publicMockPlan(
 			of: instantiable,
 			parameters: parameters,
 			parameterNames: ScopeGenerator.mockRootParameterNames(of: parameters),
 			context: publicMockContext,
-		).parameters.filter { $0.builder == nil }.map(\.name)
-		let buildersNamedApart = shapedBuilders(namedApartFrom: Set(otherParameterLabels))
-		guard buildersNamedApart.builders.map(\.label) != builders.builders.map(\.label) else { return builtGenerator }
+		).parameters.filter { $0.builder == nil }.map { (label: $0.name, access: $0.access) }
+		let buildersNamedApart = shapedBuilders(namedApartFrom: otherParameters)
+		guard buildersNamedApart.builders.map(SeamSignature.CallShape.Builder.init) != builders.builders.map(SeamSignature.CallShape.Builder.init) else { return builtGenerator }
 		return try mockRootGenerator(builders: buildersNamedApart)
 	}
 
