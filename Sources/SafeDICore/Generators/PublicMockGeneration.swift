@@ -879,7 +879,7 @@ extension ScopeGenerator {
 		// isolation, where a default may read the actor's state: each is a parameter of `mock()`, never a field of the
 		// nonisolated `SafeDIOverrides` initializer, and its provider shares the isolation.
 		let mockIsolation: String? = if instantiable.generatedMockIsGlobalActorIsolated {
-			instantiable.declarationIsolation.flatMap { $0 == "nonisolated" ? nil : $0 } ?? Initializer.globalActorAttribute(in: instantiable.mockAttributes)
+			instantiable.declaredGlobalActorIsolation ?? Initializer.globalActorAttribute(in: instantiable.mockAttributes)
 		} else {
 			nil
 		}

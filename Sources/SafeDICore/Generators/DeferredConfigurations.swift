@@ -83,9 +83,12 @@ extension ScopeGenerator {
 			/// Whether every configuration-typed field is deferred.
 			let defersEveryConfiguration: Bool
 
-			/// Whether the field that holds `child`'s configuration is deferred.
+			/// Whether the field that holds `child`'s configuration is deferred. A node that calls another module's public
+			/// mock needs no configuration struct, since its leaf declares neither children nor defaults
+			/// (`publicMockLeafInstantiable`), so the field that holds the mock's `SafeDIOverrides` keeps its `.init()`
+			/// default.
 			func defersConfiguration(of child: MockParameterNode) -> Bool {
-				guard child.needsConfigurationStruct, child.publicMockCall?.takesOverrides != true else {
+				guard child.needsConfigurationStruct else {
 					return false
 				}
 				if defersEveryConfiguration {
@@ -101,7 +104,8 @@ extension ScopeGenerator {
 		/// The locals a `mock()` binds its deferred configurations to, in the order its tree's walk reaches them, which is
 		/// the tree's pre-order: a configuration's local is bound before those of the configurations it holds.
 		final class Bindings {
-			/// - Parameter takenNames: The names declared at the top level of `mock()`'s body that no local may take.
+			/// - Parameter takenNames: The names no local may take: those of the builder functions the tree declares at any
+			///   level, which would shadow a local read beneath them, and of the locals `mock()` declares before them.
 			init(takenNames: Set<String>) {
 				self.takenNames = takenNames
 			}

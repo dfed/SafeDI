@@ -5324,9 +5324,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				DeferredConfigurations.Walk(
 					holder: .overrides(of: instantiable),
 					bindings: DeferredConfigurations.Bindings(
-						takenNames: Set(treePropertyNodes.map {
-							Self.functionName(toBuildPropertyNamed: Self.disambiguatedLabel(for: $0, labelMap: rootLabelMap))
-						} + sendableAutoclosureParameters.values.map(\.localName)),
+						takenNames: Self.builderFunctionNamesNamedByLabels(in: rootItems, rootLabelMap: rootLabelMap)
+							.union(sendableAutoclosureParameters.values.map(\.localName)),
 					),
 				)
 			} else {
@@ -6790,6 +6789,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				names.insert(dependency.property.label)
 			}
 			nodesToVisit.append(contentsOf: node.propertyChildren)
+		}
+		return names
+	}
+
+	/// The names of the builder functions an internal mock's tree declares at any level, each named after the
+	/// disambiguated label of the node it builds, as `generateMockBodyBindings` names them where no cycle-closing scope
+	/// renames one. A local bound at the top of `mock()` and read beneath a level that declares a function of its name
+	/// would be shadowed there. Only a public mock's tree has sites of holes, whose wrappers declare functions too.
+	private static func builderFunctionNamesNamedByLabels(
+		in rootItems: [MockTreeItem],
+		rootLabelMap: [String: [TypeDescription: String]],
+	) -> Set<String> {
+		var names = Set<String>()
+		// A stack of the levels left to visit, since a mock tree can be as deep as the module has types.
+		var levelsToVisit: [(items: [MockTreeItem], labelMap: [String: [TypeDescription: String]]?)] = [(rootItems, rootLabelMap)]
+		while let level = levelsToVisit.popLast() {
+			let propertyNodes = level.items.propertyNodes
+			let labelMap = level.labelMap ?? disambiguatePropertyLabels(for: propertyNodes)
+			for node in propertyNodes {
+				names.insert(functionName(toBuildPropertyNamed: disambiguatedLabel(for: node, labelMap: labelMap)))
+				levelsToVisit.append((node.children, nil))
+			}
 		}
 		return names
 	}
