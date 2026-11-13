@@ -3346,6 +3346,95 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnfulfillableErrorFromRoot_whenFillRequiresValueTypeOnPathForwardsOptionally() async {
+		// `Profile` forwards `theme: Theme?`, so the struct would carry `theme: Theme?` where `ThemedUserService` requires
+		// `theme: Theme`. The received-property walk reports it first, as inline: `fieldHeldOnlyOptionally` never sees a
+		// field that is optional because its declaration is.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["ThemedUserService.swift"]):9:5: error: @Received property `theme: Theme` is not @Instantiated or @Forwarded in chain: Root -> Service -> Instantiator<Profile> -> ThemedUserService. Did you mean `theme: Theme?`?
+			\(fixtures["App"]!["ThemedUserService.swift"]):9:26-9:31: fixit: Theme?
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Theme", declarations: []),
+						seamFixtureType(named: "Profile", declarations: ["@Forwarded let theme: Theme?", "@Instantiated let userService: any UserService"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let profileBuilder: Instantiator<Profile>"]),
+					],
+					app: [
+						Self.fulfillingType(named: "ThemedUserService", fulfilling: "UserService", declarations: ["@Received let theme: Theme"]),
+						Self.canonicalRoot,
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnfulfillableErrorFromRoot_whenFillRequiresValueSeamForwardsOptionally() async {
+		// The seam itself forwards `theme: Theme?`, which the received-property walk reports, as for a type on the path.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["ThemedUserService.swift"]):9:5: error: @Received property `theme: Theme` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Service> -> Profile -> ThemedUserService. Did you mean `theme: Theme?`?
+			\(fixtures["App"]!["ThemedUserService.swift"]):9:26-9:31: fixit: Theme?
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Theme", declarations: []),
+						seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Forwarded let theme: Theme?", "@Instantiated let profile: Profile"]),
+					],
+					app: [
+						Self.fulfillingType(named: "ThemedUserService", fulfilling: "UserService", declarations: ["@Received let theme: Theme"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let serviceBuilder: Instantiator<Service>"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnfulfillableErrorFromRoot_whenFillRequiresValueTypeOnPathRenamesOptionally() async {
+		// `Profile` renames `theme` to `currentTheme: Theme?` only if available, which the received-property walk reports
+		// where `ThemedUserService` requires `currentTheme: Theme`, as for a forwarded optional.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["ThemedUserService.swift"]):9:5: error: @Received property `currentTheme: Theme` is not @Instantiated or @Forwarded in chain: Root -> Service -> Profile -> ThemedUserService. Did you mean one of `currentTheme: Theme?`, `theme: Theme`?
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Theme", declarations: []),
+						seamFixtureType(named: "Profile", declarations: [#"@Received(fulfilledByDependencyNamed: "theme", ofType: Theme.self, onlyIfAvailable: true) let currentTheme: Theme?"#, "@Instantiated let userService: any UserService"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let profile: Profile"]),
+					],
+					app: [
+						Self.fulfillingType(named: "ThemedUserService", fulfilling: "UserService", declarations: ["@Received let currentTheme: Theme"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let theme: Theme", "@Instantiated let service: Service"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Cycles through a fill
 
 	@Test(arguments: [false, true])

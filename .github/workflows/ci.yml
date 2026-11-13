@@ -1022,6 +1022,19 @@ jobs:
   # Swift 6.2. It therefore runs in publish's container, swift:6.3, not the
   # test job's swift:6.2; keep it in step with publish.yml. It caches nothing,
   # so every module is compiled from scratch, as publish compiles it.
+  #
+  # Because every module compiles here, this job also fails when SafeDI's own
+  # sources produce a compiler warning. After the product it builds, one at a
+  # time, every target whose path `swift package describe` lists under Sources
+  # or Plugins (SafeDIMacros and the plugins among them), and fails on any
+  # warning located under Sources or Plugins of this checkout. A whole-package
+  # build would not do: with these flags it fails compiling
+  # SafeDIToolTestSupport ("no such module 'Testing'"). Warnings in
+  # dependencies (swift-syntax, swift-argument-parser, under .build) are
+  # ignored, which is why it reads the log instead of passing
+  # -warnings-as-errors. It sees only what Swift 6.3 reports on Linux: code
+  # under `#if canImport(Darwin)` and other Apple-only branches is not compiled
+  # here.
   linux-release-build:
     name: Build Release SafeDITool on Linux
     needs: changes
@@ -1033,8 +1046,25 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
-      - name: Build SafeDITool
-        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
+      - name: Build SafeDITool and Check for Warnings
+        shell: bash
+        run: |
+          set -eo pipefail
+          log="$RUNNER_TEMP/swift-build.log"
+          swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize 2>&1 | tee "$log"
+          targets=$(swift package describe | awk '/^ *Name: /{name=$2} /^ *Path: (Sources|Plugins)\//{print name}' | sort -u)
+          if [ -z "$targets" ]; then
+            echo "::error::swift package describe listed no target under Sources or Plugins."
+            exit 1
+          fi
+          for target in $targets; do
+            swift build -c release --target "$target" --static-swift-stdlib -Xswiftc -Osize 2>&1 | tee -a "$log"
+          done
+          if grep -F ': warning: ' "$log" | grep -F -e "$PWD/Sources/" -e "$PWD/Plugins/" > "$RUNNER_TEMP/source-warnings.log"; then
+            echo "::error::SafeDI's own sources produced a compiler warning:"
+            sort -u "$RUNNER_TEMP/source-warnings.log"
+            exit 1
+          fi
       - name: Smoke test
         run: .build/release/SafeDITool --version
 

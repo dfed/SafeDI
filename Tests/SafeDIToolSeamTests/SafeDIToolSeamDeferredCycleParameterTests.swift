@@ -428,6 +428,25 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenFillRequiresCycleParameterFunctionTakesOptionally() async {
+		// `TagReader` receives `tag` only if available, so the function that builds `A` takes `tag: Tag?`, which hides
+		// `Hub`'s pass-through, and the struct carries it as the function takes it, while `LiveApi` requires `tag: Tag`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag`, which the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) carries only as `tag: Tag?`, since `A`'s builder function takes it as a parameter, because a cycle inside `A`'s tree passes it, and no type `Hub`'s tree builds in that function requires `tag: Tag`. Receive it on `LiveApi` with `@Received(onlyIfAvailable: true) let tag: Tag?`, or make an @Instantiable declaration that fulfills `Api` one module `Feature` reads.
+			\(fixtures["Feature"]!["TagReader.swift"]):7:5: note: `TagReader` receives `tag: Tag?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(readerReceive: "@Received(onlyIfAvailable: true) let tag: Tag?", liveApiDeclarations: ["@Received let tag: Tag"]),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_mocksSeamInline_whenSeamWithSiteInsideCycleFunctionGeneratesMock() async throws {
 		// A mock builds `Hub`'s tree inline, as mocks build every seam, taking `api`, which it cannot build.
 		let modules = Self.modules(hubArguments: "generateDependencyTree: true, generateMock: true")
@@ -582,8 +601,8 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// fills the builder, holds only its own.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `tag: Tag`, which `TagReader` builds on the path where `Hub` calls `Inner`, but `Hub` passes the builder for `Inner`'s `api: any Api` (case `api` of `apiBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let tag: Tag` on `Inner`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `Api` one module `Feature` reads, so `Hub` fills the builder itself.
-			\(fixtures["Feature"]!["TagReader.swift"]):9:5: note: `TagReader` declares `tag: Tag` here.
+			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `tag: Tag`, which `A`'s builder function takes as a parameter on the path where `Hub` calls `Inner`, because a cycle inside `A`'s tree passes it, but `Hub` passes the builder for `Inner`'s `api: any Api` (case `api` of `apiBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let tag: Tag` on `Inner`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `Api` one module `Feature` reads, so `Hub` fills the builder itself.
+			\(fixtures["Feature"]!["TagReader.swift"]):9:5: note: `TagReader` receives `tag: Tag` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

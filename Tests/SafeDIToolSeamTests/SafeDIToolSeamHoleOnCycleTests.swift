@@ -352,9 +352,37 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillBuildsInlineValues_whenCycleInsideSendableInstantiatorClosesOnFunctionBuiltByValue() async throws {
+		// `Hub` builds `A` by value, and `B`, built in `A`'s `SendableInstantiator`, builds `A` again, which calls the function
+		// `Hub`'s tree builds `A` with from a `@Sendable` closure: that function is `@Sendable`, so it starts a stage of the
+		// place of `B`'s `api`, whose first stage the seam calls just before it.
+		let feature = [
+			"public protocol Api: Sendable {}",
+			seamFixtureType(named: "A", declarations: ["@Instantiated public let bBuilder: SendableInstantiator<B>"], conformances: ", Sendable"),
+			seamFixtureType(named: "B", declarations: ["@Instantiated public let api: any Api", "@Instantiated public let a: A"], conformances: ", Sendable"),
+			seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let a: A"], conformances: ", Sendable"),
+		]
+		try await expectValuesEqualInlineBuild(
+			feature: feature,
+			fulfiller: Self.liveApi([]),
+			root: Self.root([]),
+			probe: DifferentialValueProbe(
+				name: "B's api at each level",
+				expression: """
+				{ () -> [String] in
+				    let b = Root().hub.a.bBuilder.instantiate()
+				    return [b.api, b.a.bBuilder.instantiate().api].map { "\\($0)" }
+				}()
+				""",
+			),
+		)
+	}
+
 	// MARK: Fixtures
 
-	/// `Api`, `A`, `B` and `Hub`: `B` declares `b`'s declarations before its `aBuilder`, and `Hub` declares `hub`'s before its
+	/// `Api`, `A`, `B` and `Hub`:`B` declares `b`'s declarations before its `aBuilder`, and `Hub` declares `hub`'s before its
 	/// own.
 	private static func feature(b: [String], hub: [String] = []) -> [String] {
 		[
