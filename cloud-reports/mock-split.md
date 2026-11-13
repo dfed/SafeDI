@@ -266,14 +266,14 @@ file, `Sources/SafeDIToolLibrary/GenerateCommand.swift`: **+84 −9 lines**.
   - the three-module `ExampleBazelIntegration` run per module as the Bazel rule runs it (`Models`, `Subproject`,
     `ExampleBazelIntegration`);
   - `ExampleProjectIntegration` and `Example Package Integration`, each as one module.
-- Checked before pushing: SwiftFormat lint passes, and the full test suite result is in
-  [Tests](#tests). No new tests were written for the option.
+- Checked before pushing: SwiftFormat lint passes, and the full test suite passes ([Tests](#tests)). No new tests
+  were written for the option.
 - **Not done:** wiring into `bazel/safedi.bzl` (N declared outputs) or the Tuist plugin; a Manual entry; tests for
   the new option; placing `additionalMocksToGenerate` mocks and the mock configuration by hash too.
 
 ## Tests
 
-The full suite (`swift test --traits sourceBuild`) was still running when this commit was pushed; a follow-up commit records its result.
+`swift test --traits sourceBuild` on the prototype branch, Swift 6.2.4 on Linux, exit 0: "Test run with 4731 tests in 133 suites passed after 779.889 seconds with 3 known issues." The three known issues are ones the suite records itself, and none touches the new option, which no test exercises. SwiftFormat lint: `0/323 files require formatting`.
 
 ## Commands that failed
 
