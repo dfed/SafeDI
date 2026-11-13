@@ -3137,6 +3137,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let value = if unavailableProperties.contains(parameter.property) {
 				"nil"
 			} else if callSiteLazilyInstantiatedInstanceProperties.contains(parameter.property.asUnwrappedProperty) {
+				// A deliberate gap: reading the instance here creates it when the function is called, not when a receiver in
+				// the function's body first reads it. Mock generation does the same (`mockCycleParameterArguments`). See
+				// "Eager instances at a lazy cycle's calls" in `.claude/rules/cycle-generation.md`.
 				"\(label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 			} else {
 				label
@@ -7793,6 +7796,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let value: String = if node.cycleParameterArgumentUnavailableProperties.contains(parameter.property) {
 				"nil"
 			} else if node.callSiteLazilyInstantiatedInstanceProperties.contains(unwrappedProperty) {
+				// A deliberate gap: reading the instance here creates it when the function is called, not when a receiver in
+				// the function's body first reads it. Production does the same (`cycleParameterArguments`). See "Eager
+				// instances at a lazy cycle's calls" in `.claude/rules/cycle-generation.md`.
 				"\(disambiguatedLazilyInstantiatedBinding(named: label, withInstanceOfType: unwrappedProperty.typeDescription, disambiguationMap: flatParameterDisambiguationMap)?.name ?? label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 			} else {
 				// The `LazilyInstantiated` the mock wrapped around the instance it was passed, or the binding the label was renamed to.
