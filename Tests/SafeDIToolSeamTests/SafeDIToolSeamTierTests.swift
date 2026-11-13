@@ -1362,9 +1362,321 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		)
 	}
 
+	// MARK: Each tier names its builders apart from its own parameters and wider ones only
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsPublicTiersBuilderLabelAndEnum_whenPackageParameterTakesBuildersLabel() async throws {
+		// `Badge`, a `package` type in `Host`'s tree, receives `serviceBuilder` only if available, so only `Host`'s `package`
+		// tier takes it. The `public` tier names its builder `serviceBuilder` over `SafeDIScope_Service`, as it would without
+		// `Badge`; the `package` tier names the same builder apart from its parameter. `Mid`, in `Host`'s package, calls the
+		// `package` tier, and `App`, in another package, the `public` one.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: Self.hostWithBadgeReceivingServiceBuilder, swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration),
+				ModuleFixture(name: "Mid", packageName: "Shop", swiftFileContent: [Self.rootFillingServiceOfHost(named: "MidRoot")], dependencies: ["Feature"]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [Self.rootFillingServiceOfHost(named: "AppRoot")], dependencies: ["Feature"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(try #require(output.modules["Feature"]).generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Host {
+		    @frozen public enum SafeDIScope_Service {
+		        case service(service_Values)
+
+		        public struct service_Values {
+		            package var serviceBuilder: Thing? { __safeDI_serviceBuilder.instance }
+		            package let badge: Badge
+		            let __safeDI_serviceBuilder: LazilyInstantiated<Thing?>
+
+		            init(serviceBuilder: LazilyInstantiated<Thing?>, badge: Badge) {
+		                __safeDI_serviceBuilder = serviceBuilder
+		                self.badge = badge
+		            }
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public init(serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
+		        self.init(__safeDI_serviceBuilder: serviceBuilder)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public init(__safeDI_serviceBuilder __safeDI_serviceBuilder_: @escaping (SafeDIScope_Service) -> any Service) {
+		        self.init(__safeDI_serviceBuilder: nil, __safeDI_service_ServiceBuilder: __safeDI_serviceBuilder_)
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    package init(serviceBuilder: Thing?, service_ServiceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
+		        self.init(__safeDI_serviceBuilder: serviceBuilder, __safeDI_service_ServiceBuilder: service_ServiceBuilder)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    package init(__safeDI_serviceBuilder: @autoclosure @escaping () -> Thing?, __safeDI_service_ServiceBuilder __safeDI_serviceBuilder_: @escaping (SafeDIScope_Service) -> any Service) {
+		        let serviceBuilder = LazilyInstantiated<Thing?>(__safeDI_serviceBuilder)
+		        let badge = Badge(serviceBuilder: serviceBuilder.instance)
+		        let service: any Service = __safeDI_serviceBuilder_(.service(SafeDIScope_Service.service_Values(serviceBuilder: serviceBuilder, badge: badge)))
+		        self.init(service: service, badge: badge)
+		    }
+		}
+
+		extension Host {
+		    public enum __safeDI_Host_C6E7807A1A8B8684 {}
+		}
+		"""])
+		#expect(try #require(output.modules["Mid"]).generatedFiles == ["Mid.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension MidRoot {
+		    public init() {
+		        func __safeDI_host() -> Host {
+		            _ = Host.__safeDI_Host_C6E7807A1A8B8684.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_serviceBuilder_Host(_ scope: Host.SafeDIScope_Service) -> any Service {
+		                switch scope {
+		                case .service:
+		                    let service: any Service = ServiceImpl()
+		                    return service
+		                }
+		            }
+		            return Host(__safeDI_serviceBuilder: nil, __safeDI_service_ServiceBuilder: __safeDI_serviceBuilder_Host)
+		        }
+		        let host: Host = __safeDI_host()
+		        self.init(host: host)
+		    }
+		}
+		"""])
+		#expect(try #require(output.modules["App"]).generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension AppRoot {
+		    public init() {
+		        func __safeDI_host() -> Host {
+		            _ = Host.__safeDI_Host_C6E7807A1A8B8684.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_serviceBuilder_Host(_ scope: Host.SafeDIScope_Service) -> any Service {
+		                switch scope {
+		                case .service:
+		                    let service: any Service = ServiceImpl()
+		                    return service
+		                }
+		            }
+		            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host)
+		        }
+		        let host: Host = __safeDI_host()
+		        self.init(host: host)
+		    }
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsPublicTiersStagedBuilderLabel_whenPackageParameterTakesBuildersLabel() async throws {
+		// As above, but `Host` holds `service` in a `SendableLazilyInstantiated`, so the place is staged and has a builder of
+		// its own. The `public` tier names it `serviceBuilder_service`, as it would without `Badge`; the `package` tier, whose
+		// `serviceBuilder` parameter renames the hole type's stem, names it `service_ServiceBuilder_service`. `Mid`, in
+		// `Host`'s package, passes its fill under the `package` tier's label, and `App`, in another package, under the
+		// `public` one's.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: Self.hostWithBadgeReceivingServiceBuilderAndSendableService, swiftFileContentByFilePath: plainDependencyTreeInitializersConfiguration),
+				ModuleFixture(name: "Mid", packageName: "Shop", swiftFileContent: [Self.rootFillingServiceOfHost(named: "MidRoot")], dependencies: ["Feature"]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [Self.rootFillingServiceOfHost(named: "AppRoot")], dependencies: ["Feature"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(try #require(output.modules["Feature"]).generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Host {
+		    public enum SafeDIStagedScope_Service_service {
+		        public struct Stage1 {
+		            package var serviceBuilder: Thing? { __safeDI_serviceBuilder.instance }
+		            package let badge: Badge
+		            let __safeDI_serviceBuilder: LazilyInstantiated<Thing?>
+
+		            init(serviceBuilder: LazilyInstantiated<Thing?>, badge: Badge) {
+		                __safeDI_serviceBuilder = serviceBuilder
+		                self.badge = badge
+		            }
+		        }
+
+		        public struct Stage2 {}
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public init(serviceBuilder_service: @escaping (SafeDIStagedScope_Service_service.Stage1) -> @Sendable (SafeDIStagedScope_Service_service.Stage2) -> any Service) {
+		        self.init(__safeDI_serviceBuilder_service: serviceBuilder_service)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public init(__safeDI_serviceBuilder_service: @escaping (SafeDIStagedScope_Service_service.Stage1) -> @Sendable (SafeDIStagedScope_Service_service.Stage2) -> any Service) {
+		        self.init(__safeDI_serviceBuilder: nil, __safeDI_service_ServiceBuilder_service: __safeDI_serviceBuilder_service)
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    package init(serviceBuilder: Thing?, service_ServiceBuilder_service: @escaping (SafeDIStagedScope_Service_service.Stage1) -> @Sendable (SafeDIStagedScope_Service_service.Stage2) -> any Service) {
+		        self.init(__safeDI_serviceBuilder: serviceBuilder, __safeDI_service_ServiceBuilder_service: service_ServiceBuilder_service)
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    package init(__safeDI_serviceBuilder: @autoclosure @escaping () -> Thing?, __safeDI_service_ServiceBuilder_service __safeDI_serviceBuilder_service: @escaping (SafeDIStagedScope_Service_service.Stage1) -> @Sendable (SafeDIStagedScope_Service_service.Stage2) -> any Service) {
+		        let serviceBuilder = LazilyInstantiated<Thing?>(__safeDI_serviceBuilder)
+		        let badge = Badge(serviceBuilder: serviceBuilder.instance)
+		        let __safeDI_serviceBuilder_service_Stage2 = __safeDI_serviceBuilder_service(SafeDIStagedScope_Service_service.Stage1(serviceBuilder: serviceBuilder, badge: badge))
+		        @Sendable func __safeDI_service() -> any Service {
+		            __safeDI_serviceBuilder_service_Stage2(SafeDIStagedScope_Service_service.Stage2())
+		        }
+		        let service = SendableLazilyInstantiated<any Service>(__safeDI_service)
+		        self.init(service: service, badge: badge)
+		    }
+		}
+
+		extension Host {
+		    public enum __safeDI_Host_B6CC9A154A8FE04A {}
+		}
+		"""])
+		#expect(try #require(output.modules["Mid"]).generatedFiles == ["Mid.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension MidRoot {
+		    public init() {
+		        func __safeDI_host() -> Host {
+		            _ = Host.__safeDI_Host_B6CC9A154A8FE04A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_service_ServiceBuilder_service(_ scope: Host.SafeDIStagedScope_Service_service.Stage1) -> @Sendable (Host.SafeDIStagedScope_Service_service.Stage2) -> any Service {
+		                @Sendable func __safeDI_service_ServiceBuilder_service_Stage2(_ scope: Host.SafeDIStagedScope_Service_service.Stage2) -> any Service {
+		                    @Sendable func __safeDI_service() -> ServiceImpl {
+		                        ServiceImpl()
+		                    }
+		                    return __safeDI_service()
+		                }
+		                return __safeDI_service_ServiceBuilder_service_Stage2
+		            }
+		            return Host(__safeDI_serviceBuilder: nil, __safeDI_service_ServiceBuilder_service: __safeDI_service_ServiceBuilder_service)
+		        }
+		        let host: Host = __safeDI_host()
+		        self.init(host: host)
+		    }
+		}
+		"""])
+		#expect(try #require(output.modules["App"]).generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension AppRoot {
+		    public init() {
+		        func __safeDI_host() -> Host {
+		            _ = Host.__safeDI_Host_B6CC9A154A8FE04A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_serviceBuilder_service(_ scope: Host.SafeDIStagedScope_Service_service.Stage1) -> @Sendable (Host.SafeDIStagedScope_Service_service.Stage2) -> any Service {
+		                @Sendable func __safeDI_serviceBuilder_service_Stage2(_ scope: Host.SafeDIStagedScope_Service_service.Stage2) -> any Service {
+		                    @Sendable func __safeDI_service() -> ServiceImpl {
+		                        ServiceImpl()
+		                    }
+		                    return __safeDI_service()
+		                }
+		                return __safeDI_serviceBuilder_service_Stage2
+		            }
+		            return Host(__safeDI_serviceBuilder_service: __safeDI_serviceBuilder_service)
+		        }
+		        let host: Host = __safeDI_host()
+		        self.init(host: host)
+		    }
+		}
+		"""])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// `Host`, a `public` seam holding the hole `service` and `badge`, whose `package` type receives `serviceBuilder: Thing?`
+	/// only if available.
+	private static let hostWithBadgeReceivingServiceBuilder = [
+		"public protocol Service {}",
+		"package struct Thing {}",
+		"""
+		@Instantiable
+		package struct Badge: Instantiable {
+		    package init(serviceBuilder: Thing?) {
+		        self.serviceBuilder = serviceBuilder
+		    }
+
+		    @Received(onlyIfAvailable: true) let serviceBuilder: Thing?
+		}
+		""",
+		"""
+		@Instantiable(generateDependencyTree: true)
+		public struct Host: Instantiable {
+		    init(service: any Service, badge: Badge) {
+		        self.service = service
+		        self.badge = badge
+		    }
+
+		    @Instantiated let service: any Service
+		    @Instantiated let badge: Badge
+		}
+		""",
+	]
+
+	/// `Host`, as `hostWithBadgeReceivingServiceBuilder` but holding the hole `service` in a `SendableLazilyInstantiated`,
+	/// which makes the place staged.
+	private static let hostWithBadgeReceivingServiceBuilderAndSendableService = [
+		"public protocol Service: Sendable {}",
+		"package struct Thing {}",
+		"""
+		@Instantiable
+		package struct Badge: Instantiable {
+		    package init(serviceBuilder: Thing?) {
+		        self.serviceBuilder = serviceBuilder
+		    }
+
+		    @Received(onlyIfAvailable: true) let serviceBuilder: Thing?
+		}
+		""",
+		"""
+		@Instantiable(generateDependencyTree: true)
+		public struct Host: Instantiable {
+		    init(service: SendableLazilyInstantiated<any Service>, badge: Badge) {
+		        self.service = service
+		        self.badge = badge
+		    }
+
+		    @Instantiated let service: SendableLazilyInstantiated<any Service>
+		    @Instantiated let badge: Badge
+		}
+		""",
+	]
+
+	/// A root named `name` that instantiates `Host` and declares `ServiceImpl`, which fills `Host`'s hole.
+	private static func rootFillingServiceOfHost(named name: String) -> String {
+		"""
+		import Feature
+
+		@Instantiable(fulfillingAdditionalTypes: [(any Service).self])
+		public struct ServiceImpl: Instantiable, Service {
+		    public init() {}
+		}
+
+		@Instantiable(isRoot: true)
+		public struct \(name): Instantiable {
+		    public init(host: Host) {
+		        self.host = host
+		    }
+
+		    @Instantiated let host: Host
+		}
+		"""
+	}
 
 	private static let badgeWithPackageInit = """
 	@Instantiable

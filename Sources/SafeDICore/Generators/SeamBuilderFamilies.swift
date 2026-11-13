@@ -82,14 +82,18 @@ extension DependencyTreeGenerator {
 	/// a `@Sendable` function, and a staged place of an inner seam, has a builder of its own. An enum exists only if it has a
 	/// case. A seam's caller fills or passes up per instantiated type, so every place one of its enums reaches is filled or
 	/// none is; a public mock's caller decides per place.
-	/// - Parameter otherParameterLabels: The labels of a public mock's parameters, which its builders follow and are named
-	///   apart from as a seam's builders are from its parameters.
+	///
+	/// Each tier names its builders apart from the parameters it takes, which are its own and those of every wider tier, so
+	/// a parameter only a narrower tier takes never renames a wider tier's builder. The widest tier's stems name the enums,
+	/// one per hole type and family whatever tier takes them.
+	/// - Parameter otherParameters: The labels of a public mock's parameters, each with the access of the narrowest tier
+	///   that takes it, which its builders follow and are named apart from as a seam's builders are from its parameters.
 	static func shapedBuilders(
 		of seam: Instantiable,
 		generator: ScopeGenerator,
 		holes flatHoles: [SeamSignature.Hole],
 		parameters: [SeamSignature.Parameter],
-		otherParameterLabels: Set<String> = [],
+		otherParameters: [(label: String, access: AccessLevel)] = [],
 		treeFunctionNames: Set<String>,
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
@@ -166,26 +170,50 @@ extension DependencyTreeGenerator {
 		// The stem of each hole type, from its instantiated type, named apart.
 		let holeTypes = Array(Set(enumKeysInReachOrder.map(\.holeType) + stagedHoleSites.compactMap { holesBySite[$0]?.holeType }))
 			.sorted { ($0.instantiatedType.asSource, $0.builtType.asSource) < ($1.instantiatedType.asSource, $1.builtType.asSource) }
-		let parameterLabels = Set(parameters.map(\.property.label)).union(otherParameterLabels)
-		let stemByHoleType = stems(of: holeTypes, parameterLabels: parameterLabels)
+		// Each tier's labels, widest first: the widest tier's stems also name the enums and order the builders.
+		let tierNames = Self.tierNames(
+			of: holeTypes,
+			parameters: parameters.map { (label: $0.property.label, access: $0.tierAccess) } + otherParameters,
+			widestTier: seamTypeAccess,
+		)
+		let stemByHoleType = tierNames[0].stemByHoleType
+		func plainLabel(of holeType: SeamSignature.HoleType, in names: TierNames) -> String {
+			Self.plainBuilderLabel(ofStem: names.stemByHoleType[holeType, default: ""])
+		}
+		func sendableLabel(of holeType: SeamSignature.HoleType, in names: TierNames) -> String {
+			Self.sendableBuilderLabel(ofStem: names.stemByHoleType[holeType, default: ""])
+		}
 		func plainLabel(of holeType: SeamSignature.HoleType) -> String {
-			Self.plainBuilderLabel(ofStem: stemByHoleType[holeType, default: ""])
+			plainLabel(of: holeType, in: tierNames[0])
 		}
 		func sendableLabel(of holeType: SeamSignature.HoleType) -> String {
-			Self.sendableBuilderLabel(ofStem: stemByHoleType[holeType, default: ""])
+			sendableLabel(of: holeType, in: tierNames[0])
+		}
+		/// The labels the narrower tiers take a builder under where they differ from the widest tier's.
+		func narrowerTierLabels(_ label: (TierNames) -> String) -> [AccessLevel: String] {
+			var labels = [AccessLevel: String]()
+			let widestLabel = label(tierNames[0])
+			for names in tierNames.dropFirst() where label(names) != widestLabel {
+				labels[names.tier] = label(names)
+			}
+			return labels
 		}
 
 		// Builder order: per hole type in label order, then plain, `@Sendable`, staged.
 		let orderedHoleTypes = holeTypes.sorted { plainLabel(of: $0) < plainLabel(of: $1) }
-		var takenLabels = parameterLabels
-		for holeType in orderedHoleTypes {
-			takenLabels.insert(plainLabel(of: holeType))
-			takenLabels.insert(sendableLabel(of: holeType))
+		var takenLabelsByTier = tierNames.map { names in
+			var takenLabels = names.parameterLabels
+			for holeType in orderedHoleTypes {
+				takenLabels.insert(plainLabel(of: holeType, in: names))
+				takenLabels.insert(sendableLabel(of: holeType, in: names))
+			}
+			return takenLabels
 		}
 		var takenStagedScopeTypeNames = Set<String>()
 		struct StagedDraft {
 			let site: SeamSignature.Hole.Site
 			let label: String
+			let narrowerTierLabels: [AccessLevel: String]
 		}
 		var stagedDraftsByHoleType = [SeamSignature.HoleType: [StagedDraft]]()
 		for site in stagedHoleSites {
@@ -194,11 +222,22 @@ extension DependencyTreeGenerator {
 			let stem = stemByHoleType[holeType, default: ""]
 			let isOwnPlace = hole.innerSeamType == nil
 			let caseName = isOwnPlace ? SeamSignature.Hole.caseName(of: hole.sitePath) : hole.placeCaseName
-			var label = (isOwnPlace ? "\(plainLabel(of: holeType))_\(caseName)" : "\(plainLabel(of: holeType))_\(Self.seamStem(of: hole.scopeSeamType))_\(caseName)").spelledAsIdentifier
-			while !takenLabels.insert(label).inserted {
-				label = "\(label)_".spelledAsJoinedIdentifier
+			// Each tier's label, named apart from what that tier takes.
+			let labels = tierNames.indices.map { tierIndex in
+				let plainLabel = plainLabel(of: holeType, in: tierNames[tierIndex])
+				var label = (isOwnPlace ? "\(plainLabel)_\(caseName)" : "\(plainLabel)_\(Self.seamStem(of: hole.scopeSeamType))_\(caseName)").spelledAsIdentifier
+				while !takenLabelsByTier[tierIndex].insert(label).inserted {
+					label = "\(label)_".spelledAsJoinedIdentifier
+				}
+				return label
+			}
+			let label = labels[0]
+			var narrowerTierLabels = [AccessLevel: String]()
+			for tierIndex in tierNames.indices.dropFirst() where labels[tierIndex] != label {
+				narrowerTierLabels[tierNames[tierIndex].tier] = labels[tierIndex]
 			}
 			holesBySite[site]?.builderLabel = label
+			holesBySite[site]?.narrowerTierBuilderLabels = narrowerTierLabels
 			if isOwnPlace {
 				var scopeTypeName = "\(scopeTypeNames.staged)_\(stem)_\(caseName)".spelledAsIdentifier
 				while !takenStagedScopeTypeNames.insert(scopeTypeName).inserted {
@@ -206,7 +245,7 @@ extension DependencyTreeGenerator {
 				}
 				holesBySite[site]?.scopeTypeName = scopeTypeName
 			}
-			stagedDraftsByHoleType[holeType, default: []].append(StagedDraft(site: site, label: label))
+			stagedDraftsByHoleType[holeType, default: []].append(StagedDraft(site: site, label: label, narrowerTierLabels: narrowerTierLabels))
 		}
 
 		// The names the initializer's body declares for its builders, in a fixed order. Every other name of the tree is
@@ -223,6 +262,7 @@ extension DependencyTreeGenerator {
 				let key = SeamSignature.ScopeEnum.Key(seamType: seamType, holeType: holeType, isSendable: isSendable)
 				guard let draftCases = draftCasesByKey[key] else { continue }
 				let label = isSendable ? sendableLabel(of: holeType) : plainLabel(of: holeType)
+				let builderNarrowerTierLabels = narrowerTierLabels { isSendable ? sendableLabel(of: holeType, in: $0) : plainLabel(of: holeType, in: $0) }
 				let internalName = names.claim(ScopeGenerator.functionName(toBuildPropertyNamed: label))
 				if !isSendable {
 					internalNameByPlainHoleType[holeType] = internalName
@@ -291,6 +331,7 @@ extension DependencyTreeGenerator {
 					tierAccess: narrowest.level,
 					accessCause: narrowest.cause,
 					narrowingInnerSeam: narrowest.seam,
+					narrowerTierLabels: builderNarrowerTierLabels,
 				))
 			}
 			for staged in stagedDraftsByHoleType[holeType, default: []].sorted(by: { $0.label < $1.label }) {
@@ -310,6 +351,7 @@ extension DependencyTreeGenerator {
 					tierAccess: hole.tierAccess,
 					accessCause: hole.accessCause,
 					narrowingInnerSeam: nil,
+					narrowerTierLabels: staged.narrowerTierLabels,
 				))
 			}
 		}
@@ -317,6 +359,7 @@ extension DependencyTreeGenerator {
 		for site in holesBySite.keys.sorted(by: { $0.sortKey < $1.sortKey }) {
 			guard let hole = holesBySite[site], hole.stages.count == 1 else { continue }
 			holesBySite[site]?.builderLabel = plainLabel(of: hole.holeType)
+			holesBySite[site]?.narrowerTierBuilderLabels = narrowerTierLabels { plainLabel(of: hole.holeType, in: $0) }
 			holesBySite[site]?.internalName = internalNameByPlainHoleType[hole.holeType] ?? ScopeGenerator.functionName(toBuildPropertyNamed: plainLabel(of: hole.holeType))
 		}
 		// The functions that build the wrapper places come after the builders and their stages. Two places in separate scopes of
@@ -390,6 +433,29 @@ extension DependencyTreeGenerator {
 	/// lists in a fixed order, so a caller's spelling never depends on anything else.
 	private static func returnType(of holeType: SeamSignature.HoleType, in holes: [SeamSignature.Hole]) -> TypeDescription {
 		holes.first { $0.holeType == holeType }?.builtType ?? holeType.builtType
+	}
+
+	/// What one tier names its builders by.
+	struct TierNames {
+		let tier: AccessLevel
+		/// The labels of the parameters the tier takes: its own and every wider tier's.
+		let parameterLabels: Set<String>
+		let stemByHoleType: [SeamSignature.HoleType: String]
+	}
+
+	/// The names of each tier that `parameters`, each with the access of the narrowest tier that takes it, give `holeTypes`,
+	/// widest first: `widestTier`, then each narrower access among `parameters`, each tier's stems computed from the labels
+	/// it takes alone, so they never depend on the order the parameters are declared in.
+	private static func tierNames(
+		of holeTypes: [SeamSignature.HoleType],
+		parameters: [(label: String, access: AccessLevel)],
+		widestTier: AccessLevel,
+	) -> [TierNames] {
+		let tiers = [widestTier] + Set(parameters.map(\.access)).filter { $0 < widestTier }.sorted(by: >)
+		return tiers.map { tier in
+			let parameterLabels = Set(parameters.filter { $0.access >= tier }.map(\.label))
+			return TierNames(tier: tier, parameterLabels: parameterLabels, stemByHoleType: stems(of: holeTypes, parameterLabels: parameterLabels))
+		}
 	}
 
 	/// The stem each of `holeTypes` is named by: its instantiated type as an identifier, unless it collides with another's or a
