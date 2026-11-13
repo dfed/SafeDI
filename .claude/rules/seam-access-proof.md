@@ -5,7 +5,6 @@ paths:
   - "Sources/SafeDIToolLibrary/GenerateCommand.swift"
   - "Tests/**/*Seam*.swift"
   - "Tests/**/*Hole*.swift"
-  - "Tests/**/*GenerateDependencyTree*.swift"
   - "Tests/**/*UnreadType*.swift"
 ---
 
