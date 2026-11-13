@@ -136,9 +136,11 @@ SafeDIInfo = provider(
     doc = "Module info artifact (`.safedi`) emitted by `safedi_compile`.",
     fields = {
         "module_info": "The `.safedi` file describing this module's @Instantiable surface.",
+        "module_info_positions": "The positions sidecar of `module_info` (prototype).",
         "transitive_module_infos": """A depset of this module's `.safedi`
 file and that of every module beneath it, collected through `deps` as
 rules_swift collects `SwiftInfo.transitive_modules`.""",
+        "transitive_module_info_positions": "The positions sidecars of `transitive_module_infos` (prototype).",
     },
 )
 
@@ -178,6 +180,9 @@ def _compilation_conditions_from_copts(copts):
 
 def _safedi_compile_impl(ctx):
     module_info = ctx.actions.declare_file(ctx.label.name + ".safedi")
+    # Prototype: the module's source positions, which dependents read only when what they write names them.
+    module_info_positions = ctx.actions.declare_file(ctx.label.name + ".safedipositions")
+    unused_inputs = ctx.actions.declare_file(ctx.label.name + "_unused_inputs.txt")
     combined = ctx.actions.declare_file(ctx.label.name + ".swift")
     input_csv = _write_csv(ctx, ctx.label.name + "_sources.csv", ctx.files.srcs)
 
@@ -205,6 +210,9 @@ def _safedi_compile_impl(ctx):
         # this rule writes to the CSV, so the generated `#sourceLocation`
         # directives can name them and stay free of machine-specific paths.
         "--compiler-receives-input-paths-unchanged",
+        "--split-module-info-positions",
+        "--unused-inputs-list-output",
+        unused_inputs.path,
     ]
 
     # rules_swift applies `copt` in the target configuration and
@@ -263,8 +271,12 @@ def _safedi_compile_impl(ctx):
     ctx.actions.run(
         executable = ctx.toolchains[_SAFEDITOOL_TOOLCHAIN_TYPE].safeditool,
         toolchain = _SAFEDITOOL_TOOLCHAIN_TYPE,
-        inputs = depset(ctx.files.srcs + [input_csv] + extra_inputs, transitive = [module_infos_beneath]),
-        outputs = [combined, module_info],
+        inputs = depset(
+            ctx.files.srcs + [input_csv] + extra_inputs,
+            transitive = [module_infos_beneath] + [dependency[SafeDIInfo].transitive_module_info_positions for dependency in ctx.attr.deps],
+        ),
+        outputs = [combined, module_info, module_info_positions, unused_inputs],
+        unused_inputs_list = unused_inputs,
         arguments = arguments,
         mnemonic = "SafeDI",
         progress_message = "SafeDI compile for %{label}",
@@ -278,7 +290,12 @@ def _safedi_compile_impl(ctx):
         DefaultInfo(files = depset([combined])),
         SafeDIInfo(
             module_info = module_info,
+            module_info_positions = module_info_positions,
             transitive_module_infos = depset([module_info], transitive = module_infos_of_dependencies),
+            transitive_module_info_positions = depset(
+                [module_info_positions],
+                transitive = [dependency[SafeDIInfo].transitive_module_info_positions for dependency in ctx.attr.deps],
+            ),
         ),
     ]
 
