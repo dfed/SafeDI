@@ -234,7 +234,7 @@ public struct SeamSignature: Sendable {
 	public struct Hole: Sendable {
 		/// A value in scope at the site, which the scope struct the builder is handed carries.
 		public struct Field: Sendable {
-			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, deferral: Parameter.Deferral = .none) {
+			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, parameterTakingType: TypeDescription? = nil, deferral: Parameter.Deferral = .none) {
 				self.property = property
 				self.deferral = deferral
 				self.access = access
@@ -242,6 +242,7 @@ public struct SeamSignature: Sendable {
 				self.declaringType = declaringType
 				self.declarationLocation = declarationLocation
 				self.isReceivedOnlyIfAvailable = isReceivedOnlyIfAvailable
+				self.parameterTakingType = parameterTakingType
 			}
 
 			/// The value's label and the type of its declaration.
@@ -260,6 +261,9 @@ public struct SeamSignature: Sendable {
 			/// Whether the field passes through a parameter the seam's tree receives only if available, so a caller
 			/// may pass `nil` for it.
 			public let isReceivedOnlyIfAvailable: Bool
+			/// For a parameter of a builder function a lazy cycle closes on (`CycleParameter`), the type whose builder
+			/// function takes it, else `nil`.
+			public let parameterTakingType: TypeDescription?
 			/// How the seam takes the parameter the field is bound from (`SeamSignature.Parameter.deferral`): `.none` for a
 			/// field bound from a declaration inside the seam's tree, or from a parameter taken by value. The seam's tree
 			/// holds a deferred parameter in a `LazilyInstantiated` (`SendableLazilyInstantiated` when `@Sendable`), which
@@ -295,10 +299,11 @@ public struct SeamSignature: Sendable {
 		/// of its label is bound after the site. A fill whose tree receives such a label is an error, since inline the
 		/// receive reads that declaration.
 		public struct UncarriedDeclaration: Sendable {
-			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, builtAfter: Property?, reason: Reason) {
+			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, parameterTakingType: TypeDescription? = nil, builtAfter: Property?, reason: Reason) {
 				self.property = property
 				self.declaringType = declaringType
 				self.declarationLocation = declarationLocation
+				self.parameterTakingType = parameterTakingType
 				self.builtAfter = builtAfter
 				self.reason = reason
 			}
@@ -342,6 +347,9 @@ public struct SeamSignature: Sendable {
 			public let property: Property
 			public let declaringType: TypeDescription
 			public let declarationLocation: Dependency.DeclarationLocation?
+			/// For a parameter of a builder function a lazy cycle closes on (`CycleParameter`), the type whose builder
+			/// function takes it, else `nil`: `declaringType` is then the first type in the function's body that receives it.
+			public let parameterTakingType: TypeDescription?
 			/// The property of the scope on the site's path that the declaration's scope builds before it, or `nil`.
 			public let builtAfter: Property?
 			public let reason: Reason
