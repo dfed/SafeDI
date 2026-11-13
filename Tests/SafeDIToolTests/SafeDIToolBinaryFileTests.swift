@@ -219,6 +219,19 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func schemaFingerprint_isChecksumOfSchemaDescription() {
+		// The fingerprint is checked in, because describing the schema by reflection scans the runtime's
+		// protocol conformance tables, which cost most of a small module's `generate`. A change to how a stored
+		// type is written changes the description, and so fails here until the fingerprint is updated.
+		let fingerprintOfSchemaDescription = Array(BinaryFile.schemaDescription.utf8).withUnsafeBytes(BinaryFile.checksum(of:))
+
+		#expect(
+			BinaryFile.schemaFingerprint == fingerprintOfSchemaDescription,
+			"The layout of a type SafeDITool's files hold changed. Set `BinaryFile.schemaFingerprint` to 0x\(String(fingerprintOfSchemaDescription, radix: 16, uppercase: true)).",
+		)
+	}
+
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func scan_writesIdenticalCache_whenScanningUnchangedSourcesTwice() async throws {
 		let project = try await scannedKitchenSinkProject()
