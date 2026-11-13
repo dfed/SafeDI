@@ -1834,7 +1834,9 @@ public struct Generate: AsyncParsableCommand {
 			let hasSidecar = FileManager.default.fileExists(atPath: sidecarPath)
 			if !opensFilesBeneath, !listedPaths.contains(path) {
 				unused.append(path)
-				if hasSidecar { unused.append(sidecarPath) }
+				if hasSidecar {
+					unused.append(sidecarPath)
+				}
 				continue
 			}
 			guard hasSidecar, !hasWarnings else { continue }
