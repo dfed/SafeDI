@@ -47,7 +47,7 @@ SafeDI is a compile-time dependency injection framework for Swift. It uses Swift
 | Module | Role |
 |--------|------|
 | `SafeDICore` | Models (`TypeDescription`, `Property`, `Instantiable`, `Dependency`), visitors (`FileVisitor`, `InstantiableVisitor`), generators (`ScopeGenerator`, `DependencyTreeGenerator`) |
-| `SafeDIMacros` | Swift macro implementations (`@Instantiable`, `@Received`, etc.) |
+| `SafeDIMacros` | Swift macro implementations (`@Instantiable`, `@Received`, etc.), compiled with the SafeDICore files they use; see `Sources/SafeDIMacros/CLAUDE.md` |
 | `SafeDIToolLibrary` | The CLI's `scan`, `generate`, `query`, and `dump` subcommands — scans Swift files for `@Instantiable` types, builds dependency tree, generates output; `query` reports what one type needs |
 | `SafeDITool` | The executable, which only runs `SafeDIToolLibrary`'s root command (`SafeDIToolCommandLine.rootCommand`). The commands live in a library so that the test targets depend on a library: Swift Build orders a target that depends on an executable target after the module it imports only when that target is a test target nothing depends on, which `SafeDIToolTestSupport` is not. The executable keeps the name `SafeDITool`, which names the tool the plugin asks for and the binary releases ship |
 | Plugins (`SafeDIGenerator`) | SPM build tool plugin that wires the tool into the build |

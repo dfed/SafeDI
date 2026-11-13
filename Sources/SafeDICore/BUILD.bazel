@@ -4,9 +4,33 @@ load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 # via a Sources/SafeDIMacros/SafeDICore symlink in SPM). Bazel's glob
 # doesn't follow symlinked directories, so we expose the raw sources
 # here and let SafeDIMacros pull them into its own compile unit.
+#
+# The macros leave out the sources only SafeDITool uses, as the
+# SafeDIMacros target's `exclude` list in Package.swift does: the macro
+# plugin is built before any file that uses SafeDI's macros can compile,
+# so every source it leaves out shortens every clean build.
+# `MacroTargetSourceTests` checks that the two lists agree.
 filegroup(
     name = "SafeDICoreSources",
-    srcs = glob(["**/*.swift"]),
+    srcs = glob(
+        ["**/*.swift"],
+        exclude = [
+            "Generators/**",
+            "Utilities/**",
+            "Extensions/ImportDeclSyntaxExtensions.swift",
+            "Models/AliasDeclarationReferences.swift",
+            "Models/CycleParameter.swift",
+            "Models/ImportStatement.swift",
+            "Models/SafeDIToolManifest.swift",
+            "Models/Scope.swift",
+            "Models/SeamSignature.swift",
+            "Models/SourceDiagnostic.swift",
+            "Models/TypeAccessProof.swift",
+            "Models/TypeRequirements.swift",
+            "Models/WithoutPositions.swift",
+            "Visitors/FileVisitor.swift",
+        ],
+    ),
     visibility = ["//Sources/SafeDIMacros:__pkg__"],
 )
 

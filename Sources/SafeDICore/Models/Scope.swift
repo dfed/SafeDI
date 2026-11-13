@@ -1139,31 +1139,6 @@ private struct ScopeGeneratorUnderConstruction {
 	private let startsCodeGeneration: Bool
 }
 
-extension Dependency {
-	/// The by-value property with which types further down the tree receive the instance of the lazily
-	/// instantiated property this dependency puts in scope. `nil` when it puts none in scope: a received
-	/// dependency declares nothing, whichever type it is.
-	var lazilyInstantiatedInstanceProperty: Property? {
-		switch source {
-		case .instantiated:
-			property.asLazilyInstantiatedInstanceProperty
-		case .aliased, .forwarded:
-			property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding
-		case .received:
-			nil
-		}
-	}
-
-	/// The dependency’s property, followed by `lazilyInstantiatedInstanceProperty` when there is one.
-	var receivableProperties: [Property] {
-		if let lazilyInstantiatedInstanceProperty {
-			[property, lazilyInstantiatedInstanceProperty]
-		} else {
-			[property]
-		}
-	}
-}
-
 extension Instantiable {
 	/// The properties the type is forwarded. A lazily instantiated one is followed by the property that
 	/// receives its instance by value.
@@ -1173,20 +1148,6 @@ extension Instantiable {
 				.filter { $0.source == .forwarded }
 				.flatMap(\.receivableProperties),
 		)
-	}
-}
-
-extension Dependency.Source {
-	/// Whether the dependency is `@Received` under its declared label and type. An aliased dependency is not: the
-	/// generated code binds it from its fulfilling property. Cycle validation counts a required alias as receiving
-	/// that property; see `DependencyTreeGenerator.closingReceive(of:in:)`.
-	var isReceived: Bool {
-		switch self {
-		case .received:
-			true
-		case .instantiated, .aliased, .forwarded:
-			false
-		}
 	}
 }
 

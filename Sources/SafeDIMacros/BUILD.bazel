@@ -3,7 +3,8 @@ load("@build_bazel_rules_swift//swift:swift.bzl", "swift_compiler_plugin")
 # SafeDIMacros inlines SafeDICore's sources into the same module (SPM
 # does this via a Sources/SafeDIMacros/SafeDICore symlink; Bazel's glob
 # doesn't follow symlinked dirs, so we pull them in explicitly via the
-# `SafeDICoreSources` filegroup).
+# `SafeDICoreSources` filegroup, which leaves out the sources only
+# SafeDITool uses).
 swift_compiler_plugin(
     name = "SafeDIMacros",
     srcs = glob(["**/*.swift"]) + ["//Sources/SafeDICore:SafeDICoreSources"],

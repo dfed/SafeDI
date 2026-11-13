@@ -10279,7 +10279,7 @@ extension DependencyTreeGenerator {
 			return (inPreferredFile.isEmpty ? candidates.filter(\.isVisibleOutsideItsFile) : inPreferredFile)
 				.enumerated()
 				.min { lhs, rhs in
-					(TypeAccessProof.normalized(lhs.element.levelBeforeExtendedTypeCap), lhs.offset) < (TypeAccessProof.normalized(rhs.element.levelBeforeExtendedTypeCap), rhs.offset)
+					(AccessLevel.normalized(lhs.element.levelBeforeExtendedTypeCap), lhs.offset) < (AccessLevel.normalized(rhs.element.levelBeforeExtendedTypeCap), rhs.offset)
 				}?
 				.element
 		}

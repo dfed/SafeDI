@@ -183,7 +183,7 @@ struct PlainTypeNamesInAnyClause {
 			declaredTypes.insert(GuardedPlainTypeNames.DeclaredType(
 				name: name.spelledWithoutBackticks,
 				outermostName: outermostName.spelledWithoutBackticks,
-				level: TypeAccessProof.normalized(declaration.levelBeforeExtendedTypeCap),
+				level: AccessLevel.normalized(declaration.levelBeforeExtendedTypeCap),
 			))
 		}
 	}

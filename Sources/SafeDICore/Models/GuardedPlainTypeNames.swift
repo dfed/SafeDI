@@ -42,7 +42,7 @@ public struct GuardedPlainTypeNames: Codable, Hashable, Sendable {
 		///   - outermostName: The name of the outermost type enclosing it, or its own when nothing encloses it, without
 		///     the backticks it was written with.
 		///   - level: The level its declaration gives it before the type an enclosing extension extends caps it
-		///     (`PlainTypeDeclaration.levelBeforeExtendedTypeCap`), normalized (`TypeAccessProof.normalized(_:)`).
+		///     (`PlainTypeDeclaration.levelBeforeExtendedTypeCap`), normalized (`AccessLevel.normalized(_:)`).
 		public init(name: String, outermostName: String, level: AccessLevel) {
 			self.name = name
 			self.outermostName = outermostName

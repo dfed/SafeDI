@@ -200,7 +200,7 @@ enum SeamAccessExplanation {
 		return (cause?.provingPlainDeclarations ?? []).flatMap { declaration in
 			declaration.accessNeeds.compactMap { accessNeed -> SourceDiagnostic? in
 				guard let type = accessNeed.declaration.declaredType,
-				      TypeAccessProof.normalized(accessNeed.level) < neededLevel,
+				      AccessLevel.normalized(accessNeed.level) < neededLevel,
 				      let location = accessNeed.access.declarationStartLocation
 				else { return nil }
 				let subject = if case .extensionDeclaringType = accessNeed.declaration {
@@ -493,7 +493,7 @@ enum SeamAccessExplanation {
 	private static func declarationLevelsByModule(_ declarations: [PlainTypeDeclaration]) -> [(moduleName: String?, level: AccessLevel)] {
 		var levelsByModule = [(moduleName: String?, level: AccessLevel)]()
 		for declaration in declarations {
-			let level = TypeAccessProof.normalized(declaration.levelBeforeExtendedTypeCap)
+			let level = AccessLevel.normalized(declaration.levelBeforeExtendedTypeCap)
 			if let index = levelsByModule.firstIndex(where: { $0.moduleName == declaration.moduleName }) {
 				levelsByModule[index].level = min(levelsByModule[index].level, level)
 			} else {
