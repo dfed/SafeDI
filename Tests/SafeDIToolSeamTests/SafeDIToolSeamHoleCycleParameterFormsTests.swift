@@ -260,7 +260,7 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		guard compileVerificationIsEnabled else { return }
 		let inlineModules = Self.modules(readerReceive: readerReceive, liveApiReceive: liveApiReceive, fulfillerInFeature: true)
 		let inlineOutput = try await executeSafeDIToolMultiModuleTest(modules: inlineModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: SafeDIToolSeamBuilderParameterTests.differentialValuePath(of: output, modules: modules),
 			knownRight: SafeDIToolSeamBuilderParameterTests.differentialValuePath(of: inlineOutput, modules: inlineModules),
 			probes: [

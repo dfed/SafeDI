@@ -112,7 +112,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -182,7 +182,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -333,7 +333,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: Across modules

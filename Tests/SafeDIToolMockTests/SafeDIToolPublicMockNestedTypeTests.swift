@@ -149,7 +149,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 		// The public mock builds the `Child.Theme` default that a hand-written mock building `Child()` builds.
 		let generatedFiles = try #require(output.generatedFiles)
 		let fixtureFiles = ["Theme.swift": topLevelTheme, "Root.swift": Self.root(instantiating: "child: Child"), "Child.swift": Self.childWithNestedTheme]
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: generatedFiles),
 			knownRight: DifferentialValuePath(
 				fixtureFiles: fixtureFiles,

@@ -1735,7 +1735,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		// The known-right path's `Root.mock()` builds what production builds: each closure present.
 		let generatedFiles = try #require(output.generatedFiles)
 		let fixtureFiles = ["Handlers.swift": handlersSource, "Root.swift": rootSource, "Child.swift": childSource]
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: generatedFiles),
 			knownRight: DifferentialValuePath(
 				fixtureFiles: fixtureFiles,

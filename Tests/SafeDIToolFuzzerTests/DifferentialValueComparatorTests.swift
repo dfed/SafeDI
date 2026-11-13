@@ -51,33 +51,33 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_rejectsNilAgainstValue_whenFeaturePathPassesNilWhereKnownRightPathPassesTheSharedInstance() throws {
-		#expect(try Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: ["e: a": "e: nil"]), filesToDelete: &filesToDelete) == [
+	mutating func compare_rejectsNilAgainstValue_whenFeaturePathPassesNilWhereKnownRightPathPassesTheSharedInstance() async throws {
+		#expect(try await Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: ["e: a": "e: nil"]), filesToDelete: &filesToDelete) == [
 			DifferentialValueDifference(probe: "Root()", path: ["<1> Root", "e"], feature: "e: nil", knownRight: "e: <2> A (seen, first at <1> Root > a)"),
 		])
 	}
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_rejectsSecondInstanceAgainstSharedOne_whenFeaturePathCreatesAnInstanceTheKnownRightPathShares() throws {
+	mutating func compare_rejectsSecondInstanceAgainstSharedOne_whenFeaturePathCreatesAnInstanceTheKnownRightPathShares() async throws {
 		// The feature path's extra instance numbers everything after it one higher, which is no difference.
-		#expect(try Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: ["b: B(a: a, c: C())": "b: B(a: A(), c: C())"]), filesToDelete: &filesToDelete) == [
+		#expect(try await Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: ["b: B(a: a, c: C())": "b: B(a: A(), c: C())"]), filesToDelete: &filesToDelete) == [
 			DifferentialValueDifference(probe: "Root()", path: ["<1> Root", "b", "a"], feature: "a: <4> A", knownRight: "a: <2> A (seen, first at <1> Root > a)"),
 		])
 	}
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_rejectsDifferentDefaultValue_whenFeaturePathPassesAnotherValueForTheStoredDefault() throws {
-		#expect(try Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: ["title: \"default\"": "title: \"other\""]), filesToDelete: &filesToDelete) == [
+	mutating func compare_rejectsDifferentDefaultValue_whenFeaturePathPassesAnotherValueForTheStoredDefault() async throws {
+		#expect(try await Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: ["title: \"default\"": "title: \"other\""]), filesToDelete: &filesToDelete) == [
 			DifferentialValueDifference(probe: "Root()", path: ["<1> Root", "title"], feature: "title: String \"other\"", knownRight: "title: String \"default\""),
 		])
 	}
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_rejectsDifferenceBeneathEachCallOfAnInstantiator_whenTheInstancesAnInstantiatorBuildsReceiveAnotherValue() throws {
-		#expect(try Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: ["bBuilder: Instantiator { B(a: a, c: C()) }": "bBuilder: Instantiator { B(a: A(), c: C()) }"]), filesToDelete: &filesToDelete) == [
+	mutating func compare_rejectsDifferenceBeneathEachCallOfAnInstantiator_whenTheInstancesAnInstantiatorBuildsReceiveAnotherValue() async throws {
+		#expect(try await Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: ["bBuilder: Instantiator { B(a: a, c: C()) }": "bBuilder: Instantiator { B(a: A(), c: C()) }"]), filesToDelete: &filesToDelete) == [
 			DifferentialValueDifference(probe: "Root()", path: ["<1> Root", "bBuilder", "instantiate()", "a"], feature: "a: <7> A", knownRight: "a: <2> A (seen, first at <1> Root > a)"),
 			DifferentialValueDifference(probe: "Root()", path: ["<1> Root", "bBuilder", "instantiate() again", "a"], feature: "a: <10> A", knownRight: "a: <2> A (seen, first at <1> Root > a)"),
 		])
@@ -85,8 +85,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_rejectsOneInstanceFromEveryCall_whenFeaturePathsInstantiatorReturnsAnInstanceItBuiltOnce() throws {
-		#expect(try Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: [
+	mutating func compare_rejectsOneInstanceFromEveryCall_whenFeaturePathsInstantiatorReturnsAnInstanceItBuiltOnce() async throws {
+		#expect(try await Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: [
 			"let a = A()": "let a = A()\n        let builtOnce = B(a: a, c: C())",
 			"bBuilder: Instantiator { B(a: a, c: C()) }": "bBuilder: Instantiator { builtOnce }",
 		]), filesToDelete: &filesToDelete) == [
@@ -96,8 +96,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_rejectsADependencyHoistedOutOfAnInstantiator_whenFeaturePathsInstantiatorCapturesAnInstanceItShouldBuildOnEachCall() throws {
-		#expect(try Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: [
+	mutating func compare_rejectsADependencyHoistedOutOfAnInstantiator_whenFeaturePathsInstantiatorCapturesAnInstanceItShouldBuildOnEachCall() async throws {
+		#expect(try await Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: [
 			"let a = A()": "let a = A()\n        let hoistedC = C()",
 			"bBuilder: Instantiator { B(a: a, c: C()) }": "bBuilder: Instantiator { B(a: a, c: hoistedC) }",
 		]), filesToDelete: &filesToDelete) == [
@@ -107,18 +107,18 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_rejectsDifferenceBeneathLazilyInstantiated_whenTheInstanceReadLastReceivesAnotherValue() throws {
-		#expect(try Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: ["lazyB: LazilyInstantiated { B(a: a, c: C()) }": "lazyB: LazilyInstantiated { B(a: A(), c: C()) }"]), filesToDelete: &filesToDelete) == [
+	mutating func compare_rejectsDifferenceBeneathLazilyInstantiated_whenTheInstanceReadLastReceivesAnotherValue() async throws {
+		#expect(try await Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: ["lazyB: LazilyInstantiated { B(a: a, c: C()) }": "lazyB: LazilyInstantiated { B(a: A(), c: C()) }"]), filesToDelete: &filesToDelete) == [
 			DifferentialValueDifference(probe: "Root()", path: ["<10>.instance", "a"], feature: "a: <12> A", knownRight: "a: <2> A (seen, first at <1> Root > a)"),
 		])
 	}
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_rejectsAnInstanceReadBeforeTheProbeIsDescribed_whenFeaturePathReadsItsLazilyInstantiatedWrapperDuringConstruction() throws {
+	mutating func compare_rejectsAnInstanceReadBeforeTheProbeIsDescribed_whenFeaturePathReadsItsLazilyInstantiatedWrapperDuringConstruction() async throws {
 		// The instance read during construction is the one read last, and the two paths' instances agree: only the
 		// wrapper's state tells an eager read from a lazy one.
-		#expect(try Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: [
+		#expect(try await Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: [
 			"let a = A()": "let a = A()\n        let lazyB = LazilyInstantiated { B(a: a, c: C()) }\n        _ = lazyB.instance",
 			"lazyB: LazilyInstantiated { B(a: a, c: C()) }": "lazyB: lazyB",
 		]), filesToDelete: &filesToDelete) == [
@@ -128,8 +128,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_reportsOneDifferenceAnExemptionAccepts_whenFeaturePathsLazilyInstantiatedClosureCapturesAnInstanceBuiltBeforeIt() throws {
-		let comparison = try DifferentialValueOracle.compare(
+	mutating func compare_reportsOneDifferenceAnExemptionAccepts_whenFeaturePathsLazilyInstantiatedClosureCapturesAnInstanceBuiltBeforeIt() async throws {
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: Self.stampedPath(initializerBody: "let made = B(a: a)\n        self.init(a: a, lazyB: LazilyInstantiated { made })"),
 			knownRight: Self.stampedPath(initializerBody: "self.init(a: a, lazyB: LazilyInstantiated { B(a: a) })"),
 			probes: [DifferentialValueProbe("Root()")],
@@ -146,8 +146,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_comparesWhatAnInstanceHolds_whenItsOnlyDifferenceIsBeingBuiltBeforeTheProbesValue() throws {
-		let comparison = try DifferentialValueOracle.compare(
+	mutating func compare_comparesWhatAnInstanceHolds_whenItsOnlyDifferenceIsBeingBuiltBeforeTheProbesValue() async throws {
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: Self.stampedPath(initializerBody: "let made = B(a: A())\n        self.init(a: a, lazyB: LazilyInstantiated { made })"),
 			knownRight: Self.stampedPath(initializerBody: "self.init(a: a, lazyB: LazilyInstantiated { B(a: a) })"),
 			probes: [DifferentialValueProbe("Root()")],
@@ -162,7 +162,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_comparesTheInstanceAndEveryLaterReference_whenALazilyInstantiatedWrapperDiffersOnlyByItsState() throws {
+	mutating func compare_comparesTheInstanceAndEveryLaterReference_whenALazilyInstantiatedWrapperDiffersOnlyByItsState() async throws {
 		let fixture = """
 		public final class A {
 		    public init() {}
@@ -188,7 +188,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			DifferentialValuePath(fixtureFiles: ["Root.swift": fixture], generatedFiles: ["Root+Make.swift": "extension Root {\n    convenience init() {\n        let a = A()\n        \(initializerBody)\n        self.init(a: a, lazyB: lazyB, lazyBAgain: lazyB)\n    }\n}\n"])
 		}
 
-		let comparison = try DifferentialValueOracle.compare(
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: path(initializerBody: "let lazyB = LazilyInstantiated { B(a: A()) }\n        _ = lazyB.instance"),
 			knownRight: path(initializerBody: "let lazyB = LazilyInstantiated { B(a: a) }"),
 			probes: [DifferentialValueProbe("Root()")],
@@ -205,7 +205,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_reportsOneDifference_whenAnInstantiatorTheProbeCallsReadsTheInstanceAClosureCapturedBeforeItsWrapper() throws {
+	mutating func compare_reportsOneDifference_whenAnInstantiatorTheProbeCallsReadsTheInstanceAClosureCapturedBeforeItsWrapper() async throws {
 		// The probe's own call of `cBuilder` reads the instance, as the builder SafeDI generates for a type that
 		// receives it by value does, before the wrapper is met and before its instance is read last.
 		func path(initializerBody: String) -> DifferentialValuePath {
@@ -215,7 +215,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			)
 		}
 
-		let comparison = try DifferentialValueOracle.compare(
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: path(initializerBody: "let made = X()\n        let lazyX = LazilyInstantiated { made }"),
 			knownRight: path(initializerBody: "let lazyX = LazilyInstantiated { X() }"),
 			probes: [DifferentialValueProbe("RootBuilderFirst()")],
@@ -234,8 +234,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_rejectsMissingTraversal_whenFeaturePathStoresAWrapperTheComparatorDoesNotTraverseWhereKnownRightPathStoresOneItDoes() throws {
-		let comparison = try DifferentialValueOracle.compare(
+	mutating func compare_rejectsMissingTraversal_whenFeaturePathStoresAWrapperTheComparatorDoesNotTraverseWhereKnownRightPathStoresOneItDoes() async throws {
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: DifferentialValuePath(
 				fixtureFiles: ["Graph.swift": Self.graphFixture.replacingOccurrences(of: "Instantiator<B>", with: "ErasedInstantiator<(), B>")],
 				generatedFiles: ["Root+SafeDI.swift": Self.graphGeneratedCode(replacing: ["bBuilder: Instantiator { B(a: a, c: C()) }": "bBuilder: ErasedInstantiator { B(a: a, c: C()) }"])],
@@ -253,7 +253,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_rejectsWhatACycleClosingBuilderBuilds_whenFeaturePathsCycleClosingBuilderBuildsAnotherValue() throws {
+	mutating func compare_rejectsWhatACycleClosingBuilderBuilds_whenFeaturePathsCycleClosingBuilderBuildsAnotherValue() async throws {
 		let fixture = """
 		public final class Root {
 		    public init(a: A, t1: T1) {
@@ -309,7 +309,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			with: "let t2Builder = Instantiator<T2> { T2(a: A(), t1Builder: Instantiator<T1>(__safeDI_t1Builder)) }\n                    return",
 		)
 
-		let comparison = try DifferentialValueOracle.compare(
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: DifferentialValuePath(fixtureFiles: ["Graph.swift": fixture], generatedFiles: ["Root+SafeDI.swift": featureGenerated]),
 			knownRight: DifferentialValuePath(fixtureFiles: ["Graph.swift": fixture], generatedFiles: ["Root+SafeDI.swift": knownRightGenerated]),
 			probes: [DifferentialValueProbe("Root()")],
@@ -329,7 +329,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_rejectsAnotherDynamicType_whenAnExistentialHoldsAValueOfAnotherTypeThatReflectsAlike() throws {
+	mutating func compare_rejectsAnotherDynamicType_whenAnExistentialHoldsAValueOfAnotherTypeThatReflectsAlike() async throws {
 		let fixture = """
 		public final class Holder {
 		    public init(number: Any, text: any StringProtocol) {
@@ -341,7 +341,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let comparison = try DifferentialValueOracle.compare(
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: DifferentialValuePath(fixtureFiles: ["Holder.swift": fixture], generatedFiles: ["Holder+Make.swift": "extension Holder {\n    static func make() -> Holder {\n        Holder(number: Int32(1), text: Substring(\"x\"))\n    }\n}\n"]),
 			knownRight: DifferentialValuePath(fixtureFiles: ["Holder.swift": fixture], generatedFiles: ["Holder+Make.swift": "extension Holder {\n    static func make() -> Holder {\n        Holder(number: 1, text: \"x\")\n    }\n}\n"]),
 			probes: [DifferentialValueProbe("Holder.make()")],
@@ -356,7 +356,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_reportsEachElementOnlyOnePathHolds_whenCollectionsDifferInLength() throws {
+	mutating func compare_reportsEachElementOnlyOnePathHolds_whenCollectionsDifferInLength() async throws {
 		let fixture = """
 		public final class Holder {
 		    public init(more: [Int], fewer: [Int]) {
@@ -368,7 +368,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let comparison = try DifferentialValueOracle.compare(
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: DifferentialValuePath(fixtureFiles: ["Holder.swift": fixture], generatedFiles: ["Holder+Make.swift": "extension Holder {\n    static func make() -> Holder {\n        Holder(more: [1, 2], fewer: [1])\n    }\n}\n"]),
 			knownRight: DifferentialValuePath(fixtureFiles: ["Holder.swift": fixture], generatedFiles: ["Holder+Make.swift": "extension Holder {\n    static func make() -> Holder {\n        Holder(more: [1], fewer: [1, 2])\n    }\n}\n"]),
 			probes: [DifferentialValueProbe("Holder.make()")],
@@ -384,7 +384,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_comparesSetsAndDictionariesOfClassInstancesByKindAndCountOnly_whenTheyHoldInstances() throws {
+	mutating func compare_comparesSetsAndDictionariesOfClassInstancesByKindAndCountOnly_whenTheyHoldInstances() async throws {
 		let fixture = """
 		public final class Node: Hashable {
 		    public init(value: Int) {
@@ -413,7 +413,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			DifferentialValuePath(fixtureFiles: ["Holder.swift": fixture], generatedFiles: ["Holder+Make.swift": "extension Holder {\n    static func make() -> Holder {\n        Holder(\(arguments))\n    }\n}\n"])
 		}
 
-		let comparison = try DifferentialValueOracle.compare(
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: path("nodes: [Node(value: 1), Node(value: 2)], nodesByName: [\"a\": Node(value: 1)], values: [1, 2]"),
 			knownRight: path("nodes: [Node(value: 1), Node(value: 3)], nodesByName: [\"a\": Node(value: 1), \"b\": Node(value: 2)], values: [1, 3]"),
 			probes: [DifferentialValueProbe("Holder.make()")],
@@ -431,7 +431,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_rejectsDifferentDefaultValue_whenASuperclassStoresTheDefault() throws {
+	mutating func compare_rejectsDifferentDefaultValue_whenASuperclassStoresTheDefault() async throws {
 		let fixture = """
 		open class Base {
 		    public init(title: String) {
@@ -451,7 +451,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let comparison = try DifferentialValueOracle.compare(
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: DifferentialValuePath(fixtureFiles: ["Child.swift": fixture], generatedFiles: ["Child+Make.swift": "extension Child {\n    static func make() -> Child {\n        Child(a: A(), title: \"other\")\n    }\n}\n"]),
 			knownRight: DifferentialValuePath(fixtureFiles: ["Child.swift": fixture], generatedFiles: ["Child+Make.swift": "extension Child {\n    static func make() -> Child {\n        Child(a: A())\n    }\n}\n"]),
 			probes: [DifferentialValueProbe("Child.make()")],
@@ -474,8 +474,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_reportsEveryDifferenceOfEachProbe_whenSeveralProbesDifferInSeveralPlaces() throws {
-		let comparison = try DifferentialValueOracle.compare(
+	mutating func compare_reportsEveryDifferenceOfEachProbe_whenSeveralProbesDifferInSeveralPlaces() async throws {
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: Self.graphPath(generated: Self.graphGeneratedCode(replacing: [
 				"e: a": "e: nil",
 				"title: \"default\"": "title: \"other\"",
@@ -504,8 +504,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_reportsOnlyTheProbeThatDiffers_whenAnEarlierProbeBuildsAnExtraInstance() throws {
-		let comparison = try DifferentialValueOracle.compare(
+	mutating func compare_reportsOnlyTheProbeThatDiffers_whenAnEarlierProbeBuildsAnExtraInstance() async throws {
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: Self.graphPath(generated: Self.graphGeneratedCode(replacing: ["b: B(a: a, c: C())": "b: B(a: A(), c: C())"])),
 			knownRight: Self.graphPath(generated: Self.graphGeneratedCode()),
 			probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("B(a: A(), c: C())")],
@@ -522,7 +522,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_acceptsAPathWrittenDifferently_whenItBuildsTheSameValues() throws {
+	mutating func compare_acceptsAPathWrittenDifferently_whenItBuildsTheSameValues() async throws {
 		// Builder functions declared in another order, the shared instance bound through other names, an instance
 		// built in a closure called at once, a default spelled another way, and the lazily built instance's wrapper
 		// declared first. Reading the instance early is a difference: the wrapper's line shows it.
@@ -543,7 +543,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let comparison = try DifferentialValueOracle.compare(
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: Self.graphPath(generated: featureGenerated),
 			knownRight: Self.graphPath(generated: Self.graphGeneratedCode()),
 			probes: [DifferentialValueProbe("Root()")],
@@ -644,7 +644,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		let featureOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: featureFixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
 		let probes = [DifferentialValueProbe("Root()"), DifferentialValueProbe("B.mock()")]
 
-		let comparison = try DifferentialValueOracle.compare(
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: DifferentialValuePath(fixtureFiles: featureFixtureFiles, generatedFiles: try #require(featureOutput.generatedFiles)),
 			knownRight: DifferentialValuePath(fixtureFiles: knownRightFixtureFiles, generatedFiles: try #require(knownRightOutput.generatedFiles)),
 			probes: probes,
@@ -683,7 +683,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_acceptsAGraphSplitAcrossModules_whenAModuleIsNamedLikeATypeItDeclaresANestedTypeIn() throws {
+	mutating func compare_acceptsAGraphSplitAcrossModules_whenAModuleIsNamedLikeATypeItDeclaresANestedTypeIn() async throws {
 		let feature = """
 		public final class Feature {
 		    public init() {}
@@ -708,7 +708,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			DifferentialValueModule(name: "App", fixtureFiles: ["Feature.swift": feature, "Root.swift": root]),
 		])
 
-		let comparison = try DifferentialValueOracle.compare(feature: splitPath, knownRight: singlePath, probes: [DifferentialValueProbe("Root()")], filesToDelete: &filesToDelete)
+		let comparison = try await DifferentialValueOracle.compare(feature: splitPath, knownRight: singlePath, probes: [DifferentialValueProbe("Root()")], filesToDelete: &filesToDelete)
 
 		// Only the leading `Feature.` names the module: `Feature.Feature.Settings` is `Feature.Settings`, as
 		// `App.Feature.Settings` is.
@@ -728,8 +728,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func differences_removeExactlyTheDifferencesEqualToAnExemption_whenAProbeDiffersInSeveralPlaces() throws {
-		let comparison = try DifferentialValueOracle.compare(
+	mutating func differences_removeExactlyTheDifferencesEqualToAnExemption_whenAProbeDiffersInSeveralPlaces() async throws {
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: Self.graphPath(generated: Self.graphGeneratedCode(replacing: ["e: a": "e: nil", "title: \"default\"": "title: \"other\""])),
 			knownRight: Self.graphPath(generated: Self.graphGeneratedCode()),
 			probes: [DifferentialValueProbe("Root()")],
@@ -754,7 +754,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_showsEachStoredPropertyByItsSpelling_whenAFixtureStoresEveryKindOfValue() throws {
+	mutating func describe_showsEachStoredPropertyByItsSpelling_whenAFixtureStoresEveryKindOfValue() async throws {
 		let fixture = """
 		public protocol Shape {}
 		public final class Plain: Shape {
@@ -816,7 +816,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
 			probes: [DifferentialValueProbe("Root(shared: Plain())")],
 			filesToDelete: &filesToDelete,
@@ -879,7 +879,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_traversesEachWrapperByItsKind_whenAFixtureStoresEveryWrapper() throws {
+	mutating func describe_traversesEachWrapperByItsKind_whenAFixtureStoresEveryWrapper() async throws {
 		let fixture = """
 		public final class Root {
 		    public init(
@@ -953,7 +953,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
 			probes: [DifferentialValueProbe("Root.make()")],
 			filesToDelete: &filesToDelete,
@@ -993,7 +993,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_marksTheInstanceAndNotItsWrapper_whenAStampedFixturesLazilyInstantiatedInstanceWasReadBeforeTheProbesValueWasBuilt() throws {
+	mutating func describe_marksTheInstanceAndNotItsWrapper_whenAStampedFixturesLazilyInstantiatedInstanceWasReadBeforeTheProbesValueWasBuilt() async throws {
 		let fixture = """
 		\(Self.stampCounter)
 		public final class B {
@@ -1018,7 +1018,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
 			probes: [DifferentialValueProbe("Root.make()")],
 			filesToDelete: &filesToDelete,
@@ -1039,7 +1039,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_marksAnInstanceBuiltBeforeTheProbesValue_whenAnInstantiatorTheProbeCallsReadsItFirst_inEitherDeclarationOrder() throws {
+	mutating func describe_marksAnInstanceBuiltBeforeTheProbesValue_whenAnInstantiatorTheProbeCallsReadsItFirst_inEitherDeclarationOrder() async throws {
 		let makers = """
 		extension RootBuilderFirst {
 		    static func lazy() -> RootBuilderFirst {
@@ -1075,7 +1075,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": Self.lazyInstanceReadByBuilderFixture, "Makers.swift": makers]),
 			probes: ["RootBuilderFirst", "RootLazyFirst"].flatMap { root in
 				["lazy", "readDuringConstruction", "capturedPreBuilt"].map { DifferentialValueProbe("\(root).\($0)()") }
@@ -1146,7 +1146,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_leavesALazilyBuiltInstanceUnmarked_whenTheProbesValueAlsoHoldsIt() throws {
+	mutating func describe_leavesALazilyBuiltInstanceUnmarked_whenTheProbesValueAlsoHoldsIt() async throws {
 		// A mock builds the instance of a lazily instantiated wrapper up front when the mocked type itself takes it by
 		// value: a path that holds the instance differs from one that does not by its identity, not by a mark.
 		let fixture = """
@@ -1172,7 +1172,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
 			probes: [DifferentialValueProbe("Root.make()")],
 			filesToDelete: &filesToDelete,
@@ -1190,7 +1190,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_leavesAConstantOfTheProbesValueUnmarked_whenAnInstantiatorDeclaredBeforeItShowsItFirst() throws {
+	mutating func describe_leavesAConstantOfTheProbesValueUnmarked_whenAnInstantiatorDeclaredBeforeItShowsItFirst() async throws {
 		// Generated code builds a root's constants before the root, so `a`'s stamp is below the root's, and the probe's
 		// call of `bBuilder` shows it before the root's own property does.
 		let fixture = """
@@ -1223,7 +1223,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
 			probes: [DifferentialValueProbe("Root.make()")],
 			filesToDelete: &filesToDelete,
@@ -1244,7 +1244,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_marksALazilyBuiltInstanceBuiltBeforeTheProbesValue_whateverTheWrapperAndWhetherItIsOptional() throws {
+	mutating func describe_marksALazilyBuiltInstanceBuiltBeforeTheProbesValue_whateverTheWrapperAndWhetherItIsOptional() async throws {
 		let fixture = """
 		\(Self.stampCounter)
 		public final class B: Sendable {
@@ -1291,7 +1291,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
 			probes: [DifferentialValueProbe("Root.make()")],
 			filesToDelete: &filesToDelete,
@@ -1318,7 +1318,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_leavesALazilyBuiltInstanceUnmarked_whenItsOwnDependenciesAreBuiltInsideItsWrappersClosure() throws {
+	mutating func describe_leavesALazilyBuiltInstanceUnmarked_whenItsOwnDependenciesAreBuiltInsideItsWrappersClosure() async throws {
 		let fixture = """
 		\(Self.stampCounter)
 		public final class A {
@@ -1346,7 +1346,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
 			probes: [DifferentialValueProbe("Root.make()")],
 			filesToDelete: &filesToDelete,
@@ -1365,7 +1365,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_leavesALazilyBuiltInstanceUnmarked_whenItsWrapperIsBuiltByAnInstantiatorTheProbeCalls() throws {
+	mutating func describe_leavesALazilyBuiltInstanceUnmarked_whenItsWrapperIsBuiltByAnInstantiatorTheProbeCalls() async throws {
 		let fixture = """
 		\(Self.stampCounter)
 		public final class B {
@@ -1393,7 +1393,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
 			probes: [DifferentialValueProbe("Root.make()")],
 			filesToDelete: &filesToDelete,
@@ -1416,8 +1416,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_callsAnInstantiatorUntilItsTypeAndPropertyAreBeingCalledTwiceOnThePath_whenInstantiatorsFormACycle() throws {
-		let description = try DifferentialValueOracle.describe(
+	mutating func describe_callsAnInstantiatorUntilItsTypeAndPropertyAreBeingCalledTwiceOnThePath_whenInstantiatorsFormACycle() async throws {
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": Self.cycleFixture]),
 			probes: [DifferentialValueProbe("T1.make()")],
 			filesToDelete: &filesToDelete,
@@ -1463,7 +1463,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_namesAnotherModulesTypeWithoutItsModule_whenAPathSpansModules() throws {
+	mutating func describe_namesAnotherModulesTypeWithoutItsModule_whenAPathSpansModules() async throws {
 		let path = DifferentialValuePath(modules: [
 			DifferentialValueModule(
 				name: "Core",
@@ -1498,7 +1498,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			),
 		])
 
-		let description = try DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("Root()")], filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("Root()")], filesToDelete: &filesToDelete)
 
 		// A type is named without its module, and without the extensions of the path's modules it is declared in
 		// (`(extension in App):(extension in Extensions):Core.Thing.Inner.Further`), so that a graph split across
@@ -1519,7 +1519,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_keepsTheExtensionATypeIsDeclaredIn_whenItsModuleIsNotOneOfThePaths() throws {
+	mutating func describe_keepsTheExtensionATypeIsDeclaredIn_whenItsModuleIsNotOneOfThePaths() async throws {
 		let fixture = """
 		import Foundation
 		public final class Holder {
@@ -1528,7 +1528,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
 			probes: [DifferentialValueProbe("Holder()")],
 			filesToDelete: &filesToDelete,
@@ -1551,7 +1551,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_listsTheValuesOfASetInTheOrderOfTheirDescriptions_andLeavesInstancesOfASetOrDictionaryUncompared() throws {
+	mutating func describe_listsTheValuesOfASetInTheOrderOfTheirDescriptions_andLeavesInstancesOfASetOrDictionaryUncompared() async throws {
 		let fixture = """
 		public final class Node: Hashable {
 		    public init(value: Int) {
@@ -1573,7 +1573,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
 			probes: [DifferentialValueProbe("Holder()")],
 			filesToDelete: &filesToDelete,
@@ -1601,7 +1601,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_describesAValueAlikeInEveryRun_whenItHoldsAnAddressDataOrAnAnyHashable() throws {
+	mutating func compare_describesAValueAlikeInEveryRun_whenItHoldsAnAddressDataOrAnAnyHashable() async throws {
 		let fixture = """
 		import Foundation
 		public final class Holder {
@@ -1618,7 +1618,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		let path = DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture])
 
 		// Each path runs in a process of its own, with addresses and hash order of its own.
-		let comparison = try DifferentialValueOracle.compare(feature: path, knownRight: path, probes: [DifferentialValueProbe("Holder()")], filesToDelete: &filesToDelete)
+		let comparison = try await DifferentialValueOracle.compare(feature: path, knownRight: path, probes: [DifferentialValueProbe("Holder()")], filesToDelete: &filesToDelete)
 
 		let comparisonMade = try #require(comparison)
 		#expect(comparisonMade.differences.isEmpty, "\(comparisonMade.report)")
@@ -1644,7 +1644,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_readsEachLazilyBuiltInstanceUnderTheCallsWhereItsWrapperWasMet_whenTheInstanceHoldsABuilderOfItsOwner() throws {
+	mutating func describe_readsEachLazilyBuiltInstanceUnderTheCallsWhereItsWrapperWasMet_whenTheInstanceHoldsABuilderOfItsOwner() async throws {
 		// Corpus seed 2996's shape, which SafeDI accepts: each instance read last builds instances whose wrappers are read
 		// last in turn, so reading them under no calls never ends.
 		let fixture = """
@@ -1670,7 +1670,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
 			probes: [DifferentialValueProbe("A.make()")],
 			filesToDelete: &filesToDelete,
@@ -1702,8 +1702,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_stopsTraversingWrappers_whenAProbeHasSpentItsTraversals() throws {
-		let description = try DifferentialValueOracle.describe(
+	mutating func describe_stopsTraversingWrappers_whenAProbeHasSpentItsTraversals() async throws {
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": Self.cycleFixture]),
 			probes: [DifferentialValueProbe("T1.make()")],
 			limits: DifferentialValueLimits(traversalsPerProbe: 3),
@@ -1732,7 +1732,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_numbersEachProbeAfresh_andMarksAnInstanceAnEarlierProbeHeld() throws {
+	mutating func describe_numbersEachProbeAfresh_andMarksAnInstanceAnEarlierProbeHeld() async throws {
 		let fixture = """
 		public final class A: Sendable {
 		    public init() {}
@@ -1747,7 +1747,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 		"""
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
 			probes: [DifferentialValueProbe("Holder()"), DifferentialValueProbe(name: "second holder", expression: "Holder()")],
 			filesToDelete: &filesToDelete,
@@ -1768,7 +1768,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func describe_runsProbesWithTheAlarmSignalUnblocked_whenTheThreadThatSpawnsThemBlocksIt() throws {
+	mutating func describe_runsProbesWithTheAlarmSignalUnblocked_whenTheThreadThatSpawnsThemBlocksIt() async throws {
 		let fixture = """
 		#if canImport(Glibc)
 		import Glibc
@@ -1799,7 +1799,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			pthread_sigmask(SIG_SETMASK, &previouslyBlockedSignals, nil)
 		}
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
 			probes: [DifferentialValueProbe("AlarmSignal()")],
 			filesToDelete: &filesToDelete,
@@ -1818,9 +1818,9 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_throwsNamingThePath_whenAPathsModuleDoesNotCompile() throws {
-		let error = try #require(throws: DifferentialValueOracleError.self) {
-			try DifferentialValueOracle.compare(
+	mutating func compare_throwsNamingThePath_whenAPathsModuleDoesNotCompile() async throws {
+		let error = try await #require(throws: DifferentialValueOracleError.self) {
+			try await DifferentialValueOracle.compare(
 				feature: Self.graphPath(generated: Self.graphGeneratedCode()),
 				knownRight: Self.graphPath(generated: Self.graphGeneratedCode(replacing: ["e: a": "e: 1"])),
 				probes: [DifferentialValueProbe("Root()")],
@@ -1836,9 +1836,9 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_throwsNamingTheProbes_whenAProbeDoesNotCompile() throws {
-		let error = try #require(throws: DifferentialValueOracleError.self) {
-			try DifferentialValueOracle.compare(
+	mutating func compare_throwsNamingTheProbes_whenAProbeDoesNotCompile() async throws {
+		let error = try await #require(throws: DifferentialValueOracleError.self) {
+			try await DifferentialValueOracle.compare(
 				feature: Self.graphPath(generated: Self.graphGeneratedCode()),
 				knownRight: Self.graphPath(generated: Self.graphGeneratedCode()),
 				probes: [DifferentialValueProbe("Root(missing: 1)")],
@@ -1854,9 +1854,9 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_throwsWithTheDescriptionSoFar_whenAProbeTraps() throws {
-		let error = try #require(throws: DifferentialValueOracleError.self) {
-			try DifferentialValueOracle.compare(
+	mutating func compare_throwsWithTheDescriptionSoFar_whenAProbeTraps() async throws {
+		let error = try await #require(throws: DifferentialValueOracleError.self) {
+			try await DifferentialValueOracle.compare(
 				feature: Self.graphPath(generated: Self.graphGeneratedCode() + "\nextension Root {\n    static func trap() -> Root {\n        fatalError(\"boom\")\n    }\n}\n"),
 				knownRight: Self.graphPath(generated: Self.graphGeneratedCode()),
 				probes: [DifferentialValueProbe("A()"), DifferentialValueProbe("Root.trap()")],
@@ -1873,9 +1873,9 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_throwsNamingThePath_whenAFixturePrintsAProbeHeading() throws {
-		let error = try #require(throws: DifferentialValueOracleError.self) {
-			try DifferentialValueOracle.compare(
+	mutating func compare_throwsNamingThePath_whenAFixturePrintsAProbeHeading() async throws {
+		let error = try await #require(throws: DifferentialValueOracleError.self) {
+			try await DifferentialValueOracle.compare(
 				feature: Self.graphPath(generated: Self.graphGeneratedCode(replacing: ["let a = A()": "let a = A()\n        print(\"probe printed by the fixture\")"])),
 				knownRight: Self.graphPath(generated: Self.graphGeneratedCode()),
 				probes: [DifferentialValueProbe("Root()")],
@@ -1890,10 +1890,10 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_namesAProbeByItsExpression_whenTheExpressionSpansLines() throws {
+	mutating func compare_namesAProbeByItsExpression_whenTheExpressionSpansLines() async throws {
 		let expression = "{\n\tlet root = Root()\n\treturn root\n}()"
 
-		let comparison = try DifferentialValueOracle.compare(
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: Self.graphPath(generated: Self.graphGeneratedCode(replacing: ["e: a": "e: nil"])),
 			knownRight: Self.graphPath(generated: Self.graphGeneratedCode()),
 			probes: [DifferentialValueProbe(expression)],
@@ -1933,9 +1933,9 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_throwsNamingTheProbeAndTheBudget_whenBothPathsSpendTheirTraversalsAtANodeBeyondWhichTheyDiffer() throws {
-		let error = try #require(throws: DifferentialValueOracleError.self) {
-			try DifferentialValueOracle.compare(
+	mutating func compare_throwsNamingTheProbeAndTheBudget_whenBothPathsSpendTheirTraversalsAtANodeBeyondWhichTheyDiffer() async throws {
+		let error = try await #require(throws: DifferentialValueOracleError.self) {
+			try await DifferentialValueOracle.compare(
 				feature: Self.buildersPath(b2: "Instantiator { B(n: 99) }", lazyB: "LazilyInstantiated { B(n: 3) }"),
 				knownRight: Self.buildersPath(lazyB: "LazilyInstantiated { B(n: 3) }"),
 				probes: [DifferentialValueProbe("Root()")],
@@ -1959,9 +1959,9 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_throwsNamingThePathThatSpentItsTraversals_whenOnlyOnePathSpendsThem() throws {
-		let error = try #require(throws: DifferentialValueOracleError.self) {
-			try DifferentialValueOracle.compare(
+	mutating func compare_throwsNamingThePathThatSpentItsTraversals_whenOnlyOnePathSpendsThem() async throws {
+		let error = try await #require(throws: DifferentialValueOracleError.self) {
+			try await DifferentialValueOracle.compare(
 				feature: Self.buildersPath(b1: "nil"),
 				knownRight: Self.buildersPath(),
 				probes: [DifferentialValueProbe("Root()")],
@@ -1984,9 +1984,9 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_throwsNamingTheProbe_whenAProbeSpendsItsTraversalsAtALazilyInstantiatedWrapper() throws {
-		let error = try #require(throws: DifferentialValueOracleError.self) {
-			try DifferentialValueOracle.compare(
+	mutating func compare_throwsNamingTheProbe_whenAProbeSpendsItsTraversalsAtALazilyInstantiatedWrapper() async throws {
+		let error = try await #require(throws: DifferentialValueOracleError.self) {
+			try await DifferentialValueOracle.compare(
 				feature: Self.buildersPath(b2: "nil", lazyB: "LazilyInstantiated { B(n: 99) }"),
 				knownRight: Self.buildersPath(b2: "nil", lazyB: "LazilyInstantiated { B(n: 3) }"),
 				probes: [DifferentialValueProbe("Root()")],
@@ -2007,8 +2007,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_reportsTheDifferencesAndNoError_whenAProbeSpendsItsLastTraversalOnItsLastWrapper() throws {
-		let comparison = try DifferentialValueOracle.compare(
+	mutating func compare_reportsTheDifferencesAndNoError_whenAProbeSpendsItsLastTraversalOnItsLastWrapper() async throws {
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: Self.buildersPath(b2: "Instantiator { B(n: 99) }"),
 			knownRight: Self.buildersPath(),
 			probes: [DifferentialValueProbe("Root()")],
@@ -2025,7 +2025,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_reportsOnlyTheDifference_whenAProbeSpendsItsTraversalsBeneathANodeThatDiffers() throws {
+	mutating func compare_reportsOnlyTheDifference_whenAProbeSpendsItsTraversalsBeneathANodeThatDiffers() async throws {
 		let fixture = """
 		public final class C: Instantiable {
 		    public init() {}
@@ -2051,7 +2051,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			DifferentialValuePath(fixtureFiles: ["Root.swift": fixture], generatedFiles: ["Root+Make.swift": "extension Root {\n    convenience init() {\n        self.init(child: \(child)())\n    }\n}\n"])
 		}
 
-		let comparison = try DifferentialValueOracle.compare(
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: path(child: "Left"),
 			knownRight: path(child: "Right"),
 			probes: [DifferentialValueProbe("Root()")],
@@ -2068,9 +2068,9 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func expectDifferentialValuesAgree_acceptsASpentBudget_whenAnExemptionEqualsTheDifferenceWhereTheProbeSpentIt() throws {
+	mutating func expectDifferentialValuesAgree_acceptsASpentBudget_whenAnExemptionEqualsTheDifferenceWhereTheProbeSpentIt() async throws {
 		// A feature whose graph outgrows any budget compares what lies before the node, deliberately.
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: Self.buildersPath(b2: "Instantiator { B(n: 99) }"),
 			knownRight: Self.buildersPath(),
 			probes: [DifferentialValueProbe("Root()")],
@@ -2089,7 +2089,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_throwsNamingANodeBeneathAnInstanceReadLast_whenAProbeSpendsItsTraversalsInsideALazilyBuiltInstance() throws {
+	mutating func compare_throwsNamingANodeBeneathAnInstanceReadLast_whenAProbeSpendsItsTraversalsInsideALazilyBuiltInstance() async throws {
 		let fixture = """
 		public final class C: Instantiable {
 		    public init(n: Int) {
@@ -2116,8 +2116,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			DifferentialValuePath(fixtureFiles: ["Root.swift": fixture], generatedFiles: ["Root+Make.swift": "extension Root {\n    convenience init() {\n        self.init(lazyB: LazilyInstantiated { B(cBuilder: Instantiator { C(n: 1) }, dBuilder: Instantiator { C(n: \(n)) }) })\n    }\n}\n"])
 		}
 
-		let error = try #require(throws: DifferentialValueOracleError.self) {
-			try DifferentialValueOracle.compare(
+		let error = try await #require(throws: DifferentialValueOracleError.self) {
+			try await DifferentialValueOracle.compare(
 				feature: path(n: 99),
 				knownRight: path(n: 2),
 				probes: [DifferentialValueProbe("Root()")],
@@ -2139,13 +2139,13 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_failsOnlyTheGraphThatSpentItsTraversals_whenGraphsAreComparedInBatches() throws {
+	mutating func compare_failsOnlyTheGraphThatSpentItsTraversals_whenGraphsAreComparedInBatches() async throws {
 		let graphs = [
 			Self.batchGraph(named: "First", featureSharesInstance: false),
 			DifferentialValueGraph(name: "Spending", feature: Self.buildersPath(b2: "Instantiator { B(n: 99) }"), knownRight: Self.buildersPath(), probes: [DifferentialValueProbe("Root()")]),
 		]
 
-		let comparisons = try #require(try DifferentialValueOracle.compare(graphs: graphs, limits: DifferentialValueLimits(traversalsPerProbe: 1), filesToDelete: &filesToDelete))
+		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, limits: DifferentialValueLimits(traversalsPerProbe: 1), filesToDelete: &filesToDelete))
 
 		// One batch of two paths, compared once: the graph that spent its traversals fails without the batch being
 		// compared again graph by graph.
@@ -2153,7 +2153,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		#expect(try comparisons[0].result.get().differences == [
 			DifferentialValueDifference(probe: "FirstRoot()", path: ["<1> FirstRoot", "e"], feature: "e: nil", knownRight: "e: <2> FirstA (seen, first at <1> FirstRoot > a)"),
 		])
-		let error = try #require(throws: DifferentialValueOracleError.self) { try comparisons[1].result.get() }
+		let error = try await #require(throws: DifferentialValueOracleError.self) { try comparisons[1].result.get() }
 		#expect(error.path == nil)
 		#expect(error.stage == .runningProbes)
 		#expect(error.description.hasPrefix("Both paths' probe `Root()` spent its 1 traversals at <1> Root > b2, "))
@@ -2163,7 +2163,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_attributesEachDifferenceToItsGraph_whenGraphsAreComparedInBatches() throws {
+	mutating func compare_attributesEachDifferenceToItsGraph_whenGraphsAreComparedInBatches() async throws {
 		// The first two graphs share a layout and compile together; the third, compiled with another condition, alone.
 		let graphs = [
 			Self.batchGraph(named: "First", featureSharesInstance: true),
@@ -2171,7 +2171,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			Self.batchGraph(named: "Third", featureSharesInstance: true, activeCompilationConditions: ["THIRD"]),
 		]
 
-		let comparisons = try #require(try DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete))
+		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete))
 
 		// Each path of each batch is one probe executable in a directory of its own: two batches of two paths. Compared
 		// one graph at a time, the graphs would make six; and the third graph's types exist only under its condition.
@@ -2193,13 +2193,13 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_comparesEachPairInOnePath_whenGraphsHoldProbePairs() throws {
+	mutating func compare_comparesEachPairInOnePath_whenGraphsHoldProbePairs() async throws {
 		let graphs = [
 			Self.pairedGraph(named: "PairedFirst", featureSharesInstance: true),
 			Self.pairedGraph(named: "PairedSecond", featureSharesInstance: false),
 		]
 
-		let comparisons = try #require(try DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete))
+		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete))
 
 		// The two graphs share a layout and hold both ways in one path, so the batch is one compile of that path and one
 		// probe executable, in one directory.
@@ -2226,7 +2226,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_comparesEachGraphOfABatchOnItsOwn_whenOneGraphOfTheBatchDoesNotCompile() throws {
+	mutating func compare_comparesEachGraphOfABatchOnItsOwn_whenOneGraphOfTheBatchDoesNotCompile() async throws {
 		let broken = Self.batchGraph(named: "Broken", featureSharesInstance: true)
 		let graphs = [
 			Self.batchGraph(named: "Compiling", featureSharesInstance: false),
@@ -2242,7 +2242,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			),
 		]
 
-		let comparisons = try #require(try DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete))
+		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete))
 
 		// The batch's feature path, which does not compile, then each graph on its own: two paths, then one.
 		#expect(filesToDelete.count == 4)
@@ -2250,14 +2250,14 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		#expect(try comparisons[0].result.get().differences == [
 			DifferentialValueDifference(probe: "CompilingRoot()", path: ["<1> CompilingRoot", "e"], feature: "e: nil", knownRight: "e: <2> CompilingA (seen, first at <1> CompilingRoot > a)"),
 		])
-		let error = try #require(throws: DifferentialValueOracleError.self) { try comparisons[1].result.get() }
+		let error = try await #require(throws: DifferentialValueOracleError.self) { try comparisons[1].result.get() }
 		#expect(error.path == .feature)
 		#expect(error.stage == .compilingModule(standaloneVerificationModuleName))
 	}
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_reportsADifferenceOnlyInItsGraph_whenGraphsOfABatchHoldOneInstanceFromAModuleEveryGraphHoldsAlike() throws {
+	mutating func compare_reportsADifferenceOnlyInItsGraph_whenGraphsOfABatchHoldOneInstanceFromAModuleEveryGraphHoldsAlike() async throws {
 		// Graphs in a batch declare no type in common but in a module every graph of the batch holds alike, which the
 		// batch compiles once, so only an instance from such a module, or from a module outside the path, can be held
 		// by two of them. The type is the test's own, so its instances describe alike on every toolchain. The first
@@ -2299,7 +2299,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			graph(named: "Second", featureState: "SharedState.instance", knownRightState: "SharedState.instance", featureTitle: "other"),
 		]
 
-		let comparisons = try #require(try DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete))
+		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete))
 
 		// One executable per path: the batch compiled the shared module once. A first visit in either path holds a
 		// `SharedState`; only the second graph's title differs. Without a reset at the second graph, its feature path
@@ -2313,7 +2313,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func compare_reportsTheGraphWhoseProbeDoesNotFinish_whenAProbeOfABatchRunsPastItsTimeLimit() throws {
+	mutating func compare_reportsTheGraphWhoseProbeDoesNotFinish_whenAProbeOfABatchRunsPastItsTimeLimit() async throws {
 		let spinningFixture = """
 		public final class SpinningRoot {
 		    public init() {}
@@ -2329,10 +2329,10 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			DifferentialValueGraph(name: "Spinning", feature: spinningPath, knownRight: spinningPath, probes: [DifferentialValueProbe("Array(0..<150)"), DifferentialValueProbe("SpinningRoot.spin()")]),
 		]
 
-		let comparisons = try #require(try DifferentialValueOracle.compare(graphs: graphs, limits: DifferentialValueLimits(probeTimeLimitInSeconds: 1), filesToDelete: &filesToDelete))
+		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: graphs, limits: DifferentialValueLimits(probeTimeLimitInSeconds: 1), filesToDelete: &filesToDelete))
 
 		#expect(try comparisons[0].result.get().differences.isEmpty)
-		let error = try #require(throws: DifferentialValueOracleError.self) { try comparisons[1].result.get() }
+		let error = try await #require(throws: DifferentialValueOracleError.self) { try comparisons[1].result.get() }
 		#expect(error.path == .feature)
 		#expect(error.stage == .runningProbes)
 		#expect(error.description.hasPrefix("The feature path's probe `SpinningRoot.spin()` did not finish within its time limit, 1 s:\n"))
@@ -2343,13 +2343,13 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func expectDifferentialValuesAgree_recordsEachUnexemptedDifference_whenPathsDiffer() throws {
+	mutating func expectDifferentialValuesAgree_recordsEachUnexemptedDifference_whenPathsDiffer() async throws {
 		var filesToDelete = [URL]()
 		defer { self.filesToDelete += filesToDelete }
 
 		// The feature path differs in two places, one of them exempted: only the other is recorded.
-		try withKnownIssue {
-			try expectDifferentialValuesAgree(
+		try await withKnownIssue {
+			try await expectDifferentialValuesAgree(
 				feature: Self.graphPath(generated: Self.graphGeneratedCode(replacing: ["e: a": "e: nil", "title: \"default\"": "title: \"other\""])),
 				knownRight: Self.graphPath(generated: Self.graphGeneratedCode()),
 				probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("A()")],
@@ -2360,7 +2360,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			issue.comments.first?.rawValue.hasPrefix("The feature path builds other values than the known-right path for probe `Root()` at <1> Root > title:\n  feature:     title: String \"other\"\n  known right: title: String \"default\"\nFeature path:\nprobe Root()\n") == true
 		}
 
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: Self.graphPath(generated: Self.graphGeneratedCode(replacing: ["e: a": "e: nil"])),
 			knownRight: Self.graphPath(generated: Self.graphGeneratedCode()),
 			probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("A()")],
@@ -2584,13 +2584,13 @@ struct DifferentialValueComparatorTests: ~Copyable {
 	/// fixture, on its own when the tool rejects the graph, and none fails as a fixture that does not compile.
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode), arguments: 0..<Self.storingFixtureCompilationPartCount)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func fixture_compilesWhenItStoresEveryParameter_forEachSmokeKnownIssueAndMixedGraphSeed(part: Int) throws {
+	func fixture_compilesWhenItStoresEveryParameter_forEachSmokeKnownIssueAndMixedGraphSeed(part: Int) async throws {
 		let seeds = Array(Set(SafeDIToolGraphFuzzerTests.smokeSeeds + SafeDIToolGraphFuzzerTests.knownIssues.flatMap(\.seeds) + Self.mixedGraphSeedsWhoseExtensionReceivesAWrapperThatIsNotSendable)).sorted()
 		let seedsOfPart = seeds.enumerated().filter { $0.offset % Self.storingFixtureCompilationPartCount == part }.map(\.element)
 
 		// Each fixture is compiled on its own: the tool reads the same declarations from it, so the code it generates is
 		// the same as for the fixture that stores no parameter.
-		let failures = try GraphFuzzerOracle.compilationFailures(of: seedsOfPart.map { seed in
+		let failures = try await GraphFuzzerOracle.compilationFailures(of: seedsOfPart.map { seed in
 			GraphFuzzerToolRuns(fixture: GraphFuzzerGenerator.fixture(forSeed: seed, storingEveryParameter: true), firstOutcome: .rejected(diagnostics: ""), secondOutcome: .rejected(diagnostics: ""))
 		})
 
@@ -2847,8 +2847,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 	}
 
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private static func differences(betweenKnownRightGraphAnd featureGenerated: String, filesToDelete: inout [URL]) throws -> [DifferentialValueDifference] {
-		let comparison = try DifferentialValueOracle.compare(
+	private static func differences(betweenKnownRightGraphAnd featureGenerated: String, filesToDelete: inout [URL]) async throws -> [DifferentialValueDifference] {
+		let comparison = try await DifferentialValueOracle.compare(
 			feature: graphPath(generated: featureGenerated),
 			knownRight: graphPath(generated: graphGeneratedCode()),
 			probes: [DifferentialValueProbe("Root()")],

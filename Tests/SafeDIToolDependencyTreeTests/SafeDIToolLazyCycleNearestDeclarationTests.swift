@@ -1553,7 +1553,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			#endif
 			""",
 		])
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.generatedFiles ?? [:]),
 			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: ["Mocks.swift": """
 			extension Root {
@@ -1649,7 +1649,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		"""])
 		// The `T3` a step builds again receives the step's session, and every `T3` the mock builds reads `flag` from its
 		// overrides.
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.generatedFiles ?? [:]),
 			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: ["App+SafeDI.swift": """
 			extension App {
@@ -5302,7 +5302,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == ["\(root)+SafeDI.swift": generatedFileHeader + expectedTree(output.fixtures)], sourceLocation: sourceLocation)
 		#expect(output.mockFiles == (expectedMock.map { ["\(root)+SafeDIMock.swift": generatedFileHeader + $0(output.fixtures)] } ?? [:]), sourceLocation: sourceLocation)
 		let comparesMock = expectedMock != nil && mockBuildsTheSameValues
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.generatedFiles ?? [:]),
 			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: [
 				"\(root)+SafeDI.swift": handBuiltTree + (comparesMock ? "\n\nextension \(root) {\n    static func mock() -> \(root) {\n        \(root)()\n    }\n}" : ""),

@@ -258,7 +258,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			],
 		]
 		#expect(inlineOutput.dependencyTreeFiles == expectedInlineOutput[holder])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -335,7 +335,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	// Kept by hand: the seam corpus draws this shape in 2 graphs and reports its error in none (census at 3b12802a);
@@ -398,7 +398,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: A receive of an alias beneath another declaration of its label
@@ -479,7 +479,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -563,7 +563,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -641,7 +641,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: A receive of an alias that is nil where it is declared
@@ -740,7 +740,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -818,7 +818,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -940,7 +940,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: An alias of an alias of a parameter
@@ -1031,7 +1031,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: A declaration of the alias property beside the alias declaring type
@@ -1181,7 +1181,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			],
 		]
 		#expect(inlineOutput.dependencyTreeFiles == expectedInlineOutput[holder])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -1269,7 +1269,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -1358,7 +1358,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	@Test
@@ -1434,7 +1434,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: An alias only its declaring type reads
@@ -3064,7 +3064,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: The type-spelling axis

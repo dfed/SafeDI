@@ -283,7 +283,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func compilationFailures_reportGraph_whenPublicTierNamesPackageType() throws {
+	func compilationFailures_reportGraph_whenPublicTierNamesPackageType() async throws {
 		// A public tier that names a package type does not compile in the declaring module, which the oracle reports as
 		// generated code that does not compile; the same tier at `package` compiles.
 		func runs(seed: UInt64, tierAccess: String) -> GraphFuzzerToolRuns {
@@ -297,7 +297,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			], warnings: [])
 			return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome)
 		}
-		let failures = try GraphFuzzerOracle.compilationFailures(of: [runs(seed: 1, tierAccess: "public"), runs(seed: 2, tierAccess: "package")])
+		let failures = try await GraphFuzzerOracle.compilationFailures(of: [runs(seed: 1, tierAccess: "public"), runs(seed: 2, tierAccess: "package")])
 		#expect(failures[1]?.kind == .generatedCodeDoesNotCompile)
 		#expect(failures[1]?.details.contains("cannot be declared public because its parameter uses a package type") == true)
 		#expect(failures[2] == nil)
@@ -307,7 +307,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The value comparator compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func valueOracle_reportsDifferences_whenHandWrittenPublicTierLosesValueOrSharesNothingOrIgnoresOverride() throws {
+	func valueOracle_reportsDifferences_whenHandWrittenPublicTierLosesValueOrSharesNothingOrIgnoresOverride() async throws {
 		// Section 5's self-tests: a public tier that drops a value its consumer holds, one that builds a second instance
 		// of a dependency the consumer shares, and one whose body ignores an override field each build other values than
 		// the known-right path.
@@ -317,7 +317,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 				try? FileManager.default.removeItem(at: fileToDelete)
 			}
 		}
-		let comparisons = try #require(try DifferentialValueOracle.compare(graphs: [
+		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: [
 			Self.droppedHeldValueGraph,
 			Self.secondInstanceGraph,
 			Self.ignoredOverrideGraph,
@@ -330,7 +330,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The value comparator compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func statedPublicMockValueDivergences_exemptOnlyWhatLeafCallsExplain_whenConsumerCallsPublicMocks() throws {
+	func statedPublicMockValueDivergences_exemptOnlyWhatLeafCallsExplain_whenConsumerCallsPublicMocks() async throws {
 		// The two divergences section 5 states, derived from the leaf calls of graphs shaped as the fuzzer draws them.
 		// M8.32: a consumer passes `analytics.instance` of the wrapper it holds; the leaf's re-made wrapper and the early
 		// read are exempt (seed 901) – unless the leaf wraps a new instance, whose wrapper still fails (seed 902). M8.9b: two
@@ -350,7 +350,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			Self.instancePerLeafCase(seed: 904, callerHoldsSession: true),
 			Self.instancePerLeafCase(seed: 905, callerHoldsSession: false, secondLeafReceivesOnlyIfAvailable: true),
 		]
-		let comparisons = try #require(try DifferentialValueOracle.compare(graphs: cases.map(\.graph), filesToDelete: &filesToDelete))
+		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: cases.map(\.graph), filesToDelete: &filesToDelete))
 		let remaining = try zip(cases, comparisons).map { testCase, comparison in
 			let valueComparison = try comparison.result.get()
 			#expect(!valueComparison.differences.isEmpty, "\(testCase.graph.name) builds what the known-right path builds")
@@ -535,6 +535,6 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 }
 
 /// The public mock smoke batch's results, drawn with the `generateMockPublic` feature, computed once per process.
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private let publicMockSmokeResults = Task {
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private let publicMockSmokeResults = SharedTestWork {
 	try await GraphFuzzerOracle.results(forSeeds: SafeDIToolGraphFuzzerTests.publicMockSmokeSeeds, features: [.generateMockPublic])
 }

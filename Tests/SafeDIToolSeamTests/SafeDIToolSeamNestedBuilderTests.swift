@@ -82,7 +82,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
 		if let visible {
 			let visibleOutput = try await executeSafeDIToolMultiModuleTest(modules: visible, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
-			try expectDifferentialValuesAgree(
+			try await expectDifferentialValuesAgree(
 				feature: SafeDIToolSeamBuilderParameterTests.differentialValuePath(of: output, modules: modules),
 				knownRight: SafeDIToolSeamBuilderParameterTests.differentialValuePath(of: visibleOutput, modules: visible),
 				probes: probes,
@@ -1498,7 +1498,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		guard compileVerificationIsEnabled else { return }
 		let visible = Self.modules(feature: feature + fulfillers, app: [root])
 		let visibleOutput = try await executeSafeDIToolMultiModuleTest(modules: visible, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: SafeDIToolSeamBuilderParameterTests.differentialValuePath(of: output, modules: Self.modules(feature: feature, app: fulfillers + [root])),
 			knownRight: SafeDIToolSeamBuilderParameterTests.differentialValuePath(of: visibleOutput, modules: visible),
 			probes: [DifferentialValueProbe("Root()")],

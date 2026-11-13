@@ -1132,7 +1132,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			""",
 		])
 		let fixtureFiles = Dictionary(uniqueKeysWithValues: fixture.enumerated().map { ("File\($0.offset).swift", $0.element) })
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: #require(output.generatedFiles)),
 			knownRight: DifferentialValuePath(
 				fixtureFiles: fixtureFiles,

@@ -62,7 +62,7 @@ func verifyGeneratedCodeCompiles(
 	passedCheckCache: PassedCompileCheckCache? = .current,
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
-) throws {
+) async throws {
 	guard compileVerificationIsEnabled, let artifacts = locateBuildArtifacts(sourceLocation: sourceLocation) else { return }
 
 	let module = ModuleCompileSources(
@@ -81,7 +81,7 @@ func verifyGeneratedCodeCompiles(
 		return
 	}
 
-	let outcome = try compileModule(check, moduleSearchPaths: [], artifacts: artifacts)
+	let outcome = try await compileModule(check, moduleSearchPaths: [], artifacts: artifacts)
 	outcome.recordIssues(skippingVerificationBy: "pass `skipCompileVerification: true`", sourceLocation: sourceLocation)
 	if let passedCheckCache, let passedCheckKey, outcome.compiledWithoutGeneratedCodeWarnings {
 		try passedCheckCache.recordPass(of: passedCheckKey)
@@ -115,7 +115,7 @@ func verifyModulesCompile(
 	passedCheckCache: PassedCompileCheckCache? = .current,
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
-) throws -> MultiModuleCompileOutcome? {
+) async throws -> MultiModuleCompileOutcome? {
 	guard compileVerificationIsEnabled, let artifacts = locateBuildArtifacts(sourceLocation: sourceLocation) else { return nil }
 
 	var checks = [CompileCheckModule]()
@@ -130,7 +130,7 @@ func verifyModulesCompile(
 
 	var outcomes = [ModuleCompileOutcome]()
 	for check in checks {
-		let outcome = try compileModule(
+		let outcome = try await compileModule(
 			check,
 			moduleSearchPaths: outcomes.filter { check.sources.dependencyModuleNames.contains($0.moduleName) }.map(\.directory),
 			artifacts: artifacts,
@@ -321,11 +321,11 @@ private func compileModule(
 	_ check: CompileCheckModule,
 	moduleSearchPaths: [URL],
 	artifacts: SafeDIBuildArtifacts,
-) throws -> ModuleCompileOutcome {
+) async throws -> ModuleCompileOutcome {
 	let module = check.sources
 	let staged = check.staged
-	func compile(_ sources: [URL]) throws -> SwiftCompileResult {
-		try compileSwift(
+	func compile(_ sources: [URL]) async throws -> SwiftCompileResult {
+		try await compileSwift(
 			sources: sources,
 			outputDirectory: staged.directory,
 			artifacts: artifacts,
@@ -341,7 +341,7 @@ private func compileModule(
 		)
 	}
 
-	let combinedResult = try compile(staged.inputFiles + staged.generatedFiles)
+	let combinedResult = try await compile(staged.inputFiles + staged.generatedFiles)
 	let failure: ModuleCompileFailure?
 	let generatedCodeWarnings: [String]
 	if combinedResult.exitCode == 0 {
@@ -352,7 +352,7 @@ private func compileModule(
 			inputFiles: staged.inputFiles,
 		)
 	} else {
-		let inputsOnlyResult = try compile(staged.inputFiles)
+		let inputsOnlyResult = try await compile(staged.inputFiles)
 		failure = inputsOnlyResult.exitCode == 0 ? .generatedCodeFailedAlongsideInputs : .inputsFailedOnTheirOwn(inputsOnlyResult)
 		generatedCodeWarnings = []
 	}
@@ -656,7 +656,7 @@ func compileSwift(
 	swiftLanguageMode: String = "6",
 	upcomingFeatures: [String] = [],
 	defaultIsolation: String? = nil,
-) throws -> SwiftCompileResult {
+) async throws -> SwiftCompileResult {
 	var arguments = swiftCompilerCommand.arguments
 	arguments.append(contentsOf: [
 		"-emit-object",
@@ -695,7 +695,7 @@ func compileSwift(
 	}
 	arguments.append(contentsOf: Set(activeCompilationConditions).subtracting(["DEBUG"]).sorted().map { "-D\($0)" })
 	arguments.append(contentsOf: sources.map(\.path))
-	return try runProcess(swiftCompilerCommand.executable, arguments: arguments)
+	return try await runProcess(swiftCompilerCommand.executable, arguments: arguments)
 }
 
 /// Runs `executableURL` with `arguments` to completion and returns its exit status and everything it wrote.
@@ -706,9 +706,37 @@ func compileSwift(
 /// what was read, and a compile that passed then seems to report no warning. A file also cannot fill up and block
 /// the process, as a pipe that no one drains can.
 ///
-/// The process gets a temporary directory of its own (`TMPDIR`), deleted with its output once it exits, because
-/// `swiftc` leaves a `TemporaryDirectory.*` folder in its temporary directory on every run.
-func runProcess(_ executableURL: URL, arguments: [String]) throws -> SwiftCompileResult {
+/// The caller is suspended, not blocked, while the process runs. A thread of Swift concurrency's cooperative pool,
+/// which has one thread per core, that waited in `waitUntilExit()` for each running compile left every other test of
+/// the process, and the code generation `generate` runs in detached tasks, waiting for a thread until a compile
+/// finished. So a thread of the process's own launches it and waits for it, as the pool thread did, and resumes the
+/// caller once it exits.
+///
+/// `ProcessSlots.shared` runs at most one process per core at once, as the width of the pool did, so that concurrent
+/// tests do not start a compiler each and exhaust the machine's memory. A caller makes nothing for its process until
+/// it holds a slot: Foundation on Linux crashed in `Process.run()` with `SIGSEGV` once the test process held more than
+/// a thousand open file descriptors, which the output files of every test waiting for a slot made it hold.
+///
+/// The process gets `environment` with a temporary directory of its own (`TMPDIR`), deleted with its output once it
+/// exits, because `swiftc` leaves a `TemporaryDirectory.*` folder in its temporary directory on every run.
+func runProcess(
+	_ executableURL: URL,
+	arguments: [String],
+	environment: [String: String] = ProcessInfo.processInfo.environment,
+) async throws -> SwiftCompileResult {
+	await ProcessSlots.shared.acquire(for: Test.current?.id)
+	do {
+		let result = try await runProcessOnAThreadOfItsOwn(executableURL, arguments: arguments, environment: environment)
+		await ProcessSlots.shared.release()
+		return result
+	} catch {
+		await ProcessSlots.shared.release()
+		throw error
+	}
+}
+
+/// Runs `executableURL` with `arguments` as `runProcess` describes, for a caller that holds a slot.
+private func runProcessOnAThreadOfItsOwn(_ executableURL: URL, arguments: [String], environment: [String: String]) async throws -> SwiftCompileResult {
 	let invocationDirectory = TestTemporaryDirectory.uniquePath(prefix: "safedi-process-")
 	let temporaryDirectory = invocationDirectory.appendingPathComponent("tmp")
 	try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
@@ -716,20 +744,134 @@ func runProcess(_ executableURL: URL, arguments: [String]) throws -> SwiftCompil
 	let process = Process()
 	process.executableURL = executableURL
 	process.arguments = arguments
-	process.environment = TestTemporaryDirectory.environment(withTemporaryDirectory: temporaryDirectory)
+	process.environment = TestTemporaryDirectory.environment(withTemporaryDirectory: temporaryDirectory, from: environment)
 	let standardOutput = invocationDirectory.appendingPathComponent("output")
 	let standardError = invocationDirectory.appendingPathComponent("error")
 	FileManager.default.createFile(atPath: standardOutput.path, contents: nil)
 	FileManager.default.createFile(atPath: standardError.path, contents: nil)
-	process.standardOutput = try FileHandle(forWritingTo: standardOutput)
-	process.standardError = try FileHandle(forWritingTo: standardError)
-	try process.run()
-	process.waitUntilExit()
+	let standardOutputHandle = try FileHandle(forWritingTo: standardOutput)
+	defer { try? standardOutputHandle.close() }
+	let standardErrorHandle = try FileHandle(forWritingTo: standardError)
+	defer { try? standardErrorHandle.close() }
+	process.standardOutput = standardOutputHandle
+	process.standardError = standardErrorHandle
+
+	let terminationStatus: Int32 = try await withCheckedThrowingContinuation { continuation in
+		Thread {
+			do {
+				try process.run()
+				process.waitUntilExit()
+				continuation.resume(returning: process.terminationStatus)
+			} catch {
+				continuation.resume(throwing: error)
+			}
+		}.start()
+	}
 	return SwiftCompileResult(
-		exitCode: process.terminationStatus,
+		exitCode: terminationStatus,
 		stdout: (try? String(contentsOf: standardOutput, encoding: .utf8)) ?? "",
 		stderr: (try? String(contentsOf: standardError, encoding: .utf8)) ?? "",
 	)
+}
+
+/// The slots `runProcess` takes one of for each process it runs, which bound how many processes run at once.
+///
+/// A caller that finds every slot taken is suspended, not blocked, until a process exits. A released slot goes to the
+/// waiting caller whose test took its place in line earliest, and among one test's callers to the one that has waited
+/// longest, so that a test that has begun runs its next compile before a test that began later runs its first. Every
+/// test starts at once, so with slots handed out in the order callers asked, each compile of a test that compiles
+/// several modules, or that compiles again to attribute a failure, waited behind the first compile of every test that
+/// had not yet compiled, and such a test finished only when the whole run did.
+///
+/// A test takes its place in line when it begins, not when it first asks for a slot: `executeSafeDIToolTest`,
+/// `executeSafeDIToolMultiModuleTest`, `GraphFuzzerOracle.results(forSeeds:)` and every `SharedTestWork` a test awaits
+/// call `takePlaceInLine(for:)` before they do anything else. A test whose place were fixed by its first request would
+/// lose its place to every test that began after it while it generated code or waited for work it shares with other
+/// tests: the differential value comparator's tests, which first wait for the runtime they all compile against, and
+/// the graph fuzzer's smoke tests, which first run every seed through the tool, then got no slot until every other
+/// test had finished, and the smoke batch, the run's longest test, began compiling only once the rest of the suite was
+/// done.
+actor ProcessSlots {
+	/// The slots every `runProcess` shares: one per core.
+	static let shared = ProcessSlots(count: max(1, ProcessInfo.processInfo.activeProcessorCount))
+
+	init(count: Int) {
+		availableCount = count
+	}
+
+	/// Gives `test` the next place in the line slots are served in, unless it has one already.
+	func takePlaceInLine(for test: Test.ID?) {
+		guard let test, priorityByTest[test] == nil else { return }
+		priorityByTest[test] = nextPriority
+		nextPriority += 1
+	}
+
+	/// Takes a slot for a process of `test`, or of no test when it is `nil`, waiting for one to be released when none
+	/// is free.
+	func acquire(for test: Test.ID?) async {
+		let priority = priority(of: test)
+		guard availableCount == 0 else {
+			availableCount -= 1
+			return
+		}
+		await withCheckedContinuation { continuation in
+			waiters.append(Waiter(priority: priority, continuation: continuation))
+		}
+	}
+
+	/// Releases a slot, handing it to the waiting caller that comes first, if one waits.
+	func release() {
+		// The first of the waiters with the lowest priority number is the one of them that has waited longest.
+		guard let index = waiters.indices.min(by: { waiters[$0].priority < waiters[$1].priority }) else {
+			availableCount += 1
+			return
+		}
+		waiters.remove(at: index).continuation.resume()
+	}
+
+	private struct Waiter {
+		/// The caller's test's place in line: the lower, the sooner it is served.
+		let priority: Int
+		let continuation: CheckedContinuation<Void, Never>
+	}
+
+	private var availableCount: Int
+	private var waiters = [Waiter]()
+	private var priorityByTest = [Test.ID: Int]()
+	private var nextPriority = 0
+
+	/// The place in line of a caller in `test`, which takes one now if it has none, or for a caller in no test, the
+	/// place of this request.
+	private func priority(of test: Test.ID?) -> Int {
+		takePlaceInLine(for: test)
+		if let test, let priority = priorityByTest[test] {
+			return priority
+		} else {
+			let priority = nextPriority
+			nextPriority += 1
+			return priority
+		}
+	}
+}
+
+/// Work computed once per process and shared by the tests that await its value, such as a batch of graphs several
+/// tests check or a runtime every comparison compiles against. A test that awaits it takes its place in
+/// `ProcessSlots`'s line first, so that it keeps the place of a test that began while it waits, and the work, which
+/// runs in the context of the test that first reached it, compiles in that test's place.
+struct SharedTestWork<Success: Sendable>: Sendable {
+	init(_ operation: @escaping @Sendable () async throws -> Success) {
+		task = Task(operation: operation)
+	}
+
+	/// The work's value, once it is done.
+	var value: Success {
+		get async throws {
+			await ProcessSlots.shared.takePlaceInLine(for: Test.current?.id)
+			return try await task.value
+		}
+	}
+
+	private let task: Task<Success, any Error>
 }
 
 /// How this platform runs `swiftc`: through `xcrun` on Apple platforms, and from `PATH` elsewhere.

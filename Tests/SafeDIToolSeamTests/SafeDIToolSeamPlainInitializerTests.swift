@@ -138,7 +138,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		}
 		""")
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			path,
 			probes: ["releasedReadingSelf()", "releasedWithNoSelfWritten()", "releasedWithCaptureLists()"].map(DifferentialValueProbe.init),
 			filesToDelete: &filesToDelete,
@@ -182,7 +182,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		}
 		""")
 
-		let description = try DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("released()")], filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("released()")], filesToDelete: &filesToDelete)
 
 		if compileVerificationIsEnabled {
 			#expect(description == """
@@ -267,7 +267,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		}
 		""")
 
-		let description = try DifferentialValueOracle.describe(
+		let description = try await DifferentialValueOracle.describe(
 			path,
 			probes: ["nameFromClass()", "nameFromStructInit()", "nameFromMutating()", "nameFromInout()", "try! nameFromTry()", "nameFromUnappliedReference()"].map(DifferentialValueProbe.init),
 			filesToDelete: &filesToDelete,
@@ -341,7 +341,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		}
 		""")
 
-		let description = try DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("compiled()")], filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("compiled()")], filesToDelete: &filesToDelete)
 
 		if compileVerificationIsEnabled {
 			#expect(description == """
@@ -373,7 +373,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		}
 		""")
 
-		let description = try DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("evaluatedAtTheCall()")], filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("evaluatedAtTheCall()")], filesToDelete: &filesToDelete)
 
 		if compileVerificationIsEnabled {
 			#expect(description == """
@@ -400,7 +400,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		}
 		""")
 
-		let description = try DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("nameAfterChange()")], filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("nameAfterChange()")], filesToDelete: &filesToDelete)
 
 		if compileVerificationIsEnabled {
 			#expect(description == """
@@ -723,7 +723,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		let seamPath = try await timingPath(featureFiles: featureFiles, appFiles: Self.timingAppFiles, appFileNamedScenarios: Self.timingScenarios)
 		let inlinePath = try await timingPath(featureFiles: inlineFixture(featureFiles), appFiles: Self.timingAppFiles, appFileNamedScenarios: Self.timingScenarios)
 
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: seamPath,
 			knownRight: inlinePath,
 			probes: Self.timingProbes.map(DifferentialValueProbe.init),
@@ -777,7 +777,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 			""",
 		)
 
-		let description = try DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("publicTierOmitsPackageValue()")], filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("publicTierOmitsPackageValue()")], filesToDelete: &filesToDelete)
 
 		if compileVerificationIsEnabled {
 			#expect(description == """
@@ -817,7 +817,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 			""",
 		)
 
-		let description = try DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("handWrittenWrapper()")], filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("handWrittenWrapper()")], filesToDelete: &filesToDelete)
 
 		if compileVerificationIsEnabled {
 			#expect(description == """
@@ -902,7 +902,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		}
 		""")
 
-		let description = try DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("handWrittenCall()")], filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("handWrittenCall()")], filesToDelete: &filesToDelete)
 
 		if compileVerificationIsEnabled {
 			#expect(description == """
@@ -933,7 +933,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		}
 		""")
 
-		let description = try DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("generatedCall()")], filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("generatedCall()")], filesToDelete: &filesToDelete)
 
 		if compileVerificationIsEnabled {
 			#expect(description == """
@@ -1064,7 +1064,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 			fixtureFiles: Dictionary(uniqueKeysWithValues: files.enumerated().map { ("File\($0.offset).swift", $0.element) }).merging(Self.configuration) { first, _ in first },
 			generatedFiles: output.dependencyTreeFiles,
 		)
-		let description = try DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("callEachTier()")], filesToDelete: &filesToDelete)
+		let description = try await DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("callEachTier()")], filesToDelete: &filesToDelete)
 		if compileVerificationIsEnabled {
 			#expect(description == """
 			probe callEachTier()

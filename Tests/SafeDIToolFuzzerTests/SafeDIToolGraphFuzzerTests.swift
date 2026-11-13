@@ -1058,7 +1058,7 @@ struct SafeDIToolGraphFuzzerTests {
 		let perturbed = try #require(Self.passingNil(forAnOnlyIfAvailableParameterIn: seamFiles, of: runs.fixture), "No smoke seam graph passes a value for a parameter received only if available")
 		let perturbedRuns = GraphFuzzerToolRuns(fixture: runs.fixture, firstOutcome: .accepted(generatedFiles: perturbed.files, warnings: warnings), secondOutcome: .accepted(generatedFiles: perturbed.files, warnings: warnings), inlineOutcome: runs.inlineOutcome)
 
-		let failures = try GraphFuzzerOracle.valueFailures(of: [perturbedRuns])
+		let failures = try await GraphFuzzerOracle.valueFailures(of: [perturbedRuns])
 
 		let failure = try #require(failures[runs.fixture.seed])
 		#expect(failure.kind == .seamBuildsOtherValuesThanInline, Comment(rawValue: failure.details))
@@ -1066,7 +1066,7 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(failure.valueDifferences.first == "probe `S16_Root0().spellHostBuilder.instantiate(S16_SpellOuter.Item())` at <1> S16_SpellHost > spellSeam > spellChild > \(perturbed.label):\n  feature:     \(perturbed.label): nil\n  known right: \(perturbed.label): <2> S16_SpellOuter.Item (seen, first at <1> S16_SpellHost > spelled)")
 		#expect(failure.valueDifferences.count == 1, "\(failure.valueDifferences)")
 		#expect(failure.details.hasPrefix(failure.valueDifferences.joined(separator: "\n") + "\n"))
-		#expect(try GraphFuzzerOracle.valueFailures(of: [runs]).isEmpty)
+		#expect(try await GraphFuzzerOracle.valueFailures(of: [runs]).isEmpty)
 	}
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The value comparator compiles generated code only when compile verification is enabled"))
@@ -1078,7 +1078,7 @@ struct SafeDIToolGraphFuzzerTests {
 		brokenFiles[fileName] = (seamFiles[fileName] ?? "") + "\nfunc broken() -> Int { \"not an integer\" }\n"
 		let brokenRuns = GraphFuzzerToolRuns(fixture: runs.fixture, firstOutcome: .accepted(generatedFiles: brokenFiles, warnings: warnings), secondOutcome: .accepted(generatedFiles: brokenFiles, warnings: warnings), inlineOutcome: runs.inlineOutcome)
 
-		let failures = try GraphFuzzerOracle.valueFailures(of: [brokenRuns])
+		let failures = try await GraphFuzzerOracle.valueFailures(of: [brokenRuns])
 
 		let failure = try #require(failures[runs.fixture.seed])
 		#expect(failure.kind == .valueComparatorCouldNotDescribeGraph)
@@ -1107,11 +1107,11 @@ struct SafeDIToolGraphFuzzerTests {
 		perturbedFiles[seamFileName] = seamFile.replacingOccurrences(of: siteArguments, with: "cycle4Reader: cycle4Reader, cycle6Tag: cycle4Reader.cycle6Tag, ")
 		let perturbedRuns = GraphFuzzerToolRuns(fixture: runs.fixture, firstOutcome: .accepted(generatedFiles: perturbedFiles, warnings: warnings), secondOutcome: .accepted(generatedFiles: perturbedFiles, warnings: warnings), visibleOutcome: runs.visibleOutcome)
 
-		let failure = try #require(try GraphFuzzerOracle.valueFailures(of: [perturbedRuns])[seed])
+		let failure = try #require(try await GraphFuzzerOracle.valueFailures(of: [perturbedRuns])[seed])
 
 		#expect(failure.kind == .holeBuildsOtherValuesThanVisibleBuild, Comment(rawValue: failure.details))
 		#expect(failure.valueDifferences.allSatisfy { $0.contains("cycle0Service") }, "\(failure.valueDifferences)")
-		#expect(try GraphFuzzerOracle.valueFailures(of: [runs]).isEmpty)
+		#expect(try await GraphFuzzerOracle.valueFailures(of: [runs]).isEmpty)
 	}
 
 	@Test
@@ -1346,7 +1346,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func compilationFailures_reportEachBrokenGraph_whenGeneratedCodeFailsToTypeCheckOrToLowerOrDrawsWarning() throws {
+	func compilationFailures_reportEachBrokenGraph_whenGeneratedCodeFailsToTypeCheckOrToLowerOrDrawsWarning() async throws {
 		// Each graph is one small type, so the four compiler invocations this takes stay cheap; the smoke batch
 		// already compiles real graphs.
 		let typeErrorSeed: UInt64 = 1_000_000_001
@@ -1391,7 +1391,7 @@ struct SafeDIToolGraphFuzzerTests {
 			),
 		]
 
-		let failures = try GraphFuzzerOracle.compilationFailures(of: toolRuns)
+		let failures = try await GraphFuzzerOracle.compilationFailures(of: toolRuns)
 
 		#expect(failures.keys.sorted() == [typeErrorSeed, loweringErrorSeed, warningSeed, redirectedWarningSeed])
 		#expect(failures[typeErrorSeed]?.kind == .generatedCodeDoesNotCompile)
@@ -1404,7 +1404,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func compilationFailures_reportWarning_whenGraphCompilesOnItsOwnAfterAnErrorThatNamesNoGraph() throws {
+	func compilationFailures_reportWarning_whenGraphCompilesOnItsOwnAfterAnErrorThatNamesNoGraph() async throws {
 		// The fixture's type name lacks its seed's prefix, so no graph's file is named in the error it draws, and the
 		// oracle compiles each graph on its own.
 		let unattributedErrorSeed: UInt64 = 1_000_000_006
@@ -1421,7 +1421,7 @@ struct SafeDIToolGraphFuzzerTests {
 			Self.probeGraph(seed: warningSeed, generatedCode: "func drawsWarning() {\n\tlet unused = 1\n}\n"),
 		]
 
-		let failures = try GraphFuzzerOracle.compilationFailures(of: toolRuns)
+		let failures = try await GraphFuzzerOracle.compilationFailures(of: toolRuns)
 
 		#expect(failures.keys.sorted() == [unattributedErrorSeed, warningSeed])
 		#expect(failures[unattributedErrorSeed]?.kind == .fixtureDoesNotCompile)
@@ -1430,14 +1430,14 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func compilationFailures_reportReleaseBuildFailure_whenGeneratedCodeCompilesOnlyWhereDebugIsDefined() throws {
+	func compilationFailures_reportReleaseBuildFailure_whenGeneratedCodeCompilesOnlyWhereDebugIsDefined() async throws {
 		// A graph the oracle compiles as a release build too (`GraphFuzzerFixture.compilesAsReleaseBuildToo`) fails there
 		// when its generated code does not compile without `DEBUG`, and the failure says which build it was.
 		let seed: UInt64 = 1_000_000_008
 		let toolRuns = [Self.probeGraph(seed: seed, generatedCode: "#if !DEBUG\nfunc brokenInRelease() -> Int { \"not an integer\" }\n#endif\n")]
 
-		#expect(try GraphFuzzerOracle.compilationFailures(of: toolRuns).isEmpty)
-		let failures = try GraphFuzzerOracle.compilationFailures(of: toolRuns, definesDebug: false)
+		#expect(try await GraphFuzzerOracle.compilationFailures(of: toolRuns).isEmpty)
+		let failures = try await GraphFuzzerOracle.compilationFailures(of: toolRuns, definesDebug: false)
 
 		#expect(failures.keys.sorted() == [seed])
 		#expect(failures[seed]?.kind == .generatedCodeDoesNotCompile)
@@ -1467,7 +1467,7 @@ struct SafeDIToolGraphFuzzerTests {
 		)
 
 		// Graphs whose runs differ are not compiled, so this costs no compiler invocation.
-		let results = try GraphFuzzerOracle.results(of: [differingRuns])
+		let results = try await GraphFuzzerOracle.results(of: [differingRuns])
 
 		#expect(results.map(\.failure?.kind) == [.runsDiffer])
 	}
@@ -1583,7 +1583,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func results_reportIntegrationsDiffer_whenRenamedGraphAndSplitGraphBothGiveOtherResults() throws {
+	func results_reportIntegrationsDiffer_whenRenamedGraphAndSplitGraphBothGiveOtherResults() async throws {
 		// One small type, so the compile this takes stays cheap, as in `compilationFailures_reportEachBrokenGraph…`.
 		let seed: UInt64 = 1_000_000_008
 		let prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
@@ -1606,7 +1606,7 @@ struct SafeDIToolGraphFuzzerTests {
 			multiModuleRuns: [multiModuleRuns],
 		)
 
-		let results = try GraphFuzzerOracle.results(of: [toolRuns])
+		let results = try await GraphFuzzerOracle.results(of: [toolRuns])
 
 		#expect(results.map(\.failure?.kind) == [.integrationsDiffer])
 		#expect(results.map { $0.renamedGraphFailures.map(\.kind) } == [[.renamedGraphDiffers]])
@@ -3323,7 +3323,7 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func summaryOfReport_saysTheSeedIsMisfiled_whenAnEntryListsADifferenceItsGraphDoesNotShow() throws {
+	func summaryOfReport_saysTheSeedIsMisfiled_whenAnEntryListsADifferenceItsGraphDoesNotShow() async throws {
 		let knownIssue = GraphFuzzerKnownIssue(reason: "Both reasons", signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)], seeds: [12])
 		let reportLine = try #require(GraphFuzzerFinding.staleRenamedGraphDifference(knownIssue, .mockConfigurationFieldPresence).reportLine(seed: 12))
 		let directory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
@@ -3335,20 +3335,15 @@ struct SafeDIToolGraphFuzzerTests {
 		let script = URL(fileURLWithPath: #filePath)
 			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 			.appendingPathComponent(".github/scripts/summarize-graph-fuzzer-report.sh")
-		let process = Process()
-		process.executableURL = URL(fileURLWithPath: "/bin/bash")
-		process.arguments = [script.path, report.path, summary.path, "12", "1"]
-		// The job summary of a CI run of this suite is not this test's to write to.
-		process.environment = TestTemporaryDirectory.environment(
-			withTemporaryDirectory: directory,
-			from: ProcessInfo.processInfo.environment.filter { $0.key != "GITHUB_STEP_SUMMARY" },
+		let result = try await runProcess(
+			URL(fileURLWithPath: "/bin/bash"),
+			arguments: [script.path, report.path, summary.path, "12", "1"],
+			// The job summary of a CI run of this suite is not this test's to write to.
+			environment: ProcessInfo.processInfo.environment.filter { $0.key != "GITHUB_STEP_SUMMARY" },
 		)
 
-		try process.run()
-		process.waitUntilExit()
-
 		let text = try String(contentsOf: summary, encoding: .utf8)
-		#expect(process.terminationStatus == 1)
+		#expect(result.exitCode == 1)
 		#expect(text.contains("- **Seed 12** is listed under an entry that names more than its graph shows (Both reasons: the renamed graph does not show which configuration fields its generated mock has; list the seed under the entry that names exactly what it shows)."))
 		#expect(!text.contains("no longer fails"))
 	}
@@ -3375,7 +3370,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func results_carryEveryRenamedGraphDifference_whenEachRenamingDiffersInAnotherFile() throws {
+	func results_carryEveryRenamedGraphDifference_whenEachRenamingDiffersInAnotherFile() async throws {
 		// One small type, so the compile this takes stays cheap, as in `compilationFailures_reportEachBrokenGraph…`.
 		let seed: UInt64 = 1_000_000_009
 		let prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
@@ -3387,7 +3382,7 @@ struct SafeDIToolGraphFuzzerTests {
 		let otherConfiguration = GraphFuzzerToolOutcome.accepted(generatedFiles: ["\(prefix)Probe+SafeDIMock.swift": "// mock\n", "SafeDIMockConfiguration.swift": "// other\n"], warnings: [])
 		let toolRuns = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome, renamedOutcomes: [(GraphFuzzerRenaming.all[0], otherMock), (GraphFuzzerRenaming.all[1], otherConfiguration)])
 
-		let result = try #require(try GraphFuzzerOracle.results(of: [toolRuns]).first)
+		let result = try #require(try await GraphFuzzerOracle.results(of: [toolRuns]).first)
 
 		#expect(result.failure?.renamedGraphDifference == .mockCode)
 		#expect(result.laterFailures.map(\.renamedGraphDifference) == [.mockConfigurationCode])
@@ -4364,7 +4359,7 @@ struct SafeDIToolGraphFuzzerTests {
 						for index in results.indices where results[index].failure == nil
 							&& results[index].fixture.seed % Self.crossProcessSampleInterval == 0
 						{
-							results[index] = try GraphFuzzerResult(
+							results[index] = try await GraphFuzzerResult(
 								fixture: results[index].fixture,
 								outcome: results[index].outcome,
 								failure: GraphFuzzerOracle.crossProcessFailure(of: results[index].fixture),
@@ -5757,12 +5752,12 @@ struct SafeDIToolGraphFuzzerTests {
 }
 
 /// The smoke batch's results, computed once per process and shared by the tests that check them.
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private let smokeResults = Task {
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private let smokeResults = SharedTestWork {
 	try await GraphFuzzerOracle.results(forSeeds: SafeDIToolGraphFuzzerTests.smokeSeeds, isolatingValueGraphsOf: SafeDIToolGraphFuzzerTests.baseCorpus.isolatedValueGraphSeeds)
 }
 
 /// The seam smoke batch's results, drawn with the `generateDependencyTree` feature, computed once per process.
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private let seamSmokeResults = Task {
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private let seamSmokeResults = SharedTestWork {
 	try await GraphFuzzerOracle.results(forSeeds: SafeDIToolGraphFuzzerTests.seamSmokeSeeds, features: [.generateDependencyTree])
 }
 

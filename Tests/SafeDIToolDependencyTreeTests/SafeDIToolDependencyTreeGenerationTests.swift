@@ -9131,7 +9131,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		}
 		""")
 		#expect(inlineOutput.warnings.map(\.formatted) == [])
-		try expectSeamBuildsInlineValues(of: Self.instanceReadInsideBuilderFixture(seam: true), seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: Self.instanceReadInsideBuilderFixture(seam: true), seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: The Manual's worked example

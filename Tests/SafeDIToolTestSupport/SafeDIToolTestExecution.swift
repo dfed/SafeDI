@@ -62,6 +62,7 @@ func executeSafeDIToolTest(
 	verificationCompilerSettings: VerificationCompilerSettings = VerificationCompilerSettings(),
 	swiftFileContentAfterScan: [String]? = nil,
 ) async throws -> TestOutput {
+	await ProcessSlots.shared.takePlaceInLine(for: Test.current?.id)
 	// Create additional directory first so its path can be substituted into target file content.
 	var additionalDirectoryFiles = [URL]()
 	var additionalFixtureDirectory: URL?
@@ -355,7 +356,7 @@ func executeSafeDIToolTest(
 
 		let moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
 		if let generatedFiles, !generatedFiles.isEmpty, !skipCompileVerification {
-			try verifyGeneratedCodeCompiles(
+			try await verifyGeneratedCodeCompiles(
 				inputSwiftFiles: swiftFiles,
 				additionalDirectorySwiftFiles: additionalDirectoryFiles,
 				generatedFiles: generatedFiles,

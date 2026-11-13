@@ -185,7 +185,7 @@ struct SafeDIToolDeprecationTests: ~Copyable {
 		#expect(generateOutput.warnings == [project.handWrittenManifestWarning])
 		let generatedFiles = try project.generatedFiles()
 		#expect(generatedFiles == Self.expectedOutput)
-		try verifyGeneratedCodeCompiles(
+		try await verifyGeneratedCodeCompiles(
 			inputSwiftFiles: [project.rootFile],
 			additionalDirectorySwiftFiles: [],
 			generatedFiles: generatedFiles,

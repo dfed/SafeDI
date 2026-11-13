@@ -486,7 +486,7 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 	func valueComparisons_reportOtherValues_whenGeneratedMockBuildsSecondInstanceOfPromotedDependency() async throws {
 		let runs = try await Self.valueOracleRuns(of: Self.sharedStoreFixture, editingMockOf: "S1_Screen", replacing: "S1_Row(store: store)", with: "S1_Row(store: S1_Store())")
 
-		let failure = try #require(try GraphFuzzerOracle.valueComparisons(of: [runs]).failures[1])
+		let failure = try #require(try await GraphFuzzerOracle.valueComparisons(of: [runs]).failures[1])
 
 		#expect(failure.kind == .mockBuildsOtherValuesThanProduction)
 		#expect(failure.valueDifferences == [
@@ -508,7 +508,7 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 		])
 		let runs = try await Self.valueOracleRuns(of: fixture, editingMockOf: "S1_Screen", replacing: "S1_Screen(detail: detail, store: store)", with: "S1_Screen(detail: detail, store: nil)")
 
-		let failure = try #require(try GraphFuzzerOracle.valueComparisons(of: [runs]).failures[1])
+		let failure = try #require(try await GraphFuzzerOracle.valueComparisons(of: [runs]).failures[1])
 
 		#expect(failure.kind == .mockBuildsOtherValuesThanProduction)
 		#expect(failure.valueDifferences == [

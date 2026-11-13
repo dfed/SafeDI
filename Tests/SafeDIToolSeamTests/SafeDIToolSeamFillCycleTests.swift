@@ -64,7 +64,7 @@ struct SafeDIToolSeamFillCycleTests: ~Copyable {
 		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
 		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
 		let visibleOutput = try await executeSafeDIToolMultiModuleTest(modules: visibleModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: SafeDIToolSeamBuilderParameterTests.differentialValuePath(of: output, modules: modules),
 			knownRight: SafeDIToolSeamBuilderParameterTests.differentialValuePath(of: visibleOutput, modules: visibleModules),
 			probes: [DifferentialValueProbe("Root()")],

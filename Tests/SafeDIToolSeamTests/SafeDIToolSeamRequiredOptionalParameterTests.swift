@@ -1125,7 +1125,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			}
 			""",
 		])
-		try expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
+		try await expectSeamBuildsInlineValues(of: fixture, seamOutput: output, inlineOutput: inlineOutput, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: An erased alias of a parameter that may be nil

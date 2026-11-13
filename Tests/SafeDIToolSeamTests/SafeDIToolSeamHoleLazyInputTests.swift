@@ -1328,7 +1328,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		}
 		let visibleModules = SafeDIToolSeamBuilderParameterTests.modules(feature: feature + movedTypes, app: staying, featureConfiguration: featureConfiguration)
 		let visibleOutput = try await executeSafeDIToolMultiModuleTest(modules: visibleModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
-		try expectDifferentialValuesAgree(
+		try await expectDifferentialValuesAgree(
 			feature: SafeDIToolSeamBuilderParameterTests.differentialValuePath(of: output, modules: modules),
 			knownRight: SafeDIToolSeamBuilderParameterTests.differentialValuePath(of: visibleOutput, modules: visibleModules),
 			probes: (probes + (hasHandBuilt ? ["makeHandBuilt()"] : [])).map(DifferentialValueProbe.init),
