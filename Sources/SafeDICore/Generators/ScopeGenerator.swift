@@ -1502,7 +1502,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		var findings = OmissionFindings<SeamTierOmission>()
 		for child in orderedChildren {
-			guard case let .property(childInstantiable, childProperty, _, _, isPropertyCycle, seamCall) = child.generator.scopeData else { continue }
+			guard case let .property(childInstantiable, _, _, _, isPropertyCycle, seamCall) = child.generator.scopeData else { continue }
 			if isPropertyCycle {
 				// A scope that closes a cycle constructs nothing: it calls the builder function of the declaration it repeats.
 				findings.recordCalls(by: child, of: child.generator.closedOnDeclaration.flatMap { enclosingCycleFunctions[$0] }, among: childDeclarationsByLabel)
@@ -3729,7 +3729,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					"\(functionName)(\(callArguments))"
 				}
 
-				return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
+				// A function a cycle closes on from inside a `Sendable` wrapper is `@Sendable`, so the stage it starts is
+				// called before it, as before a wrapper's function.
+				return "\(stageCallLines)\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
 			}
 		case let .hole(property, _, site):
 			// A tree built only to compute the seam's signature has no site, and generates nothing.
@@ -6364,7 +6366,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					insideSendableScope: childInsideSendable,
 					propertiesGeneratedLater: childBodyPropertiesGeneratedLater,
 				)
-				let childConstructionUnavailableProperties = await childGenerator.bodyUnavailableProperties(childUnavailableProperties)
+				let childConstructionUnavailableProperties = childGenerator.bodyUnavailableProperties(childUnavailableProperties)
 
 				// Determine which initializer to use for construction arguments and defaults.
 				// When the child has a compatible mock method, it fully controls the

@@ -465,7 +465,7 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 		reversesLabels ? Self.reversingIndices(in: label, pattern: Self.renamedLabelPattern) : label
 	}
 
-	private static let renamedLabelPattern = "(?<![A-Za-z0-9])(?:lazyAnyT|lazyT|anyT|t|missing)([0-9])"
+	private static let renamedLabelPattern = "(?<![A-Za-z0-9])(?:lazyAnyT|lazyT|anyT|t|missing|cycle)([0-9])"
 
 	/// Every renaming the oracle runs. A seed's first renamed failure is the one its known issue matches, so a new
 	/// renaming goes last: the seeds the earlier ones already list keep their entries.
@@ -537,9 +537,9 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 	private func reversingOrders(in text: String, typeNamePrefix: String) -> String {
 		var text = text
 		if reversesTypeNames {
-			text = Self.reversingIndices(in: text, pattern: NSRegularExpression.escapedPattern(for: typeNamePrefix) + "(?:Root|AnyT|T|Missing)([0-9])")
+			text = Self.reversingIndices(in: text, pattern: NSRegularExpression.escapedPattern(for: typeNamePrefix) + "(?:Root|AnyT|T|Missing|Cycle)([0-9])")
 			// A builder's label is the type's name with its leading capitals lowered.
-			text = Self.reversingIndices(in: text, pattern: NSRegularExpression.escapedPattern(for: typeNamePrefix.prefix(1).lowercased() + typeNamePrefix.dropFirst()) + "(?:Root|AnyT|T|Missing)([0-9])")
+			text = Self.reversingIndices(in: text, pattern: NSRegularExpression.escapedPattern(for: typeNamePrefix.prefix(1).lowercased() + typeNamePrefix.dropFirst()) + "(?:Root|AnyT|T|Missing|Cycle)([0-9])")
 		}
 		if reversesLabels {
 			text = Self.reversingIndices(in: text, pattern: Self.renamedLabelPattern)
@@ -851,6 +851,57 @@ enum GraphFuzzerHoleOutputFeature: String, CaseIterable, Comparable {
 
 	static func < (lhs: GraphFuzzerHoleOutputFeature, rhs: GraphFuzzerHoleOutputFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
+	}
+}
+
+/// The names `GraphFuzzerGenerator`'s `addingCycleParameterShapes` gives its cycle's types and labels, each without the
+/// graph's prefix. The labels, and the types of the reader and the side, carry an index that the rename oracle's reversals
+/// reverse (`cycle<digit>` and `<prefix>Cycle<digit>`, `GraphFuzzerRenaming`), so that a choice made by their names, such
+/// as the order of a function's cycle parameters, changes under renaming. The cycle's own types carry none: reversing their
+/// names reorders which back-edge of a lazy cycle a mock's configuration leaves out (`lazyCycleConfigurationFieldReason`,
+/// a known issue), which every mocked cycle would then show.
+enum GraphFuzzerCycleNames {
+	/// The type the seam opens the cycle on, whose builder function the cycle closes on.
+	static let a = "CycleA"
+	/// The type `a` builds, between the cycle's ends.
+	static let b = "CycleB"
+	/// The type `b` builds in a cycle two levels deep.
+	static let c = "CycleC"
+	/// The type that makes `tag` a parameter of the function the cycle closes on.
+	static let reader = "Cycle4Reader"
+	/// The type beside the reader that receives `tag` in a second form.
+	static let side = "Cycle5Side"
+	static let seam = "CycleSeam"
+	static let root = "CycleRoot"
+	/// The type that fills the hole.
+	static let fill = "CycleImpl"
+	static let tagType = "CycleTag"
+	static let noteType = "CycleNote"
+	static let serviceType = "CycleService"
+	/// The label the cycle declares again.
+	static let tag = "cycle6Tag"
+	/// The label the root holds that the seam takes as a deferred parameter.
+	static let note = "cycle7Note"
+	/// The label a type between aliases as `tag`.
+	static let other = "cycle8Other"
+	/// The hole's label.
+	static let service = "cycle0Service"
+	/// Every type of the draw but those of its values.
+	static let typeSuffixes = [seam, a, b, c, reader, side, fill, root]
+
+	/// The label of a property that builds the type named `suffix`: an indexed label for each of the cycle's own types,
+	/// and otherwise the type's name with its first letter lowered.
+	static func label(of suffix: String) -> String {
+		switch suffix {
+		case a:
+			"cycle1A"
+		case b:
+			"cycle2B"
+		case c:
+			"cycle3C"
+		default:
+			suffix.prefix(1).lowercased() + suffix.dropFirst()
+		}
 	}
 }
 
@@ -1261,6 +1312,92 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case samePackageHostIsSeam
 	/// `ProofOtherHost`, the caller in another package, itself a seam.
 	case otherPackageHostIsSeam
+	/// `addingCycleParameterShapes`' seam, `CycleSeam`, whose tree holds a lazy cycle that closes through a cycle parameter,
+	/// with a hole beneath it. The names below are `GraphFuzzerCycleNames`'.
+	case cycleParameterSeam
+	/// The seam opens the cycle through an instantiator.
+	case cycleParameterOpenedByInstantiator
+	/// The seam opens the cycle through a lazily instantiated wrapper.
+	case cycleParameterOpenedLazily
+	/// The seam opens the cycle by value, so that an instantiator on the way closes it.
+	case cycleParameterOpenedByValue
+	/// A wrapper of the cycle, or of its label, is of the `Sendable` kind.
+	case cycleParameterSendableWrappers
+	/// The cycle's wrappers, its label's among them, are of both kinds.
+	case cycleParameterMixedWrapperKinds
+	/// `CycleC` between `CycleB` and the closer: two levels between the function the cycle closes on and the closer.
+	case cycleParameterTwoLevelsDeep
+	/// `CycleC` builds `CycleB` again, a cycle nested inside the first, whose function takes `cycle6Tag` too.
+	case cycleParameterNestedCycle
+	/// Every declaration of `cycle6Tag` is a lazily instantiated wrapper, which provides the by-value form.
+	case cycleParameterDeclaredLazily
+	/// Every declaration of `cycle6Tag` is an instantiator, which provides no by-value form.
+	case cycleParameterDeclaredAsInstantiators
+	/// The type between declares `cycle6Tag` as an instantiator while another declaration or receive of it is of another
+	/// form, which the instantiator does not provide, so that the receives beneath it are hidden.
+	case cycleParameterDeclaredAsHidingInstantiator
+	/// The type between declares `cycle6Tag` as an alias of `cycle8Other`, which `CycleA` declares.
+	case cycleParameterDeclaredAsAlias
+	/// The type between declares `cycle6Tag` after its closer.
+	case cycleParameterDeclaredAfterCloser
+	/// `Cycle4Reader` requires `cycle6Tag` by value.
+	case cycleParameterReaderRequiresValue
+	/// `Cycle4Reader` receives `cycle6Tag` only if available.
+	case cycleParameterReaderReceivesOnlyIfAvailable
+	/// `Cycle4Reader` requires `cycle6Tag`'s lazily instantiated wrapper.
+	case cycleParameterReaderRequiresWrapper
+	/// `Cycle4Reader` receives `cycle6Tag`'s lazily instantiated wrapper only if available.
+	case cycleParameterReaderReceivesWrapperOnlyIfAvailable
+	/// `Cycle4Reader` receives an instantiator of `cycle6Tag`, required or only if available.
+	case cycleParameterReaderReceivesInstantiator
+	/// No reader and no side, so that `cycle6Tag` is no parameter of the function the cycle closes on.
+	case cycleParameterWithoutReader
+	/// The reader built by `CycleB`, above `CycleC`, which declares `cycle6Tag`.
+	case cycleParameterReaderBetween
+	/// `Cycle5Side` beside the reader receiving `cycle6Tag` by value, required or only if available.
+	case cycleParameterSideReceivesValue
+	/// `Cycle5Side` receiving `cycle6Tag`'s lazily instantiated wrapper only if available: carried by one parameter beside a
+	/// reader of the wrapper, and `unpassableCycleLabel` beside a reader that requires the value.
+	case cycleParameterSideReceivesWrapper
+	/// `Cycle5Side` receiving an instantiator of `cycle6Tag`, beside instantiator declarations.
+	case cycleParameterSideReceivesInstantiator
+	/// The seam declares `cycle6Tag` above the cycle.
+	case cycleParameterDeclaredBySeam
+	/// The root holds `cycle6Tag`, which the seam takes as a deferred parameter.
+	case cycleParameterDeferredFromCaller
+	/// Nothing above the cycle declares `cycle6Tag`.
+	case cycleParameterUndeclaredAbove
+	/// The hole on the seam, outside the cycle.
+	case cycleParameterHoleOnSeam
+	/// The hole on `CycleA`, inside the function the cycle closes on.
+	case cycleParameterHoleOnClosedOnType
+	/// The hole on `CycleB` or `CycleC`, between the function the cycle closes on and the closer.
+	case cycleParameterHoleBetween
+	/// The hole on the type that declares `cycle6Tag` again, or on `CycleC` beneath a declaring `CycleB`.
+	case cycleParameterHoleAtOrBeneathDeclaration
+	/// The hole on the reader.
+	case cycleParameterHoleOnReader
+	/// `CycleImpl`, the fill, receives `cycle6Tag`.
+	case cycleParameterFillReadsLabel
+	/// The fill receives `cycle6Tag` on a hole inside the function the cycle closes on, above the type that declares it
+	/// again, where no reader or side makes it a parameter: rejected as `declarationBoundOnCycleReentry`.
+	case cycleParameterFillReadsLabelNoParameterCarries
+	/// A type of the cycle receives `cycle7Note`, which the root holds: a deferred parameter of the seam.
+	case cycleParameterDeferredNote
+	/// The reader or the side receives `cycle7Note` after `cycle6Tag`, so that the function's body receives the label first.
+	case cycleParameterNoteReceivedAfterLabel
+	/// The type between declares `cycle7Note` again, which makes it a cycle parameter that hides the seam's memo.
+	case cycleParameterNoteDeclaredAgain
+	/// The fill receives `cycle7Note`.
+	case cycleParameterFillReadsNote
+	/// `CycleSeam` or `CycleA` declared with `generateMock: true`.
+	case cycleParameterMocked
+
+	/// Whether `addingCycleParameterShapes` draws this shape, whose count in accepted graphs the seam corpus pins too
+	/// (`acceptedDrawFeatureCounts`).
+	var isCycleParameterShape: Bool {
+		rawValue.hasPrefix("cycleParameter")
+	}
 
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -1896,6 +2033,7 @@ enum GraphFuzzerGenerator {
 			unreadTypeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unreadTypeRandomSeedMask)
 			unreadBoundaryRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unreadBoundaryRandomSeedMask)
 			mockOnlyBlockRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockOnlyBlockRandomSeedMask)
+			cycleParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.cycleParameterRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -1978,6 +2116,9 @@ enum GraphFuzzerGenerator {
 				if !modulesOmittingPackageName.contains(.seamModule) {
 					drawSeamDependencies(in: &finalDeclarations, extensionSource: extensionSource)
 				}
+				// Drawn only in a graph the passes before it split, and after the declarations that move beneath the seam's
+				// module have moved, so that every other graph, and every other draw of a graph it draws in, is drawn as before.
+				finalDeclarations = addingCycleParameterShapes(to: finalDeclarations)
 				presentModules = Set(finalDeclarations.compactMap(\.module))
 			}
 			// Left out after every draw, so that the graph without its second place is drawn, and split, as the graph with it.
@@ -2204,6 +2345,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingMockOnlyBlockParameterTypes`' choices: whether a graph gains its tree with a value of a plain type
 		/// declared in a block that guards mock-only declarations, and how the clauses where `DEBUG` is inactive declare it.
 		private var mockOnlyBlockRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingCycleParameterShapes`' choices: whether a split graph gains `CycleSeam`'s tree, a lazy cycle that
+		/// closes through a cycle parameter with a hole beneath it, and every shape of that tree.
+		private var cycleParameterRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -5539,6 +5683,500 @@ enum GraphFuzzerGenerator {
 
 		private static let mockOnlyBlockRandomSeedMask: UInt64 = 0x6D6F636B4F6E6C79
 
+		// MARK: Cycle parameters
+
+		/// How a property of `addingCycleParameterShapes`' cycle builds its type.
+		private enum CycleEdgeKind {
+			case constant
+			case lazilyInstantiated
+			case instantiator
+		}
+
+		/// How `addingCycleParameterShapes`' declarations of its label build `CycleTag`: every one of them alike.
+		private enum CycleTagKind {
+			case value
+			case lazilyInstantiated
+			case instantiator
+		}
+
+		/// A form in which a type of `addingCycleParameterShapes`' tree receives its label.
+		private enum CycleTagForm {
+			/// `@Received let cycle6Tag: CycleTag`.
+			case value
+			/// `@Received(onlyIfAvailable: true) let cycle6Tag: CycleTag?`.
+			case optionalValue
+			/// `@Received let cycle6Tag: LazilyInstantiated<CycleTag>`, or its `Sendable` kind.
+			case wrapper
+			/// `@Received(onlyIfAvailable: true) let cycle6Tag: LazilyInstantiated<CycleTag>?`, or its `Sendable` kind.
+			case optionalWrapper
+			/// `@Received let cycle6Tag: Instantiator<CycleTag>`, or its `Sendable` kind.
+			case instantiator
+			/// `@Received(onlyIfAvailable: true) let cycle6Tag: Instantiator<CycleTag>?`, or its `Sendable` kind.
+			case optionalInstantiator
+
+			var isRequired: Bool {
+				switch self {
+				case .value, .wrapper, .instantiator:
+					true
+				case .optionalValue, .optionalWrapper, .optionalInstantiator:
+					false
+				}
+			}
+
+			/// This form received only if available.
+			var onlyIfAvailable: CycleTagForm {
+				switch self {
+				case .value, .optionalValue:
+					.optionalValue
+				case .wrapper, .optionalWrapper:
+					.optionalWrapper
+				case .instantiator, .optionalInstantiator:
+					.optionalInstantiator
+				}
+			}
+
+			/// This form required.
+			var required: CycleTagForm {
+				switch self {
+				case .value, .optionalValue:
+					.value
+				case .wrapper, .optionalWrapper:
+					.wrapper
+				case .instantiator, .optionalInstantiator:
+					.instantiator
+				}
+			}
+
+			var isWrapper: Bool {
+				switch self {
+				case .wrapper, .optionalWrapper:
+					true
+				case .value, .optionalValue, .instantiator, .optionalInstantiator:
+					false
+				}
+			}
+		}
+
+		/// With the `generateDependencyTree` feature on, three in five graphs already split across modules gain
+		/// `CycleSeam`, a seam of the seam's module whose tree holds a lazy cycle that closes through a cycle parameter (`CycleParameter`),
+		/// with a hole beneath it that `CycleImpl`, beside the roots, fills: the shapes of the defects reviews found in
+		/// holes on cycles, which no other pass draws. `CycleRoot`, a root of the roots' module, instantiates the seam.
+		///
+		/// The cycle. The seam opens it on `CycleA` – through an instantiator, a lazily instantiated wrapper, or by value –
+		/// and `CycleA` builds `CycleB`, which builds `CycleA` again with the opener's own property, or, two levels deep,
+		/// builds `CycleC`, which does; an instantiator closes the cycle or is on the way, so the cycle is one SafeDI
+		/// accepts. A third of the deep cycles nest a second one: `CycleC` builds `CycleB` again with `CycleA`'s own
+		/// property. In a graph of both kinds of wrapper, half the cycles draw each wrapper's kind on its own, so a plain
+		/// wrapper can be captured inside a `Sendable` one (`nonSendableWrapperCaptures`).
+		///
+		/// The label. A type between the cycle's ends (`CycleB` or `CycleC`) declares `cycle6Tag` again, before or after
+		/// its closer: every declaration of it by value, every one lazily, or every one an instantiator; or the type
+		/// between aliases `cycle8Other`, which `CycleA` declares; or, now and then, the type between declares it as an
+		/// instantiator beside by-value declarations, which provides no by-value form and so hides the reads beneath it.
+		/// `Cycle4Reader`, built by `CycleA`, or by `CycleB` above a declaring `CycleC`, receives it in a form those
+		/// declarations provide, required or only if available, which makes it a parameter of the function the cycle closes
+		/// on, and `Cycle5Side` beside it now and then a second form: one the parameter carries, or, beside lazily
+		/// instantiated declarations, the wrapper only if available, which no one parameter carries beside a required
+		/// value (`unpassableCycleLabel`). Above the cycle the seam declares the label, or the root holds it (a deferred
+		/// parameter), or nothing does, and then the cycle's receives are only if available but one draw in five.
+		///
+		/// The hole, `cycle0Service: any CycleService`, which `CycleImpl` fills from the roots' module, is on the seam, on
+		/// `CycleA`, on a type between, or on the reader. The fill reads the label in a form the field its hole's scope
+		/// carries provides, required only where the field is, so that no read is held only optionally
+		/// (`fieldHeldOnlyOptionally`): the seam's own field, the declaration of the type between at or above the hole, or
+		/// the function's parameter. Where no reader or side makes the label a parameter, a fill inside the function
+		/// above the type that declares it again is rejected (`declarationBoundOnCycleReentry`), and so reads it only one
+		/// draw in four. A fill of a parameter that is a wrapper only if available reads the wrapper, since its by-value form
+		/// beside the parameter is one no one parameter carries, which only the visible build, whose fill joins the
+		/// function's body, reports.
+		///
+		/// The second label. `cycle7Note`, which the root holds, is now and then received in the cycle – by `CycleA`, or
+		/// after the label by the reader or the side, so that the order of the function's parameters is not their labels'
+		/// order – a deferred parameter the hole's struct carries as the seam's memo, unless the type declaring `cycle6Tag`
+		/// declares `cycle7Note` again too, which makes it a cycle parameter that hides the memo; `CycleImpl` now and then
+		/// reads it. The names whose order the cycle's code could follow carry an index the rename oracle reverses
+		/// (`GraphFuzzerCycleNames`). Now and then the seam or `CycleA` generates a mock.
+		///
+		/// `cycleParameterRandom` draws only for this pass, which runs after every other pass and after the declarations that
+		/// move beneath the seam's module have moved, and only in a graph another pass split, so that every graph in one
+		/// module, and every other draw of a graph it draws in, draws as before.
+		private mutating func addingCycleParameterShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `build()` calls this pass only for a graph split across modules.
+			guard features.contains(.generateDependencyTree), cycleParameterRandom.percentChance(60) else { return declarations }
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let sendableRoll = cycleParameterRandom.percentChance(50)
+			let mixesWrapperKindsRoll = cycleParameterRandom.percentChance(50)
+			let wrapperKindRolls = (0..<4).map { _ in cycleParameterRandom.percentChance(50) }
+			let openerRoll = cycleParameterRandom.integer(in: 0...99)
+			let isDeep = cycleParameterRandom.percentChance(40)
+			let nestsCycleRoll = cycleParameterRandom.percentChance(30)
+			let hopToBIsInstantiator = cycleParameterRandom.percentChance(70)
+			let hopToBOtherKind = cycleParameterRandom.element(of: [CycleEdgeKind.lazilyInstantiated, .constant])
+			let hopToCKind = cycleParameterRandom.element(of: [CycleEdgeKind.instantiator, .lazilyInstantiated, .constant])
+			let declaresOnCRoll = cycleParameterRandom.percentChance(50)
+			let declarationRoll = cycleParameterRandom.integer(in: 0...99)
+			let aliasesTagRoll = cycleParameterRandom.percentChance(25)
+			let declaresAfterCloser = cycleParameterRandom.percentChance(25)
+			let readerRoll = cycleParameterRandom.percentChance(75)
+			let readerOnBRoll = cycleParameterRandom.percentChance(35)
+			let readerFormRoll = cycleParameterRandom.integer(in: 0...99)
+			let sideRoll = cycleParameterRandom.integer(in: 0...99)
+			let sideFormRoll = cycleParameterRandom.integer(in: 0...99)
+			let aboveRoll = cycleParameterRandom.integer(in: 0...99)
+			let requiresUndeclaredRoll = cycleParameterRandom.percentChance(20)
+			let holeRoll = cycleParameterRandom.integer(in: 0...99)
+			let fillTagRoll = cycleParameterRandom.integer(in: 0...99)
+			let drawsNoteReceive = cycleParameterRandom.percentChance(30)
+			let noteReceiverRoll = cycleParameterRandom.integer(in: 0...99)
+			let redeclaresNote = cycleParameterRandom.percentChance(30)
+			let fillReadsNote = cycleParameterRandom.percentChance(30)
+			let fillReadsNoteOnlyIfAvailable = cycleParameterRandom.percentChance(30)
+			let rootHoldsOptionalNote = cycleParameterRandom.percentChance(50)
+			let seamFirstOnRoot = cycleParameterRandom.percentChance(25)
+			let mockRoll = cycleParameterRandom.integer(in: 0...19)
+
+			typealias Names = GraphFuzzerCycleNames
+			// Whether the wrapper of the opener (0), of the hop to `CycleB` (1), of the hop to `CycleC` (2), or of the label
+			// (3) is of the `Sendable` kind: one kind for all in a graph of one kind, and in half the graphs of both kinds.
+			func isSendable(_ wrapperIndex: Int) -> Bool {
+				switch sendability {
+				case .nonSendable:
+					false
+				case .sendable:
+					true
+				case .mixed:
+					mixesWrapperKindsRoll ? wrapperKindRolls[wrapperIndex] : sendableRoll
+				}
+			}
+			func instantiator(_ wrapperIndex: Int) -> String {
+				isSendable(wrapperIndex) ? "SendableInstantiator" : "Instantiator"
+			}
+			func lazyWrapper(_ wrapperIndex: Int) -> String {
+				isSendable(wrapperIndex) ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			}
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let prefix = prefix
+			func instantiable(_ suffix: String, module: GraphFuzzerModule = .seamModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			let tagName = prefix + Names.tagType
+			let noteName = prefix + Names.noteType
+			let serviceName = prefix + Names.serviceType
+			/// The property through which a type builds the type named `suffix`, labeled after it, through the wrapper of
+			/// `wrapperIndex`'s kind.
+			func edge(to suffix: String, kind: CycleEdgeKind, wrapperIndex: Int) -> PropertyDeclaration {
+				let label = Names.label(of: suffix)
+				return switch kind {
+				case .constant:
+					PropertyDeclaration(attribute: "@Instantiated", label: label, type: "\(prefix)\(suffix)")
+				case .lazilyInstantiated:
+					PropertyDeclaration(attribute: "@Instantiated", label: label, type: "\(lazyWrapper(wrapperIndex))<\(prefix)\(suffix)>")
+				case .instantiator:
+					PropertyDeclaration(attribute: "@Instantiated", label: label + "Builder", type: "\(instantiator(wrapperIndex))<\(prefix)\(suffix)>")
+				}
+			}
+			func tagReceive(_ form: CycleTagForm) -> PropertyDeclaration {
+				switch form {
+				case .value:
+					PropertyDeclaration(attribute: "@Received", label: Names.tag, type: tagName)
+				case .optionalValue:
+					PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: Names.tag, type: tagName + "?")
+				case .wrapper:
+					PropertyDeclaration(attribute: "@Received", label: Names.tag, type: "\(lazyWrapper(3))<\(tagName)>")
+				case .optionalWrapper:
+					PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: Names.tag, type: "\(lazyWrapper(3))<\(tagName)>?")
+				case .instantiator:
+					PropertyDeclaration(attribute: "@Received", label: Names.tag, type: "\(instantiator(3))<\(tagName)>")
+				case .optionalInstantiator:
+					PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: Names.tag, type: "\(instantiator(3))<\(tagName)>?")
+				}
+			}
+			let holeProperty = PropertyDeclaration(attribute: "@Instantiated", label: Names.service, type: "any \(serviceName)")
+
+			// The cycle: the seam's opener, the hops between, and the closers, each a copy of the property it repeats. A
+			// cycle needs an instantiator on the way from its closer to the declaration it repeats, the closer included.
+			let openerKind: CycleEdgeKind = openerRoll < 45 ? .instantiator : openerRoll < 85 ? .lazilyInstantiated : .constant
+			let nestsCycle = isDeep && nestsCycleRoll
+			var hopToBKind: CycleEdgeKind = hopToBIsInstantiator ? .instantiator : hopToBOtherKind
+			var hopToCKindDrawn = hopToCKind
+			if nestsCycle {
+				// `CycleB`'s closer repeats the opener, and `CycleC`'s repeats the hop to `CycleB`.
+				if openerKind != .instantiator {
+					hopToBKind = .instantiator
+				}
+				if hopToBKind != .instantiator {
+					hopToCKindDrawn = .instantiator
+				}
+			} else if openerKind != .instantiator, hopToBKind != .instantiator, !isDeep || hopToCKindDrawn != .instantiator {
+				hopToBKind = .instantiator
+			}
+			let opener = edge(to: Names.a, kind: openerKind, wrapperIndex: 0)
+			let hopToB = edge(to: Names.b, kind: hopToBKind, wrapperIndex: 1)
+			let hopToC = edge(to: Names.c, kind: hopToCKindDrawn, wrapperIndex: 2)
+
+			// The label declared again between the function the cycle closes on and the closer. Every declaration of it is of
+			// one kind, so that no receive is hidden beneath a declaration that does not provide a form one above provides;
+			// but now and then the type between aliases another property, or declares it as an instantiator beside by-value
+			// declarations, which provides no by-value form, and so hides the reads beneath it.
+			let declaresOnC = isDeep && (nestsCycle || declaresOnCRoll)
+			let declarerSuffix = declaresOnC ? Names.c : Names.b
+			let hidesBeneathInstantiator = declarationRoll >= 97
+			let tagKind: CycleTagKind = switch declarationRoll {
+			case 0..<50, 97...:
+				.value
+			case 50..<80:
+				.lazilyInstantiated
+			default:
+				.instantiator
+			}
+			let aliasesTag = tagKind == .value && !hidesBeneathInstantiator && aliasesTagRoll
+			let declaredTagType = switch tagKind {
+			case .value:
+				tagName
+			case .lazilyInstantiated:
+				"\(lazyWrapper(3))<\(tagName)>"
+			case .instantiator:
+				"\(instantiator(3))<\(tagName)>"
+			}
+			let tagDeclaration = if hidesBeneathInstantiator {
+				PropertyDeclaration(attribute: "@Instantiated", label: Names.tag, type: "\(instantiator(3))<\(tagName)>")
+			} else if aliasesTag {
+				PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"\(Names.other)\", ofType: \(tagName).self)", label: Names.tag, type: tagName)
+			} else {
+				PropertyDeclaration(attribute: "@Instantiated", label: Names.tag, type: declaredTagType)
+			}
+
+			// Above the cycle: the seam's own label, the root's, which the seam takes as a deferred parameter, or none, which
+			// the seam takes as a parameter where its tree receives the label only if available. Where the seam takes
+			// `cycle7Note` too, the seam declares the label all but one draw in seven: a seam sorts its pass-throughs by
+			// label (`labelSortedPassThroughReason`), which the rename oracle's label reversal reorders, and the known
+			// issue that excuses it excuses every other difference in the seam's generated code too.
+			let rootHoldsNote = drawsNoteReceive || fillReadsNote && (!fillReadsNoteOnlyIfAvailable || rootHoldsOptionalNote)
+			let seamTakesNote = drawsNoteReceive || fillReadsNote
+			let seamDeclaresTag = aboveRoll < (seamTakesNote ? 85 : 35)
+			let rootHoldsTag = !seamDeclaresTag && (seamTakesNote || aboveRoll < 90)
+			let nothingAboveDeclaresTag = !seamDeclaresTag && !rootHoldsTag
+
+			// The reader that makes the label a parameter of the function the cycle closes on, the type it is built by, and
+			// the side beside it: forms the declarations provide, only if available where nothing above declares the label
+			// but one draw in five.
+			let drawsReader = nestsCycle || readerRoll
+			let readerOnB = drawsReader && (nestsCycle || declaresOnC && readerOnBRoll)
+			let drawnReaderForm: CycleTagForm = switch tagKind {
+			case .value:
+				readerFormRoll < 60 ? .value : .optionalValue
+			case .lazilyInstantiated:
+				readerFormRoll < 35 ? .value : readerFormRoll < 60 ? .optionalValue : readerFormRoll < 85 ? .wrapper : .optionalWrapper
+			case .instantiator:
+				readerFormRoll < 60 ? .instantiator : .optionalInstantiator
+			}
+			// A form the parameter carries, or, beside lazily instantiated declarations, the wrapper only if available, which
+			// one parameter carries beside a reader of the wrapper and cannot beside a reader that requires the value.
+			let drawnSideForm: CycleTagForm = switch tagKind {
+			case .value:
+				sideFormRoll < 65 ? .optionalValue : .value
+			case .lazilyInstantiated:
+				sideFormRoll < 30 ? .optionalValue : sideFormRoll < 50 ? .value : .optionalWrapper
+			case .instantiator:
+				sideFormRoll < 60 ? .optionalInstantiator : .instantiator
+			}
+			// The side is drawn more often beside lazily instantiated declarations, the only ones beside which one of its
+			// forms is one no one parameter carries.
+			let drawsSide = sideRoll < (tagKind == .lazilyInstantiated ? 60 : 35)
+			let receivesOnlyIfAvailable = nothingAboveDeclaresTag && !requiresUndeclaredRoll
+			let readerForm = receivesOnlyIfAvailable ? drawnReaderForm.onlyIfAvailable : drawnReaderForm
+			let sideForm = receivesOnlyIfAvailable ? drawnSideForm.onlyIfAvailable : drawnSideForm
+
+			var seam = instantiable(Names.seam)
+			seam.instantiableArguments = ["generateDependencyTree: true"]
+			seam.additionalDeclarations.append("public protocol \(serviceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+			var cycleA = instantiable(Names.a)
+			var cycleB = instantiable(Names.b)
+			var cycleC = instantiable(Names.c)
+			var reader = instantiable(Names.reader, properties: [tagReceive(readerForm)])
+			var side = instantiable(Names.side, properties: [tagReceive(sideForm)])
+			var root = instantiable(Names.root, module: .samePackageCaller)
+			root.instantiableArguments = ["isRoot: true"]
+			var impl = instantiable(Names.fill, module: .samePackageCaller)
+			impl.instantiableArguments = ["fulfillingAdditionalTypes: [\(serviceName).self]"]
+			impl.additionalConformances.append(serviceName)
+			impl.fillsHole = true
+
+			let aboveDeclaration = PropertyDeclaration(attribute: "@Instantiated", label: Names.tag, type: declaredTagType)
+			if seamDeclaresTag {
+				seam.properties.append(aboveDeclaration)
+			} else if rootHoldsTag {
+				root.properties.append(aboveDeclaration)
+			}
+			seam.properties.append(opener)
+
+			// `cycle7Note`, received from above the seam now and then: by `CycleA`, inside the function the cycle closes
+			// on, or by the reader or the side after the label, so that the walk of the function's body meets it second.
+			let noteReceive = PropertyDeclaration(attribute: "@Received", label: Names.note, type: noteName)
+			if drawsNoteReceive {
+				if noteReceiverRoll >= 40, drawsReader, noteReceiverRoll < 70 || !drawsSide {
+					reader.properties.append(noteReceive)
+				} else if noteReceiverRoll >= 40, drawsSide {
+					side.properties.append(noteReceive)
+				} else {
+					cycleA.properties.append(noteReceive)
+				}
+			}
+			if aliasesTag {
+				cycleA.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: Names.other, type: tagName))
+			}
+			let readerProperties = [
+				drawsReader ? PropertyDeclaration(attribute: "@Instantiated", label: Names.label(of: Names.reader), type: reader.name) : nil,
+				drawsSide ? PropertyDeclaration(attribute: "@Instantiated", label: Names.label(of: Names.side), type: side.name) : nil,
+			].compactMap(\.self)
+			if readerOnB {
+				cycleB.properties += readerProperties
+			} else {
+				cycleA.properties += readerProperties
+			}
+
+			// The hole: on the seam, on `CycleA`, on a type between, or on the reader.
+			let holeOwnerSuffix = switch holeRoll {
+			case 0..<35:
+				Names.a
+			case 35..<60:
+				Names.b
+			case 60..<75:
+				isDeep ? Names.c : Names.b
+			case 75..<90:
+				Names.seam
+			default:
+				drawsReader ? Names.reader : Names.a
+			}
+			switch holeOwnerSuffix {
+			case Names.seam:
+				seam.properties.append(holeProperty)
+			case Names.a:
+				cycleA.properties.append(holeProperty)
+			case Names.b:
+				cycleB.properties.append(holeProperty)
+			case Names.c:
+				cycleC.properties.append(holeProperty)
+			default:
+				reader.properties.append(holeProperty)
+			}
+			cycleA.properties.append(hopToB)
+
+			// The type that declares the label again, and `cycle7Note` now and then, before or, where it holds the closer,
+			// after it.
+			var redeclarations = [tagDeclaration]
+			if drawsNoteReceive, redeclaresNote {
+				redeclarations.append(PropertyDeclaration(attribute: "@Instantiated", label: Names.note, type: noteName))
+			}
+			if isDeep {
+				cycleB.properties.append(hopToC)
+				if nestsCycle {
+					cycleB.properties.append(opener)
+					cycleC.properties += redeclarations + [hopToB]
+				} else if declaresOnC {
+					cycleC.properties += declaresAfterCloser ? [opener] + redeclarations : redeclarations + [opener]
+				} else {
+					cycleB.properties.insert(contentsOf: redeclarations, at: 0)
+					cycleC.properties.append(opener)
+				}
+			} else {
+				cycleB.properties += declaresAfterCloser ? [opener] + redeclarations : redeclarations + [opener]
+			}
+
+			// The field the hole's scope carries for the label, which the fill's read must be a form of, required only where
+			// the field is: the seam's own, the declaration of the type between at or above the hole, or the function's
+			// parameter, which a reader or a side makes. A fill inside the function above the type between with no
+			// parameter reads the label the cycle declares again, which is rejected, so it reads it only now and then. A
+			// fill of a parameter that is a wrapper only if available reads the wrapper: its by-value form only if
+			// available beside the parameter's is one no one parameter carries (`unpassableCycleLabel`), which the visible
+			// build, whose fill joins the function's body, reports and the seam, which hands the fill the parameter, need not.
+			var fillReadsOnlyFieldForm = false
+			let holeIsAtOrBeneathDeclarer = holeOwnerSuffix == declarerSuffix || holeOwnerSuffix == Names.c && declarerSuffix == Names.b
+			let parameterForms = [drawsReader ? readerForm : nil, drawsSide ? sideForm : nil].compactMap(\.self)
+			let fieldForm: CycleTagForm?
+			if holeOwnerSuffix == Names.seam {
+				let treeRequiresTag = seamDeclaresTag || rootHoldsTag && parameterForms.contains(where: \.isRequired)
+				let fieldCarriesWrapper = tagKind == .lazilyInstantiated && (seamDeclaresTag || parameterForms.contains(where: \.isWrapper))
+				let form: CycleTagForm = tagKind == .instantiator ? .instantiator : fieldCarriesWrapper ? .wrapper : .value
+				fieldForm = treeRequiresTag ? form : form.onlyIfAvailable
+			} else if holeIsAtOrBeneathDeclarer {
+				// The declaration itself, required.
+				fieldForm = if hidesBeneathInstantiator || tagKind == .instantiator {
+					.instantiator
+				} else if tagKind == .lazilyInstantiated {
+					.wrapper
+				} else {
+					.value
+				}
+			} else if !parameterForms.isEmpty {
+				let form: CycleTagForm = tagKind == .instantiator ? .instantiator : parameterForms.contains(where: \.isWrapper) ? .wrapper : .value
+				fieldForm = parameterForms.contains(where: \.isRequired) ? form : form.onlyIfAvailable
+				fillReadsOnlyFieldForm = fieldForm == .optionalWrapper
+			} else {
+				fieldForm = nil
+			}
+			if let fieldForm {
+				// The field's form, or, for a wrapper, the value it provides, required only where the field is.
+				let valueForm: CycleTagForm = fieldForm.isWrapper ? (fieldForm.isRequired ? .value : .optionalValue) : fieldForm
+				switch fillTagRoll {
+				case 0..<30:
+					break
+				case _ where fillReadsOnlyFieldForm:
+					impl.properties.append(tagReceive(fieldForm))
+				case 30..<60:
+					impl.properties.append(tagReceive(valueForm))
+				case 60..<90:
+					impl.properties.append(tagReceive(valueForm.onlyIfAvailable))
+				default:
+					impl.properties.append(tagReceive(fieldForm))
+				}
+			} else if fillTagRoll >= 75 {
+				impl.properties.append(tagReceive(tagKind == .instantiator ? .optionalInstantiator : .optionalValue))
+			}
+			if fillReadsNote {
+				impl.properties.append(fillReadsNoteOnlyIfAvailable
+					? PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: Names.note, type: noteName + "?")
+					: PropertyDeclaration(attribute: "@Received", label: Names.note, type: noteName))
+			}
+			if rootHoldsNote {
+				root.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: Names.note, type: noteName))
+			}
+			let seamProperty = PropertyDeclaration(attribute: "@Instantiated", label: Names.label(of: Names.seam), type: seam.name)
+			if seamFirstOnRoot {
+				root.properties.insert(seamProperty, at: 0)
+			} else {
+				root.properties.append(seamProperty)
+			}
+			switch mockRoll {
+			case 0...2:
+				seam.instantiableArguments.append("generateMock: true")
+			case 3...4:
+				cycleA.instantiableArguments.append("generateMock: true")
+			default:
+				break
+			}
+
+			var cycleDeclarations = [seam, cycleA, cycleB]
+			if isDeep {
+				cycleDeclarations.append(cycleC)
+			}
+			if drawsReader {
+				cycleDeclarations.append(reader)
+			}
+			if drawsSide {
+				cycleDeclarations.append(side)
+			}
+			cycleDeclarations.append(instantiable(Names.tagType))
+			if drawsNoteReceive || fillReadsNote {
+				cycleDeclarations.append(instantiable(Names.noteType))
+			}
+			return declarations + cycleDeclarations + [impl, root]
+		}
+
+		private static let cycleParameterRandomSeedMask: UInt64 = 0x637963506172616D
+
 		// MARK: Access proof extensions
 
 		/// With the `generateDependencyTree` feature on, extends `addingAccessProofShapes`' tree with the shapes that pass
@@ -6749,13 +7387,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				features.insert(.formsUserDeclaredAfterSeam)
 			}
 		}
-		return features.union(accessProofDrawFeatures(of: fixture)).union(holeDrawFeatures(of: fixture))
+		return features.union(accessProofDrawFeatures(of: fixture)).union(holeDrawFeatures(of: fixture)).union(cycleParameterDrawFeatures(of: fixture))
 	}
 
-	/// The shapes `addingHoleShapes` draws, read from the properties the fixture declares on the `Hole` types.
-	private static func holeDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
-		guard fixture.drawsHole else { return [] }
-		let prefix = fixture.typeNamePrefix
+	/// Each type's properties, in declaration order, and the types declared with `generateMock: true`, by name, read from
+	/// every file of `fixture`.
+	private static func declaredProperties(of fixture: GraphFuzzerFixture) -> (propertiesByType: [String: [(attribute: String, label: String, type: String)]], mockedTypeNames: Set<String>) {
 		var propertiesByType = [String: [(attribute: String, label: String, type: String)]]()
 		var mockedTypeNames = Set<String>()
 		for content in fixture.swiftFileContent {
@@ -6781,6 +7418,162 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				}
 			}
 		}
+		return (propertiesByType, mockedTypeNames)
+	}
+
+	/// The shapes `addingCycleParameterShapes` draws, read from the properties the fixture declares on the `Cycle` types.
+	private static func cycleParameterDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
+		typealias Names = GraphFuzzerCycleNames
+		let prefix = fixture.typeNamePrefix
+		let (propertiesByType, mockedTypeNames) = declaredProperties(of: fixture)
+		guard let seamProperties = propertiesByType[prefix + Names.seam] else { return [] }
+		func properties(of suffix: String) -> [(attribute: String, label: String, type: String)] {
+			propertiesByType[prefix + suffix] ?? []
+		}
+		func declares(_ suffix: String) -> Bool {
+			propertiesByType[prefix + suffix] != nil
+		}
+		var features: Set<GraphFuzzerSeamDrawFeature> = [.cycleParameterSeam]
+		let openerLabel = Names.label(of: Names.a)
+		if let opener = seamProperties.first(where: { $0.label.hasPrefix(openerLabel) }) {
+			if opener.type.contains("Instantiator<") {
+				features.insert(.cycleParameterOpenedByInstantiator)
+			} else if opener.type.contains("LazilyInstantiated<") {
+				features.insert(.cycleParameterOpenedLazily)
+			} else {
+				features.insert(.cycleParameterOpenedByValue)
+			}
+		}
+		let wrapperTypes = Names.typeSuffixes.flatMap { properties(of: $0).map(\.type) }.filter { $0.contains("Instantiator<") || $0.contains("LazilyInstantiated<") }
+		let hasSendableWrapper = wrapperTypes.contains { $0.hasPrefix("Sendable") }
+		if hasSendableWrapper {
+			features.insert(.cycleParameterSendableWrappers)
+			if wrapperTypes.contains(where: { !$0.hasPrefix("Sendable") }) {
+				features.insert(.cycleParameterMixedWrapperKinds)
+			}
+		}
+		let isNested = properties(of: Names.c).contains { $0.label.hasPrefix(Names.label(of: Names.b)) }
+		if declares(Names.c) {
+			features.insert(.cycleParameterTwoLevelsDeep)
+			if isNested {
+				features.insert(.cycleParameterNestedCycle)
+			}
+		}
+		// Every property of the label but the one the type between declares, whose kind tells a hiding instantiator apart.
+		let tagProperties = Names.typeSuffixes.flatMap { properties(of: $0) }.filter { $0.label == Names.tag }
+		let declarerSuffix = [Names.b, Names.c].first { suffix in properties(of: suffix).contains { $0.label == Names.tag } }
+		if let declarerSuffix {
+			let declarerProperties = properties(of: declarerSuffix)
+			if let declaration = declarerProperties.first(where: { $0.label == Names.tag }) {
+				if declaration.attribute.contains("fulfilledByDependencyNamed:") {
+					features.insert(.cycleParameterDeclaredAsAlias)
+				} else if declaration.type.contains("LazilyInstantiated<") {
+					features.insert(.cycleParameterDeclaredLazily)
+				} else if declaration.type.contains("Instantiator<") {
+					if tagProperties.allSatisfy({ $0.type.contains("Instantiator<") }) {
+						features.insert(.cycleParameterDeclaredAsInstantiators)
+					} else {
+						features.insert(.cycleParameterDeclaredAsHidingInstantiator)
+					}
+				}
+			}
+			let closerPrefix = Names.label(of: isNested && declarerSuffix == Names.c ? Names.b : Names.a)
+			if let closerIndex = declarerProperties.firstIndex(where: { $0.label.hasPrefix(closerPrefix) }),
+			   let declarationIndex = declarerProperties.firstIndex(where: { $0.label == Names.tag }),
+			   closerIndex < declarationIndex
+			{
+				features.insert(.cycleParameterDeclaredAfterCloser)
+			}
+			if declarerProperties.contains(where: { $0.label == Names.note }) {
+				features.insert(.cycleParameterNoteDeclaredAgain)
+			}
+		}
+		/// The form in which `properties` receive the label.
+		func receivedTagForm(in properties: [(attribute: String, label: String, type: String)]) -> (isOnlyIfAvailable: Bool, type: String)? {
+			properties.first { $0.label == Names.tag && $0.attribute.hasPrefix("@Received") }.map { ($0.attribute.contains("onlyIfAvailable: true"), $0.type) }
+		}
+		if let readerForm = receivedTagForm(in: properties(of: Names.reader)) {
+			if readerForm.type.contains("Instantiator<") {
+				features.insert(.cycleParameterReaderReceivesInstantiator)
+			} else {
+				switch (readerForm.type.contains("LazilyInstantiated<"), readerForm.isOnlyIfAvailable) {
+				case (false, false):
+					features.insert(.cycleParameterReaderRequiresValue)
+				case (false, true):
+					features.insert(.cycleParameterReaderReceivesOnlyIfAvailable)
+				case (true, false):
+					features.insert(.cycleParameterReaderRequiresWrapper)
+				case (true, true):
+					features.insert(.cycleParameterReaderReceivesWrapperOnlyIfAvailable)
+				}
+			}
+		}
+		if !declares(Names.reader), !declares(Names.side) {
+			features.insert(.cycleParameterWithoutReader)
+		}
+		if properties(of: Names.b).contains(where: { $0.label == Names.label(of: Names.reader) }) {
+			features.insert(.cycleParameterReaderBetween)
+		}
+		if let sideForm = receivedTagForm(in: properties(of: Names.side)) {
+			if sideForm.type.contains("LazilyInstantiated<") {
+				features.insert(.cycleParameterSideReceivesWrapper)
+			} else if sideForm.type.contains("Instantiator<") {
+				features.insert(.cycleParameterSideReceivesInstantiator)
+			} else {
+				features.insert(.cycleParameterSideReceivesValue)
+			}
+		}
+		if seamProperties.contains(where: { $0.label == Names.tag }) {
+			features.insert(.cycleParameterDeclaredBySeam)
+		} else if properties(of: Names.root).contains(where: { $0.label == Names.tag }) {
+			features.insert(.cycleParameterDeferredFromCaller)
+		} else {
+			features.insert(.cycleParameterUndeclaredAbove)
+		}
+		let holeOwnerSuffix = Names.typeSuffixes.first { suffix in properties(of: suffix).contains { $0.label == Names.service } }
+		switch holeOwnerSuffix {
+		case Names.seam:
+			features.insert(.cycleParameterHoleOnSeam)
+		case Names.a:
+			features.insert(.cycleParameterHoleOnClosedOnType)
+		case Names.reader:
+			features.insert(.cycleParameterHoleOnReader)
+		default:
+			features.insert(.cycleParameterHoleBetween)
+		}
+		let holeIsAtOrBeneathDeclaration = holeOwnerSuffix != nil && (holeOwnerSuffix == declarerSuffix || holeOwnerSuffix == Names.c && declarerSuffix == Names.b)
+		if holeIsAtOrBeneathDeclaration {
+			features.insert(.cycleParameterHoleAtOrBeneathDeclaration)
+		}
+		let fillProperties = properties(of: Names.fill)
+		if fillProperties.contains(where: { $0.label == Names.tag }) {
+			features.insert(.cycleParameterFillReadsLabel)
+			if !declares(Names.reader), !declares(Names.side), holeOwnerSuffix != Names.seam, !holeIsAtOrBeneathDeclaration {
+				features.insert(.cycleParameterFillReadsLabelNoParameterCarries)
+			}
+		}
+		let noteReceivers = [Names.a, Names.reader, Names.side].filter { suffix in properties(of: suffix).contains { $0.label == Names.note } }
+		if !noteReceivers.isEmpty {
+			features.insert(.cycleParameterDeferredNote)
+		}
+		if noteReceivers.contains(where: { $0 != Names.a }) {
+			features.insert(.cycleParameterNoteReceivedAfterLabel)
+		}
+		if fillProperties.contains(where: { $0.label == Names.note }) {
+			features.insert(.cycleParameterFillReadsNote)
+		}
+		if mockedTypeNames.contains(prefix + Names.seam) || mockedTypeNames.contains(prefix + Names.a) {
+			features.insert(.cycleParameterMocked)
+		}
+		return features
+	}
+
+	/// The shapes `addingHoleShapes` draws, read from the properties the fixture declares on the `Hole` types.
+	private static func holeDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
+		let prefix = fixture.typeNamePrefix
+		let (propertiesByType, mockedTypeNames) = declaredProperties(of: fixture)
+		// `addingCycleParameterShapes` draws a hole of its own, which its own shapes count.
+		guard fixture.drawsHole, propertiesByType[prefix + "HoleSeam"] != nil else { return [] }
 		func properties(of suffix: String) -> [(attribute: String, label: String, type: String)] {
 			propertiesByType[prefix + suffix] ?? []
 		}
@@ -7615,8 +8408,9 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// Every aspect in which two outcomes differ, or nothing when they agree: their verdict or their diagnostics in any
 	/// order; or the names of their generated files, the code of each file both generated (compared as `codeComparison`
 	/// says), and their warnings in any order, each a difference of its own. Paths to fixture files are compared by file
-	/// name, and the suggestions a diagnostic lists ("Did you mean one of …"), and the declarations it lists as proving
-	/// a type's access, in any order: the order inside a message is presentation and changes nothing a user does.
+	/// name, and the suggestions a diagnostic lists ("Did you mean one of …"), the forms of a label one cycle parameter cannot
+	/// carry, and the declarations it lists as proving a type's access, in any order: the order inside a message is
+	/// presentation and changes nothing a user does.
 	/// - Parameter renaming: The renaming that separates the two outcomes, which decides which known reason can explain a
 	///   mock's difference (`GraphFuzzerMockDifference`). With none, neither can, and the difference is the file's code.
 	/// - Parameter fixture: The graph both outcomes are of, whose types can decide which field of a lazy cycle a mock drops
@@ -7701,18 +8495,35 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// `diagnostic` with the items of each list of suggestions it makes – "Did you mean one of `a: A`, `b: B`?",
 	/// which SafeDI sorts by `Property.<` – and of each parenthesized list of the declarations that prove a seam
 	/// parameter's access – "(`Host.init(key:seam:)`, `Vault.init(key:)`)", which SafeDI lists in source order, so a
-	/// file-name reversal reorders them – sorted as text, so two diagnostics that list the same items in another order
-	/// compare equal, and any other difference, including an item added, removed or changed, still tells them apart.
+	/// file-name reversal reorders them – and of the two lists of the forms of a label one cycle parameter cannot carry
+	/// ("receive `x` as `x: X?` and `x: LazilyInstantiated<X>?`, which one value cannot carry together. Receive `x: X?`
+	/// and `x: LazilyInstantiated<X>?` under different labels to fix.", `unpassableCycleLabel`), which SafeDI lists in the
+	/// order of their types' names – sorted as text, each item in its place among the list's separators, so two diagnostics
+	/// that list the same items in another order compare equal, and any other difference, including an item added, removed
+	/// or changed, still tells them apart.
 	private static func sortingSuggestions(in diagnostic: String) -> String {
 		// Each item is a property's or a declaration's source between backticks, and no fuzzer label or type contains one.
-		let expression = try! NSRegularExpression(pattern: "(?<=Did you mean one of )`[^`]*`(?:, `[^`]*`)+(?=\\?)|(?<=\\()`[^`]*`(?:, `[^`]*`)+(?=\\))")
+		let expression = try! NSRegularExpression(pattern: [
+			"(?<=Did you mean one of )`[^`]*`(?:, `[^`]*`)+(?=\\?)",
+			"(?<=\\()`[^`]*`(?:, `[^`]*`)+(?=\\))",
+			"(?<= as )`[^`]*`(?:(?:, and |, | and )`[^`]*`)+(?=, which one value cannot carry together\\.)",
+			"(?<=which one value cannot carry together\\. Receive )`[^`]*`(?:(?:, and |, | and )`[^`]*`)+(?= under different labels to fix\\.)",
+		].joined(separator: "|"))
+		let item = try! NSRegularExpression(pattern: "`[^`]*`")
 		let source = diagnostic as NSString
 		var result = ""
 		var location = 0
 		for match in expression.matches(in: diagnostic, range: NSRange(location: 0, length: source.length)) {
-			let suggestions = source.substring(with: match.range).dropFirst().dropLast().components(separatedBy: "`, `")
+			let list = source.substring(with: match.range) as NSString
+			let itemRanges = item.matches(in: list as String, range: NSRange(location: 0, length: list.length)).map(\.range)
+			let sortedItems = itemRanges.map { list.substring(with: $0) }.sorted()
 			result += source.substring(with: NSRange(location: location, length: match.range.location - location))
-			result += "`" + suggestions.sorted().joined(separator: "`, `") + "`"
+			var listLocation = 0
+			for (itemRange, sortedItem) in zip(itemRanges, sortedItems) {
+				result += list.substring(with: NSRange(location: listLocation, length: itemRange.location - listLocation)) + sortedItem
+				listLocation = itemRange.location + itemRange.length
+			}
+			result += list.substring(from: listLocation)
 			location = match.range.location + match.range.length
 		}
 		return result + source.substring(from: location)

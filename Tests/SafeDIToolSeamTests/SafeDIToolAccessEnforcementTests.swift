@@ -2447,9 +2447,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let servicePath = fixtures["Feature"]!["Service.swift"]
 			return """
-			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix, or pass module `Feature`'s package to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if it is compiled with `-package-name`.
+			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Give module `Feature` the package name of module `App` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package, or make `Service` `public` to fix.
 			\(servicePath):2:1-2:8: fixit: public
-			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass module `Feature`'s package to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if it is compiled with `-package-name`.
+			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Give module `Feature` the package name of module `App` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package, or make the initializer `public` to fix.
 			\(servicePath):3:5-3:12: fixit: public
 			"""
 		}) {
@@ -2476,9 +2476,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let servicePath = fixtures["Feature"]!["Service.swift"]
 			return """
-			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix, or pass module `App`'s package to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if it is compiled with `-package-name`.
+			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Give module `App` the package name of module `Feature` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package, or make `Service` `public` to fix.
 			\(servicePath):2:1-2:8: fixit: public
-			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass module `App`'s package to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if it is compiled with `-package-name`.
+			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Give module `App` the package name of module `Feature` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package, or make the initializer `public` to fix.
 			\(servicePath):3:5-3:12: fixit: public
 			"""
 		}) {
@@ -2507,9 +2507,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let servicePath = fixtures["Feature"]!["Service.swift"]
 			return """
-			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Service` `public` to fix.
 			\(servicePath):2:1-2:8: fixit: public
-			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make the initializer `public` to fix.
 			\(servicePath):3:5-3:12: fixit: public
 			"""
 		}) {
@@ -2626,7 +2626,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let servicePath = fixtures["Feature"]!["Service.swift"]
 			return """
-			\(servicePath):5:5: error: `Service.mock()` is `package`, so the mock of `Screen`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make `Service.mock()` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(servicePath):5:5: error: `Service.mock()` is `package`, so the mock of `Screen`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Service.mock()` `public` to fix.
 			\(servicePath):5:5-5:12: fixit: public
 			"""
 		}) {
@@ -3354,7 +3354,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let spacePath = fixtures["Feature"]!["Space.swift"]
 			return """
-			\(spacePath):2:1: error: `Space`, which encloses `Space.Shelf`, is `package`, so module `App`, in another package, cannot construct `Space.Shelf` in the code SafeDI generates. Make `Space` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
+			\(spacePath):2:1: error: `Space`, which encloses `Space.Shelf`, is `package`, so module `App`, in another package, cannot construct `Space.Shelf` in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Space` `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
 			\(spacePath):2:1-2:8: fixit: public
 			"""
 		}) {
@@ -3710,7 +3710,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let namespacePath = Self.declarationPath(of: "Namespace.swift", in: "Core", fixtures: fixtures, under: .moduleInfo)
 			return """
-			\(namespacePath):2:5: error: `Outer.Namespace`, which encloses `Outer.Namespace.Helper`, is `package`, so module `App`, in another package, cannot construct `Outer.Namespace.Helper` in the code SafeDI generates. Make `Outer.Namespace` `public` to fix, or pass the packages of modules `App` and `Core` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(namespacePath):2:5: error: `Outer.Namespace`, which encloses `Outer.Namespace.Helper`, is `package`, so module `App`, in another package, cannot construct `Outer.Namespace.Helper` in the code SafeDI generates. Give modules `App` and `Core` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Outer.Namespace` `public` to fix.
 			\(namespacePath):2:5-2:12: fixit: public
 			"""
 		}) {

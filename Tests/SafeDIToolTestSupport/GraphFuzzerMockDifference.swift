@@ -45,7 +45,7 @@ import SwiftSyntax
 ///   is among the fields of the outcome that lacks it, and when the renaming changes the order of two of the types that
 ///   decide where the search enters the cycle: its owner, its type, every type a configuration shows to reach them, and
 ///   every type no generated configuration names, since one of those can reach them unseen. A reversal renames only
-///   `<prefix>Root|AnyT|T|Missing<digit>`, and a move gives each of a graph's names one of two letters, so two names of
+///   `<prefix>Root|AnyT|T|Missing|Cycle<digit>`, and a move gives each of a graph's names one of two letters, so two names of
 ///   one letter keep their order. The reads of a dropped field go with it, each only as the path of the node at its place
 ///   in the tree.
 struct GraphFuzzerMockDifference: Sendable {

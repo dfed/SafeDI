@@ -365,6 +365,10 @@ final class Scope: Hashable {
 	///     initializer's arguments. `nil` for a root of the dependency tree and for a mock root.
 	///   - startsCodeGeneration: Whether each generator of a dependency tree starts generating its code as soon as
 	///     it is created, which a tree built only to read its generators' sets skips.
+	///   - validatesForwardedProperties: Whether each erased instantiator's first generic argument is checked against the
+	///     `@Forwarded` properties of the type it builds. The inline tree of another module's seam, built only to read its
+	///     generators' sets, skips it: that seam's module and the fills of its holes check every erased instantiator of
+	///     the tree, seeing through the seam's module, which the inline tree cannot.
 	///   - mockBuilders: For a public mock's root, the builders its `mock()` takes, which each site of the tree calls and
 	///     each call of another module's public mock hands its places up to, as a seam's tree calls the builders of
 	///     `seamRoot`'s signature.
@@ -386,6 +390,7 @@ final class Scope: Hashable {
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,
 		startsCodeGeneration: Bool = true,
+		validatesForwardedProperties: Bool = true,
 		declaredTypeNames: DeclaredTypeNames,
 	) throws -> ScopeGenerator {
 		var previousPassGenerator: ScopeGenerator?
@@ -404,6 +409,7 @@ final class Scope: Hashable {
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				forMockGeneration: forMockGeneration,
 				startsCodeGeneration: startsCodeGeneration,
+				validatesForwardedProperties: validatesForwardedProperties,
 				declaredTypeNames: declaredTypeNames,
 				previousPassGenerator: previousPassGenerator,
 				generatorsToStart: &generatorsToStart,
@@ -429,6 +435,7 @@ final class Scope: Hashable {
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool,
 		startsCodeGeneration: Bool,
+		validatesForwardedProperties: Bool,
 		declaredTypeNames: DeclaredTypeNames,
 		previousPassGenerator: ScopeGenerator?,
 		generatorsToStart: inout [ScopeGenerator]?,
@@ -449,6 +456,7 @@ final class Scope: Hashable {
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
 			startsCodeGeneration: startsCodeGeneration,
+			validatesForwardedProperties: validatesForwardedProperties,
 			declaredTypeNames: declaredTypeNames,
 			previousPassGenerator: previousPassGenerator,
 			cycleParameterContexts: [:],
@@ -517,6 +525,7 @@ private struct ScopeGeneratorUnderConstruction {
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool,
 		startsCodeGeneration: Bool,
+		validatesForwardedProperties: Bool,
 		fill: Fill? = nil,
 		buildsWithHandWrittenMocks: Bool = false,
 		declaredTypeNames: DeclaredTypeNames,
@@ -690,6 +699,7 @@ private struct ScopeGeneratorUnderConstruction {
 		self.closedOnDeclaration = closedOnDeclaration
 		self.forMockGeneration = forMockGeneration
 		self.startsCodeGeneration = startsCodeGeneration
+		self.validatesForwardedProperties = validatesForwardedProperties
 		self.buildsWithHandWrittenMocks = buildsWithHandWrittenMocks
 		// A scope that closes a cycle calls no seam; any other seam call passes a builder for each of the seam's holes. A
 		// call inside a fill of a seam that holds the fill's site, or that passes the site's builder up, passes that fill
@@ -801,6 +811,7 @@ private struct ScopeGeneratorUnderConstruction {
 			erasedToConcreteExistential: hole.erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
 			startsCodeGeneration: startsCodeGeneration,
+			validatesForwardedProperties: validatesForwardedProperties,
 			fill: fill,
 			// A fill a mock declares builds the hole's tree as the mock's tree built inline would.
 			buildsWithHandWrittenMocks: forMockGeneration,
@@ -854,6 +865,7 @@ private struct ScopeGeneratorUnderConstruction {
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
 			startsCodeGeneration: startsCodeGeneration,
+			validatesForwardedProperties: validatesForwardedProperties,
 			buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
 			declaredTypeNames: declaredTypeNames,
 			previousPassGenerator: previousPassChildGenerator,
@@ -862,7 +874,8 @@ private struct ScopeGeneratorUnderConstruction {
 	}
 
 	/// Throws when `property`, declared on `parent` at `declarationLocation`, is an erased instantiator whose first
-	/// generic argument is not the `@Forwarded` properties of `builtInstantiable`.
+	/// generic argument is not the `@Forwarded` properties of `builtInstantiable`, unless the tree skips the check
+	/// (`validatesForwardedProperties`).
 	/// - Parameter declaringModuleNames: The modules, beside the built type's, whose name may qualify a type either
 	///   spelling names: for a fill, that of the seam that holds the hole (`SeamSignature.Hole.declaringModuleNames`).
 	private func validateForwardedProperties(
@@ -872,16 +885,15 @@ private struct ScopeGeneratorUnderConstruction {
 		seeingThroughModulesNamed declaringModuleNames: [String],
 		building builtInstantiable: Instantiable,
 	) throws {
-		if let error = ErasedInstantiatorForwardedPropertiesMismatchError(
+		guard validatesForwardedProperties, let error = ErasedInstantiatorForwardedPropertiesMismatchError(
 			property: property,
 			declarationLocation: declarationLocation,
 			parent: parent,
 			builtInstantiable: builtInstantiable,
 			declaringModuleNames: declaringModuleNames,
 			declaredTypeNames: declaredTypeNames,
-		) {
-			throw error
-		}
+		) else { return }
+		throw error
 	}
 
 	/// The generator the pass before created for the child whose generator is created next, or `nil` in the first pass.
@@ -1086,6 +1098,8 @@ private struct ScopeGeneratorUnderConstruction {
 	/// Whether this scope is in the tree of a fill a mock declares, whose types are built as the mock's tree built
 	/// inline builds them: each with its hand-written mock where `mockReturnTypeIsCompatible` says the mock builds it.
 	private let buildsWithHandWrittenMocks: Bool
+	/// Whether the tree checks each erased instantiator against the type it builds (see `createScopeGenerator`).
+	private let validatesForwardedProperties: Bool
 	private let propertiesToGenerate: [Scope.PropertyToGenerate]
 	/// The index in `propertiesToGenerate` of the next property to create a generator for.
 	private var nextPropertyIndex = 0

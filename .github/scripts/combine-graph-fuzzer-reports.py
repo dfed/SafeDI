@@ -11,8 +11,9 @@ that ci.yml splits each corpus into. Each shard's long run ends its report with
     read-twins <graphs the oracle compared with their read twin> <pinned count> <corpus>
     omitted-values <graphs rejected because a caller holds a value its tier omits> <pinned count> <corpus>
     spellings <corpus> <spellings to draw, comma-separated> <spellings drawn in accepted graphs>
+    draws <corpus> <draw>=<accepted graphs showing it>,… <draw>=<pinned count>,…
+    errors <corpus> <graphs each pinned error rejects>,… <pinned counts>,…
     outputs <corpus> <feature>=<accepted graphs showing it>,… <feature>=<pinned minimum percent>,…
-    public-mock-errors <corpus> <graphs each public mock error rejects>,… <pinned counts>,…
     value-oracle <corpus> <key>=<value>,… <key>=<pinned value>,…
 
 where <corpus> names the corpus the shard fuzzed: `base`, or a generator
@@ -23,11 +24,12 @@ pinned count wherever the corpus pins them (`features`), the graphs the value or
 inspected, the graphs compared with their read twin, and the graphs rejected for an omitted value must add up to their
 pins, every spelling the corpus draws must be
 drawn in some accepted graph of some shard, each output feature with a pinned minimum must show in at least that
-percentage of the corpus's accepted graphs (the public mock corpus reports `outputs`), the graphs each public mock
-error rejects must add up to their pins (`public-mock-errors`), what the base corpus's value oracle compares and
+percentage of the corpus's accepted graphs (the public mock corpus reports `outputs`), the accepted graphs that show
+each draw a corpus counts must add up to its pinned count (`draws`), the graphs each error a corpus pins rejects must
+add up to their pins (`errors`: a public mock's own errors, or a cycle's in a seam's tree), what the base corpus's value oracle compares and
 skips must add up to its pins (`value-oracle`: counts, and set sums whose keys end in `Sum`, which add up wrapping
 like the accepted seed-set sum), and no shard may report a failure,
-a stale known issue, a misfiled seed, or a problem. Every long run writes `features`, `inspected` and `read-twins` for its corpus, and
+a stale known issue, a misfiled seed, or a problem. Every long run writes `features`, `inspected`, `read-twins`, `draws` and `errors` for its corpus, and
 `value-oracle` for the base corpus, so a complete report that names a corpus without one of them is a problem: a
 run that stopped writing the line would otherwise skip that line's check silently. Writes a Markdown summary to
 SUMMARY and the job summary, and exits non-zero when anything is missing or
@@ -58,6 +60,8 @@ output_counts_by_corpus = {}
 output_minimums_by_corpus = {}
 error_counts_by_corpus = {}
 error_pins_by_corpus = {}
+draw_counts_by_corpus = {}
+draw_pins_by_corpus = {}
 value_oracle_by_corpus = {}
 value_oracle_pins_by_corpus = {}
 
@@ -81,6 +85,8 @@ for path in report_paths:
     featured_corpora = set()
     inspected_corpora = set()
     read_twin_corpora = set()
+    drawn_corpora = set()
+    error_corpora = set()
     value_oracle_corpora = set()
     with open(path) as report:
         for line in report:
@@ -125,8 +131,17 @@ for path in report_paths:
                     feature, count = item.split("=")
                     counts[feature] = counts.get(feature, 0) + int(count)
                 output_minimums_by_corpus.setdefault(fields[1], set()).add(fields[3] if len(fields) > 3 else "")
-            elif fields[0] == "public-mock-errors" and len(fields) >= 3:
-                counts = [int(count) for count in fields[2].split(",") if count]
+            elif fields[0] == "draws" and len(fields) >= 2:
+                drawn_corpora.add(fields[1])
+                counts = draw_counts_by_corpus.setdefault(fields[1], {})
+                for item in filter(None, (fields[2] if len(fields) > 2 else "").split(",")):
+                    draw, count = item.split("=")
+                    counts[draw] = counts.get(draw, 0) + int(count)
+                # An empty list is an absent field, so a corpus that counts no draw reports two fields.
+                draw_pins_by_corpus.setdefault(fields[1], set()).add(fields[3] if len(fields) > 3 else "")
+            elif fields[0] == "errors" and len(fields) >= 2:
+                error_corpora.add(fields[1])
+                counts = [int(count) for count in (fields[2] if len(fields) > 2 else "").split(",") if count]
                 totals = error_counts_by_corpus.setdefault(fields[1], [0] * len(counts))
                 error_counts_by_corpus[fields[1]] = [total + count for total, count in zip(totals, counts)] if len(totals) == len(counts) else counts
                 error_pins_by_corpus.setdefault(fields[1], set()).add(fields[3] if len(fields) > 3 else "")
@@ -149,6 +164,10 @@ for path in report_paths:
             problems.append(f"The {corpus} corpus reported no count of the graphs the value oracle inspected in {path}.")
         for corpus in sorted(reported_corpora - read_twin_corpora):
             problems.append(f"The {corpus} corpus reported no count of the graphs compared with their read twin in {path}.")
+        for corpus in sorted(reported_corpora - drawn_corpora):
+            problems.append(f"The {corpus} corpus reported no counts of the draws it counts in accepted graphs in {path}.")
+        for corpus in sorted(reported_corpora - error_corpora):
+            problems.append(f"The {corpus} corpus reported no counts of the graphs each error it pins rejects in {path}.")
         # Only the base corpus has a value oracle of its own, which every long run of it reports.
         if "base" in reported_corpora and "base" not in value_oracle_corpora:
             problems.append(f"The base corpus reported nothing its value oracle compared in {path}.")
@@ -211,13 +230,31 @@ if not problems:
         accepted_sum = sum(shard[3] for shard in shards) % (1 << 64)
         error_pins = error_pins_by_corpus.get(corpus, set())
         if len(error_pins) > 1:
-            problems.append(f"The shards of the {corpus} corpus disagree about its public mock error pins: {sorted(error_pins)}.")
+            problems.append(f"The shards of the {corpus} corpus disagree about its error pins: {sorted(error_pins)}.")
         elif error_pins and next(iter(error_pins)):
             pinned_errors = [int(count) for count in next(iter(error_pins)).split(",")]
             if error_counts_by_corpus.get(corpus) != pinned_errors:
                 problems.append(
-                    f"The tool rejected {error_counts_by_corpus.get(corpus)} graphs of the {corpus} corpus with each of a public "
-                    f"mock's own errors, but {pinned_errors} are pinned."
+                    f"The tool rejected {error_counts_by_corpus.get(corpus)} graphs of the {corpus} corpus with each error it "
+                    f"pins, but {pinned_errors} are pinned."
+                )
+        draw_pins = draw_pins_by_corpus.get(corpus, set())
+        if len(draw_pins) > 1:
+            problems.append(f"The shards of the {corpus} corpus disagree about its per-draw pins: {sorted(draw_pins)}.")
+        elif draw_pins:
+            pinned_draws = dict(item.split("=") for item in filter(None, next(iter(draw_pins)).split(",")))
+            draw_counts = draw_counts_by_corpus.get(corpus, {})
+            mismatches = []
+            for draw in sorted(set(draw_counts) | set(pinned_draws)):
+                count = draw_counts.get(draw, 0)
+                if draw not in pinned_draws:
+                    mismatches.append(f"{draw} {count} (no pin)")
+                elif count != int(pinned_draws[draw]):
+                    mismatches.append(f"{draw} {count} (pinned {pinned_draws[draw]})")
+            if mismatches:
+                problems.append(
+                    f"The accepted graphs of the {corpus} corpus show these draws in other numbers than pinned: "
+                    f"{', '.join(mismatches)}."
                 )
         feature_pins = feature_pins_by_corpus.get(corpus, set())
         if len(feature_pins) > 1:
@@ -282,6 +319,8 @@ with open(summary_path, "w") as summary:
             summary.write(f"{len(shards)} shards covered the whole {corpus} corpus, and the accepted set matches its pins.\n")
             if any(feature_pins_by_corpus.get(corpus, set())):
                 summary.write(f"The accepted graphs of the {corpus} corpus show each feature the pinned number of times.\n")
+            if any(draw_pins_by_corpus.get(corpus, set())):
+                summary.write(f"The accepted graphs of the {corpus} corpus show each draw it counts the pinned number of times.\n")
             if inspected_by_corpus.get(corpus, 0) > 0:
                 summary.write(
                     f"The value oracle inspected {inspected_by_corpus[corpus]} graphs of the {corpus} corpus and compared "

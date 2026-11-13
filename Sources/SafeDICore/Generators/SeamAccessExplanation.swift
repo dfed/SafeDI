@@ -262,6 +262,18 @@ enum SeamAccessExplanation {
 		let neededLevel = neededLevel(for: omission)
 		let causeText = parameter.accessCause.map { " " + causeSentence($0, receivers: parameter.receivers.map { Receiver(declaringType: $0.declaringType, aliasProperty: $0.aliasProperty, isInstantiateMethodParameter: $0.isInstantiateMethodParameter) }) } ?? ""
 		var remedies = [String]()
+		// A caller that needs `public` across a module SafeDI is told no package of needs only `package` if that module
+		// belongs in the other's package, which reaches the parameter on a `package` initializer and which the
+		// parameter's `package` tier makes the likelier fix, so that remedy comes first. A parameter on no tier is
+		// omitted by a nested call, whose modules this call does not decide.
+		if !omission.isNoTierParameter, let packageNameRemedy = ModuleIdentity.packageNameRemedy(
+			emitter: ModuleIdentity(moduleName: seamCall.callerModuleName, packageName: seamCall.callerPackageName),
+			declarer: ModuleIdentity(moduleName: seamCall.seamModuleName, packageName: seamCall.seamPackageName),
+			requirement: seamCall.requirement,
+			declaredLevel: parameter.tierAccess,
+		) {
+			remedies.append(packageNameRemedy)
+		}
 		// A caller SafeDI cannot tell is in the seam's package needs `package` access, or `public` if it is not.
 		let unverifiedPackage = seamCall.requirement == .packageUnverified && !omission.isNoTierParameter ? ", or `public` if the two modules are in different packages" : ""
 		// Widening the seam's own initializer, for its own property, helps only where its other arguments' types are as
@@ -272,17 +284,6 @@ enum SeamAccessExplanation {
 			remedies.append("widen \(first.name) to `\(neededLevel.spelledOnGeneratedDeclaration)`\(unverifiedPackage)")
 		}
 		remedies += causeRemedies(parameter.accessCause, neededLevel: neededLevel)
-		// A caller that needs `public` across a module SafeDI is told no package of needs only `package` if that module
-		// has one, which reaches the parameter only on a `package` initializer. A parameter on no tier is omitted by a
-		// nested call, whose modules this call does not decide.
-		if !omission.isNoTierParameter, let packageRemedy = ModuleIdentity.passingPackageRemedy(forModulesNamed: ModuleIdentity.namesOfModulesWithoutPackage(
-			emitter: ModuleIdentity(moduleName: seamCall.callerModuleName, packageName: seamCall.callerPackageName),
-			declarer: ModuleIdentity(moduleName: seamCall.seamModuleName, packageName: seamCall.seamPackageName),
-			requirement: seamCall.requirement,
-			declaredLevel: parameter.tierAccess,
-		)) {
-			remedies.append(packageRemedy)
-		}
 		remedies.append("stop providing \(label) on this path")
 		return "\(provider), but \(what)\(causeText) \(joined(remedies))"
 	}
