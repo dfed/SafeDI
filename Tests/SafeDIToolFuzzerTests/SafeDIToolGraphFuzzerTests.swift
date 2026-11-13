@@ -187,6 +187,25 @@ struct SafeDIToolGraphFuzzerTests {
 			.holeInnerStagedPlaceOnSendableRoute,
 			.holePlaceInsideSendableFill,
 		]).subtracting(drawFeatures).sorted() == [])
+		// `addingCycleParameterShapes`' cycle, in accepted graphs: its hole between the cycle's ends at or beneath the type that
+		// declares the label again, filled by a fill that reads it (seeds 196 and 609); its hole on the seam (seed 705); the
+		// note received after the label, and the label aliased (seed 196); instantiator declarations in a nested cycle of both
+		// kinds of wrapper (seed 19); and opened by value inside `Sendable` wrappers, whose function the cycle closes on is
+		// `@Sendable` and starts a stage of the hole's place (seed 277).
+		#expect(Set([
+			GraphFuzzerSeamDrawFeature.cycleParameterSeam,
+			.cycleParameterFillReadsLabel,
+			.cycleParameterHoleBetween,
+			.cycleParameterHoleAtOrBeneathDeclaration,
+			.cycleParameterHoleOnSeam,
+			.cycleParameterNoteReceivedAfterLabel,
+			.cycleParameterDeclaredAsAlias,
+			.cycleParameterDeclaredAsInstantiators,
+			.cycleParameterNestedCycle,
+			.cycleParameterMixedWrapperKinds,
+			.cycleParameterOpenedByValue,
+			.cycleParameterSendableWrappers,
+		]).subtracting(drawFeatures).sorted() == [])
 		// A graph with a hole whose builder labels and case names the name-stability oracle compared with those of the graph
 		// without its second place.
 		#expect(acceptedResults.contains { $0.isComparedWithoutSecondHolePlace })
@@ -1064,6 +1083,35 @@ struct SafeDIToolGraphFuzzerTests {
 		let failure = try #require(failures[runs.fixture.seed])
 		#expect(failure.kind == .valueComparatorCouldNotDescribeGraph)
 		#expect(failure.details.contains("not an integer"))
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "The value comparator compiles generated code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueFailures_reportsOtherValues_whenFillReadsAnotherLevelOfACycleThanItsVisibleBuild() async throws {
+		// Seed 227 draws `addingCycleParameterShapes`' cycle: `CycleB`, built inside the function `CycleSeam`'s
+		// `cycle1ABuilder` closes on, declares `cycle6Tag` again beside its hole, whose fill, `CycleImpl`, reads it, so each
+		// level's fill receives that level's `CycleB`'s tag, as the visible build's `CycleImpl` does. A seam that handed the
+		// fill the tag the function's reader holds instead – the level above's – builds other values than the visible build,
+		// which the value oracle reports without an oracle of its own.
+		let seed: UInt64 = 227
+		let runs = try await GraphFuzzerOracle.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree]), renamings: [])
+		guard case let .accepted(files, warnings) = runs.firstOutcome, case .accepted = runs.visibleOutcome else {
+			Issue.record("Seed \(seed) is no longer accepted with its hole and as its visible build")
+			return
+		}
+		let seamFileName = try #require(files.keys.first { $0.hasSuffix("/S227_CycleSeam+SafeDI.swift") })
+		let seamFile = try #require(files[seamFileName])
+		let siteArguments = "cycle4Reader: cycle4Reader, cycle6Tag: cycle6Tag, "
+		try #require(seamFile.components(separatedBy: siteArguments).count == 2, "Seed \(seed)'s seam no longer hands its one site `CycleB`'s `cycle6Tag`")
+		var perturbedFiles = files
+		perturbedFiles[seamFileName] = seamFile.replacingOccurrences(of: siteArguments, with: "cycle4Reader: cycle4Reader, cycle6Tag: cycle4Reader.cycle6Tag, ")
+		let perturbedRuns = GraphFuzzerToolRuns(fixture: runs.fixture, firstOutcome: .accepted(generatedFiles: perturbedFiles, warnings: warnings), secondOutcome: .accepted(generatedFiles: perturbedFiles, warnings: warnings), visibleOutcome: runs.visibleOutcome)
+
+		let failure = try #require(try GraphFuzzerOracle.valueFailures(of: [perturbedRuns])[seed])
+
+		#expect(failure.kind == .holeBuildsOtherValuesThanVisibleBuild, Comment(rawValue: failure.details))
+		#expect(failure.valueDifferences.allSatisfy { $0.contains("cycle0Service") }, "\(failure.valueDifferences)")
+		#expect(try GraphFuzzerOracle.valueFailures(of: [runs]).isEmpty)
 	}
 
 	@Test
@@ -3451,6 +3499,20 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func difference_isNil_whenDiagnosticsListTheSameFormsOneCycleParameterCannotCarryInAnotherOrder() {
+		// SafeDI lists the forms of a label one cycle parameter cannot carry in the order of their types' names, which a
+		// renaming that moves type names across wrapper names reorders (seam corpus seed 788); the same forms in another
+		// order are the same diagnostic, and another form is not.
+		func diagnostics(forms: String) -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "/a/<fixture-directory>/S1_Reader.swift:9:2: error: @Received property `tag: LazilyInstantiated<S1_Tag>?` is received in chain: S1_B -> S1_Reader. A dependency cycle builds `S1_B` again beneath `S1_C`, which declares `tag: LazilyInstantiated<S1_Tag>` with the same label, and SafeDI hands each `S1_B` one value of `tag`. `S1_B` and the types it builds receive `tag` as \(forms), which one value cannot carry together. Receive \(forms) under different labels to fix.")
+		}
+
+		#expect(GraphFuzzerToolOutcome.difference(between: diagnostics(forms: "`tag: LazilyInstantiated<S1_Tag>?` and `tag: S1_Tag?`"), and: diagnostics(forms: "`tag: S1_Tag?` and `tag: LazilyInstantiated<S1_Tag>?`")) == nil)
+		#expect(GraphFuzzerToolOutcome.difference(between: diagnostics(forms: "`tag: Instantiator<S1_Tag>?`, `tag: LazilyInstantiated<S1_Tag>?`, and `tag: S1_Tag?`"), and: diagnostics(forms: "`tag: S1_Tag?`, `tag: Instantiator<S1_Tag>?`, and `tag: LazilyInstantiated<S1_Tag>?`")) == nil)
+		#expect(GraphFuzzerToolOutcome.difference(between: diagnostics(forms: "`tag: LazilyInstantiated<S1_Tag>?` and `tag: S1_Tag?`"), and: diagnostics(forms: "`tag: LazilyInstantiated<S1_Tag>?` and `tag: S1_Tag`")) == "its diagnostics")
+	}
+
+	@Test
 	func difference_reportsDiagnostics_whenDiagnosticsDifferInMoreThanTheOrderOfTheirSuggestions() {
 		func diagnostics(chain: String, suggestions: String) -> GraphFuzzerToolOutcome {
 			.rejected(diagnostics: "/a/<fixture-directory>/S12_T1.swift:7:2: error: @Received property `t4: S12_T3` is not @Instantiated or @Forwarded in chain: \(chain). Did you mean one of \(suggestions)?")
@@ -4276,7 +4338,8 @@ struct SafeDIToolGraphFuzzerTests {
 		var acceptedSpellingDrawFeatures = Set<GraphFuzzerSeamDrawFeature>()
 		var omittedValueGraphCount = 0
 		var publicMockOutputFeatureCounts = [GraphFuzzerPublicMockOutputFeature: Int]()
-		var publicMockOnlyErrorCounts = [String: Int]()
+		var errorGraphCounts = [String: Int]()
+		var acceptedDrawFeatureCounts = [GraphFuzzerSeamDrawFeature: Int]()
 		var valueOracleCounts = GraphFuzzerValueOracleCounts()
 		var knownIssueCount = 0
 		var failureCount = 0
@@ -4342,6 +4405,11 @@ struct SafeDIToolGraphFuzzerTests {
 								for feature in GraphFuzzerFeature.features(of: result.fixture, outcome: result.outcome) {
 									acceptedFeatureCounts[feature, default: 0] += 1
 								}
+								if !corpus.drawFeaturesCountedWhenAccepted.isEmpty {
+									for feature in GraphFuzzerFeature.seamDrawFeatures(of: result.fixture).intersection(corpus.drawFeaturesCountedWhenAccepted) {
+										acceptedDrawFeatureCounts[feature, default: 0] += 1
+									}
+								}
 								if result.failure == nil {
 									acceptedSpellingDrawFeatures.formUnion(GraphFuzzerFeature.seamDrawFeatures(of: result.fixture).intersection(corpus.spellingDrawFeatures))
 									if corpus.features.contains(.generateMockPublic), case let .accepted(generatedFiles, _) = result.outcome {
@@ -4357,10 +4425,11 @@ struct SafeDIToolGraphFuzzerTests {
 							if case let .rejected(diagnostics) = result.outcome, diagnostics.split(separator: "\n").contains(where: GraphFuzzerOracle.isOmittedValueError) {
 								omittedValueGraphCount += 1
 							}
-							// The graphs each of a public mock's own errors rejects, which the public mock's commits pin.
-							if corpus.features.contains(.generateMockPublic), case let .rejected(diagnostics) = result.outcome {
-								for marker in GraphFuzzerOracle.publicMockOnlyErrorMarkers where diagnostics.contains(marker) {
-									publicMockOnlyErrorCounts[marker, default: 0] += 1
+							// The graphs each error the corpus pins rejects: a public mock's own errors, or the errors of a cycle's
+							// label in a seam's tree.
+							if case let .rejected(diagnostics) = result.outcome {
+								for marker in corpus.errorMarkers where diagnostics.contains(marker) {
+									errorGraphCounts[marker, default: 0] += 1
 								}
 							}
 							if result.isComparedByValueOracle {
@@ -4429,15 +4498,20 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs the tool rejects because a caller holds a value its tier omits, which ci.yml's combine job adds up.
 		report.append("omitted-values \(omittedValueGraphCount) \(corpus.omittedValueGraphCount) \(corpus.name)")
 		report.append("spellings \(corpus.name) \(corpus.spellingDrawFeatures.map(\.rawValue).sorted().joined(separator: ",")) \(acceptedSpellingDrawFeatures.map(\.rawValue).sorted().joined(separator: ","))")
+		// The accepted graphs that show each draw the corpus counts there, with the pinned counts, and the graphs each error
+		// the corpus pins rejects, with the pins, which ci.yml's combine job adds up and checks: a draw that stops landing
+		// in accepted graphs, or a change that rejects more of them, names the shape.
+		let drawFeatureCounts = corpus.drawFeaturesCountedWhenAccepted.sorted().map { "\($0.rawValue)=\(acceptedDrawFeatureCounts[$0, default: 0])" }.joined(separator: ",")
+		let drawFeaturePins = corpus.acceptedDrawFeatureCounts.sorted { $0.key < $1.key }.map { "\($0.key.rawValue)=\($0.value)" }.joined(separator: ",")
+		report.append("draws \(corpus.name) \(drawFeatureCounts) \(drawFeaturePins)")
+		let errorCounts = corpus.errorMarkers.map { errorGraphCounts[$0, default: 0] }
+		report.append("errors \(corpus.name) \(errorCounts.map(String.init).joined(separator: ",")) \(corpus.errorGraphCounts.map(String.init).joined(separator: ","))")
 		// The output features of the accepted graphs that pass, with each pinned minimum share as a percentage of the
-		// corpus's accepted graphs, which ci.yml's combine job adds up and checks; and how many graphs each of a public
-		// mock's own errors rejects.
+		// corpus's accepted graphs, which ci.yml's combine job adds up and checks.
 		if corpus.features.contains(.generateMockPublic) {
 			let counts = GraphFuzzerPublicMockOutputFeature.allCases.map { "\($0.rawValue)=\(publicMockOutputFeatureCounts[$0, default: 0])" }.joined(separator: ",")
 			let minimums = corpus.outputFeatureMinimumShares.sorted { $0.key < $1.key }.map { "\($0.key.rawValue)=\($0.value)" }.joined(separator: ",")
 			report.append("outputs \(corpus.name) \(counts) \(minimums)")
-			let errorCounts = GraphFuzzerOracle.publicMockOnlyErrorMarkers.map { publicMockOnlyErrorCounts[$0, default: 0] }
-			report.append("public-mock-errors \(corpus.name) \(errorCounts.map(String.init).joined(separator: ",")) \(corpus.publicMockErrorGraphCounts.map(String.init).joined(separator: ","))")
 		}
 		// What the base corpus's value oracle compared and skipped, with the pins, which ci.yml's combine job adds up.
 		if let pinnedValueOracleCounts = corpus.valueOracleCounts {
@@ -4479,9 +4553,18 @@ struct SafeDIToolGraphFuzzerTests {
 			if !missingSpellings.isEmpty {
 				reportProblem("No accepted graph of the \(corpus.name) corpus draws \(missingSpellings.map(\.rawValue).sorted().joined(separator: ", ")).")
 			}
-			let errorCounts = GraphFuzzerOracle.publicMockOnlyErrorMarkers.map { publicMockOnlyErrorCounts[$0, default: 0] }
-			if corpus.features.contains(.generateMockPublic), errorCounts != corpus.publicMockErrorGraphCounts {
-				reportProblem("The tool rejected \(errorCounts) graphs of the \(corpus.name) corpus with each of a public mock's own errors (`publicMockOnlyErrorMarkers`), but \(corpus.publicMockErrorGraphCounts) are pinned.")
+			if errorCounts != corpus.errorGraphCounts {
+				reportProblem("The tool rejected \(errorCounts) graphs of the \(corpus.name) corpus with each error it pins (`errorMarkers`), but \(corpus.errorGraphCounts) are pinned.")
+			}
+			let drawMismatches = corpus.drawFeaturesCountedWhenAccepted.union(corpus.acceptedDrawFeatureCounts.keys).sorted().compactMap { feature -> String? in
+				let count = acceptedDrawFeatureCounts[feature, default: 0]
+				guard let pinnedCount = corpus.acceptedDrawFeatureCounts[feature] else {
+					return "\(feature.rawValue) \(count) (no pin)"
+				}
+				return count == pinnedCount ? nil : "\(feature.rawValue) \(count) (pinned \(pinnedCount))"
+			}
+			if !drawMismatches.isEmpty {
+				reportProblem("The accepted graphs of the \(corpus.name) corpus show these draws in other numbers than pinned (`acceptedDrawFeatureCounts`): \(drawMismatches.joined(separator: ", ")).")
 			}
 			for (feature, minimumShare) in corpus.outputFeatureMinimumShares.sorted(by: { $0.key < $1.key }) where publicMockOutputFeatureCounts[feature, default: 0] * 100 < minimumShare * acceptedCount {
 				reportProblem("The generated code of \(publicMockOutputFeatureCounts[feature, default: 0]) of the \(acceptedCount) graphs of the \(corpus.name) corpus the tool accepts shows \(feature.rawValue), fewer than the pinned \(minimumShare) percent.")
@@ -4637,9 +4720,16 @@ struct SafeDIToolGraphFuzzerTests {
 		/// The least share, in percent of the graphs the tool accepts, of the graphs whose generated code shows each public
 		/// mock output feature, for the features that have one.
 		var outputFeatureMinimumShares = [GraphFuzzerPublicMockOutputFeature: Int]()
-		/// How many graphs the tool rejects with each of a public mock's own errors, in the order of
-		/// `GraphFuzzerOracle.publicMockOnlyErrorMarkers`.
-		var publicMockErrorGraphCounts = [Int]()
+		/// Text that each of the errors whose rejections the corpus pins contains: a public mock's own errors
+		/// (`GraphFuzzerOracle.publicMockOnlyErrorMarkers`), or the errors of a cycle's label in a seam's tree.
+		var errorMarkers = [String]()
+		/// How many graphs the tool rejects with each error of `errorMarkers`, in its order.
+		var errorGraphCounts = [Int]()
+		/// The draws whose graphs the tool accepts the corpus counts, so that a draw the tool always rejects fails a pin.
+		var drawFeaturesCountedWhenAccepted = Set<GraphFuzzerSeamDrawFeature>()
+		/// How many of the graphs the tool accepts show each draw of `drawFeaturesCountedWhenAccepted`, counted whether or
+		/// not the graph fails, as the accepted-seed pins are.
+		var acceptedDrawFeatureCounts = [GraphFuzzerSeamDrawFeature: Int]()
 		/// What the base corpus's value oracle compares and skips over the whole corpus, or `nil` for a corpus that has
 		/// no such oracle.
 		var valueOracleCounts: GraphFuzzerValueOracleCounts?
@@ -4743,19 +4833,83 @@ struct SafeDIToolGraphFuzzerTests {
 		valueOracleInspectedGraphCount: seamCorpusValueOracleInspectedGraphCount,
 		spellingDrawFeatures: Set(GraphFuzzerSpelling.allCases.map(\.drawFeature)),
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
+		errorMarkers: seamCorpusErrorMarkers,
+		errorGraphCounts: seamCorpusErrorGraphCounts,
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter(\.isCycleParameterShape)),
+		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		seedsTraversingPastTheBatchBudget: seamCorpusSeedsTraversingPastTheBatchBudget,
 	)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0x738354155D0E6294
-	static let seamCorpusAcceptedSeedCount = 290
-	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xD6D6804D93BCEE5C
+	static let seamCorpusFixtureHash: UInt64 = 0xC154F93D35DD9E3B
+	static let seamCorpusAcceptedSeedCount = 281
+	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x1E4142F6F2A528D0
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 200
+	static let seamCorpusValueOracleInspectedGraphCount = 196
 	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
 	static let seamCorpusOmittedValueGraphCount = 0
+	/// The errors of a cycle's label in a seam's tree whose rejections the seam corpus pins, which
+	/// `addingCycleParameterShapes` draws by design: a fill that reads a label a cycle declares again with no cycle
+	/// parameter to carry it (`declarationBoundOnCycleReentry`), forms of a label one cycle parameter cannot carry
+	/// (`unpassableCycleLabel`), a fill that requires what its scope carries only optionally (`fieldHeldOnlyOptionally`),
+	/// and a plain wrapper captured inside a `Sendable` one (`nonSendableWrapperCaptures`). The third marker is the part of
+	/// `fieldHeldOnlyOptionally`'s message both of its causes share: the seam's tree receiving the label only if available,
+	/// and a builder function a lazy cycle closes on taking it as a parameter.
+	static let seamCorpusErrorMarkers = [
+		"holds the same values at every level of that cycle",
+		"which one value cannot carry together",
+		"carries only as `",
+		"cannot be received inside a `@Sendable` function in chain",
+	]
+	/// How many of the seam corpus's graphs the tool rejects with each error of `seamCorpusErrorMarkers`, in its order.
+	static let seamCorpusErrorGraphCounts = [1, 11, 0, 24]
+	/// How many of the seam corpus's graphs the tool accepts show each of `addingCycleParameterShapes`' draws, so that a
+	/// draw the tool rejects every time, or a change that rejects more of them, names the shape. Two draws the tool rejects
+	/// by design are pinned at none: an instantiator declaration between beside by-value ones, which hides the reads beneath
+	/// it, and a fill's read of a label no cycle parameter carries (`declarationBoundOnCycleReentry`, among
+	/// `seamCorpusErrorMarkers`).
+	static let seamCorpusAcceptedDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
+		.cycleParameterDeclaredAfterCloser: 12,
+		.cycleParameterDeclaredAsAlias: 14,
+		.cycleParameterDeclaredAsHidingInstantiator: 0,
+		.cycleParameterDeclaredAsInstantiators: 16,
+		.cycleParameterDeclaredBySeam: 57,
+		.cycleParameterDeclaredLazily: 19,
+		.cycleParameterDeferredFromCaller: 21,
+		.cycleParameterDeferredNote: 24,
+		.cycleParameterFillReadsLabel: 55,
+		.cycleParameterFillReadsLabelNoParameterCarries: 0,
+		.cycleParameterFillReadsNote: 28,
+		.cycleParameterHoleAtOrBeneathDeclaration: 27,
+		.cycleParameterHoleBetween: 31,
+		.cycleParameterHoleOnClosedOnType: 33,
+		.cycleParameterHoleOnReader: 7,
+		.cycleParameterHoleOnSeam: 10,
+		.cycleParameterMixedWrapperKinds: 3,
+		.cycleParameterMocked: 19,
+		.cycleParameterNestedCycle: 10,
+		.cycleParameterNoteDeclaredAgain: 8,
+		.cycleParameterNoteReceivedAfterLabel: 11,
+		.cycleParameterOpenedByInstantiator: 38,
+		.cycleParameterOpenedByValue: 13,
+		.cycleParameterOpenedLazily: 30,
+		.cycleParameterReaderBetween: 13,
+		.cycleParameterReaderReceivesInstantiator: 14,
+		.cycleParameterReaderReceivesOnlyIfAvailable: 17,
+		.cycleParameterReaderReceivesWrapperOnlyIfAvailable: 2,
+		.cycleParameterReaderRequiresValue: 26,
+		.cycleParameterReaderRequiresWrapper: 4,
+		.cycleParameterSeam: 81,
+		.cycleParameterSendableWrappers: 18,
+		.cycleParameterSideReceivesInstantiator: 3,
+		.cycleParameterSideReceivesValue: 24,
+		.cycleParameterSideReceivesWrapper: 2,
+		.cycleParameterTwoLevelsDeep: 32,
+		.cycleParameterUndeclaredAbove: 3,
+		.cycleParameterWithoutReader: 10,
+	]
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
 	/// with their read twin.
 	static let seamCorpusReadTwinGraphCount = 153
@@ -4784,15 +4938,18 @@ struct SafeDIToolGraphFuzzerTests {
 	/// declares a type in a flag's clause in the seam's module (`recordedInFlagClause`), which the two integrations agree
 	/// on once the plugin flow's assertions about that module's block are excused (seed 326); and a graph it rejects, which
 	/// `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks; and declarations moved beneath the seam's module
-	/// (seed 153) and a chain of seams through the three modules beneath it (seed 163), which a caller computes from the
+	/// (seed 153) and a chain of seams through the three modules beneath it (seed 347), which a caller computes from the
 	/// seam's module's view (`GraphFuzzerSeamDependencyDraw`); and seams naming a type declared in a block that guards
 	/// mock-only declarations, whose other clauses declare it at the same level (seed 277), wider (seed 151) or narrower
 	/// (seed 298), or which has none while another file declares it where `DEBUG` is inactive (seed 609, in the seam's
-	/// module), each compiled as a release build too. The union of the batches the hole rolls and the seam tests' draws
-	/// were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 78, 92, 93, 151, 153, 163, 180, 196, 215, 277, 298, 304, 326, 605, 609, 743]
+	/// module), each compiled as a release build too; and `addingCycleParameterShapes`' cycle, its hole between the cycle's
+	/// ends filled by a fill that reads the label the cycle declares again (seeds 196 and 609), its hole on the seam (seed
+	/// 705), instantiator declarations in a nested cycle (seed 19), and opened by value inside `Sendable` wrappers (seed 277).
+	/// The union of the batches the hole rolls and the seam tests' draws were each pinned with. Pinned by
+	/// `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 78, 92, 93, 151, 153, 180, 196, 215, 277, 298, 304, 326, 347, 605, 609, 705, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xBC45E5A841CA7CA2
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xB9A340AF41200419
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -4981,6 +5138,44 @@ struct SafeDIToolGraphFuzzerTests {
 		.seamReachedThroughHolder: 110,
 		.samePackageHostIsSeam: 171,
 		.otherPackageHostIsSeam: 47,
+		.cycleParameterSeam: 330,
+		.cycleParameterOpenedByInstantiator: 140,
+		.cycleParameterOpenedLazily: 145,
+		.cycleParameterOpenedByValue: 45,
+		.cycleParameterSendableWrappers: 94,
+		.cycleParameterMixedWrapperKinds: 24,
+		.cycleParameterTwoLevelsDeep: 127,
+		.cycleParameterNestedCycle: 38,
+		.cycleParameterDeclaredLazily: 104,
+		.cycleParameterDeclaredAsInstantiators: 55,
+		.cycleParameterDeclaredAsHidingInstantiator: 9,
+		.cycleParameterDeclaredAsAlias: 44,
+		.cycleParameterDeclaredAfterCloser: 58,
+		.cycleParameterReaderRequiresValue: 111,
+		.cycleParameterReaderReceivesOnlyIfAvailable: 73,
+		.cycleParameterReaderRequiresWrapper: 16,
+		.cycleParameterReaderReceivesWrapperOnlyIfAvailable: 12,
+		.cycleParameterReaderReceivesInstantiator: 43,
+		.cycleParameterWithoutReader: 45,
+		.cycleParameterReaderBetween: 51,
+		.cycleParameterSideReceivesValue: 86,
+		.cycleParameterSideReceivesWrapper: 31,
+		.cycleParameterSideReceivesInstantiator: 21,
+		.cycleParameterDeclaredBySeam: 206,
+		.cycleParameterDeferredFromCaller: 112,
+		.cycleParameterUndeclaredAbove: 12,
+		.cycleParameterHoleOnSeam: 44,
+		.cycleParameterHoleOnClosedOnType: 127,
+		.cycleParameterHoleBetween: 128,
+		.cycleParameterHoleAtOrBeneathDeclaration: 109,
+		.cycleParameterHoleOnReader: 31,
+		.cycleParameterFillReadsLabel: 218,
+		.cycleParameterFillReadsLabelNoParameterCarries: 3,
+		.cycleParameterDeferredNote: 96,
+		.cycleParameterNoteReceivedAfterLabel: 45,
+		.cycleParameterNoteDeclaredAgain: 23,
+		.cycleParameterFillReadsNote: 103,
+		.cycleParameterMocked: 69,
 	]
 
 	/// Seeds in `0..<seamCorpusSeedCount` whose graphs fail today. The 1 000-seed run of this corpus found that each
@@ -5060,18 +5255,18 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Seeds of `knownIssues` that the seam corpus's run observed failing with the seam's own shape, or not failing
 	/// at all, since the seam's draw changed their graphs; the inherited lists leave them out. Observed, not derived: a
 	/// seed here that a run finds failing its inherited shape again is a new failure, and goes back.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 309, 311, 338, 364, 371, 381, 383, 434, 476, 525, 545, 595, 632, 714, 728, 735, 768, 774, 786, 808, 836, 840, 847, 903, 948]
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 309, 311, 338, 364, 371, 381, 383, 431, 434, 476, 525, 545, 595, 632, 714, 728, 735, 768, 774, 786, 808, 836, 840, 847, 903, 948]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
 	private static let seamCorpusSeedsAddedToInheritedShapes: [String: [UInt64]] = [
-		lazyCycleConfigurationFieldReason: [854],
+		lazyCycleConfigurationFieldReason: [163, 854, 868],
 	]
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order
 	/// that follows label order is how mocks and initializers already work – so the oracle's label reversal
 	/// reorders them, which is expected, not a defect, as the mock's label-sorted parameters are in `knownIssues`.
-	private static let labelSortedPassThroughSeeds: [UInt64] = [604, 788, 809, 816, 928]
+	private static let labelSortedPassThroughSeeds: [UInt64] = [330, 604, 788, 809, 816, 834, 928, 950]
 
 	/// Seeds of the same shape whose generated mock also lists label-sorted parameters, so that it changes too.
 	private static let labelSortedPassThroughSeedsWhoseMockParametersAlsoChange: [UInt64] = [371, 381]
@@ -5104,7 +5299,8 @@ struct SafeDIToolGraphFuzzerTests {
 		spellingDrawFeatures: [],
 		omittedValueGraphCount: publicMockCorpusOmittedValueGraphCount,
 		outputFeatureMinimumShares: publicMockCorpusOutputFeatureMinimumShares,
-		publicMockErrorGraphCounts: publicMockCorpusErrorGraphCounts,
+		errorMarkers: GraphFuzzerOracle.publicMockOnlyErrorMarkers,
+		errorGraphCounts: publicMockCorpusErrorGraphCounts,
 		readTwinGraphCount: publicMockCorpusReadTwinGraphCount,
 	)
 
