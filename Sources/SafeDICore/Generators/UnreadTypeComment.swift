@@ -18,6 +18,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#if canImport(Darwin)
+	import Darwin
+#elseif canImport(Glibc)
+	import Glibc
+#elseif canImport(Musl)
+	import Musl
+#endif
+
 /// The comment a file SafeDI generates carries, in a run that does not read every first-party module, naming the types
 /// its `public` declarations name that no declaration SafeDI reads declares, which SafeDI counts as `public`
 /// (`TypeAccessProof.unreadTypes(namedBy:mentionedFrom:)`): a `package` type of a first-party module that does not run
@@ -42,29 +50,36 @@ public struct UnreadTypeComment: Sendable {
 
 	/// `code`, a generated file's body, with its first marker replaced by the comment naming every marker's types, and
 	/// every other marker removed. `code` unchanged when it holds no marker.
+	///
+	/// Reads `code` as UTF-8 bytes in one pass, since every generated file passes through here and almost none holds a
+	/// marker. Each byte a marker is made of, and the line break and indentation around it, is ASCII.
 	public static func resolvingMarkers(in code: String) -> String {
-		guard code.contains(markerPrefix) else { return code }
-		var lines = [String]()
-		var typeNames = [String]()
-		var commentLineIndex: Int?
-		var commentIndent = ""
-		for line in code.split(separator: "\n", omittingEmptySubsequences: false) {
-			let trimmed = line.drop { $0 == " " || $0 == "\t" }
-			guard trimmed.hasPrefix(markerPrefix) else {
-				lines.append(String(line))
-				continue
+		var code = code
+		let resolvedCode: String? = code.withUTF8 { bytes in
+			let markerLines = markerLines(in: bytes)
+			guard let firstMarkerLine = markerLines.first else { return nil }
+			var typeNames = Set<String>()
+			for markerLine in markerLines {
+				for typeName in bytes[markerLine.markerStart + markerPrefixBytes.count..<markerLine.lineEnd].split(separator: markerSeparatorByte) {
+					typeNames.insert(String(decoding: typeName, as: UTF8.self))
+				}
 			}
-			typeNames += trimmed.dropFirst(markerPrefix.count).split(separator: markerSeparator).map(String.init)
-			if commentLineIndex == nil {
-				commentLineIndex = lines.count
-				commentIndent = String(line.prefix(line.count - trimmed.count))
-				lines.append("")
+			var resolvedBytes = [UInt8]()
+			resolvedBytes.reserveCapacity(bytes.count)
+			// The first marker line keeps its indentation, and the comment takes the marker's place.
+			resolvedBytes.append(contentsOf: bytes[..<firstMarkerLine.markerStart])
+			resolvedBytes.append(contentsOf: comment(naming: typeNames.sorted()).utf8)
+			var copiedEnd = firstMarkerLine.lineEnd
+			// Every other marker line goes with the line break before it, which each has, since the first marker line
+			// comes before it.
+			for markerLine in markerLines.dropFirst() {
+				resolvedBytes.append(contentsOf: bytes[copiedEnd..<markerLine.lineStart - 1])
+				copiedEnd = markerLine.lineEnd
 			}
+			resolvedBytes.append(contentsOf: bytes[copiedEnd...])
+			return String(decoding: resolvedBytes, as: UTF8.self)
 		}
-		if let commentLineIndex {
-			lines[commentLineIndex] = commentIndent + comment(naming: Array(Set(typeNames)).sorted())
-		}
-		return lines.joined(separator: "\n")
+		return resolvedCode ?? code
 	}
 
 	// MARK: Internal
@@ -86,6 +101,51 @@ public struct UnreadTypeComment: Sendable {
 	private static let markerPrefix = "\u{1}UnreadTypes\u{1}"
 	/// What separates the type names a marker lists.
 	private static let markerSeparator: Character = "\u{1}"
+	/// `markerPrefix` as UTF-8 bytes.
+	private static let markerPrefixBytes = Array(markerPrefix.utf8)
+	/// `markerSeparator` as its one UTF-8 byte, which also begins `markerPrefix`.
+	private static let markerSeparatorByte = UInt8(ascii: "\u{1}")
+	private static let lineBreak = UInt8(ascii: "\n")
+	private static let space = UInt8(ascii: " ")
+	private static let tab = UInt8(ascii: "\t")
+
+	/// Where a marker line lies in a generated file's UTF-8 bytes.
+	private struct MarkerLine {
+		/// The index of the line's first byte.
+		let lineStart: Int
+		/// The index of the marker's first byte, after the line's indentation.
+		let markerStart: Int
+		/// The index of the line break that ends the line, or the number of bytes when the line ends the file.
+		let lineEnd: Int
+	}
+
+	/// The marker lines of `bytes`, a generated file's UTF-8 bytes, in order: each line that begins with `markerPrefix`
+	/// after spaces and tabs.
+	private static func markerLines(in bytes: UnsafeBufferPointer<UInt8>) -> [MarkerLine] {
+		var markerLines = [MarkerLine]()
+		var searchStart = 0
+		// Only a line that holds the control character `markerPrefix` begins with can be a marker line.
+		while let controlCharacterIndex = firstIndex(of: markerSeparatorByte, in: bytes, from: searchStart) {
+			let lineStart = bytes[..<controlCharacterIndex].lastIndex(of: lineBreak).map { $0 + 1 } ?? 0
+			let lineEnd = bytes[controlCharacterIndex...].firstIndex(of: lineBreak) ?? bytes.count
+			// The line's first control character begins its marker when only indentation comes before it.
+			if bytes[lineStart..<controlCharacterIndex].allSatisfy({ $0 == space || $0 == tab }),
+			   bytes[controlCharacterIndex..<lineEnd].starts(with: markerPrefixBytes)
+			{
+				markerLines.append(MarkerLine(lineStart: lineStart, markerStart: controlCharacterIndex, lineEnd: lineEnd))
+			}
+			searchStart = lineEnd
+		}
+		return markerLines
+	}
+
+	/// The index of the first `byte` in `bytes` at or after `start`, found by `memchr(3)`, which reads many bytes at once.
+	private static func firstIndex(of byte: UInt8, in bytes: UnsafeBufferPointer<UInt8>, from start: Int) -> Int? {
+		guard let baseAddress = bytes.baseAddress,
+		      let found = memchr(baseAddress + start, Int32(byte), bytes.count - start)
+		else { return nil }
+		return UnsafeRawPointer(baseAddress).distance(to: UnsafeRawPointer(found))
+	}
 
 	/// The comment naming `typeNames`, each a type's spelling.
 	private static func comment(naming typeNames: [String]) -> String {

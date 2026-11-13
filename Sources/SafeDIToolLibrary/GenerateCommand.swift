@@ -226,9 +226,18 @@ public struct Generate: AsyncParsableCommand {
 			compilerReceivesInputPathsUnchanged: compilerReceivesInputPathsUnchanged,
 		)
 		buildLog.buildSystemFilePaths = buildSystemFilePaths
-		let inputFilePaths = try await findGenerateSwiftFiles()
+		let inputFiles = try await findGenerateSwiftFiles()
+		let inputFilePaths = inputFiles.filePaths
 		let suppliedCompilationConditions = buildSettingConditions
 			?? Set(activeCompilationConditions).union(manifest?.activeCompilationConditions ?? [])
+
+		// Paths are compared as scan compared them: inputs relative to the manifest's project root, or else to the
+		// working directory. Without a project root, paths compare as the working directory spells them.
+		let comparisonFilePaths = projectFilePaths ?? ProjectFilePaths(projectRoot: FileManager.default.currentDirectoryPath)
+		// Each set is spelled at most once per run, since spelling a path for comparison costs far more than comparing it,
+		// and the inputs only when a reader needs them.
+		lazy var inputProjectFilePaths = inputFiles.projectFilePaths(comparedBy: comparisonFilePaths)
+		let ownProjectFilePaths = Self.ownProjectFilePaths(manifest: manifest, inputProjectFilePaths: inputProjectFilePaths, comparisonFilePaths: comparisonFilePaths)
 
 		let listedModuleInfoPaths = try moduleInfoPaths(listedIn: dependentModuleInfoFilePath)
 		let (listedModuleInfoFiles, parsed) = try await (
@@ -238,6 +247,8 @@ public struct Generate: AsyncParsableCommand {
 				manifestPath: resolvedSwiftManifest,
 				manifest: manifest,
 				projectFilePaths: projectFilePaths,
+				ownProjectFilePaths: ownProjectFilePaths,
+				comparisonFilePaths: comparisonFilePaths,
 				activeCompilationConditions: suppliedCompilationConditions,
 			),
 		)
@@ -259,10 +270,6 @@ public struct Generate: AsyncParsableCommand {
 			additionalImportedModules
 		}
 
-		// Paths are compared as scan compared them: inputs relative to the manifest's project root, or else to the
-		// working directory. Without a project root, paths compare as the working directory spells them.
-		let comparisonFilePaths = projectFilePaths ?? ProjectFilePaths(projectRoot: FileManager.default.currentDirectoryPath)
-
 		// If the source configuration specifies additional directories to include,
 		// find and parse swift files in those directories and merge with initial
 		// results. Skipped when the initial module came from scan's cache —
@@ -277,7 +284,7 @@ public struct Generate: AsyncParsableCommand {
 			// declares; without a project root, files are named as found.
 			let additionalFileScans = try await parseAdditionalDirectoryFiles(
 				Set(findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude).map(comparisonFilePaths.projectFilePath(of:))),
-				excludingInputFilesAt: Set(inputFilePaths.map(comparisonFilePaths.projectFilePath(of:))),
+				excludingInputFilesAt: inputProjectFilePaths,
 				namedBy: projectFilePaths,
 				conditionalCompilation: evaluator,
 				// The proof reads a declaration of another module's file only where a mention names it.
@@ -299,7 +306,7 @@ public struct Generate: AsyncParsableCommand {
 		let membership = try moduleMembership(
 			// Only a run with a manifest, which each of the SafeDIGenerator plugin's runs is, reads a target graph.
 			targetGraphInputSourcesFilePath: resolvedSwiftManifest != nil ? swiftSourcesFilePath : nil,
-			inputFilePaths: inputFilePaths,
+			inputProjectFilePaths: inputProjectFilePaths,
 			comparisonFilePaths: comparisonFilePaths,
 		)
 		// A module given twice, at two paths, is read once: the merged view below rejects two files of one module whose
@@ -370,10 +377,11 @@ public struct Generate: AsyncParsableCommand {
 		// The seams this run generates are those its own files declare; a seam another module declares is called
 		// with the signature that module computed, from the declarations it saw. Which files are the module's own is
 		// found only when a seam or a public mock exists, since a public mock another module declares is called with
-		// the signature that module computed too: without the build system's word, finding them normalizes every input
-		// path, which a project without either must not pay for, and nothing consults the set for any other declaration.
+		// the signature that module computed too: without the build system's word, finding them normalizes the path of
+		// every declaration, which a project without either must not pay for, and nothing consults the set for any other
+		// declaration.
 		let ownFilePaths: Set<String> = if normalizedInstantiables.contains(where: { $0.generatesDependencyTree || $0.generateMock == .public }) {
-			Set(ownFilePaths(of: module, membership: membership, manifest: manifest, inputFilePaths: inputFilePaths, comparisonFilePaths: comparisonFilePaths))
+			Set(ownFilePaths(of: module, membership: membership, ownProjectFilePaths: ownProjectFilePaths, comparisonFilePaths: comparisonFilePaths))
 		} else {
 			[]
 		}
@@ -389,11 +397,7 @@ public struct Generate: AsyncParsableCommand {
 		// A module's generated code names the types the seams and public mocks it calls name, which the modules the views
 		// carry declare: it imports what their files import, as it imports what the files of the modules it was given do.
 		let viewOnlyDeclarations = moduleInfoView.viewOnlyDeclarations
-		let isOwnFile = Self.isOwnFile(
-			manifest: manifest,
-			inputFilePaths: inputFilePaths,
-			comparisonFilePaths: comparisonFilePaths,
-		)
+		let isOwnFile = Self.isOwnFile(ownProjectFilePaths: ownProjectFilePaths, comparisonFilePaths: comparisonFilePaths)
 		let generator = DependencyTreeGenerator(
 			importStatements: importingOtherModules(importingModulesReadFromBeneath(dependentModuleInfo.flatMap(\.imports) + viewOnlyDeclarations.flatMap(\.imports) + additionalImportStatements + module.imports)),
 			// A dependent module's mock-only declarations reach this module's mocks, so its mock imports do too.
@@ -448,12 +452,7 @@ public struct Generate: AsyncParsableCommand {
 				comparisonFilePaths: comparisonFilePaths,
 				conditionalCompilation: evaluator,
 			),
-			readOwnFiles: Self.ownFilesReader(
-				manifest: manifest,
-				inputFilePaths: inputFilePaths,
-				comparisonFilePaths: comparisonFilePaths,
-				conditionalCompilation: evaluator,
-			),
+			readOwnFiles: Self.ownFilesReader(ownProjectFilePaths: ownProjectFilePaths, conditionalCompilation: evaluator),
 			viewInstantiablesByModuleName: Dictionary(grouping: viewOnlyDeclarations, by: \.moduleName).mapValues { $0.flatMap(\.instantiables) },
 			viewPlainTypeDeclarations: viewOnlyDeclarations.flatMap(\.plainTypeDeclarations),
 			viewDeclaringModules: Self.viewDeclaringModules(of: viewOnlyDeclarations, in: moduleInfoView),
@@ -935,37 +934,40 @@ public struct Generate: AsyncParsableCommand {
 	/// and, without a manifest or with a hand-written one that lists none, the files the input CSV or `--include`
 	/// names. A file reached through `additionalDirectoriesToInclude` is another module's. Both the access check
 	/// (`isOwnFile`) and the seams (`ownFilePaths`, without a module name) read this one definition, as `scan` plans a
-	/// seam's output for a mock-scoped file alone.
-	/// - Parameter comparisonFilePaths: How this run compares paths, which spells a file the same way whichever
-	///   spelling names it.
+	/// seam's output for a mock-scoped file alone. `generate` spells them once per run, and every reader takes that set.
+	/// - Parameters:
+	///   - inputProjectFilePaths: The files the input CSV and `--include` name, spelled by `comparisonFilePaths`, read
+	///     only without a list of mock-scoped files.
+	///   - comparisonFilePaths: How this run compares paths, which spells a file the same way whichever spelling names
+	///     it.
 	private static func ownProjectFilePaths(
 		manifest: SafeDIToolManifest?,
-		inputFilePaths: Set<String>,
+		inputProjectFilePaths: @autoclosure () -> Set<ProjectFilePath>,
 		comparisonFilePaths: ProjectFilePaths,
 	) -> Set<ProjectFilePath> {
-		Set((manifest?.mockScopedFilePaths ?? Array(inputFilePaths)).map(comparisonFilePaths.projectFilePath(of:)))
+		if let mockScopedFilePaths = manifest?.mockScopedFilePaths {
+			Set(mockScopedFilePaths.map(comparisonFilePaths.projectFilePath(of:)))
+		} else {
+			inputProjectFilePaths()
+		}
 	}
 
 	/// Whether a file a declaration records is one of the module's own files (see `ownProjectFilePaths`), so that the
 	/// generated code needs only `internal` access to a declaration in it.
 	private static func isOwnFile(
-		manifest: SafeDIToolManifest?,
-		inputFilePaths: Set<String>,
+		ownProjectFilePaths: Set<ProjectFilePath>,
 		comparisonFilePaths: ProjectFilePaths,
 	) -> @Sendable (String) -> Bool {
-		let ownFilePaths = ownProjectFilePaths(manifest: manifest, inputFilePaths: inputFilePaths, comparisonFilePaths: comparisonFilePaths)
-		return { filePath in ownFilePaths.contains(comparisonFilePaths.projectFilePath(of: filePath)) }
+		{ filePath in ownProjectFilePaths.contains(comparisonFilePaths.projectFilePath(of: filePath)) }
 	}
 
 	/// What the module's own files (see `ownProjectFilePaths`) say that decides an import added for a fulfiller. A build
 	/// system reruns `generate` when one of them changes, as it declares them inputs of the command that reads them.
 	private static func ownFilesReader(
-		manifest: SafeDIToolManifest?,
-		inputFilePaths: Set<String>,
-		comparisonFilePaths: ProjectFilePaths,
+		ownProjectFilePaths: Set<ProjectFilePath>,
 		conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 	) -> @Sendable () async -> FulfillerImports.OwnFiles {
-		let filePaths = ownProjectFilePaths(manifest: manifest, inputFilePaths: inputFilePaths, comparisonFilePaths: comparisonFilePaths).map(\.path)
+		let filePaths = ownProjectFilePaths.map(\.path)
 		return {
 			await ownFiles(at: filePaths, conditionalCompilation: evaluator)
 		}
@@ -977,15 +979,13 @@ public struct Generate: AsyncParsableCommand {
 	private func ownFilePaths(
 		of module: ModuleInfo,
 		membership: ModuleMembership?,
-		manifest: SafeDIToolManifest?,
-		inputFilePaths: Set<String>,
+		ownProjectFilePaths: Set<ProjectFilePath>,
 		comparisonFilePaths: ProjectFilePaths,
 	) -> [String] {
 		if let membership, let moduleName = membership.moduleName {
-			return module.instantiables.filter { $0.moduleName == moduleName }.compactMap(\.sourceFilePath)
+			module.instantiables.filter { $0.moduleName == moduleName }.compactMap(\.sourceFilePath)
 		} else {
-			let ownProjectFilePaths = Self.ownProjectFilePaths(manifest: manifest, inputFilePaths: inputFilePaths, comparisonFilePaths: comparisonFilePaths)
-			return module.instantiables
+			module.instantiables
 				.compactMap(\.sourceFilePath)
 				.filter { ownProjectFilePaths.contains(comparisonFilePaths.projectFilePath(of: $0)) }
 		}
@@ -1317,18 +1317,19 @@ public struct Generate: AsyncParsableCommand {
 	/// - Parameters:
 	///   - targetGraphInputSourcesFilePath: The input CSV beside which a target graph is read, or `nil` for a run that
 	///     reads none.
-	///   - inputFilePaths: The files the input CSV and `--include` name.
+	///   - inputProjectFilePaths: The files the input CSV and `--include` name, spelled by `comparisonFilePaths`, read
+	///     only when a module or package name is given.
 	///   - comparisonFilePaths: How this run compares paths.
 	private func moduleMembership(
 		targetGraphInputSourcesFilePath: String?,
-		inputFilePaths: Set<String>,
+		inputProjectFilePaths: @autoclosure () -> Set<ProjectFilePath>,
 		comparisonFilePaths: ProjectFilePaths,
 	) throws -> ModuleMembership? {
 		if moduleName != nil || packageName != nil {
 			ModuleMembership(
 				moduleName: moduleName,
 				packageName: packageName,
-				inputFilePaths: Set(inputFilePaths.map(comparisonFilePaths.projectFilePath(of:))),
+				inputFilePaths: inputProjectFilePaths(),
 				filePathsSpelledBy: comparisonFilePaths,
 			)
 		} else if let targetGraphInputSourcesFilePath,
@@ -1340,18 +1341,38 @@ public struct Generate: AsyncParsableCommand {
 		}
 	}
 
-	private func findGenerateSwiftFiles() async throws -> Set<String> {
-		try await findGenerateSwiftFiles(additionalDirectories: include)
+	/// The files the input CSV and `--include` name.
+	private struct InputFiles {
+		/// - Parameters:
+		///   - foundFilePaths: The Swift files `--include` names, as `findSwiftFiles(inDirectories:)` found them.
+		///   - listedFilePaths: The files the input CSV lists, as it spells them.
+		init(foundFilePaths: Set<NormalizedFilePath>, listedFilePaths: [String]) {
+			self.foundFilePaths = foundFilePaths
+			self.listedFilePaths = listedFilePaths
+			filePaths = Set(foundFilePaths.map(\.path)).union(listedFilePaths)
+		}
+
+		/// Each file as the parse names it: as `--include` found it, normalized, or as the input CSV spells it.
+		let filePaths: Set<String>
+
+		/// Each file as `comparisonFilePaths` spells it for comparison. A file `--include` found is normalized already,
+		/// so only the input CSV's paths are normalized, since normalizing a path costs far more than comparing one.
+		/// `generate` calls this at most once per run.
+		func projectFilePaths(comparedBy comparisonFilePaths: ProjectFilePaths) -> Set<ProjectFilePath> {
+			Set(foundFilePaths.map(comparisonFilePaths.projectFilePath(of:)))
+				.union(listedFilePaths.map(comparisonFilePaths.projectFilePath(of:)))
+		}
+
+		private let foundFilePaths: Set<NormalizedFilePath>
+		private let listedFilePaths: [String]
 	}
 
-	private func findGenerateSwiftFiles(additionalDirectories: [String]) async throws -> Set<String> {
-		var swiftFiles = try await Set(findSwiftFiles(inDirectories: additionalDirectories).map(\.path))
-		if let swiftSourcesFilePath {
-			let sourcesFromFile = try String(contentsOfFile: swiftSourcesFilePath, encoding: .utf8)
-				.parsedPathListCSV()
-			swiftFiles.formUnion(sourcesFromFile)
-		}
-		return swiftFiles
+	private func findGenerateSwiftFiles() async throws -> InputFiles {
+		let foundFilePaths = try await findSwiftFiles(inDirectories: include)
+		let listedFilePaths = try swiftSourcesFilePath.map { swiftSourcesFilePath in
+			try String(contentsOfFile: swiftSourcesFilePath, encoding: .utf8).parsedPathListCSV()
+		} ?? []
+		return InputFiles(foundFilePaths: foundFilePaths, listedFilePaths: listedFilePaths)
 	}
 
 	/// Whether this run writes the module's info for other modules to read, and has no target graph that would tell it
@@ -1440,12 +1461,16 @@ public struct Generate: AsyncParsableCommand {
 	///     declare this module's configuration. In multi-module builds the CSV includes every module's files, so
 	///     several configurations may be present; without a manifest every input file belongs to this module.
 	///   - projectFilePaths: How the manifest's project spells its files, or `nil` without a project root.
+	///   - ownProjectFilePaths: The module's own files (see `ownProjectFilePaths`).
+	///   - comparisonFilePaths: How this run compares paths.
 	///   - activeCompilationConditions: The conditions supplied on the command line and through the manifest.
 	private func parsedModule(
 		inputFilePaths: Set<String>,
 		manifestPath: String?,
 		manifest: SafeDIToolManifest?,
 		projectFilePaths: ProjectFilePaths?,
+		ownProjectFilePaths: Set<ProjectFilePath>,
+		comparisonFilePaths: ProjectFilePaths,
 		activeCompilationConditions: Set<String>,
 	) async throws -> (module: ParsedModule, isFromCache: Bool) {
 		// Only `scan` writes a cache, beside a manifest that records its project root.
@@ -1467,11 +1492,7 @@ public struct Generate: AsyncParsableCommand {
 		} else {
 			// Without a list of the module's own files, every input is one, which needs no path spelled for comparison.
 			let isReadingModuleFile: (String) -> Bool = if manifest?.mockScopedFilePaths != nil {
-				Self.isOwnFile(
-					manifest: manifest,
-					inputFilePaths: inputFilePaths,
-					comparisonFilePaths: projectFilePaths ?? ProjectFilePaths(projectRoot: FileManager.default.currentDirectoryPath),
-				)
+				Self.isOwnFile(ownProjectFilePaths: ownProjectFilePaths, comparisonFilePaths: comparisonFilePaths)
 			} else {
 				{ _ in true }
 			}
