@@ -350,12 +350,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var receivedProperties = Set<Property>()
 		var requiredReceivedProperties = Set<Property>()
 		for child in propertiesToGenerate {
-			for property in child.receivedProperties
-				where isReceivedFromAncestors(property)
-				&& (child.requiredReceivedProperties.contains(property) || !providesAFormReadByOnlyIfAvailableReceive(of: property))
-			{
+			for property in child.receivedProperties where isReceivedFromAncestors(property) {
+				let isRequired = child.requiredReceivedProperties.contains(property)
+				guard isRequired || !providesAFormReadByOnlyIfAvailableReceive(of: property) else { continue }
 				receivedProperties.insert(property)
-				if child.requiredReceivedProperties.contains(property) {
+				if isRequired {
 					requiredReceivedProperties.insert(property)
 				}
 			}
@@ -1224,10 +1223,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		declaredProperties: Set<Property>,
 		forwardedProperties: Set<Property>,
 	) -> Bool {
-		declaredProperties.contains(property)
-			|| forwardedProperties.contains(property)
+		// Every scope of every tree asks this of each property its children receive, and most scopes forward nothing.
+		(!declaredProperties.isEmpty && declaredProperties.contains(property))
+			|| (!forwardedProperties.isEmpty && forwardedProperties.contains(property))
 			|| (property.typeDescription.isOptional
-				&& (declaredProperties.contains(property.asUnwrappedProperty) || forwardedProperties.contains(property.asUnwrappedProperty)))
+				&& ((!declaredProperties.isEmpty && declaredProperties.contains(property.asUnwrappedProperty))
+					|| (!forwardedProperties.isEmpty && forwardedProperties.contains(property.asUnwrappedProperty))))
 	}
 
 	/// Whether a scope that declares `declaredProperties` and forwards `forwardedProperties` declares the
@@ -6253,10 +6254,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// in the dependency tree and carries the metadata needed to generate its
 	/// `SafeDIMockConfiguration` struct and builder call.
 	///
-	/// Explicit `Sendable` conformance (here and on `MockAliasNode` /
-	/// `MockTreeItem`) is required because the mutual recursion through
-	/// `MockTreeItem` blocks the compiler's implicit Sendable inference.
-	struct MockParameterNode: Sendable {
+	/// A class, so that the many places mock generation holds a node, in arrays of the tree's items and of its
+	/// property nodes, retain one reference rather than copying every field. Every stored property is a `let`, so a
+	/// node is a value nothing changes, and `Sendable`.
+	final class MockParameterNode: Sendable {
 		/// The property label on the parent type's init (e.g., "service", "childBuilder").
 		let propertyLabel: String
 		/// The full type description of the property (e.g., `Instantiator<Child>`).
@@ -6372,14 +6373,110 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// For a member of a loop of builders among the children of the scope that holds this node (see
 		/// `ReceivedBuilderLoops`), the loop, named by the index of its first member among those children; `nil` for every
 		/// other node.
-		var loop: Int?
+		let loop: Int?
 		/// The `reboundProperties` of the scope this node was built from: the members of its loop that its builder function
 		/// wraps again, in the order its body first receives them.
-		var reboundProperties = [Property]()
+		let reboundProperties: [Property]
 		/// Whether anything outside this node's loop reads the wrapper its scope binds. A member of a loop on a mock root
 		/// that only the members of its loop receive is not read outside it: the mock declares its builder function, which
 		/// the loop's wrappers hand, and no binding of its wrapper, which Swift would report unused.
-		var isReadOutsideItsLoop = true
+		let isReadOutsideItsLoop: Bool
+
+		init(
+			propertyLabel: String,
+			typeDescription: TypeDescription,
+			instantiatedTypeDescription: TypeDescription,
+			isInstantiator: Bool,
+			isExtensionBased: Bool,
+			erasedToConcreteExistential: Bool,
+			childItems: MockTreeItems?,
+			defaultParameters: [DefaultParameter],
+			constructionArguments: [Initializer.Argument],
+			constructionIsolation: String?,
+			dependencies: [Dependency],
+			lazilyInstantiatedInstanceProperties: Set<Property>,
+			unavailableProperties: Set<Property>,
+			useMockInitializer: Bool,
+			customMockName: String?,
+			concreteType: TypeDescription,
+			sourceFilePath: String?,
+			mockDeclarationLocation: Dependency.DeclarationLocation?,
+			publicMockCall: PublicMockCall?,
+			stageCalls: [String],
+			fillingGenerator: ScopeGenerator?,
+			holeArgumentValuesByLabel: [String: String],
+			fillPropertiesGeneratedLater: Set<Property>,
+			referencedFillNames: Set<String>,
+			forwardedProperties: Set<Property>,
+			typesDeclaredEscaping: Set<TypeDescription>,
+			isPropertyCycle: Bool,
+			closedOnDeclaration: ScopeGenerator.BuiltDeclaration?,
+			cycleClosedOnDeclarations: Set<ScopeGenerator.BuiltDeclaration>,
+			isReferencedByCycleClosingScope: Bool,
+			cycleParameters: [CycleParameter],
+			cycleParameterArgumentUnavailableProperties: Set<Property>,
+			callSiteLazilyInstantiatedInstanceProperties: Set<Property>,
+			buildsInSendableFunction: Bool,
+			requiresSendable: Bool,
+			loop: Int?,
+			reboundProperties: [Property],
+			isReadOutsideItsLoop: Bool,
+		) {
+			self.propertyLabel = propertyLabel
+			self.typeDescription = typeDescription
+			self.instantiatedTypeDescription = instantiatedTypeDescription
+			self.isInstantiator = isInstantiator
+			self.isExtensionBased = isExtensionBased
+			self.erasedToConcreteExistential = erasedToConcreteExistential
+			self.childItems = childItems
+			self.defaultParameters = defaultParameters
+			self.constructionArguments = constructionArguments
+			self.constructionIsolation = constructionIsolation
+			self.dependencies = dependencies
+			self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
+			self.unavailableProperties = unavailableProperties
+			self.useMockInitializer = useMockInitializer
+			self.customMockName = customMockName
+			self.concreteType = concreteType
+			self.sourceFilePath = sourceFilePath
+			self.mockDeclarationLocation = mockDeclarationLocation
+			self.publicMockCall = publicMockCall
+			self.stageCalls = stageCalls
+			self.fillingGenerator = fillingGenerator
+			self.holeArgumentValuesByLabel = holeArgumentValuesByLabel
+			self.fillPropertiesGeneratedLater = fillPropertiesGeneratedLater
+			self.referencedFillNames = referencedFillNames
+			self.forwardedProperties = forwardedProperties
+			self.typesDeclaredEscaping = typesDeclaredEscaping
+			self.isPropertyCycle = isPropertyCycle
+			self.closedOnDeclaration = closedOnDeclaration
+			self.cycleClosedOnDeclarations = cycleClosedOnDeclarations
+			self.isReferencedByCycleClosingScope = isReferencedByCycleClosingScope
+			self.cycleParameters = cycleParameters
+			self.cycleParameterArgumentUnavailableProperties = cycleParameterArgumentUnavailableProperties
+			self.callSiteLazilyInstantiatedInstanceProperties = callSiteLazilyInstantiatedInstanceProperties
+			self.buildsInSendableFunction = buildsInSendableFunction
+			self.requiresSendable = requiresSendable
+			self.loop = loop
+			self.reboundProperties = reboundProperties
+			self.isReadOutsideItsLoop = isReadOutsideItsLoop
+			// Generation reads these for every node many times, so they are worked out once here.
+			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
+			self.dependencyInnerLabels = dependencyInnerLabels
+			let callSiteArguments = constructionArguments.filter { argument in
+				!Self.isElidedInCallSite(argument, dependencyInnerLabels: dependencyInnerLabels)
+			}
+			self.callSiteArguments = callSiteArguments
+			builderParameterTypes = callSiteArguments.map { argument in
+				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter
+			}
+			needsConfigurationStruct = childItems?.containsPropertyNode == true || !defaultParameters.isEmpty || isPropertyCycle
+			subtreeCallsPublicMock = publicMockCall != nil || childItems?.propertyNodes.contains(where: \.subtreeCallsPublicMock) == true
+		}
+
+		/// Whether this node or a node beneath it calls another module's public mock (`publicMockCall`). The walks that
+		/// look for such calls, which nearly every tree has none of, skip a subtree without one.
+		let subtreeCallsPublicMock: Bool
 
 		/// The property this node builds.
 		var property: Property {
@@ -6390,13 +6487,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// `SafeDIMockConfiguration`, `SafeDIOverrides`, and disambiguation only
 		/// concern properties — aliases are plain `let` bindings emitted inline.
 		var propertyChildren: [MockParameterNode] {
-			children.compactMap {
-				if case let .property(property) = $0 {
-					property
-				} else {
-					nil
-				}
-			}
+			childItems?.propertyNodes ?? []
 		}
 
 		/// Whether this node needs a full `SafeDIMockConfiguration` struct or can be
@@ -6404,9 +6495,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// when it has property children (subtree customization), non-dependency
 		/// defaults, or is a property cycle (the struct may exist from a non-cycle
 		/// instance of the same type).
-		var needsConfigurationStruct: Bool {
-			!propertyChildren.isEmpty || !defaultParameters.isEmpty || isPropertyCycle
-		}
+		let needsConfigurationStruct: Bool
 
 		/// True when this node must be wrapped in a `__safeDI_<label>()` helper
 		/// function — either because it needs a configuration struct or because
@@ -6464,18 +6553,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// `validateUnlabeledDefaultShape` on the macro rejects the shapes
 		/// where eliding would produce an uncallable signature (non-trailing
 		/// `_`-labeled default).
-		private func isElidedInCallSite(_ argument: Initializer.Argument, dependencyInnerLabels: Set<String>) -> Bool {
+		private static func isElidedInCallSite(_ argument: Initializer.Argument, dependencyInnerLabels: Set<String>) -> Bool {
 			argument.label == "_"
 				&& argument.hasDefaultValue
 				&& !dependencyInnerLabels.contains(argument.innerLabel)
 		}
 
+		/// The labels of `dependencies`.
+		private let dependencyInnerLabels: Set<String>
+
 		/// Construction arguments surfaced at the mock call site, with elided
 		/// non-dependency unlabeled defaults removed.
-		var callSiteArguments: [Initializer.Argument] {
-			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
-			return constructionArguments.filter { !isElidedInCallSite($0, dependencyInnerLabels: dependencyInnerLabels) }
-		}
+		let callSiteArguments: [Initializer.Argument]
 
 		/// The builder closure type as a Swift source string (unlabeled parameters).
 		/// Uses the property type (not the concrete fulfilling type) so the override
@@ -6524,11 +6613,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The parameter types of the builder closures that override how this node is built, one per call-site argument:
 		/// the argument's type, or the type of the value an `@autoclosure` argument takes, which the mock evaluates before
 		/// it calls the builder, as it does before it calls the construction.
-		var builderParameterTypes: [TypeDescription] {
-			callSiteArguments.map { argument in
-				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter
-			}
-		}
+		let builderParameterTypes: [TypeDescription]
 
 		/// Call-site arguments with labeled non-dependency defaults also elided,
 		/// for the pruned-back-edge / unreachable-override case where Swift's
@@ -6545,8 +6630,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// static members and nested types it may name resolve in the struct, nested in the type's extension, but
 		/// not in the mock root's extension.
 		func callSiteArgumentsForPrunedOverride(handWrittenMockDefaultParameters: [DefaultParameter]) -> [Initializer.Argument] {
-			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
-			return callSiteArguments.filter { argument in
+			callSiteArguments.filter { argument in
 				dependencyInnerLabels.contains(argument.innerLabel)
 					|| !argument.hasDefaultValue
 					|| (!useMockInitializer && handWrittenMockDefaultParameters.contains(where: {
@@ -6870,16 +6954,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	final class MockTreeItems: Sendable {
 		init(_ items: [MockTreeItem]) {
 			self.items = items
+			propertyNodes = items.propertyNodes
 		}
 
 		deinit {
 			var items = [MockTreeItem]()
 			swap(&items, &self.items)
 			DeferredRelease.release(consume items)
+			var propertyNodes = [MockParameterNode]()
+			swap(&propertyNodes, &self.propertyNodes)
+			DeferredRelease.release(consume propertyNodes)
 		}
 
 		/// Mutated only by `deinit`, which has the only access.
 		nonisolated(unsafe) private(set) var items: [MockTreeItem]
+		/// The property nodes among `items` (`[MockTreeItem].propertyNodes`), which generation reads for every node many
+		/// times. Mutated only by `deinit`, which has the only access.
+		nonisolated(unsafe) private(set) var propertyNodes: [MockParameterNode]
+
+		/// Whether any of `items` is a property node.
+		var containsPropertyNode: Bool {
+			!propertyNodes.isEmpty
+		}
 	}
 
 	/// A directed edge in the global type-reference graph that, when removed,
@@ -7268,14 +7364,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		treePropertyNodes: [MockParameterNode],
 		holeSiteProperties: Set<Property>,
 	) -> [Dependency] {
-		instantiable.dependencies.filter { dependency in
+		// The properties the tree's nodes build, each also as the instance of a `LazilyInstantiated` it builds, collected
+		// once rather than for each dependency.
+		var builtProperties: Set<Property>?
+		return instantiable.dependencies.filter { dependency in
 			switch dependency.source {
 			case .instantiated:
-				!holeSiteProperties.contains(dependency.property) && !treePropertyNodes.contains(where: {
-					$0.property == dependency.property || $0.property.asLazilyInstantiatedInstanceProperty == dependency.property
-				})
+				guard !holeSiteProperties.contains(dependency.property) else { return false }
+				if builtProperties == nil {
+					var properties = Set<Property>()
+					for node in treePropertyNodes {
+						let property = node.property
+						properties.insert(property)
+						if let instanceProperty = property.asLazilyInstantiatedInstanceProperty {
+							properties.insert(instanceProperty)
+						}
+					}
+					builtProperties = properties
+				}
+				return builtProperties?.contains(dependency.property) == false
 			case .received, .aliased, .forwarded:
-				false
+				return false
 			}
 		}
 	}
@@ -7439,8 +7548,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var calledTypeByProperty = [Property: TypeDescription]()
 		var hidden = Set<Property>()
 		// A stack of the nodes left to visit, each with the labels the builder functions enclosing it declare, since a mock
-		// tree can be as deep as the module has types.
-		var nodesToVisit = nodes.map { (node: $0, labelsDeclaredAbove: Set<String>()) }
+		// tree can be as deep as the module has types. A subtree that calls no public mock passes nothing up.
+		var nodesToVisit = nodes.filter(\.subtreeCallsPublicMock).map { (node: $0, labelsDeclaredAbove: Set<String>()) }
 		while let (node, labelsDeclaredAbove) = nodesToVisit.popLast() {
 			var labelsDeclared = labelsDeclaredAbove
 			for dependency in node.dependencies {
@@ -7457,7 +7566,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					labelsDeclared.insert(dependency.property.label)
 				}
 			}
-			nodesToVisit.append(contentsOf: node.propertyChildren.map { (node: $0, labelsDeclaredAbove: labelsDeclared) })
+			nodesToVisit.append(contentsOf: node.propertyChildren.filter(\.subtreeCallsPublicMock).map { (node: $0, labelsDeclaredAbove: labelsDeclared) })
 		}
 		return (calledTypeByProperty, hidden)
 	}
@@ -9296,8 +9405,9 @@ extension [ScopeGenerator.MockTreeItem] {
 	/// function passes up, as the calling tree receives them, which the function captures.
 	var passedUpBuildersCapturedBySendableFunctions: Set<Property> {
 		var builders = Set<Property>()
-		// A stack of its own, since a mock tree can be as deep as the module has types.
-		var nodesToVisit = propertyNodes
+		// A stack of its own, since a mock tree can be as deep as the module has types. A subtree that calls no public mock
+		// passes nothing up.
+		var nodesToVisit = propertyNodes.filter(\.subtreeCallsPublicMock)
 		while let node = nodesToVisit.popLast() {
 			if node.requiresSendable, let publicMockCall = node.publicMockCall {
 				let passedUpLabels = Set(publicMockCall.passedUpBuilders.map(\.label))
@@ -9307,7 +9417,7 @@ extension [ScopeGenerator.MockTreeItem] {
 					}
 				}
 			}
-			nodesToVisit.append(contentsOf: node.propertyChildren)
+			nodesToVisit.append(contentsOf: node.propertyChildren.filter(\.subtreeCallsPublicMock))
 		}
 		return builders
 	}
@@ -9317,13 +9427,14 @@ extension [ScopeGenerator.MockTreeItem] {
 	/// the fills with (`ScopeGenerator.MockParameterNode.fillPropertiesGeneratedLater`).
 	var fillingGenerators: [(generator: ScopeGenerator, propertiesGeneratedLater: Set<Property>)] {
 		var fillingGenerators = [(generator: ScopeGenerator, propertiesGeneratedLater: Set<Property>)]()
-		// A stack of its own, since a mock tree can be as deep as the module has types.
-		var nodesToVisit = propertyNodes
+		// A stack of its own, since a mock tree can be as deep as the module has types. Only a node that calls a public
+		// mock fills a builder (`ScopeGenerator.fillsABuilder`).
+		var nodesToVisit = propertyNodes.filter(\.subtreeCallsPublicMock)
 		while let node = nodesToVisit.popLast() {
 			if let fillingGenerator = node.fillingGenerator {
 				fillingGenerators.append((fillingGenerator, node.fillPropertiesGeneratedLater))
 			}
-			nodesToVisit.append(contentsOf: node.propertyChildren)
+			nodesToVisit.append(contentsOf: node.propertyChildren.filter(\.subtreeCallsPublicMock))
 		}
 		return fillingGenerators
 	}

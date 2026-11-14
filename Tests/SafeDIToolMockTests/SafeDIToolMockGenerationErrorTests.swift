@@ -2852,6 +2852,51 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsErrorsInSourceOrder_whenEachOfTwentyOneMockRootsBuildsInSendableFunctionTypeReceivingInstantiatorMockCannotBuild() async {
+		// The mock roots' trees are walked in parallel, so their captures arrive in any order; the errors are reported in
+		// source order.
+		let names = (0...20).map { index in "\(index < 10 ? "0" : "")\(index)" }
+		var swiftFileContent = [String]()
+		for name in names {
+			swiftFileContent.append("""
+			@Instantiable(generateMock: true)
+			public final class Screen\(name): Instantiable {
+			    public init(settingsBuilder: SendableInstantiator<Settings\(name)>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let settingsBuilder: SendableInstantiator<Settings\(name)>
+			}
+			""")
+			swiftFileContent.append("""
+			@Instantiable
+			public final class Settings\(name): Instantiable {
+			    public init(childBuilder: Instantiator<Child>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received let childBuilder: Instantiator<Child>
+			}
+			""")
+		}
+		swiftFileContent[0] += "\n\npublic final class Child: Instantiable {}"
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				names.map { name in
+					"\(fixtures["Settings\(name).swift"]):7:5: error: @Received property `childBuilder: Instantiator<Child>` cannot be received inside a `@Sendable` function in chain: Screen\(name) -> Settings\(name). SafeDI builds `settingsBuilder: SendableInstantiator<Settings\(name)>` on `Screen\(name)` in a `@Sendable` function, which cannot capture `childBuilder: Instantiator<Child>`, which the tree of `Screen\(name)` receives from outside it, because `Instantiator<Child>` is not `Sendable`. Declare `childBuilder` as `SendableInstantiator<Child>` where it is declared and where it is received as `Instantiator<Child>` to fix. `SendableInstantiator<Child>` builds `Child` in a `@Sendable` function, so what the tree of `Child` receives from outside that function must be `Sendable` too."
+				}.joined(separator: "\n")
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: swiftFileContent,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenSendableInstantiatorSubtreeReceivesInstantiatorPromotedToMockRoot() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in

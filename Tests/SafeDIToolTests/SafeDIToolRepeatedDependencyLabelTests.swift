@@ -323,6 +323,168 @@ struct SafeDIToolRepeatedDependencyLabelTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtMockRootThatRepeatsALabel_whenTwentyMockRootsBeforeItShareItsTree() async {
+		// The twenty mock roots before `Zebra`, in type order, validate the tree of `Shared` they share, which is not walked
+		// again; `Zebra`'s own declaration is still validated, though a scope made for an earlier mock root may have
+		// occupied the memory of `Zebra`'s.
+		let screens = (1...20).map { index in
+			let name = "Screen\(index < 10 ? "0" : "")\(index)"
+			return """
+			@Instantiable(generateMock: true)
+			public final class \(name): Instantiable {
+			    public init(shared: Shared) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let shared: Shared
+			}
+			"""
+		}
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Zebra.swift"]):9:5: error: `Zebra` has dependencies `caf\u{E9}` (U+0063 U+0061 U+0066 U+00E9) and `cafe\u{301}` (U+0063 U+0061 U+0066 U+0065 U+0301), which look the same but are encoded differently, so SafeDI cannot tell them apart. The @Instantiable macro rejects such names. Rename one of them.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: screens + [
+					"""
+					@Instantiable
+					public final class Shared: Instantiable {
+					    public init(leaf: Leaf) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let leaf: Leaf
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Leaf: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class First: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Second: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				swiftFileContentByFilePath: [
+					"Zebra.swift": """
+					@Instantiable(generateMock: true)
+					public final class Zebra: Instantiable {
+					    public init(shared: Shared, caf\u{E9}: First, cafe\u{301}: Second) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let shared: Shared
+					    @Instantiated let caf\u{E9}: First
+					    @Instantiated let cafe\u{301}: Second
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtDeclarationThatRepeatsALabel_whenOnlyTheLastOfTwentyOneMockRootsSharingATreeReachesIt() async {
+		// The twenty mock roots before `Zebra`, in type order, validate the tree of `Shared` they share, which is not walked
+		// again; the declaration only `Zebra`'s tree reaches beside it is still validated.
+		let screens = (1...20).map { index in
+			let name = "Screen\(index < 10 ? "0" : "")\(index)"
+			return """
+			@Instantiable(generateMock: true)
+			public final class \(name): Instantiable {
+			    public init(shared: Shared) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let shared: Shared
+			}
+			"""
+		}
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Service.swift"]):3:52: error: `Service` has more than one dependency named `_`. SafeDI names an `instantiate(…)` dependency by its parameter’s name, and the @Instantiable macro rejects a dependency parameter named `_`. Name the parameter.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: screens + [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Zebra: Instantiable {
+					    public init(shared: Shared, service: Service) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let shared: Shared
+					    @Instantiated let service: Service
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Shared: Instantiable {
+					    public init(leaf: Leaf) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let leaf: Leaf
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Leaf: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class First: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Second: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				swiftFileContentByFilePath: [
+					"Service.swift": """
+					@Instantiable
+					extension Service: Instantiable {
+					    public static func instantiate(first _: First, second _: Second) -> Service { Service() }
+					}
+
+					public final class Service {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_succeeds_whenNoTreeReachesDeclarationThatRepeatsALabel() async throws {
 		// Only hand-written code constructs `Feature`, so no generated code keys its dependencies, and nothing traps.
 		let output = try await executeSafeDIToolTest(
