@@ -246,6 +246,8 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 		#expect(counts.rootPairCount > 0)
 		#expect(counts.mirroredPairCount > 0)
+		// The override oracle passes a sentinel through each kind of field.
+		#expect(GraphFuzzerOverrideFieldKind.allCases.filter { counts.overrideFieldKindCounts[$0, default: 0] == 0 } == [])
 		let shapesTheCorpusShows = GraphFuzzerValueOracleShape.allCases.filter { Self.corpusValueOracleCounts.shapeCounts[$0, default: 0] > 0 }
 		#expect(shapesTheCorpusShows.filter { counts.shapeCounts[$0, default: 0] == 0 } == [])
 	}

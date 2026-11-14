@@ -661,7 +661,201 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 		#expect(runs.valueOracleFixtureFailure?.kind == .valueOracleFixtureChangesDrawnMocks)
 	}
 
+	// MARK: Overrides
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func overrideProbes_passSentinelThroughConfigurationOfRootsChildAndBuilderOfMockedTypesChild_whenEachMockHasOneField() async throws {
+		let runs = try await Self.valueOracleToolRuns(of: Self.rootOfMockedScreenFixture)
+
+		#expect(try #require(runs.valueOracle).overrideProbes == [
+			GraphFuzzerOverrideProbe(
+				mockedTypeName: "S1_Root",
+				label: "screen",
+				builtTypeName: "S1_Screen",
+				fieldKind: .configuration,
+				pair: DifferentialValueProbePair(
+					name: "S1_Root.mock(safeDIOverrides: .init(screen: sentinel))",
+					featureExpression: "{ S1_ZOverrideSentinel.value = nil; let value = S1_Root.mock(safeDIOverrides: .init(screen: .init(S1_ZOverrideSentinel.recording(S1_Screen.init)))); return (value, S1_ZOverrideSentinel.value) }()",
+					knownRightExpression: "{ let known = S1_Root(); return (known, known.screen as Any?) }()",
+				),
+			),
+			GraphFuzzerOverrideProbe(
+				mockedTypeName: "S1_Screen",
+				label: "detail",
+				builtTypeName: "S1_Detail",
+				fieldKind: .builder,
+				pair: DifferentialValueProbePair(
+					name: "S1_Screen.mock(safeDIOverrides: .init(detail: sentinel))",
+					featureExpression: "{ S1_ZOverrideSentinel.value = nil; let value = S1_Screen.mock(safeDIOverrides: .init(detail: S1_ZOverrideSentinel.recording(S1_Detail.init))); return (value, S1_ZOverrideSentinel.value) }()",
+					knownRightExpression: "{ let known = S1_ZMirror0(); return (known.differentialMirrorValue, known.detail as Any?) }()",
+				),
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func overrideProbes_passSentinelToBuilderOfPromotedDependencyOnly_whenMockedTypesOwnChildIsAnInstantiator() async throws {
+		// The instantiator's field builds `S1_Detail` once per `instantiate()`, so no one instance takes the sentinel's place.
+		let runs = try await Self.valueOracleToolRuns(of: Self.overriddenStoreFixture)
+
+		#expect(try #require(runs.valueOracle).overrideProbes.map(\.pair) == [
+			DifferentialValueProbePair(
+				name: "S1_Screen.mock(safeDIOverrides: .init(store: sentinel))",
+				featureExpression: "{ S1_ZOverrideSentinel.value = nil; let value = S1_Screen.mock(safeDIOverrides: .init(store: S1_ZOverrideSentinel.recording(S1_Store.init))); return (value, S1_ZOverrideSentinel.value) }()",
+				knownRightExpression: "{ let known = S1_ZMirror0(); return (known.differentialMirrorValue, known.store as Any?) }()",
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func overrideProbes_passMocksSamplesAndBuildMirrorThroughItsRoot_whenMockTakesRequiredParameters() async throws {
+		// The mock takes the forwarded `session`, so the override's call hands it the sample its own pair hands it, and
+		// the known-right side builds the forwarding mirror through its root with the same sample.
+		let runs = try await Self.valueOracleToolRuns(of: Self.forwardingFixture)
+
+		#expect(try #require(runs.valueOracle).overrideProbes.map(\.pair) == [
+			DifferentialValueProbePair(
+				name: "S1_Screen.mock(safeDIOverrides: .init(editor: sentinel))",
+				featureExpression: "{ S1_ZOverrideSentinel.value = nil; let value = S1_Screen.mock(session: differentialValueSample(S1_Session()), safeDIOverrides: .init(editor: S1_ZOverrideSentinel.recording(S1_Editor.init))); return (value, S1_ZOverrideSentinel.value) }()",
+				knownRightExpression: "{ let known = S1_ZMirror0Host().mirrorBuilder.instantiate(differentialValueSample(S1_Session())); return (known.differentialMirrorValue, known.editor as Any?) }()",
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func overrideProbes_passInstantiateEveryParameterButUnlabeledDefaultValuedOne_whenOverriddenTypeIsAnExtension() async throws {
+		// The configuration's builder takes each labeled default-valued parameter, and no unlabeled one.
+		let runs = try await Self.valueOracleToolRuns(of: Self.fixture([
+			// Seed 1 takes the root's second field.
+			Self.type("S1_Root", arguments: "isRoot: true", properties: ["@Instantiated let store: S1_Store", "@Instantiated let clock: S1_Clock"]),
+			"""
+			@Instantiable
+			extension S1_Clock: Instantiable {
+				public static func instantiate(store: S1_Store, title: String = "default", _ note: String = "") -> S1_Clock {
+					S1_Clock()
+				}
+			}
+
+			public final class S1_Clock {
+				public init() {}
+			}
+
+			""",
+			Self.type("S1_Store", properties: []),
+		]))
+
+		let probes = try #require(runs.valueOracle).overrideProbes
+		#expect(probes.map(\.fieldKind) == [.configuration])
+		#expect(probes.map(\.pair.featureExpression) == [
+			"{ S1_ZOverrideSentinel.value = nil; let value = S1_Root.mock(safeDIOverrides: .init(clock: .init({ S1_ZOverrideSentinel.recorded(S1_Clock.instantiate(store: $0, title: $1)) }))); return (value, S1_ZOverrideSentinel.value) }()",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func overrideProbes_omitField_whenItBuildsAProtocolOrAWrapper() async throws {
+		// A fulfilled-by-type protocol's field returns the protocol, which the built type's initializer does not, and an
+		// instantiator's builds an instance per call.
+		let runs = try await Self.valueOracleToolRuns(of: Self.fixture([
+			Self.type("S1_Root", arguments: "isRoot: true", properties: [
+				"@Instantiated(fulfilledByType: \"S1_Service\") let service: S1_ServiceProtocol",
+				"@Instantiated let storeBuilder: Instantiator<S1_Store>",
+			]),
+			"""
+			@Instantiable(fulfillingAdditionalTypes: [S1_ServiceProtocol.self])
+			public final class S1_Service: Instantiable, S1_ServiceProtocol {
+				public init() {}
+			}
+
+			public protocol S1_ServiceProtocol: AnyObject {}
+
+			""",
+			Self.type("S1_Store", properties: []),
+		]))
+
+		#expect(try #require(runs.valueOracle).overrideProbes == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func overrideProbes_chooseOneFieldByTheSeedAndThePairsPosition_whenMocksHaveSeveralFields() async throws {
+		// Seed 1: the first root's pair takes its second field, the second root's its third.
+		let runs = try await Self.valueOracleToolRuns(of: Self.fixture([
+			Self.type("S1_Root0", arguments: "isRoot: true", properties: ["@Instantiated let a: S1_A", "@Instantiated let b: S1_B", "@Instantiated let c: S1_C"]),
+			Self.type("S1_Root1", arguments: "isRoot: true", properties: ["@Instantiated let a: S1_A", "@Instantiated let b: S1_B", "@Instantiated let c: S1_C"]),
+			Self.type("S1_A", properties: []),
+			Self.type("S1_B", properties: []),
+			Self.type("S1_C", properties: []),
+		]))
+
+		let probes = try #require(runs.valueOracle).overrideProbes
+		#expect(probes.map { "\($0.mockedTypeName).\($0.label)" } == ["S1_Root0.b", "S1_Root1.c"])
+		var counts = GraphFuzzerValueOracleCounts()
+		counts.add(try #require(runs.valueOracle), isCompared: true)
+		#expect(counts.overridePairCount == 2)
+		#expect(counts.overrideFieldKindCounts == [.builder: 2])
+	}
+
 	// MARK: Values
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "The value oracle compiles generated code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueComparisons_reportOtherValues_whenGeneratedMockIgnoresOverride() async throws {
+		let runs = try await Self.valueOracleRuns(
+			of: Self.overriddenStoreFixture,
+			editingMockOf: "S1_Screen",
+			replacing: "if let safeDIBuilder = safeDIOverrides.store { safeDIBuilder() } else { S1_Store() }",
+			with: "S1_Store()",
+		)
+
+		let failure = try #require(try await GraphFuzzerOracle.valueComparisons(of: [runs]).failures[1])
+
+		#expect(failure.kind == .mockBuildsOtherValuesThanProduction)
+		#expect(failure.valueDifferences == [
+			"""
+			probe `S1_Screen.mock(safeDIOverrides: .init(store: sentinel))` at (S1_Screen, Optional<Any>) > .1:
+			  feature:     .1: nil
+			  known right: .1: <4> S1_Store (seen, first at (S1_Screen, Optional<Any>) > .0 > detailBuilder > instantiate() > store)
+			""",
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "The value oracle compiles generated code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueComparisons_reportOtherValues_whenOverrideReachesOneOfTwoReceivers() async throws {
+		// The mock called without the override still builds what production builds, so only the override's pair differs.
+		let runs = try await Self.valueOracleRuns(
+			of: Self.overriddenStoreFixture,
+			editingMockOf: "S1_Screen",
+			replacing: "S1_Detail(store: store)",
+			with: "S1_Detail(store: safeDIOverrides.store == nil ? store : S1_Store())",
+		)
+
+		let failure = try #require(try await GraphFuzzerOracle.valueComparisons(of: [runs]).failures[1])
+
+		#expect(failure.kind == .mockBuildsOtherValuesThanProduction)
+		#expect(failure.valueDifferences == [
+			"""
+			probe `S1_Screen.mock(safeDIOverrides: .init(store: sentinel))` at (S1_Screen, Optional<Any>) > .0 > detailBuilder > instantiate() again > store:
+			  feature:     store: <6> S1_Store
+			  known right: store: <4> S1_Store (seen, first at (S1_Screen, Optional<Any>) > .0 > detailBuilder > instantiate() > store)
+			""",
+			"""
+			probe `S1_Screen.mock(safeDIOverrides: .init(store: sentinel))` at (S1_Screen, Optional<Any>) > .0 > store:
+			  feature:     store: <7> S1_Store
+			  known right: store: <4> S1_Store (seen, first at (S1_Screen, Optional<Any>) > .0 > detailBuilder > instantiate() > store)
+			""",
+			"""
+			probe `S1_Screen.mock(safeDIOverrides: .init(store: sentinel))` at (S1_Screen, Optional<Any>) > .1:
+			  feature:     .1: <7> S1_Store (seen, first at (S1_Screen, Optional<Any>) > .0 > store)
+			  known right: .1: <4> S1_Store (seen, first at (S1_Screen, Optional<Any>) > .0 > detailBuilder > instantiate() > store)
+			""",
+		])
+	}
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The value oracle compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -676,6 +870,17 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 			probe `S1_Screen.mock()` at <1> S1_Screen > detail > store:
 			  feature:     store: <5> S1_Store
 			  known right: store: <4> S1_Store (seen, first at <1> S1_Screen > detail > row > store)
+			""",
+			// The override oracle's pair, which passes the mock the dependency's sentinel, shows the second instance too.
+			"""
+			probe `S1_Screen.mock(safeDIOverrides: .init(store: sentinel))` at (S1_Screen, Optional<Any>) > .0 > detail > store:
+			  feature:     store: <5> S1_Store
+			  known right: store: <4> S1_Store (seen, first at (S1_Screen, Optional<Any>) > .0 > detail > row > store)
+			""",
+			"""
+			probe `S1_Screen.mock(safeDIOverrides: .init(store: sentinel))` at (S1_Screen, Optional<Any>) > .1:
+			  feature:     .1: <5> S1_Store (seen, first at (S1_Screen, Optional<Any>) > .0 > detail > store)
+			  known right: .1: <4> S1_Store (seen, first at (S1_Screen, Optional<Any>) > .0 > detail > row > store)
 			""",
 		])
 	}
@@ -698,6 +903,12 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 			probe `S1_Screen.mock()` at <1> S1_Screen > store:
 			  feature:     store: nil
 			  known right: store: <3> S1_Store (seen, first at <1> S1_Screen > detail > store)
+			""",
+			// The override oracle's pair, which passes the mock the dependency's sentinel, shows the `nil` too.
+			"""
+			probe `S1_Screen.mock(safeDIOverrides: .init(store: sentinel))` at (S1_Screen, Optional<Any>) > .0 > store:
+			  feature:     store: nil
+			  known right: store: <3> S1_Store (seen, first at (S1_Screen, Optional<Any>) > .0 > detail > store)
 			""",
 		])
 	}
@@ -786,6 +997,14 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 		type("S1_Root", arguments: "isRoot: true", properties: ["@Instantiated let screen: S1_Screen"]),
 		type("S1_Screen", arguments: "generateMock: true", properties: ["@Instantiated let detail: S1_Detail"]),
 		type("S1_Detail", properties: []),
+	])
+
+	/// A mocked type that receives a dependency its mock builds beside it, which the type its instantiator builds receives
+	/// too: the override oracle's one field of the mock.
+	private static let overriddenStoreFixture = fixture([
+		type("S1_Screen", arguments: "generateMock: true", properties: ["@Instantiated let detailBuilder: Instantiator<S1_Detail>", "@Received let store: S1_Store"]),
+		type("S1_Detail", properties: ["@Received let store: S1_Store"]),
+		type("S1_Store", properties: []),
 	])
 
 	/// A mocked type with a required alias of the optional form of a property it receives, which the mock promotes from
