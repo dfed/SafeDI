@@ -221,6 +221,7 @@ struct GraphFuzzerMockMirrorModel {
 				case let .instantiateMethod(parameters):
 					guard let currentTypeName else { continue }
 					types[currentTypeName]?.isExtension = true
+					types[currentTypeName]?.instantiateParameters = GraphFuzzerOracle.topLevelParameters(parameters)
 					for parameter in GraphFuzzerOracle.topLevelParameters(parameters) where !parameter.contains(" = ") {
 						guard let colon = parameter.firstIndex(of: ":") else { continue }
 						let names = parameter[..<colon].split(separator: " ")
@@ -303,6 +304,8 @@ struct GraphFuzzerMockMirrorModel {
 		let generatesMock: Bool
 		var isExtension: Bool
 		let additionalTypes: [String]
+		/// The parameters of an extension's `instantiate(…)`, each as declared.
+		var instantiateParameters = [String]()
 
 		var forwardedReceivableProperties: Set<GraphFuzzerMirrorProperty> {
 			Set(dependencies.filter { $0.source == .forwarded }.flatMap(\.receivableProperties))
@@ -815,6 +818,8 @@ struct GraphFuzzerMockMirror: Equatable {
 		let property: GraphFuzzerMirrorProperty
 		/// `nil` for a declaration that is not an alias.
 		var alias: Alias?
+		/// The concrete type whose scope builds the declaration, `nil` for an alias.
+		var builtTypeName: String?
 	}
 
 	let mockedTypeName: String
@@ -840,13 +845,18 @@ struct GraphFuzzerMockMirror: Equatable {
 		"\(mockedTypeName).mock(\(mockArguments.joined(separator: ", ")))"
 	}
 
-	/// The probe expression of the known-right side of the mirror's pair: the mirror's value, built by a root of its own
-	/// with the sample values the mock takes when the mirror forwards them.
+	/// The probe expression of the known-right side of the mirror's pair: the mirror's value.
 	var knownRightExpression: String {
+		"\(knownRightConstruction).\(Self.valueLabel)"
+	}
+
+	/// The expression that builds the mirror: the mirror itself, a root, or, when it forwards the mock's required
+	/// parameters, a root of its own, with the sample values the mock takes.
+	var knownRightConstruction: String {
 		if let forwardedPropertiesSample {
-			"\(hostName)().\(Self.builderLabel).instantiate(\(forwardedPropertiesSample)).\(Self.valueLabel)"
+			"\(hostName)().\(Self.builderLabel).instantiate(\(forwardedPropertiesSample))"
 		} else {
-			"\(name)().\(Self.valueLabel)"
+			"\(name)()"
 		}
 	}
 
@@ -999,6 +1009,7 @@ extension GraphFuzzerMockMirrorModel {
 				declarations.append(GraphFuzzerMockMirror.Declaration(
 					attribute: isErased ? "@Instantiated(fulfilledByType: \"\(scopeTypeName)\", erasedToConcreteExistential: true)" : "@Instantiated",
 					property: property.unwrapped,
+					builtTypeName: scopeTypeName,
 				))
 			case let .aliased(property, fulfillingProperty, onlyIfAvailable):
 				guard declaredAliases.contains(property), let dependency = mockedType.dependencies.first(where: { $0.property == property }) else {
@@ -1400,6 +1411,24 @@ struct GraphFuzzerValueOraclePlan {
 		drawnMockFiles = generatedFiles.filter { $0.key.hasSuffix(mockFileSuffix) }
 		rootShapes = Self.rootShapes(of: model, rootTypeNames: rootTypeNames)
 		mirrorNamesSortingBeforeTypeNames = Self.typeNamesSortingAfterMirrors(in: fixture, mirrors: mirrors)
+		var rootOverrideCandidates = [String: [GraphFuzzerOverrideCandidate]]()
+		for rootTypeName in rootTypeNames {
+			rootOverrideCandidates[rootTypeName] = model.propertiesToGenerate(ofTypeNamed: rootTypeName).compactMap { propertyToGenerate in
+				guard case let .instantiated(property, scopeTypeName, isErased) = propertyToGenerate,
+				      !isErased,
+				      GraphFuzzerMirrorTypes.kindOrder(of: property.type) == 0,
+				      !property.isOptional
+				else { return nil }
+				return GraphFuzzerOverrideCandidate(label: property.label, builtTypeName: scopeTypeName)
+			}
+		}
+		self.rootOverrideCandidates = rootOverrideCandidates
+		var instantiateParametersByExtensionTypeName = [String: [String]]()
+		for typeName in model.typeOrder {
+			guard let type = model.types[typeName], type.isExtension else { continue }
+			instantiateParametersByExtensionTypeName[typeName] = type.instantiateParameters
+		}
+		self.instantiateParametersByExtensionTypeName = instantiateParametersByExtensionTypeName
 	}
 
 	let fixture: GraphFuzzerFixture
@@ -1425,9 +1454,14 @@ struct GraphFuzzerValueOraclePlan {
 	/// The type names of the graph that sort after a mirror's name, which would let a mirror change the order of the
 	/// tool's alphabetical walks: always empty, by the mirrors' names.
 	let mirrorNamesSortingBeforeTypeNames: [String]
+	/// The dependencies of each root whose override the override oracle may pass the root's mock, in declaration order.
+	let rootOverrideCandidates: [String: [GraphFuzzerOverrideCandidate]]
+	/// The parameters of each of the graph's extensions' `instantiate(…)`, each as declared, by the type it builds.
+	let instantiateParametersByExtensionTypeName: [String: [String]]
 
 	/// The value-oracle fixture: `fixture`, or the same graph drawn storing every parameter, with `generateMock: true`
-	/// on every root and the mirrors' files after the graph's own.
+	/// on every root and the mirrors' files after the graph's own, and, in the fixture the comparator compiles, the file
+	/// of the override oracle's record (`GraphFuzzerOverrideSentinel`), which the tool does not read.
 	func valueOracleFixture(storingEveryParameter: Bool) -> GraphFuzzerFixture {
 		let base = storingEveryParameter ? storingFixture : fixture
 		let counterName = "\(fixture.typeNamePrefix)CreationStamp"
@@ -1439,7 +1473,8 @@ struct GraphFuzzerValueOraclePlan {
 		return GraphFuzzerFixture(
 			seed: fixture.seed,
 			swiftFileContent: base.swiftFileContent.map { $0.replacingOccurrences(of: "@Instantiable(isRoot: true)\n", with: "@Instantiable(isRoot: true, generateMock: true)\n") }
-				+ mirrors.map { $0.source(conformance: conformance, stamp: stamp) },
+				+ mirrors.map { $0.source(conformance: conformance, stamp: stamp) }
+				+ (storingEveryParameter ? [GraphFuzzerOverrideSentinel.source(typeNamePrefix: fixture.typeNamePrefix)] : []),
 		)
 	}
 
@@ -1643,15 +1678,23 @@ struct GraphFuzzerValueOracleRun {
 	let outcome: GraphFuzzerToolOutcome?
 
 	/// The graph the comparator compares: the value-oracle fixture drawn storing every parameter, with what the tool
-	/// generated for it, and the plan's pairs, or `nil` when the tool did not accept the fixture.
+	/// generated for it, and the plan's pairs followed by the override oracle's, or `nil` when the tool did not accept the
+	/// fixture.
 	var valueGraph: DifferentialValueGraph? {
 		guard case let .accepted(generatedFiles, _) = outcome else { return nil }
 		return DifferentialValueGraph(
 			name: "seed \(plan.fixture.seed), value oracle",
 			path: DifferentialValuePath(fixture: plan.valueOracleFixture(storingEveryParameter: true), generatedFiles: generatedFiles),
-			probePairs: plan.probePairs,
+			probePairs: plan.probePairs + overrideProbes.map(\.pair),
 			samples: plan.forwardedPropertiesSamples,
 		)
+	}
+
+	/// The override oracle's probes of the value-oracle run's mocks (`GraphFuzzerValueOraclePlan.overrideProbes`), none
+	/// when the tool did not accept the fixture.
+	var overrideProbes: [GraphFuzzerOverrideProbe] {
+		guard case let .accepted(generatedFiles, _) = outcome else { return [] }
+		return plan.overrideProbes(generatedFiles: generatedFiles)
 	}
 
 	/// The drawn graph's mock files, by name, that the value-oracle run generates otherwise even once both are read as
@@ -1703,8 +1746,9 @@ extension GraphFuzzerMockOverrides {
 /// that a pair that drops out while another drops in still moves a pin; each mocked type compared with no mirror, by
 /// reason; the compared pairs that show each shape; the drawn mock files that R6 finds alike only once its allowance
 /// normalizes them (`GraphFuzzerValueOracleRun.drawnMockFileNamesMatchingOnlyAfterNormalization`); and, of the
-/// compared graphs, the mirrored pairs whose mock takes sample values and the types whose `ForwardedProperties` have a
-/// sample the describer calls their instantiators with.
+/// compared graphs, the mirrored pairs whose mock takes sample values, the types whose `ForwardedProperties` have a
+/// sample the describer calls their instantiators with, and the override oracle's pairs, as a count, as a set sum over
+/// `<seed>:<type>:<label>`, and per field kind.
 struct GraphFuzzerValueOracleCounts: Equatable {
 	var rootPairCount = 0
 	var rootPairsSum = GraphFuzzerSeedSetSum()
@@ -1715,6 +1759,9 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 	var drawnMocksMatchingOnlyAfterNormalizationCount = 0
 	var mirroredPairsTakingSamplesCount = 0
 	var forwardedPropertiesSampleCount = 0
+	var overridePairCount = 0
+	var overridePairsSum = GraphFuzzerSeedSetSum()
+	var overrideFieldKindCounts = [GraphFuzzerOverrideFieldKind: Int]()
 
 	/// Counts the skips and the drawn mock files R6 normalizes of a graph the value oracle inspected and, when its
 	/// value-oracle graph was compared, its pairs and their shapes.
@@ -1740,6 +1787,11 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 		for (shape, count) in plan.shapeCounts {
 			shapeCounts[shape, default: 0] += count
 		}
+		for probe in valueOracle.overrideProbes {
+			overridePairCount += 1
+			overridePairsSum.add(member: "\(plan.fixture.seed):\(probe.mockedTypeName):\(probe.label)")
+			overrideFieldKindCounts[probe.fieldKind, default: 0] += 1
+		}
 	}
 
 	/// The counts as one report field, `key=value` separated by commas, every key present: what
@@ -1756,6 +1808,9 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 		fields.append("drawnMocksMatchingOnlyAfterNormalization=\(drawnMocksMatchingOnlyAfterNormalizationCount)")
 		fields.append("mirroredPairsTakingSamples=\(mirroredPairsTakingSamplesCount)")
 		fields.append("forwardedPropertiesSamples=\(forwardedPropertiesSampleCount)")
+		fields.append("overridePairs=\(overridePairCount)")
+		fields.append("overridePairsSum=0x\(String(overridePairsSum.value, radix: 16, uppercase: true))")
+		fields += GraphFuzzerOverrideFieldKind.allCases.map { "override.\($0.rawValue)=\(overrideFieldKindCounts[$0, default: 0])" }
 		return fields.joined(separator: ",")
 	}
 
