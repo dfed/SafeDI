@@ -25,9 +25,10 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// What a public mock's levels hold where its tree binds a value other than as a declaration of the level's type: a loop of
-/// builders whose members each wrap the others again, and a label the mock's root names apart because its tree receives it
-/// as two types. Each test compiles both modules and compares the values the mock builds through the public mock with those
-/// the same graph's mock builds inline.
+/// builders whose members each wrap the others again, a label the mock's root names apart because its tree receives it
+/// as two types, and a receive the mock passes a type by name rather than binding it again under its label. Each test
+/// compiles both modules and compares the values the mock builds through the public mock with those the same graph's mock
+/// builds inline.
 struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 	// MARK: Initialization
 
@@ -533,6 +534,236 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 		)
 	}
 
+	@Test(arguments: [[], ["@Received(onlyIfAvailable: true) public let user: User?"], ["@Received(onlyIfAvailable: true) public let user: Draft?"]])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsBindingPassedByName_whenLevelCarriesReceiveMockPassesByNameAboveTypeThatReceivesLabelAsAnotherType(fillDeclarations: [String]) async throws {
+		// The mock binds `user: User`, which `Promoted` requires, beside `Hub`'s tree, and passes `Middle` its
+		// `user: Draft?` by name, `user_Draft`, since `Child` beneath reads `user: User?` by name. `Middle`'s level carries
+		// the `user: Draft?` it received, so its payload reads `user_Draft`, not the `user` its function does not bind
+		// again. `LiveApi`, filling `Child`'s `api`, reads neither form, or either.
+		try await expectPublicMock(
+			feature: Self.passedByNameFeature(middle: "@Instantiated public let middle: Middle", child: "@Instantiated public let child: Child"),
+			app: [
+				Self.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: fillDeclarations),
+				Self.mockedRoot(declarations: ["@Received public let promoted: Promoted", "@Instantiated public let hub: Hub"]),
+			],
+			probes: [DifferentialValueProbe("Root.mock()")],
+			expectedFeature: """
+			#if DEBUG
+			extension Hub {
+			    @frozen public enum SafeDIMockScope_Api {
+			        case middle(middle_Values, SafeDIMockScope_Api.Middle_Scope)
+
+			        public struct middle_Values {
+			            public let user: User
+			            public let promoted: Promoted
+			        }
+
+			        @frozen public enum Middle_Scope {
+			            case child(child_Values, SafeDIMockScope_Api.Child_Scope)
+
+			            public struct child_Values {
+			                public let user: Draft?
+			            }
+			        }
+
+			        @frozen public enum Child_Scope {
+			            case api(api_Values)
+
+			            public struct api_Values {
+			                public let user: User?
+			            }
+			        }
+			    }
+
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            user: (() -> User)? = nil,
+			            promoted: ((User) -> Promoted)? = nil,
+			            middle: __safeDI_Feature_Middle_MockConfiguration = .init()
+			        ) {
+			            self.user = user
+			            self.promoted = promoted
+			            self.middle = middle
+			        }
+
+			        public let user: (() -> User)?
+			        public let promoted: ((User) -> Promoted)?
+			        public let middle: __safeDI_Feature_Middle_MockConfiguration
+			    }
+
+			    public static func mock(
+			        apiBuilder: @escaping (Hub.SafeDIMockScope_Api) -> any Api,
+			        promoted: Promoted? = nil,
+			        user: User? = nil,
+			        user_Draft: Draft? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Hub {
+			        let __safeDI_apiBuilder = apiBuilder
+			        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+			        let promoted = if let promoted { promoted } else if let safeDIBuilder = safeDIOverrides.promoted { safeDIBuilder(user) } else { Promoted(user: user) }
+			        let __safeDI_apiValues_middle = SafeDIMockScope_Api.middle_Values(user: user, promoted: promoted)
+			        func __safeDI_middle() -> Middle {
+			            let __safeDI_apiValues_child = SafeDIMockScope_Api.Middle_Scope.child_Values(user: user_Draft)
+			            func __safeDI_child() -> Child {
+			                let api: any Api = __safeDI_apiBuilder(.middle(__safeDI_apiValues_middle, .child(__safeDI_apiValues_child, .api(SafeDIMockScope_Api.Child_Scope.api_Values(user: user)))))
+			                return if let safeDIBuilder = safeDIOverrides.middle.child { safeDIBuilder(user, api) } else { Child(user: user, api: api) }
+			            }
+			            let child: Child = __safeDI_child()
+			            return Middle.__safeDI_init(user: user_Draft, child: child, safeDIBuilder: safeDIOverrides.middle.safeDIBuilder)
+			        }
+			        let middle: Middle = __safeDI_middle()
+			        return Hub(middle: middle, promoted: promoted)
+			    }
+			}
+
+			extension Hub {
+			    public enum __safeDI_Hub_mock_E6F26184A23E366F {}
+			}
+			#endif
+
+			#if DEBUG
+			/// Configuration for how `Middle` is constructed within the public mock trees of module `Feature`.
+			nonisolated public struct __safeDI_Feature_Middle_MockConfiguration {
+			    public init(
+			        child: ((User?, any Api) -> Child)? = nil,
+			        _ safeDIBuilder: ((Draft?, Child) -> Middle)? = nil
+			    ) {
+			        self.child = child
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    public let child: ((User?, any Api) -> Child)?
+			    /// Overrides how `Middle` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((Draft?, Child) -> Middle)?
+			}
+
+			extension Middle {
+			    static func __safeDI_init(user: Draft?, child: Child, safeDIBuilder: ((Draft?, Child) -> Middle)?) -> Middle {
+			        if let safeDIBuilder { safeDIBuilder(user, child) } else { Middle(user: user, child: child) }
+			    }
+			}
+			#endif
+
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsBindingPassedByName_whenInstantiatorsLevelCarriesReceiveMockPassesByNameAboveInstantiatorOfTypeThatReceivesLabelAsAnotherType() async throws {
+		// As above, with `Middle` and `Child` each built by an instantiator: `Middle`'s payload for `childBuilder` is bound
+		// before `Child`'s builder function, inside `Middle`'s.
+		try await expectPublicMock(
+			feature: Self.passedByNameFeature(middle: "@Instantiated public let middleBuilder: Instantiator<Middle>", child: "@Instantiated public let childBuilder: Instantiator<Child>"),
+			app: [
+				Self.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let user: User?"]),
+				Self.mockedRoot(declarations: ["@Received public let promoted: Promoted", "@Instantiated public let hub: Hub"]),
+			],
+			probes: [DifferentialValueProbe("Root.mock().hub.middleBuilder.instantiate().childBuilder.instantiate()")],
+			expectedFeature: """
+			#if DEBUG
+			extension Hub {
+			    @frozen public enum SafeDIMockScope_Api {
+			        case middleBuilder(middleBuilder_Values, SafeDIMockScope_Api.Middle_Scope)
+
+			        public struct middleBuilder_Values {
+			            public let user: User
+			            public let promoted: Promoted
+			        }
+
+			        @frozen public enum Middle_Scope {
+			            case childBuilder(childBuilder_Values, SafeDIMockScope_Api.Child_Scope)
+
+			            public struct childBuilder_Values {
+			                public let user: Draft?
+			            }
+			        }
+
+			        @frozen public enum Child_Scope {
+			            case api(api_Values)
+
+			            public struct api_Values {
+			                public let user: User?
+			            }
+			        }
+			    }
+
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            user: (() -> User)? = nil,
+			            promoted: ((User) -> Promoted)? = nil,
+			            middleBuilder: __safeDI_Feature_Middle_MockConfiguration = .init()
+			        ) {
+			            self.user = user
+			            self.promoted = promoted
+			            self.middleBuilder = middleBuilder
+			        }
+
+			        public let user: (() -> User)?
+			        public let promoted: ((User) -> Promoted)?
+			        public let middleBuilder: __safeDI_Feature_Middle_MockConfiguration
+			    }
+
+			    public static func mock(
+			        apiBuilder: @escaping (Hub.SafeDIMockScope_Api) -> any Api,
+			        promoted: Promoted? = nil,
+			        user: User? = nil,
+			        user_Draft: Draft? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Hub {
+			        let __safeDI_apiBuilder = apiBuilder
+			        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+			        let promoted = if let promoted { promoted } else if let safeDIBuilder = safeDIOverrides.promoted { safeDIBuilder(user) } else { Promoted(user: user) }
+			        let __safeDI_apiValues_middleBuilder = SafeDIMockScope_Api.middleBuilder_Values(user: user, promoted: promoted)
+			        func __safeDI_middleBuilder() -> Middle {
+			            let __safeDI_apiValues_childBuilder = SafeDIMockScope_Api.Middle_Scope.childBuilder_Values(user: user_Draft)
+			            func __safeDI_childBuilder() -> Child {
+			                let api: any Api = __safeDI_apiBuilder(.middleBuilder(__safeDI_apiValues_middleBuilder, .childBuilder(__safeDI_apiValues_childBuilder, .api(SafeDIMockScope_Api.Child_Scope.api_Values(user: user)))))
+			                return if let safeDIBuilder = safeDIOverrides.middleBuilder.childBuilder { safeDIBuilder(user, api) } else { Child(user: user, api: api) }
+			            }
+			            let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
+			            return Middle.__safeDI_init(user: user_Draft, childBuilder: childBuilder, safeDIBuilder: safeDIOverrides.middleBuilder.safeDIBuilder)
+			        }
+			        let middleBuilder = Instantiator<Middle>(__safeDI_middleBuilder)
+			        return Hub(middleBuilder: middleBuilder, promoted: promoted)
+			    }
+			}
+
+			extension Hub {
+			    public enum __safeDI_Hub_mock_F986014891F88E67 {}
+			}
+			#endif
+
+			#if DEBUG
+			/// Configuration for how `Middle` is constructed within the public mock trees of module `Feature`.
+			nonisolated public struct __safeDI_Feature_Middle_MockConfiguration {
+			    public init(
+			        childBuilder: ((User?, any Api) -> Child)? = nil,
+			        _ safeDIBuilder: ((Draft?, Instantiator<Child>) -> Middle)? = nil
+			    ) {
+			        self.childBuilder = childBuilder
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    public let childBuilder: ((User?, any Api) -> Child)?
+			    /// Overrides how `Middle` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((Draft?, Instantiator<Child>) -> Middle)?
+			}
+
+			extension Middle {
+			    static func __safeDI_init(user: Draft?, childBuilder: Instantiator<Child>, safeDIBuilder: ((Draft?, Instantiator<Child>) -> Middle)?) -> Middle {
+			        if let safeDIBuilder { safeDIBuilder(user, childBuilder) } else { Middle(user: user, childBuilder: childBuilder) }
+			    }
+			}
+			#endif
+
+			""",
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -541,6 +772,21 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 	private static func publicMockType(named name: String, declarations: [String]) -> String {
 		seamFixtureType(named: name, isFinalClass: true, declarations: declarations)
 			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: .public)\n")
+	}
+
+	/// `Feature`'s types where `Hub`'s mock passes `Middle` its `user: Draft?` by name: `Hub` declares `middle`, `Middle`
+	/// receives `user: Draft?` only if available and declares `child`, and `Child` receives `user: User?` only if available
+	/// and holds the place `api`. `Hub` receives `Promoted`, which receives the `user: User` the mock binds.
+	private static func passedByNameFeature(middle: String, child: String) -> [String] {
+		[
+			"public protocol Api {}",
+			seamFixtureType(named: "User", isFinalClass: true, declarations: []),
+			"public final class Draft {}",
+			seamFixtureType(named: "Child", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) public let user: User?", "@Instantiated public let api: any Api"]),
+			seamFixtureType(named: "Middle", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) public let user: Draft?", child]),
+			seamFixtureType(named: "Promoted", isFinalClass: true, declarations: ["@Received public let user: User"]),
+			publicMockType(named: "Hub", declarations: [middle, "@Received public let promoted: Promoted"]),
+		]
 	}
 
 	/// `Root`, which generates a mock, with `declarations`.
