@@ -47,6 +47,11 @@ fi
   elif grep -q '^completed ' "$report"; then
     echo "Completed $(grep '^completed ' "$report" | sed 's/^completed //')."
   fi
+  # What the run cost; "Check Graph Fuzzer Corpus on Linux" adds the shards' lines up per corpus.
+  { grep '^cpu ' "$report" || true; } | while read -r _ _ wall process children phases; do
+    echo
+    echo "Cost: $wall wall seconds; the test process used $process CPU seconds and its child processes $children. Per phase, busy seconds:child CPU seconds:child processes: \`$phases\`."
+  done
   echo
   { grep -E '^(failure|stale|misfiled) ' "$report" || true; } | while read -r kind seed reason; do
     if [ "$kind" = failure ]; then

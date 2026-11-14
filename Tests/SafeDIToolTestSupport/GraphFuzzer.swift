@@ -9811,10 +9811,13 @@ enum GraphFuzzerOracle {
 		willRunSeed: @Sendable (UInt64) -> Void = { _ in },
 	) async throws -> [GraphFuzzerResult] {
 		await ProcessSlots.shared.takePlaceInLine(for: Test.current?.id)
-		var toolRuns = [GraphFuzzerToolRuns]()
-		for seed in seeds {
-			willRunSeed(seed)
-			await toolRuns.append(try self.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: features)))
+		let toolRuns = try await GraphFuzzerPhaseAccount.measuring(.toolRuns) {
+			var toolRuns = [GraphFuzzerToolRuns]()
+			for seed in seeds {
+				willRunSeed(seed)
+				await toolRuns.append(try self.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: features)))
+			}
+			return toolRuns
 		}
 		return try await results(of: toolRuns, isolatingValueGraphsOf: isolatedSeeds)
 	}
@@ -9824,10 +9827,16 @@ enum GraphFuzzerOracle {
 	static func results(of toolRuns: [GraphFuzzerToolRuns], isolatingValueGraphsOf isolatedSeeds: Set<UInt64> = []) async throws -> [GraphFuzzerResult] {
 		let compiledRuns = toolRuns.filter { $0.runsDifferFailure == nil }
 		// A graph that fails as a debug build is reported as one.
-		let compilationFailures = compileVerificationIsEnabled
-			? try await compilationFailures(of: compiledRuns).merging(compilationFailures(of: compiledRuns.filter(\.fixture.compilesAsReleaseBuildToo), definesDebug: false)) { debugFailure, _ in debugFailure }
-			: [:]
-		let valueComparisons = try await valueComparisons(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil }, isolatingValueGraphsOf: isolatedSeeds)
+		let compilationFailures: [UInt64: GraphFuzzerFailure] = if compileVerificationIsEnabled {
+			try await GraphFuzzerPhaseAccount.measuring(.compiles) {
+				try await self.compilationFailures(of: compiledRuns).merging(self.compilationFailures(of: compiledRuns.filter(\.fixture.compilesAsReleaseBuildToo), definesDebug: false)) { debugFailure, _ in debugFailure }
+			}
+		} else {
+			[:]
+		}
+		let valueComparisons = try await GraphFuzzerPhaseAccount.measuring(.valueComparisons) {
+			try await self.valueComparisons(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil }, isolatingValueGraphsOf: isolatedSeeds)
+		}
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
 			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.multiModuleFailures.first].compactMap(\.self) + renamedGraphFailures
@@ -10288,8 +10297,12 @@ enum GraphFuzzerOracle {
 		var multiModuleRuns = [GraphFuzzerMultiModuleRuns]()
 		if GraphFuzzerGeneratorFeature.features(drawnIn: fixture).isEmpty {
 			let partition = GraphFuzzerPartition.partition(of: fixture)
-			for renaming in multiModuleRenamings {
-				await multiModuleRuns.append(try GraphFuzzerMultiModuleProperty.runs(of: fixture, partition: partition, renaming: renaming))
+			multiModuleRuns = try await GraphFuzzerPhaseAccount.measuring(.multiModule) {
+				var multiModuleRuns = [GraphFuzzerMultiModuleRuns]()
+				for renaming in multiModuleRenamings {
+					await multiModuleRuns.append(try GraphFuzzerMultiModuleProperty.runs(of: fixture, partition: partition, renaming: renaming))
+				}
+				return multiModuleRuns
 			}
 		}
 		let firstOutcome = try await toolOutcome(of: fixture)

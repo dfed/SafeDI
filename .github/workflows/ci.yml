@@ -1095,7 +1095,12 @@ jobs:
       # and seed-set sum, known issues); the combine job checks each corpus's shards against its pins, that the
       # shards cover it exactly once, and that every corpus the long run names has a report.
       # The base corpus runs in four shards: its value oracle compiles every accepted graph's root mocks and mirrors
-      # again, which the smoke batch suggests about doubles a base shard's time (not yet measured on CI).
+      # again, which the smoke batch suggests about doubles a base shard's time (not yet measured on CI). The seam
+      # corpus runs in two: its graphs cost about four times as much each as the others', and as one shard of 1000
+      # seeds (14.5 to 15 minutes) it finished about five minutes after every other shard. Each report's `cpu` line
+      # says what each phase of a shard cost, which the combine job adds up per corpus.
+      # No required check is a shard's: "Check Graph Fuzzer Corpus on Linux" is, so a change to this matrix needs no
+      # stand-in for a Markdown-only change.
       matrix:
         include:
           - corpus: base
@@ -1117,7 +1122,11 @@ jobs:
           - corpus: generateDependencyTree
             features: generateDependencyTree
             starting-seed: 0
-            iterations: 1000
+            iterations: 500
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 500
+            iterations: 500
           - corpus: generateMockPublic
             features: generateMockPublic
             starting-seed: 0
