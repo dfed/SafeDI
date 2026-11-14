@@ -41,6 +41,14 @@ let generateMockEnablingPattern = #"@Instantiable\s*\((.|\n)*?generateMock\s*:\s
 /// detection includes a lookahead that bails on unterminated `/*` — that
 /// defangs runaway consumption when a `/*` appears inside a simple regex
 /// and no later `*/` exists in the file.
+///
+/// Known limitation: the lookahead skips line comments, so that a `// … */`
+/// after a regex holding `/*` does not close it and strip the code between.
+/// A block comment that holds `//` before a `*/` on the same line, as in
+/// `/* See https://example.com */`, therefore has no closer unless another
+/// one follows, and the text between its `/*` and `//` is kept as code. The
+/// other reading would strip real declarations after such a regex, which is
+/// worse than keeping a mention of `@Instantiable(…)` in such a comment.
 func stripSwiftCommentsAndStrings(from source: String) -> String {
 	var result = ""
 	result.reserveCapacity(source.count)
@@ -144,9 +152,9 @@ func stripSwiftCommentsAndStrings(from source: String) -> String {
 					continue
 				}
 				if chars[index] == "\"" || chars[index] == "\n" {
-					if chars[index] == "\n" {
-						result.append("\n")
-					} else {
+					// A newline ends the string and stays for the loop above
+					// to keep, so the line structure is preserved.
+					if chars[index] == "\"" {
 						index += 1
 					}
 					break

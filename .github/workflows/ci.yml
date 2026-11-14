@@ -50,9 +50,18 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           source=false
           docc=false
+          # A stacked pull request's base is the branch below it, and CI
+          # runs on the top pull request only, so a Markdown-only top
+          # would skip the tests of every change beneath it. A pull
+          # request is therefore classified against the default branch:
+          # the diff below starts from the merge base either way.
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            BASE_SHA="origin/$DEFAULT_BRANCH"
+          fi
           if [ "$EVENT_NAME" != "pull_request" ] && [ "$EVENT_NAME" != "push" ]; then
             echo "Event '$EVENT_NAME' has no diff to classify; treating everything as changed."
             source=true
@@ -857,6 +866,30 @@ jobs:
           key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Prepare Coverage Reports
         run: ./Scripts/prepare-coverage-reports.sh
+      # "Check Line Coverage on Linux" unions this report with the Linux
+      # job's. It is uploaded before the Codecov upload, so that the check
+      # never depends on Codecov, and with the root its paths start with,
+      # the commit it measured and the platform it ran on.
+      - name: Stage Coverage Report for the Line Coverage Check
+        run: |
+          mkdir line-coverage
+          cp .build/artifacts/SafeDIPackageTests.lcov line-coverage/coverage.lcov
+          pwd -P > line-coverage/checkout-root.txt
+          echo "$GITHUB_SHA" > line-coverage/commit.txt
+          echo macos > line-coverage/platform.txt
+      - name: Upload Coverage Report for the Line Coverage Check
+        uses: actions/upload-artifact@v7
+        with:
+          name: line-coverage-macos
+          path: line-coverage/
+          retention-days: 7
+          if-no-files-found: error
+          # A re-run of this job replaces the report an earlier attempt left.
+          overwrite: true
+      # Codecov's upload searches the workspace for coverage files and would
+      # upload the staged copy too.
+      - name: Remove the Staged Coverage Report
+        run: rm -r line-coverage
       - name: Upload Coverage Reports
         if: success()
         uses: codecov/codecov-action@v7
@@ -952,6 +985,28 @@ jobs:
           name: graph-fuzzer-test-bundle
           path: graph-fuzzer-test-bundle.tar.gz
           retention-days: 1
+      - name: Prepare Coverage Reports
+        run: |
+          llvm-cov export -format="lcov" .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest -instr-profile .build/x86_64-unknown-linux-gnu/release/codecov/default.profdata > coverage.lcov
+      # Staged, uploaded and removed as in the macOS job, for the same
+      # reasons, before curl is installed for Codecov.
+      - name: Stage Coverage Report for the Line Coverage Check
+        run: |
+          mkdir line-coverage
+          cp coverage.lcov line-coverage/coverage.lcov
+          pwd -P > line-coverage/checkout-root.txt
+          echo "$GITHUB_SHA" > line-coverage/commit.txt
+          echo linux > line-coverage/platform.txt
+      - name: Upload Coverage Report for the Line Coverage Check
+        uses: actions/upload-artifact@v7
+        with:
+          name: line-coverage-linux
+          path: line-coverage/
+          retention-days: 7
+          if-no-files-found: error
+          overwrite: true
+      - name: Remove the Staged Coverage Report
+        run: rm -r line-coverage
       # Retried because the runner sometimes cannot resolve Ubuntu's package
       # servers. `apt-get update` exits 0 when it cannot fetch an index, so the
       # retry covers the install, which is what fails. A failure here skips the
@@ -960,9 +1015,6 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
-      - name: Prepare Coverage Reports
-        run: |
-          llvm-cov export -format="lcov" .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest -instr-profile .build/x86_64-unknown-linux-gnu/release/codecov/default.profdata > coverage.lcov
       - name: Upload Coverage Reports
         if: success()
         uses: codecov/codecov-action@v7
@@ -1192,6 +1244,47 @@ jobs:
           path: reports
       - name: Combine Shard Reports
         run: python3 .github/scripts/combine-graph-fuzzer-reports.py "$RUNNER_TEMP/graph-fuzzer-corpus.md" reports/*/report.txt
+
+  # Fails on any line under Sources/ or Plugins/ that no test executes on
+  # Linux or macOS, over the whole tree, from the lcov reports the two test
+  # jobs upload: a line either platform executed counts, as in Codecov's
+  # union of the `linux` and `macos` flags, and lines whose only text is a
+  # brace are left out, as Codecov leaves them out. Every Swift file there
+  # is either recorded by a report or listed, with its reason, in
+  # Scripts/unmeasured-files.txt. It reads nothing from Codecov and nothing
+  # from the pull request's base, so a stacked pull request whose base has
+  # no report is checked like any other, and a missing, partial or stale
+  # report fails the check rather than passing it. It runs when the test
+  # jobs run, so a Markdown-only pull request skips it, and a skipped job
+  # that is not a matrix job reports success under its own name, so it
+  # needs no stand-in. It only reads reports with Python, as "Check Graph
+  # Fuzzer Corpus on Linux" does, so it runs on Linux with no container.
+  line-coverage:
+    name: Check Line Coverage on Linux
+    needs: [changes, spm, linux]
+    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      # The check is the only thing between an unexecuted line and main, so
+      # its script proves on fixtures that it unions the platforms, resolves
+      # symbolic links and refuses missing data before it reads the reports.
+      - name: Check the Script Against Its Fixtures
+        run: python3 -I Scripts/unexecuted-lines.py --self-test "$RUNNER_TEMP/unexecuted-lines-self-test"
+      # A test job that failed, was cancelled or could not export uploads no
+      # report, and the next step names the report that is missing, so a
+      # download that finds nothing is not this step's failure.
+      - name: Download Coverage Reports
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: line-coverage-*
+          path: ${{ runner.temp }}/line-coverage
+      - name: Find Lines No Test Executes
+        run: python3 -I Scripts/unexecuted-lines.py --summary "$GITHUB_STEP_SUMMARY" --commit "$GITHUB_SHA" linux="$RUNNER_TEMP/line-coverage/line-coverage-linux" macos="$RUNNER_TEMP/line-coverage/line-coverage-macos"
 
   linux-latest-swift:
     name: Build and Test on Latest Swift
