@@ -321,11 +321,15 @@ struct SafeDIToolGraphFuzzerTests {
 			.holePlaceInsidePlainFillOnTwoInnerRoutes,
 			.holePlaceInsidePlainFillReadsInnerLevel,
 			.holePlaceInsidePlainFillTwoTypesDeep,
+			.holePlaceInsidePlainFillTwoCalls,
+			.holePlaceInsidePlainFillFulfillerReadsInnerLevel,
 			.holeUnderLaterLoopMember,
 			.holeUnderEveryLoopMember,
+			.holeLoopOfThreeMembers,
 			.holeLoopPlaceThroughSharedLeaf,
 			.holeLoopBeneathSeam,
 			.holeLoopMemberLevelReadByFill,
+			.holeLoopMemberAlsoBuiltByValue,
 		]).subtracting(drawFeatures).sorted() == [])
 		// `addingCycleParameterShapes`' cycle, in accepted graphs: its hole between the cycle's ends at or beneath the type that
 		// declares the label again, filled by a fill that reads it (seeds 227 and 609); its hole on the seam (seed 705); the
@@ -885,26 +889,25 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func nilArgumentFailure_comparesNoConstructionOfALabel_whenInlinePassesItNilThroughABuilderFunction() {
-		// Inline hands the builder function a lazy cycle closes on a literal `nil` for `mark`, which each construction in its
-		// body reads by name, where a seam's fill writes `nil` at each construction: the counts of `mark` cannot say where a
-		// value is lost, so they are not compared, while `token`'s still are.
+	func nilArgumentFailure_countsInlinesNilAtTheConstructionsOfItsBuilderFunction_whenInlinePassesACycleParameterNil() {
+		// Inline hands the builder function a lazy cycle closes on a literal `nil` for `mark`, which the construction in its
+		// body passes on by name: that `nil` counts at the construction, so a seam that writes it there once matches inline,
+		// and one that writes it at a second construction, or loses `token`, does not.
 		let fixture = GraphFuzzerFixture(seed: 7, swiftFileContent: [
 			"@Instantiable(generateDependencyTree: true)\npublic final class S7_Screen: Instantiable {\n\tpublic init(reader: S7_Reader) {\n\t\tself.reader = reader\n\t}\n\n\t@Instantiated let reader: S7_Reader\n}\n",
 		])
-		let inline = GraphFuzzerToolOutcome.accepted(generatedFiles: [
-			"S7_Root+SafeDI.swift": "func __safeDI_ownerBuilder(mark: S7_Mark?) -> S7_Owner {\n    let reader = S7_Reader(token: token, mark: mark)\n    return S7_Owner(reader: reader)\n}\nlet owner = __safeDI_ownerBuilder(mark: nil)",
-		], warnings: [])
-		let seam = GraphFuzzerToolOutcome.accepted(generatedFiles: [
-			"S7_Root+SafeDI.swift": "let first = S7_Reader(token: token, mark: nil)\nlet second = S7_Reader(token: token, mark: nil)",
-		], warnings: [])
-		#expect(GraphFuzzerOracle.labelsPassedNilToBuilderFunctions(in: ["S7_Root+SafeDI.swift": "let owner = __safeDI_ownerBuilder(mark: nil, token: token)"]) == ["mark"])
-		#expect(GraphFuzzerToolRuns(fixture: fixture, firstOutcome: seam, secondOutcome: seam, inlineOutcome: inline).nilArgumentFailure == nil)
-		let seamLosingToken = GraphFuzzerToolOutcome.accepted(generatedFiles: [
-			"S7_Root+SafeDI.swift": "let first = S7_Reader(token: nil, mark: nil)",
-		], warnings: [])
-		let defect = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: seamLosingToken, secondOutcome: seamLosingToken, inlineOutcome: inline)
-		#expect(defect.nilArgumentFailure?.details.prefix { $0 != "\n" } == "`S7_Reader(token:)` is passed `nil` 1 times with the seam and 0 without it.")
+		let inlineFiles = [
+			"S7_Root+SafeDI.swift": "func __safeDI_ownerBuilder(mark: S7_Mark?) -> S7_Owner {\n    let reader = S7_Reader(token: token, mark: mark)\n    return S7_Owner(reader: reader)\n}\nlet owner = __safeDI_ownerBuilder(mark: nil)\nlet other = __safeDI_ownerBuilder(mark: mark)",
+		]
+		#expect(GraphFuzzerOracle.nilArgumentCountsThroughBuilderFunctions(in: inlineFiles, typeNamePrefix: "S7_", excluding: []) == ["S7_Reader(mark:)": 1])
+		let inline = GraphFuzzerToolOutcome.accepted(generatedFiles: inlineFiles, warnings: [])
+		func runs(seamFile: String) -> GraphFuzzerToolRuns {
+			let seam = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S7_Root+SafeDI.swift": seamFile], warnings: [])
+			return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: seam, secondOutcome: seam, inlineOutcome: inline)
+		}
+		#expect(runs(seamFile: "let first = S7_Reader(token: token, mark: nil)\nlet second = S7_Reader(token: token, mark: mark)").nilArgumentFailure == nil)
+		#expect(runs(seamFile: "let first = S7_Reader(token: token, mark: nil)\nlet second = S7_Reader(token: token, mark: nil)").nilArgumentFailure?.details.prefix { $0 != "\n" } == "`S7_Reader(mark:)` is passed `nil` 2 times with the seam and 1 without it.")
+		#expect(runs(seamFile: "let first = S7_Reader(token: nil, mark: nil)").nilArgumentFailure?.details.prefix { $0 != "\n" } == "`S7_Reader(token:)` is passed `nil` 1 times with the seam and 0 without it.")
 	}
 
 	/// A seam's generated file whose plain enum holds `cases`, each `case <name>(<name>_Values)`, and whose initializer
@@ -5187,7 +5190,7 @@ struct SafeDIToolGraphFuzzerTests {
 	)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0xDC9EE07A7728E5A7
+	static let seamCorpusFixtureHash: UInt64 = 0xAF3BD6E2B04117FA
 	static let seamCorpusAcceptedSeedCount = 289
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xF226EE7C76286253
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -5262,8 +5265,10 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `DifferentialValueLimits.isolatedFuzzerGraph`: seed 391, whose `S391_Root0()` traverses 130,726 through a chain of
 	/// hole draws that re-enter one another (`HoleInner2`, `HoleDeep`, `HoleLoop`, `HoleSeam`), on its builds with the
 	/// hole, visible and inline alike; and seed 883, whose `S883_Root0()` spends a batch's traversals through `HoleBoth`,
-	/// `HolePing` and `HoleInner2` re-entering `HoleSeam`, with types shared under its hole, on both of its builds alike.
-	static let seamCorpusSeedsTraversingPastTheBatchBudget: Set<UInt64> = [391, 883]
+	/// `HolePing` and `HoleInner2` re-entering `HoleSeam`, with types shared under its hole, on both of its builds alike; and
+	/// seed 945, whose `S945_HoleOtherRoot()` spends a batch's traversals through `HoleOuter`, `HoleRelay` and `HoleImpl`
+	/// re-entering `HoleSeam`, whose place inside a plain fill `HoleNestScreen` holds, on both of its builds alike.
+	static let seamCorpusSeedsTraversingPastTheBatchBudget: Set<UInt64> = [391, 883, 945]
 
 	/// The ordinary suite's batch of the seam corpus: graphs the tool accepts whose generated code, between them, shows
 	/// every `GraphFuzzerSeamOutputFeature` – both kinds of pass-through, a call reading `.instance`, an `@escaping`
@@ -5280,10 +5285,11 @@ struct SafeDIToolGraphFuzzerTests {
 	/// seams with a `@Sendable` edge (seed 93), and an inner seam reached by a plain and a `@Sendable` route, passed up with
 	/// both enums, an inner `@Sendable` place on a `@Sendable` route and a place inside a `@Sendable` fill (seed 304), a place
 	/// inside a plain fill on two routes of the inner seam's enum, two types deep, read through the inner seam's levels
-	/// (seed 594, and seed 151 on two routes), and a hole under a later member of a loop of received instantiators, declared
-	/// by the seam (seed 347) or beneath it (seed 215), under every member through a shared leaf (seed 164), and read from
-	/// the member's level (seed 309) – of which the name-stability oracle compares one without its second place; a split
-	/// graph that
+	/// (seed 594, and seed 151 on two routes), on two calls (seed 1010) and read by its fulfiller (seed 1450), and a hole
+	/// under a later member of a loop of received instantiators, declared by the seam (seed 347) or beneath it (seed 215),
+	/// under every member through a shared leaf (seed 164), read from the member's level (seed 309), of three members (seed
+	/// 1020) and with a member also built by value (seeds 309 and 347) – of which the name-stability oracle compares one
+	/// without its second place; a split graph that
 	/// declares a type in a flag's clause in the seam's module (`recordedInFlagClause`), which the two integrations agree
 	/// on once the plugin flow's assertions about that module's block are excused (seed 84); and a graph it rejects, which
 	/// `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks; and declarations moved beneath the seam's module
@@ -5299,9 +5305,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// the tool now accepts, giving the seam a second hole type whose builders the move across wrapper names reorders
 	/// (`seamBuilderOrderReason`), or a lazy cycle's configuration field (`lazyCycleConfigurationFieldReason`). Pinned by
 	/// `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 1_010, 1_814, 1_890]
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x5C1E90B18E14DDB5
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x9CFE00D496A0FBB4
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -5444,18 +5450,18 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeTangleTReadsMark: 73,
 		.holeTangleTBuiltByValue: 42,
 		.holePlaceInsidePlainFill: 41,
-		.holePlaceInsidePlainFillOnTwoInnerRoutes: 25,
+		.holePlaceInsidePlainFillOnTwoInnerRoutes: 21,
 		.holePlaceInsidePlainFillReadsInnerLevel: 22,
 		.holePlaceInsidePlainFillTwoTypesDeep: 19,
-		.holePlaceInsidePlainFillTwoCalls: 11,
+		.holePlaceInsidePlainFillTwoCalls: 10,
 		.holePlaceInsidePlainFillFulfillerReadsInnerLevel: 7,
-		.holeUnderLaterLoopMember: 48,
-		.holeUnderEveryLoopMember: 27,
-		.holeLoopOfThreeMembers: 13,
-		.holeLoopPlaceThroughSharedLeaf: 16,
-		.holeLoopBeneathSeam: 18,
-		.holeLoopMemberLevelReadByFill: 15,
-		.holeLoopMemberBuiltByValueReceivingOnlyIfAvailable: 8,
+		.holeUnderLaterLoopMember: 37,
+		.holeUnderEveryLoopMember: 26,
+		.holeLoopOfThreeMembers: 8,
+		.holeLoopPlaceThroughSharedLeaf: 11,
+		.holeLoopBeneathSeam: 12,
+		.holeLoopMemberLevelReadByFill: 8,
+		.holeLoopMemberAlsoBuiltByValue: 16,
 		.uncreatedAliasLabelLazilyInstantiatedBeside: 29,
 		.uncreatedAliasLabelReceivedBeside: 20,
 		.uncreatedAliasLabelOnMid: 6,

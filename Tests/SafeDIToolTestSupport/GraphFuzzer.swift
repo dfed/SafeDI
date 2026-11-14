@@ -1265,9 +1265,10 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// The members instantiate `holeRingMark` before their places, which `HoleImpl` reads only if available: the payload
 	/// of a later member's level holds a value.
 	case holeLoopMemberLevelReadByFill
-	/// The seam also builds `HoleRingA` by value, whose receive of `holeRingBBuilder` is only if available: its level's
-	/// field takes the receive's optional form.
-	case holeLoopMemberBuiltByValueReceivingOnlyIfAvailable
+	/// The scope that declares the loop also builds `HoleRingA` by value, beside the loop: that build wraps none of the
+	/// instantiators `HoleRingA`'s builder function wraps again, which a level of its type leaves out
+	/// (`SeamPlaceLevels.Level.fieldsOfType`).
+	case holeLoopMemberAlsoBuiltByValue
 
 	/// `addingUncreatedAliasExtensions`' second declaration of the alias's label: a lazily instantiated wrapper of the
 	/// alias's property, on `AliasLeft`, `AliasMid` or the seam.
@@ -5301,6 +5302,12 @@ enum GraphFuzzerGenerator {
 					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeTangleTValue", type: name("HoleTangleT")))
 				}
 			}
+			// Whether a fill calls the seam again (`HoleImpl`, `HoleMiddle` or `HoleTrackerImpl`). Each place of the seam's hole
+			// then calls the seam, whose places call it again, and the value comparator, which calls each instantiator twice
+			// and goes round a loop of them twice, describes a tree that grows exponentially with the places a visit of the
+			// seam holds: past a batch's traversals, and an isolated seed's, with the draws below at their widest (seed 945
+			// with a place inside a plain fill on two calls and two routes; seeds 600, 945 and 1393 with a loop's places).
+			let fillCallsSeamAgain = ownerIsBuiltByInstantiator && (drawsReentry || drawsNestedFill && !drawsSecondHole)
 			// A place inside a plain fill the seam generates (the design's section 2.6): `HoleNest`, a seam in the module beneath
 			// the seam's, takes a builder for `HoleNestService`, which `HoleNestImpl`, in the seam's module, fills, so the seam
 			// generates the fill, and `HoleNestImpl`'s own place of `HoleService`, on it or, now and then, on `HoleNestWidget`
@@ -5310,9 +5317,12 @@ enum GraphFuzzerGenerator {
 			// both, so that the case reaches every route of the inner seam's enum; `HoleImpl` mostly reads `holeNestId` only if
 			// available, which only the screen's level holds, so its dispatcher reads it through the inner seam's levels
 			// (`InnerScopeReaders`), and is passed `nil` on the root route and at every other place, as inline; `HoleNestImpl`
-			// now and then reads it too, from its fill's struct. Only where the graph holds `Instantiator`, so that no
-			// `@Sendable` function encloses the place; not where `HoleImpl` reads `HoleOwner`'s alias, which the place's scope
-			// does not carry, nor where the seam's module has no package, which `HoleNest`'s module has.
+			// now and then reads it too, from its fill's struct. Only where the graph's types may hold an `Instantiator`, which
+			// `HoleNest` and `HoleSeam`'s call of it do, so that no `@Sendable` function inside the seam's tree encloses the
+			// place; not where `HoleImpl` reads `HoleOwner`'s alias, which the place's scope does not carry, nor where the
+			// seam's module has no package, which `HoleNest`'s module has. Where a fill calls the seam again
+			// (`fillCallsSeamAgain`), `HoleSeam` calls `HoleNest` once and `HoleNest` holds the place on one route, in
+			// `HoleNestScreen` where the roll gives both.
 			if drawsPlainFillPlace, sendability != .sendable, !implReadsOwnersAlias, !modulesOmittingPackageName.contains(.seamModule) {
 				let nestServiceName = name("HoleNestService")
 				let nestServiceProperty = PropertyDeclaration(attribute: "@Instantiated", label: "holeNestService", type: "any \(nestServiceName)")
@@ -5321,11 +5331,13 @@ enum GraphFuzzerGenerator {
 				nest.instantiableArguments = ["generateDependencyTree: true"]
 				nest.additionalDeclarations.append("public protocol \(nestServiceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
 				var nestDeclarations = [TypeDeclaration]()
-				// 0: the root route alone; 1: the screen's alone; otherwise both.
-				if plainFillRouteRoll != 1 {
+				// 0: the root route alone; 1: the screen's alone; otherwise both, or the screen's alone where a fill calls the seam
+				// again.
+				let routeRoll = fillCallsSeamAgain && plainFillRouteRoll > 1 ? 1 : plainFillRouteRoll
+				if routeRoll != 1 {
 					nest.properties.append(nestServiceProperty)
 				}
-				if plainFillRouteRoll != 0 {
+				if routeRoll != 0 {
 					let screen = instantiable("HoleNestScreen", module: .seamDependency, properties: [
 						PropertyDeclaration(attribute: "@Forwarded", label: "holeNestId", type: "Int"),
 						nestServiceProperty,
@@ -5351,7 +5363,7 @@ enum GraphFuzzerGenerator {
 				let instantiatorCall = PropertyDeclaration(attribute: "@Instantiated", label: "holeNestBuilder", type: "Instantiator<\(nest.name)>")
 				let firstCall = plainFillCallsByValue ? byValueCall : instantiatorCall
 				seam.properties.append(firstCall)
-				if plainFillCallsTwice {
+				if plainFillCallsTwice, !fillCallsSeamAgain {
 					seam.properties.append(plainFillCallsByValue ? instantiatorCall : byValueCall)
 				}
 				if plainFillImplReadsId {
@@ -5368,17 +5380,18 @@ enum GraphFuzzerGenerator {
 			// `HoleRingLeaf`, which it instantiates; a member's case is bound before the loop's first function and holds no
 			// member of the loop, which its own level carries. The members now and then instantiate `holeRingMark` before
 			// the place, which `HoleImpl` then reads only if available, so the payload of a later member's level holds a value.
-			// Where `HoleRingFlow` declares the loop, the seam now and then also builds `HoleRingA` by value, whose receive of
-			// `holeRingBBuilder` is then only if available, which that build cannot fulfill: its level's field takes the
-			// receive's optional form. Only where the graph holds `Instantiator`, so that no `@Sendable` function encloses the
-			// places; not where `HoleImpl` reads `HoleOwner`'s alias, nor beside a mocked seam, whose mock's lazy cycle
-			// configuration a renaming can reorder.
-			if drawsLoopPlace, sendability != .sendable, !implReadsOwnersAlias, mockRoll != 0 {
+			// The scope that declares the loop now and then also builds `HoleRingA` by value, after the loop's instantiators, so
+			// that `HoleRingA` has a build outside its builder function, which wraps none of the instantiators the function
+			// wraps again, and which receives `holeRingBBuilder` from that scope, so that the seam receives nothing the loop
+			// declares. Only where the graph's types may hold an `Instantiator`, which the members do, so that no `@Sendable`
+			// function inside the seam's tree encloses the places; not where `HoleImpl` reads `HoleOwner`'s alias, nor beside
+			// a mocked seam, whose mock's lazy cycle configuration a renaming can reorder; nor where a fill calls the seam
+			// again (`fillCallsSeamAgain`): each place in the loop then calls the seam, which declares the loop again.
+			if drawsLoopPlace, sendability != .sendable, !implReadsOwnersAlias, mockRoll != 0, !fillCallsSeamAgain {
 				let memberSuffixes = Array(["A", "B", "C"].prefix(loopLength))
 				func builderProperty(_ suffix: String) -> PropertyDeclaration {
 					PropertyDeclaration(attribute: "@Instantiated", label: "holeRing\(suffix)Builder", type: "Instantiator<\(name("HoleRing" + suffix))>")
 				}
-				let memberBuiltByValue = loopDeclaredBeneathSeam && loopMemberBuiltByValue
 				var ringDeclarations = [TypeDeclaration]()
 				let mark = instantiable("HoleRingMark", module: .seamModule)
 				if loopMembersBindMark {
@@ -5397,22 +5410,20 @@ enum GraphFuzzerGenerator {
 					if loopMembersBindMark {
 						member.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeRingMark", type: mark.name))
 					}
-					member.properties.append(position == 0 && memberBuiltByValue
-						? PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: nextBuilder.label, type: nextBuilder.type + "?")
-						: PropertyDeclaration(attribute: "@Received", label: nextBuilder.label, type: nextBuilder.type))
-					if position == memberSuffixes.count - 1 || loopPlaceOnEveryMember || position == 0 && memberBuiltByValue {
+					member.properties.append(PropertyDeclaration(attribute: "@Received", label: nextBuilder.label, type: nextBuilder.type))
+					if position == memberSuffixes.count - 1 || loopPlaceOnEveryMember || position == 0 && loopMemberBuiltByValue {
 						member.properties.append(leafProperty ?? holeProperty)
 					}
 					ringDeclarations.append(member)
 				}
-				let builders = memberSuffixes.map(builderProperty)
+				var builders = memberSuffixes.map(builderProperty)
+				if loopMemberBuiltByValue {
+					builders.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeRingAValue", type: name("HoleRingA")))
+				}
 				if loopDeclaredBeneathSeam {
 					let flow = instantiable("HoleRingFlow", module: .seamModule, properties: builders)
 					ringDeclarations.append(flow)
 					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeRingFlow", type: flow.name))
-					if memberBuiltByValue {
-						seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeRingAValue", type: name("HoleRingA")))
-					}
 					if secondHolePlace == nil {
 						secondHolePlace = (seamName, "holeRingFlow")
 					}
@@ -8487,8 +8498,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			if properties(of: "HoleImpl").contains(where: { $0.label == "holeRingMark" }) {
 				features.insert(.holeLoopMemberLevelReadByFill)
 			}
-			if seamProperties.contains(where: { $0.label == "holeRingAValue" }) {
-				features.insert(.holeLoopMemberBuiltByValueReceivingOnlyIfAvailable)
+			if (seamProperties + properties(of: "HoleRingFlow")).contains(where: { $0.label == "holeRingAValue" }) {
+				features.insert(.holeLoopMemberAlsoBuiltByValue)
 			}
 		}
 		if declares("HoleMiddle") {
@@ -10075,8 +10086,8 @@ struct GraphFuzzerToolRuns {
 
 	/// The failure of a graph in whose seam's tree two builds of one type bind other values before the same property, or
 	/// `nil`: a scope enum nested by type holds one level per type, so what a type binds before a property, the seam's
-	/// root's parameters included, must not depend on the path the type is built on. A fill's tree is built with the stack
-	/// of the seam whose hole it fills, and is not judged.
+	/// root's parameters included, must not depend on the path the type is built on, inside a fill the seam generates too
+	/// (`SeamPlaceLevels.levelDisagreements()`).
 	var placeLevelsFailure: GraphFuzzerFailure? {
 		guard !placeLevelDisagreements.isEmpty else { return nil }
 		return GraphFuzzerFailure(
@@ -10390,12 +10401,10 @@ struct GraphFuzzerToolRuns {
 	/// without it, or `nil`. A seam that passes `nil` where inline passes a value loses a value a receiver gets today.
 	/// The constructions of a seam type itself are not compared: its own tiers and the calls of them pass `nil` for
 	/// what a tier omits, which inline has no counterpart of. A seam that reads a value inline does not (the
-	/// documented divergences) lowers its count, which is no failure. Where inline hands a builder function a literal `nil`
-	/// for a label – a cycle parameter of a function a lazy cycle closes on, whose value every construction in the
-	/// function's body that receives the label reads by name – the constructions' counts of that label are not compared:
-	/// inline's `nil` reaches them through the parameter, while a seam's fill writes it at each construction, so the counts
-	/// cannot tell where a value is lost (`GraphFuzzerOracle.labelsPassedNilToBuilderFunctions(in:)`). The value comparator
-	/// still compares what each receiver holds.
+	/// documented divergences) lowers its count, which is no failure. A literal `nil` a call of a builder function passes
+	/// for a label – a cycle parameter of a function a lazy cycle closes on – counts at each construction in the function's
+	/// body that passes the parameter on by name (`GraphFuzzerOracle.nilArgumentCountsThroughBuilderFunctions`), on both
+	/// sides: inline's `nil` reaches those constructions through the parameter, where a seam's fill can write it at each.
 	var nilArgumentFailure: GraphFuzzerFailure? {
 		guard case let .accepted(seamFiles, _) = firstOutcome, case let .accepted(inlineFiles, _) = inlineOutcome else { return nil }
 		let seamTypeNames = Set(fixture.swiftFileContent.flatMap { content -> [String] in
@@ -10416,11 +10425,13 @@ struct GraphFuzzerToolRuns {
 			}
 			return names
 		})
-		let differences = GraphFuzzerOracle.nilArgumentCountsExceeding(
-			GraphFuzzerOracle.nilArgumentCounts(in: seamFiles, typeNamePrefix: fixture.typeNamePrefix, excluding: seamTypeNames),
-			GraphFuzzerOracle.nilArgumentCounts(in: inlineFiles, typeNamePrefix: fixture.typeNamePrefix, excluding: seamTypeNames),
-			excludingLabels: GraphFuzzerOracle.labelsPassedNilToBuilderFunctions(in: inlineFiles),
-		)
+		func counts(in files: [String: String]) -> [String: Int] {
+			GraphFuzzerOracle.nilArgumentCounts(in: files, typeNamePrefix: fixture.typeNamePrefix, excluding: seamTypeNames).merging(
+				GraphFuzzerOracle.nilArgumentCountsThroughBuilderFunctions(in: files, typeNamePrefix: fixture.typeNamePrefix, excluding: seamTypeNames),
+				uniquingKeysWith: +,
+			)
+		}
+		let differences = GraphFuzzerOracle.nilArgumentCountsExceeding(counts(in: seamFiles), counts(in: inlineFiles))
 		guard !differences.isEmpty else { return nil }
 		return GraphFuzzerFailure(
 			seed: fixture.seed,
@@ -10878,62 +10889,102 @@ enum GraphFuzzerOracle {
 	/// argument's label, as `Type(label:)`. The oracle's own seam callers are not generated code and are skipped.
 	static func nilArgumentCounts(in generatedFiles: [String: String], typeNamePrefix: String, excluding excludedTypeNames: Set<String>) -> [String: Int] {
 		var counts = [String: Int]()
-		for argument in nilArguments(in: generatedFiles, calleeExpression: "(?<![A-Za-z0-9_.])(" + NSRegularExpression.escapedPattern(for: typeNamePrefix) + "[A-Za-z0-9_]+)\\(") where !excludedTypeNames.contains(argument.callee) {
-			counts["\(argument.callee)(\(argument.label):)", default: 0] += 1
+		for (fileName, contents) in generatedFiles where !fileName.hasSuffix("+SafeDISeamCaller.swift") {
+			for call in calls(in: contents, calleeExpression: constructionExpression(typeNamePrefix: typeNamePrefix)) where !excludedTypeNames.contains(call.callee) {
+				for argument in call.arguments where argument.value == "nil" {
+					counts["\(call.callee)(\(argument.label):)", default: 0] += 1
+				}
+			}
 		}
 		return counts
 	}
 
-	/// Each literal `nil` argument the code in `generatedFiles` passes in a call whose callee `calleeExpression` matches,
-	/// the callee its first capture and the call's arguments after it, with the callee and the argument's label. The
-	/// oracle's own seam callers are not generated code and are skipped.
-	private static func nilArguments(in generatedFiles: [String: String], calleeExpression: String) -> [(callee: String, label: String)] {
-		var nilArguments = [(callee: String, label: String)]()
-		// The expressions are this file's, built from escaped names.
-		let expression = try! NSRegularExpression(pattern: calleeExpression)
+	/// How many constructions in the code in `generatedFiles` a literal `nil` reaches through a builder function it
+	/// generates, keyed as `nilArgumentCounts(in:typeNamePrefix:excluding:)` keys them: for each call
+	/// `__safeDI_f(label: nil)`, each construction of a type whose name begins with `typeNamePrefix`, but those of
+	/// `excludedTypeNames`, in the body of the declaration of `__safeDI_f` the call reaches that passes `label: label`. The
+	/// call reaches the declaration of its name whose body holds it, else the last one before it, else the first after it.
+	/// Such a `nil` is a cycle parameter of a function a lazy cycle closes on, which the function's constructions read by
+	/// name. The oracle's own seam callers are not generated code and are skipped.
+	static func nilArgumentCountsThroughBuilderFunctions(in generatedFiles: [String: String], typeNamePrefix: String, excluding excludedTypeNames: Set<String>) -> [String: Int] {
+		var counts = [String: Int]()
+		// The expression is this file's own.
+		let declarationExpression = try! NSRegularExpression(pattern: #"\bfunc (__safeDI_[A-Za-z0-9_]+)\("#)
 		for (fileName, contents) in generatedFiles where !fileName.hasSuffix("+SafeDISeamCaller.swift") {
 			let source = contents as NSString
-			for match in expression.matches(in: contents, range: NSRange(location: 0, length: source.length)) {
-				let callee = source.substring(with: match.range(at: 1))
-				// The arguments run from after the opening parenthesis to the one that closes it.
-				let start = match.range.location + match.range.length
-				var depth = 1
-				var end = start
-				while end < source.length, depth > 0 {
-					switch source.character(at: end) {
-					case 0x28, 0x5B, 0x7B: // ( [ {
-						depth += 1
-					case 0x29, 0x5D, 0x7D: // ) ] }
-						depth -= 1
-					default:
-						break
+			let declarations = declarationExpression.matches(in: contents, range: NSRange(location: 0, length: source.length)).compactMap { match -> (name: String, start: Int, body: NSRange)? in
+				let parametersEnd = closingDelimiterEnd(in: source, after: match.range.location + match.range.length)
+				let bodyStart = source.range(of: "{", range: NSRange(location: parametersEnd, length: source.length - parametersEnd)).location
+				guard bodyStart != NSNotFound else { return nil }
+				let bodyEnd = closingDelimiterEnd(in: source, after: bodyStart + 1)
+				return (source.substring(with: match.range(at: 1)), match.range.location, NSRange(location: bodyStart + 1, length: max(0, bodyEnd - bodyStart - 2)))
+			}
+			for call in calls(in: contents, calleeExpression: #"(?<![A-Za-z0-9_.])(__safeDI_[A-Za-z0-9_]+)\("#) {
+				let labels = call.arguments.filter { $0.value == "nil" }.map(\.label)
+				let namesakes = declarations.filter { $0.name == call.callee }
+				guard !labels.isEmpty,
+				      let declaration = namesakes.last(where: { NSLocationInRange(call.location, $0.body) })
+				      ?? namesakes.last(where: { $0.start < call.location })
+				      ?? namesakes.first
+				else { continue }
+				for construction in calls(in: source.substring(with: declaration.body), calleeExpression: constructionExpression(typeNamePrefix: typeNamePrefix)) where !excludedTypeNames.contains(construction.callee) {
+					for argument in construction.arguments where labels.contains(argument.label) && argument.value == argument.label {
+						counts["\(construction.callee)(\(argument.label):)", default: 0] += 1
 					}
-					end += 1
-				}
-				let arguments = source.substring(with: NSRange(location: start, length: max(0, end - start - 1)))
-				for argument in topLevelParameters(arguments) {
-					let parts = argument.split(separator: ":", maxSplits: 1)
-					guard parts.count == 2, parts[1].trimmingCharacters(in: .whitespacesAndNewlines) == "nil" else { continue }
-					nilArguments.append((callee, parts[0].trimmingCharacters(in: .whitespacesAndNewlines)))
 				}
 			}
 		}
-		return nilArguments
+		return counts
 	}
 
-	/// The labels of the arguments to which the code in `generatedFiles` passes a literal `nil` in a call of a builder
-	/// function it generates (`__safeDI_…(label: nil)`): a cycle parameter of a function a lazy cycle closes on, which the
-	/// constructions in the function's body read by name. The oracle's own seam callers are not generated code and are
-	/// skipped.
-	static func labelsPassedNilToBuilderFunctions(in generatedFiles: [String: String]) -> Set<String> {
-		Set(nilArguments(in: generatedFiles, calleeExpression: #"(?<![A-Za-z0-9_.])(__safeDI_[A-Za-z0-9_]+)\("#).map(\.label))
+	/// The expression whose first capture is the callee of a construction of a type whose name begins with
+	/// `typeNamePrefix`, which the call's arguments follow.
+	private static func constructionExpression(typeNamePrefix: String) -> String {
+		"(?<![A-Za-z0-9_.])(" + NSRegularExpression.escapedPattern(for: typeNamePrefix) + "[A-Za-z0-9_]+)\\("
+	}
+
+	/// Each call in `contents` whose callee `calleeExpression` matches, the callee its first capture and the call's
+	/// arguments after it: the callee, where the call begins, and each top-level argument's label and value.
+	private static func calls(in contents: String, calleeExpression: String) -> [(callee: String, location: Int, arguments: [(label: String, value: String)])] {
+		// The expressions are this file's, built from escaped names.
+		let expression = try! NSRegularExpression(pattern: calleeExpression)
+		let source = contents as NSString
+		return expression.matches(in: contents, range: NSRange(location: 0, length: source.length)).map { match in
+			// The arguments run from after the opening parenthesis to the one that closes it.
+			let start = match.range.location + match.range.length
+			let end = closingDelimiterEnd(in: source, after: start)
+			let arguments = topLevelParameters(source.substring(with: NSRange(location: start, length: max(0, end - start - 1)))).compactMap { argument -> (label: String, value: String)? in
+				let parts = argument.split(separator: ":", maxSplits: 1)
+				guard parts.count == 2 else { return nil }
+				return (parts[0].trimmingCharacters(in: .whitespacesAndNewlines), parts[1].trimmingCharacters(in: .whitespacesAndNewlines))
+			}
+			return (source.substring(with: match.range(at: 1)), match.range.location, arguments)
+		}
+	}
+
+	/// The location just past the delimiter that closes the one opened just before `start` in `source`, or the end of
+	/// `source`.
+	private static func closingDelimiterEnd(in source: NSString, after start: Int) -> Int {
+		var depth = 1
+		var end = start
+		while end < source.length, depth > 0 {
+			switch source.character(at: end) {
+			case 0x28, 0x5B, 0x7B: // ( [ {
+				depth += 1
+			case 0x29, 0x5D, 0x7D: // ) ] }
+				depth -= 1
+			default:
+				break
+			}
+			end += 1
+		}
+		return end
 	}
 
 	/// A line for each construction argument `seamCounts` passes a literal `nil` more often than `inlineCounts`, in
-	/// order, but those whose label is one of `excludedLabels`.
-	static func nilArgumentCountsExceeding(_ seamCounts: [String: Int], _ inlineCounts: [String: Int], excludingLabels excludedLabels: Set<String> = []) -> [String] {
+	/// order.
+	static func nilArgumentCountsExceeding(_ seamCounts: [String: Int], _ inlineCounts: [String: Int]) -> [String] {
 		seamCounts.keys.sorted().compactMap { key in
-			guard !excludedLabels.contains(where: { key.hasSuffix("(\($0):)") }) else { return nil }
 			let seamCount = seamCounts[key] ?? 0
 			let inlineCount = inlineCounts[key] ?? 0
 			return seamCount > inlineCount ? "`\(key)` is passed `nil` \(seamCount) times with the seam and \(inlineCount) without it." : nil
