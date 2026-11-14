@@ -4397,7 +4397,7 @@ struct SafeDIToolGraphFuzzerTests {
 			return
 		}
 		guard configuration.iterations > 0 else {
-			reportProblem("SAFEDI_GRAPH_FUZZER_ITERATIONS must be a positive integer or `corpus`.")
+			reportProblem("SAFEDI_GRAPH_FUZZER_ITERATIONS must be a positive integer or `corpus`, and SAFEDI_GRAPH_FUZZER_SHARD, when set, `<index>/<count>` naming a shard with at least one seed.")
 			return
 		}
 		let corpus = Self.corpus(for: features)
@@ -4469,6 +4469,13 @@ struct SafeDIToolGraphFuzzerTests {
 		// the issues are the same on every run. A batch's seeds are all finished when its results arrive.
 		let batchStarts = Array(stride(from: 0, to: configuration.iterations, by: Self.longRunBatchSize))
 		let concurrentBatchCount = max(1, ProcessInfo.processInfo.activeProcessorCount)
+		// What each phase of the oracle cost, which the report's `cpu` line gives with the run's wall time and the CPU
+		// time of the test process and of its child processes.
+		let phaseAccount = GraphFuzzerPhaseAccount()
+		let phaseContext = GraphFuzzerPhaseAccount.Context(account: phaseAccount, phase: nil)
+		let startNanoseconds = DispatchTime.now().uptimeNanoseconds
+		let startProcessCPUSeconds = GraphFuzzerPhaseAccount.processCPUSeconds()
+		let startChildProcessCPUSeconds = GraphFuzzerPhaseAccount.childProcessCPUSeconds()
 		do {
 			try await withThrowingTaskGroup(of: (Int, [GraphFuzzerResult]).self) { group in
 				var nextBatchIndex = 0
@@ -4479,17 +4486,21 @@ struct SafeDIToolGraphFuzzerTests {
 					let seeds = (batchStart..<min(batchStart + Self.longRunBatchSize, configuration.iterations))
 						.map { configuration.startingSeed &+ UInt64($0) }
 					nextBatchIndex += 1
-					group.addTask {
+					group.addTask { try await GraphFuzzerPhaseAccount.$current.withValue(phaseContext) {
 						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueGraphsOf: corpus.isolatedValueGraphSeeds) { seed in
 							report.append("seed \(seed)")
 						}
 						for index in results.indices where results[index].failure == nil
 							&& results[index].fixture.seed % Self.crossProcessSampleInterval == 0
 						{
-							results[index] = try await GraphFuzzerResult(
+							let fixture = results[index].fixture
+							let crossProcessFailure = try await GraphFuzzerPhaseAccount.measuring(.crossProcess) {
+								try await GraphFuzzerOracle.crossProcessFailure(of: fixture)
+							}
+							results[index] = GraphFuzzerResult(
 								fixture: results[index].fixture,
 								outcome: results[index].outcome,
-								failure: GraphFuzzerOracle.crossProcessFailure(of: results[index].fixture),
+								failure: crossProcessFailure,
 								laterFailures: results[index].laterFailures,
 								renamedGraphFailures: results[index].renamedGraphFailures,
 								multiModuleRuns: results[index].multiModuleRuns,
@@ -4504,7 +4515,7 @@ struct SafeDIToolGraphFuzzerTests {
 							report.append("finished \(result.fixture.seed)")
 						}
 						return (batchIndex, results)
-					}
+					} }
 				}
 				for _ in 0..<concurrentBatchCount {
 					addNextBatch()
@@ -4639,6 +4650,13 @@ struct SafeDIToolGraphFuzzerTests {
 		if let pinnedValueOracleCounts = corpus.valueOracleCounts {
 			report.append("value-oracle \(corpus.name) \(valueOracleCounts.reportField) \(pinnedValueOracleCounts.reportField)")
 		}
+		// What the run cost: its wall seconds, the CPU seconds of the test process and of its child processes, and for each
+		// phase the seconds batches spent in it, the CPU seconds of the processes it ran, and their number, which ci.yml's
+		// combine job adds up per corpus.
+		let wallSeconds = Double(DispatchTime.now().uptimeNanoseconds - startNanoseconds) / 1e9
+		let processCPUSeconds = GraphFuzzerPhaseAccount.processCPUSeconds() - startProcessCPUSeconds
+		let childProcessCPUSeconds = GraphFuzzerPhaseAccount.childProcessCPUSeconds() - startChildProcessCPUSeconds
+		await report.append("cpu \(corpus.name) \(GraphFuzzerPhaseAccount.formatted(wallSeconds)) \(GraphFuzzerPhaseAccount.formatted(processCPUSeconds)) \(GraphFuzzerPhaseAccount.formatted(childProcessCPUSeconds)) \(phaseAccount.reportField)")
 		// Every corpus that exists, so the combine job can tell a corpus whose shards left no report from none.
 		report.append("corpora \(([Self.baseCorpus] + GraphFuzzerGeneratorFeature.allCases.map { Self.corpus(for: [$0]) }).map(\.name).joined(separator: " "))")
 		if configuration.startingSeed == 0, configuration.iterations == corpus.seedCount,
@@ -5926,25 +5944,50 @@ struct GraphFuzzerLongRunConfiguration {
 	/// `stale <seed> <reason>`, or `misfiled <seed> <reason>` for each finding; `renamed <seed> <summary>` and `multimodule <seed> <summary>` for each renamed or partitioned run
 	/// that gives other results, whether or not the graph fails another way; `problem <text>` for anything wrong
 	/// with the run itself; `partitions …` with how many base corpus graphs are split into each number of modules and
-	/// how many have a `Delta` depending on `Gamma`, whose two integrations combine declarations in different orders; and
-	/// `completed …` at the end.
+	/// how many have a `Delta` depending on `Gamma`, whose two integrations combine declarations in different orders;
+	/// `cpu …` with what each `GraphFuzzerPhase` cost (`GraphFuzzerPhaseAccount`); and `completed …` at the end.
 	let reportPath: String?
 
 	/// `nil` unless `SAFEDI_GRAPH_FUZZER_ITERATIONS` is set: to a count of seeds, or to `corpus` for the seed count
 	/// of the corpus `SAFEDI_GRAPH_FUZZER_FEATURES` selects – a comma-separated list of `GraphFuzzerGeneratorFeature`
 	/// names, or unset for the corpus drawn without features. Anything else becomes zero, which the run reports.
+	/// `SAFEDI_GRAPH_FUZZER_SHARD`, when set to `<index>/<count>`, runs only that shard of those seeds
+	/// (`shard(_:of:startingSeed:iterations:)`), as `graph-fuzzer.yml`'s jobs do; any other value also becomes zero.
 	static var current: GraphFuzzerLongRunConfiguration? {
 		let environment = ProcessInfo.processInfo.environment
 		guard let iterations = environment["SAFEDI_GRAPH_FUZZER_ITERATIONS"] else { return nil }
 		let featureNames = (environment["SAFEDI_GRAPH_FUZZER_FEATURES"] ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
 		let features = featureNames.compactMap(GraphFuzzerGeneratorFeature.init(rawValue:))
 		let validFeatures: Set<GraphFuzzerGeneratorFeature>? = features.count == featureNames.count ? Set(features) : nil
+		let requestedIterations = iterations == "corpus" ? validFeatures.map { SafeDIToolGraphFuzzerTests.corpus(for: $0).seedCount } ?? 0 : Int(iterations) ?? 0
+		let requestedStartingSeed = environment["SAFEDI_GRAPH_FUZZER_STARTING_SEED"].flatMap { UInt64($0) } ?? 0
+		let seeds: (startingSeed: UInt64, iterations: Int)
+		if let shardDescription = environment["SAFEDI_GRAPH_FUZZER_SHARD"] {
+			let parts = shardDescription.split(separator: "/", omittingEmptySubsequences: false).map { Int($0) }
+			if parts.count == 2, let index = parts[0], let count = parts[1], let shard = shard(index, of: count, startingSeed: requestedStartingSeed, iterations: requestedIterations) {
+				seeds = shard
+			} else {
+				seeds = (requestedStartingSeed, 0)
+			}
+		} else {
+			seeds = (requestedStartingSeed, requestedIterations)
+		}
 		return GraphFuzzerLongRunConfiguration(
-			iterations: iterations == "corpus" ? validFeatures.map { SafeDIToolGraphFuzzerTests.corpus(for: $0).seedCount } ?? 0 : Int(iterations) ?? 0,
-			startingSeed: environment["SAFEDI_GRAPH_FUZZER_STARTING_SEED"].flatMap { UInt64($0) } ?? 0,
+			iterations: seeds.iterations,
+			startingSeed: seeds.startingSeed,
 			features: validFeatures,
 			reportPath: environment["SAFEDI_GRAPH_FUZZER_REPORT"],
 		)
+	}
+
+	/// The seeds of shard `index` of `count` consecutive shards of the `iterations` seeds from `startingSeed`, the earlier
+	/// shards one seed longer when `count` does not divide `iterations`; `nil` unless `index` is in `0..<count`.
+	static func shard(_ index: Int, of count: Int, startingSeed: UInt64, iterations: Int) -> (startingSeed: UInt64, iterations: Int)? {
+		guard count > 0, (0..<count).contains(index) else { return nil }
+		let shortShardLength = iterations / count
+		let longShardCount = iterations % count
+		let offset = index * shortShardLength + min(index, longShardCount)
+		return (startingSeed &+ UInt64(offset), shortShardLength + (index < longShardCount ? 1 : 0))
 	}
 }
 

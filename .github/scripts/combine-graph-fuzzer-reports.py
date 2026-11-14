@@ -15,6 +15,7 @@ that ci.yml splits each corpus into. Each shard's long run ends its report with
     errors <corpus> <graphs each pinned error rejects>,… <pinned counts>,…
     outputs <corpus> <feature>=<accepted graphs showing it>,… <feature>=<pinned minimum percent>,…
     value-oracle <corpus> <key>=<value>,… <key>=<pinned value>,…
+    cpu <corpus> <wall seconds> <test process CPU seconds> <child processes' CPU seconds> <phase>=<busy seconds>:<child CPU seconds>:<child processes>,…
 
 where <corpus> names the corpus the shard fuzzed: `base`, or a generator
 feature's name. For each corpus the shards must cover 0..<seed count exactly
@@ -31,7 +32,9 @@ skips must add up to its pins (`value-oracle`: counts, and set sums whose keys e
 like the accepted seed-set sum), and no shard may report a failure,
 a stale known issue, a misfiled seed, or a problem. Every long run writes `features`, `inspected`, `read-twins`, `draws` and `errors` for its corpus, and
 `value-oracle` for the base corpus, so a complete report that names a corpus without one of them is a problem: a
-run that stopped writing the line would otherwise skip that line's check silently. Writes a Markdown summary to
+run that stopped writing the line would otherwise skip that line's check silently. The `cpu` lines check nothing:
+the summary adds them up per corpus into a table of what each phase of the oracle cost, a phase's busy seconds being
+the seconds the batches of the corpus's shards spent in it. Writes a Markdown summary to
 SUMMARY and the job summary, and exits non-zero when anything is missing or
 does not match.
 """
@@ -64,6 +67,7 @@ draw_counts_by_corpus = {}
 draw_pins_by_corpus = {}
 value_oracle_by_corpus = {}
 value_oracle_pins_by_corpus = {}
+cost_by_corpus = {}
 
 
 def value_oracle_fields(field):
@@ -151,6 +155,20 @@ for path in report_paths:
                 for key, value in value_oracle_fields(fields[2]).items():
                     totals[key] = (totals.get(key, 0) + value) % (1 << 64)
                 value_oracle_pins_by_corpus.setdefault(fields[1], set()).add(fields[3])
+            elif fields[0] == "cpu" and len(fields) == 6:
+                cost = cost_by_corpus.setdefault(fields[1], {"shards": 0, "wall": 0.0, "longest wall": 0.0, "process": 0.0, "children": 0.0, "phases": {}})
+                cost["shards"] += 1
+                cost["wall"] += float(fields[2])
+                cost["longest wall"] = max(cost["longest wall"], float(fields[2]))
+                cost["process"] += float(fields[3])
+                cost["children"] += float(fields[4])
+                for item in filter(None, fields[5].split(",")):
+                    phase, values = item.split("=")
+                    busy, cpu, processes = values.split(":")
+                    totals = cost["phases"].setdefault(phase, [0.0, 0.0, 0])
+                    totals[0] += float(busy)
+                    totals[1] += float(cpu)
+                    totals[2] += int(processes)
             elif fields[0] == "completed":
                 completed = True
             elif fields[0] in ("failure", "stale", "misfiled", "problem"):
@@ -328,6 +346,15 @@ with open(summary_path, "w") as summary:
                 )
             if read_twins_by_corpus.get(corpus, 0) > 0:
                 summary.write(f"The oracle compared {read_twins_by_corpus[corpus]} graphs of the {corpus} corpus with their read twin.\n")
+    for corpus, cost in sorted(cost_by_corpus.items()):
+        summary.write(
+            f"\n#### What the {corpus} corpus cost\n\n"
+            f"{cost['shards']} shards ran for {cost['wall']:.0f} wall seconds in all, the longest for {cost['longest wall']:.0f}. "
+            f"Their test processes used {cost['process']:.0f} CPU seconds and their child processes {cost['children']:.0f}.\n\n"
+            "| Phase | Busy seconds | Child CPU seconds | Child processes |\n|---|---|---|---|\n"
+        )
+        for phase, (busy, cpu, processes) in cost["phases"].items():
+            summary.write(f"| {phase} | {busy:.0f} | {cpu:.0f} | {processes} |\n")
 step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
 if step_summary:
     with open(summary_path) as summary, open(step_summary, "a") as job_summary:

@@ -18,6 +18,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#if canImport(Darwin)
+	import Darwin
+#elseif canImport(Glibc)
+	import Glibc
+#elseif canImport(Musl)
+	import Musl
+#endif
 import Foundation
 import Testing
 
@@ -719,6 +726,11 @@ func compileSwift(
 ///
 /// The process gets `environment` with a temporary directory of its own (`TMPDIR`), deleted with its output once it
 /// exits, because `swiftc` leaves a `TemporaryDirectory.*` folder in its temporary directory on every run.
+///
+/// The process is spawned and reaped with `posix_spawn` and `wait4` rather than through Foundation's `Process`, because
+/// `wait4` reports the CPU time the process and every process it waited for used, which `Process` does not expose: the
+/// graph fuzzer's long run adds it to the phase that ran the process (`GraphFuzzerPhaseAccount`). Foundation reaps only
+/// the processes it launched, each by its identifier, so the two never reap each other's.
 func runProcess(
 	_ executableURL: URL,
 	arguments: [String],
@@ -741,10 +753,7 @@ private func runProcessOnAThreadOfItsOwn(_ executableURL: URL, arguments: [Strin
 	let temporaryDirectory = invocationDirectory.appendingPathComponent("tmp")
 	try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
 	defer { try? FileManager.default.removeItem(at: invocationDirectory) }
-	let process = Process()
-	process.executableURL = executableURL
-	process.arguments = arguments
-	process.environment = TestTemporaryDirectory.environment(withTemporaryDirectory: temporaryDirectory, from: environment)
+	let processEnvironment = TestTemporaryDirectory.environment(withTemporaryDirectory: temporaryDirectory, from: environment)
 	let standardOutput = invocationDirectory.appendingPathComponent("output")
 	let standardError = invocationDirectory.appendingPathComponent("error")
 	FileManager.default.createFile(atPath: standardOutput.path, contents: nil)
@@ -753,24 +762,122 @@ private func runProcessOnAThreadOfItsOwn(_ executableURL: URL, arguments: [Strin
 	defer { try? standardOutputHandle.close() }
 	let standardErrorHandle = try FileHandle(forWritingTo: standardError)
 	defer { try? standardErrorHandle.close() }
-	process.standardOutput = standardOutputHandle
-	process.standardError = standardErrorHandle
+	let standardOutputDescriptor = standardOutputHandle.fileDescriptor
+	let standardErrorDescriptor = standardErrorHandle.fileDescriptor
 
-	let terminationStatus: Int32 = try await withCheckedThrowingContinuation { continuation in
+	let exitedProcess: ExitedProcess = try await withCheckedThrowingContinuation { continuation in
 		Thread {
 			do {
-				try process.run()
-				process.waitUntilExit()
-				continuation.resume(returning: process.terminationStatus)
+				try continuation.resume(returning: spawnAndWait(
+					executableURL.path,
+					arguments: arguments,
+					environment: processEnvironment,
+					standardOutputDescriptor: standardOutputDescriptor,
+					standardErrorDescriptor: standardErrorDescriptor,
+				))
 			} catch {
 				continuation.resume(throwing: error)
 			}
 		}.start()
 	}
+	await GraphFuzzerPhaseAccount.recordProcess(cpuSeconds: exitedProcess.cpuSeconds)
+	let terminationStatus = exitedProcess.terminationStatus
 	return SwiftCompileResult(
 		exitCode: terminationStatus,
 		stdout: (try? String(contentsOf: standardOutput, encoding: .utf8)) ?? "",
 		stderr: (try? String(contentsOf: standardError, encoding: .utf8)) ?? "",
+	)
+}
+
+/// A process `spawnAndWait` ran to its end.
+struct ExitedProcess {
+	/// The exit status of a process that exited, or the number of the signal that ended one that did not, as
+	/// `Process.terminationStatus` reports them.
+	let terminationStatus: Int32
+	/// The user and system CPU time the process used, with that of every process it waited for (a compiler driver's
+	/// frontend, for example).
+	let cpuSeconds: Double
+}
+
+/// The error `spawnAndWait` throws when it cannot start or reap a process.
+struct ProcessSpawnError: Error, CustomStringConvertible {
+	let executablePath: String
+	let operation: String
+	let errorNumber: Int32
+
+	var description: String {
+		"\(operation) failed for \(executablePath): \(String(cString: strerror(errorNumber)))"
+	}
+}
+
+/// Runs the executable at `executablePath` with `arguments` and `environment`, its standard input reading nothing and
+/// its standard output and error written to the given descriptors, and blocks the calling thread until it exits.
+///
+/// The child resets every signal to its default action and blocks none, as a process a shell starts does, rather than
+/// inherit the dispositions and mask of the thread that spawns it.
+private func spawnAndWait(
+	_ executablePath: String,
+	arguments: [String],
+	environment: [String: String],
+	standardOutputDescriptor: Int32,
+	standardErrorDescriptor: Int32,
+) throws -> ExitedProcess {
+	#if canImport(Darwin)
+		var fileActions: posix_spawn_file_actions_t?
+		var attributes: posix_spawnattr_t?
+	#else
+		var fileActions = posix_spawn_file_actions_t()
+		var attributes = posix_spawnattr_t()
+	#endif
+	posix_spawn_file_actions_init(&fileActions)
+	defer { posix_spawn_file_actions_destroy(&fileActions) }
+	posix_spawnattr_init(&attributes)
+	defer { posix_spawnattr_destroy(&attributes) }
+	posix_spawn_file_actions_addopen(&fileActions, 0, "/dev/null", O_RDONLY, 0)
+	posix_spawn_file_actions_adddup2(&fileActions, standardOutputDescriptor, 1)
+	posix_spawn_file_actions_adddup2(&fileActions, standardErrorDescriptor, 2)
+	var noSignals = sigset_t()
+	sigemptyset(&noSignals)
+	posix_spawnattr_setsigmask(&attributes, &noSignals)
+	var defaultedSignals = sigset_t()
+	sigfillset(&defaultedSignals)
+	sigdelset(&defaultedSignals, SIGKILL)
+	sigdelset(&defaultedSignals, SIGSTOP)
+	posix_spawnattr_setsigdefault(&attributes, &defaultedSignals)
+	var flags = Int32(POSIX_SPAWN_SETSIGMASK) | Int32(POSIX_SPAWN_SETSIGDEF)
+	#if canImport(Darwin)
+		// Only the three descriptors above reach the child. Linux has no such flag, so there the child also inherits
+		// the test process's descriptors that are not close-on-exec, which it never reads.
+		flags |= Int32(POSIX_SPAWN_CLOEXEC_DEFAULT)
+	#endif
+	posix_spawnattr_setflags(&attributes, Int16(flags))
+
+	let argumentVector: [UnsafeMutablePointer<CChar>?] = ([executablePath] + arguments).map { strdup($0) } + [nil]
+	defer { argumentVector.forEach { free($0) } }
+	let environmentVector: [UnsafeMutablePointer<CChar>?] = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
+	defer { environmentVector.forEach { free($0) } }
+	var processIdentifier = pid_t()
+	let spawnResult = posix_spawn(&processIdentifier, executablePath, &fileActions, &attributes, argumentVector, environmentVector)
+	guard spawnResult == 0 else {
+		throw ProcessSpawnError(executablePath: executablePath, operation: "posix_spawn", errorNumber: spawnResult)
+	}
+
+	var status: Int32 = 0
+	var usage = rusage()
+	while wait4(processIdentifier, &status, 0, &usage) == -1 {
+		let waitError = errno
+		guard waitError == EINTR else {
+			throw ProcessSpawnError(executablePath: executablePath, operation: "wait4", errorNumber: waitError)
+		}
+	}
+	// `WIFEXITED`, `WEXITSTATUS` and `WTERMSIG`, which Swift does not import: the low seven bits hold the signal that
+	// ended the process, zero when it exited, and the next eight bits its exit status.
+	let terminatingSignal = status & 0x7F
+	var cpuSeconds = Double(usage.ru_utime.tv_sec) + Double(usage.ru_utime.tv_usec) / 1_000_000
+	cpuSeconds += Double(usage.ru_stime.tv_sec) + Double(usage.ru_stime.tv_usec) / 1_000_000
+	return ExitedProcess(
+		terminationStatus: terminatingSignal == 0 ? (status >> 8) & 0xFF : terminatingSignal,
+		cpuSeconds: cpuSeconds,
 	)
 }
 

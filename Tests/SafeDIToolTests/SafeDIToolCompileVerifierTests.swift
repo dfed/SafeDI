@@ -244,6 +244,39 @@ struct SafeDIToolCompileVerifierTests: ~Copyable {
 		#expect(results.filter { $0.stderr != line + "\n" || $0.stdout != "done\n" || $0.exitCode != 0 }.isEmpty)
 	}
 
+	@Test
+	func runProcess_returnsExitStatusAndOutput_whenProcessExitsWithNonzeroStatus() async throws {
+		let result = try await runProcess(URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "echo out; echo error >&2; exit 3"])
+
+		#expect(result.exitCode == 3)
+		#expect(result.stdout == "out\n")
+		#expect(result.stderr == "error\n")
+	}
+
+	@Test
+	func runProcess_returnsSignalNumber_whenSignalEndsProcess() async throws {
+		// As `Process.terminationStatus` reports a process a signal ended: the compiler crashing is such a process.
+		let result = try await runProcess(URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "kill -9 $$"])
+
+		#expect(result.exitCode == 9)
+	}
+
+	@Test
+	func runProcess_givesProcessEmptyStandardInput() async throws {
+		let result = try await runProcess(URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "cat; echo end"])
+
+		#expect(result.exitCode == 0)
+		#expect(result.stdout == "end\n")
+	}
+
+	@Test
+	func runProcess_throws_whenExecutableDoesNotExist() async throws {
+		let missingExecutable = directory.appendingPathComponent("missing-executable")
+		await #expect(throws: ProcessSpawnError.self) {
+			try await runProcess(missingExecutable, arguments: [])
+		}
+	}
+
 	// MARK: Private
 
 	private let directory: URL
