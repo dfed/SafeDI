@@ -1108,7 +1108,7 @@ jobs:
       # seeds (14.5 to 15 minutes) it finished about five minutes after every other shard. Each report's `cpu` line
       # says what each phase of a shard cost, which the combine job adds up per corpus.
       # No required check is a shard's: "Check Graph Fuzzer Corpus on Linux" is, so a change to this matrix needs no
-      # stand-in for a Markdown-only change.
+      # stand-in for a Markdown-only change. A change to it changes graph-fuzzer-coverage's EXPECTED_SHARDS too.
       matrix:
         include:
           - corpus: base
@@ -1160,8 +1160,12 @@ jobs:
       # Graph Executed on Linux" reads each shard's. Only the fuzzer's own
       # process writes to the profile folder: every process it starts gets an
       # LLVM_PROFILE_FILE of its own in the test's temporary directory
-      # (TestTemporaryDirectory.environment).
+      # (TestTemporaryDirectory.environment). The step's limit is under the
+      # job's, so a shard that runs out of time still summarizes and uploads
+      # its report; the job's limit would cancel those steps too. A shard's
+      # fuzzer has taken 7 to 12 minutes.
       - name: Run Graph Fuzzer
+        timeout-minutes: 25
         env:
           SAFEDI_GRAPH_FUZZER_ITERATIONS: ${{ matrix.iterations }}
           SAFEDI_GRAPH_FUZZER_STARTING_SEED: ${{ matrix.starting-seed }}
@@ -1226,7 +1230,9 @@ jobs:
   # the only one CI runs on, lists every slice's lines; a push to main lists
   # what it pushed. Advisory: it fails only when it cannot report, and no
   # required check is its. It runs when a shard fails, and names a shard that
-  # left no profile, since a line only that shard ran would be listed.
+  # left no profile or no report, since a line only that shard ran would be
+  # listed; EXPECTED_SHARDS names graph-fuzzer's matrix, and the report fails
+  # when a shard it does not name uploads a report.
   # graph-fuzzer.yml's `coverage` input makes the same report for a commit
   # before review; see "Coverage of a change" in
   # .claude/rules/fuzzer-corpora.md.
@@ -1270,6 +1276,8 @@ jobs:
       - name: Report
         env:
           BEFORE: ${{ github.event.before }}
+          # graph-fuzzer's matrix, `<corpus>-<starting-seed>` per shard.
+          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-500 generateMockPublic-0
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           tar -xzf graph-fuzzer-test-bundle.tar.gz
@@ -1280,7 +1288,7 @@ jobs:
           fi
           .github/scripts/report-graph-fuzzer-coverage.sh \
             .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest reports unit-suite/default.profdata \
-            "$base" "$RUNNER_TEMP/fuzzer-coverage"
+            "$base" "$RUNNER_TEMP/fuzzer-coverage" "$EXPECTED_SHARDS"
       # What Scripts/fuzzer-coverage-report.sh reads to report against
       # another base without running anything.
       - name: Upload Coverage

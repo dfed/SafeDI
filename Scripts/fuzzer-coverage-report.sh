@@ -16,6 +16,8 @@ directory=$(mktemp -d "$caches/SafeDIFuzzerCoverage/run-$run.XXXXXX")
 trap 'rm -rf "$directory"' EXIT
 gh run download "$run" --name fuzzer-coverage --dir "$directory"
 head=$(<"$directory/head.txt")
+# The lines head changes since its merge base with BASE, as the run's report lists them.
+base=$(git merge-base "$(git rev-parse "$base^{commit}")" "$head")
 if [[ $(git rev-parse HEAD) != "$head" ]]; then
 	print -u2 "warning: HEAD is not $head, which the coverage was built from; line numbers may not match."
 fi
@@ -25,7 +27,7 @@ for name in corpus.lcov corpus-functions.json suite.lcov; do
 		sed "s#/__w/SafeDI/SafeDI/#$root/#g" "$directory/$name" >"$directory/local-$name"
 	fi
 done
-arguments=(--corpus "$directory/local-corpus.lcov" --functions "$directory/local-corpus-functions.json" --compared "$(git rev-parse "$base")..$head")
+arguments=(--corpus "$directory/local-corpus.lcov" --functions "$directory/local-corpus-functions.json" --compared "$base..$head")
 if [[ -f "$directory/local-suite.lcov" ]]; then
 	arguments+=(--suite "$directory/local-suite.lcov")
 fi

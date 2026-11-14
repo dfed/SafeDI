@@ -8,10 +8,11 @@ consecutive executable lines, each with the function it is in. CORPUS_LCOV and C
 lcov and JSON (`-format=text`) of the fuzzer's long run over every corpus; the JSON gives each function's range, so a
 run names the innermost function that holds it. SUITE_LCOV, when given, is the unit suite's coverage, and splits the
 lines, one by one, into those a unit test reaches (the corpus draws no graph for that shape) and those nothing reaches.
-A run whose lines throw or build an error is tagged `[error path?]`; the tag only orders the list. The default value of
-a stored property that every initializer passes explicitly runs nowhere, so such lines are counted and not listed.
+A run whose lines throw or build an error is tagged `[error path?]`; the tag only orders the list. A changed line of a
+stored property's default value that neither the corpus nor the unit suite ran (its initializers' callers pass the
+value) is counted and not listed; without SUITE_LCOV it is listed.
 `--suite-failed` says the unit suite failed in the run that wrote SUITE_LCOV, and each `--missing-shard` names a
-shard that wrote no profile; the header reports both. Files are matched through
+shard that left no profile; the header reports both. Files are matched through
 `os.path.realpath`, as changed-line-coverage.py matches them. Run it from the checkout the coverage was built from, at
 the same commit. Exits 0; the report is the output.
 """
@@ -143,7 +144,7 @@ ERROR_LINE_PATTERN = re.compile(r"\bthrow\b|SourceDiagnostic\(|Error\(|severity:
 ERROR_FUNCTION_PATTERN = re.compile(r"Error|[Dd]iagnostic|[Rr]emedy|Explanation|Finding|[Ww]arning")
 
 # Files the fuzzer does not exercise by design: other subcommands, caches, the scan's file handling. Their changed
-# lines are counted and not listed.
+# lines are counted and not listed. A renamed file falls out of the pattern and its lines are listed again.
 NOT_TARGETED_PATTERN = re.compile(
     r"Sources/SafeDIToolLibrary/(QueryCommand|DumpCommand|ScanCommand|BinaryCod\w*|BinaryFile|FileModificationStamp|"
     r"BuildSettingCompilationConditions|ModulesBeneathSelection)\.swift$"
@@ -204,11 +205,11 @@ def main():
                 corpus_executed_count += 1
                 continue
             innermost = innermost_function(file_functions, line_number)
-            if innermost is not None and PROPERTY_INITIAL_VALUE_PATTERN.search(innermost.name):
+            reach = "unknown" if suite_counts is None else ("tests" if suite_counts.get(line_number, 0) > 0 else "nothing")
+            if reach == "nothing" and innermost is not None and PROPERTY_INITIAL_VALUE_PATTERN.search(innermost.name):
                 initial_value_count += 1
                 continue
             function = innermost_function(file_functions, line_number, skipping_closures=True) or innermost
-            reach = "unknown" if suite_counts is None else ("tests" if suite_counts.get(line_number, 0) > 0 else "nothing")
             if runs and runs[-1]["path"] == path and runs[-1]["function"] is function and runs[-1]["reach"] == reach:
                 gap = range(runs[-1]["lines"][-1] + 1, line_number)
                 if all(line_counts.get(line) is None for line in gap):
@@ -236,8 +237,9 @@ def main():
     print(HEADER)
     print()
     if arguments.missing_shard:
-        print(f"Shard(s) {', '.join(sorted(arguments.missing_shard))} wrote no coverage profile (a crashed or timed-out "
-              "fuzzer writes none), so lines only those shards would have executed are listed too.")
+        print(f"Shard(s) {', '.join(sorted(arguments.missing_shard))} left no coverage profile (a shard whose fuzzer "
+              "crashed, or that timed out or lost its runner, leaves none), so lines only those shards would have executed "
+              "are listed too.")
     if suite is None:
         print("No unit-suite profile, so the runs are not split by whether a unit test reaches them.")
     elif arguments.suite_failed:
@@ -246,8 +248,8 @@ def main():
     print(f"{executable_count} changed executable generator line(s); the corpus executed {corpus_executed_count}, "
           f"and no corpus graph executed {unexecuted_count}, in {len(runs)} run(s).")
     if initial_value_count:
-        print(f"{initial_value_count} changed line(s) are default values of stored properties that every initializer "
-              "passes explicitly, so nothing runs them; they are not listed.")
+        print(f"{initial_value_count} changed line(s) are default values of stored properties that neither the corpus "
+              "nor the unit suite ran; they are not listed.")
     if not_targeted_count:
         print(f"{not_targeted_count} changed line(s) in files the fuzzer does not exercise by design were not checked.")
     for path in unrecorded_paths:

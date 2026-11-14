@@ -23,10 +23,13 @@ name: Graph Fuzzer
 # with each shard's profile kept, and reports the lines changed since `base`
 # (.github/scripts/report-graph-fuzzer-coverage.sh). The report is in the
 # report job's summary and its `fuzzer-coverage` artifact; see "Coverage of a
-# change" in .claude/rules/fuzzer-corpora.md. `ref` need not have this
-# workflow: the report job runs the scripts of the commit the run is
-# dispatched on against `ref`'s checkout. Inputs reach the shell through
-# environment variables, never interpolated into a script.
+# change" in .claude/rules/fuzzer-corpora.md. The report job runs the two
+# report scripts of the commit the run is dispatched on against `ref`'s
+# checkout, so `ref` need not have them or this workflow; the other jobs run
+# `ref`'s .github/actions/retry and
+# .github/scripts/summarize-graph-fuzzer-report.sh, so `ref` needs those. Inputs
+# reach the shell through environment variables, never interpolated into a
+# script.
 on:
   workflow_dispatch:
     inputs:
@@ -241,7 +244,8 @@ jobs:
           path: unit-suite/
           retention-days: 1
 
-  # ci.yml's graph-fuzzer shards; keep the matrix in step with that job's.
+  # ci.yml's graph-fuzzer shards; keep the matrix in step with that job's, and
+  # coverage-report's EXPECTED_SHARDS with this matrix.
   # Each shard keeps its profile in its report folder, as ci.yml's shards do.
   coverage-fuzz:
     name: Fuzz for Coverage on Linux (${{ matrix.corpus }} seeds ${{ matrix.starting-seed }}+${{ matrix.iterations }})
@@ -318,7 +322,8 @@ jobs:
 
   # Reports with the scripts of the commit the run was dispatched on, checked
   # out beside `ref`'s, so `ref` need not have them. Advisory: it fails only
-  # when it cannot report.
+  # when it cannot report. It names a shard that left no profile or no
+  # report; EXPECTED_SHARDS names coverage-fuzz's matrix.
   coverage-report:
     name: Report Changed Lines No Fuzzer Graph Executed on Linux
     needs: [coverage-build, coverage-unit-suite, coverage-fuzz]
@@ -368,6 +373,8 @@ jobs:
       - name: Report
         env:
           BASE: ${{ inputs.base }}
+          # coverage-fuzz's matrix, `<corpus>-<starting-seed>` per shard.
+          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-500 generateMockPublic-0
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           tar -xzf graph-fuzzer-test-bundle.tar.gz
@@ -379,7 +386,7 @@ jobs:
           fi
           .graph-fuzzer-coverage-tools/.github/scripts/report-graph-fuzzer-coverage.sh \
             .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest reports unit-suite/default.profdata \
-            "$base" "$RUNNER_TEMP/fuzzer-coverage"
+            "$base" "$RUNNER_TEMP/fuzzer-coverage" "$EXPECTED_SHARDS"
       - name: Upload Coverage
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
