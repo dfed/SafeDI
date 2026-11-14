@@ -752,6 +752,7 @@ private struct ScopeGeneratorUnderConstruction {
 		var fillsOfThisCall = [(fill: Fill, scope: Scope)]()
 		var dispatchersOfThisCall = [ScopeGenerator.FillDispatcher]()
 		if !holeArguments.isEmpty {
+			let callPath = self.sitePath
 			var names = GeneratedNameAllocator(reserving: Set(enclosingFills.values).union(seamHoles.namesBoundForBuilders))
 			var fillNames = enclosingFills
 			// Every place of a case nested by type is filled by one function, the first place's: it can read whatever field
@@ -761,14 +762,27 @@ private struct ScopeGeneratorUnderConstruction {
 			for case let .fill(hole, _) in holeArguments where hole.enumPlace?.isNestedByType == true {
 				placesByCaseKey[ScopeGenerator.fillCaseKey(of: hole), default: []].append(hole)
 			}
-			let caseFieldsByCaseKey = placesByCaseKey.mapValues(ScopeGenerator.caseFields(of:))
+			// A place inside a fill of an inner seam's builder reads, through the scope value the inner seam handed that fill, a
+			// label that some route of the inner seam's enum holds and another does not: on that other route inline reads the
+			// caller's declaration, as for a label one place of the case carries and another does not.
+			let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey, nameByKey: [:]) }
+			let caseFieldsByCaseKey = placesByCaseKey.mapValues { places in
+				var caseFields = ScopeGenerator.caseFields(of: places)
+				if let innerScopeReaders {
+					let fieldLabels = Set(caseFields.fields.map(\.property.label))
+					for place in places {
+						caseFields.callerReadLabels.formUnion(innerScopeReaders.labelsSomeInnerRouteLacks(of: place).intersection(fieldLabels))
+					}
+				}
+				return caseFields
+			}
 			var functionNameByCaseKey = [String: String]()
 			for case let .fill(hole, fulfillingScope) in holeArguments where enclosingFills[ScopeGenerator.fillKey(of: hole)] == nil {
 				let key = ScopeGenerator.fillKey(of: hole)
 				let caseKey = ScopeGenerator.fillCaseKey(of: hole)
 				if let functionName = functionNameByCaseKey[caseKey] {
 					fillNames[key] = functionName
-					fillsOfThisCall.append((Fill(hole: hole, key: key, functionName: functionName, fields: hole.fields, emitsCode: false), fulfillingScope))
+					fillsOfThisCall.append((Fill(hole: hole, key: key, functionName: functionName, fields: hole.fields, emitsCode: false, caseHoles: [hole]), fulfillingScope))
 					continue
 				}
 				let functionName = names.claim(ScopeGenerator.fillFunctionName(of: hole))
@@ -777,7 +791,17 @@ private struct ScopeGeneratorUnderConstruction {
 					functionNameByCaseKey[caseKey] = functionName
 				}
 				let caseFields = caseFieldsByCaseKey[caseKey]
-				fillsOfThisCall.append((Fill(hole: hole, key: key, functionName: functionName, fields: caseFields?.fields ?? hole.fields, emitsCode: true, callerReadLabels: caseFields?.callerReadLabels ?? []), fulfillingScope))
+				var fill = Fill(
+					hole: hole,
+					key: key,
+					functionName: functionName,
+					fields: caseFields?.fields ?? hole.fields,
+					emitsCode: true,
+					caseHoles: placesByCaseKey[caseKey] ?? [hole],
+					callerReadLabels: caseFields?.callerReadLabels ?? [],
+				)
+				fill.innerScopeParameter = Self.innerScopeParameter(ofFillOf: hole, seamHoles: seamHoles, callPath: callPath)
+				fillsOfThisCall.append((fill, fulfillingScope))
 			}
 			if let calledBuilders = scope.calledBuilders {
 				dispatchersOfThisCall = ScopeGenerator.FillDispatcher.dispatchers(
@@ -786,6 +810,9 @@ private struct ScopeGeneratorUnderConstruction {
 					enclosingDispatchers: enclosingFills,
 					fillNames: fillNames,
 					names: &names,
+					innerScopeNameByKey: Dictionary(calledBuilders.scopeEnums.compactMap { scopeEnum in
+						seamHoles.innerScope(at: callPath, innerKey: scopeEnum.key).map { (scopeEnum.key, $0.name) }
+					}, uniquingKeysWith: { first, _ in first }),
 				)
 			}
 		}
@@ -804,6 +831,9 @@ private struct ScopeGeneratorUnderConstruction {
 		let fields: [SeamSignature.Hole.Field]
 		/// Whether the fill's code is generated (see `ScopeGenerator.fillEmitsCode`).
 		let emitsCode: Bool
+		/// The places the fill stands for: its hole, or, for the fill that generates the code of a case nested by type, every
+		/// place of the case, in builder order.
+		let caseHoles: [SeamSignature.Hole]
 		/// For the fill that generates the code of a case nested by type, the labels of `fields` that a level holds on some
 		/// route to the case and none holds on another, where the root dispatcher hands the fill the caller's declaration
 		/// (see `ScopeGenerator.caseFields(of:)`).
@@ -815,6 +845,22 @@ private struct ScopeGeneratorUnderConstruction {
 		var callerNearestDeclarations = NearestDeclarations()
 		/// The received properties in scope at the call only as the instance of a `LazilyInstantiated` property.
 		var callerLazilyInstantiatedInstanceProperties = Set<Property>()
+		/// For a fill of a builder whose fills lead to a place of the seam whose tree makes the call, the scope value the inner
+		/// seam handed it, as the parameter the fill takes it under where its tree builds such a place or a call that passes one
+		/// up (`SeamHoles.innerScope(at:innerKey:)`).
+		var innerScopeParameter: SeamSignature.Hole.Field?
+	}
+
+	/// The parameter a fill of `hole` takes the scope value the seam whose tree holds `hole` handed it under, for the call at
+	/// `callPath`, where a place inside a fill of a place of that seam's enum reads it, or `nil`.
+	private static func innerScopeParameter(ofFillOf hole: SeamSignature.Hole, seamHoles: SeamHoles, callPath: [Property]) -> SeamSignature.Hole.Field? {
+		guard let innerScope = seamHoles.innerScope(at: callPath, innerKey: SeamSignature.ScopeEnum.rootKey(of: hole)) else { return nil }
+		return SeamSignature.Hole.Field(
+			property: Property(label: innerScope.name, typeDescription: innerScope.enumType),
+			access: .public,
+			declaringType: hole.scopeSeamType,
+			declarationLocation: nil,
+		)
 	}
 
 	/// The generators created so far for `propertiesToGenerate`, in order, followed by those of `fillsOfThisCall`.
@@ -893,6 +939,8 @@ private struct ScopeGeneratorUnderConstruction {
 			// pass before found for it as any scope does, when a lazy cycle inside the fill closes on its property.
 			previousPassGenerator: previousPassChildGenerator?.children.first,
 			cycleParameterContexts: [:],
+			// A place inside the fill is a place of the type the fill builds, whose builds start their children in its order.
+			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 		)
 	}
 
@@ -1032,6 +1080,10 @@ private struct ScopeGeneratorUnderConstruction {
 	/// lazily, or `nil`.
 	private static func callerReads(of fill: Fill, child: ScopeGenerator) -> ScopeGenerator.FillCallerReads {
 		var reads = ScopeGenerator.FillCallerReads()
+		// The inner scope, only where the fill's tree builds a place or a call that passes one up, whose case carries it.
+		if let innerScopeParameter = fill.innerScopeParameter, child.containsBuildSite || child.passesUpBuilder {
+			reads.innerScopeParameters = [innerScopeParameter]
+		}
 		for field in fill.fields where fill.callerReadLabels.contains(field.property.label) && fill.boundLabels.contains(field.property.label) {
 			let label = field.property.label
 			// A site inside the fill that carries the field reads it as the field's own form.
@@ -1185,6 +1237,7 @@ private struct ScopeGeneratorUnderConstruction {
 				functionName: fill.functionName,
 				boundLabels: fill.boundLabels,
 				fields: fill.fields,
+				caseHoles: fill.caseHoles,
 				emitsCode: fill.emitsCode,
 				callerReads: Self.callerReads(of: fill, child: builtGenerator),
 				child: builtGenerator,
@@ -1239,9 +1292,9 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The generator the pass before created for this scope, or `nil` in the first pass (see `createScopeGenerator`).
 	private let previousPassGenerator: ScopeGenerator?
 	/// The properties of each type in the tree that hold a place, by which each scope's children start
-	/// (`ScopeGenerator.startsAsCarrier(_:)`), or `nil` where they start by what their subtrees hold on the scope's path:
-	/// in a pass whose order by path is the same, and inside a fill, whose tree is built with the filled seam's stack and
-	/// keeps its order by path.
+	/// (`ScopeGenerator.startsAsCarrier(_:)`), or `nil` where they start by what their subtrees hold on the scope's path,
+	/// in a pass whose order by path is the same. A fill's tree, whose places are places of the type the fill builds, starts
+	/// its children by the same properties.
 	private let placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?
 	/// The parameters of this scope's builder function that the pass before found: those a lazy cycle closing on it
 	/// needs. Empty for nearly every scope.
@@ -1422,6 +1475,7 @@ struct SeamHoles {
 		sitesByPath = [:]
 		passedUpHolesBySite = [:]
 		valuesBindingsByPath = [:]
+		innerScopesByCall = [:]
 		namesBoundForBuilders = []
 		namesBoundForDeferredParameters = []
 	}
@@ -1438,21 +1492,26 @@ struct SeamHoles {
 			}
 		}
 		// The payload of each case that wraps another on the way to a place or a call nested by type, bound just before the
-		// case's property is built, once however many places it leads to. A case of a `@Sendable` enum carries none.
+		// case's property is built, once however many places it leads to. A case of a `@Sendable` enum carries none. A call's
+		// case for a builder it fills carries the scope value the inner seam handed the fill, which the fill takes.
 		var valuesBindingsByName = [[Property]: [String: ValuesBinding]]()
-		func bindValues(of route: [SeamSignature.Hole.RouteStep], toSiteAt sitePath: [Property]) {
-			for (index, step) in route.enumerated() {
+		var innerScopesByCall = [RouteCall: SeamSignature.Hole.RouteStep.InnerScope]()
+		func bindValues(of route: [SeamSignature.Hole.RouteStep]) {
+			for step in route {
+				if let innerScope = step.innerScope {
+					innerScopesByCall[RouteCall(sitePath: innerScope.callPath, innerKey: innerScope.innerKey)] = innerScope
+				}
 				guard let values = step.values else { continue }
-				valuesBindingsByName[Array(sitePath.prefix(index + 1)), default: [:]][values.bindingName] = ValuesBinding(values: values)
+				valuesBindingsByName[values.bindingPath, default: [:]][values.bindingName] = ValuesBinding(values: values)
 			}
 		}
 		/// The cases that lead to a place or a call's case, each opened, and what closes them.
 		func opening(_ route: [SeamSignature.Hole.RouteStep]) -> String {
-			route.map { step in step.values.map { ".\(step.caseName)(\($0.bindingName), " } ?? ".\(step.caseName)(" }.joined()
+			route.map { step in ".\(step.caseName)(\(step.leadingArguments)" }.joined()
 		}
 		for callRoute in callRoutes {
 			guard let builderName = internalNameByEnum[callRoute.rootKey] else { continue }
-			bindValues(of: callRoute.route, toSiteAt: callRoute.sitePath)
+			bindValues(of: callRoute.route)
 			let ownCase = callRoute.values.map { ".\(callRoute.caseName)(\($0.type.asSource)(\(Self.valuesArguments(of: $0.fields))), " } ?? ".\(callRoute.caseName)("
 			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(
 				builderName: builderName,
@@ -1471,9 +1530,11 @@ struct SeamHoles {
 			}
 			sitesByPath[hole.sitePath] = hole
 			if let enumPlace = hole.enumPlace, enumPlace.isNestedByType {
-				bindValues(of: enumPlace.route, toSiteAt: hole.sitePath)
+				bindValues(of: enumPlace.route)
 			}
 		}
+		namesBoundForBuilders.formUnion(innerScopesByCall.values.map(\.name))
+		self.innerScopesByCall = innerScopesByCall
 		// Each path's payloads are bound in the order of their names.
 		var valuesBindingsByPath = [[Property]: [ValuesBinding]]()
 		for (path, bindings) in valuesBindingsByName {
@@ -1580,6 +1641,13 @@ struct SeamHoles {
 		valuesBindingsByPath.isEmpty ? [] : valuesBindingsByPath[sitePath, default: []]
 	}
 
+	/// The scope value the inner seam called at the end of `sitePath` hands the fills of its builder whose root enum is
+	/// `innerKey`'s, where a place or a call inside one of them reads it: the name the fills, and each dispatcher that leads
+	/// to them, take it under, and its type.
+	func innerScope(at sitePath: [Property], innerKey: SeamSignature.ScopeEnum.Key) -> SeamSignature.Hole.RouteStep.InnerScope? {
+		innerScopesByCall.isEmpty ? nil : innerScopesByCall[RouteCall(sitePath: sitePath, innerKey: innerKey)]
+	}
+
 	/// A seam call in the tree and the inner enum it carries.
 	private struct RouteCall: Hashable {
 		let sitePath: [Property]
@@ -1592,6 +1660,7 @@ struct SeamHoles {
 	private let sitesByPath: [[Property]: SeamSignature.Hole]
 	private let passedUpHolesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]
 	private let valuesBindingsByPath: [[Property]: [ValuesBinding]]
+	private let innerScopesByCall: [RouteCall: SeamSignature.Hole.RouteStep.InnerScope]
 }
 
 // MARK: - NearestDeclarations

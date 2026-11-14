@@ -9053,7 +9053,7 @@ struct GraphFuzzerFailure: Equatable {
 		/// for the graph without the place is gone from what it generates for the graph with it: a hand-written caller that
 		/// names it stops compiling when a place is added beneath the seam it calls.
 		case holeNamesChangeWithSecondPlace = "a builder label or case name of the graph without its second place of a hole changes when the place is added"
-		/// Two builds of one type in a seam's tree bind other values before the same property (`SeamPlaceLevels.levelDisagreements(judgingLevelsInFills:)`):
+		/// Two builds of one type in a seam's tree bind other values before the same property (`SeamPlaceLevels.levelDisagreements()`):
 		/// the levels a scope enum would nest by type would depend on the path.
 		case placeLevelsDifferBetweenBuildsOfType = "two builds of one type in a seam's tree bind other values before the same property"
 	}
@@ -9502,7 +9502,7 @@ struct GraphFuzzerToolRuns {
 	///   - withoutSecondHolePlaceOutcome: The outcome of the graph without its second place of a hole
 	///     (`GraphFuzzerGenerator.fixtureWithoutSecondHolePlace`), when it has one, with the place it leaves out.
 	///   - placeLevelDisagreements: Each level of a place of a seam that one build of a type gives with other values than
-	///     another build of it, in the run of `firstOutcome` (`SeamPlaceLevels.levelDisagreements(judgingLevelsInFills:)`).
+	///     another build of it, in the run of `firstOutcome` (`SeamPlaceLevels.levelDisagreements()`).
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,

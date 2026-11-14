@@ -905,6 +905,8 @@ The filling module builds the implementation from the case’s values and its ow
 
 When a tree cannot fill a place: a seam passes it up through its own builder, whose enum holds the inner seam’s in a case, for its caller to fill, and a root reports an error.
 
+A seam can fill an inner seam’s place with a type whose own tree holds a place the seam cannot fill. That place is a case of the filling type’s enum, nested by type, and the type that calls the inner seam has a case for the call and each builder it fills, such as `.inner_serviceBuilder(values, innerScope, scope)`: what the calling type binds before the call, the scope the inner seam handed the fill, and the filling type’s enum. A place the inner seam passes up from a seam it calls has a case of its own, named after that seam, such as `.inner_serviceBuilder_DeepSeam`, which holds that seam’s scope. A generated implementation that receives a value the inner seam’s tree holds reads it from that scope, or, on a route where no level holds it, from the filling module.
+
 A type stops being a hole once the seam’s module reads a declaration that fulfills it ([Which modules to list](#which-modules-to-list)). The seam then builds the type itself, and a hand-written call that passes its builder stops compiling.
 
 A hand-written call fills a builder with a closure that switches over the scope and reads the values in its case:
