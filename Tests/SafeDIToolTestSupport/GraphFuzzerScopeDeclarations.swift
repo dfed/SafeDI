@@ -31,9 +31,9 @@ import SwiftSyntax
 /// extension, one nested enum per type that holds a place, named after the type as the seam's module spells it with
 /// `_Scope` appended (and `_` while a name collides), a case per property that leads to a place, named by the property's
 /// label (`p_Sendable` for one that leads to a further `@Sendable` function, `<call>_<builder>` for a place inside a
-/// fill), whose payload is the level's `<label>_Values` struct, then a forwarded value, the nested enum of the type the
-/// property builds, or an inner seam's root enum. The oracles below read it only where the generator nests every scope
-/// of the graph by type (`GraphFuzzerToolRuns.nestsEveryScopeByType`).
+/// fill), whose payload is the level's `<label>_Values` struct, then a forwarded value or the nested enum of the type the
+/// property builds; an inner seam's wrapping case holds that seam's root enum alone. The oracles below read it only where
+/// the generator nests every scope of the graph by type (`GraphFuzzerToolRuns.nestsEveryScopeByType`).
 struct GraphFuzzerScopeDeclarations {
 	/// The scope enums and value structs every file of `generatedFiles` declares, in the order of the files' names.
 	init(generatedFiles: [String: String]) {

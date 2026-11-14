@@ -502,9 +502,9 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_handsInnerSeamsDispatcherNoValuesOfOuterSeam_whenOuterSeamPassesPlaceUpThroughWrappingCase() async throws {
-		// `Outer` calls `Inner`, whose place `api` it passes up: `Outer`'s enum wraps `Inner`'s in a case that carries what
-		// `Outer` binds before `inner`, for a builder a person writes. A generated fill never reads it: `Inner`'s root
-		// dispatcher takes no parameters, so `theme`, which no type on the route binds, is `Root`'s, as inline.
+		// `Outer` calls `Inner`, whose place `api` it passes up: `Outer`'s enum wraps `Inner`'s in a case that holds `Inner`'s
+		// enum alone. `Inner`'s root dispatcher takes no parameters, so `theme`, which no type on the route binds, is
+		// `Root`'s, as inline.
 		try await expectFill(
 			feature: Self.passedUpPlaceFeature(outerBindsTheme: false),
 			fulfillers: [Self.passedUpPlaceFulfiller],
@@ -518,10 +518,10 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let theme = Theme()
 			        func __safeDI_outer() -> Outer {
-			            _ = Outer.__safeDI_Outer_ABE6117F85943AE5.self // \(Self.moduleInfoComment)
+			            _ = Outer.__safeDI_Outer_73B20716AC529436.self // \(Self.moduleInfoComment)
 			            func __safeDI_apiBuilder_Outer(_ scope: Outer.SafeDIScope_Api) -> any Api {
 			                switch scope {
-			                case let .inner(_, scope): return __safeDI_apiBuilder_Inner(scope)
+			                case let .inner(scope): return __safeDI_apiBuilder_Inner(scope)
 			                }
 			            }
 			            func __safeDI_apiBuilder_Inner(_ scope: Inner.SafeDIScope_Api) -> any Api {

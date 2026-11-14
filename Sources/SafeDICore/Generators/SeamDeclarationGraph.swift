@@ -45,9 +45,9 @@
 ///
 /// A call of an inner seam that passes a place up holds no place in the start order this graph gives (`init(treeRootedAt:)`
 /// reads only sites and fills): it is no carrier, so it starts among its type's other children. The enums' graph
-/// (`placeHolding(inTreeRootedAt:edges:)`) counts it as a place, so the call has a case, whose payload only a builder a
-/// person writes reads in this release: a generated fill reads none of it, and a fill that would read what the passing-up
-/// seam binds before the call is reported (`boundByPassingUpSeam`), by ruling for 2.3.0.
+/// (`placeHolding(inTreeRootedAt:edges:)`) counts it as a place, so the call has a case, which holds the inner seam's enum
+/// and no value of the calling type: a fill that would read what the passing-up seam binds before the call is reported
+/// (`boundByPassingUpSeam`).
 struct SeamDeclarationGraph {
 	/// Reads the graph of the tree `root` roots, every place of every hole a place.
 	init(treeRootedAt root: ScopeGenerator) {
