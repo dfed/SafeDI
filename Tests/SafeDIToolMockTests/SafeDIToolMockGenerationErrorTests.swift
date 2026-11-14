@@ -919,7 +919,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Row.swift"]):4:5: error: @Received property `session: Session` is hidden in chain: Feed -> Row. In the mock of `Screen`, `Row` is passed the `session: Session` that `Screen` forwards, but `Feed` receives `session: Instantiator<Session>` with the same label, so the types below `Feed` receive `session: Instantiator<Session>` instead. Give `session: Session` on `Screen` a different label to fix.
+				\(fixtures["Row.swift"]):4:5: error: @Received property `session: Session` is hidden in chain: Feed -> Row. In the mock of `Screen`, `Row` is passed the `session: Session` that `Screen` forwards, but `Feed` receives `session: Instantiator<Session>` with the same label, so the types below `Feed` receive `session: Instantiator<Session>` instead. Receive `session: Session` on `Row` and `session: Instantiator<Session>` on `Feed` under different labels to fix.
 				\(fixtures["Feed.swift"]):4:5: note: `session: Instantiator<Session>` is received here
 				"""
 			},
@@ -970,7 +970,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Row.swift"]):4:5: error: @Received property `session: Session` is hidden in chain: Feed -> Row. In the mock of `Screen`, `Row` is passed the `session: Session` that `Screen` forwards, but `Feed` receives `session: LazilyInstantiated<Session>` with the same label, so the types below `Feed` receive `session: LazilyInstantiated<Session>` instead. Give `session: Session` on `Screen` a different label to fix.
+				\(fixtures["Row.swift"]):4:5: error: @Received property `session: Session` is hidden in chain: Feed -> Row. In the mock of `Screen`, `Row` is passed the `session: Session` that `Screen` forwards, but `Feed` receives `session: LazilyInstantiated<Session>` with the same label, so the types below `Feed` receive `session: LazilyInstantiated<Session>` instead. Receive `session: Session` on `Row` and `session: LazilyInstantiated<Session>` on `Feed` under different labels to fix.
 				\(fixtures["Feed.swift"]):4:5: note: `session: LazilyInstantiated<Session>` is received here
 				"""
 			},
@@ -1021,7 +1021,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Row.swift"]):4:5: error: @Received property `user: User` is hidden in chain: Editor -> Row. In the mock of `Screen`, `Row` is passed the `user: User` that `Screen` forwards, but `Editor` receives `user: Draft` with the same label, so the types below `Editor` receive `user: Draft` instead. Give `user: User` on `Screen` a different label to fix.
+				\(fixtures["Row.swift"]):4:5: error: @Received property `user: User` is hidden in chain: Editor -> Row. In the mock of `Screen`, `Row` is passed the `user: User` that `Screen` forwards, but `Editor` receives `user: Draft` with the same label, so the types below `Editor` receive `user: Draft` instead. Receive `user: User` on `Row` and `user: Draft` on `Editor` under different labels to fix.
 				\(fixtures["Editor.swift"]):4:5: note: `user: Draft` is received here
 				"""
 			},
@@ -1070,7 +1070,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Row.swift"]):4:5: error: @Received property `session: Session` is hidden in chain: Feed -> Row. In the mock of `Screen`, `Row` is passed the `session: Session` that `Screen` forwards, but `Feed` receives `session: Instantiator<Session>` with the same label, so the types below `Feed` receive `session: Instantiator<Session>` instead. Give `session: Session` on `Screen` a different label to fix.
+				\(fixtures["Row.swift"]):4:5: error: @Received property `session: Session` is hidden in chain: Feed -> Row. In the mock of `Screen`, `Row` is passed the `session: Session` that `Screen` forwards, but `Feed` receives `session: Instantiator<Session>` with the same label, so the types below `Feed` receive `session: Instantiator<Session>` instead. Receive `session: Session` on `Row` and `session: Instantiator<Session>` on `Feed` under different labels to fix.
 				\(fixtures["Feed.swift"]):4:5: note: `session: Instantiator<Session>` is received here
 				"""
 			},

@@ -2842,15 +2842,19 @@ public actor DependencyTreeGenerator {
 
 			/// An `error:` line that names the hiding receive, as `HiddenReceivedProperty`'s does, and a `note:` at it.
 			var sourceDiagnostics: [SourceDiagnostic] {
+				let property = property.asSource
 				let hidingProperty = hidingProperty.asSource
 				let hidingType = chain[0].asSource
+				let receivingType = chain[chain.count - 1].asSource
 				let forwardedProperty = forwardedProperty.asSource
 				let mockedType = mockedType.asSource
+				// Giving the forwarded property another label leaves the receive hidden wherever `hidingType` holds a
+				// form of the label the mock cannot derive from the receiver's, so the remedy separates the two receives.
 				return [
 					SourceDiagnostic(
 						severity: .error,
 						location: declarationLocation,
-						message: "@\(Dependency.Source.receivedRawValue) property `\(property.asSource)` is hidden in chain: \(chain.map(\.asSource).joined(separator: " -> ")). In the mock of `\(mockedType)`, `\(chain[chain.count - 1].asSource)` is passed the `\(forwardedProperty)` that `\(mockedType)` forwards, but `\(hidingType)` receives `\(hidingProperty)` with the same label, so the types below `\(hidingType)` receive `\(hidingProperty)` instead. Give `\(forwardedProperty)` on `\(mockedType)` a different label to fix.",
+						message: "@\(Dependency.Source.receivedRawValue) property `\(property)` is hidden in chain: \(chain.map(\.asSource).joined(separator: " -> ")). In the mock of `\(mockedType)`, `\(receivingType)` is passed the `\(forwardedProperty)` that `\(mockedType)` forwards, but `\(hidingType)` receives `\(hidingProperty)` with the same label, so the types below `\(hidingType)` receive `\(hidingProperty)` instead. Receive `\(property)` on `\(receivingType)` and `\(hidingProperty)` on `\(hidingType)` under different labels to fix.",
 					),
 					SourceDiagnostic(
 						severity: .note,
