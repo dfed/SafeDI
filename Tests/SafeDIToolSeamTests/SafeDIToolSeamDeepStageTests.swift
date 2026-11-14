@@ -24,9 +24,9 @@ import Testing
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
-/// A hole beneath more `@Sendable` functions than a concurrency thread's stack could recurse over. A staged builder's
-/// type has one level per stage, and tests run on such threads, half a megabyte on Apple platforms, where a debug build
-/// spends kilobytes of stack on a level of a recursive walk.
+/// A hole beneath more `@Sendable` functions than a concurrency thread's stack could recurse over. The `@Sendable` enum has
+/// one level per `@Sendable` function, and tests run on such threads, half a megabyte on Apple platforms, where a debug
+/// build spends kilobytes of stack on a level of a recursive walk.
 struct SafeDIToolSeamDeepStageTests: ~Copyable {
 	// MARK: Initialization
 
@@ -44,7 +44,7 @@ struct SafeDIToolSeamDeepStageTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesBuilderWithOneStagePerCarrier_whenHoleIsBeneathTwoHundredSendableInstantiators() async throws {
+	mutating func run_nestsSendableEnumOneLevelPerCarrier_whenHoleIsBeneathTwoHundredSendableInstantiators() async throws {
 		let carrierCount = 200
 		var files = [
 			"public protocol Gadget: Sendable {}",
@@ -63,23 +63,19 @@ struct SafeDIToolSeamDeepStageTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let caseName = (Array(repeating: "carried", count: carrierCount + 1) + ["held"]).joined(separator: "_")
-		// One stage for each `@Sendable` function on the path: each carrier's, then the wrapper's own, which carries nothing.
-		func expectedStageFunctionTypes(qualifiedBy qualifier: String) -> String {
-			var expectedType = "any Gadget"
-			for stage in (1...carrierCount + 2).reversed() {
-				expectedType = "@Sendable (\(qualifier)SafeDIStagedScope_Gadget_\(caseName).\(Self.stageName(at: stage))) -> \(expectedType)"
-			}
-			return expectedType
-		}
+		// One `carried_Sendable` case for each `@Sendable` function on the path but the wrapper's own, whose case is `held`.
+		let route = String(repeating: ".carried_Sendable(", count: carrierCount + 1) + ".held" + String(repeating: ")", count: carrierCount + 1)
 		let generatedSeam = try #require(output.modules["Feature"]?.generatedFiles["Feature.swift"])
-		#expect(generatedSeam.split(separator: "\n").map(String.init).filter { $0.contains("public init(") } == [
-			"    public init(__safeDI_gadgetBuilder_\(caseName): @escaping (SafeDIStagedScope_Gadget_\(caseName).Stage1) -> \(expectedStageFunctionTypes(qualifiedBy: ""))) {",
+		let seamLines = generatedSeam.split(separator: "\n").map(String.init)
+		#expect(seamLines.filter { $0.contains("public init(") } == [
+			"    public init(__safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {",
 		])
+		#expect(seamLines.filter { $0.contains("__safeDI_gadgetSendableBuilder(.") }.map { $0.trimmingCharacters(in: .whitespaces) } == [
+			"__safeDI_gadgetSendableBuilder(\(route))",
+		])
+		// One dispatcher for the root enum and one for each carrier's enum.
 		let generatedFill = try #require(output.modules["App"]?.generatedFiles["App.swift"])
-		#expect(generatedFill.split(separator: "\n").map(String.init).filter { $0.contains("func __safeDI_gadgetBuilder_\(caseName)(") } == [
-			"            func __safeDI_gadgetBuilder_\(caseName)(_ scope: Host.SafeDIStagedScope_Gadget_\(caseName).Stage1) -> \(expectedStageFunctionTypes(qualifiedBy: "Host.")) {",
-		])
+		#expect(generatedFill.split(separator: "\n").filter { $0.contains("@Sendable func __safeDI_gadgetSendableBuilder_Host") }.count == carrierCount + 2)
 	}
 
 	// MARK: Private
@@ -88,9 +84,5 @@ struct SafeDIToolSeamDeepStageTests: ~Copyable {
 
 	private static func carrier(named name: String, isSeam: Bool, holding heldType: String) -> String {
 		seamFixtureType(named: name, isSeam: isSeam, declarations: ["@Instantiated let carried: SendableInstantiator<\(heldType)>"], conformances: ", @unchecked Sendable")
-	}
-
-	private static func stageName(at stageIndex: Int) -> String {
-		"Stage\(stageIndex + 1)"
 	}
 }

@@ -1024,13 +1024,8 @@ extension ScopeGenerator {
 			hash.combine(parameter.access.spelledOnGeneratedDeclaration)
 			hash.combine(parameter.defaultKind.rawValue)
 		}
-		// After every parameter, the builders among them, every enum they reach and each staged place's stages, as a seam
-		// hashes them.
-		SeamSignature.combine(
-			scopeEnums: SeamSignature.scopeEnumShapes(of: shapedBuilders?.scopeEnums ?? [], holes: holes),
-			holes: holes.map(SeamSignature.CallShape.Hole.init),
-			into: &hash,
-		)
+		// After every parameter, the builders among them and every enum they reach, as a seam hashes them.
+		SeamSignature.combine(scopeEnums: SeamSignature.scopeEnumShapes(of: shapedBuilders?.scopeEnums ?? [], holes: holes), into: &hash)
 		var plan = PublicMockPlan(
 			parameters: parameters,
 			tiers: tiers,
@@ -1277,7 +1272,7 @@ struct PublicMockFinding: Hashable, Sendable {
 			"which \(receiverNames.first ?? typeName) instantiates and no `@Instantiable` declaration this module sees fulfills"
 		case let .builder(hole):
 			if let enumPlace = hole.enumPlace {
-				"whose case `\(enumPlace.caseName)` builds `\(hole.builtType.asSource)` for the hole `\(hole.property.label)`"
+				"whose case `\(enumPlace.describedCase)` builds `\(hole.builtType.asSource)` for the hole `\(hole.property.label)`"
 			} else {
 				"which builds `\(hole.builtType.asSource)` for the hole `\(hole.property.label)`"
 			}

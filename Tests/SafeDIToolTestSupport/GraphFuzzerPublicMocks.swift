@@ -243,10 +243,10 @@ enum GraphFuzzerPublicMockOutputFeature: String, CaseIterable, Comparable {
 	/// construction wrapped in it.
 	case consumerErasedCall
 	case consumerErasedInline
-	/// A public mock taking a builder for a hole, `<label>Builder: @escaping (…SafeDIMockScope_…`, and a staged one,
-	/// `…: @escaping (…SafeDIStagedMockScope_…`, in the declaring module.
+	/// A public mock taking a builder for a hole, `<label>Builder: @escaping (…SafeDIMockScope_…`, and a `@Sendable` one,
+	/// `<label>SendableBuilder: @escaping @Sendable (…SafeDISendableMockScope_…`, in the declaring module.
 	case holeBuilder
-	case stagedHoleBuilder
+	case sendableHoleBuilder
 	/// A consumer's mock filling a called public mock's places with functions of its own (`func __safeDI_…(_ scope:
 	/// …MockScope_…`, a fill or a dispatcher), a fill that calls the public mock again with the fill around it (a fully
 	/// lazy cycle), and a consumer's mock taking a builder and passing it up.
@@ -651,7 +651,7 @@ struct GraphFuzzerPublicMockDraw {
 			}
 		}
 
-		/// Whether the hole is built inside a `@Sendable` builder function, whose builder the public mock takes staged.
+		/// Whether the hole is built inside a `@Sendable` builder function, whose place the public mock's `@Sendable` builder builds.
 		var isSendable: Bool {
 			switch self {
 			case .direct, .instantiator, .lazilyInstantiated: false
@@ -1121,17 +1121,16 @@ struct GraphFuzzerPublicMockDraw {
 			}
 			// The call: a builder named by the type the hole instantiates, `<type, leading capitals lowered>Builder`, handed an
 			// enum of the places, whose case carries an `Instantiator`'s forwarded value; or, for a place built inside a
-			// `@Sendable` builder function, a staged builder, `<that label>_<host label>_<hole label>`, whose last stage takes the
-			// forwarded value. It returns the plain value.
+			// `@Sendable` builder function, the `@Sendable` builder, `<…>SendableBuilder`, handed the `@Sendable` enum. It returns
+			// the plain value.
 			let instantiatedTypeName = switch spelling {
 			case .plain, .instantiator: holeName
 			case .existential: protocolName
 			case .erasedConstant, .erasedInstantiator: fillName
 			}
 			let enumBuilderLabel = Self.builderLabel(ofTypeNamed: instantiatedTypeName)
-			let forwardedParameter = spelling == .instantiator ? ", _" : ""
 			let call = if position.isSendable {
-				"\(declaration.name).mock(\(enumBuilderLabel)_\(position.hostLabel)_\(holeLabel): { _ in { _\(forwardedParameter) in \(value) } })"
+				"\(declaration.name).mock(\(enumBuilderLabel.dropLast("Builder".count))SendableBuilder: { _ in \(value) })"
 			} else {
 				"\(declaration.name).mock(\(enumBuilderLabel): { _ in \(value) })"
 			}
@@ -2395,16 +2394,16 @@ extension GraphFuzzerPublicMockDraw {
 				if line.hasPrefix("@usableFromInline nonisolated func __safeDI_"), line.contains("_mockDefault_") {
 					features.insert(.forwardedProvider)
 				}
-				// A builder over an enum of the places, `SafeDIMockScope_…` or `SafeDISendableMockScope_…`, or a staged builder,
-				// `SafeDIStagedMockScope_…`.
-				if line.contains(": @escaping ("), line.contains("MockScope_"), !line.contains("func ") {
+				// A builder over an enum of the places, `SafeDIMockScope_…`, or a `@Sendable` builder over one,
+				// `SafeDISendableMockScope_…`.
+				if line.contains(": @escaping "), line.contains("MockScope_"), !line.contains("func ") {
 					features.insert(isConsumerFile ? .consumerPassesHoleBuilderUp : .holeBuilder)
-					if !isConsumerFile, line.contains(".SafeDIStagedMockScope_") {
-						features.insert(.stagedHoleBuilder)
+					if !isConsumerFile, line.contains(": @escaping @Sendable (") {
+						features.insert(.sendableHoleBuilder)
 					}
 				}
 				guard isConsumerFile else { continue }
-				// A fill, handed a place's values or a stage's struct, or a dispatcher, which a call declares only with a fill.
+				// A fill, handed a place's values, or a dispatcher, which a call declares only with a fill.
 				if line.hasPrefix("func __safeDI_") || line.hasPrefix("@Sendable func __safeDI_"), line.contains("(_ scope: "), line.contains("MockScope_") {
 					features.insert(.consumerFillsHole)
 				}

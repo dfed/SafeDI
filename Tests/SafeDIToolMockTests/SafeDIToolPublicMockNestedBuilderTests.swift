@@ -475,7 +475,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesAStagedPlaceUpUnderTheCalledMocksStem_whenNeitherCallerFillsIt() async throws {
+	mutating func generate_passesASendablePlaceUpUnderTheCalledMocksStem_whenNeitherCallerFillsIt() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(
 			core: [
 				"""
@@ -541,6 +541,10 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 		#if DEBUG
 		extension Shelf {
+		    @frozen public enum SafeDISendableMockScope_Service {
+		        case crate_Sendable(Crate.SafeDISendableMockScope_Service)
+		    }
+
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
 		        public init(
@@ -553,18 +557,18 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        serviceBuilder_Crate_job_service: @escaping (Crate.SafeDIStagedMockScope_Service_job_service.Stage1) -> @Sendable (Crate.SafeDIStagedMockScope_Service_job_service.Stage2) -> any Service,
+		        serviceSendableBuilder: @escaping @Sendable (Shelf.SafeDISendableMockScope_Service) -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Shelf {
-		        let __safeDI_serviceBuilder_Crate_job_service = serviceBuilder_Crate_job_service
-		        _ = Crate.__safeDI_Crate_mock_4E6FF0184436B101.self\(Self.comment("Core"))
-		        let crate = Crate.mock(serviceBuilder_job_service: __safeDI_serviceBuilder_Crate_job_service, safeDIOverrides: safeDIOverrides.crate)
+		        let __safeDI_serviceSendableBuilder = serviceSendableBuilder
+		        _ = Crate.__safeDI_Crate_mock_96987A7EE6DFA6C3.self\(Self.comment("Core"))
+		        let crate = Crate.mock(serviceSendableBuilder: { __safeDI_serviceSendableBuilder(.crate_Sendable($0)) }, safeDIOverrides: safeDIOverrides.crate)
 		        return Shelf(crate: crate)
 		    }
 		}
 
 		extension Shelf {
-		    public enum __safeDI_Shelf_mock_BF4FCC7689F901A5 {}
+		    public enum __safeDI_Shelf_mock_E7A34ABB426E6919 {}
 		}
 		#endif
 		"""])
@@ -593,11 +597,11 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        serviceBuilder_Crate_job_service: @escaping (Crate.SafeDIStagedMockScope_Service_job_service.Stage1) -> @Sendable (Crate.SafeDIStagedMockScope_Service_job_service.Stage2) -> any Service,
+		        serviceSendableBuilder: @escaping @Sendable (Shelf.SafeDISendableMockScope_Service) -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> ShelfScreen {
-		        _ = Shelf.__safeDI_Shelf_mock_BF4FCC7689F901A5.self\(Self.comment("Mid"))
-		        let shelf = Shelf.mock(serviceBuilder_Crate_job_service: serviceBuilder_Crate_job_service, safeDIOverrides: safeDIOverrides.shelf)
+		        _ = Shelf.__safeDI_Shelf_mock_E7A34ABB426E6919.self\(Self.comment("Mid"))
+		        let shelf = Shelf.mock(serviceSendableBuilder: serviceSendableBuilder, safeDIOverrides: safeDIOverrides.shelf)
 		        return ShelfScreen(shelf: shelf)
 		    }
 		}
@@ -1441,7 +1445,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_carriesAForwardedTypealiasOfAFunctionInTheCaseAndTheStagedBuilder_whenPublicMocksPlaceIsAnErasedInstantiator() async throws {
+	mutating func generate_carriesAForwardedTypealiasOfAFunctionInTheCases_whenPublicMocksPlaceIsAnErasedInstantiator() async throws {
 		let modules = [
 			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
 				"""
@@ -1510,35 +1514,30 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        public struct maker_Values {}
 		    }
 
-		    public enum SafeDIStagedMockScope_TapService_sendableMaker {
-		        public struct Stage1 {
-		            public let maker: ErasedInstantiator<OnTap, AnyService>
-		        }
+		    @frozen public enum SafeDISendableMockScope_TapService {
+		        case sendableMaker(sendableMaker_Values, OnTap)
 
-		        public struct Stage2 {}
-
-		        public typealias SendableLastStage<__safeDI_Forwarded> = @Sendable (Stage2, __safeDI_Forwarded) -> AnyService
+		        public struct sendableMaker_Values {}
 		    }
 
 		    public static func mock(
 		        tapServiceBuilder: @escaping (Host.SafeDIMockScope_TapService) -> AnyService,
-		        tapServiceBuilder_sendableMaker: @escaping (Host.SafeDIStagedMockScope_TapService_sendableMaker.Stage1) -> Host.SafeDIStagedMockScope_TapService_sendableMaker.SendableLastStage<OnTap>
+		        tapServiceSendableBuilder: @escaping @Sendable (Host.SafeDISendableMockScope_TapService) -> AnyService
 		    ) -> Host {
 		        let __safeDI_tapServiceBuilder = tapServiceBuilder
-		        let __safeDI_tapServiceBuilder_sendableMaker = tapServiceBuilder_sendableMaker
+		        let __safeDI_tapServiceSendableBuilder = tapServiceSendableBuilder
 		        let maker = ErasedInstantiator<OnTap, AnyService> {
 		            __safeDI_tapServiceBuilder(.maker(SafeDIMockScope_TapService.maker_Values(), $0))
 		        }
-		        let __safeDI_tapServiceBuilder_sendableMaker_Stage2 = __safeDI_tapServiceBuilder_sendableMaker(SafeDIStagedMockScope_TapService_sendableMaker.Stage1(maker: maker))
 		        let sendableMaker = SendableErasedInstantiator<OnTap, AnyService> {
-		            __safeDI_tapServiceBuilder_sendableMaker_Stage2(SafeDIStagedMockScope_TapService_sendableMaker.Stage2(), $0)
+		            __safeDI_tapServiceSendableBuilder(.sendableMaker(SafeDISendableMockScope_TapService.sendableMaker_Values(), $0))
 		        }
 		        return Host(maker: maker, sendableMaker: sendableMaker)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_mock_DB42C7557BAACB34 {}
+		    public enum __safeDI_Host_mock_9F3701B553C489E5 {}
 		}
 		#endif
 		"""])
@@ -1555,27 +1554,18 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            host: ((@escaping (Host.SafeDIMockScope_TapService) -> AnyService, @escaping (Host.SafeDIStagedMockScope_TapService_sendableMaker.Stage1) -> Host.SafeDIStagedMockScope_TapService_sendableMaker.SendableLastStage<OnTap>) -> Host)? = nil
+		            host: ((@escaping (Host.SafeDIMockScope_TapService) -> AnyService, @escaping @Sendable (Host.SafeDISendableMockScope_TapService) -> AnyService) -> Host)? = nil
 		        ) {
 		            self.host = host
 		        }
 
-		        let host: ((@escaping (Host.SafeDIMockScope_TapService) -> AnyService, @escaping (Host.SafeDIStagedMockScope_TapService_sendableMaker.Stage1) -> Host.SafeDIStagedMockScope_TapService_sendableMaker.SendableLastStage<OnTap>) -> Host)?
+		        let host: ((@escaping (Host.SafeDIMockScope_TapService) -> AnyService, @escaping @Sendable (Host.SafeDISendableMockScope_TapService) -> AnyService) -> Host)?
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> HostScreen {
 		        func __safeDI_host() -> Host {
-		            func __safeDI_tapServiceBuilder_sendableMaker(_ scope: Host.SafeDIStagedMockScope_TapService_sendableMaker.Stage1) -> Host.SafeDIStagedMockScope_TapService_sendableMaker.SendableLastStage<OnTap> {
-		                @Sendable func __safeDI_tapServiceBuilder_sendableMaker_Stage2(_ scope: Host.SafeDIStagedMockScope_TapService_sendableMaker.Stage2, _ __safeDI_forwarded: @escaping OnTap) -> AnyService {
-		                    @Sendable func __safeDI_sendableMaker(onTap: @escaping OnTap) -> TapService {
-		                        TapService(onTap: onTap)
-		                    }
-		                    return AnyService(__safeDI_sendableMaker(onTap: __safeDI_forwarded))
-		                }
-		                return __safeDI_tapServiceBuilder_sendableMaker_Stage2
-		            }
 		            func __safeDI_tapServiceBuilder_Host(_ scope: Host.SafeDIMockScope_TapService) -> AnyService {
 		                switch scope {
 		                case let .maker(_, __safeDI_forwarded):
@@ -1585,8 +1575,17 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                    return AnyService(__safeDI_maker(onTap: __safeDI_forwarded))
 		                }
 		            }
-		            _ = Host.__safeDI_Host_mock_DB42C7557BAACB34.self\(Self.comment("Core"))
-		            return if let safeDIBuilder = safeDIOverrides.host { safeDIBuilder(__safeDI_tapServiceBuilder_Host, __safeDI_tapServiceBuilder_sendableMaker) } else { Host.mock(tapServiceBuilder: __safeDI_tapServiceBuilder_Host, tapServiceBuilder_sendableMaker: __safeDI_tapServiceBuilder_sendableMaker) }
+		            @Sendable func __safeDI_tapServiceSendableBuilder_Host(_ scope: Host.SafeDISendableMockScope_TapService) -> AnyService {
+		                switch scope {
+		                case let .sendableMaker(_, __safeDI_forwarded):
+		                    @Sendable func __safeDI_sendableMaker(onTap: @escaping OnTap) -> TapService {
+		                        TapService(onTap: onTap)
+		                    }
+		                    return AnyService(__safeDI_sendableMaker(onTap: __safeDI_forwarded))
+		                }
+		            }
+		            _ = Host.__safeDI_Host_mock_9F3701B553C489E5.self\(Self.comment("Core"))
+		            return if let safeDIBuilder = safeDIOverrides.host { safeDIBuilder(__safeDI_tapServiceBuilder_Host, __safeDI_tapServiceSendableBuilder_Host) } else { Host.mock(tapServiceBuilder: __safeDI_tapServiceBuilder_Host, tapServiceSendableBuilder: __safeDI_tapServiceSendableBuilder_Host) }
 		        }
 		        let host: Host = __safeDI_host()
 		        return HostScreen(host: host)

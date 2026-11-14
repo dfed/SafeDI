@@ -90,7 +90,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_446917FA996AE016 {}
+			    public enum __safeDI_ExportFeature_22973D5D6A377C27 {}
 			}
 			""",
 		]))
@@ -103,7 +103,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_446917FA996AE016.self\(Self.pluginComment(integration))
+			            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
 			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
 			                switch scope {
 			                case .uploader:
@@ -146,7 +146,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_446917FA996AE016.self\(Self.pluginComment(integration))
+			            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
 			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
 			                switch scope {
 			                case .uploader:
@@ -169,42 +169,38 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
-	mutating func generate_readsAppsSendableMemoInsideFillsSendableStage_whenSeamBuildsHoleInsideSendableBuilder(integration: MultiModuleIntegration) async throws {
-		// `Panel`, behind `ExportFeature`'s `SendableInstantiator`, builds the hole, so its builder is staged: the first stage
-		// call hands the outer struct the memo, and `Root`'s fill reads `Root`'s `SendableLazilyInstantiated` inside its
-		// `@Sendable` inner stage, so the service is created when an `UploadJob` reads it, as inline.
+	mutating func generate_readsAppsSendableMemoInsideSendableFill_whenSeamBuildsHoleInsideSendableBuilder(integration: MultiModuleIntegration) async throws {
+		// `Panel`, behind `ExportFeature`'s `SendableInstantiator`, builds the hole, so it is a case of the `@Sendable` enum,
+		// and `Root`'s fill reads `Root`'s `SendableLazilyInstantiated` inside the `@Sendable` fill, so the service is created
+		// when an `UploadJob` reads it, as inline.
 		let feature = Self.feature(exportServiceConformances: ", Sendable", seamDeclarations: Self.seamBuildingPanel, additionalTypes: [Self.panel])
 		let app = Self.app(declarations: Self.uploaderBuildingJobs, rootDeclarations: ["@Instantiated let exportService: SendableLazilyInstantiated<ExportService>"], handWrittenFill: nil)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app), integration: integration, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"ExportFeature": """
 			extension ExportFeature {
-			    public enum SafeDIStagedScope_Uploader_panelBuilder_uploader {
-			        public struct Stage1 {
-			            public var exportService: ExportService { __safeDI_exportService.instance }
-			            public let screenBuilder: Instantiator<ExportScreen>
-			            let __safeDI_exportService: LazilyInstantiated<ExportService>
+			    @frozen public enum SafeDIScope_Uploader {
+			        @frozen public enum Panel_Scope {
+			            case uploader(uploader_Values)
 
-			            init(exportService: LazilyInstantiated<ExportService>, screenBuilder: Instantiator<ExportScreen>) {
-			                __safeDI_exportService = exportService
-			                self.screenBuilder = screenBuilder
-			            }
+			            public struct uploader_Values {}
 			        }
+			    }
 
-			        public struct Stage2 {}
+			    @frozen public enum SafeDISendableScope_Uploader {
+			        case panelBuilder(SafeDIScope_Uploader.Panel_Scope)
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
-			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder_panelBuilder_uploader: @escaping (SafeDIStagedScope_Uploader_panelBuilder_uploader.Stage1) -> @Sendable (SafeDIStagedScope_Uploader_panelBuilder_uploader.Stage2) -> any Uploader) {
+			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderSendableBuilder: @escaping @Sendable (SafeDISendableScope_Uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_screenBuilder() -> ExportScreen {
 			            ExportScreen(exportService: exportService.instance)
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
-			        let __safeDI_uploaderBuilder_panelBuilder_uploader_Stage2 = __safeDI_uploaderBuilder_panelBuilder_uploader(SafeDIStagedScope_Uploader_panelBuilder_uploader.Stage1(exportService: exportService, screenBuilder: screenBuilder))
 			        @Sendable func __safeDI_panelBuilder() -> Panel {
-			            let uploader: any Uploader = __safeDI_uploaderBuilder_panelBuilder_uploader_Stage2(SafeDIStagedScope_Uploader_panelBuilder_uploader.Stage2())
+			            let uploader: any Uploader = __safeDI_uploaderSendableBuilder(.panelBuilder(.uploader(SafeDIScope_Uploader.Panel_Scope.uploader_Values())))
 			            return Panel(uploader: uploader)
 			        }
 			        let panelBuilder = SendableInstantiator<Panel>(__safeDI_panelBuilder)
@@ -213,7 +209,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_29F6DE7C0A1F158C {}
+			    public enum __safeDI_ExportFeature_6AFA0E82E1FFBD43 {}
 			}
 			""",
 		]))
@@ -226,9 +222,15 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let exportService = SendableLazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_29F6DE7C0A1F158C.self\(Self.pluginComment(integration))
-			            func __safeDI_uploaderBuilder_panelBuilder_uploader(_ scope: ExportFeature.SafeDIStagedScope_Uploader_panelBuilder_uploader.Stage1) -> @Sendable (ExportFeature.SafeDIStagedScope_Uploader_panelBuilder_uploader.Stage2) -> any Uploader {
-			                @Sendable func __safeDI_uploaderBuilder_panelBuilder_uploader_Stage2(_ scope: ExportFeature.SafeDIStagedScope_Uploader_panelBuilder_uploader.Stage2) -> any Uploader {
+			            _ = ExportFeature.__safeDI_ExportFeature_6AFA0E82E1FFBD43.self\(Self.pluginComment(integration))
+			            @Sendable func __safeDI_uploaderSendableBuilder_ExportFeature(_ scope: ExportFeature.SafeDISendableScope_Uploader) -> any Uploader {
+			                switch scope {
+			                case let .panelBuilder(scope): return __safeDI_uploaderBuilder_ExportFeature_Panel_Scope(scope)
+			                }
+			            }
+			            @Sendable func __safeDI_uploaderBuilder_ExportFeature_Panel_Scope(_ scope: ExportFeature.SafeDIScope_Uploader.Panel_Scope) -> any Uploader {
+			                switch scope {
+			                case .uploader:
 			                    func __safeDI_uploader() -> DefaultUploader {
 			                        func __safeDI_jobBuilder() -> UploadJob {
 			                            UploadJob(exportService: exportService.instance)
@@ -239,9 +241,8 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                    let uploader: any Uploader = __safeDI_uploader()
 			                    return uploader
 			                }
-			                return __safeDI_uploaderBuilder_panelBuilder_uploader_Stage2
 			            }
-			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder_panelBuilder_uploader: __safeDI_uploaderBuilder_panelBuilder_uploader)
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderSendableBuilder: __safeDI_uploaderSendableBuilder_ExportFeature)
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(exportService: exportService, exportFeature: exportFeature)
@@ -254,8 +255,8 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenFillsSendableStageReadsAppsNonSendableWrapper(integration: MultiModuleIntegration) async {
-		// The staged hole of the cell above, with `Root` holding a plain `LazilyInstantiated`: the fill's inner stage would
+	mutating func generate_throwsError_whenSendableFillReadsAppsNonSendableWrapper(integration: MultiModuleIntegration) async {
+		// The `@Sendable` place of the cell above, with `Root` holding a plain `LazilyInstantiated`: the `@Sendable` fill would
 		// capture it, as `ExportFeature`'s `SendableInstantiator` would inline.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
@@ -291,7 +292,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let exportService = SendableLazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_446917FA996AE016.self\(Self.pluginComment(integration))
+			            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
 			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
 			                switch scope {
 			                case .uploader:
@@ -397,7 +398,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_5648D1BBCDF4F203 {}
+			    public enum __safeDI_ExportFeature_00B6A325709B1B40 {}
 			}
 			""",
 		]))
@@ -414,7 +415,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
 			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_5648D1BBCDF4F203.self\(Self.pluginComment(integration))
+			            _ = ExportFeature.__safeDI_ExportFeature_00B6A325709B1B40.self\(Self.pluginComment(integration))
 			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
 			                switch scope {
 			                case let .uploader(scope):
@@ -493,7 +494,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_535C4E406B5C5750 {}
+			    public enum __safeDI_ExportFeature_E1C7C999BA863935 {}
 			}
 			""",
 		]))
@@ -506,7 +507,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_535C4E406B5C5750.self\(Self.pluginComment(integration))
+			            _ = ExportFeature.__safeDI_ExportFeature_E1C7C999BA863935.self\(Self.pluginComment(integration))
 			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
 			                switch scope {
 			                case .uploader:
@@ -540,7 +541,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
 			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_535C4E406B5C5750.self\(Self.pluginComment(integration))
+			            _ = ExportFeature.__safeDI_ExportFeature_E1C7C999BA863935.self\(Self.pluginComment(integration))
 			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
 			                switch scope {
 			                case .uploader:
@@ -623,7 +624,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_5958B573451EB652 {}
+			    public enum __safeDI_ExportFeature_1C2D437F31039D13 {}
 			}
 			""",
 		]))
@@ -640,7 +641,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        let logger: Logger! = currentLogger
 			        #sourceLocation()
 			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_5958B573451EB652.self\(Self.pluginComment(integration))
+			            _ = ExportFeature.__safeDI_ExportFeature_1C2D437F31039D13.self\(Self.pluginComment(integration))
 			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
 			                switch scope {
 			                case .uploader:
@@ -716,7 +717,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_03939A0052FE861E {}
+			    public enum __safeDI_ExportFeature_0ADF41BAF7CFEFF7 {}
 			}
 			""",
 		]))
@@ -733,7 +734,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let reportBuilder = Instantiator<Report>(__safeDI_reportBuilder)
 			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_03939A0052FE861E.self\(Self.pluginComment(integration))
+			            _ = ExportFeature.__safeDI_ExportFeature_0ADF41BAF7CFEFF7.self\(Self.pluginComment(integration))
 			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
 			                switch scope {
 			                case let .uploader(scope):
@@ -805,7 +806,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_446917FA996AE016 {}
+			    public enum __safeDI_ExportFeature_22973D5D6A377C27 {}
 			}
 			""",
 		]))
@@ -818,7 +819,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_446917FA996AE016.self\(Self.pluginComment(integration))
+			            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
 			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
 			                switch scope {
 			                case .uploader:
@@ -886,7 +887,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_13794DFBF69DD645 {}
+			    public enum __safeDI_ExportFeature_6600585188E01684 {}
 			}
 			""",
 		]))
@@ -899,7 +900,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_13794DFBF69DD645.self\(Self.pluginComment(integration))
+			            _ = ExportFeature.__safeDI_ExportFeature_6600585188E01684.self\(Self.pluginComment(integration))
 			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
 			                switch scope {
 			                case let .uploader(scope):
@@ -971,13 +972,24 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_446917FA996AE016 {}
+			    public enum __safeDI_ExportFeature_22973D5D6A377C27 {}
 			}
 			""",
 			"Shell": """
 			extension Shell {
 			    @frozen public enum SafeDIScope_Uploader {
-			        case exportFeature(ExportFeature.SafeDIScope_Uploader)
+			        case exportFeature(exportFeature_Values, ExportFeature.SafeDIScope_Uploader)
+
+			        public struct exportFeature_Values {
+			            public var exportService: ExportService { __safeDI_exportService.instance }
+			            public let headerBuilder: Instantiator<Header>
+			            let __safeDI_exportService: LazilyInstantiated<ExportService>
+
+			            init(exportService: LazilyInstantiated<ExportService>, headerBuilder: Instantiator<Header>) {
+			                __safeDI_exportService = exportService
+			                self.headerBuilder = headerBuilder
+			            }
+			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -989,8 +1001,8 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let headerBuilder = Instantiator<Header>(__safeDI_headerBuilder)
 			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_446917FA996AE016.self
-			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: { __safeDI_uploaderBuilder(.exportFeature($0)) })
+			            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: { __safeDI_uploaderBuilder(.exportFeature(SafeDIScope_Uploader.exportFeature_Values(exportService: exportService, headerBuilder: headerBuilder), $0)) })
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(headerBuilder: headerBuilder, exportFeature: exportFeature)
@@ -998,7 +1010,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 
 			extension Shell {
-			    public enum __safeDI_Shell_DF7335D3AA0E9B15 {}
+			    public enum __safeDI_Shell_B78E374D9FCE9298 {}
 			}
 			""",
 		]))
@@ -1011,10 +1023,10 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_shell() -> Shell {
-			            _ = Shell.__safeDI_Shell_DF7335D3AA0E9B15.self\(Self.pluginComment(integration, seam: "Shell"))
+			            _ = Shell.__safeDI_Shell_B78E374D9FCE9298.self\(Self.pluginComment(integration, seam: "Shell"))
 			            func __safeDI_uploaderBuilder_Shell(_ scope: Shell.SafeDIScope_Uploader) -> any Uploader {
 			                switch scope {
-			                case let .exportFeature(scope): return __safeDI_uploaderBuilder_ExportFeature(scope)
+			                case let .exportFeature(_, scope): return __safeDI_uploaderBuilder_ExportFeature(scope)
 			                }
 			            }
 			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
@@ -1081,7 +1093,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		}
 
 		extension ExportFeature {
-		    public enum __safeDI_ExportFeature_446917FA996AE016 {}
+		    public enum __safeDI_ExportFeature_22973D5D6A377C27 {}
 		}
 		"""
 		let mock = """
@@ -1164,7 +1176,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    public convenience init() {
 			        let exportService = ExportService()
 			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_446917FA996AE016.self\(Self.pluginComment(integration))
+			            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
 			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
 			                switch scope {
 			                case let .uploader(scope):
@@ -1177,7 +1189,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			                        func __safeDI_reentry() -> Reentry {
 			                            let exportService = ExportService()
 			                            func __safeDI_featureBuilder() -> ExportFeature {
-			                                _ = ExportFeature.__safeDI_ExportFeature_446917FA996AE016.self\(Self.pluginComment(integration))
+			                                _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
 			                                return ExportFeature(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
 			                            }
 			                            let featureBuilder = Instantiator<ExportFeature>(__safeDI_featureBuilder)
@@ -1223,7 +1235,8 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 	/// `ExportFeature`'s declarations: `screenBuilder`, and `uploader: any Uploader`, the hole.
 	private static let seamDeclarations = ["@Instantiated let screenBuilder: Instantiator<ExportScreen>", "@Instantiated let uploader: any Uploader"]
 
-	/// `ExportFeature`'s declarations when it builds the hole in `Panel`, behind a `SendableInstantiator`: a staged hole.
+	/// `ExportFeature`'s declarations when it builds the hole in `Panel`, behind a `SendableInstantiator`: a place of the
+	/// `@Sendable` enum.
 	private static let seamBuildingPanel = ["@Instantiated let screenBuilder: Instantiator<ExportScreen>", "@Instantiated let panelBuilder: SendableInstantiator<Panel>"]
 
 	/// `Panel`, which instantiates `uploader: any Uploader`.

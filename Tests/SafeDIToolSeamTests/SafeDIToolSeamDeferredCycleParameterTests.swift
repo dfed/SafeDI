@@ -25,8 +25,9 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// A hole's site inside the builder function a lazy cycle closes on, in the tree of a seam that defers a pass-through
-/// of a label that function takes as a cycle parameter: the site's struct carries the function's parameter, by value,
-/// as inline's site reads it, never the seam's memo of the pass-through, which the parameter hides.
+/// of a label that function takes as a cycle parameter: the level of the site's type, which every build of the type
+/// builds in that function, carries the function's parameter, by value, as inline's site reads it, never the seam's memo
+/// of the pass-through, which the parameter hides, nor the value of the chain the first build reports.
 struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 	// MARK: Initialization
 
@@ -139,12 +140,13 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 	private static let callComment = MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature")
 
 	/// `App`'s generated file, whose `Root` binds `tag` with `rootTagCode` and calls `Hub`'s initializer under the guard
-	/// `guardName`, passing `tagArgument` and the dispatcher, whose one case, `caseName`, `fillCode` fills.
+	/// `guardName`, passing `tagArgument` and the root dispatcher, whose one case, `rootCaseName`, hands `A`'s enum to its
+	/// dispatcher, whose one case, `api`, `fillCode` fills.
 	private static func appFile(
 		guardName: String,
 		rootTagCode: String = "let tag = Tag()",
 		tagArgument: String = "tag",
-		caseName: String = "aBuilder_api",
+		rootCaseName: String = "aBuilder",
 		fillCode: String = "let api: any Api = LiveApi()",
 	) -> [String: String] {
 		["App.swift": generatedFileHeader + """
@@ -159,7 +161,12 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		            _ = Hub.\(guardName).self\(callComment)
 		            func __safeDI_apiBuilder_Hub(_ scope: Hub.SafeDIScope_Api) -> any Api {
 		                switch scope {
-		                case \(fillCode.contains("scope.") ? "let .\(caseName)(scope)" : ".\(caseName)"):
+		                case let .\(rootCaseName)(_, scope): return __safeDI_apiBuilder_Hub_A_Scope(scope)
+		                }
+		            }
+		            func __safeDI_apiBuilder_Hub_A_Scope(_ scope: Hub.SafeDIScope_Api.A_Scope) -> any Api {
+		                switch scope {
+		                case \(fillCode.contains("scope.") ? "let .api(scope)" : ".api"):
 		                    \(fillCode)
 		                    return api
 		                }
@@ -179,12 +186,25 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		["Feature.swift": generatedFileHeader + """
 		extension Hub {
 		    @frozen public enum SafeDIScope_Api {
-		        case aBuilder_api(aBuilder_api_Values)
+		        case aBuilder(aBuilder_Values, SafeDIScope_Api.A_Scope)
 
-		        public struct aBuilder_api_Values {
-		            \(access) let tag: \(tagType)
-		            \(access) let reader: TagReader
-		            \(access) let bBuilder: Instantiator<B>
+		        public struct aBuilder_Values {
+		            \(access) var tag: \(tagType) { __safeDI_tag.instance }
+		            let __safeDI_tag: LazilyInstantiated<\(tagType)>
+
+		            init(tag: LazilyInstantiated<\(tagType)>) {
+		                __safeDI_tag = tag
+		            }
+		        }
+
+		        @frozen public enum A_Scope {
+		            case api(api_Values)
+
+		            public struct api_Values {
+		                \(access) let tag: \(tagType)
+		                \(access) let reader: TagReader
+		                \(access) let bBuilder: Instantiator<B>
+		            }
 		        }
 		    }
 
@@ -192,6 +212,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    \(access) init(__safeDI_tag: @autoclosure @escaping () -> \(tagType), __safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
 		        let tag = LazilyInstantiated<\(tagType)>(__safeDI_tag)
+		        let __safeDI_apiValues_aBuilder = SafeDIScope_Api.aBuilder_Values(tag: tag)
 		        func __safeDI_aBuilder(tag: \(tagType)) -> A {
 		            let reader = TagReader(tag: tag)
 		            func __safeDI_bBuilder(tag: Tag) -> B {
@@ -203,7 +224,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		            let bBuilder = Instantiator<B> {
 		                __safeDI_bBuilder(tag: $0)
 		            }
-		            let api: any Api = __safeDI_apiBuilder(.aBuilder_api(SafeDIScope_Api.aBuilder_api_Values(tag: tag, reader: reader, bBuilder: bBuilder)))
+		            let api: any Api = __safeDI_apiBuilder(.aBuilder(__safeDI_apiValues_aBuilder, .api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))))
 		            return A(reader: reader, api: api, bBuilder: bBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
@@ -222,21 +243,26 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 	/// `Feature`'s generated file for `Hub`'s tree built behind `aBuilder: SendableInstantiator<A>`.
 	private static let sendableCycleFeatureFile = ["Feature.swift": generatedFileHeader + """
 	extension Hub {
-	    public enum SafeDIStagedScope_Api_aBuilder_api {
-	        public struct Stage1 {}
+	    @frozen public enum SafeDIScope_Api {
+	        @frozen public enum A_Scope {
+	            case api(api_Values)
 
-	        public struct Stage2 {
-	            public let tag: Tag
-	            public let reader: TagReader
-	            public let bBuilder: SendableInstantiator<B>
+	            public struct api_Values {
+	                public let tag: Tag
+	                public let reader: TagReader
+	                public let bBuilder: SendableInstantiator<B>
+	            }
 	        }
+	    }
+
+	    @frozen public enum SafeDISendableScope_Api {
+	        case aBuilder(SafeDIScope_Api.A_Scope)
 	    }
 
 	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
-	    public init(__safeDI_tag: @autoclosure @escaping @Sendable () -> Tag, __safeDI_apiBuilder_aBuilder_api: @escaping (SafeDIStagedScope_Api_aBuilder_api.Stage1) -> @Sendable (SafeDIStagedScope_Api_aBuilder_api.Stage2) -> any Api) {
+	    public init(__safeDI_tag: @autoclosure @escaping @Sendable () -> Tag, __safeDI_apiSendableBuilder: @escaping @Sendable (SafeDISendableScope_Api) -> any Api) {
 	        let tag = SendableLazilyInstantiated<Tag>(__safeDI_tag)
-	        let __safeDI_apiBuilder_aBuilder_api_Stage2 = __safeDI_apiBuilder_aBuilder_api(SafeDIStagedScope_Api_aBuilder_api.Stage1())
 	        @Sendable func __safeDI_aBuilder(tag: Tag) -> A {
 	            let reader = TagReader(tag: tag)
 	            @Sendable func __safeDI_bBuilder(tag: Tag) -> B {
@@ -248,7 +274,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 	            let bBuilder = SendableInstantiator<B> {
 	                __safeDI_bBuilder(tag: $0)
 	            }
-	            let api: any Api = __safeDI_apiBuilder_aBuilder_api_Stage2(SafeDIStagedScope_Api_aBuilder_api.Stage2(tag: tag, reader: reader, bBuilder: bBuilder))
+	            let api: any Api = __safeDI_apiSendableBuilder(.aBuilder(.api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))))
 	            return A(reader: reader, api: api, bBuilder: bBuilder)
 	        }
 	        let aBuilder = SendableInstantiator<A> {
@@ -259,11 +285,11 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 	}
 
 	extension Hub {
-	    public enum __safeDI_Hub_CE1237D4AE25666D {}
+	    public enum __safeDI_Hub_1E148D9D3972F58F {}
 	}
 	"""]
 
-	/// `App`'s generated file for `Hub`'s tree built behind `aBuilder: SendableInstantiator<A>`, whose fill of the last stage
+	/// `App`'s generated file for `Hub`'s tree built behind `aBuilder: SendableInstantiator<A>`, whose fill of the place
 	/// is `fillCode`.
 	private static func sendableCycleAppFile(fillCode: String = "let api: any Api = LiveApi()") -> [String: String] {
 		["App.swift": generatedFileHeader + """
@@ -275,15 +301,20 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		    public convenience init() {
 		        let tag = Tag()
 		        func __safeDI_hub() -> Hub {
-		            _ = Hub.__safeDI_Hub_CE1237D4AE25666D.self\(callComment)
-		            func __safeDI_apiBuilder_aBuilder_api(_ scope: Hub.SafeDIStagedScope_Api_aBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedScope_Api_aBuilder_api.Stage2) -> any Api {
-		                @Sendable func __safeDI_apiBuilder_aBuilder_api_Stage2(_ scope: Hub.SafeDIStagedScope_Api_aBuilder_api.Stage2) -> any Api {
+		            _ = Hub.__safeDI_Hub_1E148D9D3972F58F.self\(callComment)
+		            @Sendable func __safeDI_apiSendableBuilder_Hub(_ scope: Hub.SafeDISendableScope_Api) -> any Api {
+		                switch scope {
+		                case let .aBuilder(scope): return __safeDI_apiBuilder_Hub_A_Scope(scope)
+		                }
+		            }
+		            @Sendable func __safeDI_apiBuilder_Hub_A_Scope(_ scope: Hub.SafeDIScope_Api.A_Scope) -> any Api {
+		                switch scope {
+		                case \(fillCode.contains("scope.") ? "let .api(scope)" : ".api"):
 		                    \(fillCode)
 		                    return api
 		                }
-		                return __safeDI_apiBuilder_aBuilder_api_Stage2
 		            }
-		            return Hub(__safeDI_tag: tag, __safeDI_apiBuilder_aBuilder_api: __safeDI_apiBuilder_aBuilder_api)
+		            return Hub(__safeDI_tag: tag, __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        self.init(tag: tag, hub: hub)
@@ -302,8 +333,8 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// function's `tag`, by value, as inline's site reads it: `Root`'s where `Hub` builds `A`, `B`'s where `B` does.
 		let modules = Self.modules()
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_B47455B435186A99"))
-		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_B47455B435186A99"))
+		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_479B8C0B49D168CB"))
+		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_479B8C0B49D168CB"))
 		try await expectValuesEqualInlineBuild(output, modules: modules, probes: [DifferentialValueProbe("Root()"), Cycle.instantiator.probe])
 	}
 
@@ -314,8 +345,8 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// site carries it as the function takes it.
 		let modules = Self.modules(readerReceive: "@Received(onlyIfAvailable: true) let tag: Tag?")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_C838B16EBCDE3D8B", tagType: "Tag?"))
-		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_C838B16EBCDE3D8B"))
+		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_0340CEF548435042", tagType: "Tag?"))
+		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_0340CEF548435042"))
 		try await expectValuesEqualInlineBuild(output, modules: modules, probes: [DifferentialValueProbe("Root()"), Cycle.instantiator.probe])
 	}
 
@@ -329,12 +360,25 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Hub {
 		    @frozen public enum SafeDIScope_Api {
-		        case a_api(a_api_Values)
+		        case a(a_Values, SafeDIScope_Api.A_Scope)
 
-		        public struct a_api_Values {
-		            public let tag: Tag
-		            public let reader: TagReader
-		            public let bBuilder: Instantiator<B>
+		        public struct a_Values {
+		            public var tag: Tag { __safeDI_tag.instance }
+		            let __safeDI_tag: LazilyInstantiated<Tag>
+
+		            init(tag: LazilyInstantiated<Tag>) {
+		                __safeDI_tag = tag
+		            }
+		        }
+
+		        @frozen public enum A_Scope {
+		            case api(api_Values)
+
+		            public struct api_Values {
+		                public let tag: Tag
+		                public let reader: TagReader
+		                public let bBuilder: Instantiator<B>
+		            }
 		        }
 		    }
 
@@ -342,6 +386,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
 		        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
+		        let __safeDI_apiValues_a = SafeDIScope_Api.a_Values(tag: tag)
 		        func __safeDI_a(tag: Tag) -> A {
 		            let reader = TagReader(tag: tag)
 		            func __safeDI_bBuilder(tag: Tag) -> B {
@@ -353,7 +398,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		            let bBuilder = Instantiator<B> {
 		                __safeDI_bBuilder(tag: $0)
 		            }
-		            let api: any Api = __safeDI_apiBuilder(.a_api(SafeDIScope_Api.a_api_Values(tag: tag, reader: reader, bBuilder: bBuilder)))
+		            let api: any Api = __safeDI_apiBuilder(.a(__safeDI_apiValues_a, .api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))))
 		            return A(reader: reader, api: api, bBuilder: bBuilder)
 		        }
 		        let a = LazilyInstantiated<A> {
@@ -364,11 +409,11 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		}
 
 		extension Hub {
-		    public enum __safeDI_Hub_C65C21D0A2486BC2 {}
+		    public enum __safeDI_Hub_2DC4F3FF104D4C4D {}
 		}
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == Self.appFile(
-			guardName: "__safeDI_Hub_C65C21D0A2486BC2",
+			guardName: "__safeDI_Hub_2DC4F3FF104D4C4D",
 			rootTagCode: """
 			func __safeDI_tag() -> Tag {
 			            Tag()
@@ -376,16 +421,16 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 			""",
 			tagArgument: "tag.instance",
-			caseName: "a_api",
+			rootCaseName: "a",
 		))
 		try await expectValuesEqualInlineBuild(output, modules: modules, probes: [DifferentialValueProbe("Root()"), Cycle.lazilyInstantiated.probe])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_carriesCycleParameterInStage_whenSendableInstantiatorCycleClosesOnSendableFunction() async throws {
-		// The function that builds `A` is `@Sendable`, so it starts the site's second stage, whose struct carries the
-		// function's `tag`; the memo, read inside a `@Sendable` function, is a `SendableLazilyInstantiated`.
+	mutating func generate_carriesCycleParameterInLevel_whenSendableInstantiatorCycleClosesOnSendableFunction() async throws {
+		// The function that builds `A` is `@Sendable`, so the place is a case of the `@Sendable` enum, and `A`'s level carries
+		// the function's `tag`; the memo, read inside a `@Sendable` function, is a `SendableLazilyInstantiated`.
 		let modules = Self.modules(cycle: .sendableInstantiator)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.sendableCycleFeatureFile)
@@ -400,9 +445,9 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// `tag` inline's `LiveApi` receives is `B`'s.
 		let modules = Self.modules(liveApiDeclarations: ["@Received let tag: Tag"])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_B47455B435186A99"))
+		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_479B8C0B49D168CB"))
 		#expect(output.modules["App"]?.generatedFiles == Self.appFile(
-			guardName: "__safeDI_Hub_B47455B435186A99",
+			guardName: "__safeDI_Hub_479B8C0B49D168CB",
 			fillCode: """
 			let tag = scope.tag
 			                    let api: any Api = LiveApi(tag: tag)
@@ -413,9 +458,9 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_fillReadsCycleParameterFromStage_whenSendableFillReceivesLabel() async throws {
-		// The `@Sendable` function's `tag` is in the site's second stage, which the fill's `@Sendable` stage binds `tag` from:
-		// where `B` builds `A` again, `LiveApi` receives `B`'s `tag`, as inline's does, never `Root`'s.
+	mutating func generate_fillReadsCycleParameterFromLevel_whenSendableFillReceivesLabel() async throws {
+		// The `@Sendable` function's `tag` is in `A`'s level, which the `@Sendable` fill binds `tag` from: where `B` builds `A`
+		// again, `LiveApi` receives `B`'s `tag`, as inline's does, never `Root`'s.
 		let modules = Self.modules(cycle: .sendableInstantiator, liveApiDeclarations: ["@Received let tag: Tag"])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.sendableCycleFeatureFile)
@@ -433,7 +478,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// `Hub`'s pass-through, and the struct carries it as the function takes it, while `LiveApi` requires `tag: Tag`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag`, which the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) carries only as `tag: Tag?`, since `A`'s builder function takes it as a parameter, because a cycle inside `A`'s tree passes it, and no type `Hub`'s tree builds in that function requires `tag: Tag`. Receive it on `LiveApi` with `@Received(onlyIfAvailable: true) let tag: Tag?`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag`, which the scope SafeDI hands the builder for `A`'s `api: any Api` (case `A_Scope.api` of `apiBuilder`) carries only as `tag: Tag?`, since `A`'s builder function takes it as a parameter, because a cycle inside `A`'s tree passes it, and no type `Hub`'s tree builds in that function requires `tag: Tag`. Receive it on `LiveApi` with `@Received(onlyIfAvailable: true) let tag: Tag?`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["TagReader.swift"]):7:5: note: `TagReader` receives `tag: Tag?` here.
 			"""
 		}) {
@@ -451,7 +496,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// A mock builds `Hub`'s tree inline, as mocks build every seam, taking `api`, which it cannot build.
 		let modules = Self.modules(hubArguments: "generateDependencyTree: true, generateMock: true")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_B47455B435186A99", mockCode: """
+		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_479B8C0B49D168CB", mockCode: """
 
 
 		#if DEBUG
@@ -533,7 +578,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		#endif
 
 		"""))
-		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_B47455B435186A99"))
+		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_479B8C0B49D168CB"))
 		try await expectValuesEqualInlineBuild(output, modules: modules, probes: [
 			DifferentialValueProbe("Root()"),
 			Cycle.instantiator.probe,
@@ -547,8 +592,8 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// Every type is `package`, and `App` is in `Feature`'s package: `Hub`'s one tier is `package`, and so is each field.
 		let modules = Self.modules(access: "package", appPackageName: "Shop")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_23AC0F8ED5FC7306", access: "package"))
-		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_23AC0F8ED5FC7306"))
+		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_617EC262FBF8B047", access: "package"))
+		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_617EC262FBF8B047"))
 		try await expectValuesEqualInlineBuild(output, modules: modules, probes: [DifferentialValueProbe("Root()"), Cycle.instantiator.probe])
 	}
 
@@ -628,18 +673,37 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 
 		extension Hub {
 		    @frozen public enum SafeDIScope_Api {
-		        case aBuilder_inner(Inner.SafeDIScope_Api)
+		        case aBuilder(aBuilder_Values, SafeDIScope_Api.A_Scope)
+
+		        public struct aBuilder_Values {
+		            public var tag: Tag { __safeDI_tag.instance }
+		            let __safeDI_tag: LazilyInstantiated<Tag>
+
+		            init(tag: LazilyInstantiated<Tag>) {
+		                __safeDI_tag = tag
+		            }
+		        }
+
+		        @frozen public enum A_Scope {
+		            case inner(inner_Values, Inner.SafeDIScope_Api)
+
+		            public struct inner_Values {
+		                public let tag: Tag
+		                public let reader: TagReader
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
 		        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
+		        let __safeDI_apiValues_aBuilder = SafeDIScope_Api.aBuilder_Values(tag: tag)
 		        func __safeDI_aBuilder(tag: Tag) -> A {
 		            let reader = TagReader(tag: tag)
 		            func __safeDI_inner() -> Inner {
-		                _ = Inner.__safeDI_Inner_B28B6E75A98C7D72.self\(innerCallComment)
-		                return Inner(__safeDI_tag: tag, __safeDI_apiBuilder: { __safeDI_apiBuilder(.aBuilder_inner($0)) })
+		                _ = Inner.__safeDI_Inner_8A5E441B1D7D870D.self\(innerCallComment)
+		                return Inner(__safeDI_tag: tag, __safeDI_apiBuilder: { __safeDI_apiBuilder(.aBuilder(__safeDI_apiValues_aBuilder, .inner(SafeDIScope_Api.A_Scope.inner_Values(tag: tag, reader: reader), $0))) })
 		            }
 		            let inner: Inner = __safeDI_inner()
 		            func __safeDI_bBuilder(tag: Tag) -> B {
@@ -661,7 +725,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		}
 
 		extension Hub {
-		    public enum __safeDI_Hub_8C8CCA788EC6514B {}
+		    public enum __safeDI_Hub_0C6DCC8E100AFBDC {}
 		}
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
@@ -676,10 +740,15 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		    public convenience init() {
 		        let tag = Tag()
 		        func __safeDI_hub() -> Hub {
-		            _ = Hub.__safeDI_Hub_8C8CCA788EC6514B.self\(Self.callComment)
+		            _ = Hub.__safeDI_Hub_0C6DCC8E100AFBDC.self\(Self.callComment)
 		            func __safeDI_apiBuilder_Hub(_ scope: Hub.SafeDIScope_Api) -> any Api {
 		                switch scope {
-		                case let .aBuilder_inner(scope): return __safeDI_apiBuilder_Inner(scope)
+		                case let .aBuilder(_, scope): return __safeDI_apiBuilder_Hub_A_Scope(scope)
+		                }
+		            }
+		            func __safeDI_apiBuilder_Hub_A_Scope(_ scope: Hub.SafeDIScope_Api.A_Scope) -> any Api {
+		                switch scope {
+		                case let .inner(_, scope): return __safeDI_apiBuilder_Inner(scope)
 		                }
 		            }
 		            func __safeDI_apiBuilder_Inner(_ scope: Inner.SafeDIScope_Api) -> any Api {

@@ -843,7 +843,7 @@ A property held in a wrapper is no different to write: the closure returns the p
 
 Two hole types whose names collide are named apart by the type each returns, so `implBuilder` becomes `impl_ServiceBuilder` beside `impl_AnyServiceBuilder`. A builder, and each value in its scope, is as visible as the types it names, including an inner seam’s enum and a forwarded value’s type.
 
-> **Note:** `@Sendable` functions add builders. Where an inner seam’s enum reaches a `@Sendable` function, a second builder, `serviceSendableBuilder`, takes a `SafeDISendableScope_Service`. A call in a `@Sendable` function gets its case there, as does an inner seam’s own `@Sendable` enum, whose case ends in `_Sendable`. A place the seam builds inside a `@Sendable` function, or holds in a [`Sendable` wrapper](#sendable-wrappers), is staged: it has a builder of its own, `serviceBuilder_<case>`, that works in steps. It is handed the values bound before the first `@Sendable` function, and returns a `@Sendable` closure that is handed the values bound inside it, and so on. The last step returns the value and takes any forwarded value: `{ _ in { _ in Implementation() } }`. A staged place an inner seam holds is passed up as `serviceBuilder_<InnerSeam>_<case>`.
+> **Note:** A place the seam builds inside a `@Sendable` function, or holds in a [`Sendable` wrapper](#sendable-wrappers), is filled by a second builder, `serviceSendableBuilder`, a `@Sendable` closure that takes a `SafeDISendableScope_Service`. That enum nests by type too, and a case ending in `_Sendable` leads to a further `@Sendable` function or to an inner seam’s own `@Sendable` enum. A place there is handed only the values bound inside the innermost `@Sendable` function that builds it: an implementation that reads a value the seam’s tree binds outside that function is an error, even a read only if available. Receive the value from outside the seam instead, or, for a value an enclosing type forwards, forward it to the type inside the function too.
 
 Here, `Service` instantiates a `Profile`, which instantiates a `UserService` that only module `App` implements:
 
@@ -851,10 +851,16 @@ Here, `Service` instantiates a `Profile`, which instantiates a `UserService` tha
 // Generated in module Feature, where `Profile` instantiates `userService: any UserService`.
 extension Service {
     @frozen public enum SafeDIScope_UserService {
-        case profile_userService(profile_userService_Values)
+        case profile(profile_Values, SafeDIScope_UserService.Profile_Scope)
 
-        public struct profile_userService_Values {
+        public struct profile_Values {
             public let analytics: Analytics
+        }
+
+        @frozen public enum Profile_Scope {
+            case userService(userService_Values)
+
+            public struct userService_Values {}
         }
     }
 
@@ -862,8 +868,9 @@ extension Service {
     /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
     public init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
         let analytics = Analytics()
+        let __safeDI_userServiceValues_profile = SafeDIScope_UserService.profile_Values(analytics: analytics)
         func __safeDI_profile() -> Profile {
-            let userService: any UserService = __safeDI_userServiceBuilder(.profile_userService(SafeDIScope_UserService.profile_userService_Values(analytics: analytics)))
+            let userService: any UserService = __safeDI_userServiceBuilder(.profile(__safeDI_userServiceValues_profile, .userService(SafeDIScope_UserService.Profile_Scope.userService_Values())))
             return Profile(userService: userService, analytics: analytics)
         }
         let profile: Profile = __safeDI_profile()
@@ -877,11 +884,15 @@ A tree that calls the seam fills the builder when its module can see an implemen
 ```swift
 // Generated in module App, which declares `DefaultUserService`, an implementation of `UserService`.
 func __safeDI_service() -> Service {
-    _ = Service.__safeDI_Service_D8E8DFCE0954DB42.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
+    _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
     func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
         switch scope {
-        case let .profile_userService(scope):
-            let analytics = scope.analytics
+        case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
+        }
+    }
+    func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
+        switch scope {
+        case .userService:
             let userService: any UserService = DefaultUserService(analytics: analytics)
             return userService
         }
@@ -1299,7 +1310,7 @@ The parameters come in this order: `@Forwarded` properties; default-valued initi
 
 **Holes.**
 
-- A [hole](#generating-a-dependency-tree-per-module) – here, a type the tree instantiates that no `@Instantiable` or `mockOnly` declaration the module sees fulfills – takes a required builder, as it does for a seam, with the same labels, cases and stages. Its scope types are nested in the mocked type: `SafeDIMockScope_<Type>`, `SafeDISendableMockScope_<Type>` and `SafeDIStagedMockScope_<Type>_<case>`. A `mockOnly` stub that fulfills the hole’s type, in the module or one it depends on, removes the builder: the mock builds the stub, and production still fills the hole.
+- A [hole](#generating-a-dependency-tree-per-module) – here, a type the tree instantiates that no `@Instantiable` or `mockOnly` declaration the module sees fulfills – takes a required builder, as it does for a seam, with the same labels and cases. Its scope enums are nested in the mocked type: `SafeDIMockScope_<Type>` and `SafeDISendableMockScope_<Type>`. A `mockOnly` stub that fulfills the hole’s type, in the module or one it depends on, removes the builder: the mock builds the stub, and production still fills the hole.
 
 Each generated call of a public mock names an empty enum that encodes the mock’s signature, so a call generated against an older signature fails to compile at the call.
 
