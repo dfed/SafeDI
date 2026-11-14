@@ -152,7 +152,7 @@ If your session started outside the worktree you are editing, scoped rules and n
 | `LazilyInstantiated` anywhere | `.claude/rules/lazily-instantiated.md` |
 | `generateMock: .public`, generated attributes | `.claude/rules/public-mocks.md` |
 | `generateDependencyTree: true` (seams) | `.claude/rules/seams.md`, `seam-access-proof.md`, `seam-generation.md`, `seam-holes.md` |
-| "Graph fuzzer" | `.claude/rules/fuzzer-overview.md`, then `fuzzer-seam-draws.md`, `fuzzer-seam-oracles.md`, `fuzzer-corpora.md`, `fuzzer-value-oracles.md` |
+| "Graph fuzzer" | `.claude/rules/fuzzer-overview.md`, then `fuzzer-seam-draws.md`, `fuzzer-seam-oracles.md`, `fuzzer-corpora.md`, `fuzzer-value-oracles.md`, `fuzzer-remedy-oracle.md` |
 | Bazel rules | `bazel/CLAUDE.md` |
 | the macro target's sources (what it compiles of SafeDICore) | `Sources/SafeDIMacros/CLAUDE.md` |
 | the Tuist plugin | `TuistPlugins/CLAUDE.md` |

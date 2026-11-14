@@ -9219,6 +9219,10 @@ struct GraphFuzzerFailure: Equatable {
 		/// A case of a scope enum that names no property of the type the enum describes
 		/// (`GraphFuzzerScopeDeclarations.casesNamingNoPropertyOfTheirType(of:)`).
 		case scopeCaseNamesNoProperty = "a scope enum's case names no property of the type it describes"
+		/// The tool rejects a base corpus graph, and applying a remedy one of its errors states
+		/// (`GraphFuzzerRemedies`) leaves an error at the declaration the error is at: the remedy does not fix the error, or
+		/// trades it for another there.
+		case remedyLeavesErrorAtSite = "a remedy an error states leaves an error at the declaration the error is at"
 	}
 
 	let seed: UInt64
@@ -9233,6 +9237,9 @@ struct GraphFuzzerFailure: Equatable {
 	/// For `renamedGraphDiffers`, what differs: a known issue of that kind documents the failure only when one of its
 	/// signatures names exactly this.
 	var renamedGraphDifference: GraphFuzzerOutcomeDifference.Aspect?
+	/// For `remedyLeavesErrorAtSite`, a line for each remedy that leaves an error at its site: a known issue of that kind
+	/// documents the failure only when every one of them contains the text of one of its remedy signatures.
+	var remedyFailures: [String] = []
 
 	static func reproductionCommand(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>) -> String {
 		let featuresVariable = features.isEmpty ? "" : "SAFEDI_GRAPH_FUZZER_FEATURES=\(features.sorted().map(\.rawValue).joined(separator: ",")) "
@@ -9267,9 +9274,11 @@ struct GraphFuzzerResult {
 		isComparedWithoutSecondHolePlace: Bool = false,
 		isComparedWithoutSecondPath: Bool = false,
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
+		remedyRuns: [GraphFuzzerRemedyRun] = [],
 	) {
 		self.isComparedWithoutSecondHolePlace = isComparedWithoutSecondHolePlace
 		self.isComparedWithoutSecondPath = isComparedWithoutSecondPath
+		self.remedyRuns = remedyRuns
 		self.fixture = fixture
 		self.outcome = outcome
 		self.failure = failure
@@ -9323,6 +9332,8 @@ struct GraphFuzzerResult {
 	let isComparedWithoutSecondPath: Bool
 	/// A base corpus graph's value-oracle run, whose pairs and skips the long run counts.
 	let valueOracle: GraphFuzzerValueOracleRun?
+	/// The remedies the errors of a rejected base corpus graph state, applied, which the long run counts by kind.
+	let remedyRuns: [GraphFuzzerRemedyRun]
 
 	/// How each partitioned run that gives other results under the two multi-module integrations differs, whether or
 	/// not the graph also fails another way.
@@ -9397,6 +9408,11 @@ struct GraphFuzzerKnownIssue: Equatable {
 		/// A builder label, scope type or case name of the graph without its second place of a hole changes when the place is
 		/// added, with details containing this text, such as the second place's label.
 		case holeNamesChangeWithSecondPlace(containing: String)
+		/// A remedy of this kind, which an error of a base corpus graph states, leaves an error at the declaration the error
+		/// is at, with a line (`GraphFuzzerFailure.remedyFailures`) containing this text, or matching another of the shape's
+		/// remedy signatures, for each remedy that does: the text names the error the remedy leaves, which tells the shapes of
+		/// one kind apart.
+		case remedyLeavesErrorAtSite(GraphFuzzerRemedyKind, containing: String)
 	}
 
 	let reason: String
@@ -9404,12 +9420,12 @@ struct GraphFuzzerKnownIssue: Equatable {
 	/// In increasing order. The ordinary suite checks the first; the long run checks every one it reaches.
 	let seeds: [UInt64]
 
-	/// Whether only the base corpus's value oracle shows the shape, which no other corpus runs, so that the seam corpus
-	/// inherits no such shape.
+	/// Whether only the base corpus's value oracle, or its remedy oracle, shows the shape, which no other corpus runs, so
+	/// that the seam corpus inherits no such shape.
 	var isBaseCorpusValueOracleShape: Bool {
 		signatures.allSatisfy { signature in
 			switch signature {
-			case .mockBuildsOtherValuesThanProduction, .valueOracleFixtureDoesNotCompile, .valueOracleFixtureRejected:
+			case .mockBuildsOtherValuesThanProduction, .valueOracleFixtureDoesNotCompile, .valueOracleFixtureRejected, .remedyLeavesErrorAtSite:
 				true
 			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight, .holeNamesChangeWithSecondPlace:
 				false
@@ -9483,6 +9499,17 @@ struct GraphFuzzerKnownIssue: Equatable {
 				failure.kind == .valueOracleFixtureDoesNotCompile && failure.details.contains(text)
 			case let .holeNamesChangeWithSecondPlace(text):
 				failure.kind == .holeNamesChangeWithSecondPlace && failure.details.prefix { $0 != "\n" }.contains(text)
+			case .remedyLeavesErrorAtSite:
+				// As for the value signatures, every remedy that leaves an error must match one.
+				failure.kind == .remedyLeavesErrorAtSite && !failure.remedyFailures.isEmpty && failure.remedyFailures.allSatisfy { remedyFailure in
+					signatures.contains { signature in
+						if case let .remedyLeavesErrorAtSite(kind, text) = signature {
+							remedyFailure.hasPrefix(kind.failureLinePrefix) && remedyFailure.contains(text)
+						} else {
+							false
+						}
+					}
+				}
 			case .valueOracleFixtureRejected:
 				// As for the value signatures, every error the tool reports must match one: a documented rejection beside
 				// an undocumented error is a new failure.
@@ -9685,6 +9712,8 @@ struct GraphFuzzerToolRuns {
 	///   - placeFacts: The facts of the places of every seam's holes the run of `firstOutcome` computes.
 	///   - withoutSecondPath: The run of the graph without its second path to a type that holds a place
 	///     (`GraphFuzzerGenerator.fixtureWithoutSecondPath(forSeed:features:)`), when it has one.
+	///   - remedyRuns: The outcome of each remedy the errors of a rejected base corpus graph state, applied to the graph
+	///     (`GraphFuzzerOracle.remedyRuns(of:outcome:)`).
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
@@ -9702,11 +9731,13 @@ struct GraphFuzzerToolRuns {
 		placeLevelDisagreements: [String] = [],
 		placeFacts: GraphFuzzerPlaceFacts = GraphFuzzerPlaceFacts(),
 		withoutSecondPath: GraphFuzzerSecondPathRun? = nil,
+		remedyRuns: [GraphFuzzerRemedyRun] = [],
 	) {
 		self.withoutSecondHolePlaceOutcome = withoutSecondHolePlaceOutcome
 		self.placeLevelDisagreements = placeLevelDisagreements
 		self.placeFacts = placeFacts
 		self.withoutSecondPath = withoutSecondPath
+		self.remedyRuns = remedyRuns
 		self.fixture = fixture
 		self.firstOutcome = firstOutcome
 		self.secondOutcome = secondOutcome
@@ -9737,6 +9768,7 @@ struct GraphFuzzerToolRuns {
 	let placeLevelDisagreements: [String]
 	let placeFacts: GraphFuzzerPlaceFacts
 	let withoutSecondPath: GraphFuzzerSecondPathRun?
+	let remedyRuns: [GraphFuzzerRemedyRun]
 
 	/// The failure of a graph some place of whose seam's tree has a path that repeats a declaration, or `nil`: the tree
 	/// closes a cycle where a declaration is already being built above, and a build that closes a cycle is the first build,
@@ -9827,6 +9859,25 @@ struct GraphFuzzerToolRuns {
 			seed: fixture.seed,
 			kind: .placeLevelsDifferBetweenBuildsOfType,
 			details: "\(placeLevelDisagreements.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
+		)
+	}
+
+	/// The failure of a rejected base corpus graph a remedy one of whose errors states leaves an error at the declaration
+	/// the error is at, or `nil`: following an error's advice must fix that error and add none there. Another error
+	/// elsewhere is allowed, since a remedy can expose what the tool's walk stopped before or change what another type
+	/// receives. Every remedy that leaves one is a line of the failure.
+	var remedyFailure: GraphFuzzerFailure? {
+		let failingRuns = remedyRuns.filter { $0.failureLine != nil }
+		guard !failingRuns.isEmpty else { return nil }
+		let remedyFailures = failingRuns.compactMap(\.failureLine)
+		let remedies = failingRuns.map { run in
+			"The errors at \(run.remedy.site) the \(run.remedy.kind.rawValue) remedy answers:\n\(run.remedy.answeredErrors.joined(separator: "\n"))\nThe remedied graph:\n\(run.remedy.fixture.description)\nIts outcome:\n\(run.outcome.description)"
+		}
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .remedyLeavesErrorAtSite,
+			details: "\(remedyFailures.joined(separator: "\n"))\n\(remedies.joined(separator: "\n"))",
+			remedyFailures: remedyFailures,
 		)
 	}
 
@@ -10401,7 +10452,7 @@ enum GraphFuzzerOracle {
 		}
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first].compactMap(\.self) + runs.scopeCaseFailures + renamedGraphFailures
+			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self) + runs.scopeCaseFailures + renamedGraphFailures
 			// A base corpus graph is compared once its value-oracle graph is.
 			let isValueOracleGraphCompared = runs.valueOracle == nil || valueComparisons.comparedValueOracleSeeds.contains(runs.fixture.seed)
 			return GraphFuzzerResult(
@@ -10418,6 +10469,7 @@ enum GraphFuzzerOracle {
 				isComparedWithoutSecondHolePlace: runs.isComparedWithoutSecondHolePlace,
 				isComparedWithoutSecondPath: runs.isComparedWithoutSecondPath,
 				valueOracle: runs.valueOracle,
+				remedyRuns: runs.remedyRuns,
 			)
 		}
 	}
@@ -10937,6 +10989,9 @@ enum GraphFuzzerOracle {
 			let (outcome, facts) = try await collectingPlaceFacts(during: { try await toolOutcome(of: withoutPath.fixture) })
 			withoutSecondPath = GraphFuzzerSecondPathRun(typeName: withoutPath.typeName, label: withoutPath.label, outcome: outcome, placeFacts: facts)
 		}
+		// A base corpus graph the tool rejects is run again with each remedy its errors state, each of which must leave no
+		// error where the error is (`remedyFailure`).
+		let remedyRuns = try await remedyRuns(of: fixture, outcome: firstOutcome)
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
 			firstOutcome: firstOutcome,
@@ -10954,6 +11009,7 @@ enum GraphFuzzerOracle {
 			placeLevelDisagreements: placeLevelDisagreements,
 			placeFacts: placeFacts,
 			withoutSecondPath: withoutSecondPath,
+			remedyRuns: remedyRuns,
 		)
 	}
 
