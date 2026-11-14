@@ -3907,7 +3907,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let noteStoragePath = fixtures["Subproject"]!["NoteStorage.swift"]
 			return """
-			\(noteStoragePath):4:1: error: `NoteStorage` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `NoteStorage` `package` to fix, or `public` if the two modules are in different packages.
+			\(noteStoragePath):4:1: error: `NoteStorage` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `NoteStorage` `package` to fix, which needs both modules compiled with one package name (`SWIFT_PACKAGE_NAME` in an Xcode project), or `public` if the two modules are in different packages.
 			\(noteStoragePath):4:1-4:1: fixit: package\(" ")
 			"""
 		}) {

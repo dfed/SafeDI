@@ -33,42 +33,67 @@ public struct ModuleIdentity: Hashable, Sendable {
 	public let packageName: String?
 
 	/// The names, in order, of the modules among `emitter` and `declarer` SafeDITool was not told the package of, when
-	/// that is why the code `emitter` generates cannot use a declaration of `declarer` at `declaredLevel`:
-	/// `requirement`, which `AccessLevel.required(toConstructFrom:declaredIn:isOwnFile:)` gave for the two, is `public`,
-	/// one of them has no package, and `declaredLevel` is `package`, which would suffice were the two in one package.
-	/// Empty otherwise, since a narrower declaration needs widening whatever the packages are.
-	static func namesOfModulesWithoutPackage(emitter: ModuleIdentity, declarer: ModuleIdentity, requirement: AccessRequirement, declaredLevel: AccessLevel) -> [String] {
+	/// that is why the code `emitter` generates needs `public` access to `declarer`'s declarations: `requirement`, which
+	/// `AccessLevel.required(toConstructFrom:declaredIn:isOwnFile:)` gave for the two, is `public`, and one of them has
+	/// no package, so SafeDITool is not told the two are in one package. Empty otherwise, including for two modules in
+	/// different packages, which need `public` whatever SafeDITool is told.
+	static func namesOfModulesWithoutPackage(emitter: ModuleIdentity, declarer: ModuleIdentity, requirement: AccessRequirement) -> [String] {
 		switch requirement {
 		case .public:
-			switch declaredLevel {
-			case .package:
-				[emitter, declarer].filter { $0.packageName == nil }.compactMap(\.moduleName).sorted()
-			case .open, .public, .internal, .fileprivate, .private:
-				[]
-			}
+			[emitter, declarer].filter { $0.packageName == nil }.compactMap(\.moduleName).sorted()
 		case .internal, .package, .packageUnverified:
 			[]
 		}
 	}
 
 	/// The remedy a diagnostic that asks for `public` access across `emitter` and `declarer` offers first when SafeDITool
-	/// was not told the package of one of them and the declaration is `package`
-	/// (`namesOfModulesWithoutPackage(emitter:declarer:requirement:declaredLevel:)`): giving the module, or both, the
-	/// package name, should the two be in one package. It comes first because a `package` declaration says its author
-	/// meant the two modules to share a package, so a module whose build names no package is the likelier cause. It
-	/// names the setting of each integration whose runs can need it, those that pass `--module-name`: Tuist, Bazel and
-	/// a custom build. The SwiftPM plugin knows the package of every module it names, and the Xcode project plugin
-	/// names no module. `nil` when the requirement is not for that reason.
+	/// was not told the package of one of them (`namesOfModulesWithoutPackage(emitter:declarer:requirement:)`) and the
+	/// declaration is `package`: giving the module, or both, the package name, should the two be in one package. It
+	/// comes first because a `package` declaration says its author meant the two modules to share a package, so a
+	/// module whose build names no package is the likelier cause. `nil` when the requirement is not for that reason, or
+	/// the declaration is not `package`.
 	public static func packageNameRemedy(emitter: ModuleIdentity, declarer: ModuleIdentity, requirement: AccessRequirement, declaredLevel: AccessLevel) -> String? {
-		let moduleNames = namesOfModulesWithoutPackage(emitter: emitter, declarer: declarer, requirement: requirement, declaredLevel: declaredLevel)
+		switch declaredLevel {
+		case .package:
+			let moduleNames = namesOfModulesWithoutPackage(emitter: emitter, declarer: declarer, requirement: requirement)
+			return packageNameGiving(to: moduleNames, emitter: emitter, declarer: declarer).map { giving in
+				giving + (moduleNames.count == 1 ? " if the two are in one package" : " if they are in one package")
+			}
+		case .open, .public, .internal, .fileprivate, .private:
+			return nil
+		}
+	}
+
+	/// The remedy a diagnostic that asks for `public` access across `emitter` and `declarer` offers after widening to
+	/// `public` when SafeDITool was not told the package of one of them (`namesOfModulesWithoutPackage(emitter:declarer:requirement:)`)
+	/// and the declaration is narrower than `package`: should the two be in one package, giving the module, or both,
+	/// the package name and making the declaration, which the remedy calls "it", `package`. Widening comes first, since
+	/// its fix-it inserts `public`. `nil` when the requirement is not for that reason, or the declaration is `package`
+	/// or wider.
+	public static func packageNameAndAccessRemedy(emitter: ModuleIdentity, declarer: ModuleIdentity, requirement: AccessRequirement, declaredLevel: AccessLevel) -> String? {
+		switch declaredLevel {
+		case .internal, .fileprivate, .private:
+			packageNameGiving(to: namesOfModulesWithoutPackage(emitter: emitter, declarer: declarer, requirement: requirement), emitter: emitter, declarer: declarer).map { giving in
+				"if the two modules are in one package, \(giving) and make it `\(AccessLevel.package.spelling)`"
+			}
+		case .open, .public, .package:
+			nil
+		}
+	}
+
+	/// Giving `moduleNames`, the modules among `emitter` and `declarer` SafeDITool was not told the package of, the
+	/// other's package name, or one name between them. It names the setting of each integration whose runs can lack a
+	/// package name, those that pass `--module-name`: Tuist, Bazel and a custom build. The SwiftPM plugin knows the
+	/// package of every module it names, and the Xcode project plugin names no module. `nil` when `moduleNames` is empty.
+	private static func packageNameGiving(to moduleNames: [String], emitter: ModuleIdentity, declarer: ModuleIdentity) -> String? {
 		let ways = "(`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build)"
 		// A `public` requirement between modules one of which has no package names both modules.
 		if moduleNames.count == 1, let moduleName = moduleNames.first, let otherModuleName = [emitter, declarer].first(where: { $0.packageName != nil })?.moduleName {
-			return "give module `\(moduleName)` the package name of module `\(otherModuleName)` \(ways) if the two are in one package"
+			return "give module `\(moduleName)` the package name of module `\(otherModuleName)` \(ways)"
 		} else if moduleNames.isEmpty {
 			return nil
 		} else {
-			return "give modules \(moduleNames.map { "`\($0)`" }.joined(separator: " and ")) the same package name \(ways) if they are in one package"
+			return "give modules \(moduleNames.map { "`\($0)`" }.joined(separator: " and ")) the same package name \(ways)"
 		}
 	}
 }
