@@ -317,6 +317,15 @@ struct SafeDIToolGraphFuzzerTests {
 			.holePlaceInsideSendableFill,
 			.holeSharedTypes,
 			.holeSharedTypesThroughModel,
+			.holePlaceInsidePlainFill,
+			.holePlaceInsidePlainFillOnTwoInnerRoutes,
+			.holePlaceInsidePlainFillReadsInnerLevel,
+			.holePlaceInsidePlainFillTwoTypesDeep,
+			.holeUnderLaterLoopMember,
+			.holeUnderEveryLoopMember,
+			.holeLoopPlaceThroughSharedLeaf,
+			.holeLoopBeneathSeam,
+			.holeLoopMemberLevelReadByFill,
 		]).subtracting(drawFeatures).sorted() == [])
 		// `addingCycleParameterShapes`' cycle, in accepted graphs: its hole between the cycle's ends at or beneath the type that
 		// declares the label again, filled by a fill that reads it (seeds 227 and 609); its hole on the seam (seed 705); the
@@ -873,6 +882,29 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(sound.isInspectedByValueOracle)
 		let rejected = GraphFuzzerToolOutcome.rejected(diagnostics: "error")
 		#expect(GraphFuzzerToolRuns(fixture: fixture, firstOutcome: rejected, secondOutcome: rejected, inlineOutcome: inline).isInspectedByValueOracle == false)
+	}
+
+	@Test
+	func nilArgumentFailure_comparesNoConstructionOfALabel_whenInlinePassesItNilThroughABuilderFunction() {
+		// Inline hands the builder function a lazy cycle closes on a literal `nil` for `mark`, which each construction in its
+		// body reads by name, where a seam's fill writes `nil` at each construction: the counts of `mark` cannot say where a
+		// value is lost, so they are not compared, while `token`'s still are.
+		let fixture = GraphFuzzerFixture(seed: 7, swiftFileContent: [
+			"@Instantiable(generateDependencyTree: true)\npublic final class S7_Screen: Instantiable {\n\tpublic init(reader: S7_Reader) {\n\t\tself.reader = reader\n\t}\n\n\t@Instantiated let reader: S7_Reader\n}\n",
+		])
+		let inline = GraphFuzzerToolOutcome.accepted(generatedFiles: [
+			"S7_Root+SafeDI.swift": "func __safeDI_ownerBuilder(mark: S7_Mark?) -> S7_Owner {\n    let reader = S7_Reader(token: token, mark: mark)\n    return S7_Owner(reader: reader)\n}\nlet owner = __safeDI_ownerBuilder(mark: nil)",
+		], warnings: [])
+		let seam = GraphFuzzerToolOutcome.accepted(generatedFiles: [
+			"S7_Root+SafeDI.swift": "let first = S7_Reader(token: token, mark: nil)\nlet second = S7_Reader(token: token, mark: nil)",
+		], warnings: [])
+		#expect(GraphFuzzerOracle.labelsPassedNilToBuilderFunctions(in: ["S7_Root+SafeDI.swift": "let owner = __safeDI_ownerBuilder(mark: nil, token: token)"]) == ["mark"])
+		#expect(GraphFuzzerToolRuns(fixture: fixture, firstOutcome: seam, secondOutcome: seam, inlineOutcome: inline).nilArgumentFailure == nil)
+		let seamLosingToken = GraphFuzzerToolOutcome.accepted(generatedFiles: [
+			"S7_Root+SafeDI.swift": "let first = S7_Reader(token: nil, mark: nil)",
+		], warnings: [])
+		let defect = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: seamLosingToken, secondOutcome: seamLosingToken, inlineOutcome: inline)
+		#expect(defect.nilArgumentFailure?.details.prefix { $0 != "\n" } == "`S7_Reader(token:)` is passed `nil` 1 times with the seam and 0 without it.")
 	}
 
 	/// A seam's generated file whose plain enum holds `cases`, each `case <name>(<name>_Values)`, and whose initializer
@@ -5155,7 +5187,7 @@ struct SafeDIToolGraphFuzzerTests {
 	)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0xC88F6DA800F46D1D
+	static let seamCorpusFixtureHash: UInt64 = 0xDC9EE07A7728E5A7
 	static let seamCorpusAcceptedSeedCount = 289
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xF226EE7C76286253
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -5237,17 +5269,21 @@ struct SafeDIToolGraphFuzzerTests {
 	/// every `GraphFuzzerSeamOutputFeature` – both kinds of pass-through, a call reading `.instance`, an `@escaping`
 	/// closure parameter, an `@escaping @Sendable` one, an optional closure, and the comment naming a type SafeDI reads no
 	/// declaration of (seeds 16 and 609) – graphs split across modules, with a caller in another package, a caller in the
-	/// seam's package without a package and a seam's module without one (seeds 31, 84, 180, 215, 609 and 743 between
-	/// them), the last two also accepted inline, so the batch compiles every module, compares a split graph's values and
-	/// compares one across the two integrations;
+	/// seam's package without a package and a seam's module without one (seeds 31, 84, 180, 215 and 609 between them), some
+	/// also accepted inline, so the batch compiles every module, compares a split graph's values and compares one across the
+	/// two integrations;
 	/// graphs with a hole whose code, between them, shows every `GraphFuzzerHoleOutputFeature` – a passed-up builder whose
 	/// fill re-enters the inner seam, a `@Sendable` builder whose fill re-enters its seam, a fill passed to a seam that passes
-	/// its site up, also `@Sendable` (seeds 277, 743 and 1890 between them) – and that draw, between them, every roll of
-	/// `addingHoleShapes` with an accepted variant (with seeds 227, 605, 743 and 1890), the nested builders' draws among them
+	/// its site up, also `@Sendable` (seeds 277 and 1890 between them) – and that draw, between them, every roll of
+	/// `addingHoleShapes` with an accepted variant (with seeds 68, 227, 605 and 1890), the nested builders' draws among them
 	/// – a second hole type (seed 215), a wrapper of the hole beside its by-value place (seeds 78 and 605), a cycle of two
 	/// seams with a `@Sendable` edge (seed 93), and an inner seam reached by a plain and a `@Sendable` route, passed up with
-	/// both enums, an inner `@Sendable` place on a `@Sendable` route and a place inside a `@Sendable` fill (seed 304) – of
-	/// which the name-stability oracle compares one without its second place; a split graph that
+	/// both enums, an inner `@Sendable` place on a `@Sendable` route and a place inside a `@Sendable` fill (seed 304), a place
+	/// inside a plain fill on two routes of the inner seam's enum, two types deep, read through the inner seam's levels
+	/// (seed 594, and seed 151 on two routes), and a hole under a later member of a loop of received instantiators, declared
+	/// by the seam (seed 347) or beneath it (seed 215), under every member through a shared leaf (seed 164), and read from
+	/// the member's level (seed 309) – of which the name-stability oracle compares one without its second place; a split
+	/// graph that
 	/// declares a type in a flag's clause in the seam's module (`recordedInFlagClause`), which the two integrations agree
 	/// on once the plugin flow's assertions about that module's block are excused (seed 84); and a graph it rejects, which
 	/// `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks; and declarations moved beneath the seam's module
@@ -5263,16 +5299,16 @@ struct SafeDIToolGraphFuzzerTests {
 	/// the tool now accepts, giving the seam a second hole type whose builders the move across wrapper names reorders
 	/// (`seamBuilderOrderReason`), or a lazy cycle's configuration field (`lazyCycleConfigurationFieldReason`). Pinned by
 	/// `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 78, 84, 92, 93, 151, 153, 180, 215, 227, 277, 304, 347, 605, 609, 705, 743, 1_010, 1_814, 1_890]
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 1_010, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x14C4802E1FF8DE50
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x5C1E90B18E14DDB5
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
 	/// `seamCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool`.
 	static let seamCorpusDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
 		.collidingFormsBeneathSeam: 67,
-		.innerSeam: 408,
+		.innerSeam: 423,
 		.instanceHeldByCaller: 393,
 		.instanceReceiveBeneathSeam: 242,
 		.otherKindWrapperReceiveBeneathSeam: 32,
@@ -5407,6 +5443,19 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeTangleReadsInstantiator: 36,
 		.holeTangleTReadsMark: 73,
 		.holeTangleTBuiltByValue: 42,
+		.holePlaceInsidePlainFill: 41,
+		.holePlaceInsidePlainFillOnTwoInnerRoutes: 25,
+		.holePlaceInsidePlainFillReadsInnerLevel: 22,
+		.holePlaceInsidePlainFillTwoTypesDeep: 19,
+		.holePlaceInsidePlainFillTwoCalls: 11,
+		.holePlaceInsidePlainFillFulfillerReadsInnerLevel: 7,
+		.holeUnderLaterLoopMember: 48,
+		.holeUnderEveryLoopMember: 27,
+		.holeLoopOfThreeMembers: 13,
+		.holeLoopPlaceThroughSharedLeaf: 16,
+		.holeLoopBeneathSeam: 18,
+		.holeLoopMemberLevelReadByFill: 15,
+		.holeLoopMemberBuiltByValueReceivingOnlyIfAvailable: 8,
 		.uncreatedAliasLabelLazilyInstantiatedBeside: 29,
 		.uncreatedAliasLabelReceivedBeside: 20,
 		.uncreatedAliasLabelOnMid: 6,
