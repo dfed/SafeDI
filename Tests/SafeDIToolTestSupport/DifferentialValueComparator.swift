@@ -735,8 +735,65 @@ enum DifferentialValueOracle {
 		limits: DifferentialValueLimits,
 		filesToDelete: inout [URL],
 	) async throws -> String {
-		let runtime = try await runtime.value
 		let pathName = role.map { "\($0.name) path" } ?? "path"
+		let run = try await compileAndRun(
+			path,
+			pathName: pathName,
+			role: role,
+			main: probesSource(moduleNames: path.modules.map(\.name), role: role, probeGroups: probeGroups, limits: limits),
+			executableModuleName: "DifferentialValueProbes",
+			filesToDelete: &filesToDelete,
+		)
+		guard run.exitCode == 0 else {
+			// The describer sets an alarm for each probe, so a probe that runs past its time limit ends the process with
+			// `SIGALRM`, after the heading of the probe that was running.
+			let headingCount = run.stdout.split(separator: "\n").count { $0.hasPrefix("probe ") }
+			let runningProbe = probeGroups.flatMap(\.self).prefix(headingCount).last.map(\.name) ?? ""
+			let failure = run.exitCode == SIGALRM
+				? "probe `\(runningProbe)` did not finish within its time limit, \(limits.probeTimeLimitInSeconds) s"
+				: "probes did not run to completion (exit status \(run.exitCode))"
+			throw DifferentialValueOracleError(
+				path: role,
+				stage: .runningProbes,
+				description: "The \(pathName)'s \(failure):\n\(run.stderr.trimmingCharacters(in: .newlines))\nDescribed before it stopped:\n\(lastLines(of: run.stdout))",
+			)
+		}
+		return run.stdout
+	}
+
+	/// Compiles each module of `path` as the comparator does, links it with `main`, the body of a `main.swift` that every
+	/// module of the path is `@testable import`ed into, runs the program, and returns what it printed, for a test that
+	/// judges what generated code does at run time beyond the values it builds, such as which instances are still alive.
+	/// - Returns: What the program printed, or `nil` when compile verification is disabled.
+	static func output(
+		of path: DifferentialValuePath,
+		running main: String,
+		filesToDelete: inout [URL],
+	) async throws -> String? {
+		guard compileVerificationIsEnabled else { return nil }
+		let imports = (["import SafeDI"] + path.modules.map { "@testable import \($0.name)" }).joined(separator: "\n")
+		let run = try await compileAndRun(path, pathName: "path", role: nil, main: imports + "\n\n" + main, executableModuleName: "DifferentialValueProgram", filesToDelete: &filesToDelete)
+		guard run.exitCode == 0 else {
+			throw DifferentialValueOracleError(
+				path: nil,
+				stage: .runningProbes,
+				description: "The program did not run to completion (exit status \(run.exitCode)):\n\(run.stderr.trimmingCharacters(in: .newlines))\nPrinted before it stopped:\n\(lastLines(of: run.stdout))",
+			)
+		}
+		return run.stdout
+	}
+
+	/// Compiles each module of `path` against the runtime, with testing enabled so that `main` can name internal
+	/// declarations, then compiles and links `main` into an executable and runs it.
+	private static func compileAndRun(
+		_ path: DifferentialValuePath,
+		pathName: String,
+		role: DifferentialValuePathRole?,
+		main: String,
+		executableModuleName: String,
+		filesToDelete: inout [URL],
+	) async throws -> SwiftCompileResult {
+		let runtime = try await runtime.value
 		let directory = TestTemporaryDirectory.root.appendingPathComponent("safedi-differential-\(role?.rawValue ?? "path")-\(UUID().uuidString)")
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		filesToDelete.append(directory)
@@ -781,11 +838,11 @@ enum DifferentialValueOracle {
 		}
 
 		let probesFile = directory.appendingPathComponent("main.swift")
-		try probesSource(moduleNames: path.modules.map(\.name), role: role, probeGroups: probeGroups, limits: limits).write(to: probesFile, atomically: true, encoding: .utf8)
+		try main.write(to: probesFile, atomically: true, encoding: .utf8)
 		let executable = directory.appendingPathComponent("probes")
 		var linkArguments = swiftCompilerCommand.arguments + [
 			"-o", executable.path,
-			"-module-name", "DifferentialValueProbes",
+			"-module-name", executableModuleName,
 			"-swift-version", "6",
 			"-I", runtime.directory.path,
 		]
@@ -805,22 +862,7 @@ enum DifferentialValueOracle {
 			)
 		}
 
-		let run = try await runProcess(executable, arguments: [])
-		guard run.exitCode == 0 else {
-			// The describer sets an alarm for each probe, so a probe that runs past its time limit ends the process with
-			// `SIGALRM`, after the heading of the probe that was running.
-			let headingCount = run.stdout.split(separator: "\n").count { $0.hasPrefix("probe ") }
-			let runningProbe = probeGroups.flatMap(\.self).prefix(headingCount).last.map(\.name) ?? ""
-			let failure = run.exitCode == SIGALRM
-				? "probe `\(runningProbe)` did not finish within its time limit, \(limits.probeTimeLimitInSeconds) s"
-				: "probes did not run to completion (exit status \(run.exitCode))"
-			throw DifferentialValueOracleError(
-				path: role,
-				stage: .runningProbes,
-				description: "The \(pathName)'s \(failure):\n\(run.stderr.trimmingCharacters(in: .newlines))\nDescribed before it stopped:\n\(lastLines(of: run.stdout))",
-			)
-		}
-		return run.stdout
+		return try await runProcess(executable, arguments: [])
 	}
 
 	/// The last hundred lines of `output`, which a probe that never finishes can make enormous.
@@ -1738,6 +1780,28 @@ func expectDifferentialValuesAgree(
 			"The feature path builds other values than the known-right path for \(difference)\n\(comparison.report)",
 			sourceLocation: sourceLocation,
 		)
+	}
+}
+
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+extension DifferentialValuePath {
+	/// The modules of a multi-module test, `modules`, each with the fixture files `executeSafeDIToolMultiModuleTest` wrote
+	/// for it and the files `output` holds that the tool generated for it.
+	init(output: MultiModuleTestOutput, modules: [ModuleFixture]) throws {
+		try self.init(modules: modules.map { module in
+			let sourceDirectory = output.fixtureRoot.appendingPathComponent(module.packageName).appendingPathComponent("Sources").appendingPathComponent(module.name)
+			var fixtureFiles = [String: String]()
+			for fileName in try FileManager.default.contentsOfDirectory(atPath: sourceDirectory.path) where fileName.hasSuffix(".swift") {
+				fixtureFiles[fileName] = try String(contentsOf: sourceDirectory.appendingPathComponent(fileName), encoding: .utf8)
+			}
+			return DifferentialValueModule(
+				name: module.name,
+				packageName: module.packageName,
+				dependencyModuleNames: module.dependencies,
+				fixtureFiles: fixtureFiles,
+				generatedFiles: output.modules[module.name]?.generatedFiles ?? [:],
+			)
+		})
 	}
 }
 

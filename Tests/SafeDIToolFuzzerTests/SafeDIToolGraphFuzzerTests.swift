@@ -106,6 +106,133 @@ struct SafeDIToolGraphFuzzerTests {
 		"""))
 	}
 
+	@Test
+	func receivedBuilderLoopFeatures_areReadFromBindings_thatWrapBuilderFunctionsOfTheirFunctionsScopeFirst() {
+		// A loop member's builder function begins by wrapping again a function its scope declares: its own, or the function
+		// that wraps its own with cycle arguments, for an instantiator received inside its tree, and another member's
+		// otherwise. An instantiator that closes an instantiated cycle wraps a function declared further out, or its own
+		// function under a label its type instantiates.
+		let features = { (code: String, instantiatedLabels: [String: Set<String>]) in
+			GraphFuzzerFeature.receivedBuilderLoopFeatures(of: code, instantiatedLabelsByTypeName: instantiatedLabels).sorted()
+		}
+		let receivingEachOther = """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_aBuilder() -> A {
+		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+		            return A(bBuilder: bBuilder)
+		        }
+		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		        func __safeDI_bBuilder() -> B {
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		            return B(aBuilder: aBuilder)
+		        }
+		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+		        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
+		    }
+		}
+		"""
+		#expect(features(receivingEachOther, [:]) == [.buildersReceivingEachOther])
+		#expect(features(receivingEachOther.replacingOccurrences(of: "Instantiator<", with: "SendableInstantiator<").replacingOccurrences(of: "func __safeDI_", with: "@Sendable func __safeDI_"), [:]) == [.sendableBuildersReceivingEachOther])
+		let selfReceiving = """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_nodeBuilder() -> Node {
+		            let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
+		            return Node(nodeBuilder: nodeBuilder)
+		        }
+		        let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
+		        self.init(nodeBuilder: nodeBuilder)
+		    }
+		}
+		"""
+		#expect(features(selfReceiving, [:]) == [.builderReceivedInsideItsTree])
+		// The same code, where `Node` instantiates `nodeBuilder` itself: a cycle that the instantiator closes.
+		#expect(features(selfReceiving, ["Node": ["nodeBuilder"]]) == [])
+		// A mock of a `Node` that instantiates an erased instantiator of itself: its builder function returns the erased
+		// type, under which the fixture's instantiated labels are read too.
+		let erasedSelfInstantiating = GraphFuzzerFixture(seed: 0, swiftFileContent: ["""
+		@Instantiable(generateMock: true)
+		public final class Node: Instantiable {
+		\t@Instantiated(fulfilledByType: "Node", erasedToConcreteExistential: true) let anyNodeBuilder: ErasedInstantiator<(), AnyNode>
+		}
+		"""])
+		#expect(features("""
+		extension Node {
+		    public static func mock() -> Node {
+		        func __safeDI_anyNodeBuilder() -> AnyNode {
+		            let anyNodeBuilder = ErasedInstantiator<(), AnyNode>(__safeDI_anyNodeBuilder)
+		            return AnyNode(Node(anyNodeBuilder: anyNodeBuilder))
+		        }
+		        let anyNodeBuilder = ErasedInstantiator<(), AnyNode>(__safeDI_anyNodeBuilder)
+		        return Node(anyNodeBuilder: anyNodeBuilder)
+		    }
+		}
+		""", GraphFuzzerFeature.instantiatedLabelsByTypeName(of: erasedSelfInstantiating)) == [])
+		#expect(features("""
+		extension Root {
+		    public convenience init() {
+		        @Sendable func __safeDI_screenBuilder(session: Session) -> Screen {
+		            let screenBuilder = SendableInstantiator<Screen> {
+		                __safeDI_screenBuilder(session: session)
+		            }
+		            @Sendable func __safeDI_stepBuilder() -> Step {
+		                let session = Session()
+		                let screenBuilder = SendableInstantiator<Screen> {
+		                    __safeDI_screenBuilder(session: session)
+		                }
+		                return Step(session: session, screenBuilder: screenBuilder)
+		            }
+		            let stepBuilder = SendableInstantiator<Step>(__safeDI_stepBuilder)
+		            return Screen(session: session, stepBuilder: stepBuilder, detail: Detail(screenBuilder: screenBuilder))
+		        }
+		        @Sendable func __safeDI_screenBuilder_received() -> Screen {
+		            __safeDI_screenBuilder(session: session)
+		        }
+		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder_received)
+		        self.init(session: session, screenBuilder: screenBuilder)
+		    }
+		}
+		""", ["Step": ["session", "screenBuilder"]]) == [.sendableBuilderReceivedInsideItsTree, .sendableReceivedLoopMemberWithCycleParameters])
+		#expect(features("""
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_otherBuilder() -> Other {
+		            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder_received)
+		            return Other(screenBuilder: screenBuilder)
+		        }
+		        let otherBuilder = Instantiator<Other>(__safeDI_otherBuilder)
+		        func __safeDI_screenBuilder(otherBuilder: Instantiator<Other>) -> Screen {
+		            return Screen(detail: Detail(otherBuilder: otherBuilder))
+		        }
+		        func __safeDI_screenBuilder_received() -> Screen {
+		            let otherBuilder = Instantiator<Other>(__safeDI_otherBuilder)
+		            return __safeDI_screenBuilder(otherBuilder: otherBuilder)
+		        }
+		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder_received)
+		        self.init(otherBuilder: otherBuilder, screenBuilder: screenBuilder)
+		    }
+		}
+		""", [:]) == [.buildersReceivingEachOther, .receivedLoopMemberWithCycleParameters])
+		// An instantiator that closes a longer cycle wraps a function declared further out than its function's siblings.
+		#expect(features("""
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_aBuilder() -> A {
+		            func __safeDI_bBuilder() -> B {
+		                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		                return B(aBuilder: aBuilder)
+		            }
+		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+		            return A(bBuilder: bBuilder)
+		        }
+		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		        self.init(aBuilder: aBuilder)
+		    }
+		}
+		""", [:]) == [])
+	}
+
 	@Test(.enabled(if: compileVerificationIsEnabled, "The value oracle compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func smokeSeeds_compareRootAndMirroredPairsShowingEveryShape_whenRunThroughValueOracle() async throws {
@@ -4571,7 +4698,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Seeds
 
-	/// The ordinary suite's batch: seeds 12, 25, 62, 99, 304, 582, 691, 705, 731, 930, 2314, 2420, 2611, and 3360, whose graphs
+	/// The ordinary suite's batch: seeds 12, 25, 30, 62, 99, 212, 267, 304, 582, 691, 705, 731, 930, 2314, 2420, 2611, and 3360, whose graphs
 	/// the tool accepts, with the same results under every `GraphFuzzerRenaming`, and which between them exercise every feature
 	/// (seed 2314's graph has a required erased rename of an optional alias, which a type its host instantiates receives only
 	/// if available; seed 25's
@@ -4588,100 +4715,110 @@ struct SafeDIToolGraphFuzzerTests {
 	/// the base corpus's value oracle must show in passing graphs: a label declared at two depths of a root's tree above
 	/// a receiver of it (99), an `onlyIfAvailable` alias of a dependency a mock promotes (304), and a promoted wrapper
 	/// whose label the tree also receives by value, as the mocked type does (3360). Seeds 18, 59, 97, 133 and 161 complete the
-	/// elements a forwarded tuple spells, and seeds 4 and 70, which the tool rejects, keep the rejected share at that quarter.
+	/// elements a forwarded tuple spells. Seeds 30, 97, 212 and 267 show the loops through received instantiators:
+	/// `Sendable` instantiators that receive one another (97), a `Sendable` loop with a member whose builder function
+	/// takes cycle parameters (30), the same member with wrappers that are not `Sendable` (267), and an instantiator
+	/// received inside the tree it builds, with each kind of wrapper (212). Seeds 4, 5 and 70, which the tool rejects,
+	/// keep the rejected share at that quarter.
 	/// It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on
 	/// every pull request. Compiling the batch is one `swiftc` invocation when nothing fails, and comparing its values
 	/// one compile and one link.
-	static let smokeSeeds: [UInt64] = [4, 12, 14, 18, 25, 40, 59, 62, 70, 97, 99, 133, 161, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
+	static let smokeSeeds: [UInt64] = [4, 5, 12, 14, 18, 25, 30, 40, 59, 62, 70, 97, 99, 133, 161, 212, 267, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x7B6CAE54EBE0F468
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x6E6697BD4633C3F6
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x379D8405C9FA4FF3
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xDB5882CD36632C45
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0x9F9DE4ED78FD0FB9
+	static let corpusFixtureHash: UInt64 = 0xD0BC90DE1A803CA4
 
-	static let corpusPartitionHash: UInt64 = 0xDE2D8C33540001E4
+	static let corpusPartitionHash: UInt64 = 0x8C63A00254D8458E
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
-	static let corpusAcceptedSeedCount = 2_303
-	static let corpusAcceptedSeedsSum: UInt64 = 0xADFA16C562C6F43B
+	static let corpusAcceptedSeedCount = 2_392
+	static let corpusAcceptedSeedsSum: UInt64 = 0x55B51D44D1709BEE
 
 	/// How many of the corpus's graphs the tool accepts show each `GraphFuzzerFeature`, read from their source as the
 	/// smoke batch reads them, which shards of the corpus add up. Unit tests leave the siblings of a shape to the
 	/// corpus, so a generator change that stops drawing a feature, or a tool change that stops accepting the graphs that
 	/// draw it, changes these and must update them deliberately, with the hashes and the accepted-seed pins.
 	static let corpusAcceptedFeatureCounts: [GraphFuzzerFeature: Int] = [
-		.constantProperty: 2_131,
-		.erasedConstantProperty: 387,
-		.instantiatorProperty: 1_854,
-		.sendableInstantiatorProperty: 783,
-		.erasedInstantiatorProperty: 1_167,
-		.sendableErasedInstantiatorProperty: 416,
-		.lazilyInstantiatedProperty: 343,
-		.sendableLazilyInstantiatedProperty: 128,
-		.erasedLazilyInstantiatedProperty: 186,
-		.forwardedLazilyInstantiatedProperty: 281,
-		.receivedLazilyInstantiatedInstance: 219,
-		.forwardedProperty: 1_444,
-		.optionalForwardedProperty: 757,
-		.requiredReceive: 1_972,
-		.requiredOptionalReceive: 480,
-		.onlyIfAvailableReceive: 1_540,
-		.requiredAlias: 947,
-		.onlyIfAvailableAlias: 782,
+		.constantProperty: 2_218,
+		.erasedConstantProperty: 396,
+		.instantiatorProperty: 1_931,
+		.sendableInstantiatorProperty: 817,
+		.erasedInstantiatorProperty: 1_217,
+		.sendableErasedInstantiatorProperty: 432,
+		.lazilyInstantiatedProperty: 354,
+		.sendableLazilyInstantiatedProperty: 130,
+		.erasedLazilyInstantiatedProperty: 189,
+		.forwardedLazilyInstantiatedProperty: 289,
+		.receivedLazilyInstantiatedInstance: 226,
+		.forwardedProperty: 1_500,
+		.optionalForwardedProperty: 790,
+		.requiredReceive: 2_074,
+		.requiredOptionalReceive: 494,
+		.onlyIfAvailableReceive: 1_626,
+		.requiredAlias: 987,
+		.onlyIfAvailableAlias: 812,
 		.aliasOfOnlyIfAvailableAlias: 67,
 		.aliasOfOptionalFormOfProperty: 12,
-		.erasedAlias: 192,
+		.erasedAlias: 195,
 		.erasedRenameOfOptionalDependency: 34,
 		.forwardedTupleOptionalElement: 69,
-		.forwardedTupleNestedTypeElement: 70,
-		.forwardedTupleGenericElementSpelledWithAngleBrackets: 72,
-		.forwardedTupleGenericElement: 69,
-		.forwardedTupleArrayElement: 84,
-		.forwardedTupleDictionaryElement: 73,
-		.forwardedTupleClosureElement: 77,
-		.forwardedTupleSendableClosureElement: 82,
-		.forwardedTupleOptionalClosureElement: 66,
-		.forwardedTupleExistentialElement: 77,
-		.forwardedTupleOptionalExistentialElement: 72,
-		.forwardedTupleTupleElement: 77,
-		.forwardedTupleTypedThrowsClosureElement: 77,
-		.forwardedTupleVariadicClosureElement: 63,
-		.forwardedTupleConventionClosureElement: 76,
-		.forwardedTupleIsolatedAnyClosureElement: 83,
-		.forwardedTupleQualifiedGlobalActorClosureElement: 64,
-		.forwardedTupleNonisolatedNonsendingClosureElement: 71,
-		.forwardedTupleKeywordLabel: 142,
-		.forwardedPropertiesTypealiasArgument: 139,
-		.forwardedTupleBuilderReceivedByMockedType: 119,
-		.multipleRoots: 1_520,
-		.generateMock: 1_997,
-		.lazyCycle: 1_042,
+		.forwardedTupleNestedTypeElement: 71,
+		.forwardedTupleGenericElementSpelledWithAngleBrackets: 75,
+		.forwardedTupleGenericElement: 71,
+		.forwardedTupleArrayElement: 86,
+		.forwardedTupleDictionaryElement: 74,
+		.forwardedTupleClosureElement: 79,
+		.forwardedTupleSendableClosureElement: 83,
+		.forwardedTupleOptionalClosureElement: 68,
+		.forwardedTupleExistentialElement: 80,
+		.forwardedTupleOptionalExistentialElement: 77,
+		.forwardedTupleTupleElement: 81,
+		.forwardedTupleTypedThrowsClosureElement: 81,
+		.forwardedTupleVariadicClosureElement: 68,
+		.forwardedTupleConventionClosureElement: 77,
+		.forwardedTupleIsolatedAnyClosureElement: 86,
+		.forwardedTupleQualifiedGlobalActorClosureElement: 66,
+		.forwardedTupleNonisolatedNonsendingClosureElement: 75,
+		.forwardedTupleKeywordLabel: 147,
+		.forwardedPropertiesTypealiasArgument: 143,
+		.forwardedTupleBuilderReceivedByMockedType: 123,
+		.multipleRoots: 1_578,
+		.generateMock: 2_083,
+		.lazyCycle: 1_093,
 		.constantCycleCloser: 28,
-		.sameLabelWithDifferentTypes: 1_090,
-		.labelSpelledAsGeneratedName: 531,
-		.dependencyMockCannotBuild: 1_400,
-		.dependencyMockCannotBuildReceivedBeneathItsOwner: 245,
+		.builderReceivedInsideItsTree: 117,
+		.sendableBuilderReceivedInsideItsTree: 43,
+		.buildersReceivingEachOther: 112,
+		.sendableBuildersReceivingEachOther: 51,
+		.receivedLoopMemberWithCycleParameters: 13,
+		.sendableReceivedLoopMemberWithCycleParameters: 7,
+		.sameLabelWithDifferentTypes: 1_127,
+		.labelSpelledAsGeneratedName: 546,
+		.dependencyMockCannotBuild: 1_448,
+		.dependencyMockCannotBuildReceivedBeneathItsOwner: 251,
 		.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner: 64,
 		.dependencyMockCannotBuildLazilyInstantiatedReceivedAsOtherKindBesideItsMockedOwner: 9,
-		.sendableAndNonSendableWrappers: 490,
-		.mockedTypeOnLazyCycle: 487,
-		.typesReceivingEachOtherOnlyIfAvailable: 244,
-		.labelReceivedAsInstanceAndAsInstantiator: 124,
-		.sameLabelReceivedAsDifferentUnbuildableWrappers: 113,
-		.receivedErasedInstantiator: 738,
-		.forwardedErasedInstantiator: 138,
-		.defaultValuedInstantiateParameter: 549,
-		.nonSendableValuesInsideSendableBuilder: 132,
+		.sendableAndNonSendableWrappers: 509,
+		.mockedTypeOnLazyCycle: 507,
+		.typesReceivingEachOtherOnlyIfAvailable: 255,
+		.labelReceivedAsInstanceAndAsInstantiator: 127,
+		.sameLabelReceivedAsDifferentUnbuildableWrappers: 115,
+		.receivedErasedInstantiator: 775,
+		.forwardedErasedInstantiator: 144,
+		.defaultValuedInstantiateParameter: 579,
+		.nonSendableValuesInsideSendableBuilder: 135,
 		.generateDependencyTree: 0,
 	]
 
@@ -4765,27 +4902,27 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the base corpus's value oracle compares and skips over the whole corpus (`GraphFuzzerValueOracleCounts`).
 	static let corpusValueOracleCounts = GraphFuzzerValueOracleCounts(
-		rootPairCount: 4_520,
-		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x097611BDF9745C69),
-		mirroredPairCount: 2_288,
-		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0xAE722ADA95FBE8D0),
+		rootPairCount: 4_690,
+		rootPairsSum: GraphFuzzerSeedSetSum(value: 0xF8234485A1F0D0AB),
+		mirroredPairCount: 2_467,
+		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0xBEBAC27385796A1B),
 		skipCounts: [
-			.requiredParameter: 2_099,
+			.requiredParameter: 2_170,
 			.twoFormsOfOneLabel: 22,
-			.requiredOptionalReceiveOfNonOptionalDeclaration: 8,
+			.requiredOptionalReceiveOfNonOptionalDeclaration: 7,
 			.requiredReceiveOfUncreatedAlias: 10,
 		],
 		shapeCounts: [
-			.rootTreePropertyReceivedByTwoOrMoreTypes: 847,
-			.rootTreeLabelDeclaredAtTwoDepthsAboveReceiver: 115,
-			.promotedDependencyReceivedByTwoOrMoreTypes: 162,
-			.onlyIfAvailableAliasOfPromotedDependency: 56,
-			.requiredAliasOfPromotedDependency: 220,
-			.promotedWrapperReceivedInAnotherForm: 3,
-			.instanceOfPromotedWrapperPassedToMockedType: 1,
-			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 173,
+			.rootTreePropertyReceivedByTwoOrMoreTypes: 929,
+			.rootTreeLabelDeclaredAtTwoDepthsAboveReceiver: 149,
+			.promotedDependencyReceivedByTwoOrMoreTypes: 177,
+			.onlyIfAvailableAliasOfPromotedDependency: 58,
+			.requiredAliasOfPromotedDependency: 236,
+			.promotedWrapperReceivedInAnotherForm: 5,
+			.instanceOfPromotedWrapperPassedToMockedType: 2,
+			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 192,
 		],
-		drawnMocksMatchingOnlyAfterNormalizationCount: 598,
+		drawnMocksMatchingOnlyAfterNormalizationCount: 621,
 	)
 
 	/// The seeds of `knownIssues` whose value-oracle fixture is known not to compile.
@@ -4837,12 +4974,12 @@ struct SafeDIToolGraphFuzzerTests {
 	)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0xC154F93D35DD9E3B
-	static let seamCorpusAcceptedSeedCount = 281
-	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x1E4142F6F2A528D0
+	static let seamCorpusFixtureHash: UInt64 = 0xD9E0E5824391BA47
+	static let seamCorpusAcceptedSeedCount = 292
+	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x70C5A79BF1553FBA
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 196
+	static let seamCorpusValueOracleInspectedGraphCount = 207
 	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
 	static let seamCorpusOmittedValueGraphCount = 0
 	/// The errors of a cycle's label in a seam's tree whose rejections the seam corpus pins, which
@@ -4859,26 +4996,26 @@ struct SafeDIToolGraphFuzzerTests {
 		"cannot be received inside a `@Sendable` function in chain",
 	]
 	/// How many of the seam corpus's graphs the tool rejects with each error of `seamCorpusErrorMarkers`, in its order.
-	static let seamCorpusErrorGraphCounts = [1, 11, 0, 24]
+	static let seamCorpusErrorGraphCounts = [1, 11, 0, 26]
 	/// How many of the seam corpus's graphs the tool accepts show each of `addingCycleParameterShapes`' draws, so that a
 	/// draw the tool rejects every time, or a change that rejects more of them, names the shape. Two draws the tool rejects
 	/// by design are pinned at none: an instantiator declaration between beside by-value ones, which hides the reads beneath
 	/// it, and a fill's read of a label no cycle parameter carries (`declarationBoundOnCycleReentry`, among
 	/// `seamCorpusErrorMarkers`).
 	static let seamCorpusAcceptedDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
-		.cycleParameterDeclaredAfterCloser: 12,
+		.cycleParameterDeclaredAfterCloser: 13,
 		.cycleParameterDeclaredAsAlias: 14,
 		.cycleParameterDeclaredAsHidingInstantiator: 0,
-		.cycleParameterDeclaredAsInstantiators: 16,
-		.cycleParameterDeclaredBySeam: 57,
-		.cycleParameterDeclaredLazily: 19,
+		.cycleParameterDeclaredAsInstantiators: 17,
+		.cycleParameterDeclaredBySeam: 60,
+		.cycleParameterDeclaredLazily: 20,
 		.cycleParameterDeferredFromCaller: 21,
-		.cycleParameterDeferredNote: 24,
-		.cycleParameterFillReadsLabel: 55,
+		.cycleParameterDeferredNote: 26,
+		.cycleParameterFillReadsLabel: 56,
 		.cycleParameterFillReadsLabelNoParameterCarries: 0,
-		.cycleParameterFillReadsNote: 28,
-		.cycleParameterHoleAtOrBeneathDeclaration: 27,
-		.cycleParameterHoleBetween: 31,
+		.cycleParameterFillReadsNote: 30,
+		.cycleParameterHoleAtOrBeneathDeclaration: 30,
+		.cycleParameterHoleBetween: 34,
 		.cycleParameterHoleOnClosedOnType: 33,
 		.cycleParameterHoleOnReader: 7,
 		.cycleParameterHoleOnSeam: 10,
@@ -4886,24 +5023,24 @@ struct SafeDIToolGraphFuzzerTests {
 		.cycleParameterMocked: 19,
 		.cycleParameterNestedCycle: 10,
 		.cycleParameterNoteDeclaredAgain: 8,
-		.cycleParameterNoteReceivedAfterLabel: 11,
-		.cycleParameterOpenedByInstantiator: 38,
+		.cycleParameterNoteReceivedAfterLabel: 12,
+		.cycleParameterOpenedByInstantiator: 39,
 		.cycleParameterOpenedByValue: 13,
-		.cycleParameterOpenedLazily: 30,
+		.cycleParameterOpenedLazily: 32,
 		.cycleParameterReaderBetween: 13,
-		.cycleParameterReaderReceivesInstantiator: 14,
+		.cycleParameterReaderReceivesInstantiator: 15,
 		.cycleParameterReaderReceivesOnlyIfAvailable: 17,
 		.cycleParameterReaderReceivesWrapperOnlyIfAvailable: 2,
-		.cycleParameterReaderRequiresValue: 26,
+		.cycleParameterReaderRequiresValue: 27,
 		.cycleParameterReaderRequiresWrapper: 4,
-		.cycleParameterSeam: 81,
-		.cycleParameterSendableWrappers: 18,
+		.cycleParameterSeam: 84,
+		.cycleParameterSendableWrappers: 19,
 		.cycleParameterSideReceivesInstantiator: 3,
 		.cycleParameterSideReceivesValue: 24,
 		.cycleParameterSideReceivesWrapper: 2,
 		.cycleParameterTwoLevelsDeep: 32,
 		.cycleParameterUndeclaredAbove: 3,
-		.cycleParameterWithoutReader: 10,
+		.cycleParameterWithoutReader: 11,
 	]
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
 	/// with their read twin.
@@ -4944,7 +5081,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 78, 92, 93, 151, 153, 180, 196, 215, 277, 298, 304, 326, 347, 605, 609, 705, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xB9A340AF41200419
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xF1DA8C3DB0AAAAC8
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -5201,7 +5338,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeCode)],
-			seeds: [83, 273, 308, 391, 407, 556, 701, 930],
+			seeds: [83, 273, 308, 391, 407, 556, 701, 930, 945],
 		),
 		// The design's output stability, section 8: a second hole type whose stem collides with another's renames both.
 		GraphFuzzerKnownIssue(
@@ -5538,29 +5675,29 @@ struct SafeDIToolGraphFuzzerTests {
 			seeds: [
 				6, 36, 45, 55, 157, 209, 281, 300, 371, 380, 381, 434, 476, 541, 548, 593,
 				774, 808, 840, 903, 1_042, 1_140, 1_185, 1_217, 1_300, 1_335, 1_369, 1_432, 1_535, 1_563, 1_646, 1_664,
-				1_675, 1_742, 1_795, 1_817, 1_853, 1_867, 2_051, 2_057, 2_083, 2_149, 2_296, 2_337, 2_484, 2_742, 2_791, 2_841,
-				2_916, 3_160, 3_470, 3_491, 3_513, 3_534, 3_537, 3_589, 3_600, 3_661, 3_843, 3_994, 4_015, 4_090, 4_191, 4_192,
-				4_196, 4_541, 4_613, 4_634, 4_648, 4_664, 4_729, 4_834, 4_857, 4_865, 4_891, 4_947, 4_955,
+				1_675, 1_742, 1_795, 1_817, 1_853, 1_867, 2_051, 2_057, 2_083, 2_149, 2_296, 2_337, 2_484, 2_626, 2_742, 2_791,
+				2_841, 2_916, 3_160, 3_470, 3_491, 3_513, 3_534, 3_537, 3_589, 3_600, 3_661, 3_843, 3_994, 4_015, 4_090, 4_191,
+				4_192, 4_196, 4_541, 4_613, 4_634, 4_648, 4_664, 4_729, 4_834, 4_857, 4_865, 4_891, 4_947, 4_955,
 			],
 		),
 		GraphFuzzerKnownIssue(
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [
-				3, 35, 107, 114, 131, 168, 223, 241, 311, 338, 364, 383, 390, 431, 448, 450,
-				473, 515, 525, 545, 567, 595, 617, 630, 680, 714, 728, 732, 735, 751, 768, 785,
-				786, 836, 847, 886, 912, 940, 948, 975, 987, 991, 1_004, 1_029, 1_044, 1_061, 1_064, 1_072,
-				1_075, 1_084, 1_092, 1_139, 1_145, 1_147, 1_215, 1_236, 1_244, 1_289, 1_322, 1_329, 1_352, 1_362, 1_372, 1_433,
-				1_441, 1_453, 1_464, 1_492, 1_504, 1_524, 1_531, 1_567, 1_602, 1_633, 1_695, 1_708, 1_781, 1_784, 1_804, 1_857,
-				1_896, 1_938, 1_972, 2_013, 2_017, 2_084, 2_123, 2_152, 2_165, 2_234, 2_249, 2_270, 2_277, 2_282, 2_287, 2_316,
-				2_325, 2_335, 2_348, 2_389, 2_403, 2_430, 2_432, 2_437, 2_444, 2_456, 2_555, 2_577, 2_630, 2_637, 2_732, 2_808,
-				2_835, 2_845, 2_874, 2_914, 3_064, 3_074, 3_075, 3_091, 3_134, 3_180, 3_183, 3_215, 3_221, 3_241, 3_252, 3_298,
-				3_306, 3_329, 3_344, 3_345, 3_361, 3_430, 3_504, 3_506, 3_526, 3_533, 3_577, 3_582, 3_584, 3_588, 3_596, 3_602,
-				3_620, 3_645, 3_648, 3_699, 3_707, 3_715, 3_723, 3_741, 3_750, 3_775, 3_776, 3_805, 3_823, 3_826, 3_850, 3_894,
-				3_915, 4_044, 4_068, 4_102, 4_107, 4_110, 4_117, 4_122, 4_125, 4_156, 4_177, 4_206, 4_213, 4_215, 4_217, 4_227,
-				4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_371, 4_393, 4_396, 4_404, 4_420, 4_428, 4_515, 4_534, 4_545, 4_549,
-				4_567, 4_619, 4_637, 4_640, 4_642, 4_666, 4_707, 4_716, 4_717, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_859,
-				4_904, 4_918, 4_922, 4_944, 4_963, 4_996,
+				3, 35, 107, 114, 116, 131, 168, 223, 241, 311, 338, 364, 383, 390, 431, 448,
+				450, 473, 515, 525, 545, 567, 595, 617, 630, 680, 714, 728, 732, 735, 751, 768,
+				785, 786, 836, 847, 886, 912, 940, 948, 975, 987, 991, 1_004, 1_029, 1_044, 1_061, 1_064,
+				1_072, 1_075, 1_084, 1_092, 1_139, 1_145, 1_147, 1_172, 1_215, 1_236, 1_244, 1_289, 1_322, 1_329, 1_352, 1_362,
+				1_372, 1_433, 1_441, 1_447, 1_453, 1_464, 1_492, 1_504, 1_524, 1_531, 1_567, 1_602, 1_633, 1_695, 1_708, 1_781,
+				1_784, 1_804, 1_857, 1_896, 1_938, 1_972, 2_013, 2_017, 2_084, 2_123, 2_152, 2_165, 2_234, 2_249, 2_270, 2_277,
+				2_282, 2_287, 2_316, 2_325, 2_335, 2_348, 2_389, 2_403, 2_430, 2_432, 2_437, 2_444, 2_456, 2_529, 2_555, 2_577,
+				2_630, 2_637, 2_732, 2_808, 2_835, 2_845, 2_874, 2_914, 3_064, 3_074, 3_075, 3_091, 3_134, 3_180, 3_183, 3_215,
+				3_221, 3_241, 3_252, 3_298, 3_306, 3_329, 3_344, 3_345, 3_361, 3_430, 3_504, 3_506, 3_522, 3_526, 3_533, 3_577,
+				3_582, 3_584, 3_588, 3_596, 3_602, 3_620, 3_648, 3_699, 3_707, 3_715, 3_723, 3_741, 3_750, 3_775, 3_776, 3_805,
+				3_823, 3_826, 3_850, 3_894, 3_915, 4_044, 4_068, 4_102, 4_107, 4_110, 4_117, 4_122, 4_125, 4_156, 4_177, 4_206,
+				4_213, 4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_358, 4_371, 4_393, 4_396, 4_404, 4_420,
+				4_428, 4_515, 4_534, 4_545, 4_549, 4_567, 4_619, 4_637, 4_640, 4_642, 4_666, 4_684, 4_707, 4_716, 4_717, 4_775,
+				4_776, 4_781, 4_783, 4_786, 4_795, 4_859, 4_904, 4_918, 4_922, 4_944, 4_963, 4_996,
 			],
 		),
 		// A graph that shows both reasons, under one renaming or across them, is documented only by the shape that names both.
@@ -5568,7 +5705,8 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: mockParameterAndFieldOrderAndLazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [
-				77, 632, 1_035, 1_496, 1_970, 2_211, 2_518, 2_553, 2_667, 2_704, 2_741, 2_902, 3_023, 3_225, 3_439, 4_496,
+				77, 632, 869, 1_035, 1_496, 1_970, 2_211, 2_518, 2_553, 2_667, 2_704, 2_741, 2_902, 3_023, 3_225, 3_439,
+				4_496,
 			],
 		),
 		GraphFuzzerKnownIssue(

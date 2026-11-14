@@ -2265,6 +2265,61 @@ enum GraphFuzzerGenerator {
 				declarations.append(owner)
 				declarations.append(leaf)
 				sendableBuilderMotifMockedTypeName = typeName(7)
+			} else if roll >= 30, roll < 35 {
+				appendReceivedBuilderLoopMotif(to: &declarations)
+			}
+		}
+
+		/// Instantiators of one scope that receive one another: a ring of one, two or three types, each receiving the
+		/// instantiator of the next, required or now and then only if available, which a root declares, or a type a root
+		/// instantiates. A ring of one is a type that receives the instantiator that builds it, itself or through a
+		/// constant it instantiates. Now and then a member has `generateMock: true`, whose mock promotes the ring, and a
+		/// ring of two now and then has an instantiated cycle close on a member: the first member instantiates a third type
+		/// that declares both members' instantiators again, so each member built beneath it receives that type's, and the
+		/// first member's builder function takes the second's as a cycle parameter. The ring's wrappers are `Sendable` in a
+		/// `Sendable` graph and in half the mixed ones.
+		private mutating func appendReceivedBuilderLoopMotif(to declarations: inout [TypeDeclaration]) {
+			let wrapper = sendability == .sendable || sendability == .mixed && random.percentChance(50) ? "SendableInstantiator" : "Instantiator"
+			func builder(_ index: Int) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: "@Instantiated", label: "t\(index)Builder", type: "\(wrapper)<\(typeName(index))>")
+			}
+			let length = random.integer(in: 1...3)
+			let members = Array(7..<(7 + length))
+			var propertiesByIndex = [Int: [PropertyDeclaration]]()
+			for (position, member) in members.enumerated() {
+				let next = members[(position + 1) % length]
+				let receive = random.percentChance(30)
+					? PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "t\(next)Builder", type: "\(wrapper)<\(typeName(next))>?")
+					: PropertyDeclaration(attribute: "@Received", label: "t\(next)Builder", type: "\(wrapper)<\(typeName(next))>")
+				if length == 1, random.percentChance(50) {
+					// The constant the member instantiates receives the member's instantiator instead.
+					propertiesByIndex[member, default: []].append(PropertyDeclaration(attribute: "@Instantiated", label: "t8", type: typeName(8)))
+					propertiesByIndex[8, default: []].append(receive)
+				} else {
+					propertiesByIndex[member, default: []].append(receive)
+				}
+			}
+			let closesCycle = length == 2 && random.percentChance(40)
+			if closesCycle {
+				propertiesByIndex[7, default: []].append(builder(9))
+				propertiesByIndex[9, default: []] += [builder(7), builder(8)]
+			}
+			let mockedIndex = random.percentChance(50) ? random.element(of: members) : nil
+			let builders = members.map(builder)
+			if !closesCycle, propertiesByIndex[9] == nil, random.percentChance(30) {
+				// A type a root instantiates as a constant declares the ring.
+				propertiesByIndex[9] = builders
+				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "t9", type: typeName(9)))
+			} else {
+				declarations[0].properties += builders
+			}
+			for index in propertiesByIndex.keys.sorted() {
+				declarations.append(TypeDeclaration(
+					name: typeName(index),
+					instantiableArguments: index == mockedIndex ? ["generateMock: true"] : [],
+					properties: propertiesByIndex[index, default: []],
+					declaresHelperTypes: true,
+				))
 			}
 		}
 
@@ -6620,6 +6675,23 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// on where a tree enters it, so it is read from an accepted graph's generated code
 	/// (`features(of:outcome:)`), and never from the fixture alone.
 	case constantCycleCloser
+	/// An instantiator received inside the tree it builds, which the builder function of the type it builds wraps again
+	/// first (`let tBuilder = Instantiator<T>(__safeDI_tBuilder)` at the top of `__safeDI_tBuilder`). Whether a receive
+	/// only if available is handed the instantiator, and so whether the function wraps it again, the tool decides, so
+	/// these are read from an accepted graph's generated code (`features(of:outcome:)`).
+	case builderReceivedInsideItsTree
+	/// The same, of `Sendable` wrappers.
+	case sendableBuilderReceivedInsideItsTree
+	/// Instantiators of one scope whose trees receive one another, so that each one's builder function wraps again the
+	/// function of another first.
+	case buildersReceivingEachOther
+	/// The same, of `Sendable` wrappers.
+	case sendableBuildersReceivingEachOther
+	/// A member of such a loop whose builder function takes cycle parameters, which a function of its own wraps
+	/// (`__safeDI_tBuilder_received`), passing the declaring scope's values.
+	case receivedLoopMemberWithCycleParameters
+	/// The same, of a `Sendable` member, whose wrapping function is `@Sendable`.
+	case sendableReceivedLoopMemberWithCycleParameters
 	case sameLabelWithDifferentTypes
 	/// An instantiated property labeled as a name a generated mock gives a binding of its own, such as `t1_S0_T1`.
 	case labelSpelledAsGeneratedName
@@ -6673,11 +6745,161 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// it, those only its generated code shows.
 	static func features(of fixture: GraphFuzzerFixture, outcome: GraphFuzzerToolOutcome) -> Set<GraphFuzzerFeature> {
 		var features = features(of: fixture)
-		if case let .accepted(generatedFiles, _) = outcome,
-		   generatedFiles.keys.sorted().contains(where: { closesCycleWithConstantOrLazilyInstantiatedDependency(generatedFiles[$0, default: ""]) })
-		{
-			features.insert(.constantCycleCloser)
+		if case let .accepted(generatedFiles, _) = outcome {
+			if generatedFiles.keys.sorted().contains(where: { closesCycleWithConstantOrLazilyInstantiatedDependency(generatedFiles[$0, default: ""]) }) {
+				features.insert(.constantCycleCloser)
+			}
+			let instantiatedLabelsByTypeName = instantiatedLabelsByTypeName(of: fixture)
+			for fileName in generatedFiles.keys.sorted() {
+				features.formUnion(receivedBuilderLoopFeatures(of: generatedFiles[fileName, default: ""], instantiatedLabelsByTypeName: instantiatedLabelsByTypeName))
+			}
 		}
+		return features
+	}
+
+	/// The labels of the properties each `@Instantiable` type of `fixture` instantiates, by the type's name, and by the
+	/// name of each type an `@Instantiated` property erases it to: a mock's builder function for an erased instantiator
+	/// returns the erased type.
+	static func instantiatedLabelsByTypeName(of fixture: GraphFuzzerFixture) -> [String: Set<String>] {
+		var labelsByTypeName = [String: Set<String>]()
+		var erasedTypeNamesByTypeName = [String: Set<String>]()
+		for content in fixture.swiftFileContent {
+			var currentTypeName: String?
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				switch line {
+				case let .typeDeclaration(name):
+					currentTypeName = name
+				case let .property(attribute, label, type):
+					guard attribute.hasPrefix("@Instantiated") else { break }
+					if let currentTypeName {
+						labelsByTypeName[currentTypeName, default: []].insert(label)
+					}
+					if attribute.contains("erasedToConcreteExistential: true"),
+					   let fulfillingTypeStart = attribute.range(of: "fulfilledByType: \"")
+					{
+						let fulfillingTypeName = attribute[fulfillingTypeStart.upperBound...].prefix { $0 != "\"" }
+						erasedTypeNamesByTypeName[String(fulfillingTypeName), default: []].insert(erasedTypeName(ofPropertyType: type))
+					}
+				case .instantiableAttribute, .instantiateMethod, .other:
+					break
+				}
+			}
+		}
+		for typeName in erasedTypeNamesByTypeName.keys.sorted() {
+			guard let labels = labelsByTypeName[typeName] else { continue }
+			for erasedTypeName in erasedTypeNamesByTypeName[typeName, default: []].sorted() {
+				labelsByTypeName[erasedTypeName, default: []].formUnion(labels)
+			}
+		}
+		return labelsByTypeName
+	}
+
+	/// The type an erased `@Instantiated` property of type `propertyType` erases to: the type itself, or a wrapper's last
+	/// generic argument, as in `ErasedInstantiator<(), AnyNode>`.
+	private static func erasedTypeName(ofPropertyType propertyType: String) -> String {
+		var type = Substring(propertyType)
+		while type.hasSuffix("?") {
+			type = type.dropLast()
+		}
+		guard type.hasSuffix(">"), let lastArgumentStart = type.lastIndex(where: { $0 == "," || $0 == "<" }) else {
+			return String(type)
+		}
+		return type[type.index(after: lastArgumentStart)...].dropLast().trimmingCharacters(in: .whitespaces)
+	}
+
+	/// A line of generated code, without its indentation, and the lines of the block it opens, when it ends with `{`.
+	private struct GeneratedCodeLine {
+		let content: Substring
+		var block = [GeneratedCodeLine]()
+
+		/// The name of the builder function the line declares, when it declares one.
+		var declaredBuilderFunctionName: Substring? {
+			let declaration = content.hasPrefix("@Sendable ") ? content.dropFirst("@Sendable ".count) : content
+			guard declaration.hasPrefix("func __safeDI_") else { return nil }
+			return declaration.dropFirst("func ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
+		}
+
+		/// The type the builder function the line declares returns.
+		var returnedTypeName: Substring? {
+			guard let arrow = content.range(of: ") -> ", options: .backwards), content.hasSuffix(" {") else { return nil }
+			return content[arrow.upperBound...].dropLast(" {".count)
+		}
+
+		/// `code` as lines, each holding the block it opens. A conditional compilation line opens no block.
+		static func lines(of code: String) -> [GeneratedCodeLine] {
+			var openBlocks = [[GeneratedCodeLine]()]
+			func closeBlock() {
+				guard openBlocks.count > 1 else { return }
+				let block = openBlocks.removeLast()
+				if let opener = openBlocks[openBlocks.count - 1].indices.last {
+					openBlocks[openBlocks.count - 1][opener].block = block
+				}
+			}
+			for line in code.split(separator: "\n") {
+				let content = line.drop { $0 == " " || $0 == "\t" }
+				guard !content.hasPrefix("#") else { continue }
+				if content.hasPrefix("}") {
+					closeBlock()
+					// `} else {` closes one block and opens another.
+					guard content.hasSuffix("{") else { continue }
+				}
+				openBlocks[openBlocks.count - 1].append(GeneratedCodeLine(content: content))
+				if content.hasSuffix("{") {
+					openBlocks.append([])
+				}
+			}
+			while openBlocks.count > 1 {
+				closeBlock()
+			}
+			return openBlocks[0]
+		}
+	}
+
+	/// The loops through received instantiators `generatedCode` shows. A member of a loop begins its builder function by
+	/// wrapping again, in a binding of the label its tree receives, a builder function the scope that declares the loop
+	/// declares: for an instantiator received inside its own tree, its own function or the function wrapping it that
+	/// passes its cycle parameters, and another member's otherwise. An instantiator that closes an instantiated cycle on
+	/// its own type wraps its own function too, so a binding of a label the built type instantiates
+	/// (`instantiatedLabelsByTypeName`) is none; one that closes a longer cycle wraps a function declared further out
+	/// than the siblings of the function it is in.
+	static func receivedBuilderLoopFeatures(of generatedCode: String, instantiatedLabelsByTypeName: [String: Set<String>]) -> Set<GraphFuzzerFeature> {
+		let instantiatorPrefixes = ["Instantiator<", "SendableInstantiator<", "ErasedInstantiator<", "SendableErasedInstantiator<"]
+		var features = Set<GraphFuzzerFeature>()
+		func visit(_ body: [GeneratedCodeLine]) {
+			var siblingNames = Set<Substring>()
+			for line in body {
+				if let name = line.declaredBuilderFunctionName {
+					siblingNames.insert(name)
+				}
+			}
+			for line in body {
+				visit(line.block)
+				guard let name = line.declaredBuilderFunctionName else { continue }
+				// A function wrapping a sibling's, which it calls last, with the cycle arguments its scope passes.
+				if siblingNames.contains(where: { name != $0 && name.hasPrefix($0 + "_received") && line.block.last?.content.contains($0 + "(") == true }) {
+					features.insert(line.content.hasPrefix("@Sendable ") ? .sendableReceivedLoopMemberWithCycleParameters : .receivedLoopMemberWithCycleParameters)
+				}
+				let ownFunctionNames = Set(line.block.compactMap(\.declaredBuilderFunctionName))
+				let instantiatedLabels = line.returnedTypeName.map { instantiatedLabelsByTypeName[String($0), default: []] } ?? []
+				for binding in line.block where binding.content.hasPrefix("let ") {
+					guard let assignment = binding.content.range(of: " = ") else { continue }
+					let label = binding.content[binding.content.index(binding.content.startIndex, offsetBy: "let ".count)..<assignment.lowerBound]
+					let value = binding.content[assignment.upperBound...]
+					guard let wrapper = instantiatorPrefixes.first(where: { value.hasPrefix($0) }), !instantiatedLabels.contains(String(label)) else { continue }
+					let wrappingSource = value.hasSuffix(" {") ? binding.block.first?.content ?? "" : value
+					guard let call = wrappingSource.range(of: "__safeDI_") else { continue }
+					let wrappedName = wrappingSource[call.lowerBound...].prefix { $0.isLetter || $0.isNumber || $0 == "_" }
+					guard !ownFunctionNames.contains(wrappedName), siblingNames.contains(wrappedName) else { continue }
+					let isSendableWrapper = wrapper.hasPrefix("Sendable")
+					if wrappedName == name || wrappedName.hasPrefix(name + "_received") {
+						features.insert(isSendableWrapper ? .sendableBuilderReceivedInsideItsTree : .builderReceivedInsideItsTree)
+					} else {
+						features.insert(isSendableWrapper ? .sendableBuildersReceivingEachOther : .buildersReceivingEachOther)
+					}
+				}
+			}
+		}
+		visit(GeneratedCodeLine.lines(of: generatedCode))
 		return features
 	}
 
@@ -10036,7 +10258,8 @@ enum GraphFuzzerOracle {
 		"error: SafeDI cannot generate the dependency tree of `",
 		"error: SafeDI cannot generate a call to the initializer SafeDI generated for `",
 		"` receives from outside it, because `",
-		// A fill's own errors: what the struct does not carry, or what a re-entering call or a passing-up seam hides.
+		// A fill's own errors: what the struct does not carry, what a re-entering call or a passing-up seam hides, or an
+		// instantiator the seam's tree is building where it calls the builder, which inline is a wrapper made again in a loop.
 		"the builder for `",
 		"but that call passes the builder `",
 	]
