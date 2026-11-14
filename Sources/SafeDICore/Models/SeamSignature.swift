@@ -314,7 +314,11 @@ public struct SeamSignature: Sendable {
 				case receivesPathScopeOnlyIfAvailable(type: TypeDescription)
 				/// Its type requires `carrier`, a sibling that holds another site.
 				case requiresOtherCarrier(type: TypeDescription, carrier: Property)
-				/// It is the scope on the site's path, still being built, or the hole itself.
+				/// It is an instantiator on the site's path, still being built where the site is: the hole itself, or the
+				/// property of a scope on the path.
+				case instantiatorBuildingSite
+				/// Any other reason: a scope on the site's path that is no instantiator, still being built, the hole itself where
+				/// it is no instantiator, or a declaration bound after the site.
 				case other
 				/// `seam`, declared in `module`, binds it in its tree on a path to a call that presents `place`, whose builder
 				/// `seam` passes up: inline, a receive of its label would read it, and `seam`'s caller, which fills the builder,
