@@ -3508,8 +3508,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// declares its builder function and returns what the function builds, and leaves the wrapper to the seam.
 	private let isBuiltByFill: Bool
 	/// See `MockParameterNode.valuesBindings`: each field read as the scope's parent reads its label, as production's are.
-	nonisolated var valuesBindingsBeforeBuilderFunction: [String] {
-		valuesBindings.map { $0.line(readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties) }
+	nonisolated var valuesBindingsBeforeBuilderFunction: [MockParameterNode.ValuesBinding] {
+		valuesBindings.map { MockParameterNode.ValuesBinding(binding: $0, lazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties) }
 	}
 
 	/// Whether this scope's generated subtree holds a site of a hole of the seam whose tree is generated, on this scope's
@@ -7135,15 +7135,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// A dependency in `lazilyInstantiatedInstanceProperties` is received as the instance of a
 	/// `LazilyInstantiated` property. When that property was renamed, it is rebound under the
 	/// dependency's label, so the construction argument can read its instance from there.
+	///
+	/// A dependency whose label is in `bindingNamesPassedByName` is not rebound: its receiver is passed the binding by
+	/// name (`receivedBindingNamesPassedByName(to:flatParameterDisambiguationMap:lazilyInstantiatedBindingNames:)`).
 	fileprivate static func emitReceiverBindings(
 		for dependencies: [Dependency],
 		unavailableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property> = [],
 		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
+		bindingNamesPassedByName: [String: String] = [:],
 		indent: String,
 	) -> [String] {
 		dependencies.compactMap { dependency in
-			disambiguatedBinding(
+			guard bindingNamesPassedByName[dependency.property.label] == nil else { return nil }
+			return disambiguatedBinding(
 				ofReceived: dependency,
 				unavailableProperties: unavailableProperties,
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -7237,6 +7242,87 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// The renamed bindings `node` is passed by name, keyed by the label of the received dependency each fulfills: those
+	/// whose label a receive beneath `node` reads by name, from a binding outside the builder function of `node`. A
+	/// rebinding of the label inside that function would hide that binding from the receive beneath, which would read the
+	/// form `node` receives instead – an `onlyIfAvailable` `user: Draft?` override rebound above a type that receives the
+	/// `user: User?` the mock binds as `user`. Production passes each receive the nearest declaration of its label, so the
+	/// receive beneath reads the binding it would read if `node` did not receive the label, as the mock root passes its
+	/// own renamed receives by name (`generateReturnArgumentList`).
+	private static func receivedBindingNamesPassedByName(
+		to node: MockParameterNode,
+		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
+		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
+	) -> [String: String] {
+		guard !flatParameterDisambiguationMap.isEmpty, !node.children.isEmpty else { return [:] }
+		var bindingNamesPassedByName = [String: String]()
+		for dependency in node.dependencies {
+			if let binding = disambiguatedBinding(
+				ofReceived: dependency,
+				unavailableProperties: node.unavailableProperties,
+				lazilyInstantiatedInstanceProperties: node.lazilyInstantiatedInstanceProperties,
+				flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+			), receiveReadsLabelByName(
+				dependency.property.label,
+				beneath: node.children,
+				flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+				lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+			) {
+				bindingNamesPassedByName[dependency.property.label] = binding.name
+			}
+		}
+		return bindingNamesPassedByName
+	}
+
+	/// Whether a receive among `items`, or beneath them up to a scope that declares `label`, reads `label` by name: a
+	/// received dependency or an alias's fulfilling property whose form neither `flatParameterDisambiguationMap` nor
+	/// `lazilyInstantiatedBindingNames` renames. A received dependency whose form the first renames is rebound in its
+	/// receiver's own builder function, or passed by name, which
+	/// `receivedBindingNamesPassedByName(to:flatParameterDisambiguationMap:lazilyInstantiatedBindingNames:)` decides for
+	/// that receiver the same way.
+	private static func receiveReadsLabelByName(
+		_ label: String,
+		beneath items: [MockTreeItem],
+		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
+		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
+	) -> Bool {
+		var readsLabelByName = false
+		// A stack of its own, since a mock tree can be as deep as the module has types.
+		var itemsToVisit = items
+		while !readsLabelByName, let item = itemsToVisit.popLast() {
+			switch item {
+			case let .alias(alias):
+				// As `emitAliasBinding` resolves the fulfilling property.
+				readsLabelByName = alias.fulfillingLabel == label
+					&& !alias.isBoundToNil
+					&& lazilyInstantiatedBindingNames[label]?[alias.fulfillingTypeDescription] == nil
+					&& (alias.fulfillingPropertyIsLazilyInstantiatedInstance
+						? disambiguatedLazilyInstantiatedBinding(named: label, withInstanceOfType: alias.fulfillingTypeDescription.unwrapped, disambiguationMap: flatParameterDisambiguationMap) == nil
+						: flatParameterDisambiguationMap[label]?[alias.fulfillingTypeDescription] == nil)
+			case let .property(node):
+				// As `dependencyArgument` resolves the argument, beneath the rebinding `emitReceiverBindings` emits.
+				readsLabelByName = node.dependencies.contains { dependency in
+					dependency.source.isReceived
+						&& dependency.property.label == label
+						&& !node.unavailableProperties.contains(dependency.property)
+						&& lazilyInstantiatedBindingNames[label]?[dependency.property.typeDescription] == nil
+						&& disambiguatedBinding(
+							ofReceived: dependency,
+							unavailableProperties: node.unavailableProperties,
+							lazilyInstantiatedInstanceProperties: node.lazilyInstantiatedInstanceProperties,
+							flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+						) == nil
+				}
+				// The builder function of a node that instantiates, forwards or renames the label declares it, and what
+				// is beneath reads that.
+				if !node.dependencies.contains(where: { !$0.source.isReceived && $0.property.label == label }) {
+					itemsToVisit.append(contentsOf: node.children)
+				}
+			}
+		}
+		return readsLabelByName
+	}
+
 	// MARK: MockParameterNode
 
 	/// A node in the mock parameter tree. Each node represents one property edge
@@ -7302,8 +7388,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// itself, or `nil` for a node built as its type's own module would build it.
 		let publicMockCall: PublicMockCall?
 		/// In a public mock's tree, the payloads of the cases on the routes to the places beneath this node, bound before its
-		/// builder function is declared (`SeamHoles.valuesBindings(at:)`).
-		let valuesBindings: [String]
+		/// builder function is declared (`SeamHoles.valuesBindings(at:)`), inside the builder function of the node above.
+		let valuesBindings: [ValuesBinding]
 		/// For a node that calls another module's public mock and fills some of its builders, the generator of the call,
 		/// which holds the fills' code (`ScopeGenerator.fillCode(propertiesGeneratedLater:)`), and what the call passes
 		/// each builder it fills, by label.
@@ -7391,7 +7477,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			sourceFilePath: String?,
 			mockDeclarationLocation: Dependency.DeclarationLocation?,
 			publicMockCall: PublicMockCall?,
-			valuesBindings: [String],
+			valuesBindings: [ValuesBinding],
 			fillingGenerator: ScopeGenerator?,
 			holeArgumentValuesByLabel: [String: String],
 			fillPropertiesGeneratedLater: Set<Property>,
@@ -7791,6 +7877,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				return "\(concreteType.asSource)(\(labeledArguments))"
 			} else {
 				return "\(concreteType.asSource).\(methodName)(\(labeledArguments))"
+			}
+		}
+
+		/// A payload bound before a node's builder function, inside the builder function of the node above
+		/// (`MockParameterNode.valuesBindings`).
+		struct ValuesBinding: Sendable {
+			let binding: SeamHoles.ValuesBinding
+			/// The by-value properties whose fields read the instance of the `LazilyInstantiated` their label names.
+			let lazilyInstantiatedInstanceProperties: Set<Property>
+
+			/// The line that binds the payload. A label in `bindingNamesPassedByName`, the bindings the node above is passed
+			/// by name (`receivedBindingNamesPassedByName(to:flatParameterDisambiguationMap:lazilyInstantiatedBindingNames:)`),
+			/// is read under that name: its builder function does not bind the label again, so the label there names a
+			/// farther declaration than the one the node above received, which its level carries.
+			func line(bindingNamesPassedByName: [String: String]) -> String {
+				binding.line(readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName)
 			}
 		}
 
@@ -9060,6 +9162,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]],
 		sendableConfigurationTypeNames: Set<String>,
 		publicMock: PublicMockEmission? = nil,
+		enclosingBindingNamesPassedByName: [String: String] = [:],
 	) async -> [String] {
 		var lines = [String]()
 
@@ -9211,7 +9314,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// itself, just before its builder function.
 				if !node.isInstantiator {
 					for valuesBinding in node.valuesBindings {
-						lines.append("\(indent)\(valuesBinding)")
+						lines.append("\(indent)\(valuesBinding.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName))")
 					}
 				}
 				// A call that fills builders is made in a builder function of its own, which declares the fills and names
@@ -9275,6 +9378,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let argumentLazilyInstantiatedBindingNames = !node.isPropertyCycle && !node.cycleParameters.isEmpty
 					? builderLazilyInstantiatedBindingNames(for: node, from: lazilyInstantiatedBindingNames)
 					: lazilyInstantiatedBindingNames
+				let bindingNamesPassedByName = receivedBindingNamesPassedByName(
+					to: node,
+					flatParameterDisambiguationMap: combinedDisambiguationMap,
+					lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+				)
 				let arguments = mockBuilderArguments(
 					for: node,
 					nodePath: nodePath,
@@ -9285,6 +9393,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
 					sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 					publicMock: publicMock,
+					bindingNamesPassedByName: bindingNamesPassedByName,
 				)
 				// The member that configures a node calling another module's public mock is a `@Sendable` closure where
 				// the struct holding it is read inside a `@Sendable` builder function.
@@ -9341,6 +9450,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						publicMockOverridesIsSendableClosure: publicMockOverridesIsSendableClosure,
 						overrideLocalNames: &overrideLocalNames,
 						loopMemberEmission: loopMemberEmission,
+						bindingNamesPassedByName: bindingNamesPassedByName,
+						enclosingBindingNamesPassedByName: enclosingBindingNamesPassedByName,
 					)
 					if let loop = node.loop {
 						appendToLoopUnit(loop, bindingLines)
@@ -9407,6 +9518,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						unavailableProperties: node.unavailableProperties,
 						lazilyInstantiatedInstanceProperties: node.lazilyInstantiatedInstanceProperties,
 						flatParameterDisambiguationMap: functionDisambiguationMap,
+						bindingNamesPassedByName: bindingNamesPassedByName,
 						indent: innerIndent,
 					)
 
@@ -9437,6 +9549,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 						publicMock: publicMock?.beneathRoot,
+						enclosingBindingNamesPassedByName: bindingNamesPassedByName,
 					)
 
 					let functionConstructionExpression = if let startedSendableOverrideExtractor {
@@ -9457,6 +9570,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 								handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
 								sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 								publicMock: publicMock,
+								bindingNamesPassedByName: bindingNamesPassedByName,
 							),
 							overrideReachable: thisOverrideReachable,
 							handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
@@ -9654,6 +9768,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		overrideReachable: Bool,
 		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
 		sendableConfigurationTypeNames: Set<String>,
+		bindingNamesPassedByName: [String: String],
 	) -> [String] {
 		// Each label names one dependency: `validateDependencyLabelsAreDistinct` rejects a declaration in a generated tree that repeats one.
 		let dependenciesByLabel = Dictionary(grouping: node.dependencies, by: \.property.label).compactMapValues(\.first)
@@ -9686,6 +9801,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					for: node,
 					lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
 					uncoveredDependencyNames: uncoveredDependencyNames,
+					bindingNamesPassedByName: bindingNamesPassedByName,
 				)
 			} else if !overrideReachable {
 				// The struct is built afresh, so nothing is read from `SafeDIOverrides`, even inside a `@Sendable` function.
@@ -9705,19 +9821,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// The expression a mock passes `node`'s construction for `argument`, the argument of `dependency`.
+	/// - Parameter bindingNamesPassedByName: The renamed bindings `node` is passed by name rather than under the labels of
+	///   its received dependencies (`receivedBindingNamesPassedByName(to:flatParameterDisambiguationMap:lazilyInstantiatedBindingNames:)`).
 	static func dependencyArgument(
 		_ argument: Initializer.Argument,
 		of dependency: Dependency,
 		for node: MockParameterNode,
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
 		uncoveredDependencyNames: [String: [TypeDescription: String]],
+		bindingNamesPassedByName: [String: String],
 	) -> String {
 		if node.unavailableProperties.contains(dependency.property) {
 			"nil"
 		} else if dependency.source.isReceived,
 		          node.lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
 		{
-			"\(argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+			"\(bindingNamesPassedByName[argument.innerLabel] ?? argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 		} else if dependency.source.isReceived,
 		          let bindingName = lazilyInstantiatedBindingNames[argument.innerLabel]?[dependency.property.typeDescription]
 		{
@@ -9729,7 +9848,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// The `mock()` parameter of an uncovered dependency, named apart from a name in scope.
 			parameterName
 		} else {
-			argument.innerLabel
+			bindingNamesPassedByName[argument.innerLabel] ?? argument.innerLabel
 		}
 	}
 
@@ -10073,6 +10192,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		publicMockOverridesIsSendableClosure: Bool,
 		overrideLocalNames: inout GeneratedNameAllocator,
 		loopMemberEmission: LoopMemberEmission? = nil,
+		bindingNamesPassedByName: [String: String],
+		enclosingBindingNamesPassedByName: [String: String],
 	) async -> InstantiatorBindingLines {
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let innerIndent = "\(indent)\(standardIndent)"
@@ -10103,6 +10224,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			unavailableProperties: node.unavailableProperties,
 			lazilyInstantiatedInstanceProperties: node.lazilyInstantiatedInstanceProperties,
 			flatParameterDisambiguationMap: builderDisambiguationMap,
+			bindingNamesPassedByName: bindingNamesPassedByName,
 			indent: innerIndent,
 		)
 
@@ -10175,6 +10297,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 				publicMock: publicMock?.beneathRoot,
+				enclosingBindingNamesPassedByName: bindingNamesPassedByName,
 			)
 
 			let nodeHandWrittenMockDefaultParameters = handWrittenMockDefaultParameters[node.concreteType, default: []]
@@ -10197,6 +10320,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
 					sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 					publicMock: publicMock,
+					bindingNamesPassedByName: bindingNamesPassedByName,
 				)
 				functionOverrideExpression = overrideExpression.map {
 					startedSendableOverrideExtractor.extract($0, localNameSuffix: ReservedName.configurationBuilderPropertyName)
@@ -10215,7 +10339,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let functionReturnType = node.instantiatedTypeDescription.asSource
 			// The payloads of the cases on the routes to the places beneath this function, bound before it.
 			for valuesBinding in node.valuesBindings {
-				lines.prelude.append("\(indent)\(valuesBinding)")
+				lines.prelude.append("\(indent)\(valuesBinding.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName))")
 			}
 			lines.function.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
 			// A member of a loop of builders first wraps again the functions of the members its tree receives inside the
@@ -10325,6 +10449,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
 		sendableConfigurationTypeNames: Set<String>,
 		publicMock: PublicMockEmission?,
+		bindingNamesPassedByName: [String: String],
 	) -> [String] {
 		if let publicMock, node.needsConfigurationStruct {
 			publicBuilderArguments(
@@ -10335,6 +10460,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				sendableOverrideExtractor: sendableOverrideExtractor,
 				overrideReachable: overrideReachable,
 				emission: publicMock,
+				bindingNamesPassedByName: bindingNamesPassedByName,
 			)
 		} else {
 			resolveBuilderArguments(
@@ -10346,6 +10472,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				overrideReachable: overrideReachable,
 				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+				bindingNamesPassedByName: bindingNamesPassedByName,
 			)
 		}
 	}

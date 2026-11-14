@@ -507,6 +507,7 @@ extension ScopeGenerator {
 		sendableOverrideExtractor: SendableOverrideExtractor?,
 		overrideReachable: Bool,
 		emission: PublicMockEmission,
+		bindingNamesPassedByName: [String: String],
 	) -> [String] {
 		// Each label names one dependency: `validateDependencyLabelsAreDistinct` rejects a declaration in a generated tree that repeats one.
 		let dependenciesByLabel = Dictionary(grouping: node.dependencies, by: \.property.label).compactMapValues(\.first)
@@ -523,6 +524,7 @@ extension ScopeGenerator {
 					for: node,
 					lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
 					uncoveredDependencyNames: uncoveredDependencyNames,
+					bindingNamesPassedByName: bindingNamesPassedByName,
 				)
 			} else if overrideReachable {
 				let expression = if let sendableOverrideExtractor {
