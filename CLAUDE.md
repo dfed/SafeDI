@@ -27,7 +27,7 @@ Always lint before pushing. Always run the full test suite after changes — don
 - `Scripts/changed-line-coverage.sh [BASE]` runs the suite with coverage as CI does and prints every added or changed line under `Sources/` and `Plugins/` that no test executed (default base `origin/main`).
 - `Scripts/fuzz-corpus.sh [--features …] [--seed N] [--iterations M|corpus] [--release]` runs the graph fuzzer's long run and prints its pin lines.
 - `Scripts/multi-module-repro.sh [--conditions DEBUG,X] ROOT MODULE…` runs `generate` per module as Bazel and Tuist do and compiles the modules in order.
-- `Scripts/unexecuted-lines.py` is "Check Line Coverage on Linux": it needs both test jobs' reports, so it cannot check a local run. To read a CI run's result locally, run it from a checkout of that run's commit on the run's `line-coverage-*` artifacts (`gh run download RUN -p 'line-coverage-*'`), as the job does; `--self-test DIRECTORY` checks the script against fixtures.
+- `Scripts/unexecuted-lines.py` is "Check Line Coverage on Linux": it needs both test jobs' reports, so it cannot check a local run. To read a CI run's result locally, download the run's reports (`gh run download RUN -p 'line-coverage-*'`) and run it as the job does, from a checkout of the commit their `commit.txt` names (for a pull request, GitHub's merge commit, which `git fetch origin SHA` fetches); `--self-test DIRECTORY` checks the script against fixtures.
 - `Scripts/check-claude-instruction-files.sh` fails when an instruction file could be truncated or would load at launch by mistake; "Check Markdown links" runs it.
 
 ### CI
