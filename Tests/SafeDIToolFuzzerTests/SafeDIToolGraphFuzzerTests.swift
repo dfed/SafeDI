@@ -1176,34 +1176,45 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(GraphFuzzerToolRuns(fixture: fixture, firstOutcome: collision, secondOutcome: collision, inlineOutcome: collision).seamRejectedWhereInlineAcceptsFailure == nil)
 	}
 
-	@Test
-	func finding_isKnownIssue_whenEveryValueDifferenceMatchesAValueSignature() {
-		let knownIssue = Self.valueDivergenceKnownIssue
-		let failure = GraphFuzzerFailure(seed: 430, kind: .seamBuildsOtherValuesThanInline, details: Self.documentedDifference + "\nFeature path:\n…", valueDifferences: [Self.documentedDifference])
+	@Test(arguments: ValueComparisonUnderTest.allCases)
+	func finding_isKnownIssue_whenEveryValueDifferenceMatchesAValueSignature(comparison: ValueComparisonUnderTest) {
+		let knownIssue = Self.valueDivergenceKnownIssue(of: comparison)
+		let failure = GraphFuzzerFailure(seed: 430, kind: comparison.failureKind, details: Self.documentedDifference + "\nFeature path:\n…", valueDifferences: [Self.documentedDifference])
 
 		#expect(GraphFuzzerFinding(failure: failure, knownIssue: knownIssue) == .knownIssue(knownIssue, failure))
 	}
 
-	@Test
-	func finding_isFailure_whenValueFailureHoldsDifferenceNoValueSignatureMatchesBesideOneThatMatches() {
+	@Test(arguments: ValueComparisonUnderTest.allCases)
+	func finding_isFailure_whenValueFailureHoldsDifferenceNoValueSignatureMatchesBesideOneThatMatches(comparison: ValueComparisonUnderTest) {
 		// A documented divergence beside an undocumented difference is a new failure: the shape's signature documents
 		// the first difference, not the graph.
-		let knownIssue = Self.valueDivergenceKnownIssue
-		let failure = GraphFuzzerFailure(seed: 430, kind: .seamBuildsOtherValuesThanInline, details: Self.documentedDifference + "\n" + Self.undocumentedDifference + "\nFeature path:\n…", valueDifferences: [Self.documentedDifference, Self.undocumentedDifference])
+		let knownIssue = Self.valueDivergenceKnownIssue(of: comparison)
+		let failure = GraphFuzzerFailure(seed: 430, kind: comparison.failureKind, details: Self.documentedDifference + "\n" + Self.undocumentedDifference + "\nFeature path:\n…", valueDifferences: [Self.documentedDifference, Self.undocumentedDifference])
 
 		#expect(GraphFuzzerFinding(failure: failure, knownIssue: knownIssue) == .failure(failure))
 	}
 
-	@Test
-	func finding_isFailure_whenKnownValueFailureIsFollowedByFailureTheKnownIssueDoesNotDocument() {
+	@Test(arguments: ValueComparisonUnderTest.allCases)
+	func finding_isFailure_whenKnownValueFailureIsFollowedByFailureTheKnownIssueDoesNotDocument(comparison: ValueComparisonUnderTest) {
 		// A known value failure masks nothing: the failures after it in the oracle's chain are reported as they would
-		// be alone.
-		let knownIssue = Self.valueDivergenceKnownIssue
-		let known = GraphFuzzerFailure(seed: 430, kind: .seamBuildsOtherValuesThanInline, details: Self.documentedDifference, valueDifferences: [Self.documentedDifference])
-		let renamed = GraphFuzzerFailure(seed: 430, kind: .renamedGraphDiffers, details: "Reversing its labels changes its generated mock code, in Root+SafeDIMock.swift.\nThis graph:\n…")
+		// be alone. A place-level failure, unlike a renamed graph's difference, is masked by a known failure of most other
+		// kinds, so it shows that the value failure is one that masks nothing.
+		let knownIssue = Self.valueDivergenceKnownIssue(of: comparison)
+		let known = GraphFuzzerFailure(seed: 430, kind: comparison.failureKind, details: Self.documentedDifference, valueDifferences: [Self.documentedDifference])
+		let placeLevels = GraphFuzzerFailure(seed: 430, kind: .placeLevelsDifferBetweenBuildsOfType, details: "`Impl` binds `id` before `service` in one build and after it in another.")
 
-		#expect(GraphFuzzerFinding(failure: known, laterFailures: [renamed], knownIssue: knownIssue) == .failure(renamed))
+		#expect(GraphFuzzerFinding(failure: known, laterFailures: [placeLevels], knownIssue: knownIssue) == .failure(placeLevels))
 		#expect(GraphFuzzerFinding(failure: known, laterFailures: [], knownIssue: knownIssue) == .knownIssue(knownIssue, known))
+	}
+
+	@Test(arguments: ValueComparisonUnderTest.allCases)
+	func knownIssue_matchesNoValueFailureOfTheOtherComparison_whenEveryDifferenceMatchesItsSignature(comparison: ValueComparisonUnderTest) {
+		// A difference from a hole's visible build and one from the inline build are separate failures, so a signature of
+		// one documents nothing of the other, though their descriptions match.
+		let knownIssue = Self.valueDivergenceKnownIssue(of: comparison)
+		let failure = GraphFuzzerFailure(seed: 430, kind: comparison.other.failureKind, details: Self.documentedDifference, valueDifferences: [Self.documentedDifference])
+
+		#expect(!knownIssue.matches(failure))
 	}
 
 	@Test
@@ -1253,7 +1264,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 		let failures = try await GraphFuzzerOracle.valueFailures(of: [perturbedRuns])
 
-		let failure = try #require(failures[runs.fixture.seed])
+		let failure = try #require(failures[runs.fixture.seed]?.first)
 		#expect(failure.kind == .seamBuildsOtherValuesThanInline, Comment(rawValue: failure.details))
 		// Seed 16's receiver beneath the spelling's seam gets `nil` where inline it gets the value its host forwards.
 		#expect(failure.valueDifferences.first == "probe `S16_Root0().spellHostBuilder.instantiate(S16_SpellOuter.Item())` at <1> S16_SpellHost > spellSeam > spellChild > \(perturbed.label):\n  feature:     \(perturbed.label): nil\n  known right: \(perturbed.label): <2> S16_SpellOuter.Item (seen, first at <1> S16_SpellHost > spelled)")
@@ -1273,7 +1284,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 		let failures = try await GraphFuzzerOracle.valueFailures(of: [brokenRuns])
 
-		let failure = try #require(failures[runs.fixture.seed])
+		let failure = try #require(failures[runs.fixture.seed]?.first)
 		#expect(failure.kind == .valueComparatorCouldNotDescribeGraph)
 		#expect(failure.details.contains("not an integer"))
 	}
@@ -1286,25 +1297,37 @@ struct SafeDIToolGraphFuzzerTests {
 		// level's fill receives that level's `CycleB`'s tag, as the visible build's `CycleImpl` does. A seam that handed the
 		// fill the tag the function's reader holds instead – the level above's – builds other values than the visible build,
 		// which the value oracle reports without an oracle of its own.
-		let seed: UInt64 = 227
-		let runs = try await GraphFuzzerOracle.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree]), renamings: [])
-		guard case let .accepted(files, warnings) = runs.firstOutcome, case .accepted = runs.visibleOutcome else {
-			Issue.record("Seed \(seed) is no longer accepted with its hole and as its visible build")
-			return
-		}
-		let seamFileName = try #require(files.keys.first { $0.hasSuffix("/S227_CycleSeam+SafeDI.swift") })
-		let seamFile = try #require(files[seamFileName])
-		let siteArguments = "cycle0Service_Values(cycle6Tag: cycle6Tag, "
-		try #require(seamFile.components(separatedBy: siteArguments).count == 2, "Seed \(seed)'s seam no longer hands its one site `CycleB`'s `cycle6Tag`")
-		var perturbedFiles = files
-		perturbedFiles[seamFileName] = seamFile.replacingOccurrences(of: siteArguments, with: "cycle0Service_Values(cycle6Tag: cycle4Reader.cycle6Tag, ")
+		let (runs, perturbedFiles, warnings) = try await Self.cycleFillReadingLevelAboveRuns()
 		let perturbedRuns = GraphFuzzerToolRuns(fixture: runs.fixture, firstOutcome: .accepted(generatedFiles: perturbedFiles, warnings: warnings), secondOutcome: .accepted(generatedFiles: perturbedFiles, warnings: warnings), visibleOutcome: runs.visibleOutcome)
 
-		let failure = try #require(try await GraphFuzzerOracle.valueFailures(of: [perturbedRuns])[seed])
+		let failure = try #require(try await GraphFuzzerOracle.valueFailures(of: [perturbedRuns])[runs.fixture.seed]?.first)
 
 		#expect(failure.kind == .holeBuildsOtherValuesThanVisibleBuild, Comment(rawValue: failure.details))
 		#expect(failure.valueDifferences.allSatisfy { $0.contains("cycle0Service") }, "\(failure.valueDifferences)")
 		#expect(try await GraphFuzzerOracle.valueFailures(of: [runs]).isEmpty)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "The value comparator compiles generated code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func results_reportInlineDifference_whenKnownIssueDocumentsOnlyTheFillsDifferenceFromItsVisibleBuild() async throws {
+		// Seed 227's seam, with its fill handed the tag of the level above, builds other values than its visible build and
+		// than its inline build. A known issue that documents the difference from the visible build documents nothing about
+		// the inline build, so the inline build's difference is the finding: a known value failure masks no later failure.
+		let (runs, perturbedFiles, warnings) = try await Self.cycleFillReadingLevelAboveRuns()
+		let perturbedRuns = GraphFuzzerToolRuns(fixture: runs.fixture, firstOutcome: .accepted(generatedFiles: perturbedFiles, warnings: warnings), secondOutcome: .accepted(generatedFiles: perturbedFiles, warnings: warnings), inlineOutcome: runs.inlineOutcome, visibleOutcome: runs.visibleOutcome)
+		let knownIssue = GraphFuzzerKnownIssue(
+			reason: "A fill reads the tag of the level above its own",
+			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: "cycle0Service")],
+			seeds: [runs.fixture.seed],
+		)
+
+		let result = try #require(try await GraphFuzzerOracle.results(of: [perturbedRuns]).first)
+
+		let failure = try #require(result.failure)
+		#expect(failure.kind == .holeBuildsOtherValuesThanVisibleBuild, Comment(rawValue: failure.details))
+		let inlineFailure = try #require(result.laterFailures.first { $0.kind == .seamBuildsOtherValuesThanInline }, "\(result.laterFailures.map(\.kind))")
+		#expect(inlineFailure.valueDifferences.allSatisfy { $0.contains("cycle0Service") }, "\(inlineFailure.valueDifferences)")
+		#expect(GraphFuzzerFinding(failure: failure, laterFailures: result.laterFailures, knownIssue: knownIssue) == .failure(inlineFailure))
 	}
 
 	@Test
@@ -5586,15 +5609,16 @@ struct SafeDIToolGraphFuzzerTests {
 			seeds: [83, 108, 298, 308, 326, 391, 407, 556, 701, 930],
 		),
 		// A fill that re-enters its own seam: the place the re-entered seam builds is handed the root dispatcher, not the
-		// fill's values, so `HoleImpl`'s only-if-available `holeNestId` is `nil` where the visible build passes it.
+		// fill's values, so `HoleImpl`'s only-if-available `holeNestId` is `nil` where the visible build and the inline
+		// build pass it.
 		GraphFuzzerKnownIssue(
 			reason: fillReenteringItsSeamLosesValueReason,
-			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference)],
+			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .seamBuildsOtherValuesThanInline(containing: fillReenteringItsSeamLosesValueDifference)],
 			seeds: [600],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(fillReenteringItsSeamLosesValueReason); and \(seamBuilderOrderReason)",
-			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeCode)],
+			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .seamBuildsOtherValuesThanInline(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeCode)],
 			seeds: [945],
 		),
 		GraphFuzzerKnownIssue(
@@ -5624,7 +5648,7 @@ struct SafeDIToolGraphFuzzerTests {
 		),
 	]
 
-	private static let fillReenteringItsSeamLosesValueReason = "A fill that re-enters its own seam hands the re-entered seam the root dispatcher, not its own values, so a fill there reads `nil` for an only-if-available value its visible build passes; fixed in a later PR"
+	private static let fillReenteringItsSeamLosesValueReason = "A fill that re-enters its own seam hands the re-entered seam the root dispatcher, not its own values, so a fill there reads `nil` for an only-if-available value its visible build and its inline build pass; fixed in a later PR"
 
 	private static let fillReenteringItsSeamLosesValueDifference = "> holeService > holeNestId:\n  feature:     holeNestId: nil\n  known right: holeNestId: Int 7"
 
@@ -6059,11 +6083,16 @@ struct SafeDIToolGraphFuzzerTests {
 		)
 	}
 
-	private static let valueDivergenceKnownIssue = GraphFuzzerKnownIssue(
-		reason: "A documented divergence",
-		signatures: [.seamBuildsOtherValuesThanInline(containing: "known right: aliasAuth: nil")],
-		seeds: [430],
-	)
+	/// A known issue that documents a difference of `comparison` whose description contains `documentedDifference`'s
+	/// last line, and no other.
+	private static func valueDivergenceKnownIssue(of comparison: ValueComparisonUnderTest) -> GraphFuzzerKnownIssue {
+		GraphFuzzerKnownIssue(
+			reason: "A documented divergence",
+			signatures: [comparison.signature(containing: "known right: aliasAuth: nil")],
+			seeds: [430],
+		)
+	}
+
 	private static let documentedDifference = "probe `Root()` at <1> Root > aliasSeam > aliasDetail > aliasAuth:\n  feature:     aliasAuth: <2> Value (seen, first at <1> Root > aliasSource)\n  known right: aliasAuth: nil"
 	private static let undocumentedDifference = "probe `Root()` at <1> Root > aliasSeam > aliasRight > aliasToken:\n  feature:     aliasToken: nil\n  known right: aliasToken: <3> Value"
 
@@ -6077,6 +6106,25 @@ struct SafeDIToolGraphFuzzerTests {
 			return (runs, seamFiles, warnings)
 		}
 		throw GraphFuzzerTestError.noSmokeGraphPassesValueForOnlyIfAvailableParameter
+	}
+
+	/// Seed 227's runs, with the files of its seam build perturbed so that the one site of `CycleB`'s hole hands the fill
+	/// the `cycle6Tag` the function's reader holds – the level above's – instead of its own `CycleB`'s, and that build's
+	/// warnings. The perturbed build constructs other values than both the visible build and the inline build.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func cycleFillReadingLevelAboveRuns() async throws -> (runs: GraphFuzzerToolRuns, perturbedFiles: [String: String], warnings: [String]) {
+		let seed: UInt64 = 227
+		let runs = try await GraphFuzzerOracle.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree]), renamings: [])
+		guard case let .accepted(files, warnings) = runs.firstOutcome, case .accepted = runs.visibleOutcome, case .accepted = runs.inlineOutcome else {
+			throw GraphFuzzerTestError.cycleSeedIsNoLongerAcceptedEveryWay
+		}
+		let seamFileName = try #require(files.keys.first { $0.hasSuffix("/S227_CycleSeam+SafeDI.swift") })
+		let seamFile = try #require(files[seamFileName])
+		let siteArguments = "cycle0Service_Values(cycle6Tag: cycle6Tag, "
+		try #require(seamFile.components(separatedBy: siteArguments).count == 2, "Seed \(seed)'s seam no longer hands its one site `CycleB`'s `cycle6Tag`")
+		var perturbedFiles = files
+		perturbedFiles[seamFileName] = seamFile.replacingOccurrences(of: siteArguments, with: "cycle0Service_Values(cycle6Tag: cycle4Reader.cycle6Tag, ")
+		return (runs, perturbedFiles, warnings)
 	}
 
 	/// `seamFiles` with the first call, in a root's file, of a seam tier's parameter received only if available
@@ -6307,8 +6355,43 @@ final class GraphFuzzerReport: Sendable {
 	private let lock = NSLock()
 }
 
+/// A comparison of a seam graph's values whose known issues are documented difference by difference
+/// (`GraphFuzzerKnownIssue.matches(_:)`), for the tests that hold for each.
+enum ValueComparisonUnderTest: CaseIterable {
+	/// The seam build against the inline build (`seamBuildsOtherValuesThanInline`).
+	case seamAgainstInline
+	/// The build that fills a hole against its visible build (`holeBuildsOtherValuesThanVisibleBuild`).
+	case holeAgainstVisibleBuild
+
+	/// The kind of the failure the comparison reports.
+	var failureKind: GraphFuzzerFailure.Kind {
+		switch self {
+		case .seamAgainstInline: .seamBuildsOtherValuesThanInline
+		case .holeAgainstVisibleBuild: .holeBuildsOtherValuesThanVisibleBuild
+		}
+	}
+
+	/// The other comparison, which a graph with a hole runs beside this one.
+	var other: ValueComparisonUnderTest {
+		switch self {
+		case .seamAgainstInline: .holeAgainstVisibleBuild
+		case .holeAgainstVisibleBuild: .seamAgainstInline
+		}
+	}
+
+	/// The signature that documents a difference of this comparison whose description contains `text`.
+	func signature(containing text: String) -> GraphFuzzerKnownIssue.Signature {
+		switch self {
+		case .seamAgainstInline: .seamBuildsOtherValuesThanInline(containing: text)
+		case .holeAgainstVisibleBuild: .holeBuildsOtherValuesThanVisibleBuild(containing: text)
+		}
+	}
+}
+
 private enum GraphFuzzerTestError: Error {
 	case noSmokeGraphPassesValueForOnlyIfAvailableParameter
+	/// Seed 227 is no longer accepted with its hole, as its visible build and inline.
+	case cycleSeedIsNoLongerAcceptedEveryWay
 }
 
 /// Extensions a generated configuration file might hold, for the tests of how a renamed graph's files are compared.

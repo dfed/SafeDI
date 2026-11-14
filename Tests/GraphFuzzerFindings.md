@@ -32,5 +32,5 @@ When a fix or a new known-issue entry lands for something the fuzzer found, add 
 | A lazy cycle's parameter of the closed-on property's own label | seam: 107 | seam draw (lazy cycles) | not recorded | fixed, #533 |
 | A seam parameter's access cause list depends on file order | seam | seam draw (narrower types across packages) | rename | fixed, #527 |
 | A staged builder's stage is called after a `@Sendable` function a cycle closes on | seam | `cycleParameter…` draws | seam value | fixed, #654 |
-| A fill that re-enters its own seam passes `nil` for an only-if-available value its visible build passes | seam: 600, 945 | `holePlaceInsidePlainFill` | `holeBuildsOtherValuesThanVisibleBuild` | listed in `seamKnownIssues`; fixed in a later PR |
+| A fill that re-enters its own seam passes `nil` for an only-if-available value its visible build and its inline build pass | seam: 600, 945 | `holePlaceInsidePlainFill` | `holeBuildsOtherValuesThanVisibleBuild`, seam value | listed in `seamKnownIssues`; fixed in a later PR |
 | The error that a fill passes a builder on from its own caller names a place by file order | seam: 590 | `holePlaceInsidePlainFill` | rename | listed in `seamKnownIssues`; fixed in a later PR |

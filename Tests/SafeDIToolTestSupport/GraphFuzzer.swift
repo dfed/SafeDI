@@ -9473,8 +9473,8 @@ struct GraphFuzzerFailure: Equatable {
 	let seed: UInt64
 	let kind: Kind
 	let details: String
-	/// For `seamBuildsOtherValuesThanInline` and the other value differences, each difference's description: a known issue of that kind documents
-	/// the failure only when every one of them matches one of its signatures.
+	/// For `seamBuildsOtherValuesThanInline` and the other value differences, each difference's description: a known
+	/// issue of that kind documents the failure only when every one of them matches one of its signatures.
 	var valueDifferences: [String] = []
 	/// For `valueOracleFixtureRejected`, each line of the tool's diagnostics that reports an error: a known issue of that
 	/// kind documents the failure only when every one of them contains the text of one of its rejection signatures.
@@ -10707,7 +10707,11 @@ enum GraphFuzzerOracle {
 		}
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self) + runs.scopeCaseFailures + renamedGraphFailures
+			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
+			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
+			failures.append(contentsOf: runs.scopeCaseFailures)
+			failures.append(contentsOf: renamedGraphFailures)
 			// A base corpus graph is compared once its value-oracle graph is.
 			let isValueOracleGraphCompared = runs.valueOracle == nil || valueComparisons.comparedValueOracleSeeds.contains(runs.fixture.seed)
 			return GraphFuzzerResult(
@@ -10729,16 +10733,18 @@ enum GraphFuzzerOracle {
 		}
 	}
 
-	/// The failure of each graph of `toolRuns` the tool accepts with its seam and without it whose seam build
+	/// The failures of each graph of `toolRuns` the tool accepts with its seam and without it whose seam build
 	/// constructs other values than its inline build, or whose two builds the differential value comparator could
-	/// not describe, keyed by seed. The seam path is the graph with its seams and the files the tool generated for it,
+	/// not describe, keyed by seed. A graph with a hole is compared with its visible build too, and that comparison's
+	/// failure comes first: each comparison's failure is its own entry, so that a known issue that documents one
+	/// (`GraphFuzzerFinding`) masks no undocumented difference of the other. The seam path is the graph with its seams and the files the tool generated for it,
 	/// the known-right path the same graph with no seam and the files the tool generated for that; the probes are the
 	/// graph's roots and the generated mocks that take no required parameter. Each path is built from the graph drawn
 	/// storing every parameter, so the comparator sees every value the generated code passes; storing changes nothing
 	/// the tool generates. Nothing is exempted: a seam hands a hole's struct the memo of each value it defers, so a fill
 	/// creates the value where inline would. The graphs of one call are compared in one batch.
 	/// Nothing is compared when `compileVerificationIsEnabled` is `false`.
-	static func valueFailures(of toolRuns: [GraphFuzzerToolRuns]) async throws -> [UInt64: GraphFuzzerFailure] {
+	static func valueFailures(of toolRuns: [GraphFuzzerToolRuns]) async throws -> [UInt64: [GraphFuzzerFailure]] {
 		try await valueComparisons(of: toolRuns).failures
 	}
 
@@ -10751,7 +10757,7 @@ enum GraphFuzzerOracle {
 	static func valueComparisons(
 		of toolRuns: [GraphFuzzerToolRuns],
 		isolatingValueGraphsOf isolatedSeeds: Set<UInt64> = [],
-	) async throws -> (failures: [UInt64: GraphFuzzerFailure], comparedValueOracleSeeds: Set<UInt64>) {
+	) async throws -> (failures: [UInt64: [GraphFuzzerFailure]], comparedValueOracleSeeds: Set<UInt64>) {
 		let inspectedRuns = toolRuns.filter(\.isInspectedByValueOracle)
 		// A graph with a hole is compared with its visible build too, in which the seam builds the fulfilling type.
 		let visibleRuns = toolRuns.filter { runs in
@@ -10800,7 +10806,7 @@ enum GraphFuzzerOracle {
 		}
 		guard let comparisons = try await compare(graphs + visibleGraphs + valueOracleGraphs, isolating: isolatedSeeds, filesToDelete: &filesToDelete) else { return ([:], []) }
 		let valueOracleComparisons = zip(valueOracleGraphs.map(\.runs), comparisons.suffix(valueOracleGraphs.count))
-		var failures = [UInt64: GraphFuzzerFailure]()
+		var failures = [UInt64: [GraphFuzzerFailure]]()
 		var comparedValueOracleSeeds = Set<UInt64>()
 		for (runs, comparison) in valueOracleComparisons {
 			let builds = "The value-oracle fixture:\n\(runs.valueOracle?.plan.valueOracleFixture(storingEveryParameter: true).description ?? "")\nWhat the tool generated for it:\n\(runs.valueOracle?.outcome?.description ?? "")"
@@ -10809,18 +10815,18 @@ enum GraphFuzzerOracle {
 				comparedValueOracleSeeds.insert(runs.fixture.seed)
 				let differences = valueComparison.differences
 				guard !differences.isEmpty else { continue }
-				failures[runs.fixture.seed] = GraphFuzzerFailure(
+				failures[runs.fixture.seed, default: []].append(GraphFuzzerFailure(
 					seed: runs.fixture.seed,
 					kind: .mockBuildsOtherValuesThanProduction,
 					details: "\(differences.map(\.description).joined(separator: "\n"))\n\(valueComparison.report)\(builds)",
 					valueDifferences: differences.map(\.description),
-				)
+				))
 			case let .failure(error):
-				failures[runs.fixture.seed] = GraphFuzzerFailure(
+				failures[runs.fixture.seed, default: []].append(GraphFuzzerFailure(
 					seed: runs.fixture.seed,
 					kind: .valueOracleFixtureDoesNotCompile,
 					details: "\(error)\n\(builds)",
-				)
+				))
 			}
 		}
 		for ((runs, _), comparison) in zip(visibleGraphs, comparisons.dropFirst(graphs.count)) {
@@ -10828,22 +10834,23 @@ enum GraphFuzzerOracle {
 			case let .success(valueComparison):
 				let differences = valueComparison.differences
 				guard !differences.isEmpty else { continue }
-				failures[runs.fixture.seed] = GraphFuzzerFailure(
+				failures[runs.fixture.seed, default: []].append(GraphFuzzerFailure(
 					seed: runs.fixture.seed,
 					kind: .holeBuildsOtherValuesThanVisibleBuild,
 					details: "\(differences.map(\.description).joined(separator: "\n"))\n\(valueComparison.report)With the hole:\n\(runs.firstOutcome.description)\nThe visible build:\n\(runs.visibleOutcome?.description ?? "")",
 					valueDifferences: differences.map(\.description),
-				)
+				))
 			case let .failure(error):
-				failures[runs.fixture.seed] = GraphFuzzerFailure(
+				failures[runs.fixture.seed, default: []].append(GraphFuzzerFailure(
 					seed: runs.fixture.seed,
 					kind: .valueComparatorCouldNotDescribeGraph,
 					details: "\(error)\nWith the hole:\n\(runs.firstOutcome.description)\nThe visible build:\n\(runs.visibleOutcome?.description ?? "")",
-				)
+				))
 			}
 		}
-		// A difference from the visible build is reported before one from the inline build.
-		for ((runs, _), comparison) in zip(graphs, comparisons) where failures[runs.fixture.seed] == nil {
+		// A difference from the visible build is reported before one from the inline build, which follows it as a failure of
+		// its own: a known issue that documents the first masks no difference of the second it does not document.
+		for ((runs, _), comparison) in zip(graphs, comparisons) {
 			let isPublicMockGraph = runs.knownRightOutcome != nil
 			let builds = isPublicMockGraph
 				? "As drawn:\n\(runs.firstOutcome.description)\nKnown right:\n\(runs.knownRightOutcome?.description ?? "")"
@@ -10854,18 +10861,18 @@ enum GraphFuzzerOracle {
 				let statedDivergences = isPublicMockGraph ? Self.statedPublicMockValueDivergences(in: valueComparison, of: runs) : []
 				let differences = valueComparison.differences.filter { !statedDivergences.contains($0) }
 				guard !differences.isEmpty else { continue }
-				failures[runs.fixture.seed] = GraphFuzzerFailure(
+				failures[runs.fixture.seed, default: []].append(GraphFuzzerFailure(
 					seed: runs.fixture.seed,
 					kind: isPublicMockGraph ? .publicMockBuildsOtherValuesThanKnownRight : .seamBuildsOtherValuesThanInline,
 					details: "\(differences.map(\.description).joined(separator: "\n"))\n\(valueComparison.report)\(builds)",
 					valueDifferences: differences.map(\.description),
-				)
+				))
 			case let .failure(error):
-				failures[runs.fixture.seed] = GraphFuzzerFailure(
+				failures[runs.fixture.seed, default: []].append(GraphFuzzerFailure(
 					seed: runs.fixture.seed,
 					kind: .valueComparatorCouldNotDescribeGraph,
 					details: "\(error)\n\(builds)",
-				)
+				))
 			}
 		}
 		return (failures, comparedValueOracleSeeds)
