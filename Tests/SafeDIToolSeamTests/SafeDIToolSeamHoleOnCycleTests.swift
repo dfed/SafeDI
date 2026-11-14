@@ -47,7 +47,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		// Inline, the `A` that `B` forwarded `2` builds again hands `LiveApi` `count` 2; the fill would read `nil` again.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):11:5: error: `LiveApi` receives `count: Int?`, which `B` declares between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`'s `count`, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `count` on `B` another label, or make an @Instantiable declaration that fulfills `Api` one module `Feature` reads.
+			\(fixtures["App"]!["LiveApi.swift"]):11:5: error: `LiveApi` receives `count: Int?`, which `B` declares between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`'s `count`, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `count` on `B` another label, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` declares `count: Int` here.
 			"""
 		}) {
@@ -68,7 +68,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		// Inline, the `A` that `B` builds again hands `LiveApi` `B`'s `tag`; the fill would read `Root`'s at every level.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag`, which `B` declares between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`'s `tag`, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `tag` on `B` another label, or make an @Instantiable declaration that fulfills `Api` one module `Feature` reads.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag`, which `B` declares between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`'s `tag`, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `tag` on `B` another label, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` declares `tag: Tag` here.
 			"""
 		}) {
@@ -90,7 +90,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		// it at every level, where inline the `A` that `B` builds again hands `LiveApi` `B`'s.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag`, which `B` declares between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`'s `tag`, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `tag` on `B` another label, or make an @Instantiable declaration that fulfills `Api` one module `Feature` reads.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag`, which `B` declares between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`'s `tag`, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `tag` on `B` another label, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` declares `tag: Tag` here.
 			"""
 		}) {
@@ -111,7 +111,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		// `B`'s `a` closes on `Hub`'s `a`, a lazily instantiated `A`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B` declares between where `Hub` instantiates `a: LazilyInstantiated<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`'s `count`, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `a_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `count` on `B` another label, or make an @Instantiable declaration that fulfills `Api` one module `Feature` reads.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B` declares between where `Hub` instantiates `a: LazilyInstantiated<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`'s `count`, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `a_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `count` on `B` another label, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` declares `count: Int` here.
 			"""
 		}) {
@@ -137,7 +137,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		// `Shell`, a seam of `Feature` too, calls `Hub` and cannot fill its builder, which it passes up to `Root`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B` declares between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`'s `count`, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `count` on `B` another label, or make an @Instantiable declaration that fulfills `Api` one module `Feature` reads.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B` declares between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`'s `count`, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `count` on `B` another label, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` declares `count: Int` here.
 			"""
 		}) {
@@ -166,7 +166,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		// `count` `B`'s function was passed; the fill would read `nil`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B`'s builder function takes as a parameter between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again, because a cycle inside `B`'s tree passes it (`C` declares `count: Int`). Inline, the `A` built again receives the `count` that parameter is passed, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `count` on `C` another label, or make an @Instantiable declaration that fulfills `Api` one module `Feature` reads.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B`'s builder function takes as a parameter between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again, because a cycle inside `B`'s tree passes it (`C` declares `count: Int`). Inline, the `A` built again receives the `count` that parameter is passed, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `count` on `C` another label, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["C.swift"]):8:5: note: `C` declares `count: Int` here.
 			"""
 		}) {
@@ -196,7 +196,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		// `count` from `X`, inside the function `B`'s `aBuilder` closes on, so that function takes no `count`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B`'s builder function takes as a parameter between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again, because a cycle inside `B`'s tree passes it (`D` declares `count: Int`). Inline, the `A` built again receives the `count` that parameter is passed, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `count` on `D` another label, or make an @Instantiable declaration that fulfills `Api` one module `Feature` reads.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B`'s builder function takes as a parameter between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again, because a cycle inside `B`'s tree passes it (`D` declares `count: Int`). Inline, the `A` built again receives the `count` that parameter is passed, but the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) holds the same values at every level of that cycle. Give `count` on `D` another label, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["D.swift"]):8:5: note: `D` declares `count: Int` here.
 			"""
 		}) {

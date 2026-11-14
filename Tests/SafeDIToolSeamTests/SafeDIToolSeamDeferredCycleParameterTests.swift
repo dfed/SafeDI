@@ -433,7 +433,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// `Hub`'s pass-through, and the struct carries it as the function takes it, while `LiveApi` requires `tag: Tag`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag`, which the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) carries only as `tag: Tag?`, since `A`'s builder function takes it as a parameter, because a cycle inside `A`'s tree passes it, and no type `Hub`'s tree builds in that function requires `tag: Tag`. Receive it on `LiveApi` with `@Received(onlyIfAvailable: true) let tag: Tag?`, or make an @Instantiable declaration that fulfills `Api` one module `Feature` reads.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag`, which the scope SafeDI hands the builder for `A`'s `api: any Api` (case `aBuilder_api` of `apiBuilder`) carries only as `tag: Tag?`, since `A`'s builder function takes it as a parameter, because a cycle inside `A`'s tree passes it, and no type `Hub`'s tree builds in that function requires `tag: Tag`. Receive it on `LiveApi` with `@Received(onlyIfAvailable: true) let tag: Tag?`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["TagReader.swift"]):7:5: note: `TagReader` receives `tag: Tag?` here.
 			"""
 		}) {
@@ -601,7 +601,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// fills the builder, holds only its own.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `tag: Tag`, which `A`'s builder function takes as a parameter on the path where `Hub` calls `Inner`, because a cycle inside `A`'s tree passes it, but `Hub` passes the builder for `Inner`'s `api: any Api` (case `api` of `apiBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let tag: Tag` on `Inner`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `Api` one module `Feature` reads, so `Hub` fills the builder itself.
+			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `tag: Tag`, which `A`'s builder function takes as a parameter on the path where `Hub` calls `Inner`, because a cycle inside `A`'s tree passes it, but `Hub` passes the builder for `Inner`'s `api: any Api` (case `api` of `apiBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let tag: Tag` on `Inner`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies, so `Hub` fills the builder itself.
 			\(fixtures["Feature"]!["TagReader.swift"]):9:5: note: `TagReader` receives `tag: Tag` here.
 			"""
 		}) {
