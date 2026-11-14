@@ -1090,15 +1090,22 @@ extension DependencyTreeGenerator {
 	/// builds it again, the nearest declaration of its label on the site's path is bound after the site, the scope struct
 	/// carries it at an access the caller cannot read, or carries it only as an optional value while the receive requires
 	/// it – and for every scope in a fill that closes a cycle on a property of the seam's path, which code
-	/// generated outside the seam's module cannot refer to. Each finding once, by kind and location.
+	/// generated outside the seam's module cannot refer to. Each finding once, by kind and location: of several fills that
+	/// give one, the finding that comes first in source order (`FillFinding.precedesInSourceOrder`), never the first the
+	/// walk meets, since builders are in label order.
 	static func validateFills(
 		inTreesRootedAt generators: [ScopeGenerator],
 		callerModule: ModuleIdentity,
 	) throws {
 		var findings = [DependencyTreeGeneratorError.FillFinding]()
-		var findingKeys = Set<String>()
+		var findingIndexByKey = [String: Int]()
 		func record(_ finding: DependencyTreeGeneratorError.FillFinding) {
-			if findingKeys.insert(finding.key).inserted {
+			if let index = findingIndexByKey[finding.key] {
+				if finding.precedesInSourceOrder(findings[index]) {
+					findings[index] = finding
+				}
+			} else {
+				findingIndexByKey[finding.key] = findings.count
 				findings.append(finding)
 			}
 		}
@@ -1371,21 +1378,48 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 		/// What identifies the finding: its kind and where it is reported.
 		var key: String {
 			let location = sourceDiagnostics.first?.location.map { "\($0.filePath):\($0.line):\($0.column)" } ?? ""
-			return switch kind {
+			return "\(kindName) \(location)"
+		}
+
+		/// Whether this finding comes before `other`: by where each of its diagnostics is reported, then where the place it
+		/// names is declared, then where each declaration of the path to that place is, then by kind, so which of two findings
+		/// of one key is reported, and the order of two at one location, never depends on a name. A seam that builds one type
+		/// under two parents reaches one place through two paths that differ only in the declarations along them, so the
+		/// path decides between them. Their messages break only a tie between findings that print the same.
+		func precedesInSourceOrder(_ other: FillFinding) -> Bool {
+			let (diagnostics, otherDiagnostics) = (sourceDiagnostics, other.sourceDiagnostics)
+			let (locations, otherLocations) = (orderingLocations, other.orderingLocations)
+			guard locations.elementsEqual(otherLocations) else {
+				return locations.lexicographicallyPrecedes(otherLocations, by: Dependency.DeclarationLocation.precedesInSourceOrder)
+			}
+			return kindName == other.kindName ? SourceDiagnostic.precedesInSourceOrder(diagnostics, otherDiagnostics) : kindName < other.kindName
+		}
+
+		/// Where each diagnostic of the finding is reported, then where its place and each declaration of the path to that
+		/// place are declared.
+		private var orderingLocations: [Dependency.DeclarationLocation?] {
+			var locations = sourceDiagnostics.map(\.location)
+			locations.append(hole.declarationLocation)
+			locations.append(contentsOf: hole.declaredSitePath.map(\.declarationLocation))
+			return locations
+		}
+
+		private var kindName: String {
+			switch kind {
 			case .fieldNotReadable:
-				"fieldNotReadable \(location)"
+				"fieldNotReadable"
 			case .fieldHeldOnlyOptionally:
-				"fieldHeldOnlyOptionally \(location)"
+				"fieldHeldOnlyOptionally"
 			case .declarationBoundOnCycleReentry:
-				"declarationBoundOnCycleReentry \(location)"
+				"declarationBoundOnCycleReentry"
 			case .declarationBoundAfterSite:
-				"declarationBoundAfterSite \(location)"
+				"declarationBoundAfterSite"
 			case .receivesInstantiatorBuildingSite:
-				"receivesInstantiatorBuildingSite \(location)"
+				"receivesInstantiatorBuildingSite"
 			case .declarationBoundOnPathToReenteringCall:
-				"declarationBoundOnPathToReenteringCall \(location)"
+				"declarationBoundOnPathToReenteringCall"
 			case .closesCycleInSeamTree:
-				"closesCycleInSeamTree \(location)"
+				"closesCycleInSeamTree"
 			}
 		}
 
