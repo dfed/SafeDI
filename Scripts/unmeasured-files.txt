@@ -4,9 +4,11 @@
 # is neither recorded by the Linux or macOS test run's coverage report nor listed here, so code cannot leave
 # measurement unnoticed by moving into a file no test target compiles. It also fails when a file listed here does
 # get a record, or no longer exists, so this list cannot go stale.
+#
+# The check cannot see logic added to a file listed here. Put plugin logic in a file that imports no PackagePlugin,
+# which Tests/SafeDIGeneratorPluginTests compiles through a symbolic link, as it does Plugins/PluginScanner.swift.
 Plugins/InstallSafeDITool/InstallSafeDITool.swift: a command plugin that imports PackagePlugin, which no test target can link
 Plugins/MigrateSafeDIFromVersionOne/MigrateSafeDIFromVersionOne.swift: a command plugin that imports PackagePlugin, which no test target can link
-Plugins/PluginScanner.swift: compiled only into the SafeDIGenerator build tool plugin, which no test target can depend on
 Plugins/SafeDIGenerator/SafeDIGenerateDependencyTree.swift: the build tool plugin's entry point, which imports PackagePlugin, which no test target can link
 Plugins/Shared.swift: compiled only into the plugins, and imports PackagePlugin, which no test target can link
 Sources/SafeDI/Decorators/Forwarded.swift: macro declarations only, which compile to no executable code

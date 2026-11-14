@@ -4,7 +4,7 @@
 
 Run from the root of a checkout of commit SHA. Each DIRECTORY holds one platform's test run: `coverage.lcov`, its
 `llvm-cov export -format=lcov`; `checkout-root.txt`, the absolute path of the checkout that run built, which the
-report's `SF:` paths start with; and `commit.txt`, the commit that run built.
+report's `SF:` paths start with; `commit.txt`, the commit that run built; and `platform.txt`, the platform it ran on.
 
 Prints `path:line: source` for every line under Sources/ or Plugins/ that a report records and no report records as
 executed, and a total, and exits 1 when there is any. A line counts as executed when either platform executed it in
@@ -20,11 +20,14 @@ also gets an error annotation; --summary FILE appends a Markdown table of them t
 
 Exits 2 when the reports cannot be trusted, so the check never passes on missing or partial data:
 - the platforms given are not exactly linux and macos, each once;
-- a report, its root or its commit is missing, or the commit is not SHA;
+- a report, its root, its commit or its platform is missing, the commit is not SHA, or the platform is not the one
+  the directory is given for;
 - a report does not end with `end_of_record` (the export was cut short), or has a malformed record;
 - a report records no line under Sources/ or Plugins/ of its root;
 - a report names a file under Sources/ or Plugins/ that this checkout lacks, or a line past the end of one;
-- a Swift file under Sources/ or Plugins/ is recorded by neither report and not listed in Scripts/unmeasured-files.txt;
+- a Swift file under Sources/ or Plugins/ is recorded by neither report and not listed in Scripts/unmeasured-files.txt
+  (a file is recorded when a report has a counted `DA` line for it);
+- a symbolic link under Sources/ or Plugins/ resolves outside both, which would take what it names out of the check;
 - a file that list names is recorded by a report, or is not a Swift file under Sources/ or Plugins/ once symbolic
   links resolve.
 
@@ -82,6 +85,23 @@ def measured_files(checkout):
     return files
 
 
+def links_leaving_measurement(checkout):
+    """(link, target) for each symbolic link under Sources/ and Plugins/, to a file or a directory, that resolves
+    outside both, each relative to `checkout`. os.walk does not descend into a linked directory, so a link to a
+    directory inside them is walked where it points."""
+    links = []
+    for directory in MEASURED_DIRECTORIES:
+        for parent, directory_names, names in os.walk(os.path.join(checkout, directory)):
+            for name in sorted(directory_names + names):
+                path = os.path.join(parent, name)
+                if not os.path.islink(path):
+                    continue
+                target = os.path.relpath(os.path.realpath(path), checkout)
+                if not target.startswith(MEASURED_PREFIXES):
+                    links.append((os.path.relpath(path, checkout), target))
+    return sorted(links)
+
+
 def read_unmeasured_files(checkout):
     """{path: reason} for each file Scripts/unmeasured-files.txt lists."""
     list_path = os.path.join(checkout, UNMEASURED_FILES_LIST)
@@ -122,12 +142,19 @@ def read_report(platform, directory, checkout, commit):
     lcov_path = os.path.join(directory, "coverage.lcov")
     root_path = os.path.join(directory, "checkout-root.txt")
     commit_path = os.path.join(directory, "commit.txt")
-    for required in (lcov_path, root_path, commit_path):
+    platform_path = os.path.join(directory, "platform.txt")
+    for required in (lcov_path, root_path, commit_path, platform_path):
         if not os.path.isfile(required):
             raise UntrustworthyReport(
                 f"{platform}: {required} is missing: the {platform} test job uploaded no report"
                 " (it failed, was cancelled, or could not export its coverage)"
             )
+    with open(platform_path, encoding="utf-8") as platform_file:
+        measured_platform = platform_file.read().strip()
+    if measured_platform != platform:
+        raise UntrustworthyReport(
+            f"{platform}: the report in {directory} was measured on {measured_platform or '(no platform)'}"
+        )
     with open(commit_path, encoding="utf-8") as commit_file:
         measured_commit = commit_file.read().strip()
     if measured_commit != commit:
@@ -137,7 +164,6 @@ def read_report(platform, directory, checkout, commit):
     if not checkout_root.startswith("/"):
         raise UntrustworthyReport(f"{platform}: {root_path} does not hold an absolute path")
     counts = collections.defaultdict(lambda: collections.defaultdict(int))
-    recorded_files = set()
     source_lines_by_path = {}
     current = None
     current_source_lines = None
@@ -163,7 +189,6 @@ def read_report(platform, directory, checkout, commit):
                     if path not in source_lines_by_path:
                         source_lines_by_path[path] = lines_of(os.path.join(checkout, path))
                     current, current_source_lines = counts[path], source_lines_by_path[path]
-                    recorded_files.add(path)
             elif record.startswith("DA:") and current is not None:
                 try:
                     line_number, count = (int(field) for field in record[3:].split(",")[:2])
@@ -185,7 +210,8 @@ def read_report(platform, directory, checkout, commit):
             f"{platform}: the report records no line under Sources/ or Plugins/ of {checkout_root};"
             " check checkout-root.txt and the export"
         )
-    return counts, recorded_files
+    # A record with no counted line measures nothing, so it does not make its file recorded.
+    return counts, {path for path, line_counts in counts.items() if line_counts}
 
 
 def load_reports(platform_directories, checkout, commit):
@@ -207,7 +233,11 @@ def load_reports(platform_directories, checkout, commit):
             recorded_by[path].append(platform)
     unmeasured = read_unmeasured_files(checkout)
     files = measured_files(checkout)
-    problems = []
+    problems = [
+        f"{link} is a symbolic link to {target}, outside Sources/ and Plugins/, so no report of it would be checked;"
+        " move the file it names under Sources/ or Plugins/ and link to it from where it is needed"
+        for link, target in links_leaving_measurement(checkout)
+    ]
     for path in sorted(unmeasured):
         if path not in files:
             problems.append(
@@ -339,9 +369,11 @@ def self_test(directory):
     os.symlink("../../Plugins/B,%.swift", os.path.join(checkout, "Tests/PluginTests/B,%.swift"))
     checkout = os.path.realpath(checkout)
 
-    def write_report(name, root, records, ending="end_of_record\n", report_commit=commit):
+    def write_report(name, platform, root, records, ending="end_of_record\n", report_commit=commit):
         report_directory = os.path.join(directory, name)
         os.makedirs(report_directory)
+        with open(os.path.join(report_directory, "platform.txt"), "w", encoding="utf-8") as platform_file:
+            platform_file.write(platform + "\n")
         with open(os.path.join(report_directory, "checkout-root.txt"), "w", encoding="utf-8") as root_file:
             root_file.write(root + "\n")
         with open(os.path.join(report_directory, "commit.txt"), "w", encoding="utf-8") as commit_file:
@@ -355,20 +387,20 @@ def self_test(directory):
 
     linux_root = "/__w/SafeDI/SafeDI"
     macos_root = "/Users/runner/work/SafeDI/SafeDI"
-    linux = write_report("linux", linux_root, [
+    linux = write_report("linux", "linux", linux_root, [
         (f"{linux_root}/Sources/Core/A.swift", [(1, 0), (2, 4), (3, 0), (6, 0), (7, 0)]),
         (f"{linux_root}/Tests/PluginTests/B,%.swift", [(1, 1), (2, 0)]),
         (f"{linux_root}/.build/checkouts/Dependency/Sources/C.swift", [(1, 0)]),
         ("/elsewhere/Sources/Core/A.swift", [(4, 0)]),
     ])
-    macos = write_report("macos", macos_root, [
+    macos = write_report("macos", "macos", macos_root, [
         (f"{macos_root}/Sources/Core/A.swift", [(1, 3), (3, 0), (4, 0)]),
         (f"{macos_root}/Sources/Macros/Core/A.swift", [(5, 2)]),
         (f"{macos_root}/Plugins/B,%.swift", [(2, 0), (3, 7)]),
     ])
 
     def linux_with(name, records, **arguments):
-        return [("linux", write_report(name, linux_root, records, **arguments)), ("macos", macos)]
+        return [("linux", write_report(name, "linux", linux_root, records, **arguments)), ("macos", macos)]
 
     failures = []
 
@@ -403,7 +435,7 @@ def self_test(directory):
     expect_refusal("another platform", both + [("windows", linux)], "exactly the platforms linux and macos")
     expect_refusal("linux twice", both + [("linux", linux)], "linux is given more than once")
     expect_refusal("missing", [("linux", os.path.join(directory, "missing")), ("macos", macos)], "is missing")
-    expect_refusal("wrong root", [("linux", write_report("wrong-root", "/home/runner/work/SafeDI/SafeDI", [
+    expect_refusal("wrong root", [("linux", write_report("wrong-root", "linux", "/home/runner/work/SafeDI/SafeDI", [
         (f"{linux_root}/Sources/Core/A.swift", [(1, 1)]),
     ])), ("macos", macos)], "records no line")
     expect_refusal("other commit", linux_with("other-commit", [
@@ -431,9 +463,33 @@ def self_test(directory):
         (f"{linux_root}/Plugins/Unmeasured.swift", [(1, 0)]),
     ]), "lists Plugins/Unmeasured.swift, which the linux report records")
 
+    expect_refusal("one platform's report given for both", [("linux", macos), ("macos", macos)],
+                   "linux: the report in")
+
     write("Sources/Core/New.swift", "let new = 1\n")
     expect_refusal("file no report records", both, "no report records Sources/Core/New.swift")
+    # A record with no line in it measures nothing.
+    expect_refusal("file a report records no line of", linux_with("record-without-lines", [
+        (f"{linux_root}/Sources/Core/A.swift", [(1, 1)]),
+        (f"{linux_root}/Sources/Core/New.swift", []),
+    ]), "no report records Sources/Core/New.swift")
     os.remove(os.path.join(checkout, "Sources/Core/New.swift"))
+
+    # A symbolic link that leaves Sources/ and Plugins/ would take what it names out of the check.
+    write("Shared/Hidden.swift", "let hidden = 1\n")
+    write("Shared/Kit/Kit.swift", "let kit = 1\n")
+    os.symlink("../../Shared/Hidden.swift", os.path.join(checkout, "Sources/Core/Hidden.swift"))
+    expect_refusal("file link leaving the measured directories", both,
+                   "Sources/Core/Hidden.swift is a symbolic link to Shared/Hidden.swift")
+    os.remove(os.path.join(checkout, "Sources/Core/Hidden.swift"))
+    os.symlink("../Shared/Kit", os.path.join(checkout, "Sources/Kit"))
+    expect_refusal("directory link leaving the measured directories", both,
+                   "Sources/Kit is a symbolic link to Shared/Kit")
+    os.remove(os.path.join(checkout, "Sources/Kit"))
+    os.symlink("../../Shared", os.path.join(checkout, "Plugins/Generator/Shared"))
+    expect_refusal("link leaving the measured directories to a directory without Swift files", both,
+                   "Plugins/Generator/Shared is a symbolic link to Shared")
+    os.remove(os.path.join(checkout, "Plugins/Generator/Shared"))
     write(UNMEASURED_FILES_LIST, sources[UNMEASURED_FILES_LIST] + "Plugins/Gone.swift: deleted\n")
     expect_refusal("listed file missing", both, "lists Plugins/Gone.swift, which is not a Swift file")
     write(UNMEASURED_FILES_LIST, sources[UNMEASURED_FILES_LIST] + "Plugins/Generator/B,%.swift: a symbolic link\n")

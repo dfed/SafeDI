@@ -207,54 +207,65 @@ struct PluginScannerStripCommentsAndStringsTests {
 	}
 
 	@Test
-	func preservesInstantiable_whenSimpleRegexContainsSlashStarAndLaterMultilineStringContainsStarSlash() {
-		// The `*/` that would close the regex's `/*` is inside a multi-line
-		// string, after an escape, so `blockCommentHasCloser` must skip the
-		// whole string when it scans.
+	func preservesInstantiable_whenSimpleRegexContainsSlashStarAndLaterMultilineStringEscapesItsDelimiterBeforeStarSlash() {
+		// Read without its escape, `\"""` would close the multi-line string,
+		// and the `*/` after it would close the regex's `/*`, so the stripper
+		// would remove everything between them.
 		let source = #"""
 		let pattern = /\/*/
-		let template = """
-			\t*/
-			"""
-
 		@Instantiable(isRoot: true)
 		public struct Root: Instantiable {}
+		let template = """
+			\"""*/
+			"""
 		"""#
 		let stripped = stripSwiftCommentsAndStrings(from: source)
-		#expect(stripped.contains("@Instantiable(isRoot: true)"))
-		#expect(stripped.contains("public struct Root"))
+		#expect(stripped == "let pattern = /\\/*/\n@Instantiable(isRoot: true)\npublic struct Root: Instantiable {}\nlet template = \n\n")
 	}
 
 	@Test
 	func preservesInstantiable_whenSimpleRegexContainsSlashStarAndLaterStringEscapesQuoteBeforeStarSlash() {
-		// Read without its escape, `"\"` would be a whole string and the `*/`
-		// after it would close the regex's `/*`.
+		// Read without its escape, `"\"` would be a whole string, and the `*/`
+		// after it would close the regex's `/*`, so the stripper would remove
+		// everything between them.
 		let source = #"""
 		let pattern = /\/*/
-		let escaped = "\"*/"
-
 		@Instantiable(isRoot: true)
 		public struct Root: Instantiable {}
+		let escaped = "\"*/"
 		"""#
 		let stripped = stripSwiftCommentsAndStrings(from: source)
-		#expect(stripped.contains("@Instantiable(isRoot: true)"))
-		#expect(stripped.contains("public struct Root"))
+		#expect(stripped == "let pattern = /\\/*/\n@Instantiable(isRoot: true)\npublic struct Root: Instantiable {}\nlet escaped = ")
 	}
 
 	@Test
-	func preservesInstantiable_whenSimpleRegexContainsSlashStarAndLaterExtendedRegexContainsStarSlash() {
-		// The `*/` is inside the character class of an extended regex literal,
-		// after an escape, so `blockCommentHasCloser` must skip the literal.
+	func preservesInstantiable_whenSimpleRegexContainsSlashStarAndLaterExtendedRegexEscapesItsDelimiterBeforeStarSlash() {
+		// Read without its escape, `\/#` would close the extended regex
+		// literal, and the `*/` after it would close the simple regex's `/*`,
+		// so the stripper would remove everything between them.
 		let source = #"""
 		let pattern = /\/*/
-		let extended = #/\d[*/]/#
-
 		@Instantiable(isRoot: true)
 		public struct Root: Instantiable {}
+		let extended = #/a\/#*/#
 		"""#
 		let stripped = stripSwiftCommentsAndStrings(from: source)
-		#expect(stripped.contains("@Instantiable(isRoot: true)"))
-		#expect(stripped.contains("public struct Root"))
+		#expect(stripped == "let pattern = /\\/*/\n@Instantiable(isRoot: true)\npublic struct Root: Instantiable {}\nlet extended = ")
+	}
+
+	@Test
+	func preservesInstantiable_whenSimpleRegexContainsSlashStarAndLaterLineCommentContainsStarSlash() {
+		// The `*/` is inside a line comment, so it would close the regex's
+		// `/*` only if that `/*` opened a block comment; read as a closer, it
+		// would make the stripper remove everything between them.
+		let source = #"""
+		let pattern = /\/*/
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {}
+		// A block comment would close here: */
+		"""#
+		let stripped = stripSwiftCommentsAndStrings(from: source)
+		#expect(stripped == "let pattern = /\\/*/\n@Instantiable(isRoot: true)\npublic struct Root: Instantiable {}\n")
 	}
 
 	@Test
@@ -265,9 +276,7 @@ struct PluginScannerStripCommentsAndStringsTests {
 		public struct Root {}
 		"""
 		let stripped = stripSwiftCommentsAndStrings(from: source)
-		#expect(!stripped.contains("@Instantiable"))
-		#expect(stripped.contains("public struct Root {}"))
-		#expect(stripped.count(where: { $0 == "\n" }) == source.count(where: { $0 == "\n" }))
+		#expect(stripped == "\n\npublic struct Root {}")
 	}
 
 	@Test
@@ -280,9 +289,7 @@ struct PluginScannerStripCommentsAndStringsTests {
 		public struct Root {}
 		"""#
 		let stripped = stripSwiftCommentsAndStrings(from: source)
-		#expect(!stripped.contains("@Instantiable"))
-		#expect(stripped.contains("public struct Root {}"))
-		#expect(stripped.count(where: { $0 == "\n" }) == source.count(where: { $0 == "\n" }))
+		#expect(stripped == "let pattern = \n\n\n\npublic struct Root {}")
 	}
 
 	@Test
@@ -295,8 +302,7 @@ struct PluginScannerStripCommentsAndStringsTests {
 		public struct Root: Instantiable {}
 		"""##
 		let stripped = stripSwiftCommentsAndStrings(from: source)
-		#expect(stripped.contains("@Instantiable(isRoot: true)"))
-		#expect(stripped.count(where: { $0 == "\n" }) == source.count(where: { $0 == "\n" }))
+		#expect(stripped == "let quote = #hi\n@Instantiable(isRoot: true)\npublic struct Root: Instantiable {}")
 	}
 
 	// MARK: Regression — the exact shape that caused PR #271

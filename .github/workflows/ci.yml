@@ -868,14 +868,15 @@ jobs:
         run: ./Scripts/prepare-coverage-reports.sh
       # "Check Line Coverage on Linux" unions this report with the Linux
       # job's. It is uploaded before the Codecov upload, so that the check
-      # never depends on Codecov, and with the root its paths start with
-      # and the commit it measured.
+      # never depends on Codecov, and with the root its paths start with,
+      # the commit it measured and the platform it ran on.
       - name: Stage Coverage Report for the Line Coverage Check
         run: |
           mkdir line-coverage
           cp .build/artifacts/SafeDIPackageTests.lcov line-coverage/coverage.lcov
           pwd -P > line-coverage/checkout-root.txt
           echo "$GITHUB_SHA" > line-coverage/commit.txt
+          echo macos > line-coverage/platform.txt
       - name: Upload Coverage Report for the Line Coverage Check
         uses: actions/upload-artifact@v7
         with:
@@ -995,6 +996,7 @@ jobs:
           cp coverage.lcov line-coverage/coverage.lcov
           pwd -P > line-coverage/checkout-root.txt
           echo "$GITHUB_SHA" > line-coverage/commit.txt
+          echo linux > line-coverage/platform.txt
       - name: Upload Coverage Report for the Line Coverage Check
         uses: actions/upload-artifact@v7
         with:
