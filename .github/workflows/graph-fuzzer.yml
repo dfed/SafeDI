@@ -14,6 +14,19 @@ name: Graph Fuzzer
 # the other corpora. A failure, a stale known issue, a problem with the run
 # itself, a crash, or a run that checks no graphs fails the job and names the
 # seeds in the job summary.
+#
+# With `coverage`, the run instead lists the generator lines a change adds or
+# modifies that no corpus graph executed, the report ci.yml makes for a pull
+# request, for any commit before it is pushed for review. It builds `ref` for
+# coverage as "Build and Test on Linux" does, runs the unit suite once for its
+# coverage, fuzzes every corpus in the shards of ci.yml's graph-fuzzer job
+# with each shard's profile kept, and reports the lines changed since `base`
+# (.github/scripts/report-graph-fuzzer-coverage.sh). The report is in the
+# report job's summary and its `fuzzer-coverage` artifact; see "Coverage of a
+# change" in .claude/rules/fuzzer-corpora.md. `ref` need not have this
+# workflow: the report job runs the scripts of the commit the run is
+# dispatched on against `ref`'s checkout. Inputs reach the shell through
+# environment variables, never interpolated into a script.
 on:
   workflow_dispatch:
     inputs:
@@ -34,6 +47,18 @@ on:
         type: choice
         options: ['auto', '1', '2', '3', '4']
         default: 'auto'
+      coverage:
+        description: Instead of the fuzzing above, list the generator lines changed since `base` that no corpus graph executed, fuzzing every corpus as ci.yml does. The inputs above are ignored.
+        type: boolean
+        default: false
+      ref:
+        description: With `coverage`, the branch, tag or commit to build, or empty for the commit the run is dispatched on.
+        required: false
+        default: ''
+      base:
+        description: With `coverage`, the commit or branch to list changes since, or empty for the merge base of `ref` with main.
+        required: false
+        default: ''
 
 permissions: {}
 
@@ -42,6 +67,7 @@ jobs:
     # Nothing here needs macOS: it runs the tool and compiles its output with
     # `swiftc -emit-object`, so it uses the Linux test job's container.
     name: Fuzz Dependency Graphs on Linux (shard ${{ strategy.job-index }} of ${{ strategy.job-total }})
+    if: ${{ !inputs.coverage }}
     runs-on: ubuntu-latest
     container: swift:6.2
     timeout-minutes: 90
@@ -92,3 +118,273 @@ jobs:
           name: graph-fuzzer-report-${{ strategy.job-index }}
           path: ${{ runner.temp }}/graph-fuzzer/
           if-no-files-found: ignore
+
+  # The jobs below run only with `coverage`. This one builds the test bundle
+  # with "Build and Test on Linux"'s arguments, from main's build cache, which
+  # it reads and never saves.
+  coverage-build:
+    name: Build for Coverage on Linux
+    if: ${{ inputs.coverage }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      commit: ${{ steps.commit.outputs.commit }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      SWIFT_BUILD_ARGUMENTS: -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      # The other jobs check out this commit, so a branch that moves during
+      # the run changes nothing.
+      - name: Name the Commit
+        id: commit
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Restore Build Directory
+        uses: actions/cache/restore@v6
+        with:
+          path: .build
+          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/ci.yml') }}
+          restore-keys: |
+            spm-release-${{ runner.os }}-swift-6.2-
+      - name: Resolve Package Dependencies
+        uses: ./.github/actions/retry
+        with:
+          command: swift package resolve
+      - name: Build
+        run: |
+          # shellcheck disable=SC2086 # The arguments are words to split.
+          swift build $SWIFT_BUILD_ARGUMENTS --build-tests
+      # What ci.yml's Linux test job packages for the graph fuzzer's shards.
+      - name: Package Test Bundle
+        run: |
+          products=.build/x86_64-unknown-linux-gnu/release
+          tar -czf graph-fuzzer-test-bundle.tar.gz \
+            "$products/SafeDIPackageTests.xctest" \
+            "$products/SafeDITool" \
+            "$products/SafeDIMacros-tool" \
+            "$products/Modules/SafeDI.swiftmodule"
+      - name: Upload Test Bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: graph-fuzzer-test-bundle
+          path: graph-fuzzer-test-bundle.tar.gz
+          retention-days: 1
+
+  # Runs the unit suite once, beside the shards, for the report's split
+  # between lines a unit test reaches and lines nothing reaches. Compile checks
+  # are off: they compile generated strings and change no count of a line
+  # under Sources. A failing suite still writes its profile, and the report
+  # says it failed; a crashed one writes none, and the report then makes no
+  # split.
+  coverage-unit-suite:
+    name: Run the Unit Suite for Coverage on Linux
+    needs: coverage-build
+    if: ${{ !cancelled() && needs.coverage-build.result == 'success' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.coverage-build.outputs.commit }}
+      - name: Download Test Bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: graph-fuzzer-test-bundle
+      - name: Unpack Test Bundle
+        run: |
+          tar -xzf graph-fuzzer-test-bundle.tar.gz
+          mkdir -p "$RUNNER_TEMP/unit-suite-profiles" unit-suite
+      - name: Run Unit Suite
+        id: suite
+        timeout-minutes: 25
+        env:
+          SAFEDI_SKIP_COMPILE_CHECK: 1
+          LLVM_PROFILE_FILE: ${{ runner.temp }}/unit-suite-profiles/unit-suite-%p.profraw
+        run: .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing
+      # The artifact always holds the suite's outcome and, when the suite
+      # wrote one, its profile, so the report job's download finds it.
+      - name: Merge Profile
+        if: ${{ !cancelled() }}
+        env:
+          OUTCOME: ${{ steps.suite.outcome }}
+        run: |
+          echo "$OUTCOME" > unit-suite/outcome.txt
+          shopt -s nullglob
+          profiles=("$RUNNER_TEMP"/unit-suite-profiles/*.profraw)
+          if [ ${#profiles[@]} -gt 0 ]; then
+            llvm-profdata merge -sparse "${profiles[@]}" -o unit-suite/default.profdata
+          else
+            echo "The unit suite wrote no coverage profile."
+          fi
+      - name: Upload Profile
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-suite-profile
+          path: unit-suite/
+          retention-days: 1
+
+  # ci.yml's graph-fuzzer shards; keep the matrix in step with that job's.
+  # Each shard keeps its profile in its report folder, as ci.yml's shards do.
+  coverage-fuzz:
+    name: Fuzz for Coverage on Linux (${{ matrix.corpus }} seeds ${{ matrix.starting-seed }}+${{ matrix.iterations }})
+    needs: coverage-build
+    if: ${{ !cancelled() && needs.coverage-build.result == 'success' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {corpus: base, features: '', starting-seed: 0, iterations: 1250}
+          - {corpus: base, features: '', starting-seed: 1250, iterations: 1250}
+          - {corpus: base, features: '', starting-seed: 2500, iterations: 1250}
+          - {corpus: base, features: '', starting-seed: 3750, iterations: 1250}
+          - {corpus: generateDependencyTree, features: generateDependencyTree, starting-seed: 0, iterations: 500}
+          - {corpus: generateDependencyTree, features: generateDependencyTree, starting-seed: 500, iterations: 500}
+          - {corpus: generateMockPublic, features: generateMockPublic, starting-seed: 0, iterations: 1000}
+    defaults:
+      run:
+        shell: bash
+    env:
+      REPORT: ${{ github.workspace }}/graph-fuzzer/report.txt
+      SUMMARY: ${{ github.workspace }}/graph-fuzzer/summary.md
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.coverage-build.outputs.commit }}
+      - name: Download Test Bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: graph-fuzzer-test-bundle
+      - name: Unpack Test Bundle
+        run: |
+          tar -xzf graph-fuzzer-test-bundle.tar.gz
+          mkdir -p graph-fuzzer "$RUNNER_TEMP/graph-fuzzer-profiles"
+      # Only the fuzzer's own process writes to the profile folder: every
+      # process it starts gets an LLVM_PROFILE_FILE of its own in the test's
+      # temporary directory. The step's limit is under the job's, so a shard
+      # that runs out of time still uploads what it has.
+      - name: Run Graph Fuzzer
+        timeout-minutes: 35
+        env:
+          SAFEDI_GRAPH_FUZZER_ITERATIONS: ${{ matrix.iterations }}
+          SAFEDI_GRAPH_FUZZER_STARTING_SEED: ${{ matrix.starting-seed }}
+          SAFEDI_GRAPH_FUZZER_FEATURES: ${{ matrix.features }}
+          SAFEDI_GRAPH_FUZZER_REPORT: ${{ github.workspace }}/graph-fuzzer/report.txt
+          LLVM_PROFILE_FILE: ${{ runner.temp }}/graph-fuzzer-profiles/graph-fuzzer-%p.profraw
+        run: .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing --filter 'SafeDIToolGraphFuzzerTests/longRun'
+      - name: Summarize
+        if: ${{ !cancelled() }}
+        run: .github/scripts/summarize-graph-fuzzer-report.sh "$REPORT" "$SUMMARY" ${{ matrix.starting-seed }} ${{ matrix.iterations }} "${{ matrix.features }}"
+      - name: Merge Coverage Profile
+        if: ${{ !cancelled() }}
+        run: |
+          shopt -s nullglob
+          profiles=("$RUNNER_TEMP"/graph-fuzzer-profiles/*.profraw)
+          if [ ${#profiles[@]} -gt 0 ]; then
+            llvm-profdata merge -sparse "${profiles[@]}" -o graph-fuzzer/coverage.profdata
+          else
+            echo "The fuzzer wrote no coverage profile."
+          fi
+      - name: Upload Report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: graph-fuzzer-report-${{ matrix.corpus }}-${{ matrix.starting-seed }}
+          path: graph-fuzzer/
+          if-no-files-found: ignore
+
+  # Reports with the scripts of the commit the run was dispatched on, checked
+  # out beside `ref`'s, so `ref` need not have them. Advisory: it fails only
+  # when it cannot report.
+  coverage-report:
+    name: Report Changed Lines No Fuzzer Graph Executed on Linux
+    needs: [coverage-build, coverage-unit-suite, coverage-fuzz]
+    if: ${{ !cancelled() && needs.coverage-build.result == 'success' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.coverage-build.outputs.commit }}
+          # Every branch's history, so any base is present.
+          fetch-depth: 0
+      - name: Checkout Report Scripts
+        uses: actions/checkout@v7
+        with:
+          path: .graph-fuzzer-coverage-tools
+          sparse-checkout: |
+            Scripts/fuzzer-changed-line-coverage.py
+            .github/scripts/report-graph-fuzzer-coverage.sh
+          sparse-checkout-cone-mode: false
+      - name: Download Test Bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: graph-fuzzer-test-bundle
+      - name: Download Unit Suite Profile
+        uses: actions/download-artifact@v8
+        with:
+          name: unit-suite-profile
+          path: unit-suite
+      - name: Download Shard Reports
+        uses: actions/download-artifact@v8
+        with:
+          pattern: graph-fuzzer-report-*
+          path: reports
+      # Retried for the reason "Install curl for Codecov" in ci.yml gives.
+      - name: Install Python
+        uses: ./.github/actions/retry
+        with:
+          command: command -v python3 >/dev/null || { apt-get update && apt-get install -y --no-install-recommends python3; }
+      - name: Report
+        env:
+          BASE: ${{ inputs.base }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          tar -xzf graph-fuzzer-test-bundle.tar.gz
+          if [ -z "$BASE" ]; then
+            base=$(git merge-base origin/main HEAD)
+          elif ! base=$(git rev-parse --verify --quiet "$BASE^{commit}" || git rev-parse --verify --quiet "origin/$BASE^{commit}"); then
+            echo "::error::The base '$BASE' names no commit of this repository."
+            exit 1
+          fi
+          .graph-fuzzer-coverage-tools/.github/scripts/report-graph-fuzzer-coverage.sh \
+            .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest reports unit-suite/default.profdata \
+            "$base" "$RUNNER_TEMP/fuzzer-coverage"
+      - name: Upload Coverage
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzzer-coverage
+          path: ${{ runner.temp }}/fuzzer-coverage/
+          if-no-files-found: ignore
+          retention-days: 3
