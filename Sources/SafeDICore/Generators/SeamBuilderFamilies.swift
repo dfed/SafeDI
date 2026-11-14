@@ -20,10 +20,12 @@
 
 // MARK: - Generated names
 
-/// The `__safeDI_` names one generated Swift scope declares. One allocator serves one scope – a seam's initializer body, or a
-/// filler's body around one seam call – and each name is claimed in a fixed order, so two namers can never hand one name
-/// out: a seam's body claims its builders' internal names with their stage bindings, then the functions that build its
-/// wrapper places; a filler's body claims its fills with their later stages, then its dispatchers.
+/// The `__safeDI_` names one generated Swift scope declares. One allocator serves one scope – a seam's initializer body, a
+/// filler's body around one seam call, or a mock's scope that declares the locals its `@Sendable` builder functions read
+/// overrides into – and each name is claimed in a fixed order, so two namers can never hand one name out: a seam's body
+/// claims its builders' internal names with their stage bindings, then the functions that build its wrapper places; a
+/// filler's body claims its fills with their later stages, then its dispatchers; a mock's scope claims each function's
+/// locals in the order the mock's body walk reads the overrides (`ScopeGenerator.SendableOverrideExtractor`).
 struct GeneratedNameAllocator {
 	init(reserving names: Set<String>) {
 		taken = names
@@ -37,6 +39,11 @@ struct GeneratedNameAllocator {
 		}
 		taken.formUnion(occupied(name))
 		return name
+	}
+
+	/// Takes `names` without claiming them: names a scope declares by rules of their own, which nothing claimed later may share.
+	mutating func reserve(_ names: some Sequence<String>) {
+		taken.formUnion(names)
 	}
 
 	private(set) var taken: Set<String>
