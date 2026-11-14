@@ -30,7 +30,8 @@ for candidate in "$bin/SafeDIMacros-tool" "$bin/SafeDIMacros-tool.exe" "$bin/Saf
 	[[ -f "$candidate" ]] && { macros=$candidate; break; }
 done
 [[ -n "$macros" ]] || { echo "no SafeDIMacros executable in $bin" >&2; exit 1; }
-module_search_path="$bin/Modules"; [[ -d "$module_search_path/SafeDI.swiftmodule" ]] || module_search_path="$bin"
+# `SafeDI.swiftmodule` is a directory on macOS and a single file on Linux, so test that it exists, not that it is a directory.
+module_search_path="$bin/Modules"; [[ -e "$module_search_path/SafeDI.swiftmodule" ]] || module_search_path="$bin"
 swiftc=(swiftc); command -v xcrun >/dev/null 2>&1 && swiftc=(xcrun swiftc)
 
 for module in "$@"; do
