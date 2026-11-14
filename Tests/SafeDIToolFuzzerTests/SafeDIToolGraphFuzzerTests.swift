@@ -1284,6 +1284,15 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(rejectedCount >= Self.smokeSeeds.count / 4, "Rejected \(rejectedCount) of \(Self.smokeSeeds.count) graphs")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func smokeSeeds_applyRemedies_inGraphsTheToolRejects() async throws {
+		// The remedy oracle judges rejected graphs, so a change that stops it reading the tool's errors, or stops it applying
+		// what they state, fails here rather than quietly judging nothing.
+		let remedyKinds = try await Set(smokeResults.value.flatMap { $0.remedyRuns.map(\.remedy.kind) })
+		#expect(remedyKinds.sorted() == Self.smokeRemedyKinds)
+	}
+
 	// MARK: Known issues
 
 	@Test
@@ -4580,6 +4589,10 @@ struct SafeDIToolGraphFuzzerTests {
 		var errorGraphCounts = [String: Int]()
 		var acceptedDrawFeatureCounts = [GraphFuzzerSeamDrawFeature: Int]()
 		var valueOracleCounts = GraphFuzzerValueOracleCounts()
+		// The remedies the remedy oracle applied, and those that left an error at their site, by kind, and the sites of a
+		// family it reads that it applied none to.
+		var remedyCounts = [GraphFuzzerRemedyKind: (judged: Int, failed: Int)]()
+		var unremediedSiteCount = 0
 		var knownIssueCount = 0
 		var failureCount = 0
 		// Batches run concurrently, one per core, but their findings are recorded in seed order, so the report and
@@ -4626,6 +4639,7 @@ struct SafeDIToolGraphFuzzerTests {
 								isComparedAcrossIntegrations: results[index].isComparedAcrossIntegrations,
 								isComparedWithReadTwin: results[index].isComparedWithReadTwin,
 								valueOracle: results[index].valueOracle,
+								remedyRuns: results[index].remedyRuns,
 							)
 						}
 						for result in results {
@@ -4690,6 +4704,15 @@ struct SafeDIToolGraphFuzzerTests {
 							}
 							if let valueOracle = result.valueOracle {
 								valueOracleCounts.add(valueOracle, isCompared: result.isComparedByValueOracle)
+							}
+							for remedyRun in result.remedyRuns {
+								remedyCounts[remedyRun.remedy.kind, default: (0, 0)].judged += 1
+								if remedyRun.failureLine != nil {
+									remedyCounts[remedyRun.remedy.kind, default: (0, 0)].failed += 1
+								}
+							}
+							if result.fixture.modules == nil, GraphFuzzerGeneratorFeature.features(drawnIn: result.fixture).isEmpty, case let .rejected(diagnostics) = result.outcome {
+								unremediedSiteCount += GraphFuzzerRemedies.unremediedSiteCount(of: result.fixture, diagnostics: diagnostics)
 							}
 							// Counted whether or not the graph also fails another way.
 							for renamedGraphFailure in result.renamedGraphFailures {
@@ -4766,6 +4789,12 @@ struct SafeDIToolGraphFuzzerTests {
 		// What the base corpus's value oracle compared and skipped, with the pins, which ci.yml's combine job adds up.
 		if let pinnedValueOracleCounts = corpus.valueOracleCounts {
 			report.append("value-oracle \(corpus.name) \(valueOracleCounts.reportField) \(pinnedValueOracleCounts.reportField)")
+		}
+		// The remedy oracle's judgments by kind, as `judged/failed`, and the sites it applied no remedy to, which no pin checks:
+		// the base corpus's unit tests hold a representative of each kind.
+		if corpus.features.isEmpty {
+			let counts = GraphFuzzerRemedyKind.allCases.map { "\($0.rawValue)=\(remedyCounts[$0]?.judged ?? 0)/\(remedyCounts[$0]?.failed ?? 0)" }.joined(separator: ",")
+			report.append("remedies \(corpus.name) \(counts) unremedied=\(unremediedSiteCount)")
 		}
 		// What the run cost: its wall seconds, the CPU seconds of the test process and of its child processes, and for each
 		// phase the seconds batches spent in it, the CPU seconds of the processes it ran, and their number, which ci.yml's
@@ -4860,13 +4889,17 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 14, 18, 25, 30, 40, 59, 62, 70, 97, 99, 133, 161, 212, 267, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x7CFB2AB833B2D24B
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x9219996BA2BD0A1A
+
+	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
+	/// holds a representative of every kind.
+	static let smokeRemedyKinds: [GraphFuzzerRemedyKind] = [.instantiateOnRoot, .instantiateOnRootAndReceiveOnlyIfAvailable, .receiveOptionallyIfAvailable, .receiveSuggestedProperty, .removeReceive]
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xB27CC33016FCC99C
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xB211B1F9E0A1B180
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -5810,6 +5843,18 @@ struct SafeDIToolGraphFuzzerTests {
 
 	private static let mockParameterAndFieldOrderAndLazyCycleConfigurationFieldReason = "\(mockParameterAndFieldOrderReason), and which back-edge of a lazy cycle loses its override follows the order of type names, so one field of a configuration struct is present under one naming and absent under another"
 
+	// The remedy oracle's shapes: advice an error states that does not fix it. Each names its minimal graph, a test in
+	// `SafeDIToolGraphFuzzerRemedyTests` that expects the advice to work as a known issue.
+	static let remedyCapturedInSendableBuilderReason = "An error at a receive inside a `@Sendable` builder advises receiving, or declaring, a property that is not `Sendable`, which then cannot be received there (remedyRuns_leaveNoErrorAtTheReceive_whenTheSuggestedOnlyIfAvailableReceiveIsInsideASendableBuilder: Root builds `t1Builder: SendableInstantiator<T1>` and `t2Builder: Instantiator<T2>`, and T1 requires `t2Builder: Instantiator<T2>?`, which the error says to receive only if available)"
+
+	static let remedyHiddenByCloserDeclarationReason = "An error advises receiving a property only if available, or a suggested property, beneath a type whose mock is generated and that declares the label with another type, so the mock rejects the receive as hidden (remedyRuns_leaveNoErrorAtTheReceive_whenAMockedTypeBetweenDeclaresItsLabelWithAnotherType: T3, mocked, declares `t4: T1` and builds T5, which Root builds too and which requires `t4: T0?`, and the error says to declare `t4: T0` on Root and receive it only if available)"
+
+	static let remedySuggestionClosesCycleReason = "An error suggests receiving a property whose receive closes a dependency cycle (remedyRuns_leaveNoErrorAtTheReceive_whenTheSuggestedPropertyIsOfTheMockedReceiversOwnType: T1, mocked, requires `t0: T1` beneath T2, which forwards `t0: T1?` and builds T1, and the error suggests `t0: T1?`, which the mock of T1 receives while building T1)"
+
+	static let remedySuggestionsAlternateReason = "Each error reports one path to a receiver, so receiving the property one path suggests leaves an error on another path, which suggests the first label again (remedyRuns_leaveNoErrorAtTheReceive_whenTwoPathsToTheReceiverDeclareTheReceivedTypeUnderOtherLabels: T1 declares `t4: T4` and T2 declares `lazyT4: T4`, and each builds T3, which requires `t4: T4`)"
+
+	static let remedyDeclarationClosesCycleThroughRootReason = "An error advises declaring a property on a root whose own properties the declared type's tree receives and that require the declaration, so the declaration closes a dependency cycle there (remedyRuns_leaveNoErrorAtTheReceive_whenTheDeclaredTypesTreeReceivesARootPropertyThatRequiresTheDeclaration: Root builds `t2: T2`, which requires `t0Builder: Instantiator<T0>`, and T0 receives `t2`)"
+
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
 	static let knownIssues: [GraphFuzzerKnownIssue] = [
@@ -5873,6 +5918,48 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree, in a graph whose lazy cycle also drops another configuration field under a renaming",
 			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [2_201],
+		),
+		GraphFuzzerKnownIssue(
+			reason: remedyCapturedInSendableBuilderReason,
+			signatures: [
+				.remedyLeavesErrorAtSite(.instantiateOnRoot, containing: "cannot be received inside a `@Sendable` function"),
+				.remedyLeavesErrorAtSite(.instantiateOnRootAndReceiveOnlyIfAvailable, containing: "cannot be received inside a `@Sendable` function"),
+				.remedyLeavesErrorAtSite(.receiveOnlyIfAvailable, containing: "cannot be received inside a `@Sendable` function"),
+				.remedyLeavesErrorAtSite(.receiveOptionallyIfAvailable, containing: "cannot be received inside a `@Sendable` function"),
+				.remedyLeavesErrorAtSite(.receiveSuggestedProperty, containing: "cannot be received inside a `@Sendable` function"),
+			],
+			seeds: [
+				167, 614, 1_556, 1_724, 1_830, 1_915, 2_310, 2_627, 2_751, 2_907, 2_963, 3_145, 3_173, 3_193, 3_586, 3_619,
+				4_586, 4_671,
+			],
+		),
+		GraphFuzzerKnownIssue(
+			reason: remedyHiddenByCloserDeclarationReason,
+			signatures: [
+				.remedyLeavesErrorAtSite(.instantiateOnRootAndReceiveOnlyIfAvailable, containing: "is hidden in chain"),
+				.remedyLeavesErrorAtSite(.receiveOnlyIfAvailable, containing: "is hidden in chain"),
+				.remedyLeavesErrorAtSite(.receiveOptionallyIfAvailable, containing: "is hidden in chain"),
+				.remedyLeavesErrorAtSite(.receiveSuggestedProperty, containing: "is hidden in chain"),
+			],
+			seeds: [
+				445, 492, 1_712, 1_832, 2_322, 2_500, 2_605, 2_663, 2_982, 3_240, 3_529, 3_778, 3_799, 3_981, 4_142, 4_441,
+				4_940,
+			],
+		),
+		GraphFuzzerKnownIssue(
+			reason: remedySuggestionClosesCycleReason,
+			signatures: [.remedyLeavesErrorAtSite(.receiveSuggestedProperty, containing: "Dependency cycle: ")],
+			seeds: [1_132, 2_059, 2_560, 3_982, 3_995, 4_333],
+		),
+		GraphFuzzerKnownIssue(
+			reason: remedySuggestionsAlternateReason,
+			signatures: [.remedyLeavesErrorAtSite(.receiveSuggestedProperty, containing: "Did you mean `")],
+			seeds: [495, 2_272],
+		),
+		GraphFuzzerKnownIssue(
+			reason: remedyDeclarationClosesCycleThroughRootReason,
+			signatures: [.remedyLeavesErrorAtSite(.instantiateOnRoot, containing: "Dependency cycle: ")],
+			seeds: [984, 3_493, 4_375, 4_864],
 		),
 	]
 
