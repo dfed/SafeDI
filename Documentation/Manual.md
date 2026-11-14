@@ -387,7 +387,7 @@ Property declarations within `@Instantiable` types decorated with [`@Received`](
 
 That property must have the received type, with two exceptions:
 
-- An optional receive, `user: User?`, also accepts a non-optional `user: User`.
+- A receive [only if available](#conditionally-receiving-dependencies), `@Received(onlyIfAvailable: true) let user: User?`, also accepts a non-optional `user: User`.
 - A receive of `X` also accepts a [`LazilyInstantiated<X>`](#lazilyinstantiated), and receives its instance.
 
 Continuing the [Macros intro](#macros) example: `LoggedInView` has a `@Forwarded user: User` and an `@Instantiated noteStorage: NoteStorage`. `NoteStorage` can `@Received` the same `user` instance from anywhere in the subtree below `LoggedInView`:
