@@ -187,7 +187,8 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        let leafBuilderAlias: Instantiator<Leaf>? = safeDIOverrides.leafBuilderAlias
 			        func __safeDI_child() -> Child {
 			            func __safeDI_leafBuilder() -> Leaf {
-			                if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(nil) } else { Leaf(leafBuilderAlias: nil) }
+			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
@@ -203,7 +204,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()", fulfillingProperty: .instantiator)
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()")
 	}
 
 	@Test
@@ -250,7 +251,8 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
 			        func __safeDI_child() -> Child {
 			            func __safeDI_leafBuilder() -> Leaf {
-			                if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(nil) } else { Leaf(leafBuilderAlias: nil) }
+			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
@@ -265,7 +267,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()", fulfillingProperty: .instantiator)
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()")
 	}
 
 	@Test
@@ -298,7 +300,8 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			    ) -> Root {
 			        func __safeDI_child() -> Child {
 			            func __safeDI_leafBuilder() -> Leaf {
-			                if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(nil) } else { Leaf(leafBuilderAlias: nil) }
+			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
@@ -313,7 +316,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()", fulfillingProperty: .instantiator)
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Root", productionExpression: "Root()")
 	}
 
 	// MARK: Tests – A mock of a type no root is, the receiver inside the alias's tree receiving it only if available
@@ -458,7 +461,8 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        let leafBuilderAlias: Instantiator<Leaf>? = safeDIOverrides.leafBuilderAlias
 			        func __safeDI_child() -> Child {
 			            func __safeDI_leafBuilder() -> Leaf {
-			                if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(nil) } else { Leaf(leafBuilderAlias: nil) }
+			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
@@ -474,7 +478,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder", fulfillingProperty: .instantiator)
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
 	}
 
 	@Test
@@ -519,7 +523,8 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
 			        func __safeDI_child() -> Child {
 			            func __safeDI_leafBuilder() -> Leaf {
-			                if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(nil) } else { Leaf(leafBuilderAlias: nil) }
+			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
@@ -534,7 +539,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder", fulfillingProperty: .instantiator)
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
 	}
 
 	@Test
@@ -568,7 +573,8 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			    ) -> Holder {
 			        func __safeDI_child() -> Child {
 			            func __safeDI_leafBuilder() -> Leaf {
-			                if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(nil) } else { Leaf(leafBuilderAlias: nil) }
+			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
 			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
@@ -583,7 +589,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			#endif
 			""",
 		], "Unexpected output \(output.mockFiles)")
-		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder", fulfillingProperty: .instantiator)
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
 	}
 
 	// MARK: Tests – The receiver inside the alias's tree requiring it
@@ -623,35 +629,111 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenRootsSiblingReceivesAliasOnlyIfAvailableAndTypeBuiltByFulfillingInstantiatorRequiresAlias() async {
-		await assertThrowsError(diagnostics: { fixtures in Self.instantiatorRequiredInsideItsOwnTreeError(fixtures) }) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					Self.mockedType(named: "Root", isRoot: true, fulfillingProperty: .instantiator, outsideReceiver: .sibling),
-					Self.child(fulfillingProperty: .instantiator),
-					Self.receiver(named: "Leaf", fulfillingProperty: .instantiator, receivesAliasOnlyIfAvailable: false),
-					Self.receiver(named: "Sibling", fulfillingProperty: .instantiator, receivesAliasOnlyIfAvailable: true),
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+	mutating func mock_bindsAliasToWrapperMadeAgain_whenRootsSiblingReceivesAliasOnlyIfAvailableAndTypeBuiltByFulfillingInstantiatorRequiresAlias() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				Self.mockedType(named: "Root", isRoot: true, fulfillingProperty: .instantiator, outsideReceiver: .sibling),
+				Self.child(fulfillingProperty: .instantiator),
+				Self.receiver(named: "Leaf", fulfillingProperty: .instantiator, receivesAliasOnlyIfAvailable: false),
+				Self.receiver(named: "Sibling", fulfillingProperty: .instantiator, receivesAliasOnlyIfAvailable: true),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.mockFiles == [
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            child: Child.SafeDIMockConfiguration = .init(),
+			            sibling: ((Instantiator<Leaf>?) -> Sibling)? = nil,
+			            leafBuilderAlias: Instantiator<Leaf>? = nil
+			        ) {
+			            self.child = child
+			            self.sibling = sibling
+			            self.leafBuilderAlias = leafBuilderAlias
+			        }
+
+			        let child: Child.SafeDIMockConfiguration
+			        let sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			        let leafBuilderAlias: Instantiator<Leaf>?
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        let leafBuilderAlias: Instantiator<Leaf>? = safeDIOverrides.leafBuilderAlias
+			        func __safeDI_child() -> Child {
+			            func __safeDI_leafBuilder() -> Leaf {
+			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
+			            }
+			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
+			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
+			            #sourceLocation()
+			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
+			        }
+			        let child: Child = __safeDI_child()
+			        let sibling = if let safeDIBuilder = safeDIOverrides.sibling { safeDIBuilder(leafBuilderAlias) } else { Sibling(leafBuilderAlias: leafBuilderAlias) }
+			        return Root(child: child, sibling: sibling)
+			    }
+			}
+			#endif
+			""",
+		], "Unexpected output \(output.mockFiles)")
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenTypeBuiltByRootsFulfillingInstantiatorRequiresAlias() async {
-		await assertThrowsError(diagnostics: { fixtures in Self.instantiatorRequiredInsideItsOwnTreeError(fixtures) }) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					Self.mockedType(named: "Root", isRoot: true, fulfillingProperty: .instantiator, outsideReceiver: nil),
-					Self.child(fulfillingProperty: .instantiator),
-					Self.receiver(named: "Leaf", fulfillingProperty: .instantiator, receivesAliasOnlyIfAvailable: false),
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+	mutating func mock_bindsAliasToWrapperMadeAgain_whenTypeBuiltByRootsFulfillingInstantiatorRequiresAlias() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				Self.mockedType(named: "Root", isRoot: true, fulfillingProperty: .instantiator, outsideReceiver: nil),
+				Self.child(fulfillingProperty: .instantiator),
+				Self.receiver(named: "Leaf", fulfillingProperty: .instantiator, receivesAliasOnlyIfAvailable: false),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.mockFiles == [
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            child: Child.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.child = child
+			        }
+
+			        let child: Child.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_child() -> Child {
+			            func __safeDI_leafBuilder() -> Leaf {
+			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
+			            }
+			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
+			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
+			            #sourceLocation()
+			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
+			        }
+			        let child: Child = __safeDI_child()
+			        return Root(child: child)
+			    }
+			}
+			#endif
+			""",
+		], "Unexpected output \(output.mockFiles)")
 	}
 
 	@Test
@@ -697,42 +779,112 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenNonRootMockedTypesSiblingReceivesAliasOnlyIfAvailableAndTypeBuiltByFulfillingInstantiatorRequiresAlias() async {
-		// The `Instantiator` twin of the test above.
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["Leaf.swift"]):7:5: error: Dependency cycle: @Instantiated `leafBuilder: Instantiator<Leaf>` -> @Received `leafBuilderAlias: Instantiator<Leaf>?` -> @Received `leafBuilder: Instantiator<Leaf>`. `leafBuilder: Instantiator<Leaf>` is received while it is still being instantiated. `leafBuilderAlias: Instantiator<Leaf>?` renames `leafBuilder: Instantiator<Leaf>` only if available, so a type that receives `leafBuilderAlias` without `onlyIfAvailable` must be built after `leafBuilder: Instantiator<Leaf>`. Receive `leafBuilderAlias` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `leafBuilder: Instantiator<Leaf>` cannot be built first.
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					Self.mockedType(named: "Holder", isRoot: false, fulfillingProperty: .instantiator, outsideReceiver: .sibling),
-					Self.child(fulfillingProperty: .instantiator),
-					Self.receiver(named: "Leaf", fulfillingProperty: .instantiator, receivesAliasOnlyIfAvailable: false),
-					Self.receiver(named: "Sibling", fulfillingProperty: .instantiator, receivesAliasOnlyIfAvailable: true),
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+	mutating func mock_bindsAliasToWrapperMadeAgain_whenNonRootMockedTypesSiblingReceivesAliasOnlyIfAvailableAndTypeBuiltByFulfillingInstantiatorRequiresAlias() async throws {
+		// The `Instantiator` twin of the test above: `leafBuilderAlias` renames the instantiator being built, which its function wraps again.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				Self.mockedType(named: "Holder", isRoot: false, fulfillingProperty: .instantiator, outsideReceiver: .sibling),
+				Self.child(fulfillingProperty: .instantiator),
+				Self.receiver(named: "Leaf", fulfillingProperty: .instantiator, receivesAliasOnlyIfAvailable: false),
+				Self.receiver(named: "Sibling", fulfillingProperty: .instantiator, receivesAliasOnlyIfAvailable: true),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.mockFiles == [
+			"Holder+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Holder {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            child: Child.SafeDIMockConfiguration = .init(),
+			            sibling: ((Instantiator<Leaf>?) -> Sibling)? = nil,
+			            leafBuilderAlias: Instantiator<Leaf>? = nil
+			        ) {
+			            self.child = child
+			            self.sibling = sibling
+			            self.leafBuilderAlias = leafBuilderAlias
+			        }
+
+			        let child: Child.SafeDIMockConfiguration
+			        let sibling: ((Instantiator<Leaf>?) -> Sibling)?
+			        let leafBuilderAlias: Instantiator<Leaf>?
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Holder {
+			        let leafBuilderAlias: Instantiator<Leaf>? = safeDIOverrides.leafBuilderAlias
+			        func __safeDI_child() -> Child {
+			            func __safeDI_leafBuilder() -> Leaf {
+			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
+			            }
+			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
+			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
+			            #sourceLocation()
+			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
+			        }
+			        let child: Child = __safeDI_child()
+			        let sibling = if let safeDIBuilder = safeDIOverrides.sibling { safeDIBuilder(leafBuilderAlias) } else { Sibling(leafBuilderAlias: leafBuilderAlias) }
+			        return Holder(child: child, sibling: sibling)
+			    }
+			}
+			#endif
+			""",
+		], "Unexpected output \(output.mockFiles)")
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenTypeBuiltByNonRootMockedTypesFulfillingInstantiatorRequiresAlias() async {
-		await assertThrowsError(diagnostics: { fixtures in Self.instantiatorRequiredInsideItsOwnTreeError(fixtures) }) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					Self.mockedType(named: "Holder", isRoot: false, fulfillingProperty: .instantiator, outsideReceiver: nil),
-					Self.child(fulfillingProperty: .instantiator),
-					Self.receiver(named: "Leaf", fulfillingProperty: .instantiator, receivesAliasOnlyIfAvailable: false),
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+	mutating func mock_bindsAliasToWrapperMadeAgain_whenTypeBuiltByNonRootMockedTypesFulfillingInstantiatorRequiresAlias() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				Self.mockedType(named: "Holder", isRoot: false, fulfillingProperty: .instantiator, outsideReceiver: nil),
+				Self.child(fulfillingProperty: .instantiator),
+				Self.receiver(named: "Leaf", fulfillingProperty: .instantiator, receivesAliasOnlyIfAvailable: false),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.mockFiles == [
+			"Holder+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Holder {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            child: Child.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.child = child
+			        }
+
+			        let child: Child.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Holder {
+			        func __safeDI_child() -> Child {
+			            func __safeDI_leafBuilder() -> Leaf {
+			                let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
+			            }
+			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
+			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
+			            #sourceLocation()
+			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
+			        }
+			        let child: Child = __safeDI_child()
+			        return Holder(child: child)
+			    }
+			}
+			#endif
+			""",
+		], "Unexpected output \(output.mockFiles)")
 	}
 
 	// MARK: Tests – A provider production builds above the alias
@@ -840,7 +992,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 		#expect(output.mockFiles == [
 			"Holder+SafeDIMock.swift": generatedFileHeader + Self.expectedLazyCycleAroundAliasMock(fulfillingProperty: fulfillingProperty, withSibling: outsideReceiver == .sibling, fixtures: output.fixtures),
 		], "Unexpected output \(output.mockFiles)")
-		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder", fulfillingProperty: fulfillingProperty)
+		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
 	}
 
 	@Test
@@ -1009,7 +1161,8 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 		case .instantiator:
 			"""
 			                func __safeDI_leafBuilder() -> Leaf {
-			                    if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.leafBuilder { safeDIBuilder(nil) } else { Leaf(leafBuilderAlias: nil) }
+			                    let leafBuilderAlias: Instantiator<Leaf>? = Instantiator<Leaf>(__safeDI_leafBuilder)
+			                    return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			                }
 			                let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
 			"""
@@ -1265,12 +1418,6 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 		"""
 	}
 
-	private static func instantiatorRequiredInsideItsOwnTreeError(_ fixtures: FixturePaths) -> String {
-		"""
-		\(fixtures["Leaf.swift"]):7:5: error: Dependency cycle: @Instantiated `leafBuilder: Instantiator<Leaf>` -> @Received `leafBuilderAlias: Instantiator<Leaf>?` -> @Received `leafBuilder: Instantiator<Leaf>`. `leafBuilder: Instantiator<Leaf>` is received while it is still being instantiated. `leafBuilderAlias: Instantiator<Leaf>?` renames `leafBuilder: Instantiator<Leaf>` only if available, so a type that receives `leafBuilderAlias` without `onlyIfAvailable` must be built after `leafBuilder: Instantiator<Leaf>`. Receive `leafBuilderAlias` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `leafBuilder: Instantiator<Leaf>` cannot be built first.
-		"""
-	}
-
 	/// Expects `mockedType.mock()` to build the values `productionExpression` builds with the generated production code.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func expectMockBuildsWhatProductionBuilds(
@@ -1278,14 +1425,8 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 		output: TestOutput,
 		mockedType: String,
 		productionExpression: String,
-		fulfillingProperty: FulfillingProperty = .constant,
 		sourceLocation: SourceLocation = #_sourceLocation,
 	) async throws {
-		// Production passes a type inside `leafBuilder`'s tree that receives `leafBuilderAlias` a wrapper of `leafBuilder`'s
-		// function, since a rename of an instantiator the scope declaring it builds is that instantiator under a second label
-		// (see `ReceivedBuilderLoops`). Mock generation does not rebind a loop of instantiators yet, and passes `nil`, so
-		// the values are compared only where the alias renames a constant until it does.
-		guard fulfillingProperty == .constant else { return }
 		let fixtureFiles = Dictionary(uniqueKeysWithValues: fixture.enumerated().map { ("File\($0.offset).swift", $0.element) })
 		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: #require(output.generatedFiles)),

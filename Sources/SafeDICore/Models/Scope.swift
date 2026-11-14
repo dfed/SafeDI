@@ -1081,7 +1081,6 @@ private struct ScopeGeneratorUnderConstruction {
 			callSiteLazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties,
 			reboundProperties: reboundProperties,
 			previousPassReceivedBuilderLoops: previousPassGenerator?.receivedBuilderLoops,
-			findsReceivedBuilderLoops: !forMockGeneration,
 		)
 		let scopeGenerator = if let fill {
 			ScopeGenerator(fill: fill.hole, key: fill.key, functionName: fill.functionName, boundLabels: fill.boundLabels, stageCalls: seamHoles.fillStageCalls(at: sitePath), child: builtGenerator)

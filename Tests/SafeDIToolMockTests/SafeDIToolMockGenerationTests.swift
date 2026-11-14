@@ -7705,9 +7705,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesNilToOnlyIfAvailableReceiver_whenReceiverIsBuiltInsideInstantiatorItReceives() async throws {
-		// D, built by `cBuilder`, receives `cBuilder` only if available. The instantiator
-		// is still being built, so D gets `nil`, as in production.
+	mutating func mock_passesWrapperMadeAgainToOnlyIfAvailableReceiver_whenReceiverIsBuiltInsideInstantiatorItReceives() async throws {
+		// D, built by `cBuilder`, receives `cBuilder` only if available. `__safeDI_cBuilder` wraps itself again for its
+		// tree, so D gets an instantiator, as in production.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -7758,7 +7758,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_cBuilder() -> C {
-		            let d = if let safeDIBuilder = safeDIOverrides.cBuilder.d { safeDIBuilder(nil) } else { D(cBuilder: nil) }
+		            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+		            let d = if let safeDIBuilder = safeDIOverrides.cBuilder.d { safeDIBuilder(cBuilder) } else { D(cBuilder: cBuilder) }
 		            return if let safeDIBuilder = safeDIOverrides.cBuilder.safeDIBuilder { safeDIBuilder(d) } else { C(d: d) }
 		        }
 		        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
@@ -7771,9 +7772,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_omitsOnlyIfAvailableAliasAndPassesNil_whenReceiverIsBuiltInsideInstantiatorItAliases() async throws {
-		// D, built by `cBuilder`, aliases `cBuilder` only if available. The instantiator
-		// is still being built, so the alias is not bound and D gets `nil`, as in production.
+	mutating func mock_bindsOnlyIfAvailableAliasToWrapperMadeAgain_whenReceiverIsBuiltInsideInstantiatorItAliases() async throws {
+		// D, built by `cBuilder`, aliases `cBuilder` only if available. `__safeDI_cBuilder` wraps itself again for its
+		// tree, so the alias is bound to that wrapper, as in production.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -7824,9 +7825,10 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_cBuilder() -> C {
+		            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 		            func __safeDI_d() -> D {
 		                #sourceLocation(file: "\(output.fixtures["D.swift"])", line: 4)
-		                let renamed: Instantiator<C>? = nil
+		                let renamed: Instantiator<C>? = cBuilder
 		                #sourceLocation()
 		                return if let safeDIBuilder = safeDIOverrides.cBuilder.d { safeDIBuilder(renamed) } else { D(renamed: renamed) }
 		            }
@@ -7843,9 +7845,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesNilToOnlyIfAvailableReceiver_whenReceiverReceivesInstantiatorThatBuildsIt() async throws {
-		// C, built by `cBuilder`, receives `cBuilder` only if available. The instantiator
-		// is still being built, so C gets `nil`, as in production.
+	mutating func mock_passesWrapperMadeAgainToOnlyIfAvailableReceiver_whenReceiverReceivesInstantiatorThatBuildsIt() async throws {
+		// C, built by `cBuilder`, receives `cBuilder` only if available. `__safeDI_cBuilder` wraps itself again for its
+		// tree, so C gets an instantiator, as in production.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -7889,7 +7891,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_cBuilder() -> C {
-		            if let safeDIBuilder = safeDIOverrides.cBuilder { safeDIBuilder(nil) } else { C(cBuilder: nil) }
+		            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.cBuilder { safeDIBuilder(cBuilder) } else { C(cBuilder: cBuilder) }
 		        }
 		        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 		        return Root(cBuilder: cBuilder)
@@ -7956,9 +7959,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_omitsOnlyIfAvailableAliasAndPassesNil_whenReceiverAliasesInstantiatorThatBuildsIt() async throws {
-		// C, built by `cBuilder`, aliases `cBuilder` only if available. The instantiator
-		// is still being built, so the alias is not bound and C gets `nil`, as in production.
+	mutating func mock_bindsOnlyIfAvailableAliasToWrapperMadeAgain_whenReceiverAliasesInstantiatorThatBuildsIt() async throws {
+		// C, built by `cBuilder`, aliases `cBuilder` only if available. `__safeDI_cBuilder` wraps itself again for its
+		// tree, so the alias is bound to that wrapper, as in production.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -8002,8 +8005,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_cBuilder() -> C {
+		            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 		            #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
-		            let renamed: Instantiator<C>? = nil
+		            let renamed: Instantiator<C>? = cBuilder
 		            #sourceLocation()
 		            return if let safeDIBuilder = safeDIOverrides.cBuilder { safeDIBuilder(renamed) } else { C(renamed: renamed) }
 		        }
@@ -8017,10 +8021,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_omitsOnlyIfAvailableAliasAndPassesNil_whenReceiverAliasesPromotedInstantiatorThatBuildsIt() async throws {
-		// Screen requires `nodeBuilder`, so the mock promotes it, and the Node it builds aliases
-		// `nodeBuilder` only if available. The instantiator is still being built, so the alias is
-		// not bound and Node gets `nil`, as in production: an `onlyIfAvailable` alias closes no cycle.
+	mutating func mock_bindsOnlyIfAvailableAliasToWrapperMadeAgain_whenReceiverAliasesPromotedInstantiatorThatBuildsIt() async throws {
+		// Screen requires `nodeBuilder`, so the mock promotes it, and the Node it builds aliases `nodeBuilder` only if
+		// available. `__safeDI_nodeBuilder` wraps itself again for its tree, so the alias is bound to that wrapper.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -8064,8 +8067,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_nodeBuilder() -> Node {
+		            let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
 		            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
-		            let childBuilder: Instantiator<Node>? = nil
+		            let childBuilder: Instantiator<Node>? = nodeBuilder
 		            #sourceLocation()
 		            return if let safeDIBuilder = safeDIOverrides.nodeBuilder { safeDIBuilder(childBuilder) } else { Node(childBuilder: childBuilder) }
 		        }
@@ -8278,9 +8282,10 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesNilToOnlyIfAvailableReceiver_whenReceiverReceivesPromotedOptionalInstantiatorThatBuildsIt() async throws {
-		// Screen requires `aBuilder: Instantiator<A>?`, so the mock promotes it, and B, built inside it, receives
-		// that exact property only if available. It is still being built, so B gets `nil`.
+	mutating func mock_passesWrapperMadeAgainToOnlyIfAvailableReceiver_whenReceiverReceivesPromotedOptionalInstantiatorThatBuildsIt() async throws {
+		// Screen requires `aBuilder: Instantiator<A>?`, so the mock promotes it, and B, built inside it, receives that
+		// exact property only if available. `__safeDI_aBuilder` wraps itself again for its tree, which provides the optional
+		// form too, so B gets an instantiator.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -8331,8 +8336,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_aBuilder() -> A {
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		            func __safeDI_bBuilder() -> B {
-		                if let safeDIBuilder = safeDIOverrides.aBuilder.bBuilder { safeDIBuilder(nil) } else { B(aBuilder: nil) }
+		                if let safeDIBuilder = safeDIOverrides.aBuilder.bBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
 		            }
 		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
@@ -8571,9 +8577,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesNilToOnlyIfAvailableReceiver_whenReceiverReceivesPromotedInstantiatorThatBuildsIt() async throws {
-		// E requires `cBuilder`, which the mock promotes. C, built by `cBuilder`, receives
-		// `cBuilder` only if available and gets `nil`, because it is still being built.
+	mutating func mock_passesWrapperMadeAgainToOnlyIfAvailableReceiver_whenReceiverReceivesPromotedInstantiatorThatBuildsIt() async throws {
+		// E requires `cBuilder`, which the mock promotes. C, built by `cBuilder`, receives `cBuilder` only if available and
+		// gets the wrapper `__safeDI_cBuilder` makes again of itself.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -8617,7 +8623,8 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> E {
 		        func __safeDI_cBuilder() -> C {
-		            if let safeDIBuilder = safeDIOverrides.cBuilder { safeDIBuilder(nil) } else { C(cBuilder: nil) }
+		            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.cBuilder { safeDIBuilder(cBuilder) } else { C(cBuilder: cBuilder) }
 		        }
 		        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 		        return E(cBuilder: cBuilder)
@@ -15429,7 +15436,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesNilForOnlyIfAvailableAlias_whenAliasIsFulfilledByNonOptionalFormOfPromotedOptionalInstantiatorBeingBuilt() async throws {
+	mutating func mock_bindsOnlyIfAvailableAliasToWrapperMadeAgain_whenAliasIsFulfilledByNonOptionalFormOfPromotedOptionalInstantiatorBeingBuilt() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -15489,9 +15496,10 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_aBuilder() -> A {
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		            func __safeDI_b() -> B {
 		                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
-		                let aBuilderAlias: Instantiator<A>? = nil
+		                let aBuilderAlias: Instantiator<A>? = aBuilder
 		                #sourceLocation()
 		                return if let safeDIBuilder = safeDIOverrides.aBuilder.b { safeDIBuilder(aBuilderAlias) } else { B(aBuilderAlias: aBuilderAlias) }
 		            }

@@ -63,7 +63,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		callSiteLazilyInstantiatedInstanceProperties: Set<Property>? = nil,
 		reboundProperties: Set<Property> = [],
 		previousPassReceivedBuilderLoops: ReceivedBuilderLoops? = nil,
-		findsReceivedBuilderLoops: Bool = true,
 	) {
 		self.builtInlineSeamComment = builtInlineSeamComment
 		self.constructsWithHandWrittenMock = constructsWithHandWrittenMock
@@ -600,9 +599,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.unpassableCycleLabelsInTree = unpassableCycleLabelsInTree
 		cycleParametersChangedInTree = foundCycleParameters != builtCycleParameters
 			|| propertiesToGenerate.contains(where: \.cycleParametersChangedInTree)
-		// A scope that closes a cycle builds nothing, so its children are on no loop. A mock's tree finds none: mock emission
-		// does not rebind a loop yet, and validation rejects one in any tree a mock generates.
-		let receivedBuilderLoops = isPropertyCycle || !findsReceivedBuilderLoops
+		// A scope that closes a cycle builds nothing, so its children are on no loop.
+		let receivedBuilderLoops = isPropertyCycle
 			? ReceivedBuilderLoops()
 			: Self.receivedBuilderLoops(of: propertiesToGenerate, requiredOnlyIfAvailableAliasProperties: requiredOnlyIfAvailableAliasProperties)
 		self.receivedBuilderLoops = receivedBuilderLoops
@@ -3152,6 +3150,51 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			loops.loopByChildIndex[index] = firstMember
 		}
 		return loops
+	}
+
+	/// The indices of the children on a loop of builders (see `ReceivedBuilderLoops`) whose wrapper nothing outside their
+	/// loop reads: neither this scope's construction nor a generated child that is not on the loop. Only a mock root has any. A
+	/// production scope's children are its type's own properties, which its construction reads, while a mock root's are
+	/// also the properties it promotes, some only because the tree of a member of their loop receives them.
+	nonisolated private func loopMembersReadOnlyInsideTheirLoop() -> [Int] {
+		guard case let .root(instantiable, _) = scopeData else { return [] }
+		let siblingGraph = Self.siblingGraph(of: propertiesToGenerate, requiredOnlyIfAvailableAliasProperties: requiredOnlyIfAvailableAliasProperties)
+		// A child outside a member's loop reads the member's wrapper, and so does a rename this scope declares of it, whose
+		// binding is the wrapper under another label, inside the loop or not. Only a generated child reads: a mock root lists
+		// a property it instantiates again where a promoted scope receives it, and generates only the first child listing it.
+		let firstListingIndices = Set(siblingGraph.siblings.map(\.index))
+		var readIndices = Set<Int>()
+		for (index, dependencies) in siblingGraph.dependencies.enumerated()
+			where firstListingIndices.contains(index) || propertiesToGenerate[index].property == nil
+		{
+			for dependencyIndex in dependencies
+				where propertiesToGenerate[index].isAlias || receivedBuilderLoops.loopByChildIndex[dependencyIndex] != receivedBuilderLoops.loopByChildIndex[index]
+			{
+				readIndices.insert(dependencyIndex)
+			}
+		}
+		// The construction reads each dependency of its type that it receives or instantiates: the child of that exact
+		// property, or, where there is none, the child of its other form. A label the mock root promotes in two forms is
+		// read in the form the construction names, so the other form's wrapper is read only where its loop rebinds it.
+		let childProperties = Set(propertiesToGenerate.compactMap(\.property))
+		var constructionReadProperties = Set<Property>()
+		var constructionReadUnwrappedProperties = Set<Property>()
+		for dependency in instantiable.dependencies {
+			switch dependency.source {
+			case .received, .instantiated:
+				if childProperties.contains(dependency.property) {
+					constructionReadProperties.insert(dependency.property)
+				} else {
+					constructionReadUnwrappedProperties.insert(dependency.property.asUnwrappedProperty)
+				}
+			case .aliased, .forwarded:
+				continue
+			}
+		}
+		return receivedBuilderLoops.loopByChildIndex.keys.sorted().filter { index in
+			!readIndices.contains(index)
+				&& !(propertiesToGenerate[index].property.map { constructionReadProperties.contains($0) || constructionReadUnwrappedProperties.contains($0.asUnwrappedProperty) } ?? false)
+		}
 	}
 
 	/// The strongly connected component of each node of the graph `arrows` describes, each node's arrows by index, named by
@@ -6315,6 +6358,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Whether this node is inside a sendable scope (descendant of SendableInstantiator).
 		/// When `true`, the `safeDIBuilder` closure on `SafeDIMockConfiguration` is `@Sendable`.
 		let requiresSendable: Bool
+		/// For a member of a loop of builders among the children of the scope that holds this node (see
+		/// `ReceivedBuilderLoops`), the loop, named by the index of its first member among those children; `nil` for every
+		/// other node.
+		var loop: Int?
+		/// The `reboundProperties` of the scope this node was built from: the members of its loop that its builder function
+		/// wraps again, in the order its body first receives them.
+		var reboundProperties = [Property]()
+		/// Whether anything outside this node's loop reads the wrapper its scope binds. A member of a loop on a mock root
+		/// that only the members of its loop receive is not read outside it: the mock declares its builder function, which
+		/// the loop's wrappers hand, and no binding of its wrapper, which Swift would report unused.
+		var isReadOutsideItsLoop = true
 
 		/// The property this node builds.
 		var property: Property {
@@ -6765,6 +6819,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// For a site of a hole held in a `Sendable` wrapper, the calls of its staged builder's stages made just before the
 		/// wrapper's `@Sendable` function (`SeamHoles.stageCalls(at:)`).
 		var stageCalls = [String]()
+		/// For a rename its scope declares of a member of a loop of builders among the scope's children, which is a member
+		/// of that loop (see `ReceivedBuilderLoops`), the loop, named by the index of its first member among those children;
+		/// `nil` for every other alias.
+		var loop: Int?
+		/// The rename as its scope declares it, by which the members of its loop rebind it: `property`, unless a mock root
+		/// binds the rename under a name of its own (`renamingAliases`).
+		var declaredProperty: Property?
 	}
 
 	// MARK: OnlyIfAvailableOverride
@@ -6950,6 +7011,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		propertiesGeneratedLater: Set<Property> = [],
 	) async -> [MockTreeItem] {
 		var items = [MockTreeItem]()
+		// The loop of builders each child is on, and the members of loops on a mock root that nothing outside their loop
+		// reads (see `ReceivedBuilderLoops`). Nearly every scope holds no loop.
+		var loopByGenerator = [ObjectIdentifier: Int]()
+		var membersReadOnlyInsideTheirLoop = Set<ObjectIdentifier>()
+		if !receivedBuilderLoops.loopByChildIndex.isEmpty {
+			for (index, loop) in receivedBuilderLoops.loopByChildIndex {
+				loopByGenerator[ObjectIdentifier(propertiesToGenerate[index])] = loop
+			}
+			for index in loopMembersReadOnlyInsideTheirLoop() {
+				membersReadOnlyInsideTheirLoop.insert(ObjectIdentifier(propertiesToGenerate[index]))
+			}
+		}
 
 		// Roots only appear at the top level, never as children here — so the
 		// `.root` case is not part of the reachable pattern space and is omitted.
@@ -6981,6 +7054,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					declarationReference: declarationReference,
 					// An alias whose fulfilling property is unavailable is declared `nil`, as production declares it.
 					isBoundToNil: Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: childUnavailableProperties),
+					loop: loopByGenerator[ObjectIdentifier(childGenerator)],
 				)))
 			} else if case let .property(childInstantiable, childProperty, _, erasedToConcreteExistential, isPropertyCycle, _) = childGenerator.scopeData {
 				let isInstantiator = !childProperty.propertyType.isConstant
@@ -7065,6 +7139,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					callSiteLazilyInstantiatedInstanceProperties: childGenerator.callSiteLazilyInstantiatedInstanceProperties,
 					buildsInSendableFunction: childGenerator.buildsInSendableFunction,
 					requiresSendable: childInsideSendable,
+					loop: loopByGenerator[ObjectIdentifier(childGenerator)],
+					reboundProperties: childGenerator.reboundProperties,
+					isReadOutsideItsLoop: !membersReadOnlyInsideTheirLoop.contains(ObjectIdentifier(childGenerator)),
 				)))
 			}
 		}
@@ -7863,32 +7940,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Nearly every level holds no node of a cycle, and its nodes keep their names.
 		// A hole held in a wrapper declares a builder function too, which those scopes must not resolve to.
 		let holeSitesBuildingWrappers = items.holeSitesBuildingWrappers
+		func builderFunctionCandidates() -> [BuilderFunctionCandidate] {
+			propertyNodes.map { node in
+				let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
+				return BuilderFunctionCandidate(
+					property: node.property,
+					declaration: BuiltDeclaration(property: node.property, concreteType: node.concreteType),
+					name: disambiguated == node.propertyLabel ? nil : Self.functionName(toBuildPropertyNamed: disambiguated),
+					declaresFunction: !node.isPropertyCycle,
+					cycleClosedOnDeclarations: node.cycleClosedOnDeclarations,
+					isReferencedByCycleClosingScope: node.isReferencedByCycleClosingScope,
+					referencedFillNames: node.referencedFillNames,
+				)
+			} + holeSitesBuildingWrappers.map { alias in
+				BuilderFunctionCandidate(
+					property: alias.property,
+					declaration: BuiltDeclaration(property: alias.property, concreteType: alias.property.typeDescription.asInstantiatedType),
+					name: nil,
+					declaresFunction: true,
+					cycleClosedOnDeclarations: [],
+					isReferencedByCycleClosingScope: false,
+					referencedFillNames: [],
+				)
+			}
+		}
 		let builderFunctionNamesByNode = propertyNodes.contains(where: { !$0.cycleClosedOnDeclarations.isEmpty || $0.isReferencedByCycleClosingScope })
-			? builderFunctionNames(
-				for: propertyNodes.map { node in
-					let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
-					return BuilderFunctionCandidate(
-						property: node.property,
-						declaration: BuiltDeclaration(property: node.property, concreteType: node.concreteType),
-						name: disambiguated == node.propertyLabel ? nil : Self.functionName(toBuildPropertyNamed: disambiguated),
-						declaresFunction: !node.isPropertyCycle,
-						cycleClosedOnDeclarations: node.cycleClosedOnDeclarations,
-						isReferencedByCycleClosingScope: node.isReferencedByCycleClosingScope,
-						referencedFillNames: node.referencedFillNames,
-					)
-				} + holeSitesBuildingWrappers.map { alias in
-					BuilderFunctionCandidate(
-						property: alias.property,
-						declaration: BuiltDeclaration(property: alias.property, concreteType: alias.property.typeDescription.asInstantiatedType),
-						name: nil,
-						declaresFunction: true,
-						cycleClosedOnDeclarations: [],
-						isReferencedByCycleClosingScope: false,
-						referencedFillNames: [],
-					)
-				},
-				enclosingFunctionNames: enclosingFunctionNames,
-			)
+			? builderFunctionNames(for: builderFunctionCandidates(), enclosingFunctionNames: enclosingFunctionNames)
 			: nil
 		var propertyNodeIndex = 0
 		var holeSiteBuildingWrapperIndex = 0
@@ -7900,7 +7977,57 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var combinedDisambiguationMap = flatParameterDisambiguationMap
 		mergeSiblingDisambiguations(into: &combinedDisambiguationMap, for: propertyNodes, labelMap: labelMap)
 
+		/// The name of the builder function of the property node at `nodeIndex` among `propertyNodes`, `node`, whose binding
+		/// is named `bindingName`: the function a cycle-closing node refers to, or the one any other declares.
+		func functionName(ofNodeAt nodeIndex: Int, _ node: MockParameterNode, bindingName: String) -> String {
+			let builderFunctionNames = builderFunctionNamesByNode?[nodeIndex] ?? BuilderFunctionNames()
+			return if node.isPropertyCycle {
+				node.closedOnDeclaration.flatMap { builderFunctionNames.enclosingFunctionNames[$0] } ?? Self.functionName(toBuild: node.property)
+			} else {
+				builderFunctionNames.functionName ?? Self.functionName(toBuildPropertyNamed: bindingName)
+			}
+		}
+		let loopMembers = loopMemberEmissions(
+			of: items,
+			propertyNodes: propertyNodes,
+			bindingName: { disambiguatedLabel(for: $0, labelMap: labelMap) },
+			functionName: functionName(ofNodeAt:_:bindingName:),
+			// The level's other functions in scope: the enclosing functions and fills a node beneath refers to by name, and
+			// the functions of the holes the level builds in wrappers.
+			otherNamesInScope: {
+				functionNamesReferenced(beneath: builderFunctionCandidates(), enclosingFunctionNames: enclosingFunctionNames)
+					.union(holeSitesBuildingWrappers.indices.map { builderFunctionNamesByNode?[propertyNodes.count + $0].functionName ?? Self.functionName(toBuild: holeSitesBuildingWrappers[$0].property) })
+			},
+			publicMock: publicMock,
+			indent: "\(indent)\(standardIndent)",
+		)
+		// The members of the loop of builders being emitted, which are emitted as one unit when it ends (see
+		// `InstantiatorBindingLines`). The members of a loop are consecutive items.
+		var loopUnit: (loop: Int, lines: InstantiatorBindingLines)?
+		func appendToLoopUnit(_ loop: Int, _ memberLines: InstantiatorBindingLines) {
+			var unitLines = loopUnit?.lines ?? InstantiatorBindingLines()
+			unitLines.prelude.append(contentsOf: memberLines.prelude)
+			unitLines.function.append(contentsOf: memberLines.function)
+			unitLines.binding.append(contentsOf: memberLines.binding)
+			loopUnit = (loop, unitLines)
+		}
+		func emitLoopUnit() {
+			if let loopUnit {
+				lines.append(contentsOf: loopUnit.lines.all)
+			}
+			loopUnit = nil
+		}
+
 		for item in items {
+			let itemLoop = switch item {
+			case let .alias(alias):
+				alias.loop
+			case let .property(node):
+				node.loop
+			}
+			if itemLoop != loopUnit?.loop {
+				emitLoopUnit()
+			}
 			switch item {
 			case let .alias(alias):
 				var holeFunctionName: String?
@@ -7908,13 +8035,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					holeFunctionName = builderFunctionNamesByNode?[propertyNodes.count + holeSiteBuildingWrapperIndex].functionName
 					holeSiteBuildingWrapperIndex += 1
 				}
-				lines.append(emitAliasBinding(
+				let aliasBinding = emitAliasBinding(
 					alias,
 					holeFunctionName: holeFunctionName,
 					flatParameterDisambiguationMap: combinedDisambiguationMap,
 					lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
 					indent: indent,
-				))
+				)
+				if let loop = alias.loop {
+					appendToLoopUnit(loop, InstantiatorBindingLines(binding: [aliasBinding]))
+				} else {
+					lines.append(aliasBinding)
+				}
 			case let .property(node):
 				// A call that fills builders is made in a builder function of its own, which declares the fills and names
 				// the guard first, as a seam call's function does (`callPreamble(of:indent:)`); any other call names the
@@ -7947,11 +8079,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// by `emitReceiverBindings` inside the consumer's wrapper.
 				let outerBindingName = disambiguated
 				// A cycle-closing node declares no function: it refers to the enclosing one of the declaration it repeats.
-				let functionName = if node.isPropertyCycle {
-					node.closedOnDeclaration.flatMap { builderFunctionNames.enclosingFunctionNames[$0] } ?? Self.functionName(toBuild: node.property)
-				} else {
-					builderFunctionNames.functionName ?? Self.functionName(toBuildPropertyNamed: disambiguated)
-				}
+				let functionName = functionName(ofNodeAt: propertyNodeIndex - 1, node, bindingName: disambiguated)
 
 				let relativePath = nodePath
 					.replacingOccurrences(of: "\(ReservedName.mockOverridesParameterName).", with: "")
@@ -8021,7 +8149,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// code which builds the entire subtree inside the builder function.
 					var childAncestors = ancestorTypes
 					childAncestors.insert(nodeTypeKey)
-					await lines.append(contentsOf: generateInstantiatorBinding(
+					let loopMemberEmission = loopMembers?.emission(of: node, atPropertyNodeIndex: propertyNodeIndex - 1, functionName: functionName, flatParameterDisambiguationMap: flatParameterDisambiguationMap, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)
+					let bindingLines = await generateInstantiatorBinding(
 						for: node,
 						outerBindingName: outerBindingName,
 						functionName: functionName,
@@ -8044,7 +8173,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						publicMock: publicMock,
 						promotedParameterName: promotedParameterName,
 						publicMockOverridesIsSendableClosure: publicMockOverridesIsSendableClosure,
-					))
+						loopMemberEmission: loopMemberEmission,
+					)
+					if let loop = node.loop {
+						appendToLoopUnit(loop, bindingLines)
+					} else {
+						lines.append(contentsOf: bindingLines.all)
+					}
 				} else if node.isPropertyCycle {
 					// A constant that closes a cycle declares no function: it calls the function of the declaration it
 					// repeats with that function's cycle parameters. It reads no override of its own (`isCycleNode`); the
@@ -8199,6 +8334,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
+		emitLoopUnit()
 		return lines
 	}
 
@@ -8283,6 +8419,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fulfillingPropertyIsLazilyInstantiatedInstance: alias.fulfillingPropertyIsLazilyInstantiatedInstance,
 				declarationReference: alias.declarationReference,
 				isBoundToNil: alias.isBoundToNil,
+				loop: alias.loop,
+				declaredProperty: alias.declaredProperty ?? alias.property,
 			))
 		}
 		return (renamedItems, bindingNames)
@@ -8502,6 +8640,250 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return lines
 	}
 
+	/// What a member of a loop of builders among the items of one level of a mock emits beyond what any other instantiator
+	/// node emits (see `ReceivedBuilderLoops`).
+	struct LoopMemberEmission {
+		/// The lines that start the member's builder function: the wrappers of the members of its loop that its tree
+		/// receives, made again.
+		let rebindingLines: [String]
+		/// For a member whose builder function takes parameters a lazy cycle needs, or that closes a cycle on such a
+		/// function, the function of no such parameters that every wrapper of the member hands, which passes them what the
+		/// level binds: its name and the lines that declare it.
+		let receivedFunction: (name: String, lines: [String])?
+		/// Whether the level binds the member's wrapper (see `MockParameterNode.isReadOutsideItsLoop`).
+		let declaresBinding: Bool
+	}
+
+	/// The members of the loops of builders among the items of one level of a mock (see `ReceivedBuilderLoops`).
+	struct LoopMemberEmissions {
+		/// For each loop, the declaration with which a member of the loop wraps each member again, by the member's property:
+		/// the name the declaration binds, the level's name of the member's wrapper, and the declaration, indented as the
+		/// body of a builder function declared at the level.
+		let declarationsByLoop: [Int: [Property: (bindingName: String, declaration: String)]]
+		/// The function of no parameters a lazy cycle needs that every wrapper of each member hands, by the member's index
+		/// among the level's property nodes, for a member whose builder function takes such parameters.
+		let receivedFunctionNameByNodeIndex: [Int: String]
+		/// The indent of the body of a builder function declared at the level.
+		let indent: String
+		/// The emission of the public mock the level is in, if any.
+		let publicMock: PublicMockEmission?
+
+		/// What `node`, the property node at `nodeIndex` among the level's property nodes, emits as a member of a loop,
+		/// whose builder function is named `functionName`, or `nil` when it is on no loop.
+		func emission(
+			of node: MockParameterNode,
+			atPropertyNodeIndex nodeIndex: Int,
+			functionName: String,
+			flatParameterDisambiguationMap: [String: [TypeDescription: String]],
+			lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
+		) -> LoopMemberEmission? {
+			guard let loop = node.loop else { return nil }
+			let declarations = declarationsByLoop[loop, default: [:]]
+			let forwardedProperties = node.forwardedProperties.sorted()
+			let rebindingLines = node.reboundProperties.compactMap { reboundProperty -> String? in
+				if reboundProperty == node.property, !node.isPropertyCycle, !node.cycleParameters.isEmpty, let bindingName = declarations[reboundProperty]?.bindingName {
+					// The function's own wrapper is made again with the function's own parameters: where a cycle-closing scope
+					// builds the tree again, they are that scope's.
+					ScopeGenerator.loopMemberDeclaration(
+						of: node,
+						bindingName: bindingName,
+						handing: functionName,
+						forwardedArguments: ScopeGenerator.mockForwardedArguments(of: forwardedProperties) + node.cycleParameters.map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.label)" },
+						publicMock: publicMock,
+						indent: indent,
+					)
+				} else {
+					declarations[reboundProperty]?.declaration
+				}
+			}
+			var receivedFunction: (name: String, lines: [String])?
+			if let receivedFunctionName = receivedFunctionNameByNodeIndex[nodeIndex] {
+				var memberLines = [String]()
+				let cycleArguments = zip(
+					node.cycleParameters,
+					ScopeGenerator.mockCycleParameterArguments(for: node, flatParameterDisambiguationMap: flatParameterDisambiguationMap, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames),
+				).map { parameter, argument in
+					// A level declares each label once, so at most one of the two forms is a member.
+					let unwrappedProperty = parameter.property.asUnwrappedProperty
+					if let member = declarations[unwrappedProperty] ?? declarations[unwrappedProperty.asOptionalProperty] {
+						memberLines.append(member.declaration)
+						return "\(parameter.property.label.spelledAsArgumentLabel): \(member.bindingName)"
+					} else {
+						return argument
+					}
+				}
+				let functionParameters = forwardedProperties.isEmpty
+					? ""
+					: forwardedProperties.initializerFunctionParameters(amongTypesDeclaredEscaping: node.typesDeclaredEscaping).map(\.description).joined()
+				let callArguments = (forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments).joined(separator: ", ")
+				let functionIndent = String(indent.dropLast(ScopeGenerator.standardIndent.count))
+				let decorator = node.buildsInSendableFunction || node.property.propertyType.isSendable ? "@Sendable " : ""
+				var lines = ["\(functionIndent)\(decorator)func \(receivedFunctionName)(\(functionParameters)) -> \(node.instantiatedTypeDescription.asSource) {"]
+				lines.append(contentsOf: memberLines)
+				lines.append("\(indent)\(memberLines.isEmpty ? "" : "return ")\(functionName)(\(callArguments))")
+				lines.append("\(functionIndent)}")
+				receivedFunction = (name: receivedFunctionName, lines: lines)
+			}
+			return LoopMemberEmission(rebindingLines: rebindingLines, receivedFunction: receivedFunction, declaresBinding: node.isReadOutsideItsLoop)
+		}
+	}
+
+	/// The members of the loops of builders among `items`, the items of one level of a mock, whose property nodes are
+	/// `propertyNodes`, each bound under `bindingName` and built by the function `functionName` names (see
+	/// `ReceivedBuilderLoops`), or `nil` when no item is on a loop, as at nearly every level. A member whose builder
+	/// function takes parameters a lazy cycle needs is wrapped through a function of no such parameters,
+	/// `__safeDI_<label>_received`, named apart from every name in scope where it is declared or read, as production names
+	/// it (see `namesReceivedFunctionsAvoid`): the level's builder functions, `otherNamesInScope`, and the builder
+	/// functions, and their `_received` names, that each member's level declares, where its rebindings read it.
+	/// - Parameters:
+	///   - otherNamesInScope: The names in scope at the level that are not its property nodes' functions.
+	///   - indent: The indent of the body of a builder function declared at the level.
+	private static func loopMemberEmissions(
+		of items: [MockTreeItem],
+		propertyNodes: [MockParameterNode],
+		bindingName: (MockParameterNode) -> String,
+		functionName: (Int, MockParameterNode, String) -> String,
+		otherNamesInScope: () -> Set<String>,
+		publicMock: PublicMockEmission?,
+		indent: String,
+	) -> LoopMemberEmissions? {
+		let containsLoop = items.contains { item in
+			switch item {
+			case let .property(node):
+				node.loop != nil
+			case let .alias(alias):
+				alias.loop != nil
+			}
+		}
+		guard containsLoop else { return nil }
+		var namesInScope = otherNamesInScope()
+		for (nodeIndex, node) in propertyNodes.enumerated() where !node.isPropertyCycle {
+			namesInScope.insert(functionName(nodeIndex, node, bindingName(node)))
+		}
+		for member in propertyNodes where member.loop != nil {
+			let memberLevelNodes = member.children.propertyNodes
+			let memberLevelLabelMap = disambiguatePropertyLabels(for: memberLevelNodes)
+			for node in memberLevelNodes where !node.isPropertyCycle {
+				let memberLevelFunctionName = Self.functionName(toBuildPropertyNamed: disambiguatedLabel(for: node, labelMap: memberLevelLabelMap))
+				namesInScope.insert(memberLevelFunctionName)
+				namesInScope.insert(ReservedName.receivedBuilderFunctionName(of: memberLevelFunctionName))
+			}
+		}
+		var names = GeneratedNameAllocator(reserving: namesInScope)
+		var declarationsByLoop = [Int: [Property: (bindingName: String, declaration: String)]]()
+		var receivedFunctionNameByNodeIndex = [Int: String]()
+		var memberByProperty = [Property: (node: MockParameterNode, functionName: String)]()
+		for (nodeIndex, node) in propertyNodes.enumerated() {
+			guard let loop = node.loop else { continue }
+			let nodeBindingName = bindingName(node)
+			var memberFunctionName = functionName(nodeIndex, node, nodeBindingName)
+			if !node.cycleParameters.isEmpty {
+				memberFunctionName = names.claim(ReservedName.receivedBuilderFunctionName(of: memberFunctionName))
+				receivedFunctionNameByNodeIndex[nodeIndex] = memberFunctionName
+			}
+			declarationsByLoop[loop, default: [:]][node.property] = (
+				bindingName: nodeBindingName,
+				declaration: loopMemberDeclaration(
+					of: node,
+					bindingName: nodeBindingName,
+					handing: memberFunctionName,
+					forwardedArguments: mockForwardedArguments(of: node.forwardedProperties.sorted()),
+					publicMock: publicMock,
+					indent: indent,
+				),
+			)
+			memberByProperty[node.property] = (node, memberFunctionName)
+		}
+		// A rename the level declares of a member is wrapped again under its own label, wrapping the member's function.
+		for case let .alias(alias) in items {
+			guard let loop = alias.loop,
+			      let member = memberByProperty[Property(label: alias.fulfillingLabel, typeDescription: alias.fulfillingTypeDescription)]
+			else { continue }
+			declarationsByLoop[loop, default: [:]][alias.declaredProperty ?? alias.property] = (
+				bindingName: alias.property.label,
+				declaration: indent + aliasDeclaration(
+					of: alias.property,
+					fulfilledBy: mockInstantiatorConstruction(
+						of: member.node.typeDescription,
+						handing: member.functionName,
+						forwardedArguments: mockForwardedArguments(of: member.node.forwardedProperties.sorted()).joined(separator: ", "),
+						indent: indent,
+					),
+					ofType: member.node.typeDescription,
+					erasedToConcreteExistential: false,
+					fulfillingValueMayBeOptional: false,
+				),
+			)
+		}
+		return LoopMemberEmissions(
+			declarationsByLoop: declarationsByLoop,
+			receivedFunctionNameByNodeIndex: receivedFunctionNameByNodeIndex,
+			indent: indent,
+			publicMock: publicMock,
+		)
+	}
+
+	/// The declaration, indented by `indent`, that binds `node`'s wrapper as `bindingName`, handing it the function named
+	/// `functionName` called with `forwardedArguments`: in a public mock that takes the wrapper, the value its caller
+	/// passed, if any.
+	private static func loopMemberDeclaration(
+		of node: MockParameterNode,
+		bindingName: String,
+		handing functionName: String,
+		forwardedArguments: [String],
+		publicMock: PublicMockEmission?,
+		indent: String,
+	) -> String {
+		let unwrappedType = node.typeDescription.unwrapped
+		let binding = unwrappedType.isConstructedByAnnotation ? "\(bindingName): \(unwrappedType.asSource)" : bindingName
+		let construction = mockInstantiatorConstruction(
+			of: node.typeDescription,
+			handing: functionName,
+			forwardedArguments: forwardedArguments.joined(separator: ", "),
+			indent: indent,
+		)
+		return if let promotedParameterName = publicMock?.promotedParameterNames[node.property] {
+			"\(indent)let \(binding) = \(passing(promotedParameterName, orBuilding: construction))"
+		} else {
+			"\(indent)let \(binding) = \(construction)"
+		}
+	}
+
+	/// A wrapper of `typeDescription` that hands the function named `functionName`, called with `forwardedArguments`: the
+	/// function itself when it takes no arguments, and otherwise a closure, whose lines after the first are indented by
+	/// `indent`, that calls it.
+	private static func mockInstantiatorConstruction(
+		of typeDescription: TypeDescription,
+		handing functionName: String,
+		forwardedArguments: String,
+		indent: String,
+	) -> String {
+		let unwrappedTypeDescription = typeDescription.unwrapped.spelledForConstruction
+		return if forwardedArguments.isEmpty {
+			"\(unwrappedTypeDescription)(\(functionName))"
+		} else {
+			"""
+			\(unwrappedTypeDescription) {
+			\(indent)\(standardIndent)\(functionName)(\(forwardedArguments))
+			\(indent)}
+			"""
+		}
+	}
+
+	/// The arguments a wrapper's closure passes the builder function of a type whose `@Forwarded` properties are
+	/// `forwardedProperties`, in their order, from its argument: the argument itself for one property, and its elements by
+	/// label for several.
+	private static func mockForwardedArguments(of forwardedProperties: [Property]) -> [String] {
+		let forwardedPropertiesHaveLabels = forwardedProperties.count > 1
+		return forwardedProperties.map {
+			if forwardedPropertiesHaveLabels {
+				"\($0.label.spelledAsArgumentLabel): $0.\($0.label)"
+			} else {
+				"\($0.label.spelledAsArgumentLabel): $0"
+			}
+		}
+	}
+
 	private static func generateInstantiatorBinding(
 		for node: MockParameterNode,
 		outerBindingName: String,
@@ -8525,7 +8907,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		publicMock: PublicMockEmission? = nil,
 		promotedParameterName: String? = nil,
 		publicMockOverridesIsSendableClosure: Bool,
-	) async -> [String] {
+		loopMemberEmission: LoopMemberEmission? = nil,
+	) async -> InstantiatorBindingLines {
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let innerIndent = "\(indent)\(standardIndent)"
 		// The parameters of the builder function a lazy cycle closes on, when this node declares it.
@@ -8569,20 +8952,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Build the forwarded arguments for the Instantiator closure call, followed by the bindings in scope here of the
 		// labels the function a lazy cycle closes on takes.
-		let forwardedPropertiesHaveLabels = forwardedProperties.count > 1
-		let forwardedArguments = (
-			forwardedProperties.map {
-				if forwardedPropertiesHaveLabels {
-					"\($0.label.spelledAsArgumentLabel): $0.\($0.label)"
-				} else {
-					"\($0.label.spelledAsArgumentLabel): $0"
-				}
-			} + mockCycleParameterArguments(
+		// A member of a loop of builders whose function takes parameters a lazy cycle needs is wrapped through a function
+		// that passes them (see `LoopMemberEmission.receivedFunction`).
+		var forwardedArgumentList = mockForwardedArguments(of: forwardedProperties)
+		if loopMemberEmission?.receivedFunction == nil {
+			forwardedArgumentList.append(contentsOf: mockCycleParameterArguments(
 				for: node,
 				flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 				lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
-			),
-		).joined(separator: ", ")
+			))
+		}
+		let forwardedArguments = forwardedArgumentList.joined(separator: ", ")
 
 		let functionDecorator = if node.buildsInSendableFunction {
 			"@Sendable "
@@ -8590,7 +8970,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			""
 		}
 
-		var lines = [String]()
+		var lines = InstantiatorBindingLines()
 
 		// Emit the inner builder function (unless it's a property cycle).
 		// Children are generated INSIDE the function body because they may
@@ -8657,7 +9037,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					startedSendableOverrideExtractor.extract($0, localNameSuffix: ReservedName.configurationBuilderPropertyName)
 				}
 				for extraction in startedSendableOverrideExtractor.extractions {
-					lines.append("\(indent)let \(extraction.localName) = \(extraction.expression)")
+					lines.prelude.append("\(indent)let \(extraction.localName) = \(extraction.expression)")
 				}
 			} else {
 				functionOverrideExpression = overrideExpression
@@ -8669,21 +9049,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let functionReturnType = node.instantiatedTypeDescription.asSource
 			// The stage calls of a public mock's staged builders whose next stage starts in this function, made before it.
 			for stageCall in node.stageCalls {
-				lines.append("\(indent)\(stageCall)")
+				lines.prelude.append("\(indent)\(stageCall)")
 			}
-			lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
+			lines.function.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
+			// A member of a loop of builders first wraps again the functions of the members its tree receives inside the
+			// loop, so each receiver beneath reads a wrapper this call made.
+			let rebindingLines = loopMemberEmission?.rebindingLines ?? []
+			lines.function.append(contentsOf: rebindingLines)
 			let preamble = await callPreamble(of: node, indent: innerIndent)
-			lines.append(contentsOf: preamble)
-			lines.append(contentsOf: receiverBindings)
-			lines.append(contentsOf: sendableAutoclosureBindings)
-			lines.append(contentsOf: childBindings)
+			lines.function.append(contentsOf: preamble)
+			lines.function.append(contentsOf: receiverBindings)
+			lines.function.append(contentsOf: sendableAutoclosureBindings)
+			lines.function.append(contentsOf: childBindings)
 
 			// Swift's implicit-return rule only applies when the function
 			// body is a single expression. Fills, receiver bindings, autoclosure
 			// bindings, and child bindings all add extra statements, so any
 			// one forces an explicit `return`. The function's return type
 			// gives both branches of an `if` expression a contextual type.
-			let returnKeyword = preamble.isEmpty && childBindings.isEmpty && receiverBindings.isEmpty && sendableAutoclosureBindings.isEmpty ? "" : "return "
+			let returnKeyword = rebindingLines.isEmpty && preamble.isEmpty && childBindings.isEmpty && receiverBindings.isEmpty && sendableAutoclosureBindings.isEmpty ? "" : "return "
 			let builtConstructionExpression = mockConstructionExpression(
 				for: node,
 				overrideExpression: functionOverrideExpression,
@@ -8701,8 +9085,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				builtConstructionExpression
 			}
-			lines.append("\(innerIndent)\(returnKeyword)\(constructionExpression)")
-			lines.append("\(indent)}")
+			lines.function.append("\(innerIndent)\(returnKeyword)\(constructionExpression)")
+			lines.function.append("\(indent)}")
+		}
+		if let receivedFunction = loopMemberEmission?.receivedFunction {
+			lines.function.append(contentsOf: receivedFunction.lines)
 		}
 
 		// Emit the Instantiator/ErasedInstantiator construction.
@@ -8718,24 +9105,46 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			\(indent)\(standardIndent)\(passing(promotedParameterName, orBuilding: "\(functionName)(\(forwardedArguments))"))
 			\(indent)}
 			"""
-		} else if forwardedArguments.isEmpty {
-			"\(unwrappedTypeDescription)(\(functionName))"
 		} else {
-			"""
-			\(unwrappedTypeDescription) {
-			\(indent)\(standardIndent)\(functionName)(\(forwardedArguments))
-			\(indent)}
-			"""
+			mockInstantiatorConstruction(
+				of: node.typeDescription,
+				handing: loopMemberEmission?.receivedFunction?.name ?? functionName,
+				forwardedArguments: forwardedArguments,
+				indent: indent,
+			)
 		}
 
-		if let promotedParameterName, !node.property.propertyType.isLazilyInstantiated {
+		if loopMemberEmission?.declaresBinding == false {
+			// Only the wrappers its loop makes again hand the member's function.
+		} else if let promotedParameterName, !node.property.propertyType.isLazilyInstantiated {
 			// A public mock takes an instantiator it builds for a received dependency as itself.
-			lines.append("\(indent)let \(outerBinding) = \(passing(promotedParameterName, orBuilding: instantiatorConstruction))")
+			lines.binding.append("\(indent)let \(outerBinding) = \(passing(promotedParameterName, orBuilding: instantiatorConstruction))")
 		} else {
-			lines.append("\(indent)let \(outerBinding) = \(instantiatorConstruction)")
+			lines.binding.append("\(indent)let \(outerBinding) = \(instantiatorConstruction)")
 		}
 
 		return lines
+	}
+
+	/// The lines `generateInstantiatorBinding` emits for one instantiator node, in the order they are emitted, in three
+	/// parts, so that the members of a loop of builders (see `ReceivedBuilderLoops`) are emitted as a unit: every
+	/// member's `prelude`, then every member's `function`, then every member's `binding`. A member's function names the
+	/// functions of the others, so everything they capture, the prelude's locals among them, must be declared before
+	/// any of the unit's wrappers is made; and in a public mock a function that wraps a member again reads the value the
+	/// caller passed for it by the name of the member's binding, which a binding declared before the function would hide.
+	struct InstantiatorBindingLines {
+		/// The locals the function reads that an enclosing `@Sendable` function cannot capture from `safeDIOverrides`, and
+		/// the stage calls made before the function.
+		var prelude = [String]()
+		/// The node's builder function, and the function of no parameters a lazy cycle needs that its wrapper hands.
+		var function = [String]()
+		/// The binding of the node's wrapper.
+		var binding = [String]()
+
+		/// Every line, in the order a node on no loop emits them.
+		var all: [String] {
+			prelude + function + binding
+		}
 	}
 
 	/// The arguments a mock passes the construction of `node`: those of its construction function in a public mock,
