@@ -57,6 +57,7 @@ extension DependencyTreeGenerator {
 			let stageBoundaries: [SeamSignature.Hole.StageBoundary]
 			let uncarriedDeclarations: [SeamSignature.Hole.UncarriedDeclaration]
 			let cycleReentryDeclarations: [SeamSignature.Hole.CycleReentryDeclaration]
+			let levels: [SeamPlaceLevels.Level]
 		}
 		var declarationsBetweenByClosedOnScope = [ObjectIdentifier: [DeclarationBetween]]()
 		let siteContents = sites.compactMap { site -> SiteContent? in
@@ -78,7 +79,22 @@ extension DependencyTreeGenerator {
 				stageBoundaries: content.stageBoundaries,
 				uncarriedDeclarations: content.uncarriedDeclarations,
 				cycleReentryDeclarations: content.cycleReentryDeclarations,
+				levels: content.levels,
 			)
+		}
+		// The levels of each place, beside its fields, for the tests and the graph fuzzer: generated code reads none yet.
+		if let observer = SeamPlaceLevels.observer {
+			observer(SeamPlaceLevels(
+				seamType: seam.concreteInstantiable,
+				places: siteContents.map { content in
+					SeamPlaceLevels.Place(
+						sitePath: content.site.sitePath,
+						levels: content.levels,
+						fields: content.stages.joined().map(\.property),
+						uncarriedProperties: content.uncarriedDeclarations.map(\.property),
+					)
+				},
+			))
 		}
 
 		// Names. A builder is labeled `<label>Builder`; holes whose labels collide with one another or with a parameter
@@ -545,6 +561,8 @@ extension DependencyTreeGenerator {
 		/// The position on the site's path of the scope that declares it, or whose builder function takes it as a parameter, or
 		/// `-1` for a parameter of the seam.
 		var frameLevel = -1
+		/// Whether it is a parameter of the builder function of the scope at `frameLevel` that a lazy cycle closes on.
+		var isCycleParameter = false
 	}
 
 	/// The fields of `site`'s scope struct, by stage, the path lengths at which its stages start, the declarations on its
@@ -559,7 +577,7 @@ extension DependencyTreeGenerator {
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
 		declarationsBetweenByClosedOnScope: inout [ObjectIdentifier: [DeclarationBetween]],
-	) -> (stages: [[SeamSignature.Hole.Field]], stageBoundaries: [SeamSignature.Hole.StageBoundary], uncarriedDeclarations: [SeamSignature.Hole.UncarriedDeclaration], cycleReentryDeclarations: [SeamSignature.Hole.CycleReentryDeclaration]) {
+	) -> (stages: [[SeamSignature.Hole.Field]], stageBoundaries: [SeamSignature.Hole.StageBoundary], uncarriedDeclarations: [SeamSignature.Hole.UncarriedDeclaration], cycleReentryDeclarations: [SeamSignature.Hole.CycleReentryDeclaration], levels: [SeamPlaceLevels.Level]) {
 		// A field is as visible as the narrowest type it names, which the declarations of the seam's module and of the
 		// module of the type that declares the value prove, capped at the seam's type.
 		func access(of property: Property, declaredBy declaringModuleName: String?) -> (level: AccessLevel, cause: TypeAccessProof.Cause?) {
@@ -569,12 +587,24 @@ extension DependencyTreeGenerator {
 		// The nearest declaration of each label, and the order in which the labels are bound.
 		var nearestDeclarations = [String: PathDeclaration]()
 		var labelsInBindingOrder = [String]()
+		// Beside them, what each scope on the path declares, the level it holds, outermost first: the seam's root's starts
+		// with the parameters.
+		var levels = [SeamPlaceLevels.Level]()
+		var levelDeclarations = [SeamPlaceLevels.Level.Declaration]()
 		func declare(_ declaration: PathDeclaration) {
 			let label = declaration.property.label
 			if nearestDeclarations.updateValue(declaration, forKey: label) != nil {
 				labelsInBindingOrder.removeAll { $0 == label }
 			}
 			labelsInBindingOrder.append(label)
+			var levelDeclaration = SeamPlaceLevels.Level.Declaration(property: declaration.property, isBoundBeforeNextProperty: declaration.isBoundBeforeSite)
+			levelDeclaration.isCycleParameter = declaration.isCycleParameter
+			levelDeclarations.append(levelDeclaration)
+		}
+		var isInFill = false
+		func endLevel(builtType: TypeDescription?, nextProperty: Property?) {
+			levels.append(SeamPlaceLevels.Level(builtType: builtType, nextProperty: nextProperty, isInFill: isInFill, declarations: levelDeclarations))
+			levelDeclarations = []
 		}
 		for parameter in parameters {
 			// A pass-through is declared, as far as a fill's reader is told, by the first type in the tree that receives it.
@@ -615,6 +645,7 @@ extension DependencyTreeGenerator {
 			if let filledHole = frame.generator.fillHole {
 				// The only property a fill builds is its hole's.
 				childDeclaringType = filledHole.ownerType
+				isInFill = true
 				for uncarriedDeclaration in filledHole.uncarriedDeclarations {
 					var pathDeclaration = PathDeclaration(
 						property: uncarriedDeclaration.property,
@@ -655,6 +686,7 @@ extension DependencyTreeGenerator {
 						))
 					}
 				}
+				endLevel(builtType: nil, nextProperty: frame.orderedChildren[frame.nextPosition - 1].generator.property)
 				continue
 			}
 			guard let instantiable = frame.generator.builtInstantiable else { continue }
@@ -713,7 +745,7 @@ extension DependencyTreeGenerator {
 				}
 				for (parameter, receivingType) in parametersWithReceivingType {
 					let parameterAccess = access(of: parameter.property, declaredBy: instantiables[receivingType]?.moduleName)
-					declare(PathDeclaration(
+					var parameterDeclaration = PathDeclaration(
 						property: parameter.property,
 						isBoundBeforeSite: true,
 						stage: stage,
@@ -723,12 +755,14 @@ extension DependencyTreeGenerator {
 						declarationLocation: parameter.receiver.declarationLocation,
 						parameterTakingType: instantiable.concreteInstantiable,
 						frameLevel: level,
-					))
+					)
+					parameterDeclaration.isCycleParameter = true
+					declare(parameterDeclaration)
 				}
 			}
 			let pathPosition = frame.nextPosition - 1
 			let pathProperty = frame.orderedChildren[pathPosition].generator.property
-			let carrierProperties = frame.orderedChildren.compactMap { $0.generator.containsBuildSite ? $0.generator.property : nil }
+			let carrierProperties = frame.orderedChildren.compactMap { frame.generator.startsAsCarrier($0.generator) ? $0.generator.property : nil }
 			for (position, child) in frame.orderedChildren.enumerated() {
 				guard let property = child.generator.property else { continue }
 				// An `onlyIfAvailable` alias is bound, to `nil` where its fulfilling property is unavailable, as every other
@@ -751,6 +785,7 @@ extension DependencyTreeGenerator {
 				declare(pathDeclaration)
 			}
 			loopDeclaringInstantiable = instantiable
+			endLevel(builtType: instantiable.concreteInstantiable, nextProperty: pathProperty)
 		}
 		// A `Sendable` wrapper the seam builds around the builder is built in a `@Sendable` function of its own, which starts
 		// the last stage: what that function calls is a `@Sendable` function, and it carries nothing.
@@ -813,7 +848,7 @@ extension DependencyTreeGenerator {
 				))
 			}
 		}
-		return (stages, stageBoundaries, uncarriedDeclarations, cycleReentryDeclarations)
+		return (stages, stageBoundaries, uncarriedDeclarations, cycleReentryDeclarations, levels.reversed())
 	}
 
 	/// A declaration between the builder function of a scope a cycle closes on and a cycle-closing scope that calls it.

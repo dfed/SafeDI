@@ -560,7 +560,10 @@ func executeSafeDIToolMultiModuleTest(
 			// Call `generate()` rather than `run()`: `run()` prints located errors in compiler format and
 			// rethrows them as an `ExitCode`, which would hide the error from the assertion helpers.
 			do {
-				generateOutput = try await tool.generate()
+				// Every place's levels must hold its scope struct's fields (`SeamPlaceLevels.pathStructMismatches`).
+				generateOutput = try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
+					try await tool.generate()
+				}
 			} catch {
 				var fixturesByModuleName = outputs.mapValues(\.fixtures)
 				fixturesByModuleName[moduleName] = fixtures

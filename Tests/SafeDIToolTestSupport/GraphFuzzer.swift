@@ -9028,6 +9028,9 @@ struct GraphFuzzerFailure: Equatable {
 		/// for the graph without the place is gone from what it generates for the graph with it: a hand-written caller that
 		/// names it stops compiling when a place is added beneath the seam it calls.
 		case holeNamesChangeWithSecondPlace = "a builder label or case name of the graph without its second place of a hole changes when the place is added"
+		/// Two builds of one type in a seam's tree bind other values before the same property (`SeamPlaceLevels.levelDisagreements(judgingLevelsInFills:)`):
+		/// the levels a scope enum would nest by type would depend on the path.
+		case placeLevelsDifferBetweenBuildsOfType = "two builds of one type in a seam's tree bind other values before the same property"
 	}
 
 	let seed: UInt64
@@ -9473,6 +9476,8 @@ struct GraphFuzzerToolRuns {
 	///   - valueOracle: The value oracle's run of a base corpus graph the tool accepts.
 	///   - withoutSecondHolePlaceOutcome: The outcome of the graph without its second place of a hole
 	///     (`GraphFuzzerGenerator.fixtureWithoutSecondHolePlace`), when it has one, with the place it leaves out.
+	///   - placeLevelDisagreements: Each level of a place of a seam that one build of a type gives with other values than
+	///     another build of it, in the run of `firstOutcome` (`SeamPlaceLevels.levelDisagreements(judgingLevelsInFills:)`).
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
@@ -9487,8 +9492,10 @@ struct GraphFuzzerToolRuns {
 		readTwinPluginOutcome: GraphFuzzerToolOutcome? = nil,
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
 		withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)? = nil,
+		placeLevelDisagreements: [String] = [],
 	) {
 		self.withoutSecondHolePlaceOutcome = withoutSecondHolePlaceOutcome
+		self.placeLevelDisagreements = placeLevelDisagreements
 		self.fixture = fixture
 		self.firstOutcome = firstOutcome
 		self.secondOutcome = secondOutcome
@@ -9516,6 +9523,20 @@ struct GraphFuzzerToolRuns {
 	let readTwinPluginOutcome: GraphFuzzerToolOutcome?
 	let valueOracle: GraphFuzzerValueOracleRun?
 	let withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)?
+	let placeLevelDisagreements: [String]
+
+	/// The failure of a graph in whose seam's tree two builds of one type bind other values before the same property, or
+	/// `nil`: a scope enum nested by type holds one level per type, so what a type binds before a property, the seam's
+	/// root's parameters included, must not depend on the path the type is built on. A fill's tree is built with the stack
+	/// of the seam whose hole it fills, and is not judged.
+	var placeLevelsFailure: GraphFuzzerFailure? {
+		guard !placeLevelDisagreements.isEmpty else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .placeLevelsDifferBetweenBuildsOfType,
+			details: "\(placeLevelDisagreements.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
+		)
+	}
 
 	/// Whether the tool accepts the graph and the graph without its second place of a hole, whose names
 	/// `holeNameStabilityFailure` compares.
@@ -10088,7 +10109,7 @@ enum GraphFuzzerOracle {
 		}
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.multiModuleFailures.first].compactMap(\.self) + renamedGraphFailures
+			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.placeLevelsFailure, runs.multiModuleFailures.first].compactMap(\.self) + renamedGraphFailures
 			// A base corpus graph is compared once its value-oracle graph is.
 			let isValueOracleGraphCompared = runs.valueOracle == nil || valueComparisons.comparedValueOracleSeeds.contains(runs.fixture.seed)
 			return GraphFuzzerResult(
@@ -10554,7 +10575,9 @@ enum GraphFuzzerOracle {
 				return multiModuleRuns
 			}
 		}
-		let firstOutcome = try await toolOutcome(of: fixture)
+		// The levels of each place of a seam the first run computes must be the same on every build of a type
+		// (`placeLevelsFailure`).
+		let (firstOutcome, placeLevelDisagreements) = try await collectingPlaceLevelDisagreements(during: { try await toolOutcome(of: fixture) })
 		// A graph with a seam is run again with no seam: a rejection inline does not make is either a seam's own error
 		// or a defect (`differentialFailure`), and an accepted graph must pass no receiver `nil` that inline passes a
 		// value (`nilArgumentFailure`).
@@ -10622,6 +10645,7 @@ enum GraphFuzzerOracle {
 			readTwinPluginOutcome: readTwinPluginOutcome,
 			valueOracle: valueOracle,
 			withoutSecondHolePlaceOutcome: withoutSecondHolePlaceOutcome,
+			placeLevelDisagreements: placeLevelDisagreements,
 		)
 	}
 

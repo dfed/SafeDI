@@ -64,7 +64,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		reboundProperties: Set<Property> = [],
 		previousPassReceivedBuilderLoops: ReceivedBuilderLoops? = nil,
 		namesBoundBySeam: Set<String> = [],
+		placeHoldingProperties: Set<Property>? = nil,
 	) {
+		self.placeHoldingProperties = placeHoldingProperties
 		self.builtInlineSeamComment = builtInlineSeamComment
 		self.namesBoundBySeam = namesBoundBySeam
 		self.constructsWithHandWrittenMock = constructsWithHandWrittenMock
@@ -726,6 +728,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		stageCalls = []
 		isBuiltByFill = false
 		containsBuildSite = false
+		placeHoldingProperties = nil
 		fieldsCarriedBySites = []
 		passesUpBuilder = false
 		fillKey = nil
@@ -810,6 +813,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.stageCalls = stageCalls
 		isBuiltByFill = false
 		containsBuildSite = true
+		placeHoldingProperties = nil
 		fieldsCarriedBySites = Set(site?.stages.joined().map(\.property) ?? [])
 		passesUpBuilder = false
 		fillKey = nil
@@ -2631,9 +2635,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		stageCalls
 	}
 
-	/// Whether this scope's generated subtree holds a site of a hole of the seam whose tree is generated: such a
-	/// child, a carrier, starts after its siblings that hold none (see `orderedPropertyToGenerateIndices`).
+	/// Whether this scope's generated subtree holds a site of a hole of the seam whose tree is generated, on this scope's
+	/// path. A child starts after its siblings that hold no place by `startsAsCarrier(_:)`, which reads this only where
+	/// `placeHoldingProperties` is `nil` (see `orderedPropertyToGenerateIndices`).
 	let containsBuildSite: Bool
+	/// The properties of this scope's type that hold a place of the seam whose tree is generated, by the seam's declaration
+	/// graph (`SeamDeclarationGraph`): a fact of the type, the same on every path, which orders this scope's children. `nil`
+	/// where the order by path is the same, which `Scope.createScopeGenerator` checks, inside a fill, whose tree is built
+	/// with the filled seam's stack, and for every scope that is no type's.
+	private let placeHoldingProperties: Set<Property>?
+
+	/// Whether `child`, a child of this scope, starts after its siblings that hold no place: it holds one by
+	/// `placeHoldingProperties`, or, where this scope has none or the child declares no property (a fill), its subtree
+	/// holds a site on this path (`containsBuildSite`).
+	nonisolated func startsAsCarrier(_ child: ScopeGenerator) -> Bool {
+		if let placeHoldingProperties, let property = child.property {
+			placeHoldingProperties.contains(property)
+		} else {
+			child.containsBuildSite
+		}
+	}
+
 	/// The fields the scope structs of the sites in this generator's subtree carry whose nearest declaration on each
 	/// site's path is above this scope: a fill the seam generates binds each of the filled seam's fields they carry,
 	/// whether or not its own tree reads it.
@@ -2807,16 +2829,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A seam call's fills declare no property, and each is generated. A loop is visited as the unit its first member
 		// stands for.
 		var unfulfilledIndices = Set(siblingGraph.siblings.map { unitByIndex[$0.index] }).union(propertiesToGenerate.indices.filter { propertiesToGenerate[$0].property == nil })
-		// In a seam's tree, a child whose subtree holds a site of one of its holes – a carrier – starts last: first every
-		// child that is no carrier and depends on none through the edges above, in index order, then the rest, in index
-		// order. No edge is added or dropped, so every receive keeps the availability it has; the start order only puts
-		// every sibling that can be built before a site there, so the site's scope struct carries it. Without a carrier
-		// the order is the index order. A sibling that depends on a carrier and is declared after a later carrier is
-		// built after that one, so a fill of the later carrier's site that reads it is reported, not supported
+		// In a seam's tree, a child that holds a place of one of its holes – a carrier – starts last: first every child
+		// that is no carrier and depends on none through the edges above, in index order, then the rest, in index order.
+		// Whether a child holds a place is a fact of this scope's type (`startsAsCarrier(_:)`), so every build of the type
+		// starts its children in one order, a build on which the child closes a cycle included. No edge is added or
+		// dropped, so every receive keeps the availability it has; the start order only puts every sibling that can be
+		// built before a site there, so the site's scope struct carries it. Without a carrier the order is the index
+		// order. A sibling that depends on a carrier and is declared after a later carrier is built after that one, so a
+		// fill of the later carrier's site that reads it is reported, not supported
 		// (`FillFinding.Kind.declarationBoundAfterSite`): a deliberate gap, which a finer order could close later.
-		let startIndices: [Int] = if propertiesToGenerate.contains(where: \.containsBuildSite) {
+		let startIndices: [Int] = if propertiesToGenerate.contains(where: startsAsCarrier) {
 			{
-				let carrierIndices = propertiesToGenerate.indices.filter { propertiesToGenerate[$0].containsBuildSite }.map { unitByIndex[$0] }
+				let carrierIndices = propertiesToGenerate.indices.filter { startsAsCarrier(propertiesToGenerate[$0]) }.map { unitByIndex[$0] }
 				let reachesCarrier = propertiesToGenerate.indices.map { index in
 					carrierIndices.contains { dependsOn($0, from: unitByIndex[index]) }
 				}

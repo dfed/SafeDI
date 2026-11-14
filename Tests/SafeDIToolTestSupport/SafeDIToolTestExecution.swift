@@ -318,7 +318,10 @@ func executeSafeDIToolTest(
 		)
 		let generateOutput: Generate.Output
 		do {
-			generateOutput = try await tool.generate()
+			// Every place's levels must hold its scope struct's fields (`SeamPlaceLevels.pathStructMismatches`).
+			generateOutput = try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
+				try await tool.generate()
+			}
 		} catch {
 			throw SafeDIToolTestError(underlyingError: error, fixtures: fixtures)
 		}

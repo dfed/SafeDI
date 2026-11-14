@@ -23,6 +23,7 @@ filegroup(
             "Models/ImportStatement.swift",
             "Models/SafeDIToolManifest.swift",
             "Models/Scope.swift",
+            "Models/SeamPlaceLevels.swift",
             "Models/SeamSignature.swift",
             "Models/SourceDiagnostic.swift",
             "Models/TypeAccessProof.swift",

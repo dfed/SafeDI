@@ -387,6 +387,13 @@ final class Scope: Hashable {
 	/// the parameters at each level of nesting have settled. The first pass starts each generator's code as the
 	/// generator is created, since nearly every tree takes one pass; a later pass starts none until the passes end,
 	/// and then only the last pass's, since nothing reads the code of a pass that is not the last.
+	///
+	/// A tree that holds a place of a hole is also created again when a scope's children would start in another order by
+	/// what its type's properties hold (`SeamDeclarationGraph`) than by what their subtrees hold on its path, which only a
+	/// tangle of cycles, or a type that one declaration builds outside a cycle and another builds inside one, makes them
+	/// do: the pass after creates each scope outside a fill with the properties of its type that hold a place
+	/// (`ScopeGenerator.startsAsCarrier(_:)`). The order decides nothing a pass creates, so the graph of
+	/// the pass after is the same.
 	func createScopeGenerator(
 		for property: Property?,
 		nearestDeclarations: NearestDeclarations = NearestDeclarations(),
@@ -400,10 +407,12 @@ final class Scope: Hashable {
 		declaredTypeNames: DeclaredTypeNames,
 	) throws -> ScopeGenerator {
 		var previousPassGenerator: ScopeGenerator?
+		var placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?
 		var scopeGenerator: ScopeGenerator
 		var generatorsToStart: [ScopeGenerator]?
 		// Every scope of the tree is enclosed by these, so they are held in storage each scope's copy shares.
 		let nearestDeclarations = nearestDeclarations.sharingDeclarations()
+		var startOrderChanged: Bool
 		repeat {
 			if previousPassGenerator != nil {
 				generatorsToStart = []
@@ -421,9 +430,18 @@ final class Scope: Hashable {
 				declaredTypeNames: declaredTypeNames,
 				previousPassGenerator: previousPassGenerator,
 				generatorsToStart: &generatorsToStart,
+				placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 			)
 			previousPassGenerator = scopeGenerator
-		} while scopeGenerator.cycleParametersChangedInTree || scopeGenerator.fillStructBoundLabelsChangedInTree || scopeGenerator.receivedBuilderLoopsChangedInTree
+			startOrderChanged = false
+			if placeHoldingPropertiesByType == nil, scopeGenerator.containsBuildSite {
+				let graph = SeamDeclarationGraph(treeRootedAt: scopeGenerator)
+				if graph.ordersChildrenOtherwiseThanTheirPaths(inTreeRootedAt: scopeGenerator) {
+					placeHoldingPropertiesByType = graph.placeHoldingPropertiesByType
+					startOrderChanged = true
+				}
+			}
+		} while startOrderChanged || scopeGenerator.cycleParametersChangedInTree || scopeGenerator.fillStructBoundLabelsChangedInTree || scopeGenerator.receivedBuilderLoopsChangedInTree
 		for generator in generatorsToStart ?? [] {
 			ScopeGeneratorUnderConstruction.startCodeGeneration(of: generator)
 		}
@@ -447,6 +465,7 @@ final class Scope: Hashable {
 		declaredTypeNames: DeclaredTypeNames,
 		previousPassGenerator: ScopeGenerator?,
 		generatorsToStart: inout [ScopeGenerator]?,
+		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?,
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: self,
@@ -468,6 +487,7 @@ final class Scope: Hashable {
 			declaredTypeNames: declaredTypeNames,
 			previousPassGenerator: previousPassGenerator,
 			cycleParameterContexts: [:],
+			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 		)]
 		while true {
 			let index = scopeGeneratorsUnderConstruction.count - 1
@@ -540,7 +560,9 @@ private struct ScopeGeneratorUnderConstruction {
 		previousPassGenerator: ScopeGenerator?,
 		cycleParameterContexts: [ScopeGenerator.BuiltDeclaration: CycleParameterContext],
 		reboundProperties: Set<Property> = [],
+		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]? = nil,
 	) {
+		self.placeHoldingPropertiesByType = placeHoldingPropertiesByType
 		var childPropertyStack = propertyStack
 		var childConcreteTypeStack = concreteTypeStack
 		// The index on `propertyStack` of the declaration this scope repeats when it closes a cycle.
@@ -888,6 +910,7 @@ private struct ScopeGeneratorUnderConstruction {
 			cycleParameterContexts: childCycleParameterContexts,
 			// The loops the pass before found among this scope's children.
 			reboundProperties: previousPassGenerator?.receivedBuilderLoops.reboundPropertiesByChildIndex[childGenerators.count] ?? [],
+			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 		)
 	}
 
@@ -1091,6 +1114,7 @@ private struct ScopeGeneratorUnderConstruction {
 			reboundProperties: reboundProperties,
 			previousPassReceivedBuilderLoops: previousPassGenerator?.receivedBuilderLoops,
 			namesBoundBySeam: seamHoles.namesBoundForBuilders.union(seamHoles.namesBoundForDeferredParameters),
+			placeHoldingProperties: placeHoldingPropertiesByType.map { $0[scope.instantiable.concreteInstantiable] ?? [] },
 		)
 		let scopeGenerator = if let fill {
 			ScopeGenerator(fill: fill.hole, key: fill.key, functionName: fill.functionName, boundLabels: fill.boundLabels, stageCalls: seamHoles.fillStageCalls(at: sitePath), child: builtGenerator)
@@ -1143,6 +1167,11 @@ private struct ScopeGeneratorUnderConstruction {
 	private let unavailableOptionalProperties: Set<Property>
 	/// The generator the pass before created for this scope, or `nil` in the first pass (see `createScopeGenerator`).
 	private let previousPassGenerator: ScopeGenerator?
+	/// The properties of each type in the tree that hold a place, by which each scope's children start
+	/// (`ScopeGenerator.startsAsCarrier(_:)`), or `nil` where they start by what their subtrees hold on the scope's path:
+	/// in a pass whose order by path is the same, and inside a fill, whose tree is built with the filled seam's stack and
+	/// keeps its order by path.
+	private let placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?
 	/// The parameters of this scope's builder function that the pass before found: those a lazy cycle closing on it
 	/// needs. Empty for nearly every scope.
 	private let ownCycleParameters: [CycleParameter]

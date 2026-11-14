@@ -906,6 +906,30 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func placeLevelsFailure_reportsEachDisagreement_whenTwoBuildsOfATypeBindOtherValuesBeforeAProperty() {
+		// A scope enum nested by type holds one level per type, so a type that binds other values before a property on
+		// another path is a failure, naming both paths.
+		let fixture = GraphFuzzerFixture(seed: 8, swiftFileContent: ["// module: FuzzFeature\n"])
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: [:], warnings: [])
+		let disagreement = "`T` holds [] before `api: any Api` on the path to the place `tBuilder.api` of `Hub`, but [cBuilder: Instantiator<C>] on the path to the place `cBuilder.tBuilder.api`."
+
+		let runs = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome, placeLevelDisagreements: [disagreement])
+
+		#expect(runs.placeLevelsFailure?.kind == .placeLevelsDifferBetweenBuildsOfType)
+		#expect(runs.placeLevelsFailure?.details.prefix { $0 != "\n" } == Substring(disagreement))
+	}
+
+	@Test
+	func placeLevelsFailure_isNil_whenEveryBuildOfATypeBindsTheSameValues() {
+		let fixture = GraphFuzzerFixture(seed: 8, swiftFileContent: ["// module: FuzzFeature\n"])
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: [:], warnings: [])
+
+		let runs = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome)
+
+		#expect(runs.placeLevelsFailure?.kind == nil)
+	}
+
+	@Test
 	func holeNameStabilityFailure_reportsRenamedBuilder_whenAddingSecondPlaceRenamesABuilderOfTheGraphWithoutIt() {
 		// A second hole type whose stem collides renames the builders of both, which a hand-written caller passes by label.
 		let fixture = GraphFuzzerFixture(seed: 8, swiftFileContent: ["// module: FuzzFeature\n"])
