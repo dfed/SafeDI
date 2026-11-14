@@ -2112,8 +2112,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_createsAliasOfParameterLabelAfterItsFulfillingInstantiator_whenNothingAboveClosedOnFunctionProvidesLabel() async throws {
 		// `Mid`'s rename of `xBuilder` is `xBuilder` under a second label, so `X`, which receives it inside the tree
-		// `xBuilder` builds, is passed a wrapper `__safeDI_xBuilder` makes again of itself. The mock does not rebind a loop
-		// of instantiators yet, so it passes `X` `nil`.
+		// `xBuilder` builds, is passed a wrapper `__safeDI_xBuilder` makes again of itself, in production and in the mock.
 		let fixture = Self.aliasOfParameterLabelFixture(
 			labelType: "Instantiator<X>",
 			midFulfillingDeclaration: "@Instantiated let xBuilder: Instantiator<X>",
@@ -2169,7 +2168,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        func __safeDI_aBuilder(renamed: Instantiator<X>?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
 		                func __safeDI_xBuilder() -> X {
-		                    if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.xBuilder { safeDIBuilder(nil) } else { X(renamed: nil) }
+		                    let renamed: Instantiator<X>? = Instantiator<X>(__safeDI_xBuilder)
+		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.xBuilder { safeDIBuilder(renamed) } else { X(renamed: renamed) }
 		                }
 		                let xBuilder = Instantiator<X>(__safeDI_xBuilder)
 		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
@@ -2190,7 +2190,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    }
 		}
 		#endif
-		""" }, mockBuildsTheSameValues: false, buildsTheSameValuesAs: """
+		""" }, buildsTheSameValuesAs: """
 		extension Root {
 		    public convenience init() {
 		        func a(renamed: Instantiator<X>?) -> A {

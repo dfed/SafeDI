@@ -462,7 +462,7 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 			await assertThrowsError(
 				diagnostics: { fixtures in
 					"""
-					\(fixtures["Module.swift"]):19:5: error: Dependency cycle: `Instantiator<\(cycleType)>` -> `\(otherType)` -> `Instantiator<\(cycleType)>`. `\(otherType)` receives `\(cycleLabel): Instantiator<\(cycleType)>` inside the tree that `\(cycleLabel)` builds. Declare `\(cycleLabel): Instantiator<\(cycleType)>` on `\(otherType)` as @Instantiated instead of @Received.
+					\(fixtures["Module.swift"]):19:5: error: Dependency cycle: `\(cycleType)` -> `\(otherType)` -> `\(cycleType)`. `\(otherType)` receives `\(cycleLabel): LazilyInstantiated<\(cycleType)>`, which is still being built when `\(otherType)` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `\(cycleLabel): LazilyInstantiated<\(cycleType)>` is validated as `\(cycleLabel): \(cycleType)`.
 					\(fixtures["Module.swift"]):10:1: note: `\(cycleType)` is part of the cycle
 					\(fixtures["Module.swift"]):16:1: note: `\(otherType)` is part of the cycle
 					"""
@@ -489,8 +489,8 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 
 						@Instantiable
 						public final class \(otherType): Instantiable {
-						    public init(\(cycleLabel): Instantiator<\(cycleType)>) { fatalError("SafeDI doesn't inspect the initializer body") }
-						    @Received let \(cycleLabel): Instantiator<\(cycleType)>
+						    public init(\(cycleLabel): LazilyInstantiated<\(cycleType)>) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    @Received let \(cycleLabel): LazilyInstantiated<\(cycleType)>
 						}
 
 						@Instantiable
@@ -501,8 +501,8 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 
 						@Instantiable
 						public final class D: Instantiable {
-						    public init(c: Instantiator<C>) { fatalError("SafeDI doesn't inspect the initializer body") }
-						    @Received let c: Instantiator<C>
+						    public init(c: LazilyInstantiated<C>) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    @Received let c: LazilyInstantiated<C>
 						}
 						""",
 					],
@@ -516,13 +516,13 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_reportsPromotedChildrenRequiringEachOtherFromTheChildReceivedFirst_whenTheirTypeNamesSortEitherWay() async {
-		// The mock root promotes `service: Instantiator<ServiceA>` and `service: Instantiator<ServiceB>`, which share a
+		// The mock root promotes `service: LazilyInstantiated<ServiceA>` and `service: LazilyInstantiated<ServiceB>`, which share a
 		// label, so only their type names could order them by name. The mock's tree receives the first one first.
 		for firstServiceName in ["ServiceA", "ServiceZ"] {
 			await assertThrowsError(
 				diagnostics: { fixtures in
 					"""
-					\(fixtures["Module.swift"]):18:5: error: Dependency cycle: @Instantiated `service: Instantiator<\(firstServiceName)>` -> @Received `service: Instantiator<ServiceB>` -> @Received `service: Instantiator<\(firstServiceName)>`. `service: Instantiator<\(firstServiceName)>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+					\(fixtures["Module.swift"]):18:5: error: Dependency cycle: @Instantiated `service: \(firstServiceName)` -> @Received `service: ServiceB` -> @Received `service: \(firstServiceName)`. `service: \(firstServiceName)` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `service: LazilyInstantiated<\(firstServiceName)>` is validated as `service: \(firstServiceName)`, `service: LazilyInstantiated<ServiceB>` is validated as `service: ServiceB`.
 					"""
 				},
 			) {
@@ -534,20 +534,20 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 
 						@Instantiable(generateMock: true)
 						public final class Root: Instantiable {
-						    public init(service: Instantiator<\(firstServiceName)>) { fatalError("SafeDI doesn't inspect the initializer body") }
-						    @Received let service: Instantiator<\(firstServiceName)>
+						    public init(service: LazilyInstantiated<\(firstServiceName)>) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    @Received let service: LazilyInstantiated<\(firstServiceName)>
 						}
 
 						@Instantiable
 						public final class \(firstServiceName): Instantiable {
-						    public init(service: Instantiator<ServiceB>) { fatalError("SafeDI doesn't inspect the initializer body") }
-						    @Received let service: Instantiator<ServiceB>
+						    public init(service: LazilyInstantiated<ServiceB>) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    @Received let service: LazilyInstantiated<ServiceB>
 						}
 
 						@Instantiable
 						public final class ServiceB: Instantiable {
-						    public init(service: Instantiator<\(firstServiceName)>) { fatalError("SafeDI doesn't inspect the initializer body") }
-						    @Received let service: Instantiator<\(firstServiceName)>
+						    public init(service: LazilyInstantiated<\(firstServiceName)>) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    @Received let service: LazilyInstantiated<\(firstServiceName)>
 						}
 						""",
 					],
