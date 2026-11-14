@@ -146,7 +146,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget, __safeDI_gearBuilder: @escaping (SafeDIScope_Gear) -> any Gear) {
 				        let __safeDI_gadgetValues_inner_widgetBuilder = SafeDIScope_Gadget.inner_widgetBuilder_Values(session: session)
 				        let __safeDI_gearValues_inner_widgetBuilder = SafeDIScope_Gear.inner_widgetBuilder_Values(session: session)
@@ -210,7 +210,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget, __safeDI_gearSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gear) -> any Gear) {
 				        func __safeDI_shell() -> Shell {
 				            _ = Shell.__safeDI_Shell_F559842BF1A90246.self\(seamCallComment(seam: "Shell", module: "Feature"))
@@ -277,7 +277,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget, __safeDI_gearSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gear) -> any Gear) {
 				        func __safeDI_inner() -> Inner {
 				            _ = Inner.__safeDI_Inner_6288FB023CC267A8.self\(seamCallComment(seam: "Inner", module: "Feature"))
@@ -344,7 +344,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget, __safeDI_gearSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gear) -> any Gear) {
 				        func __safeDI_shell() -> Shell {
 				            _ = Shell.__safeDI_Shell_9506931DF49A6B00.self\(seamCallComment(seam: "Shell", module: "Feature"))
@@ -706,7 +706,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        func __safeDI_shell() -> Shell {
 		            _ = Shell.__safeDI_Shell_F559842BF1A90246.self\(seamCallComment(seam: "Shell", module: "Feature"))
@@ -813,7 +813,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        func __safeDI_shell() -> Shell {
 		            _ = Shell.__safeDI_Shell_F559842BF1A90246.self\(seamCallComment(seam: "Shell", module: "Feature"))
@@ -938,7 +938,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 				        func __safeDI_shell() -> Shell {
 				            _ = Shell.__safeDI_Shell_F559842BF1A90246.self\(seamCallComment(seam: "Shell", module: "Feature"))
@@ -985,7 +985,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 				        func __safeDI_shell() -> Shell {
 				            _ = Shell.__safeDI_Shell_F559842BF1A90246.self\(seamCallComment(seam: "Shell", module: "Feature"))
@@ -1311,7 +1311,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        func __safeDI_shell() -> Shell {
 		            _ = Shell.__safeDI_Shell_F559842BF1A90246.self\(seamCallComment(seam: "Shell", module: "Feature"))
@@ -1417,7 +1417,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        func __safeDI_shell() -> Shell {
 		            _ = Shell.__safeDI_Shell_F559842BF1A90246.self\(seamCallComment(seam: "Shell", module: "Feature"))
@@ -1525,7 +1525,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_session session: Session, __safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 		        let __safeDI_gadgetValues_inner_widgetBuilder = SafeDIScope_Gadget.inner_widgetBuilder_Values(session: session)
 		        func __safeDI_inner() -> Inner {
@@ -1625,7 +1625,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_318A87E8A50EC522.self\(seamCallComment(seam: "Inner", module: "Feature"))
@@ -1706,7 +1706,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_session session: Session) {
 		        func __safeDI_shell() -> Shell {
 		            _ = Shell.__safeDI_Shell_F559842BF1A90246.self\(seamCallComment(seam: "Shell", module: "Feature"))
@@ -1772,7 +1772,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		expectGeneratedCode(of: output, module: "Middle", imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_session session: Session) {
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_6288FB023CC267A8.self\(seamCallComment(seam: "Inner", module: "Feature"))
@@ -1858,7 +1858,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        @Sendable func __safeDI_topBuilder() -> Top {
 		            _ = Top.__safeDI_Top_9F8DEF3089EB537C.self\(seamCallComment(seam: "Top", module: "Feature"))
@@ -2035,10 +2035,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 			        func __safeDI_shell() -> Shell {
-			            _ = Shell.__safeDI_Shell_F559842BF1A90246.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Shell.__safeDI_Shell_F559842BF1A90246.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            @Sendable func __safeDI_widgetSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_Widget) -> any Widget {
 			                switch scope {
 			                case let .innerBuilder(scope): return __safeDI_widgetBuilder_Inner(scope)
@@ -2079,7 +2079,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session: @autoclosure @escaping @Sendable () -> Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 			        let session = SendableLazilyInstantiated<Session>(__safeDI_session)
 			        @Sendable func __safeDI_hostBuilder() -> Host {
@@ -2131,7 +2131,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        func __safeDI_shell() -> Shell {
 		            _ = Shell.__safeDI_Shell_F559842BF1A90246.self\(seamCallComment(seam: "Shell", module: "Feature"))
@@ -2206,7 +2206,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 		        let account = Account(user: user.instance)
@@ -2307,7 +2307,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        @Sendable func __safeDI_shellMaker() -> Shell {
 		            _ = Shell.__safeDI_Shell_F559842BF1A90246.self\(seamCallComment(seam: "Shell", module: "Feature"))
@@ -2406,7 +2406,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        @Sendable func __safeDI_holderMaker() -> ShellHolder {
 		            let bag = Bag()
@@ -2480,7 +2480,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        func __safeDI_itemMaker() -> Item {
 		            Item()
@@ -2570,7 +2570,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 		        let __safeDI_gadgetValues_inner_widgetBuilder = SafeDIScope_Gadget.inner_widgetBuilder_Values()
 		        func __safeDI_inner() -> Inner {
@@ -2637,7 +2637,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        func __safeDI_shell() -> Shell {
 		            _ = Shell.__safeDI_Shell_84C8B73BD373B858.self\(seamCallComment(seam: "Shell", module: "Feature"))
@@ -2728,7 +2728,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 		        let __safeDI_gadgetValues_top_widgetBuilder_SubA = SafeDIScope_Gadget.top_widgetBuilder_SubA_Values()
 		        let __safeDI_gadgetValues_top_widgetBuilder_SubB = SafeDIScope_Gadget.top_widgetBuilder_SubB_Values()
@@ -2871,7 +2871,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 				        let __safeDI_gadgetValues_inner_widgetBuilder = SafeDIScope_Gadget.inner_widgetBuilder_Values(session: session)
 				        func __safeDI_inner() -> Inner {
@@ -2925,7 +2925,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 				        let __safeDI_gadgetValues_inner_widgetBuilder = SafeDIScope_Gadget.inner_widgetBuilder_Values(session: session)
 				        func __safeDI_inner() -> Inner {
@@ -2984,7 +2984,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 				        let __safeDI_gadgetValues_inner_widgetBuilder = SafeDIScope_Gadget.inner_widgetBuilder_Values(session: session)
 				        func __safeDI_inner() -> Inner {
@@ -3064,7 +3064,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        func __safeDI_shell() -> Shell {
 		            _ = Shell.__safeDI_Shell_F559842BF1A90246.self\(seamCallComment(seam: "Shell", module: "Feature"))
@@ -3124,7 +3124,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        func __safeDI_shell() -> Shell {
 		            _ = Shell.__safeDI_Shell_F559842BF1A90246.self\(seamCallComment(seam: "Shell", module: "Feature"))
@@ -3212,7 +3212,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        @Sendable func __safeDI_holderMaker() -> Holder {
 		            let `my gadget`: any Gadget = __safeDI_gadgetSendableBuilder(.holderMaker(.`my gadget`(SafeDIScope_Gadget.Holder_Scope.`my gadget_Values`())))
@@ -3262,7 +3262,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_widgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Widget) -> any Widget) {
 		        let analytics = Analytics()
 		        @Sendable func __safeDI_panelBuilder() -> Panel {

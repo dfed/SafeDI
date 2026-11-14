@@ -50,7 +50,7 @@ struct SafeDIToolSeamPublicMockTierTests: ~Copyable {
 		// Cell 1: `Store`, in the tree, requires `storage`, whose own declaration is `package`.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Store` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`'s own `@Instantiable` declaration is `package`. Declare `Storage` `public`; receive `storage` with `onlyIfAvailable: true` and an optional type; build `storage` inside the tree; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Store` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`’s own `@Instantiable` declaration is `package`. Declare `Storage` `public`; receive `storage` with `onlyIfAvailable: true` and an optional type; build `storage` inside the tree; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Store.swift"]):7:5: note: `Store` receives `storage: Storage` here.
 			"""
 		}) {
@@ -68,7 +68,7 @@ struct SafeDIToolSeamPublicMockTierTests: ~Copyable {
 		// Cell 3: `storage`'s type is `internal`, two levels beneath the seam's: the tree is offered an `internal` type.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Store` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`'s own `@Instantiable` declaration is `internal`. Declare `Storage` `public`; receive `storage` with `onlyIfAvailable: true` and an optional type; build `storage` inside the tree; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Store` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`’s own `@Instantiable` declaration is `internal`. Declare `Storage` `public`; receive `storage` with `onlyIfAvailable: true` and an optional type; build `storage` inside the tree; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Store.swift"]):7:5: note: `Store` receives `storage: Storage` here.
 			"""
 		}) {
@@ -86,7 +86,7 @@ struct SafeDIToolSeamPublicMockTierTests: ~Copyable {
 		// `Store` requires `storage` only through its alias `cache`: the receive the error offers to relax is the alias's.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Store` receives through its alias `cache` (`fulfilledByDependencyNamed: "storage"`), and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`'s own `@Instantiable` declaration is `package`. Declare `Storage` `public`; receive `cache` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Store` receives through its alias `cache` (`fulfilledByDependencyNamed: "storage"`), and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`’s own `@Instantiable` declaration is `package`. Declare `Storage` `public`; receive `cache` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Store.swift"]):7:5: note: `Store` receives `storage: Storage` here.
 			"""
 		}) {
@@ -145,9 +145,9 @@ struct SafeDIToolSeamPublicMockTierTests: ~Copyable {
 		// Cell 9: two required `package` pass-throughs give two errors, each saying once what requires the seam's access.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `session: Session`, which `Store` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Session`'s own `@Instantiable` declaration is `package`. Declare `Session` `public`; receive `session` with `onlyIfAvailable: true` and an optional type; build `session` inside the tree; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `session: Session`, which `Store` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Session`’s own `@Instantiable` declaration is `package`. Declare `Session` `public`; receive `session` with `onlyIfAvailable: true` and an optional type; build `session` inside the tree; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Store.swift"]):9:5: note: `Store` receives `session: Session` here.
-			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Store` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`'s own `@Instantiable` declaration is `package`. Declare `Storage` `public`; receive `storage` with `onlyIfAvailable: true` and an optional type; build `storage` inside the tree; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Store` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`’s own `@Instantiable` declaration is `package`. Declare `Storage` `public`; receive `storage` with `onlyIfAvailable: true` and an optional type; build `storage` inside the tree; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Store.swift"]):8:5: note: `Store` receives `storage: Storage` here.
 			"""
 		}) {
@@ -172,7 +172,7 @@ struct SafeDIToolSeamPublicMockTierTests: ~Copyable {
 		// generates, is not reported.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Store` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`'s own `@Instantiable` declaration is `package`. Declare `Storage` `public`; receive `storage` with `onlyIfAvailable: true` and an optional type; build `storage` inside the tree; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Store` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`’s own `@Instantiable` declaration is `package`. Declare `Storage` `public`; receive `storage` with `onlyIfAvailable: true` and an optional type; build `storage` inside the tree; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Core"]!["Store.swift"]):7:5: note: `Store` receives `storage: Storage` here.
 			"""
 		}) {
@@ -210,7 +210,7 @@ struct SafeDIToolSeamPublicMockTierTests: ~Copyable {
 		// narrower, so the remedy says what the compiler then requires of `[3 of Int]` instead.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `session: [3 of Int]`, which `Consumer` receives through its alias `auth` (`fulfilledByDependencyNamed: "session"`), and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and no initializer, `instantiate(…)` or mock method SafeDI records mentions it (`Consumer`'s initializer mentions only `any Auth`). Declare `@Received let session: [3 of Int]` on `Screen`, so that its initializer, which the compiler checks, states how visible `[3 of Int]` is (if `[3 of Int]` is narrower than `public`, the compiler then requires it to be `public`); mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; receive `auth` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `session: [3 of Int]`, which `Consumer` receives through its alias `auth` (`fulfilledByDependencyNamed: "session"`), and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and no initializer, `instantiate(…)` or mock method SafeDI records mentions it (`Consumer`’s initializer mentions only `any Auth`). Declare `@Received let session: [3 of Int]` on `Screen`, so that its initializer, which the compiler checks, states how visible `[3 of Int]` is (if `[3 of Int]` is narrower than `public`, the compiler then requires it to be `public`); mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; receive `auth` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(fixtures["Consumer.swift"]):7:5: note: `Consumer` receives `session: [3 of Int]` here.
 			"""
 		}) {
@@ -244,7 +244,7 @@ struct SafeDIToolSeamPublicMockTierTests: ~Copyable {
 		// Cell 4: the seam's own required receive is not built inside the tree, so building it is not offered.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`'s own `@Instantiable` declaration is `package`. Declare `Storage` `public`; receive `storage` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`’s own `@Instantiable` declaration is `package`. Declare `Storage` `public`; receive `storage` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `Screen` receives `storage: Storage` here.
 			"""
 		}) {
@@ -264,7 +264,7 @@ struct SafeDIToolSeamPublicMockTierTests: ~Copyable {
 		// the public mock's own error would otherwise report first.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Screen`'s own initializer takes, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`'s own `@Instantiable` declaration is `package`. Declare `Storage` `public`, or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Screen`’s own initializer takes, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`’s own `@Instantiable` declaration is `package`. Declare `Storage` `public`, or declare the dependency tree on a `package` type that instantiates `Screen`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -289,7 +289,7 @@ struct SafeDIToolSeamPublicMockTierTests: ~Copyable {
 		// initializer cannot take the builder for it.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `serviceBuilder: @escaping (SafeDIScope_Service) -> any Service`, the builder for `Store`'s `service: any Service`, which no @Instantiable declaration that module `Feature` can see fulfills. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Service` is declared `package`. Declare `Service` `public`; declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies, so `Screen`’s tree builds it; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `serviceBuilder: @escaping (SafeDIScope_Service) -> any Service`, the builder for `Store`’s `service: any Service`, which no @Instantiable declaration that module `Feature` can see fulfills. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Service` is declared `package`. Declare `Service` `public`; declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies, so `Screen`’s tree builds it; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Service.swift"]):1:1: note: `Service` is declared `package` here.
 			\(fixtures["Feature"]!["Service.swift"]):1:1-1:8: fixit: public
 			"""
@@ -321,7 +321,7 @@ struct SafeDIToolSeamPublicMockTierTests: ~Copyable {
 		// the order every `public` seam's error gives.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `storage: Storage`, which `Store` receives, and cannot pass `nil` for it, since it is required. `Storage`'s own `@Instantiable` declaration is `package`. Declare `Storage` `public`; declare `Screen` `package`; build `storage` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `storage: Storage`, which `Store` receives, and cannot pass `nil` for it, since it is required. `Storage`’s own `@Instantiable` declaration is `package`. Declare `Storage` `public`; declare `Screen` `package`; build `storage` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Store.swift"]):7:5: note: `Store` receives `storage: Storage` here.
 			"""
 		}) {

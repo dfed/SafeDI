@@ -276,7 +276,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		                case let .service(scope): if let token { return __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) } else { return passUp() }
 		                }
 		            }
-		            _ = Office.__safeDI_Office_mock_793294F7A3D3804D.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Office.__safeDI_Office_mock_793294F7A3D3804D.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Office.mock(serviceBuilder: { scope in __safeDI_serviceBuilder_Office(scope, passUp: { serviceBuilder(scope) }) }, safeDIOverrides: safeDIOverrides.office)
 		        }
 		        let office: Office = __safeDI_office()
@@ -363,7 +363,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        public let holder: __safeDI_Middle_Holder_MockConfiguration
 		    }
 
-		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
+		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    public static func mock(
 		        gadgetBuilder: @escaping (Outer.SafeDIMockScope_Gadget) -> any Gadget,
 		        safeDIOverrides: SafeDIOverrides = .init()
@@ -394,7 +394,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		                    return service
 		                }
 		            }
-		            _ = Inner.__safeDI_Inner_mock_2EFBE0AFAF545FB2.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Inner.__safeDI_Inner_mock_2EFBE0AFAF545FB2.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner, safeDIOverrides: safeDIOverrides.inner)
 		        }
 		        let inner: Inner = __safeDI_inner()
@@ -503,7 +503,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		                case let .service(values): return values.id
 		                }
 		            }
-		            _ = Outer.__safeDI_Outer_mock_0701A52A9DE584D8.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Outer.__safeDI_Outer_mock_0701A52A9DE584D8.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Outer.mock(gadgetBuilder: { scope in __safeDI_gadgetBuilder_Outer(scope, passUp: { gadgetBuilder(scope) }) }, safeDIOverrides: safeDIOverrides.outer)
 		        }
 		        let outer: Outer = __safeDI_outer()

@@ -192,7 +192,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", imports: [], rootFiles: ["Flow": """
 		extension Flow {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_screenBuilder_received: @autoclosure @escaping () -> Thing) {
 		        let screenBuilder_received = LazilyInstantiated<Thing>(__safeDI_screenBuilder_received)
 		        let session = Session()
@@ -276,7 +276,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_widgetBuilder: @escaping (SafeDIScope_Widget) -> any Widget) {
 		        let __safeDI_widgetValues_aBuilder = SafeDIScope_Widget.aBuilder_Values()
 		        func __safeDI_aBuilder() -> A {
@@ -361,7 +361,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_widgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Widget) -> any Widget) {
 		        @Sendable func __safeDI_aBuilder() -> A {
 		            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
@@ -462,7 +462,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_widgetBuilder: @escaping (SafeDIScope_Widget) -> any Widget) {
 		        let __safeDI_widgetValues_xBuilder = SafeDIScope_Widget.xBuilder_Values()
 		        func __safeDI_xBuilder() -> X {
@@ -586,7 +586,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_widgetBuilder: @escaping (SafeDIScope_Widget) -> any Widget) {
 		        let __safeDI_widgetValues_aBuilder = SafeDIScope_Widget.aBuilder_Values()
 		        let __safeDI_widgetValues_bBuilder = SafeDIScope_Widget.bBuilder_Values()
@@ -689,7 +689,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_widgetBuilder: @escaping (SafeDIScope_Widget) -> any Widget) {
 		        let __safeDI_widgetValues_bBuilder = SafeDIScope_Widget.bBuilder_Values()
 		        func __safeDI_aBuilder() -> A {
@@ -788,7 +788,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_widgetBuilder: @escaping (SafeDIScope_Widget) -> any Widget) {
 		        let __safeDI_widgetValues_aBuilder = SafeDIScope_Widget.aBuilder_Values()
 		        let __safeDI_widgetValues_bBuilder = SafeDIScope_Widget.bBuilder_Values()
@@ -900,7 +900,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_bBuilder bBuilder: Instantiator<B>?, __safeDI_widgetBuilder: @escaping (SafeDIScope_Widget) -> any Widget) {
 		        let __safeDI_widgetValues_flow = SafeDIScope_Widget.flow_Values(bBuilder: bBuilder)
 		        func __safeDI_flow() -> Flow {

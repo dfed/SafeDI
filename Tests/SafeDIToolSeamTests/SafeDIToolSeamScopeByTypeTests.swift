@@ -498,7 +498,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_service: @autoclosure @escaping () -> Service, __safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
 		        let service = LazilyInstantiated<Service>(__safeDI_service)
 		        let __safeDI_apiValues_kiloBuilder = SafeDIScope_Api.kiloBuilder_Values(service: service)
@@ -907,7 +907,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
 		        let __safeDI_apiValues_store = SafeDIScope_Api.store_Values()
 		        func __safeDI_store() -> Store {
@@ -993,7 +993,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
 		        let jobScope = Job_Scope()
 		        let __safeDI_apiValues_job = SafeDIScope_Api.job_Values(jobScope: jobScope)
@@ -1151,7 +1151,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
 		        let __safeDI_apiValues_fourth = SafeDIScope_Api.fourth_Values()
 		        func __safeDI_fourth() -> A.B.C_D {
@@ -1326,9 +1326,9 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		        }
 		    }
 
-		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
+		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 		        let __safeDI_gadgetValues_widget = SafeDIScope_Gadget.widget_Values()
 		        func __safeDI_widget() -> Widget {
@@ -1473,7 +1473,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
 		        let apiValues_store = Clock()
 		        let __safeDI_apiValues_store_ = SafeDIScope_Api.store_Values(apiValues_store: apiValues_store)
@@ -1535,7 +1535,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 	}
 
 	/// The comment a call of `Feature`'s seam carries in a `.safedi` flow.
-	private static let moduleInfoComment = "If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
+	private static let moduleInfoComment = "If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
 
 	private var filesToDelete: [URL]
 

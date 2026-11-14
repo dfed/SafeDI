@@ -1699,7 +1699,7 @@ public enum SeamCallComment: Hashable, Sendable {
 		case .plugin:
 			"// If this line does not compile, add the SafeDI plugin to the target that declares \(type.asSource)."
 		case let .moduleInfo(declaringModuleName):
-			"// If this line does not compile, compile the code SafeDI generates for module \(declaringModuleName) into \(declaringModuleName): under Bazel, add \(declaringModuleName)'s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
+			"// If this line does not compile, compile the code SafeDI generates for module \(declaringModuleName) into \(declaringModuleName): under Bazel, add \(declaringModuleName)’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
 		}
 	}
 

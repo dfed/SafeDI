@@ -70,7 +70,7 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 			])
 			#expect(output.modules["App"]?.generatedFiles == [
 				"FeatureRoot+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n" + """
-				// SafeDI generates FeatureRoot's init() only in Feature, the module that declares FeatureRoot. If FeatureRoot() does not compile, add the SafeDI plugin to the target that declares FeatureRoot.
+				// SafeDI generates FeatureRoot’s init() only in Feature, the module that declares FeatureRoot. If FeatureRoot() does not compile, add the SafeDI plugin to the target that declares FeatureRoot.
 				""",
 				"Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n",
 			])
@@ -90,7 +90,7 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles["FeatureRoot+SafeDI.swift"] == generatedFileHeader + Self.importBlock("Feature") + "\n\n" + """
-		// SafeDI generates FeatureRoot's init() only in Feature, the module that declares FeatureRoot. If FeatureRoot() does not compile, add the SafeDI plugin to the target that declares FeatureRoot.
+		// SafeDI generates FeatureRoot’s init() only in Feature, the module that declares FeatureRoot. If FeatureRoot() does not compile, add the SafeDI plugin to the target that declares FeatureRoot.
 		""")
 	}
 
@@ -109,7 +109,7 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 		)
 		#expect(output.modules["App"]?.generatedFiles == [
 			"FeatureRoot+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n" + """
-			// SafeDI generates FeatureRoot's init() only in Feature, the module that declares FeatureRoot. If FeatureRoot() does not compile, add the SafeDI plugin to the target that declares FeatureRoot.
+			// SafeDI generates FeatureRoot’s init() only in Feature, the module that declares FeatureRoot. If FeatureRoot() does not compile, add the SafeDI plugin to the target that declares FeatureRoot.
 			""",
 			"Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n",
 		])
@@ -166,7 +166,7 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 		)
 		#expect(output.dependencyTreeFiles == [
 			"FeatureRoot+SafeDI.swift": generatedFileHeader + """
-			// SafeDI generates FeatureRoot's init() only in the module that declares FeatureRoot. If FeatureRoot() does not compile, add the SafeDI plugin to the target that declares FeatureRoot.
+			// SafeDI generates FeatureRoot’s init() only in the module that declares FeatureRoot. If FeatureRoot() does not compile, add the SafeDI plugin to the target that declares FeatureRoot.
 			""",
 			"Root+SafeDI.swift": generatedFileHeader,
 		])

@@ -118,7 +118,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_analytics analytics: Analytics, __safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 				        func __safeDI_part() -> any Gadget {
 				            __safeDI_gadgetBuilder(.part(SafeDIScope_Gadget.part_Values(analytics: analytics)))
@@ -136,7 +136,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_analytics analytics: Analytics, __safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 				        @Sendable func __safeDI_part() -> any Gadget {
 				            __safeDI_gadgetSendableBuilder(.part)
@@ -158,7 +158,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelBuilder: @escaping (SafeDIScope_Panel) -> Panel) {
 				        let part = Instantiator<Panel> {
 				            __safeDI_panelBuilder(.part(SafeDIScope_Panel.part_Values(analytics: analytics), $0))
@@ -175,7 +175,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelSendableBuilder: @escaping @Sendable (SafeDISendableScope_Panel) -> Panel) {
 				        let part = SendableInstantiator<Panel> {
 				            __safeDI_panelSendableBuilder(.part($0))
@@ -196,7 +196,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_analytics analytics: Analytics, __safeDI_namedGadgetBuilder: @escaping (SafeDIScope_NamedGadget) -> AnyGadget) {
 				        let part = ErasedInstantiator<String, AnyGadget> {
 				            __safeDI_namedGadgetBuilder(.part(SafeDIScope_NamedGadget.part_Values(analytics: analytics), $0))
@@ -213,7 +213,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_analytics analytics: Analytics, __safeDI_namedGadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_NamedGadget) -> AnyGadget) {
 				        let part = SendableErasedInstantiator<String, AnyGadget> {
 				            __safeDI_namedGadgetSendableBuilder(.part($0))
@@ -382,7 +382,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_actionGadgetBuilder: @escaping (SafeDIScope_ActionGadget) -> any Gadget) {
 		        let analytics = Analytics()
 		        let part: ErasedInstantiator<nonisolated(nonsending) () async -> Void, any Gadget> = ErasedInstantiator {
@@ -470,7 +470,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_pairGadgetBuilder: @escaping (SafeDIScope_PairGadget) -> any Gadget, __safeDI_pairPanelBuilder: @escaping (SafeDIScope_PairPanel) -> PairPanel) {
 		        let analytics = Analytics()
 		        let erased = ErasedInstantiator<(count: Int, name: String), any Gadget> {
@@ -551,7 +551,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_defaultGadgetBuilder: @escaping (SafeDIScope_DefaultGadget) -> any Gadget) {
 		        let analytics = Analytics()
 		        func __safeDI_part() -> any Gadget {
@@ -627,7 +627,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_emptyPanelBuilder: @escaping (SafeDIScope_EmptyPanel) -> EmptyPanel) {
 		        let analytics = Analytics()
 		        let held = Instantiator<EmptyPanel> {
@@ -803,7 +803,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelSendableBuilder: @escaping @Sendable (SafeDISendableScope_Panel) -> Panel) {
 		        @Sendable func __safeDI_ownerBuilder() -> Owner {
 		            let held = Instantiator<Panel> {
@@ -893,7 +893,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_analytics analytics: Analytics, __safeDI_panelSendableBuilder: @escaping @Sendable (SafeDISendableScope_Panel) -> Panel) {
 		        @Sendable func __safeDI_ownerBuilder() -> Owner {
 		            let tally = Tally()
@@ -991,7 +991,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_panelBuilder: @escaping (SafeDIScope_Panel) -> Panel) {
 		        let part = Instantiator<Panel> {
 		            __safeDI_panelBuilder(.part(SafeDIScope_Panel.part_Values(), $0))
@@ -1012,7 +1012,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_panelBuilder: @escaping (SafeDIScope_Panel) -> Panel) {
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_0D39F8A8EF1A9F4A.self
@@ -1099,9 +1099,9 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        case inner_widgetSendableBuilder(SafeDIScope_Gadget.DefaultWidget_Scope)
 		    }
 
-		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
+		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_6C2AA56F3C357B96.self\(seamCallComment(seam: "Inner"))
@@ -1208,7 +1208,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_labeledGadgetBuilder: @escaping (SafeDIScope_LabeledGadget) -> any Gadget) {
 		        let analytics = Analytics()
 		        let part = ErasedInstantiator<Label, any Gadget> {
@@ -1232,7 +1232,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_labeledGadgetBuilder: @escaping (SafeDIScope_LabeledGadget) -> any Gadget) {
 		        let analytics = Analytics()
 		        let part = ErasedInstantiator<Label, any Gadget> {
@@ -1366,7 +1366,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
 		        let __safeDI_gadgetValues_again = SafeDIScope_Gadget.again_Values()
 		        func __safeDI_again() -> Middle {
@@ -1593,7 +1593,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_actionPanelBuilder: @escaping (SafeDIScope_ActionPanel) -> ActionPanel) {
 		        let analytics = Analytics()
 		        let part = Instantiator<ActionPanel> {
@@ -1654,7 +1654,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_analytics analytics: Analytics, __safeDI_actionPanelSendableBuilder: @escaping @Sendable (SafeDISendableScope_ActionPanel) -> ActionPanel) {
 		        let part = SendableInstantiator<ActionPanel> {
 		            __safeDI_actionPanelSendableBuilder(.part($0))
@@ -1721,7 +1721,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_actionPanelBuilder: @escaping (SafeDIScope_ActionPanel) -> ActionPanel) {
 		        let analytics = Analytics()
 		        let part = Instantiator<ActionPanel> {
@@ -1783,7 +1783,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_analytics analytics: Analytics, __safeDI_actionPanelSendableBuilder: @escaping @Sendable (SafeDISendableScope_ActionPanel) -> ActionPanel) {
 		        let part = SendableInstantiator<ActionPanel> {
 		            __safeDI_actionPanelSendableBuilder(.part($0))
@@ -1849,7 +1849,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_tapGadgetBuilder: @escaping (SafeDIScope_TapGadget) -> AnyGadget) {
 		        let analytics = Analytics()
 		        let part = ErasedInstantiator<OnTap, AnyGadget> {
@@ -1912,7 +1912,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_analytics analytics: Analytics, __safeDI_tapGadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_TapGadget) -> AnyGadget) {
 		        let part = SendableErasedInstantiator<SendableOnTap, AnyGadget> {
 		            __safeDI_tapGadgetSendableBuilder(.part($0))

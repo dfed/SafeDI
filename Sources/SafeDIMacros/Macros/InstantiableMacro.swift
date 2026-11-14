@@ -2222,7 +2222,7 @@ public struct InstantiableMacro: MemberMacro {
 			case let .extensionCannotBeRoot(declaredRootType, instantiateParameters):
 				"`\(declaredRootType.asSource)` is declared with `isRoot: true`, so no other type passes it dependencies, but its `\(InstantiableVisitor.instantiateMethodName)(…)` method takes \(instantiateParameters.asBacktickedPropertyList). Remove the parameters, or remove `isRoot: true` and instantiate `\(declaredRootType.asSource)` from another type."
 			case let .extensionCannotGenerateDependencyTree(extendedType):
-				"`\(extendedType.asSource)` is declared with `generateDependencyTree: true` on an extension, but SafeDI generates a dependency tree only for a type declaration: an extension's `\(InstantiableVisitor.instantiateMethodName)(…)` method takes every dependency it needs, and SafeDI cannot add an initializer that builds them to a type it does not declare. Remove `generateDependencyTree: true`, or declare the dependency tree on an @\(InstantiableVisitor.macroName) type that instantiates `\(extendedType.asSource)`."
+				"`\(extendedType.asSource)` is declared with `generateDependencyTree: true` on an extension, but SafeDI generates a dependency tree only for a type declaration: an extension’s `\(InstantiableVisitor.instantiateMethodName)(…)` method takes every dependency it needs, and SafeDI cannot add an initializer that builds them to a type it does not declare. Remove `generateDependencyTree: true`, or declare the dependency tree on an @\(InstantiableVisitor.macroName) type that instantiates `\(extendedType.asSource)`."
 			}
 		}
 	}

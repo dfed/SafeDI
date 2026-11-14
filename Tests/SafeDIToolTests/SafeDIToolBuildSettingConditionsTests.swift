@@ -1229,7 +1229,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
-		// SafeDI generates StagingRoot's init() only in the module that declares StagingRoot. If StagingRoot() does not compile, add the SafeDI plugin to the target that declares StagingRoot.
+		// SafeDI generates StagingRoot’s init() only in the module that declares StagingRoot. If StagingRoot() does not compile, add the SafeDI plugin to the target that declares StagingRoot.
 		""")
 	}
 
