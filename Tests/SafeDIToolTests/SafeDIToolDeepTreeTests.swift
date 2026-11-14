@@ -111,6 +111,90 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == Self.fileHeader + lines.joined(separator: "\n"))
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_writesDependencyTree_whenTwoHundredFeaturesEachReceiveTheInstantiatorThatBuildsThem() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.selfReceivingFeatureChain(depth: 200),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			// The time the compiler takes for nested builder functions grows exponentially with their depth, so the chain of twenty below is compiled instead.
+			skipCompileVerification: true,
+		)
+
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == Self.selfReceivingChainDependencyTree(depth: 200))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_writesDependencyTreeThatCompiles_whenTwentyFeaturesEachReceiveTheInstantiatorThatBuildsThem() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.selfReceivingFeatureChain(depth: 20),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == Self.selfReceivingChainDependencyTree(depth: 20))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_writesDependencyTree_whenEachOfTwoHundredSiblingInstantiatorsReceivesTheNextInALoop() async throws {
+		let length = 200
+		let builders = (0..<length).map { (label: "builder\($0)", type: "Instantiator<Screen\($0)>") }
+		var swiftFileContent = [
+			"""
+			@Instantiable(isRoot: true)
+			public struct Root: Instantiable {
+			    public init(\(builders.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			\(builders.map { "    @Instantiated let \($0.label): \($0.type)" }.joined(separator: "\n"))
+			}
+			""",
+		]
+		for index in 0..<length {
+			let next = (index + 1) % length
+			swiftFileContent.append("""
+			@Instantiable
+			public struct Screen\(index): Instantiable {
+			    public init(builder\(next): Instantiator<Screen\(next)>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received let builder\(next): Instantiator<Screen\(next)>
+			}
+			""")
+		}
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: swiftFileContent,
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		var lines = [
+			"extension Root {",
+			"    public init() {",
+		]
+		for index in 0..<length {
+			let next = (index + 1) % length
+			lines += [
+				"        func __safeDI_builder\(index)() -> Screen\(index) {",
+				"            let builder\(next) = Instantiator<Screen\(next)>(__safeDI_builder\(next))",
+				"            return Screen\(index)(builder\(next): builder\(next))",
+				"        }",
+				"        let builder\(index) = Instantiator<Screen\(index)>(__safeDI_builder\(index))",
+			]
+		}
+		lines += [
+			"        self.init(\(builders.map { "\($0.label): \($0.label)" }.joined(separator: ", ")))",
+			"    }",
+			"}",
+		]
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == Self.fileHeader + lines.joined(separator: "\n"))
+	}
+
 	// MARK: Mock Tests
 
 	@Test
@@ -209,6 +293,65 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 			""")
 		}
 		return swiftFileContent
+	}
+
+	/// The source of `Root`, which instantiates `Feature0` through an `Instantiator`, and of `depth` features, each of which
+	/// receives the instantiator that builds it and instantiates the next feature but the last through an `Instantiator`.
+	private static func selfReceivingFeatureChain(depth: Int) -> [String] {
+		var swiftFileContent = [
+			"""
+			@Instantiable(isRoot: true)
+			public struct Root: Instantiable {
+			    public init(feature0: Instantiator<Feature0>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let feature0: Instantiator<Feature0>
+			}
+			""",
+		]
+		for index in 0..<depth {
+			let nextFeatureParameter = index + 1 < depth ? ", feature\(index + 1): Instantiator<Feature\(index + 1)>" : ""
+			let nextFeatureDeclaration = index + 1 < depth ? "\n    @Instantiated let feature\(index + 1): Instantiator<Feature\(index + 1)>" : ""
+			swiftFileContent.append("""
+			@Instantiable
+			public struct Feature\(index): Instantiable {
+			    public init(feature\(index): Instantiator<Feature\(index)>\(nextFeatureParameter)) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received let feature\(index): Instantiator<Feature\(index)>\(nextFeatureDeclaration)
+			}
+			""")
+		}
+		return swiftFileContent
+	}
+
+	/// The dependency tree of `selfReceivingFeatureChain(depth:)`: a builder function for each feature, nested in the
+	/// function that builds the feature before it, which starts by wrapping itself again for the feature it builds.
+	private static func selfReceivingChainDependencyTree(depth: Int) -> String {
+		var lines = [
+			"extension Root {",
+			"    public init() {",
+		]
+		for index in 0..<depth {
+			lines.append("\(indentation(2 + index))func __safeDI_feature\(index)() -> Feature\(index) {")
+			lines.append("\(indentation(3 + index))let feature\(index) = Instantiator<Feature\(index)>(__safeDI_feature\(index))")
+		}
+		lines.append("\(indentation(2 + depth))return Feature\(depth - 1)(feature\(depth - 1): feature\(depth - 1))")
+		for index in (0..<depth).reversed() {
+			lines.append("\(indentation(2 + index))}")
+			lines.append("\(indentation(2 + index))let feature\(index) = Instantiator<Feature\(index)>(__safeDI_feature\(index))")
+			if index > 0 {
+				lines.append("\(indentation(2 + index))return Feature\(index - 1)(feature\(index - 1): feature\(index - 1), feature\(index): feature\(index))")
+			}
+		}
+		lines += [
+			"        self.init(feature0: feature0)",
+			"    }",
+			"}",
+		]
+		return fileHeader + lines.joined(separator: "\n")
 	}
 
 	/// The source of `Root`, which instantiates `length` services, each of which but the last receives the next.

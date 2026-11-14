@@ -850,7 +850,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesNoParameterOfClosedOnPropertysOwnLabel_whenTypeBuiltAgainReceivesBuilderThatBuildsIt() async throws {
 		// `T1` receives `t1Builder` only if available, and `T2` declares it again by closing the cycle: every `T1` is built
-		// inside a `t1Builder` and is passed `nil`, so `Root`'s builder function takes no parameter, as before.
+		// inside a `t1Builder`, whose function wraps itself again for it, so `Root`'s builder function takes no parameter, as
+		// before.
 		let fixture = [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let t1Builder: Instantiator<T1>"]),
 			seamFixtureType(named: "T1", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let t1Builder: Instantiator<T1>?", "@Instantiated let t2Builder: Instantiator<T2>"]),
@@ -860,12 +861,13 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_t1Builder() -> T1 {
+		            let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
 		            func __safeDI_t2Builder() -> T2 {
 		                let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
 		                return T2(t1Builder: t1Builder)
 		            }
 		            let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
-		            return T1(t1Builder: nil, t2Builder: t2Builder)
+		            return T1(t1Builder: t1Builder, t2Builder: t2Builder)
 		        }
 		        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
 		        self.init(t1Builder: t1Builder)
@@ -875,7 +877,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func t1() -> T1 {
-		            T1(t1Builder: nil, t2Builder: Instantiator<T2> { T2(t1Builder: Instantiator<T1> { t1() }) })
+		            T1(t1Builder: Instantiator<T1> { t1() }, t2Builder: Instantiator<T2> { T2(t1Builder: Instantiator<T1> { t1() }) })
 		        }
 		        self.init(t1Builder: Instantiator<T1> { t1() })
 		    }
@@ -2109,6 +2111,9 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_createsAliasOfParameterLabelAfterItsFulfillingInstantiator_whenNothingAboveClosedOnFunctionProvidesLabel() async throws {
+		// `Mid`'s rename of `xBuilder` is `xBuilder` under a second label, so `X`, which receives it inside the tree
+		// `xBuilder` builds, is passed a wrapper `__safeDI_xBuilder` makes again of itself. The mock does not rebind a loop
+		// of instantiators yet, so it passes `X` `nil`.
 		let fixture = Self.aliasOfParameterLabelFixture(
 			labelType: "Instantiator<X>",
 			midFulfillingDeclaration: "@Instantiated let xBuilder: Instantiator<X>",
@@ -2119,7 +2124,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        func __safeDI_aBuilder(renamed: Instantiator<X>?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
 		                func __safeDI_xBuilder() -> X {
-		                    X(renamed: nil)
+		                    let renamed: Instantiator<X>? = Instantiator<X>(__safeDI_xBuilder)
+		                    return X(renamed: renamed)
 		                }
 		                let xBuilder = Instantiator<X>(__safeDI_xBuilder)
 		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
@@ -2184,12 +2190,15 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    }
 		}
 		#endif
-		""" }, buildsTheSameValuesAs: """
+		""" }, mockBuildsTheSameValues: false, buildsTheSameValuesAs: """
 		extension Root {
 		    public convenience init() {
 		        func a(renamed: Instantiator<X>?) -> A {
 		            A(renamed: renamed, midBuilder: Instantiator<Mid> {
-		                let xBuilder = Instantiator<X> { X(renamed: nil) }
+		                func x() -> X {
+		                    X(renamed: Instantiator<X> { x() })
+		                }
+		                let xBuilder = Instantiator<X> { x() }
 		                return Mid(xBuilder: xBuilder, renamed: xBuilder, aBuilder: Instantiator<A> { a(renamed: xBuilder) })
 		            })
 		        }
@@ -3958,7 +3967,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsCycleError_whenNearestDeclarationIsStillBeingBuiltAroundCycleClosingScope() async {
+	mutating func generate_passesRebindingOfInstantiatorBeingBuilt_whenNearestDeclarationIsStillBeingBuiltAroundCycleClosingScope() async throws {
 		// `T1` is built by `T0`'s `t1Builder` and builds `T3` again, which requires `t1Builder`: the nearest is the one being
 		// built. `Host` is handed its `t1Builder`, so nothing else builds `T1` where `T3` receives it.
 		let fixture = [
@@ -3968,15 +3977,40 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			seamFixtureType(named: "T0", isFinalClass: true, declarations: ["@Instantiated let t1Builder: Instantiator<T1>"]),
 			seamFixtureType(named: "T1", isFinalClass: true, declarations: ["@Instantiated let t3Builder: Instantiator<T3>"]),
 		]
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["T3.swift"]):9:5: error: Dependency cycle: `Instantiator<T1>` -> `Instantiator<T3>` -> `Instantiator<T1>`. `T3` receives `t1Builder: Instantiator<T1>` inside the tree that `t1Builder` builds. Declare `t1Builder: Instantiator<T1>` on `T3` as @Instantiated instead of @Received.
-			\(fixtures["T1.swift"]):1:1: note: `T1` is part of the cycle
-			\(fixtures["T3.swift"]):1:1: note: `T3` is part of the cycle
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_hostBuilder(t1Builder: Instantiator<T1>) -> Host {
+			            func __safeDI_t3Builder(t1Builder: Instantiator<T1>) -> T3 {
+			                func __safeDI_t0Builder() -> T0 {
+			                    func __safeDI_t1Builder() -> T1 {
+			                        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			                        let t3Builder = Instantiator<T3> {
+			                            __safeDI_t3Builder(t1Builder: t1Builder)
+			                        }
+			                        return T1(t3Builder: t3Builder)
+			                    }
+			                    let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			                    return T0(t1Builder: t1Builder)
+			                }
+			                let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
+			                return T3(t0Builder: t0Builder, t1Builder: t1Builder)
+			            }
+			            let t3Builder = Instantiator<T3> {
+			                __safeDI_t3Builder(t1Builder: t1Builder)
+			            }
+			            return Host(t1Builder: t1Builder, t3Builder: t3Builder)
+			        }
+			        let hostBuilder = Instantiator<Host> {
+			            __safeDI_hostBuilder(t1Builder: $0)
+			        }
+			        self.init(hostBuilder: hostBuilder)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test

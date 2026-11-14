@@ -194,8 +194,8 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 			await assertThrowsError(
 				diagnostics: { fixtures in
 					"""
-					\(fixtures["Module.swift"]):19:5: error: Dependency cycle: @Instantiated `p: Instantiator<P>` -> @Received `q: Instantiator<Q>` -> @Received `p: Instantiator<P>`. `p: Instantiator<P>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
-					\(fixtures["Module.swift"]):38:5: error: Dependency cycle: @Instantiated `r: Instantiator<R>` -> @Received `s: Instantiator<S>` -> @Received `r: Instantiator<R>`. `r: Instantiator<R>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+					\(fixtures["Module.swift"]):19:5: error: Dependency cycle: @Instantiated `p: Instantiator<P>` -> @Received `q: Q` -> @Received `p: Instantiator<P>`. `p: Instantiator<P>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+					\(fixtures["Module.swift"]):38:5: error: Dependency cycle: @Instantiated `r: Instantiator<R>` -> @Received `s: S` -> @Received `r: Instantiator<R>`. `r: Instantiator<R>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 					"""
 				},
 			) {
@@ -207,15 +207,15 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 
 						@Instantiable(isRoot: true)
 						public final class \(firstRootName): Instantiable {
-						    public init(p: Instantiator<P>, q: Instantiator<Q>) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    public init(p: Instantiator<P>, q: Q) { fatalError("SafeDI doesn't inspect the initializer body") }
 						    @Instantiated let p: Instantiator<P>
-						    @Instantiated let q: Instantiator<Q>
+						    @Instantiated let q: Q
 						}
 
 						@Instantiable
 						public final class P: Instantiable {
-						    public init(q: Instantiator<Q>) { fatalError("SafeDI doesn't inspect the initializer body") }
-						    @Received let q: Instantiator<Q>
+						    public init(q: Q) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    @Received let q: Q
 						}
 
 						@Instantiable
@@ -226,15 +226,15 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 
 						@Instantiable(isRoot: true)
 						public final class BetaRoot: Instantiable {
-						    public init(r: Instantiator<R>, s: Instantiator<S>) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    public init(r: Instantiator<R>, s: S) { fatalError("SafeDI doesn't inspect the initializer body") }
 						    @Instantiated let r: Instantiator<R>
-						    @Instantiated let s: Instantiator<S>
+						    @Instantiated let s: S
 						}
 
 						@Instantiable
 						public final class R: Instantiable {
-						    public init(s: Instantiator<S>) { fatalError("SafeDI doesn't inspect the initializer body") }
-						    @Received let s: Instantiator<S>
+						    public init(s: S) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    @Received let s: S
 						}
 
 						@Instantiable
@@ -260,7 +260,7 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 			await assertThrowsError(
 				diagnostics: { fixtures in
 					"""
-					\(fixtures["Module.swift"]):30:5: error: Dependency cycle: @Instantiated `p: Instantiator<P>` -> @Received `q: Instantiator<Q>` -> @Received `p: Instantiator<P>`. `p: Instantiator<P>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+					\(fixtures["Module.swift"]):30:5: error: Dependency cycle: @Instantiated `p: Instantiator<P>` -> @Received `q: Q` -> @Received `p: Instantiator<P>`. `p: Instantiator<P>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 					"""
 				},
 			) {
@@ -285,14 +285,14 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 
 						@Instantiable
 						public final class Shared: Instantiable {
-						    public init(p: Instantiator<P>, q: Instantiator<Q>) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    public init(p: Instantiator<P>, q: Q) { fatalError("SafeDI doesn't inspect the initializer body") }
 						    @Instantiated let p: Instantiator<P>
-						    @Instantiated let q: Instantiator<Q>
+						    @Instantiated let q: Q
 						}
 						@Instantiable
 						public final class P: Instantiable {
-						    public init(q: Instantiator<Q>) { fatalError("SafeDI doesn't inspect the initializer body") }
-						    @Received let q: Instantiator<Q>
+						    public init(q: Q) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    @Received let q: Q
 						}
 						@Instantiable
 						public final class Q: Instantiable {
@@ -302,14 +302,14 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 
 						@Instantiable
 						public final class Other: Instantiable {
-						    public init(r: Instantiator<R>, s: Instantiator<S>) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    public init(r: Instantiator<R>, s: S) { fatalError("SafeDI doesn't inspect the initializer body") }
 						    @Instantiated let r: Instantiator<R>
-						    @Instantiated let s: Instantiator<S>
+						    @Instantiated let s: S
 						}
 						@Instantiable
 						public final class R: Instantiable {
-						    public init(s: Instantiator<S>) { fatalError("SafeDI doesn't inspect the initializer body") }
-						    @Received let s: Instantiator<S>
+						    public init(s: S) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    @Received let s: S
 						}
 						@Instantiable
 						public final class S: Instantiable {
@@ -611,7 +611,7 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 			await assertThrowsError(
 				diagnostics: { fixtures in
 					"""
-					\(fixtures["Module.swift"]):14:5: error: Dependency cycle: @Instantiated `\(alphaLabel): Instantiator<Alpha>` -> @Received `beta: Instantiator<Beta>` -> @Received `\(alphaLabel): Instantiator<Alpha>`. `\(alphaLabel): Instantiator<Alpha>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+					\(fixtures["Module.swift"]):14:5: error: Dependency cycle: @Instantiated `\(alphaLabel): Instantiator<Alpha>` -> @Received `beta: Beta` -> @Received `\(alphaLabel): Instantiator<Alpha>`. `\(alphaLabel): Instantiator<Alpha>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 					"""
 				},
 			) {
@@ -623,9 +623,9 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 
 						@Instantiable(isRoot: true)
 						public final class Root: Instantiable {
-						    public init(\(alphaLabel): Instantiator<Alpha>, beta: Instantiator<Beta>, renamedAlpha: Instantiator<Alpha>) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    public init(\(alphaLabel): Instantiator<Alpha>, beta: Beta, renamedAlpha: Instantiator<Alpha>) { fatalError("SafeDI doesn't inspect the initializer body") }
 						    @Instantiated let \(alphaLabel): Instantiator<Alpha>
-						    @Instantiated let beta: Instantiator<Beta>
+						    @Instantiated let beta: Beta
 						    @Received(fulfilledByDependencyNamed: "\(alphaLabel)", ofType: Instantiator<Alpha>.self) let renamedAlpha: Instantiator<Alpha>
 						}
 
@@ -638,8 +638,8 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 
 						@Instantiable
 						public final class Alpha: Instantiable {
-						    public init(beta: Instantiator<Beta>) { fatalError("SafeDI doesn't inspect the initializer body") }
-						    @Received let beta: Instantiator<Beta>
+						    public init(beta: Beta) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    @Received let beta: Beta
 						}
 						""",
 					],

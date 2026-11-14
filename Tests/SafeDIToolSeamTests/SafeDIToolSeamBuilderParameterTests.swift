@@ -2444,10 +2444,10 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesUnavailableValueNil_whenFillReceivesOnlyIfAvailablePropertyFillersPathIsBuilding() async throws {
+	mutating func generate_passesRebindingOfInstantiator_whenFillReceivesOnlyIfAvailableInstantiatorFillersPathIsBuilding() async throws {
 		// G3, H7 (1): `DefaultUserService` receives `xBuilder` only if available, and the fill is inside the builder function
-		// of `Root`'s `xBuilder`, which is still being built there, so the fill passes `nil`, as the leaf would pass a
-		// pass-through.
+		// of `Root`'s `xBuilder`, which wraps itself again there, so the fill passes that wrapper, as the tree built inline
+		// would.
 		let feature = [
 			Self.userServiceProtocol,
 			seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
@@ -2469,13 +2469,14 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_xBuilder() -> X {
+		            let xBuilder = Instantiator<X>(__safeDI_xBuilder)
 		            func __safeDI_service() -> Service {
 		                _ = Service.__safeDI_Service_D8E8DFCE0954DB42.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		                func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
 		                    switch scope {
 		                    case let .profile_userService(scope):
 		                        let analytics = scope.analytics
-		                        let userService: any UserService = DefaultUserService(analytics: analytics, xBuilder: nil)
+		                        let userService: any UserService = DefaultUserService(analytics: analytics, xBuilder: xBuilder)
 		                        return userService
 		                    }
 		                }
