@@ -973,14 +973,16 @@ public actor DependencyTreeGenerator {
 			typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls)
 			// A call that fills a builder declares no dependency for it, so the map is built again with the fills.
 			if generatesPublicMock {
-				for (calledType, holes) in holesFilled(byCallsOf: publicMockCalls, in: typeDescriptionToScopeMap, unfulfilledInstantiationsAreHoles: true) {
-					publicMockCallsOfPublicMocks[calledType]?.filledHoles = holes
+				for (calledType, filled) in holesFilled(byCallsOf: publicMockCalls, in: typeDescriptionToScopeMap, unfulfilledInstantiationsAreHoles: true) {
+					publicMockCallsOfPublicMocks[calledType]?.filledHoles = filled.holes
+					publicMockCallsOfPublicMocks[calledType]?.sitesPassedUpOnSomeRoute = filled.sitesPassedUpOnSomeRoute
 				}
 			}
 			let filledHoles = holesFilled(byCallsOf: publicMockCalls, in: typeDescriptionToScopeMap, unfulfilledInstantiationsAreHoles: false)
 			if !filledHoles.isEmpty {
-				for (calledType, holes) in filledHoles {
-					publicMockCalls[calledType]?.filledHoles = holes
+				for (calledType, filled) in filledHoles {
+					publicMockCalls[calledType]?.filledHoles = filled.holes
+					publicMockCalls[calledType]?.sitesPassedUpOnSomeRoute = filled.sitesPassedUpOnSomeRoute
 				}
 				typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls)
 			}
@@ -8184,6 +8186,8 @@ public actor DependencyTreeGenerator {
 	/// carries and the builders of the public mocks it calls whose every place is filled. Starting from every such place,
 	/// a place whose fill would read anything else is dropped, until none is: a fill never passes a place up. Every other
 	/// place is passed up: the calling mock takes it, through a case of its own enum or as a parameter its caller passes.
+	/// A place inside a fill of an inner seam's builder that some routes of the inner seam's enum lead to with a value its
+	/// fill reads and others without is filled and passed up both (`InnerScopeReaders.passesUpOnSomeInnerRoute`).
 	/// - Parameter unfulfilledInstantiationsAreHoles: Whether the fills are a public mock's, whose tree is built with holes,
 	///   so a type a fill's tree instantiates that no declaration the module sees fulfills is a place of the mock's own. An
 	///   internal mock's fill would read a value nothing binds there, so it does not fill the place.
@@ -8191,18 +8195,22 @@ public actor DependencyTreeGenerator {
 		byCallsOf publicMockCalls: [TypeDescription: PublicMockCall],
 		in typeDescriptionToScopeMap: [TypeDescription: Scope],
 		unfulfilledInstantiationsAreHoles: Bool,
-	) -> [TypeDescription: [SeamSignature.Hole]] {
+	) -> [TypeDescription: (holes: [SeamSignature.Hole], sitesPassedUpOnSomeRoute: Set<SeamSignature.Hole.Site>)] {
 		guard let emittingModule = emittingModuleToCheck else { return [:] }
 		struct Candidate {
 			let calledType: TypeDescription
 			let hole: SeamSignature.Hole
 			/// What the fill's tree receives that the scope struct does not carry.
 			let receivedBesideFields: Set<Property>
+			/// Whether a route of an inner seam's enum leads to the place without a value the fill reads.
+			let passesUpOnSomeRoute: Bool
 		}
 		var receivedPropertiesCache = ReceivedPropertiesCache()
 		var candidates = [Candidate]()
 		for calledType in publicMockCalls.keys.sorted() {
-			for hole in publicMockCalls[calledType]?.holes ?? [] {
+			guard let publicMockCall = publicMockCalls[calledType] else { continue }
+			let readers = InnerScopeReaders(enumsByKey: publicMockCall.calledBuilders.enumsByKey, nameByKey: [:])
+			for hole in publicMockCall.holes {
 				guard let fulfillingScope = Self.fulfillingMockScope(of: hole, in: typeDescriptionToScopeMap),
 				      Self.inaccessibleConstructions(
 				      	Self.constructions(
@@ -8227,10 +8235,14 @@ public actor DependencyTreeGenerator {
 						fieldForms.insert(form.asOptionalProperty)
 					}
 				}
+				let received = Self.collectReceivedProperties(from: fulfillingScope, cache: &receivedPropertiesCache).received
+				// The root enum the place's route starts at: of the seam whose enums hold it, its hole type's, of its family.
+				let rootKey = SeamSignature.ScopeEnum.Key(seamType: hole.scopeSeamType, holeType: hole.holeType, isSendable: hole.enumPlace?.isBuiltBySendableBuilder ?? false)
 				candidates.append(Candidate(
 					calledType: calledType,
 					hole: hole,
-					receivedBesideFields: Self.collectReceivedProperties(from: fulfillingScope, cache: &receivedPropertiesCache).received.subtracting(fieldForms),
+					receivedBesideFields: received.subtracting(fieldForms),
+					passesUpOnSomeRoute: readers.passesUpOnSomeInnerRoute(hole, reading: received, from: rootKey),
 				))
 			}
 		}
@@ -8242,6 +8254,7 @@ public actor DependencyTreeGenerator {
 			for (calledType, calledCandidates) in Dictionary(grouping: filled, by: \.calledType) {
 				guard var publicMockCall = publicMockCalls[calledType] else { continue }
 				publicMockCall.filledHoles = calledCandidates.map(\.hole)
+				publicMockCall.sitesPassedUpOnSomeRoute = Set(calledCandidates.filter(\.passesUpOnSomeRoute).map(\.hole.site))
 				let passedUpLabels = Set(publicMockCall.passedUpBuilders.map(\.label))
 				for parameter in publicMockCall.passedParameters {
 					if let builder = parameter.builder, !passedUpLabels.contains(builder.label) {
@@ -8253,7 +8266,9 @@ public actor DependencyTreeGenerator {
 			guard kept.count < filled.count else { break }
 			filled = kept
 		}
-		return Dictionary(grouping: filled, by: \.calledType).mapValues { $0.map(\.hole) }
+		return Dictionary(grouping: filled, by: \.calledType).mapValues { calledCandidates in
+			(calledCandidates.map(\.hole), Set(calledCandidates.filter(\.passesUpOnSomeRoute).map(\.hole.site)))
+		}
 	}
 
 	/// Whether a scope of the mock tree rooted at `scope`, in a map built without holes, instantiates a property no scope

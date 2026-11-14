@@ -93,9 +93,6 @@ extension DependencyTreeGenerator {
 	/// - Parameters:
 	///   - reached: The places of the hole type, and the calls that pass one up, in the order the seam's generated code
 	///     reaches them.
-	///   - takenTypeNames: The names every generated type nested in a root enum must not take beside those its own cases spell:
-	///     the names the root's other cases – cases per path, of a place inside a public mock's fill – declare or spell, in
-	///     their fields, forwarded values and inner enums.
 	///   - bindsReceivesAgain: Whether the tree is a public mock's, whose types' levels hold the receives it binds again
 	///     (`receivesBoundAgainOfAnyBuild(inTreeRootedAt:)`).
 	static func scopeEnumsByType(
@@ -105,14 +102,12 @@ extension DependencyTreeGenerator {
 		builderLabels: (plain: String, sendable: String),
 		generator: ScopeGenerator,
 		reached: [ReachedPlace],
-		takenTypeNames externallyTakenTypeNames: Set<String>,
 		holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole],
 		parameters: [SeamSignature.Parameter],
 		bindsReceivesAgain: Bool,
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
 		reachedEnum: (SeamSignature.ScopeEnum.Key) -> SeamSignature.ScopeEnum?,
-		entersFills: Bool = true,
 	) -> ScopeEnumsByType {
 		let seamType = seam.concreteInstantiable
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
@@ -164,9 +159,7 @@ extension DependencyTreeGenerator {
 				return [.declaration(inSendableFunction: child.buildsInSendableFunction)]
 			}
 		}, fillEdges: { _, call in
-			// A public mock's places inside a fill keep a case per path: no fill of its own enters its enums.
-			guard entersFills else { return [] }
-			return call.children.compactMap { fill in
+			call.children.compactMap { fill in
 				guard fill.fillEmitsCode,
 				      fill.containsBuildSite || fill.passesUpBuilder,
 				      let fulfiller = fill.children.first,
@@ -176,8 +169,8 @@ extension DependencyTreeGenerator {
 				return (SeamDeclarationGraph.FillEdge(innerKey: innerKey, inSendableFunction: inSendableFunction, fulfillerBuildsInSendableFunction: fulfiller.buildsInSendableFunction), fulfiller)
 			}
 		})
-		let cycleParametersOfAnyBuild = Self.cycleParametersOfAnyBuild(inTreeRootedAt: generator, entersFills: entersFills)
-		let reboundPropertiesOfAnyBuild = Self.reboundPropertiesOfAnyBuild(inTreeRootedAt: generator, entersFills: entersFills)
+		let cycleParametersOfAnyBuild = Self.cycleParametersOfAnyBuild(inTreeRootedAt: generator)
+		let reboundPropertiesOfAnyBuild = Self.reboundPropertiesOfAnyBuild(inTreeRootedAt: generator)
 		let receivesBoundAgainOfAnyBuild = bindsReceivesAgain ? Self.receivesBoundAgainOfAnyBuild(inTreeRootedAt: generator) : [:]
 
 		// What each type with an enum binds, in its order, and the cases each family's enum has.
@@ -408,7 +401,7 @@ extension DependencyTreeGenerator {
 					}
 				}
 			}
-			var takenTypeNames = spelledTypeNames.union([rootTypeNames.plain, rootTypeNames.sendable]).union(externallyTakenTypeNames)
+			var takenTypeNames = spelledTypeNames.union([rootTypeNames.plain, rootTypeNames.sendable])
 			enumTypeNameByDescribed[Described(type: seamType, isSendable: isSendable)] = rootTypeName
 			let nestedTypes = familyDescribed.filter { $0.type != seamType }
 			for (current, name) in zip(nestedTypes, nestedEnumNames(of: nestedTypes.map(\.type), instantiables: instantiables)) {
@@ -482,7 +475,7 @@ extension DependencyTreeGenerator {
 					kind = .nested(enumKey: key(of: heldDescribed), isIndirect: false)
 				case let .inner(innerKey):
 					guard let innerEnum = reachedEnum(innerKey) else { continue }
-					kind = .inner(enumKey: innerKey, enumType: innerEnum.type, sitePath: [], isIndirect: false)
+					kind = .inner(enumKey: innerKey, enumType: innerEnum.type, isIndirect: false)
 				case let .fill(filledBuilder, _, _, fulfiller, isSendable):
 					let heldDescribed = Described(type: fulfiller, isSendable: isSendable)
 					guard describedSet.contains(heldDescribed), let innerEnum = reachedEnum(filledBuilder.innerKey) else { continue }
@@ -648,16 +641,14 @@ extension DependencyTreeGenerator {
 	/// (`SeamHoles.valuesArguments(of:readingInstancesOf:)`). Every build takes a label in one form: a parameter's form
 	/// follows from the receivers in the type's own tree, which every build shares. A build in a `@Sendable` function counts
 	/// as any other: its function binds its parameters.
-	/// A public mock's levels are its builds' outside every fill (`entersFills` false), since a place inside its fill keeps a
-	/// case per path.
-	static func cycleParametersOfAnyBuild(inTreeRootedAt root: ScopeGenerator, entersFills: Bool = true) -> [TypeDescription: [LevelCycleParameter]] {
+	static func cycleParametersOfAnyBuild(inTreeRootedAt root: ScopeGenerator) -> [TypeDescription: [LevelCycleParameter]] {
 		var parametersByType = [TypeDescription: [LevelCycleParameter]]()
 		var generatorsToVisit = [root]
 		while let generator = generatorsToVisit.popLast() {
 			for child in generator.children where child.holeSite == nil && !child.closesPropertyCycle {
 				// A fill whose code is generated builds a type whose levels are as any other's.
 				guard child.fillHole == nil else {
-					if entersFills, child.fillEmitsCode {
+					if child.fillEmitsCode {
 						generatorsToVisit.append(child)
 					}
 					continue
@@ -683,16 +674,15 @@ extension DependencyTreeGenerator {
 	/// build whose function does not binds the field from the label as Swift sees it there, the nearest declaration, which
 	/// the type's tree receives, and so reads inline. Where every receiver in the type's tree receives the label only if
 	/// available, the field takes the optional form: a build whose function does not rebind it can bind the label from an
-	/// optional declaration, and a wrapper converts to the optional form. A public mock's levels are its builds' outside
-	/// every fill (`entersFills` false), as `cycleParametersOfAnyBuild(inTreeRootedAt:entersFills:)` reads them.
-	static func reboundPropertiesOfAnyBuild(inTreeRootedAt root: ScopeGenerator, entersFills: Bool = true) -> [TypeDescription: [Property]] {
+	/// optional declaration, and a wrapper converts to the optional form.
+	static func reboundPropertiesOfAnyBuild(inTreeRootedAt root: ScopeGenerator) -> [TypeDescription: [Property]] {
 		var propertiesByType = [TypeDescription: [Property]]()
 		var generatorsToVisit = [root]
 		while let generator = generatorsToVisit.popLast() {
 			for child in generator.children where child.holeSite == nil && !child.closesPropertyCycle {
 				// A fill whose code is generated builds a type whose levels are as any other's.
 				guard child.fillHole == nil else {
-					if entersFills, child.fillEmitsCode {
+					if child.fillEmitsCode {
 						generatorsToVisit.append(child)
 					}
 					continue

@@ -117,13 +117,6 @@ extension DependencyTreeGenerator {
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
 		var holesBySite = Dictionary(flatHoles.map { ($0.site, $0) }, uniquingKeysWith: { first, _ in first })
 
-		// The enums' cases per path, in the order the seam's generated code first reaches them.
-		struct DraftCase {
-			let rawName: String
-			let disambiguatingType: TypeDescription
-			let kind: SeamSignature.ScopeEnum.Case.Kind
-		}
-		var draftCasesByKey = [SeamSignature.ScopeEnum.Key: [DraftCase]]()
 		var holeTypesInReachOrder = [SeamSignature.HoleType]()
 		var seenHoleTypes = Set<SeamSignature.HoleType>()
 		func reach(_ holeType: SeamSignature.HoleType) {
@@ -139,22 +132,26 @@ extension DependencyTreeGenerator {
 		func reachedEnum(_ key: SeamSignature.ScopeEnum.Key) -> SeamSignature.ScopeEnum? {
 			ownScopeEnums[key] ?? calledSeamsEnums[key]
 		}
-		// A seam's places and calls, by hole type, whose enums are nested by type (`scopeEnumsByType`), a place inside a fill
-		// included, and a public mock's outside every fill. A place inside a public mock's fill keeps a case per path.
-		let entersFills = !scopeTypeNames.areQualified
+		// A call reaches its enums through its fills too, where it passes no place up: a public mock, which computes no
+		// called mock's signature, reads them from each call whose tree leads to a place.
+		var generatorsToVisit = [generator]
+		while let visited = generatorsToVisit.popLast() {
+			for child in visited.children where child.containsBuildSite || child.passesUpBuilder {
+				for scopeEnum in child.calledBuilders?.scopeEnums ?? [] where calledSeamsEnums[scopeEnum.key] == nil {
+					calledSeamsEnums[scopeEnum.key] = scopeEnum
+				}
+				generatorsToVisit.append(child)
+			}
+		}
+		// The places and calls of a seam's or a public mock's tree, by hole type, whose enums are nested by type
+		// (`scopeEnumsByType`), a place inside a fill included.
 		var reachedByHoleType = [SeamSignature.HoleType: [ReachedPlace]]()
 		for reached in placesAndCalls(in: generator) {
 			switch reached {
-			case let .place(sitePath, steps, isInSendableFunction):
-				let site = SeamSignature.Hole.Site(seamType: seamType, path: sitePath)
-				guard let hole = holesBySite[site] else { continue }
+			case let .place(sitePath, steps):
+				guard let hole = holesBySite[SeamSignature.Hole.Site(seamType: seamType, path: sitePath)] else { continue }
 				reach(hole.holeType)
-				if entersFills || !steps.contains(where: { $0.filledBuilder != nil }) {
-					reachedByHoleType[hole.holeType, default: []].append(ReachedPlace(sitePath: sitePath, steps: steps, call: nil))
-				} else {
-					let key = SeamSignature.ScopeEnum.Key(seamType: seamType, holeType: hole.holeType, isSendable: isInSendableFunction)
-					draftCasesByKey[key, default: []].append(DraftCase(rawName: SeamSignature.Hole.caseName(of: sitePath), disambiguatingType: hole.ownerType, kind: .own(site: site)))
-				}
+				reachedByHoleType[hole.holeType, default: []].append(ReachedPlace(sitePath: sitePath, steps: steps, call: nil))
 			case let .call(sitePath, call, steps, isInSendableFunction):
 				guard let calledBuilders = call.calledBuilders else { continue }
 				for scopeEnum in calledBuilders.scopeEnums where calledSeamsEnums[scopeEnum.key] == nil {
@@ -168,17 +165,12 @@ extension DependencyTreeGenerator {
 				for builder in calledBuilders.builders {
 					let innerKey = builder.enumKey
 					guard !SeamSignature.ScopeEnum.sitesReached(from: innerKey, in: calledEnumsByKey).isDisjoint(with: passedUpSites),
-					      let innerEnum = reachedEnum(innerKey)
+					      reachedEnum(innerKey) != nil
 					else { continue }
 					reach(innerKey.holeType)
 					let key = SeamSignature.ScopeEnum.Key(seamType: seamType, holeType: innerKey.holeType, isSendable: innerKey.isSendable || isInSendableFunction)
-					if entersFills || !steps.contains(where: { $0.filledBuilder != nil }) {
-						if reachedHoleTypes.insert(innerKey.holeType).inserted {
-							reachedByHoleType[innerKey.holeType, default: []].append(ReachedPlace(sitePath: sitePath, steps: steps, call: call))
-						}
-					} else {
-						let rawName = SeamSignature.Hole.caseName(of: sitePath) + (innerKey.isSendable ? "_Sendable" : "")
-						draftCasesByKey[key, default: []].append(DraftCase(rawName: rawName, disambiguatingType: innerKey.seamType, kind: .inner(enumKey: innerKey, enumType: innerEnum.type, sitePath: sitePath, isIndirect: false)))
+					if reachedHoleTypes.insert(innerKey.holeType).inserted {
+						reachedByHoleType[innerKey.holeType, default: []].append(ReachedPlace(sitePath: sitePath, steps: steps, call: call))
 					}
 					// The enum is as visible as the inner seam whose enum it holds, and the builder that takes that enum.
 					let innerSeamAccess = proof.access(ofParameterTyped: innerKey.seamType, mentionedFrom: .declaration(seam), admittedModules: Set([seam.moduleName, instantiables[innerKey.seamType]?.moduleName]))
@@ -227,47 +219,7 @@ extension DependencyTreeGenerator {
 		for holeType in orderedHoleTypes {
 			let stem = stemByHoleType[holeType, default: ""]
 			let rootTypeNames = (plain: "\(scopeTypeNames.plain)_\(stem)".spelledAsIdentifier, sendable: "\(scopeTypeNames.sendable)_\(stem)".spelledAsIdentifier)
-			// Each family's cases per path, named: two cases of one name are both named apart.
-			var namedDraftCasesByFamily = [Bool: [(draftCase: DraftCase, name: String)]]()
-			// A payload struct's name is taken from the case; a type a field spells must not resolve to the struct.
-			var takenStructNamesByFamily = [Bool: Set<String>]()
-			for isSendable in [false, true] {
-				let draftCases = draftCasesByKey[SeamSignature.ScopeEnum.Key(seamType: seamType, holeType: holeType, isSendable: isSendable)] ?? []
-				var indicesByName = [String: [Int]]()
-				for (index, draftCase) in draftCases.enumerated() {
-					indicesByName[draftCase.rawName, default: []].append(index)
-				}
-				let collidingIndices = draftCases.indices.filter { indicesByName[draftCases[$0].rawName, default: []].count > 1 }
-				var caseNames = draftCases.map(\.rawName.spelledAsIdentifier)
-				let renamed = ScopeGenerator.identifierSafeNames(
-					for: collidingIndices.map { (label: draftCases[$0].rawName, suffixTypes: [draftCases[$0].disambiguatingType]) },
-					reservedNames: Set(draftCases.indices.filter { !collidingIndices.contains($0) }.map { caseNames[$0] }),
-				)
-				for (index, name) in zip(collidingIndices, renamed) {
-					caseNames[index] = name.spelledAsIdentifier
-				}
-				namedDraftCasesByFamily[isSendable] = Array(zip(draftCases, caseNames))
-				var takenStructNames = Set(caseNames)
-				for draftCase in draftCases {
-					switch draftCase.kind {
-					case let .own(site):
-						for field in holesBySite[site]?.fields ?? [] {
-							takenStructNames.formUnion(TypeAccessProof.mentionedTypes(in: field.property.typeDescription).compactMap(\.outermostTypeName))
-						}
-						if let forwardedType = holesBySite[site]?.forwardedType {
-							takenStructNames.formUnion(TypeAccessProof.mentionedTypes(in: forwardedType).compactMap(\.outermostTypeName))
-						}
-					case let .inner(_, enumType, _, _):
-						takenStructNames.formUnion(TypeAccessProof.mentionedTypes(in: enumType).compactMap(\.outermostTypeName))
-					case .place, .nested, .fill:
-						// Only an enum nested by type has these, which `scopeEnumsByType` names.
-						break
-					}
-				}
-				takenStructNamesByFamily[isSendable] = takenStructNames
-			}
-			// The enums are nested by type, a seam's places and calls inside its fills included; the cases of the places inside a
-			// public mock's fill, which keep a case per path, follow each root's own.
+			// The enums, nested by type.
 			var byType = ScopeEnumsByType()
 			if let reached = reachedByHoleType[holeType] {
 				byType = scopeEnumsByType(
@@ -277,15 +229,12 @@ extension DependencyTreeGenerator {
 					builderLabels: (plain: label(of: holeType, isSendable: false), sendable: label(of: holeType, isSendable: true)),
 					generator: generator,
 					reached: reached,
-					// The names the roots' cases per path declare and spell, which their nested types must not shadow.
-					takenTypeNames: takenStructNamesByFamily[false, default: []].union(takenStructNamesByFamily[true, default: []]),
 					holesBySite: holesBySite,
 					parameters: parameters,
 					bindsReceivesAgain: bindsReceivesAgain,
 					proof: proof,
 					instantiables: instantiables,
 					reachedEnum: reachedEnum,
-					entersFills: entersFills,
 				)
 				valuesBindingKeysByStem[loweredLeadingCapitals(of: stem)] = byType.valuesBindingKeys
 				callRoutes += byType.callRoutes
@@ -297,25 +246,8 @@ extension DependencyTreeGenerator {
 			for isSendable in [false, true] {
 				let key = SeamSignature.ScopeEnum.Key(seamType: seamType, holeType: holeType, isSendable: isSendable)
 				let typeName = isSendable ? rootTypeNames.sendable : rootTypeNames.plain
-				let byTypeRoot = byType.rootEnum(isSendable: isSendable)
 				let nestedEnums = byType.enums.filter { $0.key.isSendable == isSendable && $0.rootTypeName != nil }
-				var takenStructNames = takenStructNamesByFamily[isSendable, default: []]
-				takenStructNames.formUnion((byTypeRoot?.cases ?? []).compactMap(\.values?.typeName))
-				var cases = byTypeRoot?.cases ?? []
-				for (draftCase, caseName) in namedDraftCasesByFamily[isSendable, default: []] {
-					var caseName = caseName
-					while cases.contains(where: { $0.name == caseName }) {
-						caseName = "\(caseName)_".spelledAsJoinedIdentifier
-					}
-					cases.append(SeamSignature.ScopeEnum.Case(name: caseName, kind: draftCase.kind))
-					guard case let .own(site) = draftCase.kind else { continue }
-					var valuesTypeName = "\(caseName)_Values".spelledAsJoinedIdentifier
-					while !takenStructNames.insert(valuesTypeName).inserted {
-						valuesTypeName = "\(valuesTypeName)_".spelledAsJoinedIdentifier
-					}
-					holesBySite[site]?.enumPlace = SeamSignature.Hole.EnumPlace(enumTypeName: typeName, caseName: caseName, valuesTypeName: valuesTypeName, isBuiltBySendableBuilder: isSendable)
-					holesBySite[site]?.scopeTypeName = typeName
-				}
+				let cases = byType.rootEnum(isSendable: isSendable)?.cases ?? []
 				// A root with no case of its own takes no builder, and is declared only where the `@Sendable` enum holds an enum
 				// nested in it.
 				guard !cases.isEmpty || !nestedEnums.isEmpty else { continue }
@@ -335,8 +267,6 @@ extension DependencyTreeGenerator {
 				for reachedEnum in [rootEnum] + nestedByTypeEnums where reachedKeys.contains(reachedEnum.key) {
 					for enumCase in reachedEnum.cases {
 						let sites: [SeamSignature.Hole.Site] = switch enumCase.kind {
-						case let .own(site):
-							[site]
 						case let .place(sites):
 							sites
 						case .nested, .inner, .fill:
@@ -421,7 +351,7 @@ extension DependencyTreeGenerator {
 			}
 		}
 		for site in holesBySite.keys {
-			guard let hole = holesBySite[site], hole.innerSeamType == nil, let enumPlace = hole.enumPlace, enumPlace.isNestedByType else { continue }
+			guard let hole = holesBySite[site], hole.innerSeamType == nil, let enumPlace = hole.enumPlace else { continue }
 			holesBySite[site]?.enumPlace = SeamSignature.Hole.EnumPlace(
 				nestedByTypeIn: enumPlace.enumTypeName,
 				rootEnumTypeName: enumPlace.rootEnumTypeName,
@@ -475,12 +405,10 @@ extension DependencyTreeGenerator {
 				for enumCase in scopeEnum.cases {
 					var sites = [SeamSignature.Hole.Site]()
 					switch enumCase.kind {
-					case let .own(site):
-						sites = [site]
 					case let .place(placeSites):
 						sites = placeSites
 					case let .nested(innerKey, _),
-					     let .inner(innerKey, _, _, _),
+					     let .inner(innerKey, _, _),
 					     let .fill(_, _, innerKey, _):
 						innerKeys.append(innerKey)
 					}
@@ -654,9 +582,10 @@ extension DependencyTreeGenerator {
 	// MARK: Private
 
 	private enum PlaceOrCall {
-		/// A place, with the cases on its path (see `ReachedPlace.steps`), and whether any `@Sendable` function, a fill's
+		/// A place, with the cases on its path (see `ReachedPlace.steps`).
+		case place(sitePath: [Property], steps: [ReachedStep])
+		/// A call that passes a builder up, with the cases on its path, and whether any `@Sendable` function, a fill's
 		/// included, encloses it.
-		case place(sitePath: [Property], steps: [ReachedStep], isInSendableFunction: Bool)
 		case call(sitePath: [Property], generator: ScopeGenerator, steps: [ReachedStep], isInSendableFunction: Bool)
 	}
 
@@ -703,7 +632,6 @@ extension DependencyTreeGenerator {
 				reached.append(.place(
 					sitePath: sitePath,
 					steps: frame.steps + [ReachedStep(type: type, property: holeSite.property, pathLength: sitePath.count, buildsInSendableFunction: isSendableWrapper, filledBuilder: nil)],
-					isInSendableFunction: frame.isInSendableFunction || isSendableWrapper,
 				))
 			} else if child.generator.containsBuildSite || child.generator.passesUpBuilder, child.generator.fillEmitsCode {
 				if child.generator.fillHole != nil {
@@ -806,21 +734,14 @@ extension DependencyTreeGenerator {
 			for caseIndex in scopeEnums[enumIndex].cases.indices {
 				if case let .nested(innerKey, _) = scopeEnums[enumIndex].cases[caseIndex].kind, componentByKey[innerKey] == component {
 					scopeEnums[enumIndex].cases[caseIndex].kind = .nested(enumKey: innerKey, isIndirect: true)
-				} else if case let .inner(innerKey, enumType, sitePath, _) = scopeEnums[enumIndex].cases[caseIndex].kind, componentByKey[innerKey] == component {
-					scopeEnums[enumIndex].cases[caseIndex].kind = .inner(enumKey: innerKey, enumType: enumType, sitePath: sitePath, isIndirect: true)
+				} else if case let .inner(innerKey, enumType, _) = scopeEnums[enumIndex].cases[caseIndex].kind, componentByKey[innerKey] == component {
+					scopeEnums[enumIndex].cases[caseIndex].kind = .inner(enumKey: innerKey, enumType: enumType, isIndirect: true)
 				} else if case let .fill(innerKey, innerEnumType, heldKey, _) = scopeEnums[enumIndex].cases[caseIndex].kind, componentByKey[heldKey] == component {
 					scopeEnums[enumIndex].cases[caseIndex].kind = .fill(innerKey: innerKey, innerEnumType: innerEnumType, enumKey: heldKey, isIndirect: true)
 				}
 			}
 		}
 		return scopeEnums
-	}
-}
-
-extension SeamSignature.Hole {
-	/// A place's case name, unspelled: the labels of its path, joined by `_`.
-	static func caseName(of sitePath: [Property]) -> String {
-		sitePath.map(\.label.spelledWithoutBackticks).joined(separator: "_")
 	}
 }
 

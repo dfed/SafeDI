@@ -1274,7 +1274,7 @@ extension DependencyTreeGenerator {
 		var emittingFillByCaseKey = [String: ScopeGenerator]()
 		var caseKeys = [String]()
 		for fill in fills {
-			guard let hole = fill.fillHole, hole.enumPlace?.isNestedByType == true else { continue }
+			guard let hole = fill.fillHole, hole.enumPlace != nil else { continue }
 			let caseKey = ScopeGenerator.fillCaseKey(of: hole)
 			if placesByCaseKey[caseKey] == nil {
 				caseKeys.append(caseKey)
