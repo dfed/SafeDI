@@ -209,6 +209,28 @@ struct GraphFuzzerMockMirrorModel {
 							.split(separator: ",")
 							.map { $0.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ".self", with: "") }
 					}
+					let isMockOnly = arguments.contains("mockOnly: true")
+					let customMockName = Self.customMockName(in: arguments)
+					if let existing = types[name] {
+						// A `mockOnly` declaration of a type with a production declaration is only that type's mock, which SafeDI
+						// merges into the production declaration whichever it reads first.
+						if isMockOnly, !existing.isMockOnly {
+							types[name]?.customMockName = customMockName ?? existing.customMockName
+							currentTypeName = nil
+							continue
+						} else if !isMockOnly, existing.isMockOnly {
+							types[name] = TypeDeclaration(
+								name: name,
+								dependencies: [],
+								isRoot: arguments.contains("isRoot: true"),
+								generatesMock: arguments.contains("generateMock: true"),
+								isExtension: false,
+								additionalTypes: additionalTypes,
+								customMockName: customMockName ?? existing.customMockName,
+							)
+							continue
+						}
+					}
 					types[name] = TypeDeclaration(
 						name: name,
 						dependencies: [],
@@ -216,6 +238,8 @@ struct GraphFuzzerMockMirrorModel {
 						generatesMock: arguments.contains("generateMock: true"),
 						isExtension: false,
 						additionalTypes: additionalTypes,
+						isMockOnly: isMockOnly,
+						customMockName: customMockName,
 					)
 					typeOrder.append(name)
 				case let .instantiateMethod(parameters):
@@ -243,6 +267,16 @@ struct GraphFuzzerMockMirrorModel {
 				}
 			}
 			currentTypeName = nil
+		}
+		// A type a `#SafeDIConfiguration` lists in `additionalMocksToGenerate` generates a mock too.
+		for typeName in Self.additionalMocksToGenerate(in: fixture) {
+			types[typeName]?.generatesMock = true
+		}
+		// The hand-written mock each type has: the method its `customMockName` names, or `mock`, that returns it.
+		let handWrittenMocks = Self.handWrittenMocks(in: fixture)
+		for name in typeOrder {
+			let mockName = types[name]?.customMockName ?? "mock"
+			types[name]?.handWrittenMock = handWrittenMocks.first { $0.name == mockName && $0.returnTypeName == name }
 		}
 		self.types = types
 		self.typeOrder = typeOrder
@@ -297,15 +331,30 @@ struct GraphFuzzerMockMirrorModel {
 		}
 	}
 
+	/// A hand-written mock method: its name, the type it returns, and the label each of its parameters is passed by.
+	struct HandWrittenMock: Equatable {
+		let name: String
+		let returnTypeName: String
+		let parameterLabels: [String]
+	}
+
 	struct TypeDeclaration {
 		let name: String
 		var dependencies: [Dependency]
 		let isRoot: Bool
-		let generatesMock: Bool
+		/// Whether the module generates the type's `mock()`: by `generateMock: true`, or because a `#SafeDIConfiguration`
+		/// lists it in `additionalMocksToGenerate`.
+		var generatesMock: Bool
 		var isExtension: Bool
 		let additionalTypes: [String]
 		/// The parameters of an extension's `instantiate(…)`, each as declared.
 		var instantiateParameters = [String]()
+		/// Whether the model holds only a `mockOnly` declaration of the type.
+		var isMockOnly = false
+		/// The method `customMockName` names on any declaration of the type.
+		var customMockName: String?
+		/// The type's hand-written mock, which its generated `mock()` calls through to.
+		var handWrittenMock: HandWrittenMock?
 
 		var forwardedReceivableProperties: Set<GraphFuzzerMirrorProperty> {
 			Set(dependencies.filter { $0.source == .forwarded }.flatMap(\.receivableProperties))
@@ -357,6 +406,44 @@ struct GraphFuzzerMockMirrorModel {
 			scopeTypeNameByType[Self.unqualifiedName(of: type)]
 		} else {
 			nil
+		}
+	}
+
+	/// The method `customMockName: "…"` names in an `@Instantiable` attribute's `arguments`, if they name one.
+	private static func customMockName(in arguments: String) -> String? {
+		guard let range = arguments.range(of: "customMockName: \"") else { return nil }
+		return String(arguments[range.upperBound...].prefix { $0 != "\"" })
+	}
+
+	/// The type names each `#SafeDIConfiguration` of `fixture` lists in `additionalMocksToGenerate`.
+	private static func additionalMocksToGenerate(in fixture: GraphFuzzerFixture) -> [String] {
+		fixture.swiftFileContent.flatMap { content in
+			content.split(separator: "\n").flatMap { line -> [String] in
+				guard let range = line.range(of: "#SafeDIConfiguration(additionalMocksToGenerate: [") else { return [] }
+				return line[range.upperBound...].prefix { $0 != "]" }
+					.split(separator: ",")
+					.map { $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "\"")) }
+			}
+		}
+	}
+
+	/// Each static method of `fixture` written on one line as `static func <name>(<parameters>) -> <Type> {`.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func handWrittenMocks(in fixture: GraphFuzzerFixture) -> [HandWrittenMock] {
+		fixture.swiftFileContent.flatMap { content in
+			content.split(separator: "\n").compactMap { line -> HandWrittenMock? in
+				guard let start = line.range(of: "static func "),
+				      let open = line[start.upperBound...].firstIndex(of: "("),
+				      let close = line.range(of: ") -> ", options: .backwards),
+				      line.hasSuffix(" {")
+				else { return nil }
+				let parameters = GraphFuzzerOracle.topLevelParameters(String(line[line.index(after: open)..<close.lowerBound]))
+				return HandWrittenMock(
+					name: String(line[start.upperBound..<open]),
+					returnTypeName: String(line[close.upperBound...].dropLast(" {".count)),
+					parameterLabels: parameters.compactMap { parameter in parameter.split(separator: ":").first?.split(separator: " ").first.map(String.init) },
+				)
+			}
 		}
 	}
 
@@ -744,7 +831,9 @@ enum GraphFuzzerMirrorSkip: String, CaseIterable, Comparable {
 	/// The mock takes a parameter without a default value that the mirror cannot forward as the mock binds it – one
 	/// that is neither a value the mocked type forwards nor a dependency its tree receives by that label and type, such
 	/// as an instance of an unbuildable type the mocked type instantiates – or of a type the harness has no sample of
-	/// (`GraphFuzzerSampleValues`).
+	/// (`GraphFuzzerSampleValues`). A value the mocked type forwards whose parameter defaults to its type's hand-written
+	/// mock is skipped so too, since the mock is handed no sample of it and no production declaration builds it for the
+	/// mirror.
 	case requiredParameter
 	/// The mock root's scope holds two forms of one label, which the mock names apart (`x_X`, `x_Instantiator__X`),
 	/// and one production scope cannot declare.
@@ -958,6 +1047,12 @@ extension GraphFuzzerMockMirrorModel {
 				return .failure(.skipped(.requiredParameter))
 			}
 		}
+		// A value the mocked type forwards that is no required parameter defaults to the hand-written mock of its type,
+		// when that mock takes no required argument; the mock is handed no sample of it and no production declaration
+		// builds it, so the mirror has nothing to pass.
+		guard mockedType.dependencies.allSatisfy({ $0.source != .forwarded || requiredParameters.contains($0.property) }) else {
+			return .failure(.skipped(.requiredParameter))
+		}
 		var declaredProperties = Set<GraphFuzzerMirrorProperty>()
 		for child in mockRoot.children {
 			if case .instantiated = child {
@@ -1045,7 +1140,7 @@ extension GraphFuzzerMockMirrorModel {
 		guard Set(declarations.map(\.property.label)).count == declarations.count else {
 			return .failure(.skipped(.twoFormsOfOneLabel))
 		}
-		switch productionResolutionSkip(of: mockRoot, mockedTypeName: typeName, declarations: declarations) {
+		switch productionResolutionSkip(of: mockRoot, declarations: declarations) {
 		case let skip?:
 			return .failure(.skipped(skip))
 		case nil:
@@ -1068,9 +1163,20 @@ extension GraphFuzzerMockMirrorModel {
 			}
 			arguments.append("\(dependency.property.label): \(argument)")
 		}
-		let construction = mockedType.isExtension
-			? "\(typeName).instantiate(\(arguments.joined(separator: ", ")))"
-			: "\(typeName)(\(arguments.joined(separator: ", ")))"
+		// A mocked type's generated `mock()` calls through to its hand-written mock, passing what that mock takes, so the
+		// mirror calls the same method.
+		let construction: String
+		if let handWrittenMock = mockedType.handWrittenMock {
+			var handWrittenMockArguments = [String]()
+			for (dependency, argument) in zip(mockedType.dependencies, arguments) where handWrittenMock.parameterLabels.contains(dependency.property.label) {
+				handWrittenMockArguments.append(argument)
+			}
+			construction = "\(typeName).\(handWrittenMock.name)(\(handWrittenMockArguments.joined(separator: ", ")))"
+		} else if mockedType.isExtension {
+			construction = "\(typeName).instantiate(\(arguments.joined(separator: ", ")))"
+		} else {
+			construction = "\(typeName)(\(arguments.joined(separator: ", ")))"
+		}
 		return .success(GraphFuzzerMockMirror(
 			mockedTypeName: typeName,
 			name: name,
@@ -1111,7 +1217,7 @@ extension GraphFuzzerMockMirrorModel {
 	/// it creates every such alias. A receive whose closest declaration of its label has another type is no reason to
 	/// skip: production passes `nil` for one received only if available, as the mock's override of its own type does,
 	/// and rejects a required one, as the mock does.
-	private func productionResolutionSkip(of mockRoot: MockRoot, mockedTypeName: String, declarations: [GraphFuzzerMockMirror.Declaration]) -> GraphFuzzerMirrorSkip? {
+	private func productionResolutionSkip(of mockRoot: MockRoot, declarations: [GraphFuzzerMockMirror.Declaration]) -> GraphFuzzerMirrorSkip? {
 		var rootDeclarations = [String: Set<ProductionDeclaration>]()
 		for declaration in declarations {
 			for property in [declaration.property] + [declaration.attribute.hasPrefix("@Instantiated") ? declaration.property.lazilyInstantiatedInstance : declaration.property.lazilyInstantiatedInstanceOfDeclaredBinding].compactMap(\.self) {
@@ -1218,8 +1324,10 @@ extension GraphFuzzerMockMirrorModel {
 				visit(childTypeName, path: path + [childTypeName], declarationsOnPath: declarationsOnPath + [scopeDeclarations])
 			}
 		}
+		// The path starts below the mirror, which is not the mocked type: production builds the mocked type again where its
+		// own tree instantiates it, through a builder, and resolves what that instance receives above it.
 		for case let .instantiated(_, childTypeName, _) in mockRoot.children {
-			visit(childTypeName, path: [mockedTypeName, childTypeName], declarationsOnPath: [rootDeclarations])
+			visit(childTypeName, path: [childTypeName], declarationsOnPath: [rootDeclarations])
 		}
 		return skip
 	}

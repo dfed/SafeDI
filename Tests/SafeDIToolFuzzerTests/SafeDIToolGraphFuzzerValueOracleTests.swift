@@ -203,6 +203,58 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 	}
 
 	@Test
+	func mirror_callsHandWrittenMockCustomMockNameNames_whenMockedTypeDeclaresOneUnderMockCondition() throws {
+		#expect(try Self.mirrorSource(of: "S1_Clock", in: Self.fixture([
+			"""
+			@Instantiable(generateMock: true, customMockName: "customMock")
+			public final class S1_Clock: Instantiable {
+				public init(store: S1_Store, title: String = "default") {
+					self.store = store
+				}
+
+				@Instantiated let store: S1_Store
+
+				#if DEBUG
+				public static func customMock(store: S1_Store, title: String = "default") -> S1_Clock {
+					S1_Clock(store: store, title: title)
+				}
+				#endif
+			}
+
+			""",
+			Self.type("S1_Store", properties: []),
+		])) == """
+		@Instantiable(isRoot: true)
+		public final class S1_ZMirror0: Instantiable {
+			public init(store: S1_Store) {
+				self.store = store
+				differentialMirrorValue = S1_Clock.customMock(store: store)
+			}
+
+			@Instantiated let store: S1_Store
+			let differentialMirrorValue: S1_Clock
+		}
+
+		""")
+	}
+
+	@Test
+	func mirror_callsMockOnlyExtensionsMock_whenExtensionPrecedesTheMockedTypesProductionDeclaration() throws {
+		#expect(try Self.mirrorSource(of: "S1_Service", in: Self.fixture([
+			Self.mockOnlyPreviewExtensionOfService + "\n" + Self.mockedServiceDeclaration,
+			Self.type("S1_Store", properties: []),
+		])) == Self.serviceMirrorSource)
+	}
+
+	@Test
+	func mirror_callsMockOnlyExtensionsMock_whenExtensionFollowsTheMockedTypesProductionDeclaration() throws {
+		#expect(try Self.mirrorSource(of: "S1_Service", in: Self.fixture([
+			Self.mockedServiceDeclaration + "\n" + Self.mockOnlyPreviewExtensionOfService,
+			Self.type("S1_Store", properties: []),
+		])) == Self.serviceMirrorSource)
+	}
+
+	@Test
 	func mirror_writesAliasOfOptionalFormWithNonOptionalType_whenMockPromotesTheOptionalFormAndBuildsItNonOptional() throws {
 		// The mock promotes the received `value: S1_Value?` its alias requires and builds it non-optional, which the
 		// alias reads. The mirror declares that property itself, and production reads a rename of its own property as a
@@ -263,6 +315,20 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 		])
 
 		#expect(Self.mirrorResult(of: "S1_Screen", in: fixture, forwarding: [GraphFuzzerMirrorProperty(label: "token", type: "S1_Token")]) == .failure(.skipped(.requiredParameter)))
+	}
+
+	@Test
+	func mirror_skipsRequiredOptionalReceive_whenMockedTypesTreeBuildsMockedTypeAgainBeneathNonOptionalDeclaration() {
+		// The mock promotes the optional `value: S1_Value?` its type receives and builds it non-optional; the mirror, which
+		// is not `S1_Screen`, builds the `S1_Screen` its editor's builder makes again, whose required receive of the
+		// optional form production does not fulfill with the mirror's non-optional declaration.
+		let fixture = Self.fixture([
+			Self.type("S1_Screen", arguments: "generateMock: true", properties: ["@Received let value: S1_Value?", "@Instantiated let editor: S1_Editor"]),
+			Self.type("S1_Editor", properties: ["@Instantiated let screenBuilder: Instantiator<S1_Screen>"]),
+			Self.type("S1_Value", properties: []),
+		])
+
+		#expect(Self.mirrorResult(of: "S1_Screen", in: fixture) == .failure(.skipped(.requiredOptionalReceiveOfNonOptionalDeclaration)))
 	}
 
 	@Test
@@ -527,6 +593,138 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 			"`S1_Screen.mock()` builds [\"S1_Editor\", \"S1_Session\"] beside `S1_Screen` and takes 0 onlyIfAvailable overrides; the mirror model builds [\"S1_Editor\"] and expects 0.",
 		])
 		#expect(plan.skips.isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func plan_mirrorsType_whenConfigurationListsItInAdditionalMocksToGenerate() async throws {
+		let fixture = Self.fixture([
+			Self.type("S1_Root", arguments: "isRoot: true", properties: ["@Instantiated let clock: S1_Clock"]) + "\n#SafeDIConfiguration(additionalMocksToGenerate: [\"S1_Clock\"])\n",
+			Self.type("S1_Clock", properties: ["@Instantiated let store: S1_Store"]),
+			Self.type("S1_Store", properties: []),
+		])
+		let generatedFiles = try await Self.generatedFiles(of: GraphFuzzerOracle.toolOutcome(of: fixture))
+		let plan = GraphFuzzerValueOraclePlan(fixture: fixture, generatedFiles: generatedFiles, storingFixture: fixture)
+
+		#expect(plan.modelFailures == [])
+		#expect(plan.mirrors.map(\.mockedTypeName) == ["S1_Clock"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func plan_skipsMockedTypeThatForwardsAValue_whenItsTypesHandWrittenMockDefaultsTheMocksParameter() async throws {
+		// `S1_Screen.mock(clock:)` defaults `clock` to `S1_Clock.customMock()`, so it takes no required parameter, yet no
+		// production declaration builds the value for a mirror (base corpus seed 1093 of the mock vocabulary draw).
+		let fixture = Self.fixture([
+			Self.type("S1_Screen", arguments: "generateMock: true", properties: ["@Forwarded let clock: S1_Clock"]),
+			"""
+			@Instantiable(generateMock: true, customMockName: "customMock")
+			public final class S1_Clock: Instantiable {
+				public init() {}
+
+				#if DEBUG
+				public static func customMock() -> S1_Clock {
+					S1_Clock()
+				}
+				#endif
+			}
+
+			""",
+		])
+		let generatedFiles = try await Self.generatedFiles(of: GraphFuzzerOracle.toolOutcome(of: fixture))
+		let plan = GraphFuzzerValueOraclePlan(fixture: fixture, generatedFiles: generatedFiles, storingFixture: fixture)
+
+		#expect(try #require(generatedFiles["S1_Screen+SafeDIMock.swift"]).contains("clock: S1_Clock = S1_Clock.customMock()"))
+		#expect(plan.modelFailures == [])
+		#expect(plan.skips.map { "\($0.typeName): \($0.skip)" } == ["S1_Screen: requiredParameter"])
+		#expect(plan.mirrors.map(\.mockedTypeName) == ["S1_Clock"])
+	}
+
+	// MARK: Hand-written mocks
+
+	/// A root whose mock builds `S1_Feature`, which declares a hand-written `mock` in its body, `S1_Clock`, whose
+	/// `customMockName` names its hand-written mock beside its generated one, and `S1_Service`, a `struct` with a
+	/// `mockOnly` extension.
+	private static let handWrittenMocksFixture = fixture([
+		type("S1_Root", arguments: "generateMock: true", properties: ["@Instantiated let feature: S1_Feature", "@Instantiated let clock: S1_Clock", "@Instantiated let service: S1_Service"]),
+		"""
+		@Instantiable
+		public final class S1_Feature: Instantiable {
+			public init(store: S1_Store) {
+				self.store = store
+			}
+
+			@Instantiated let store: S1_Store
+
+			#if DEBUG
+			public static func mock(store: S1_Store) -> S1_Feature {
+				S1_Feature(store: store)
+			}
+			#endif
+		}
+
+		""",
+		"""
+		@Instantiable(generateMock: true, customMockName: "customMock")
+		public final class S1_Clock: Instantiable {
+			public init() {}
+
+			#if DEBUG
+			public static func customMock() -> S1_Clock {
+				S1_Clock()
+			}
+			#endif
+		}
+
+		""",
+		type("S1_Store", properties: []),
+		"""
+		#if DEBUG
+		@Instantiable(mockOnly: true)
+		extension S1_Service {
+			public static func mock() -> S1_Service {
+				S1_Service()
+			}
+		}
+		#endif
+
+		@Instantiable
+		public struct S1_Service: Instantiable {
+			public init() {}
+		}
+
+		""",
+	])
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func handWrittenMockBypassFailure_isNil_whenGeneratedMocksCallEachHandWrittenMock() async throws {
+		let outcome = try await GraphFuzzerOracle.toolOutcome(of: Self.handWrittenMocksFixture)
+		let runs = GraphFuzzerToolRuns(fixture: Self.handWrittenMocksFixture, firstOutcome: outcome, secondOutcome: outcome)
+		let rootMock = try #require(try Self.generatedFiles(of: outcome)["S1_Root+SafeDIMock.swift"])
+
+		#expect(rootMock.contains("S1_Feature.mock(store: store)"))
+		#expect(rootMock.contains("S1_Clock.customMock()"))
+		#expect(rootMock.contains("S1_Service.mock()"))
+		#expect(runs.handWrittenMockBypassFailure == nil)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func handWrittenMockBypassFailure_reportsEachConstruction_whenGeneratedMockCallsInitializersOfTypesWithHandWrittenMocks() async throws {
+		var generatedFiles = try await Self.generatedFiles(of: GraphFuzzerOracle.toolOutcome(of: Self.handWrittenMocksFixture))
+		let rootMock = try #require(generatedFiles["S1_Root+SafeDIMock.swift"])
+		generatedFiles["S1_Root+SafeDIMock.swift"] = rootMock
+			.replacingOccurrences(of: "S1_Feature.mock(store: store)", with: "S1_Feature(store: store)")
+			.replacingOccurrences(of: "S1_Service.mock()", with: "S1_Service.init()")
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: generatedFiles, warnings: [])
+		let failure = GraphFuzzerToolRuns(fixture: Self.handWrittenMocksFixture, firstOutcome: outcome, secondOutcome: outcome).handWrittenMockBypassFailure
+
+		#expect(failure?.kind == .generatedMockBypassesHandWrittenMock)
+		#expect(failure?.details.split(separator: "\n").filter { $0.hasPrefix("`S1_Root+SafeDIMock.swift` builds") }.map { $0.prefix { $0 != ":" } } == [
+			"`S1_Root+SafeDIMock.swift` builds `S1_Feature` with its initializer, not its hand-written mock",
+			"`S1_Root+SafeDIMock.swift` builds `S1_Service` with its initializer, not its hand-written mock",
+		])
 	}
 
 	// MARK: Known issues
@@ -1060,6 +1258,35 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 		#endif
 		"""
 	}
+
+	/// `S1_Service`, whose `mock()` is generated and calls through to the `mockOnly` extension's `preview(store:)`.
+	private static let mockedServiceDeclaration = SafeDIToolGraphFuzzerValueOracleTests.type("S1_Service", arguments: "generateMock: true", properties: ["@Instantiated let store: S1_Store"])
+
+	private static let mockOnlyPreviewExtensionOfService = """
+	#if DEBUG
+	@Instantiable(mockOnly: true, customMockName: "preview")
+	extension S1_Service {
+		public static func preview(store: S1_Store = S1_Store()) -> S1_Service {
+			S1_Service(store: store)
+		}
+	}
+	#endif
+
+	"""
+
+	private static let serviceMirrorSource = """
+	@Instantiable(isRoot: true)
+	public final class S1_ZMirror0: Instantiable {
+		public init(store: S1_Store) {
+			self.store = store
+			differentialMirrorValue = S1_Service.preview(store: store)
+		}
+
+		@Instantiated let store: S1_Store
+		let differentialMirrorValue: S1_Service
+	}
+
+	"""
 
 	/// The source of a fuzzer-shaped `@Instantiable` class named `name` that stores each of `properties`.
 	private static func type(_ name: String, arguments: String? = nil, properties: [String]) -> String {
