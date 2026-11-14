@@ -1,0 +1,18 @@
+# Swift files under Sources/ and Plugins/ that no coverage report records, one per line as `path: reason`.
+#
+# "Check Line Coverage on Linux" (Scripts/unexecuted-lines.py) fails when a Swift file under Sources/ or Plugins/
+# is neither recorded by the Linux or macOS test run's coverage report nor listed here, so code cannot leave
+# measurement unnoticed by moving into a file no test target compiles. It also fails when a file listed here does
+# get a record, or no longer exists, so this list cannot go stale.
+Plugins/InstallSafeDITool/InstallSafeDITool.swift: a command plugin that imports PackagePlugin, which no test target can link
+Plugins/MigrateSafeDIFromVersionOne/MigrateSafeDIFromVersionOne.swift: a command plugin that imports PackagePlugin, which no test target can link
+Plugins/PluginScanner.swift: compiled only into the SafeDIGenerator build tool plugin, which no test target can depend on
+Plugins/SafeDIGenerator/SafeDIGenerateDependencyTree.swift: the build tool plugin's entry point, which imports PackagePlugin, which no test target can link
+Plugins/Shared.swift: compiled only into the plugins, and imports PackagePlugin, which no test target can link
+Sources/SafeDI/Decorators/Forwarded.swift: macro declarations only, which compile to no executable code
+Sources/SafeDI/Decorators/Instantiable.swift: macro declarations only, which compile to no executable code
+Sources/SafeDI/Decorators/Instantiated.swift: macro declarations only, which compile to no executable code
+Sources/SafeDI/Decorators/Received.swift: macro declarations only, which compile to no executable code
+Sources/SafeDI/Decorators/SafeDIConfiguration.swift: macro declarations only, which compile to no executable code
+Sources/SafeDICore/Errors/DiagnosticError.swift: a protocol declaration only, which compiles to no executable code
+Sources/SafeDITool/SafeDIToolMain.swift: the executable's entry point; test targets depend on SafeDIToolLibrary, never on an executable target

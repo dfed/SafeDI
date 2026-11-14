@@ -30,6 +30,12 @@ coverage:
     project:
       default:
         target: 100%
+        # With no report for the base commit, Codecov posts this status
+        # without reading the head's report, and the default is success: a
+        # stacked pull request whose base branch's CI was cancelled passed
+        # with "No report found to compare against" while main fell below
+        # 100%. Failing instead means the status never passes unread.
+        if_not_found: failure
         flags:
           - linux
           - macos
