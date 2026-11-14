@@ -269,7 +269,6 @@ enum SeamAccessExplanation {
 		if !omission.isNoTierParameter, let packageNameRemedy = ModuleIdentity.packageNameRemedy(
 			emitter: ModuleIdentity(moduleName: seamCall.callerModuleName, packageName: seamCall.callerPackageName),
 			declarer: ModuleIdentity(moduleName: seamCall.seamModuleName, packageName: seamCall.seamPackageName),
-			requirement: seamCall.requirement,
 			declaredLevel: parameter.tierAccess,
 		) {
 			remedies.append(packageNameRemedy)

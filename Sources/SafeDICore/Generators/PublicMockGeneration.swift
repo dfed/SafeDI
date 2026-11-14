@@ -1273,11 +1273,8 @@ struct PublicMockFinding: Hashable, Sendable {
 		case .instantiated:
 			"which \(receiverNames.first ?? typeName) instantiates and no `@Instantiable` declaration this module sees fulfills"
 		case let .builder(hole):
-			if let enumPlace = hole.enumPlace {
-				"whose case `\(enumPlace.describedCase)` builds `\(hole.builtType.asSource)` for the hole `\(hole.property.label)`"
-			} else {
-				"which builds `\(hole.builtType.asSource)` for the hole `\(hole.property.label)`"
-			}
+			// A public mock's builder takes a place of its shaped signature, which has its case nested by type (`enumPlace`).
+			"whose case `\(hole.enumPlace?.describedCase ?? hole.property.label)` builds `\(hole.builtType.asSource)` for the hole `\(hole.property.label)`"
 		}
 		let parameterName = if case let .builder(hole) = parameter.kind {
 			hole.builderLabel
@@ -1572,7 +1569,7 @@ extension ScopeGenerator.PublicMockTierOmission {
 		// belongs in the other's package, which reaches the parameter on a `package` tier and which the parameter's
 		// `package` tier makes the likelier fix, so that remedy comes first. A parameter on no tier is omitted by a call
 		// in the mock's tree, whose modules this call does not decide.
-		if parameter.nestedOmission == nil, let packageNameRemedy = ModuleIdentity.packageNameRemedy(emitter: call.callerModule, declarer: call.declaringModule, requirement: call.requirement, declaredLevel: parameter.access) {
+		if parameter.nestedOmission == nil, let packageNameRemedy = ModuleIdentity.packageNameRemedy(emitter: call.callerModule, declarer: call.declaringModule, declaredLevel: parameter.access) {
 			remedies.append(packageNameRemedy)
 		}
 		let unverifiedPackage = call.requirement == .packageUnverified ? ", or `public` if the two modules are in different packages" : ""
@@ -1606,24 +1603,6 @@ extension ScopeGenerator.PublicMockTierOmission {
 
 extension ScopeGenerator {
 	/// A call of another module's public mock, in a mock tree, that the calling module's mock condition does not reach.
-	/// A case of an enum of another module's public mock that a dispatcher of this module's call of the mock would pass up on
-	/// some route, though it is handed no way to, since the per-place decision fills every place the enum reaches on every
-	/// route (`PublicMockCall.sitesFilledOnEveryRoute`). No shape that reaches it is known; it is reported plainly rather
-	/// than as code that does not compile.
-	struct PublicMockRouteWithoutPassUp: Sendable {
-		/// The enum whose dispatcher holds the case.
-		let enumType: TypeDescription
-		let caseName: String
-
-		var sourceDiagnostic: SourceDiagnostic {
-			SourceDiagnostic(
-				severity: .error,
-				location: nil,
-				message: "SafeDI cannot fill `\(enumType.asSource)`'s case `\(caseName)` on every route this module's mock can reach it on, though it fills every place the case stands for. Please report this tree to SafeDI.",
-			)
-		}
-	}
-
 	struct PublicMockCallUnderOtherMockCondition: Sendable {
 		let publicMockCall: PublicMockCall
 		/// The dependency that leads to the call.
