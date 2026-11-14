@@ -137,7 +137,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// the root's dependency that reaches the seam, with a note at the hole.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and `Root`, a root, must fill it. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and the root `Root` must fill it. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 			\(fixtures["Feature"]!["Profile.swift"]):8:5: note: `Profile` instantiates `userService: any UserService` here.
 			"""
 		}) {
@@ -155,7 +155,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// C3.8: a root in `Feature` sees what `Service`'s module sees, so it cannot fill the builder either.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Root.swift"]):7:5: error: No @Instantiable type or extension that module `Feature` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Service -> Profile. `Service` generates its dependency tree in this module, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and `Root`, a root, must fill it. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["Feature"]!["Root.swift"]):7:5: error: No @Instantiable type or extension that module `Feature` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and the root `Root` must fill it. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 			\(fixtures["Feature"]!["Profile.swift"]):8:5: note: `Profile` instantiates `userService: any UserService` here.
 			"""
 		}) {
@@ -173,7 +173,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// C3.10: a `mockOnly` declaration is used only to generate mocks, so it fills no builder.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):9:5: error: No production @Instantiable declaration that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and `Root`, a root, must fill it. A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @Instantiable declaration that fulfills `UserService`.
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No production @Instantiable declaration that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and the root `Root` must fill it. A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @Instantiable declaration that fulfills `UserService`.
 			\(fixtures["Feature"]!["Profile.swift"]):8:5: note: `Profile` instantiates `userService: any UserService` here.
 			"""
 		}) {
@@ -202,7 +202,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// view: the error names it, as the module `App` must list, and says that listing it fills nothing by itself.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Shell -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and `Root`, a root, must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Feature`: \(Self.listModuleRemedy) That does not fill the builder by itself. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Shell -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and the root `Root` must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Feature`: \(Self.listModuleRemedy) Listing it lets SafeDI follow the chain, but `UserService` still needs a declaration that fulfills it. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -224,7 +224,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// those that declare the seams on the way to the hole, facts of the hole and no choice among unlisted modules.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Top -> Shell -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and `Root`, a root, must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Mid` or `Feature`: for each, \(Self.listModuleRemedy) That does not fill the builder by itself. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Top -> Shell -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and the root `Root` must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Mid` or `Feature`: for each, \(Self.listModuleRemedy) Listing them lets SafeDI follow the chain, but `UserService` still needs a declaration that fulfills it. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -247,7 +247,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// one its signature was computed from, whichever way the other modules' names sort around it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):11:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Shell -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and `Root`, a root, must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Feature`: \(Self.listModuleRemedy) That does not fill the builder by itself. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["App"]!["Root.swift"]):11:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Shell -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and the root `Root` must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Feature`: \(Self.listModuleRemedy) Listing it lets SafeDI follow the chain, but `UserService` still needs a declaration that fulfills it. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 			"""
 		}) {
 			let otherService = seamFixtureType(named: "Service", declarations: [])
@@ -316,7 +316,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// fills nothing.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):10:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and `Root`, a root, must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Deep`: \(Self.listModuleRemedy) That does not fill the builder by itself. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["App"]!["Root.swift"]):10:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and the root `Root` must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Deep`: \(Self.listModuleRemedy) Listing it lets SafeDI follow the chain, but `UserService` still needs a declaration that fulfills it. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -411,7 +411,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `App` lists `Outer` alone, so `Mid`'s declaration reaches it in a view only, and all three modules must be listed.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):9:5: error: `DefaultUserService` fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Top -> Shell -> Service -> Profile, but SafeDI cannot follow that chain, because module `App` does not list `Mid`, `Feature` or `Deep`. A module that declares a root lists every module beneath it: for each, \(Self.listModuleRemedy)
+			\(fixtures["App"]!["Root.swift"]):9:5: error: `DefaultUserService` fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Top -> Shell -> Service -> Profile, but SafeDI cannot follow that chain, because module `App` does not list `Mid`, `Feature`, or `Deep`. A module that declares a root lists every module beneath it: for each, \(Self.listModuleRemedy)
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -468,7 +468,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// A `mockOnly` declaration fills no builder, so listing `Mid` would leave the hole unfilled.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Top -> Shell -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and `Root`, a root, must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Mid`: \(Self.listModuleRemedy) That does not fill the builder by itself. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Top -> Shell -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and the root `Root` must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Mid`: \(Self.listModuleRemedy) Listing it lets SafeDI follow the chain, but `UserService` still needs a declaration that fulfills it. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 			\(fixtures["Deep"]!["Profile.swift"]):7:5: note: `Profile` instantiates `userService: any UserService` here.
 			"""
 		}) {
@@ -501,7 +501,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// the module the error names, would leave the hole unfilled.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Top -> Shell -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and `Root`, a root, must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Mid`: \(Self.listModuleRemedy) That does not fill the builder by itself. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Top -> Shell -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and the root `Root` must fill it. A module that declares a root lists every module beneath it, and module `App` does not list `Mid`: \(Self.listModuleRemedy) Listing it lets SafeDI follow the chain, but `UserService` still needs a declaration that fulfills it. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 			\(fixtures["Deep"]!["Profile.swift"]):7:5: note: `Profile` instantiates `userService: any UserService` here.
 			"""
 		}) {
@@ -520,7 +520,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// goes through the fill that makes the call.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):10:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Top -> Inner1 -> Holder -> DefaultGadget -> Inner2 -> Profile. `Inner2` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and `Root`, a root, must fill it. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["App"]!["Root.swift"]):10:5: error: No @Instantiable type or extension that module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Top -> Inner1 -> Holder -> DefaultGadget -> Inner2 -> Profile. `Inner2` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `userServiceBuilder`, whose case `profile_userService` builds `userService`, and the root `Root` must fill it. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 			\(fixtures["Feature"]!["Profile.swift"]):7:5: note: `Profile` instantiates `userService: any UserService` here.
 			"""
 		}) {
@@ -553,7 +553,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// fulfilling declaration is `Service`'s, which `App` knows only from the hole.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Home` builds after `profile`, since `Theme` receives `profile` only if available, so the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` (case `home_profile_userService` of `userServiceBuilder`) does not carry it. Receive `profile` on `Theme` some other way, or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads.
+			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Home` builds after `profile`, since `Theme` receives `profile` only if available, so the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` (case `home_profile_userService` of `userServiceBuilder`) does not carry it. Receive `profile` on `Theme` some other way, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Base"]!["Home.swift"]):9:5: note: `Home` declares `theme: Theme` here.
 			"""
 		}) {
@@ -585,7 +585,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// itself is `Shell`'s, which `App` knows only from the hole.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Shell` builds where it calls `Service`, but `Shell` passes the builder for `Profile`'s `userService: any UserService` (case `profile_userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`'s values. Declare `@Received let theme: Theme` on `Service`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `UserService` one module `Mid` reads, so `Shell` fills the builder itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Shell` builds where it calls `Service`, but `Shell` passes the builder for `Profile`'s `userService: any UserService` (case `profile_userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`'s values. Declare `@Received let theme: Theme` on `Service`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `UserService` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
 			note: `Shell` declares `theme: Theme` here.
 			"""
 		}) {
@@ -617,7 +617,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `Service` only from the hole `Shell` passes up.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["TokenUserService.swift"]):10:5: error: `TokenUserService` receives `token: [3 of Int]`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` (case `screenBuilder_profile_userService` of `userServiceBuilder`) carries only at `internal` access, and module `App` is not module `Feature`. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(token:profile:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it.
+			\(fixtures["App"]!["TokenUserService.swift"]):10:5: error: `TokenUserService` receives `token: [3 of Int]`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` (case `screenBuilder_profile_userService` of `userServiceBuilder`) carries only at `internal` access, and module `App` is not module `Feature`. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(token:profile:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
 			note: `Screen` declares `token: [3 of Int]` here.
 			"""
 		}) {
@@ -1305,7 +1305,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// passed to that call, is one function, which reads `Root`'s.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `Middle` declares on the path from the builder for `Profile`'s `router: any Router` (case `profileBuilder_router` of `routerBuilder`) to the call by which `Middle` instantiates `Flow` again (`flowBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`'s values. Declare `@Received let logger: Logger` on `Flow`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `Router` one module `Feature` reads.
+			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `Middle` declares on the path from the builder for `Profile`'s `router: any Router` (case `profileBuilder_router` of `routerBuilder`) to the call by which `Middle` instantiates `Flow` again (`flowBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`'s values. Declare `@Received let logger: Logger` on `Flow`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["App"]!["Middle.swift"]):10:5: note: `Middle` declares `logger: Logger` here.
 			"""
 		}) {
@@ -1387,7 +1387,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// one function, reads `Root`'s.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultTracker.swift"]):9:5: error: `DefaultTracker` receives `logger: Logger`, which `Middle` declares on the path from the builder for `Profile`'s `router: any Router` (case `profileBuilder_router` of `routerBuilder`) to the call by which `Middle` instantiates `Flow` again (`flowBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`'s values. Declare `@Received let logger: Logger` on `Flow`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `Tracker` one module `Feature` reads.
+			\(fixtures["App"]!["DefaultTracker.swift"]):9:5: error: `DefaultTracker` receives `logger: Logger`, which `Middle` declares on the path from the builder for `Profile`'s `router: any Router` (case `profileBuilder_router` of `routerBuilder`) to the call by which `Middle` instantiates `Flow` again (`flowBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`'s values. Declare `@Received let logger: Logger` on `Flow`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Tracker` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["App"]!["Middle.swift"]):10:5: note: `Middle` declares `logger: Logger` here.
 			"""
 		}) {
@@ -1649,7 +1649,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// C1.24: the fill of `Shell`'s passed-up builder is built with `Service`'s stack, on which `profileBuilder` is.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LoopingUserService.swift"]):10:5: error: SafeDI cannot fill the builder for `Profile`'s `userService: any UserService` (case `profileBuilder_userService` of `userServiceBuilder`) in `Service`'s dependency tree: `LoopingUserService`, which fills it, instantiates `profileBuilder: Instantiator<Profile>`, which `Service`'s tree is building where it builds `userService` (Service -> profileBuilder -> Profile -> userService -> LoopingUserService -> profileBuilder). Code generated outside module `Feature` cannot refer to the function `Service`'s initializer builds `Profile` with, and building it again would hand it other values than `Service`'s tree holds. Instantiate the seam where `LoopingUserService` builds `Profile` (`@Instantiated let serviceBuilder: Instantiator<Service>`), so the cycle re-enters through the initializer SafeDI generates for `Service`; make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads; or give `profileBuilder` on `LoopingUserService` another label, so the cycle closes at `userService` itself.
+			\(fixtures["App"]!["LoopingUserService.swift"]):10:5: error: SafeDI cannot fill the builder for `Profile`'s `userService: any UserService` (case `profileBuilder_userService` of `userServiceBuilder`) in `Service`'s dependency tree: `LoopingUserService`, which fills it, instantiates `profileBuilder: Instantiator<Profile>`, which `Service`'s tree is building where it builds `userService` (Service -> profileBuilder -> Profile -> userService -> LoopingUserService -> profileBuilder). Code generated outside module `Feature` cannot refer to the function `Service`'s initializer builds `Profile` with, and building it again would hand it other values than `Service`'s tree holds. Instantiate the seam where `LoopingUserService` builds `Profile` (`@Instantiated let serviceBuilder: Instantiator<Service>`), so the cycle re-enters through the initializer SafeDI generates for `Service`; declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies; or give `profileBuilder` on `LoopingUserService` another label, so the cycle closes at `userService` itself.
 			\(fixtures["Feature"]!["Service.swift"]):7:5: note: `Service` instantiates `profileBuilder: Instantiator<Profile>` here.
 			"""
 		}) {
@@ -1679,7 +1679,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// and the struct carries the seam's received `theme` no more, which `Home`'s hides.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `theme: Theme`, which `Home` builds after `profile`, since `Theme` receives `profile` only if available, so the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` (case `home_profile_userService` of `userServiceBuilder`) does not carry it. Receive `profile` on `Theme` some other way, or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads.
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `theme: Theme`, which `Home` builds after `profile`, since `Theme` receives `profile` only if available, so the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` (case `home_profile_userService` of `userServiceBuilder`) does not carry it. Receive `profile` on `Theme` some other way, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Home.swift"]):9:5: note: `Home` declares `theme: Theme` here.
 			"""
 		}) {
@@ -1813,7 +1813,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `Shell`'s values, and `Shell`'s caller, which fills the builder, does not hold them.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Shell` builds where it calls `Service`, but `Shell` passes the builder for `Profile`'s `userService: any UserService` (case `profile_userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`'s values. Declare `@Received let theme: Theme` on `Service`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `UserService` one module `Mid` reads, so `Shell` fills the builder itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Shell` builds where it calls `Service`, but `Shell` passes the builder for `Profile`'s `userService: any UserService` (case `profile_userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`'s values. Declare `@Received let theme: Theme` on `Service`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `UserService` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
 			\(fixtures["Mid"]!["Shell.swift"]):10:5: note: `Shell` declares `theme: Theme` here.
 			"""
 		}) {
@@ -2003,7 +2003,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `logger`; the one fill `App` generates reads `Root`'s, which a nested copy of the fill would read again a level down.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Middle` declares on the path from the builder for `Profile`'s `userService: any UserService` (case `profileBuilder_userService` of `userServiceBuilder`) to the call by which `X` instantiates `Service` again (`service`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`'s values. Declare `@Received let logger: Logger` on `Service`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads.
+			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Middle` declares on the path from the builder for `Profile`'s `userService: any UserService` (case `profileBuilder_userService` of `userServiceBuilder`) to the call by which `X` instantiates `Service` again (`service`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`'s values. Declare `@Received let logger: Logger` on `Service`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["App"]!["Middle.swift"]):11:5: note: `Middle` declares `logger: Logger` here.
 			"""
 		}) {
@@ -2029,7 +2029,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `DefaultUserService` `Shell`'s `logger`, which `Shell`'s copy of the builder does not carry.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `logger: Logger`, which `Shell` builds where it calls `Inner`, but `Shell` passes the builder for `Profile`'s `userService: any UserService` (case `profileBuilder_userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`'s values. Declare `@Received let logger: Logger` on `Inner`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Shell` fills the builder itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `logger: Logger`, which `Shell` builds where it calls `Inner`, but `Shell` passes the builder for `Profile`'s `userService: any UserService` (case `profileBuilder_userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`'s values. Declare `@Received let logger: Logger` on `Inner`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
 			\(fixtures["Feature"]!["Shell.swift"]):8:5: note: `Shell` declares `logger: Logger` here.
 			"""
 		}) {
@@ -2499,7 +2499,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// would be `Profile`'s, bound inside `Service`'s tree on the path, which `Shell`'s caller does not hold.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultLogger.swift"]):10:5: error: `DefaultLogger` receives `cache: Cache`, which `Profile` builds on the path where `Shell` calls `Inner2`, but `Shell` passes the builder for `Inner2`'s `logger: any Logger` (case `logger` of `loggerBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let cache: Cache` on `Inner2`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `Logger` one module `Mid` reads, so `Shell` fills the builder itself.
+			\(fixtures["App"]!["DefaultLogger.swift"]):10:5: error: `DefaultLogger` receives `cache: Cache`, which `Profile` builds on the path where `Shell` calls `Inner2`, but `Shell` passes the builder for `Inner2`'s `logger: any Logger` (case `logger` of `loggerBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let cache: Cache` on `Inner2`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Logger` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
 			\(fixtures["Feature"]!["Profile.swift"]):8:5: note: `Profile` declares `cache: Cache` here.
 			"""
 		}) {
@@ -2644,7 +2644,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `Service`'s builder on unchanged, so the one fill `App` generates would read `Root`'s.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Service`'s tree builds where it instantiates `Service` again, but that call passes the builder `Service` takes for `Profile`'s `userService: any UserService` on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let logger: Logger` on `Service`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service` fills the builder itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Service`'s tree builds where it instantiates `Service` again, but that call passes the builder `Service` takes for `Profile`'s `userService: any UserService` on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let logger: Logger` on `Service`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service` fills the builder itself.
 			\(fixtures["Feature"]!["X.swift"]):8:5: note: `X` declares `logger: Logger` here.
 			"""
 		}) {
@@ -2766,7 +2766,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// label reaches `Service`'s own builder through the builder `Other` passes up, which `Service` presents to `Other`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Other` builds where it calls `Service`, but `Other` passes the builder for `Profile`'s `userService: any UserService` (case `profile_userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Other`'s values. Declare `@Received let logger: Logger` on `Service`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Other` fills the builder itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Other` builds where it calls `Service`, but `Other` passes the builder for `Profile`'s `userService: any UserService` (case `profile_userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Other`'s values. Declare `@Received let logger: Logger` on `Service`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Other` fills the builder itself.
 			\(fixtures["Feature"]!["Other.swift"]):8:5: note: `Other` declares `logger: Logger` here.
 			"""
 		}) {
@@ -3290,7 +3290,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// fill reads `z`, which inline builds before `p2`. A deliberate gap of the start order, reported with the reorder.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["ZLedger.swift"]):9:5: error: `ZLedger` receives `z: Z`, which `Service`'s dependency tree builds after `p2`, since `Z` requires `p1`, which carries another builder, so the scope SafeDI hands the builder for `P2`'s `ledger: any Ledger` (case `p2_ledger` of `ledgerBuilder`) does not carry it. Declare `z` before `p2` in `Service`, or make an @Instantiable declaration that fulfills `Ledger` one module `Feature` reads.
+			\(fixtures["App"]!["ZLedger.swift"]):9:5: error: `ZLedger` receives `z: Z`, which `Service`'s dependency tree builds after `p2`, since `Z` requires `p1`, which carries another builder, so the scope SafeDI hands the builder for `P2`'s `ledger: any Ledger` (case `p2_ledger` of `ledgerBuilder`) does not carry it. Declare `z` before `p2` in `Service`, or declare an @Instantiable type that fulfills `Ledger` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Service.swift"]):11:5: note: `Service` declares `z: Z` here.
 			"""
 		}) {
@@ -3452,7 +3452,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let renameRemedy = "; or give `aBuilder` on `LoopingUserService` another label, so the cycle closes at `\(label)` itself"
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LoopingUserService.swift"]):10:5: error: SafeDI cannot fill the builder for `A`'s `\(property)` (case `aBuilder_\(label)` of `loopingUserServiceBuilder`) in `Service`'s dependency tree: `LoopingUserService`, which fills it, instantiates `aBuilder: Instantiator<A>`, which `Service`'s tree is building where it builds `\(label)` (Service -> aBuilder -> A -> \(label) -> LoopingUserService -> aBuilder). Code generated outside module `Feature` cannot refer to the function `Service`'s initializer builds `A` with, and building it again would hand it other values than `Service`'s tree holds. Instantiate the seam where `LoopingUserService` builds `A` (`@Instantiated let serviceBuilder: Instantiator<Service>`), so the cycle re-enters through the initializer SafeDI generates for `Service`; make an @Instantiable declaration that fulfills `LoopingUserService` one module `Feature` reads\(renameRemedy).
+			\(fixtures["App"]!["LoopingUserService.swift"]):10:5: error: SafeDI cannot fill the builder for `A`'s `\(property)` (case `aBuilder_\(label)` of `loopingUserServiceBuilder`) in `Service`'s dependency tree: `LoopingUserService`, which fills it, instantiates `aBuilder: Instantiator<A>`, which `Service`'s tree is building where it builds `\(label)` (Service -> aBuilder -> A -> \(label) -> LoopingUserService -> aBuilder). Code generated outside module `Feature` cannot refer to the function `Service`'s initializer builds `A` with, and building it again would hand it other values than `Service`'s tree holds. Instantiate the seam where `LoopingUserService` builds `A` (`@Instantiated let serviceBuilder: Instantiator<Service>`), so the cycle re-enters through the initializer SafeDI generates for `Service`; declare an @Instantiable type that fulfills `LoopingUserService` in module `Feature` or a module it lists among its SafeDI dependencies\(renameRemedy).
 			\(fixtures["Feature"]!["Service.swift"]):9:5: note: `Service` instantiates `aBuilder: Instantiator<A>` here.
 			"""
 		}) {
@@ -3831,7 +3831,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// it, which every tier takes.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService`, the builder for `Profile`'s `userService: any UserService`, which no @Instantiable declaration that module `Feature` can see fulfills. `UserService` is declared `package`. Declare `UserService` `public`; declare `Service` `package`; make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService`, the builder for `Profile`'s `userService: any UserService`, which no @Instantiable declaration that module `Feature` can see fulfills. `UserService` is declared `package`. Declare `UserService` `public`; declare `Service` `package`; declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it; or declare the dependency tree on a `package` type that instantiates `Service`.
 			\(fixtures["Feature"]!["UserService.swift"]):1:1: note: `UserService` is declared `package` here.
 			\(fixtures["Feature"]!["UserService.swift"]):1:1-1:8: fixit: public
 			"""
@@ -3858,7 +3858,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// in another package, cannot read.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` (case `profile_userService` of `userServiceBuilder`) carries only at `package` access, and module `App` is not in package `Shop`. `Session`'s own `@Instantiable` declaration is `package`. Declare `Session` `public`; or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it.
+			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` (case `profile_userService` of `userServiceBuilder`) carries only at `package` access, and module `App` is not in package `Shop`. `Session`'s own `@Instantiable` declaration is `package`. Declare `Session` `public`, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
 			\(fixtures["Feature"]!["Service.swift"]):8:5: note: `Service` declares `session: Session` here.
 			"""
 		}) {
@@ -3885,7 +3885,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// another package, and giving it the package name lets it read the `package` field, so that remedy comes first.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` (case `profile_userService` of `userServiceBuilder`) carries only at `package` access, and module `App` is not told it is in package `Shop`. `Session`'s own `@Instantiable` declaration is `package`. Give module `App` the package name of module `Feature` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package; declare `Session` `public`; or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it.
+			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` (case `profile_userService` of `userServiceBuilder`) carries only at `package` access, and module `App` is not told it is in package `Shop`. `Session`'s own `@Instantiable` declaration is `package`. Give module `App` the package name of module `Feature` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package; declare `Session` `public`; or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
 			\(fixtures["Feature"]!["Service.swift"]):8:5: note: `Service` declares `session: Session` here.
 			"""
 		}) {
@@ -4098,7 +4098,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// initializer cannot take the builder it passes up.
 		await assertThrowsMultiModuleError(inModule: "Mid", diagnostics: { fixtures in
 			"""
-			\(fixtures["Mid"]!["Shell.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Shell`: its generated `public` initializer, which `Shell`'s `public` access requires, cannot take `userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService`, the builder for `Profile`'s `userService: any UserService`, which no @Instantiable declaration that module `Mid` can see fulfills. `Service`'s own `@Instantiable` declaration is `package`. Declare `Service` `public`; declare `Shell` `package`; make an @Instantiable declaration that fulfills `UserService` one module `Mid` reads, so `Shell` fills the builder itself; or declare the dependency tree on a `package` type that instantiates `Shell`.
+			\(fixtures["Mid"]!["Shell.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Shell`: its generated `public` initializer, which `Shell`'s `public` access requires, cannot take `userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService`, the builder for `Profile`'s `userService: any UserService`, which no @Instantiable declaration that module `Mid` can see fulfills. `Service`'s own `@Instantiable` declaration is `package`. Declare `Service` `public`; declare `Shell` `package`; declare an @Instantiable type that fulfills `UserService` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself; or declare the dependency tree on a `package` type that instantiates `Shell`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -4129,7 +4129,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// access, which `App` cannot read.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["TokenUserService.swift"]):9:5: error: `TokenUserService` receives `token: [3 of Int]`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` (case `screenBuilder_profile_userService` of `userServiceBuilder`) carries only at `internal` access, and module `App` is not module `Feature`. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(token:profile:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it.
+			\(fixtures["App"]!["TokenUserService.swift"]):9:5: error: `TokenUserService` receives `token: [3 of Int]`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` (case `screenBuilder_profile_userService` of `userServiceBuilder`) carries only at `internal` access, and module `App` is not module `Feature`. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(token:profile:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies, so `Service`’s tree builds it.
 			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `Screen` declares `token: [3 of Int]` here.
 			"""
 		}) {
@@ -4770,7 +4770,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// struct does not carry it; `DefaultUserService` receives it only if available.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `badge: Badge?`, which `Service`'s dependency tree builds after the scope that builds the builder for `Profile`'s `userService: any UserService` (case `profile_userService` of `userServiceBuilder`), so the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` (case `profile_userService` of `userServiceBuilder`) does not carry it. Make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads.
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `badge: Badge?`, which `Service`’s tree builds only after it calls the builder for `Profile`’s `userService: any UserService` (case `profile_userService` of `userServiceBuilder`), so that builder’s scope does not carry it. Declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Service.swift"]):9:5: note: `Service` declares `badge: Badge` here.
 			"""
 		}) {
@@ -4792,12 +4792,40 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarryNamingDeclaringType_whenTypeInSeamsTreeDeclaresSiblingThatRequiresHolesCarrier() async {
+		// As above, one level down: `Mid`, which `Service` instantiates, builds `badge` after `profile`, so the error names
+		// `Mid` as what builds it.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `badge: Badge?`, which `Mid` builds only after `Service`’s tree calls the builder for `Profile`’s `userService: any UserService` (case `mid_profile_userService` of `userServiceBuilder`), so that builder’s scope does not carry it. Declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Mid.swift"]):9:5: note: `Mid` declares `badge: Badge` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+						seamFixtureType(named: "Badge", declarations: ["@Received let profile: Profile"]),
+						seamFixtureType(named: "Mid", declarations: ["@Instantiated let profile: Profile", "@Instantiated let badge: Badge"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let mid: Mid"]),
+					],
+					app: [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received(onlyIfAvailable: true) let badge: Badge?"]), Self.canonicalRoot],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFillClosesCycleInSeamTreeNamingEachType_whenTypeBeneathFulfillerInstantiatesPropertyOfSeamsPath() async {
 		// C1.14 one level down: `LoopingUserService` instantiates `Middle`, which instantiates `aBuilder: Instantiator<A>`,
 		// which `Service`'s tree is building; the chain names the type that declares each property.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Middle.swift"]):10:5: error: SafeDI cannot fill the builder for `A`'s `userService: any UserService` (case `aBuilder_userService` of `userServiceBuilder`) in `Service`'s dependency tree: `Middle`, beneath `LoopingUserService`, which fills it, instantiates `aBuilder: Instantiator<A>`, which `Service`'s tree is building where it builds `userService` (Service -> aBuilder -> A -> userService -> LoopingUserService -> middle -> Middle -> aBuilder). Code generated outside module `Feature` cannot refer to the function `Service`'s initializer builds `A` with, and building it again would hand it other values than `Service`'s tree holds. Instantiate the seam where `Middle` builds `A` (`@Instantiated let serviceBuilder: Instantiator<Service>`), so the cycle re-enters through the initializer SafeDI generates for `Service`; make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads; or give `aBuilder` on `Middle` another label, so the cycle closes at `userService` itself.
+			\(fixtures["App"]!["Middle.swift"]):10:5: error: SafeDI cannot fill the builder for `A`'s `userService: any UserService` (case `aBuilder_userService` of `userServiceBuilder`) in `Service`'s dependency tree: `Middle`, beneath `LoopingUserService`, which fills it, instantiates `aBuilder: Instantiator<A>`, which `Service`'s tree is building where it builds `userService` (Service -> aBuilder -> A -> userService -> LoopingUserService -> middle -> Middle -> aBuilder). Code generated outside module `Feature` cannot refer to the function `Service`'s initializer builds `A` with, and building it again would hand it other values than `Service`'s tree holds. Instantiate the seam where `Middle` builds `A` (`@Instantiated let serviceBuilder: Instantiator<Service>`), so the cycle re-enters through the initializer SafeDI generates for `Service`; declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies; or give `aBuilder` on `Middle` another label, so the cycle closes at `userService` itself.
 			\(fixtures["Feature"]!["Service.swift"]):9:5: note: `Service` instantiates `aBuilder: Instantiator<A>` here.
 			"""
 		}) {
@@ -4823,12 +4851,51 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillClosesCycleInSeamTreeSuggestingLabelFromSeamsOwnName_whenSeamIsNestedType() async {
+		// The suggested instantiator's label is the nested seam's own name, `Service`, since `Outer.Service` is no identifier.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LoopingUserService.swift"]):9:5: error: SafeDI cannot fill the builder for `A`'s `userService: any UserService` (case `aBuilder_userService` of `userServiceBuilder`) in `Outer.Service`'s dependency tree: `LoopingUserService`, which fills it, instantiates `aBuilder: Instantiator<A>`, which `Outer.Service`'s tree is building where it builds `userService` (Outer.Service -> aBuilder -> A -> userService -> LoopingUserService -> aBuilder). Code generated outside module `Feature` cannot refer to the function `Outer.Service`'s initializer builds `A` with, and building it again would hand it other values than `Outer.Service`'s tree holds. Instantiate the seam where `LoopingUserService` builds `A` (`@Instantiated let serviceBuilder: Instantiator<Outer.Service>`), so the cycle re-enters through the initializer SafeDI generates for `Outer.Service`; declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies; or give `aBuilder` on `LoopingUserService` another label, so the cycle closes at `userService` itself.
+			\(fixtures["Feature"]!["Service.swift"]):8:9: note: `Outer.Service` instantiates `aBuilder: Instantiator<A>` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "A", declarations: ["@Instantiated let userService: any UserService"]),
+						"""
+						public enum Outer {
+						    @Instantiable(generateDependencyTree: true)
+						    public struct Service: Instantiable {
+						        public init(aBuilder: Instantiator<A>) {
+						            self.aBuilder = aBuilder
+						        }
+
+						        @Instantiated let aBuilder: Instantiator<A>
+						    }
+						}
+						""",
+					],
+					app: [
+						Self.fulfillingType(named: "LoopingUserService", fulfilling: "UserService", declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Outer.Service"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFillClosesCycleInSeamTreeNamingDeclaredProperties_whenSiteIsInsideFillOfPassedUpHole() async {
 		// `Shell` passes up the builder of `Inner`'s hole, and `Host` fills it with `DefaultWidget`, whose own hole is the
 		// site: the chain walks `Shell`'s `inner` to `Inner`, the call that presented the hole.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultGadget.swift"]):11:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `shell_Inner_panelMaker_widget_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panelMaker: Instantiator<Panel>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panelMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`; make an @Instantiable declaration that fulfills `Gadget` one module `Upper` reads.
+			\(fixtures["App"]!["DefaultGadget.swift"]):11:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `shell_Inner_panelMaker_widget_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panelMaker: Instantiator<Panel>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panelMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panelMaker: Instantiator<Panel>` here.
 			"""
 		}) {
@@ -4852,7 +4919,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `Shell` reaches `Inner` through `Carrier`, and `Outer` passes `Shell`'s copy on: every call on the way is a hop.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultGadget.swift"]):11:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `outer_Inner_panelMaker_widget_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panelMaker: Instantiator<Panel>`, which `Host`'s tree is building where it builds `gadget` (Host -> outer -> Outer -> shell -> Shell -> carrier -> Carrier -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panelMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`; make an @Instantiable declaration that fulfills `Gadget` one module `Upper` reads.
+			\(fixtures["App"]!["DefaultGadget.swift"]):11:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `outer_Inner_panelMaker_widget_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panelMaker: Instantiator<Panel>`, which `Host`'s tree is building where it builds `gadget` (Host -> outer -> Outer -> shell -> Shell -> carrier -> Carrier -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panelMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panelMaker: Instantiator<Panel>` here.
 			"""
 		}) {
@@ -4879,7 +4946,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// route goes through that fill.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultGadget.swift"]):11:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `shell_Inner_panelMaker_widget_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panelMaker: Instantiator<Panel>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> holder -> Holder -> slot -> DefaultSlot -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panelMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`; make an @Instantiable declaration that fulfills `Gadget` one module `Upper` reads.
+			\(fixtures["App"]!["DefaultGadget.swift"]):11:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `shell_Inner_panelMaker_widget_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panelMaker: Instantiator<Panel>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> holder -> Holder -> slot -> DefaultSlot -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panelMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panelMaker: Instantiator<Panel>` here.
 			"""
 		}) {
@@ -4908,7 +4975,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `Inner`'s declaration, in its own spelling.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `shell_Inner_panel_rowMaker_widget_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panel: Panel`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panel -> Panel -> rowMaker -> Row -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panel). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`; make an @Instantiable declaration that fulfills `Gadget` one module `Upper` reads.
+			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `shell_Inner_panel_rowMaker_widget_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panel: Panel`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panel -> Panel -> rowMaker -> Row -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panel). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panel: LazilyInstantiated<Panel>` here.
 			"""
 		}) {
@@ -4936,7 +5003,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// generation finds a closer: the note is at `Row`'s.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `shell_Inner_pane_rowMaker_pane_widgetMaker_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `pane: any Pane`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> pane -> OuterPane -> rowMaker -> Row -> pane -> InnerPane -> widgetMaker -> DefaultWidget -> gadget -> DefaultGadget -> pane). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Pane` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Pane` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`; make an @Instantiable declaration that fulfills `Gadget` one module `Upper` reads.
+			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `shell_Inner_pane_rowMaker_pane_widgetMaker_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `pane: any Pane`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> pane -> OuterPane -> rowMaker -> Row -> pane -> InnerPane -> widgetMaker -> DefaultWidget -> gadget -> DefaultGadget -> pane). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Pane` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Pane` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Row.swift"]):7:5: note: `Row` instantiates `pane: any Pane` here.
 			"""
 		}) {
@@ -4966,7 +5033,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// has its place.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `shell_Inner_panelMaker_widgetMaker_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `widgetMaker: Instantiator<Widget>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panelMaker -> Panel -> widgetMaker -> DefaultWidget -> gadget -> DefaultGadget -> widgetMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Widget` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Widget` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`; make an @Instantiable declaration that fulfills `Gadget` one module `Upper` reads; or give `widgetMaker` on `DefaultGadget` another label, so the cycle closes at `gadget` itself.
+			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `shell_Inner_panelMaker_widgetMaker_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `widgetMaker: Instantiator<Widget>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panelMaker -> Panel -> widgetMaker -> DefaultWidget -> gadget -> DefaultGadget -> widgetMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Widget` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Widget` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`; declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies; or give `widgetMaker` on `DefaultGadget` another label, so the cycle closes at `gadget` itself.
 			\(fixtures["Feature"]!["Panel.swift"]):7:5: note: `Panel` instantiates `widgetMaker: Instantiator<Widget>` here.
 			"""
 		}) {
@@ -4992,7 +5059,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `DefaultWidget` fills `any Widget` and declares `midMaker`: the chain and the note name it, not the protocol.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `Mid`'s `gadget: any Gadget` (case `shell_Inner_panelMaker_widget_midMaker_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `midMaker: Instantiator<Mid>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> midMaker -> Mid -> gadget -> DefaultGadget -> midMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Mid` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Mid` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`; make an @Instantiable declaration that fulfills `Gadget` one module `Upper` reads; or give `midMaker` on `DefaultGadget` another label, so the cycle closes at `gadget` itself.
+			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `Mid`'s `gadget: any Gadget` (case `shell_Inner_panelMaker_widget_midMaker_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `midMaker: Instantiator<Mid>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> midMaker -> Mid -> gadget -> DefaultGadget -> midMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Mid` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Mid` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`; declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies; or give `midMaker` on `DefaultGadget` another label, so the cycle closes at `gadget` itself.
 			\(fixtures["Upper"]!["DefaultWidget.swift"]):9:5: note: `DefaultWidget` instantiates `midMaker: Instantiator<Mid>` here.
 			"""
 		}) {
@@ -5059,7 +5126,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `Outer` passes up the builder `Shell` passes up from `Inner`, reached through `Carrier`: the chain has every call.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `Widget`, which @Instantiated property `widget: any Widget` instantiates in chain: Root -> Outer -> Shell -> Carrier -> Inner -> Panel. `Inner` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `widgetBuilder`, whose case `panelMaker_widget` builds `widget`, and `Root`, a root, must fill it. Decorate `Widget`, or an extension of it, with @Instantiable; list `Widget` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `Widget`, which @Instantiated property `widget: any Widget` instantiates in chain: Root -> Outer -> Shell -> Carrier -> Inner -> Panel. `Inner` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `widgetBuilder`, whose case `panelMaker_widget` builds `widget`, and the root `Root` must fill it. Decorate `Widget`, or an extension of it, with @Instantiable; list `Widget` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 			\(fixtures["Feature"]!["Panel.swift"]):7:5: note: `Panel` instantiates `widget: any Widget` here.
 			"""
 		}) {
@@ -5081,7 +5148,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// every call on the way to the fill, and the type that declares `gadget`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):10:5: error: No @Instantiable type or extension that module `App` can see fulfills `Gadget`, which @Instantiated property `gadget: any Gadget` instantiates in chain: Root -> Host -> Outer -> Shell -> Carrier -> Inner -> Panel -> DefaultWidget. `Host` generates its dependency tree in module `Upper`, which cannot see one either, so the initializer SafeDI generated for it takes `gadgetBuilder`, whose case `outer_Inner_panelMaker_widget_gadget` builds `gadget`, and `Root`, a root, must fill it. Decorate `Gadget`, or an extension of it, with @Instantiable; list `Gadget` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["App"]!["Root.swift"]):10:5: error: No @Instantiable type or extension that module `App` can see fulfills `Gadget`, which @Instantiated property `gadget: any Gadget` instantiates in chain: Root -> Host -> Outer -> Shell -> Carrier -> Inner -> Panel -> DefaultWidget. `Host` generates its dependency tree in module `Upper`, which cannot see one either, so the initializer SafeDI generated for it takes `gadgetBuilder`, whose case `outer_Inner_panelMaker_widget_gadget` builds `gadget`, and the root `Root` must fill it. Decorate `Gadget`, or an extension of it, with @Instantiable; list `Gadget` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 			\(fixtures["Upper"]!["DefaultWidget.swift"]):9:5: note: `DefaultWidget` instantiates `gadget: any Gadget` here.
 			"""
 		}) {
@@ -5175,7 +5242,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let closingLabel = String(closingProperty.prefix { $0 != ":" })
 		let closingType = closer ?? "DefaultGadget"
 		let closerDescription = closer.map { "`\($0)`, beneath `DefaultGadget`, which fills it," } ?? "`DefaultGadget`, which fills it,"
-		return "SafeDI cannot fill the builder for `\(ownerOfHole)`'s `gadget: any Gadget`\(caseName.map { " (case `\($0)` of `gadgetBuilder`)" } ?? "") in `Host`'s dependency tree: \(closerDescription) instantiates `\(closingProperty)`, which `Host`'s tree is building where it builds `gadget` (\(chain)). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `\(builtType)` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `\(closingType)` builds `\(builtType)` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`; make an @Instantiable declaration that fulfills `Gadget` one module `Upper` reads\(closesOnOwnerOfHole ? "; or give `\(closingLabel)` on `\(closingType)` another label, so the cycle closes at `gadget` itself" : "")."
+		return "SafeDI cannot fill the builder for `\(ownerOfHole)`'s `gadget: any Gadget`\(caseName.map { " (case `\($0)` of `gadgetBuilder`)" } ?? "") in `Host`'s dependency tree: \(closerDescription) instantiates `\(closingProperty)`, which `Host`'s tree is building where it builds `gadget` (\(chain)). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `\(builtType)` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `\(closingType)` builds `\(builtType)` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`\(closesOnOwnerOfHole ? ";" : ", or") declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies\(closesOnOwnerOfHole ? "; or give `\(closingLabel)` on `\(closingType)` another label, so the cycle closes at `gadget` itself" : "")."
 	}
 
 	/// A spelling of the property on a seam's path and a spelling of the property of a fill that closes a cycle on it.

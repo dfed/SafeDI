@@ -8260,7 +8260,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// R7: an array of an internal type nothing fulfills is a required parameter no public tier can take.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):3:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `secrets: [Secret]`, which `Service` instantiates and no `@Instantiable` declaration this module sees fulfills, and cannot pass `nil` for it, since it is required. `Secret` is declared `internal`. Declare `Secret` `public`; or use `generateMock: .internal`.
+			\(fixtures["Service.swift"]):3:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `secrets: [Secret]`, which `Service` instantiates and no `@Instantiable` declaration this module sees fulfills, and cannot pass `nil` for it, since it is required. `Secret` is declared `internal`. Declare `Secret` `public`, or use `generateMock: .internal`.
 			\(fixtures["Service.swift"]):1:1: note: `Secret` is declared `internal` here.
 			\(fixtures["Service.swift"]):1:1-1:1: fixit: public\(" ")
 			\(fixtures["Service.swift"]):9:5: note: `Service` instantiates `secrets: [Secret]` here.

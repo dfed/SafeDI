@@ -264,7 +264,7 @@ struct SafeDIToolSeamPublicMockTierTests: ~Copyable {
 		// the public mock's own error would otherwise report first.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Screen`'s own initializer takes, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`'s own `@Instantiable` declaration is `package`. Declare `Storage` `public`; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Screen`'s own initializer takes, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`'s own `@Instantiable` declaration is `package`. Declare `Storage` `public`, or declare the dependency tree on a `package` type that instantiates `Screen`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -289,7 +289,7 @@ struct SafeDIToolSeamPublicMockTierTests: ~Copyable {
 		// initializer cannot take the builder for it.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `serviceBuilder: @escaping (SafeDIScope_Service) -> any Service`, the builder for `Store`'s `service: any Service`, which no @Instantiable declaration that module `Feature` can see fulfills. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Service` is declared `package`. Declare `Service` `public`; make an @Instantiable declaration that fulfills `Service` one module `Feature` reads, so `Screen`'s tree builds it; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `serviceBuilder: @escaping (SafeDIScope_Service) -> any Service`, the builder for `Store`'s `service: any Service`, which no @Instantiable declaration that module `Feature` can see fulfills. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Service` is declared `package`. Declare `Service` `public`; declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies, so `Screen`’s tree builds it; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Service.swift"]):1:1: note: `Service` is declared `package` here.
 			\(fixtures["Feature"]!["Service.swift"]):1:1-1:8: fixit: public
 			"""

@@ -132,7 +132,7 @@ enum SeamAccessExplanation {
 		case .ownReceived:
 			remedies.append("receive `\(parameter.label)` with `onlyIfAvailable: true` and an optional type")
 		case let .builder(fulfilledType, seamModuleName, isPassedUp):
-			remedies.append(fulfillRemedy(fulfilling: fulfilledType, seam: seam, seamModuleName: seamModuleName, isPassedUp: isPassedUp))
+			remedies.append(fulfillRemedy(fulfilling: fulfilledType, seamModuleName: seamModuleName, effect: isPassedUp ? .seamFillsBuilder(seam) : .seamTreeBuildsIt(seam)))
 		case .passThrough:
 			if let aliasProperty = receivers.first(where: { $0.aliasProperty != nil })?.aliasProperty, receivers.count == 1 {
 				remedies.append("receive `\(aliasProperty.label)` with `onlyIfAvailable: true` and an optional type")
@@ -305,12 +305,28 @@ enum SeamAccessExplanation {
 		"`generateMock: .public` requires \(name(seam)) to be `public`, so its generated initializer is `public` too."
 	}
 
-	/// What a module must declare so that `seam` needs no builder for `fulfilledType`: a fulfilling declaration in a
-	/// module `seamModuleName` reads, which `seam`'s tree builds, or, for a builder `seam` passes up, fills itself.
-	static func fulfillRemedy(fulfilling fulfilledType: TypeDescription, seam: TypeDescription, seamModuleName: String?, isPassedUp: Bool) -> String {
+	/// What declaring a type that fulfills a builder's type achieves, which `fulfillRemedy` names after the declaration.
+	enum FulfillRemedyEffect {
+		/// The seam's tree builds the type.
+		case seamTreeBuildsIt(TypeDescription)
+		/// The seam, which passes the builder up, fills it itself.
+		case seamFillsBuilder(TypeDescription)
+	}
+
+	/// What a module must declare so that a seam needs no builder for `fulfilledType`: a fulfilling declaration in module
+	/// `seamModuleName` or a module it lists, followed by what that achieves, when `effect` names it. The location has no
+	/// comma of its own, so the remedy reads as one alternative in a list joined by ", or".
+	static func fulfillRemedy(fulfilling fulfilledType: TypeDescription, seamModuleName: String?, effect: FulfillRemedyEffect?) -> String {
 		let module = seamModuleName.map { "module `\($0)`" } ?? "this module"
-		let effect = isPassedUp ? "\(name(seam)) fills the builder itself" : "\(name(seam))'s tree builds it"
-		return "make an @\(InstantiableVisitor.macroName) declaration that fulfills \(name(fulfilledType)) one \(module) reads, so \(effect)"
+		let effectClause = switch effect {
+		case let .seamTreeBuildsIt(seam)?:
+			", so \(name(seam))’s tree builds it"
+		case let .seamFillsBuilder(seam)?:
+			", so \(name(seam)) fills the builder itself"
+		case nil:
+			""
+		}
+		return "declare an @\(InstantiableVisitor.macroName) type that fulfills \(name(fulfilledType)) in \(module) or a module it lists among its SafeDI dependencies\(effectClause)"
 	}
 
 	// MARK: Private
@@ -513,10 +529,13 @@ enum SeamAccessExplanation {
 		"mention \(types.map(name).joined(separator: " or ")) in a `\(neededLevel.spelledOnGeneratedDeclaration)` initializer, `instantiate(…)` or mock method SafeDI records"
 	}
 
-	/// `remedies` as one sentence: separated by semicolons, the last after "or", the first capitalized.
+	/// `remedies` as one sentence, the first capitalized: two joined by ", or", and three or more separated by semicolons,
+	/// the last after "or", since a remedy may contain commas of its own.
 	static func joined(_ remedies: [String]) -> String {
 		guard var sentence = remedies.first else { return "" }
-		if remedies.count > 1 {
+		if remedies.count == 2 {
+			sentence += ", or " + remedies[1]
+		} else if remedies.count > 2 {
 			sentence = remedies.dropLast().joined(separator: "; ") + "; or " + (remedies.last ?? "")
 		}
 		return sentence.prefix(1).uppercased() + sentence.dropFirst() + "."

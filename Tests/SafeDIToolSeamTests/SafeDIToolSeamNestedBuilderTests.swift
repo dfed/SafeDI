@@ -2488,7 +2488,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 	mutating func generate_throwsTierOmitsBuilder_whenPublicSeamsPlaceForwardsAnInternalType() async {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Host.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Host`: its generated `public` initializer, which `Host`'s `public` access requires, cannot take `hiddenGadgetBuilder: @escaping (SafeDIScope_HiddenGadget) -> any Gadget`, the builder for `Host`'s `maker: ErasedInstantiator<Hidden, any Gadget>`, which no @Instantiable declaration that module `Feature` can see fulfills. `Hidden` is declared `internal`. Declare `Hidden` `public`; declare `Host` `internal`; make an @Instantiable declaration that fulfills `HiddenGadget` one module `Feature` reads, so `Host`'s tree builds it; or declare the dependency tree on an `internal` type that instantiates `Host`.
+			\(fixtures["Feature"]!["Host.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Host`: its generated `public` initializer, which `Host`'s `public` access requires, cannot take `hiddenGadgetBuilder: @escaping (SafeDIScope_HiddenGadget) -> any Gadget`, the builder for `Host`'s `maker: ErasedInstantiator<Hidden, any Gadget>`, which no @Instantiable declaration that module `Feature` can see fulfills. `Hidden` is declared `internal`. Declare `Hidden` `public`; declare `Host` `internal`; declare an @Instantiable type that fulfills `HiddenGadget` in module `Feature` or a module it lists among its SafeDI dependencies, so `Host`’s tree builds it; or declare the dependency tree on an `internal` type that instantiates `Host`.
 			\(fixtures["Feature"]!["Hidden.swift"]):1:1: note: `Hidden` is declared `internal` here.
 			\(fixtures["Feature"]!["Hidden.swift"]):1:1-1:1: fixit: public\(" ")
 			"""
@@ -3461,7 +3461,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		// `serviceSendableBuilder`, which the place's `package` scope narrows.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Host.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Host`: its generated `public` initializer, which `Host`'s `public` access requires, cannot take `serviceSendableBuilder: @escaping @Sendable (SafeDISendableScope_Service) -> any Service`, the builder for `Deep`'s `service: any Service`, which no @Instantiable declaration that module `Feature` can see fulfills. `Deep`'s own `@Instantiable` declaration is `package`. Declare `Deep` `public`; declare `Host` `package`; make an @Instantiable declaration that fulfills `Service` one module `Feature` reads, so `Host` fills the builder itself; or declare the dependency tree on a `package` type that instantiates `Host`.
+			\(fixtures["Feature"]!["Host.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Host`: its generated `public` initializer, which `Host`'s `public` access requires, cannot take `serviceSendableBuilder: @escaping @Sendable (SafeDISendableScope_Service) -> any Service`, the builder for `Deep`'s `service: any Service`, which no @Instantiable declaration that module `Feature` can see fulfills. `Deep`'s own `@Instantiable` declaration is `package`. Declare `Deep` `public`; declare `Host` `package`; declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies, so `Host` fills the builder itself; or declare the dependency tree on a `package` type that instantiates `Host`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -3503,7 +3503,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		// `Helper`, whose place the fill fills, not on `Host`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultService.swift"]):11:5: error: `DefaultService` receives `user: User`, which `Mid` builds where it calls `Helper`, but `Mid` passes the builder for `Helper`'s `gadget: any Gadget` (case `gadget` of `gadgetBuilder`) on from its own caller, which cannot hand it `Mid`'s values. Declare `@Received let user: User` on `Helper`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `Gadget` one module `Middle` reads, so `Mid` fills the builder itself.
+			\(fixtures["App"]!["DefaultService.swift"]):11:5: error: `DefaultService` receives `user: User`, which `Mid` builds where it calls `Helper`, but `Mid` passes the builder for `Helper`'s `gadget: any Gadget` (case `gadget` of `gadgetBuilder`) on from its own caller, which cannot hand it `Mid`'s values. Declare `@Received let user: User` on `Helper`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, so `Mid` fills the builder itself.
 			\(fixtures["Middle"]!["Mid.swift"]):10:5: note: `Mid` declares `user: User` here.
 			"""
 		}) {
