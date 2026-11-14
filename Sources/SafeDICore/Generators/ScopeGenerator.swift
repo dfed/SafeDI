@@ -10300,7 +10300,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// caller passed for it by the name of the member's binding, which a binding declared before the function would hide.
 	struct InstantiatorBindingLines {
 		/// The locals the function reads that an enclosing `@Sendable` function cannot capture from `safeDIOverrides`, and
-		/// the stage calls made before the function.
+		/// the payloads of the cases on the routes to the places beneath the node, bound before the function.
 		var prelude = [String]()
 		/// The node's builder function, and the function of no parameters a lazy cycle needs that its wrapper hands.
 		var function = [String]()

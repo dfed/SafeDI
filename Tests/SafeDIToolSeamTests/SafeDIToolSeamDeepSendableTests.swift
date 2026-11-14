@@ -27,7 +27,7 @@ import Testing
 /// A hole beneath more `@Sendable` functions than a concurrency thread's stack could recurse over. The `@Sendable` enum has
 /// one level per `@Sendable` function, and tests run on such threads, half a megabyte on Apple platforms, where a debug
 /// build spends kilobytes of stack on a level of a recursive walk.
-struct SafeDIToolSeamDeepStageTests: ~Copyable {
+struct SafeDIToolSeamDeepSendableTests: ~Copyable {
 	// MARK: Initialization
 
 	init() {
