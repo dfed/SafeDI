@@ -324,6 +324,30 @@ public struct SeamSignature: Sendable {
 				/// `seam` passes up: inline, a receive of its label would read it, and `seam`'s caller, which fills the builder,
 				/// does not hold it.
 				case boundByPassingUpSeam(seam: TypeDescription, module: ModuleIdentity, place: PresentedPlace)
+				/// It is bound outside the innermost `@Sendable` function that builds the site – `functionProperty`'s, which
+				/// builds `functionBuiltType`, or `nil` for a `Sendable` wrapper the place is held in – and a place is handed only
+				/// what that function binds. `isForwarded` says the declaring type forwards it. Where it is a parameter of a
+				/// builder function a lazy cycle closes on, `cycleParameter` says whose, and what the cycle passes it. Where the
+				/// declaring type, the seam or a type in its tree, receives it under an alias, `alias` says what fulfills it.
+				case boundOutsideSendableFunction(functionProperty: Property, functionBuiltType: TypeDescription?, isForwarded: Bool, cycleParameter: CycleParameterOrigin?, alias: AliasOrigin?)
+			}
+
+			/// An alias that binds a label to another property than the one of its own label: `fulfillingProperty`, the
+			/// caller's where `isSeams`, the seam's own alias, and otherwise a property of the seam's tree.
+			public struct AliasOrigin: Sendable {
+				public let fulfillingProperty: Property
+				public let isSeams: Bool
+			}
+
+			/// A parameter of the builder function of `takingType` that a lazy cycle closes on: a cycle inside `takingType`'s
+			/// tree passes it the `property` that `declaringType` declares, or forwards where `isForwarded`, at
+			/// `declarationLocation`.
+			public struct CycleParameterOrigin: Sendable {
+				public let takingType: TypeDescription
+				public let property: Property
+				public let declaringType: TypeDescription
+				public let declarationLocation: Dependency.DeclarationLocation?
+				public let isForwarded: Bool
 			}
 
 			/// The place a call presents whose builder a seam passes up, which a message about a declaration bound on the path
@@ -335,7 +359,8 @@ public struct SeamSignature: Sendable {
 					property = hole.property
 					instantiatedType = hole.instantiatedType
 					builderLabel = hole.builderLabel
-					caseName = hole.enumPlace?.caseName
+					caseName = hole.enumPlace?.describedCase
+					isBuiltBySendableBuilder = hole.enumPlace?.isBuiltBySendableBuilder ?? false
 				}
 
 				/// The seam whose tree holds the place.
@@ -346,6 +371,8 @@ public struct SeamSignature: Sendable {
 				/// The label of the builder the place's seam takes, and the place's case in that builder's enum, if it has one.
 				public let builderLabel: String
 				public let caseName: String?
+				/// Whether a `@Sendable` function builds the place, which is then handed only what that function binds.
+				public let isBuiltBySendableBuilder: Bool
 			}
 
 			public let property: Property
@@ -408,8 +435,7 @@ public struct SeamSignature: Sendable {
 			scopeSeamModule: ModuleIdentity,
 			typesToOwner: [PathType],
 			scopeTypeName: String,
-			stages: [[Field]],
-			stageBoundaries: [StageBoundary],
+			fields: [Field],
 			tierAccess: AccessLevel,
 			accessCause: TypeAccessProof.Cause? = nil,
 			uncarriedDeclarations: [UncarriedDeclaration],
@@ -418,7 +444,6 @@ public struct SeamSignature: Sendable {
 			passedUpRoute: [DeclaredProperty] = [],
 			isSendable: Bool = false,
 			enumPlace: EnumPlace? = nil,
-			placeCaseName: String = "",
 		) {
 			self.ownerType = ownerType
 			self.declaringModuleNames = declaringModuleNames
@@ -436,8 +461,7 @@ public struct SeamSignature: Sendable {
 			self.scopeSeamModule = scopeSeamModule
 			self.typesToOwner = typesToOwner
 			self.scopeTypeName = scopeTypeName
-			self.stages = stages
-			self.stageBoundaries = stageBoundaries
+			self.fields = fields
 			self.tierAccess = tierAccess
 			self.accessCause = accessCause
 			self.uncarriedDeclarations = uncarriedDeclarations
@@ -446,7 +470,6 @@ public struct SeamSignature: Sendable {
 			self.passedUpRoute = passedUpRoute
 			self.isSendable = isSendable
 			self.enumPlace = enumPlace
-			self.placeCaseName = placeCaseName
 		}
 
 		/// The type whose `@Instantiated` property the site builds.
@@ -454,8 +477,8 @@ public struct SeamSignature: Sendable {
 		/// The module of the seam whose tree holds the site, when it also declares the owner and no seam passes the site up,
 		/// which a spelling of the property's type or of the fulfiller's `@Forwarded` property may qualify a type with, since
 		/// the fulfiller is in another module. Empty otherwise: generated code spells the property's type in the module that
-		/// generates the fill, and in the staged builder of every module that passes the place up, where a bare name may mean a
-		/// type of that module, which its `.safedi` records only if a declaration of that module mentions it.
+		/// generates the fill, where a bare name may mean a type of that module, which its `.safedi` records only if a
+		/// declaration of that module mentions it.
 		public let declaringModuleNames: [String]
 		/// The property the site builds, as its owner declares it: the builder returns its type without its wrapper
 		/// (`builtType`).
@@ -498,23 +521,19 @@ public struct SeamSignature: Sendable {
 		/// passed-up hole, every seam it passes through on the way to `scopeSeamType`. Empty when that seam owns the hole.
 		/// Each type's module is a fact of the hole, so no order among modules decides which one a diagnostic names.
 		public let typesToOwner: [PathType]
-		/// The name of the scope struct, or, for a staged builder, of the enum holding one struct per stage; for a place in a
-		/// seam's plain scope enum (`enumPlace`), the enum's name.
+		/// The name of the enum whose case the place is (`enumPlace`), or, before the builders are shaped, a name made from the
+		/// place's owner and property.
 		public internal(set) var scopeTypeName: String
-		/// Where a seam's or a public mock's plain scope enum carries this place, or `nil` for a staged place, which has a
-		/// builder of its own.
+		/// Where a scope enum of the seam or the public mock carries this place, once its builders are shaped.
 		public internal(set) var enumPlace: EnumPlace?
-		/// The name of the case the place has among its seam's places, unspelled: the labels of its path, joined by `_`. A
-		/// staged builder's label and its scope type are made from it. Empty for a public mock's place.
-		public internal(set) var placeCaseName = ""
 		/// The name of the function that builds the wrapper this place is held in, or `nil` for one held by value and for a
 		/// public mock's, whose function the generator names (see `SeamBuilderNames`).
 		public internal(set) var wrapperFunctionName: String?
-		/// The fields of each stage's struct: one stage, unless `@Sendable` functions lie between the seam and the site,
-		/// each of which starts another.
-		public let stages: [[Field]]
-		/// Where each stage after the first starts: each `@Sendable` function between the seam and the site, outermost first.
-		public let stageBoundaries: [StageBoundary]
+		/// The values a fill of the place can read from what its builder is handed: the nearest declaration of each label on
+		/// the site's path that is bound before the site, inside the innermost `@Sendable` function that builds the site where
+		/// one does. The seam's parameters are no field of a place built in a `@Sendable` function: a fill reads them from the
+		/// caller's own scope.
+		public let fields: [Field]
 		/// The access each tier that takes the builder must have no more than: the builder's type is as visible as the
 		/// narrowest type it names – the scope struct at the access of the seam that declares it, and the property's type
 		/// as the declarations the signature is computed from prove it (`TypeAccessProof`) – capped at the seam's type.
@@ -537,12 +556,92 @@ public struct SeamSignature: Sendable {
 		/// captures it.
 		public internal(set) var isSendable: Bool
 
-		/// Where a seam's plain scope enum carries a place.
-		public struct EnumPlace: Hashable, Sendable {
+		/// Where a scope enum carries a place.
+		public struct EnumPlace: Sendable {
+			init(enumTypeName: String, caseName: String, valuesTypeName: String, isBuiltBySendableBuilder: Bool) {
+				self.enumTypeName = enumTypeName
+				self.caseName = caseName
+				self.valuesTypeName = valuesTypeName
+				self.isBuiltBySendableBuilder = isBuiltBySendableBuilder
+				rootEnumTypeName = nil
+				route = []
+				values = []
+				isNestedByType = false
+			}
+
+			init(nestedByTypeIn enumTypeName: String, rootEnumTypeName: String?, caseName: String, valuesTypeName: String?, isBuiltBySendableBuilder: Bool, route: [RouteStep], values: [Field]) {
+				self.enumTypeName = enumTypeName
+				self.caseName = caseName
+				self.valuesTypeName = valuesTypeName
+				self.isBuiltBySendableBuilder = isBuiltBySendableBuilder
+				self.rootEnumTypeName = rootEnumTypeName
+				self.route = route
+				self.values = values
+				isNestedByType = true
+			}
+
 			public let enumTypeName: String
 			/// The case's name, spelled as Swift requires.
 			public let caseName: String
-			public let valuesTypeName: String
+			/// The name of the case's payload struct, or `nil` for a case of a `@Sendable` enum nested by type, which carries no
+			/// values: a place held in a `Sendable` wrapper.
+			public let valuesTypeName: String?
+			/// In an enum nested by type, the name of the root enum `enumTypeName` is nested in, or `nil` where the place's
+			/// case is the root enum's own.
+			public let rootEnumTypeName: String?
+			/// In an enum nested by type, the cases that lead from the root enum to the place's own, outermost first: each
+			/// wraps the next.
+			public let route: [RouteStep]
+			/// In an enum nested by type, what the place's owner binds before the property: the fields of the case's payload.
+			public let values: [Field]
+
+			/// Whether the place's case is in an enum nested by type.
+			public let isNestedByType: Bool
+			/// Whether the place is built inside a `@Sendable` function, which the `@Sendable` builder builds: its route starts
+			/// at the `@Sendable` root enum, whatever enum its own case is in.
+			public let isBuiltBySendableBuilder: Bool
+
+			/// The case as a diagnostic names it: qualified by its enum where that is nested in a root.
+			public var describedCase: String {
+				rootEnumTypeName == nil ? caseName : "\(enumTypeName).\(caseName)"
+			}
+
+			/// The type of the enum whose case the place is, qualified by `seamType` when it is given.
+			func enumType(qualifiedBy seamType: TypeDescription?) -> TypeDescription {
+				let rootType: TypeDescription = if let seamType {
+					.nested(name: rootEnumTypeName ?? enumTypeName, parentType: seamType, generics: [])
+				} else {
+					.simple(name: rootEnumTypeName ?? enumTypeName, generics: [])
+				}
+				if rootEnumTypeName == nil {
+					return rootType
+				} else {
+					return .nested(name: enumTypeName, parentType: rootType, generics: [])
+				}
+			}
+		}
+
+		/// A case on the way from a root enum nested by type to a place, which wraps the next: its name, and what it carries
+		/// before the value it wraps.
+		public struct RouteStep: Sendable {
+			public let caseName: String
+			/// The case's payload, or `nil` for a case of a `@Sendable` enum, which carries no values: a place is handed only
+			/// what the innermost `@Sendable` function that builds it binds.
+			public let values: Values?
+
+			/// A case's payload on a route: the name the seam's tree binds it under, before the case's property is built, the
+			/// type of its struct, as the seam's extension spells it, and its fields, what the case's type binds before its
+			/// property.
+			public struct Values: Sendable {
+				public let bindingName: String
+				public let type: TypeDescription
+				public let fields: [Field]
+			}
+
+			/// The step with its payload bound under `bindingName`.
+			func named(_ bindingName: String?) -> RouteStep {
+				RouteStep(caseName: caseName, values: values.map { Values(bindingName: bindingName ?? $0.bindingName, type: $0.type, fields: $0.fields) })
+			}
 		}
 
 		/// What a seam takes one builder of per family: the type a declaration must fulfill and the type the builder returns,
@@ -578,21 +677,6 @@ public struct SeamSignature: Sendable {
 			public let declarationLocation: Dependency.DeclarationLocation?
 		}
 
-		/// A `@Sendable` function between a seam and a site of its tree, which starts a stage of the site's builder: the seam
-		/// calls the stage before it just before declaring the function.
-		public struct StageBoundary: Sendable {
-			public init(pathLength: Int, fillStageIndex: Int? = nil) {
-				self.pathLength = pathLength
-				self.fillStageIndex = fillStageIndex
-			}
-
-			/// How much of the site's path leads to the property the function builds.
-			public let pathLength: Int
-			/// For a function of a fill the seam's tree generates for a seam it calls, its stage among the fill's stages, or
-			/// `nil` for a builder function.
-			public let fillStageIndex: Int?
-		}
-
 		/// What identifies a hole: its site, by the seam whose tree holds it and its path there, which a passed-up hole
 		/// keeps. A seam takes one builder per site, whatever route presents it.
 		public struct Site: Hashable, Sendable {
@@ -624,171 +708,21 @@ public struct SeamSignature: Sendable {
 			property.typeDescription.builtTypeOfWrapper
 		}
 
-		/// The value an instantiator hands the builder, which the builder's last stage takes as its second argument, or
+		/// The value an instantiator hands the builder, which the place's case carries after its values, or
 		/// `nil` when the property is no instantiator, or is one spelled as forwarding `()` or `Void`.
 		public var forwardedType: TypeDescription? {
 			property.typeDescription.forwardedTypeOfWrapper
 		}
 
-		/// The name of the struct of the stage at `stageIndex` of a staged builder: `Stage1`, `Stage2`, and so on. The
-		/// structs are nested side by side, where a field's type, or the built type the last stage's generic alias spells,
-		/// that begins with one's name would resolve to it, so an underscore is appended while such a type begins with the
-		/// name.
-		public func stageName(at stageIndex: Int) -> String {
-			Self.stageName(at: stageIndex, of: stages, builtType: builtType)
-		}
-
-		/// The name of the function the stage at `stageIndex` is, for a builder or fill named `functionName`: that name for
-		/// the first stage, whose function it is, and that name joined with the stage's for a later one.
-		public func stageFunctionName(at stageIndex: Int, ofFunctionNamed functionName: String) -> String {
-			Self.stageFunctionName(at: stageIndex, of: stages, builtType: builtType, ofFunctionNamed: functionName)
-		}
-
-		/// `stageFunctionName(at:ofFunctionNamed:)` of a hole with `stages`.
-		static func stageFunctionName(at stageIndex: Int, of stages: [[Field]], builtType: TypeDescription, ofFunctionNamed functionName: String) -> String {
-			stageIndex == 0 ? functionName : "\(functionName)_\(stageName(at: stageIndex, of: stages, builtType: builtType))".spelledAsJoinedIdentifier
-		}
-
-		private static func stageName(at stageIndex: Int, of stages: [[Field]], builtType: TypeDescription) -> String {
-			let namedTypes = namedTypes(of: stages).union(TypeAccessProof.mentionedTypes(in: builtType).compactMap(\.outermostTypeName))
-			var name = "Stage\(stageIndex + 1)"
-			while namedTypes.contains(name) {
-				name += "_"
-			}
-			return name
-		}
-
-		private static func namedTypes(of stages: [[Field]]) -> Set<String> {
-			Set(stages.joined().flatMap { TypeAccessProof.mentionedTypes(in: $0.property.typeDescription).compactMap(\.outermostTypeName) })
-		}
-
-		/// The name of the generic typealias of the last stage's function that spells the forwarded value through its generic
-		/// parameter, named apart from the types the scope type's members spell.
-		func lastStageAliasName(isSendable: Bool) -> String {
-			var name = isSendable ? "SendableLastStage" : "LastStage"
-			let namedTypes = Self.namedTypes(of: stages).union(TypeAccessProof.mentionedTypes(in: builtType).compactMap(\.outermostTypeName))
-			while namedTypes.contains(name) {
-				name += "_"
-			}
-			return name
-		}
-
-		/// The scope type this hole's stages are nested in, qualified by `seamType` when it is given.
-		private func scopeType(qualifiedBy seamType: TypeDescription?) -> TypeDescription {
-			if let seamType {
-				.nested(name: scopeTypeName, parentType: seamType, generics: [])
-			} else {
-				.simple(name: scopeTypeName, generics: [])
-			}
-		}
-
-		/// Whether the last stage's function is spelled through `lastStageAliasName(isSendable:)`: an instantiator whose
-		/// forwarded value may be a function type that its spelling does not show – an `Instantiator<T>`'s
-		/// `T.ForwardedProperties`, which code outside `T`'s module cannot see, or an erased instantiator's forwarded type
-		/// spelled as a name, which may be a typealias of a function type (`ErasedInstantiator<OnTap, AnyScreen>`) that its
-		/// fulfiller declares `@escaping`. A generic parameter substituted with a function type escapes, where that function
-		/// type spelled directly in the builder's parameter list would not, and where `@escaping` could not be written when it
-		/// is no function.
-		var spellsLastStageThroughAlias: Bool {
-			guard !property.propertyType.forwardsPropertiesOfBuiltType else { return true }
-			switch forwardedType {
-			case .nested?,
-			     .simple?:
-				return true
-			case .any?,
-			     .array?,
-			     .attributed?,
-			     .closure?,
-			     .composition?,
-			     .dictionary?,
-			     .implicitlyUnwrappedOptional?,
-			     .metatype?,
-			     .optional?,
-			     .some?,
-			     .tuple?,
-			     .unknown?,
-			     .variadic?,
-			     .void?,
-			     nil:
-				return false
-			}
-		}
-
-		/// The type of the struct the stage at `stageIndex` is handed, qualified by `seamType` when it is given.
-		public func stageStructType(at stageIndex: Int, qualifiedBy seamType: TypeDescription?) -> TypeDescription {
-			if let enumPlace {
-				let enumType: TypeDescription = if let seamType {
-					.nested(name: enumPlace.enumTypeName, parentType: seamType, generics: [])
-				} else {
-					.simple(name: enumPlace.enumTypeName, generics: [])
-				}
-				return .nested(name: enumPlace.valuesTypeName, parentType: enumType, generics: [])
-			}
-			let scopeType = scopeType(qualifiedBy: seamType)
-			return stages.count == 1 ? scopeType : .nested(name: stageName(at: stageIndex), parentType: scopeType, generics: [])
-		}
-
-		/// The type of the function the stage at `stageIndex` is: it takes that stage's struct and returns the next
-		/// stage's `@Sendable` function, or, at the last stage, also takes the value an instantiator forwards and returns
-		/// the type the property builds. `@Sendable` when `isSendable`: every stage after the first is.
-		public func stageFunctionType(at stageIndex: Int, qualifiedBy seamType: TypeDescription?, isSendable: Bool = false) -> TypeDescription {
-			stageFunctionType(at: stageIndex, qualifiedBy: seamType, isSendable: isSendable, spelledWithoutAny: false)
-		}
-
-		/// The builder parameter's type, `@escaping`, with its scope type qualified by `seamType` when it is given,
-		/// `@Sendable` as the hole is unless `isSendable` says otherwise.
-		public func builderType(qualifiedBy seamType: TypeDescription?, isSendable: Bool? = nil) -> TypeDescription {
-			builderType(qualifiedBy: seamType, isSendable: isSendable ?? self.isSendable, spelledWithoutAny: false)
-		}
-
-		/// `builderType(qualifiedBy:isSendable:)`, spelled without `any` at every depth, which a guard hashes: the same
-		/// function spells both, so nothing can be emitted and not hashed.
-		func builderTypeWithoutAny(qualifiedBy seamType: TypeDescription?, isSendable: Bool? = nil) -> TypeDescription {
-			builderType(qualifiedBy: seamType, isSendable: isSendable ?? self.isSendable, spelledWithoutAny: true).withoutAny
-		}
-
-		private func builderType(qualifiedBy seamType: TypeDescription?, isSendable: Bool, spelledWithoutAny: Bool) -> TypeDescription {
-			let functionType = stageFunctionType(at: 0, qualifiedBy: seamType, isSendable: isSendable, spelledWithoutAny: spelledWithoutAny)
-			// A typealias is no function type as a spelling shows, so `@escaping` is written on it here.
-			return stages.count == 1 && spellsLastStageThroughAlias ? .attributed(functionType, specifiers: [], attributes: ["escaping"]) : functionType.asFunctionParameter
-		}
-
-		/// The function the last stage is: spelled through its alias where the forwarded value's type may be a function.
-		private func lastStageFunctionType(qualifiedBy seamType: TypeDescription?, isSendable: Bool) -> TypeDescription {
-			let lastStageIndex = stages.count - 1
-			if spellsLastStageThroughAlias, let forwardedType {
-				return .nested(name: lastStageAliasName(isSendable: isSendable), parentType: scopeType(qualifiedBy: seamType), generics: [forwardedType])
-			}
-			let functionType = TypeDescription.closure(arguments: [stageStructType(at: lastStageIndex, qualifiedBy: seamType)] + (forwardedType.map { [$0] } ?? []), isAsync: false, doesThrow: false, returnType: builtType)
-			return isSendable ? functionType.asSendableFunction : functionType
-		}
-
-		/// `stageFunctionType(at:qualifiedBy:)`, built from the last stage out. Each later stage is held as its spelling, so
-		/// that the type has no more depth than one stage however many there are: `@Sendable` functions on a path can be as
-		/// many as the module has types, and a walk of a `TypeDescription` recurses per level.
-		private func stageFunctionType(at stageIndex: Int, qualifiedBy seamType: TypeDescription?, isSendable: Bool, spelledWithoutAny: Bool) -> TypeDescription {
-			func spelled(_ type: TypeDescription) -> TypeDescription {
-				spelledWithoutAny ? type.withoutAny : type
-			}
-			let lastStageIndex = stages.count - 1
-			// Every stage but the first is returned by the one before it as a `@Sendable` function.
-			var functionType = lastStageFunctionType(qualifiedBy: seamType, isSendable: stageIndex == lastStageIndex ? isSendable : true)
-			for earlierStageIndex in (stageIndex..<lastStageIndex).reversed() {
-				functionType = .closure(
-					arguments: [stageStructType(at: earlierStageIndex, qualifiedBy: seamType)],
-					isAsync: false,
-					doesThrow: false,
-					returnType: .unknown(text: spelled(functionType).asSource),
-				)
-				if earlierStageIndex > stageIndex || isSendable {
-					functionType = functionType.asSendableFunction
-				}
-			}
-			return functionType
+		/// The type of the payload struct the place's case carries, qualified by `seamType` when it is given, or `nil` for a
+		/// case that carries no values: a place held in a `Sendable` wrapper, in a `@Sendable` enum.
+		public func valuesType(qualifiedBy seamType: TypeDescription?) -> TypeDescription? {
+			guard let enumPlace, let valuesTypeName = enumPlace.valuesTypeName else { return nil }
+			return .nested(name: valuesTypeName, parentType: enumPlace.enumType(qualifiedBy: seamType), generics: [])
 		}
 	}
 
-	public init(seamType: TypeDescription, parameters: [Parameter], tiers: [AccessLevel], noTierParameters: [Parameter] = [], holes: [Hole] = [], builders: [Builder] = [], scopeEnums: [ScopeEnum] = [], typesDeclaredEscaping: Set<TypeDescription> = []) {
+	public init(seamType: TypeDescription, parameters: [Parameter], tiers: [AccessLevel], noTierParameters: [Parameter] = [], holes: [Hole] = [], builders: [Builder] = [], scopeEnums: [ScopeEnum] = [], callRoutes: [CallRoute] = [], typesDeclaredEscaping: Set<TypeDescription> = []) {
 		self.seamType = seamType
 		self.parameters = parameters
 		self.tiers = tiers
@@ -796,10 +730,31 @@ public struct SeamSignature: Sendable {
 		self.holes = holes
 		self.builders = builders
 		self.scopeEnums = scopeEnums
+		self.callRoutes = callRoutes
 		self.typesDeclaredEscaping = typesDeclaredEscaping
 		callShape = Self.callShape(parameters: parameters, holes: holes, builders: builders, scopeEnums: scopeEnums, tiers: tiers)
 		guardTypeName = Self.guardTypeName(of: seamType, callShape: callShape)
 	}
+
+	/// How the seam's tree hands an inner seam's enum up from a call whose case is in an enum nested by type: the call's path,
+	/// the inner enum, the cases that lead from the root enum to the call's case, and the values the call's owner binds
+	/// before it, which the closure the call passes builds.
+	public struct CallRoute: Sendable {
+		/// The properties from the seam's root to the call's property.
+		public let sitePath: [Property]
+		public let innerKey: ScopeEnum.Key
+		/// The root enum whose builder takes the inner enum.
+		public let rootKey: ScopeEnum.Key
+		public let route: [Hole.RouteStep]
+		public let caseName: String
+		/// The type of the call's case's payload struct, as the seam's extension spells it, and its fields, or `nil` for a case
+		/// of a `@Sendable` enum, which carries no values.
+		public let values: (type: TypeDescription, fields: [Hole.Field])?
+	}
+
+	/// How the seam's tree hands each inner seam's enum up from a call whose case is in an enum nested by type. Read by the
+	/// seam's own generation, never by a call, so neither the call shape nor the guard holds it.
+	public let callRoutes: [CallRoute]
 
 	/// The seam's concrete type.
 	public let seamType: TypeDescription
@@ -811,7 +766,7 @@ public struct SeamSignature: Sendable {
 	/// seam's own tree.
 	public let holes: [Hole]
 	/// The builders the generated initializer takes, after every parameter and on every tier: per hole type in label order,
-	/// a plain builder over its enum, a `@Sendable` builder over its enum, and one staged builder per staged place.
+	/// a plain builder over its enum, then a `@Sendable` builder over its enum.
 	public let builders: [Builder]
 	/// This seam's scope enums, then every enum their cases reach, each once.
 	public internal(set) var scopeEnums: [ScopeEnum] {
@@ -828,39 +783,112 @@ public struct SeamSignature: Sendable {
 	}
 
 	/// The enum a family's builder of one hole type is handed: which place of the seam, or which inner seam, wants a value.
+	///
+	/// A seam's plain enum is nested by type: the root enum, `SafeDIScope_<Stem>`, describes what the seam itself builds,
+	/// and each other type of the seam's tree that leads to a place has an enum of its own, `<Type>_Scope`, nested in the
+	/// root. A case is a property of the type its enum describes – a place, a property that builds a type with an enum, or
+	/// a call of an inner seam – and carries what that type binds before the property (`Case.values`). A public mock's
+	/// enums, and a seam's `@Sendable` enum, have one case per path.
 	public struct ScopeEnum: Sendable {
 		public struct Key: Hashable, Sendable {
+			public init(seamType: TypeDescription, holeType: HoleType, isSendable: Bool, describedType: TypeDescription? = nil) {
+				self.seamType = seamType
+				self.holeType = holeType
+				self.isSendable = isSendable
+				self.describedType = describedType
+			}
+
 			public let seamType: TypeDescription
 			public let holeType: HoleType
 			public let isSendable: Bool
+			/// The type of the seam's tree whose enum this is, or `nil` for a root enum, which a builder is handed.
+			public let describedType: TypeDescription?
 
 			/// The key's spelling, which orders the enums a guard hashes.
 			var spelling: String {
-				"\(seamType.asSource) \(holeType.instantiatedType.asSource) \(holeType.builtType.asSource) \(isSendable ? "@Sendable" : "plain")"
+				"\(seamType.asSource) \(holeType.instantiatedType.asSource) \(holeType.builtType.asSource) \(isSendable ? "@Sendable" : "plain")" + (describedType.map { " \($0.asSource)" } ?? "")
 			}
 		}
 
+		/// What the type an enum nested by type describes binds before a case's property: its `@Forwarded` properties, then
+		/// the children it builds before the property, and, for the seam itself, its parameters first. The case's payload
+		/// struct holds them.
+		public struct Values: Sendable {
+			public let typeName: String
+			public let fields: [Hole.Field]
+		}
+
 		public struct Case: Sendable {
+			public init(name: String, kind: Kind, values: Values? = nil) {
+				self.name = name
+				self.kind = kind
+				self.values = values
+			}
+
 			public enum Kind: Sendable {
-				/// A place of the enum's seam.
+				/// A place of the enum's seam, in an enum with one case per path.
 				case own(site: Hole.Site)
-				/// A call of a seam whose enum the case holds: `sitePath` is the path to the property that holds the call.
+				/// A place of the enum's seam, in an enum nested by type: every site at which the type the enum describes builds
+				/// the property, in the order the builders reach them.
+				case place(sites: [Hole.Site])
+				/// A property that builds the type whose enum, `enumKey`'s, the case holds.
+				case nested(enumKey: Key, isIndirect: Bool)
+				/// A call of a seam whose enum the case holds: `sitePath` is the path to the property that holds the call in an
+				/// enum with one case per path, and empty in an enum nested by type.
 				case inner(enumKey: Key, enumType: TypeDescription, sitePath: [Property], isIndirect: Bool)
 			}
 
 			public let name: String
 			public internal(set) var kind: Kind
+			/// What the type the enum describes binds before the case's property, in an enum nested by type; `nil` otherwise.
+			public let values: Values?
+		}
+
+		public init(key: Key, typeName: String, rootTypeName: String? = nil, builderLabel: String, cases: [Case]) {
+			self.key = key
+			self.typeName = typeName
+			self.rootTypeName = rootTypeName
+			self.builderLabel = builderLabel
+			self.cases = cases
 		}
 
 		public let key: Key
 		public let typeName: String
+		/// The name of the root enum this one is nested in, or `nil` for a root enum.
+		public let rootTypeName: String?
 		/// The label of the builder this enum is handed to, which names its dispatcher.
 		public let builderLabel: String
 		public internal(set) var cases: [Case]
 
 		/// The enum's type, as a module that does not declare it spells it.
 		var type: TypeDescription {
-			.nested(name: typeName, parentType: key.seamType, generics: [])
+			typeQualified(by: key.seamType)
+		}
+
+		/// The enum's type, qualified by `seamType` when it is given, and otherwise as the seam's extension spells it: from
+		/// the root enum.
+		func typeQualified(by seamType: TypeDescription?) -> TypeDescription {
+			let rootType: TypeDescription = if let seamType {
+				.nested(name: rootTypeName ?? typeName, parentType: seamType, generics: [])
+			} else {
+				.simple(name: rootTypeName ?? typeName, generics: [])
+			}
+			if rootTypeName == nil {
+				return rootType
+			} else {
+				return .nested(name: typeName, parentType: rootType, generics: [])
+			}
+		}
+
+		/// The key of the enum `enumCase` holds, or `nil` for a place.
+		static func heldKey(of enumCase: Case) -> Key? {
+			switch enumCase.kind {
+			case .own, .place:
+				nil
+			case let .nested(enumKey, _),
+			     let .inner(enumKey, _, _, _):
+				enumKey
+			}
 		}
 
 		/// The sites of the places the enum of `key` reaches among `enumsByKey`, its own and those of the enums its cases hold,
@@ -875,7 +903,10 @@ public struct SeamSignature: Sendable {
 					switch enumCase.kind {
 					case let .own(site):
 						sites.insert(site)
-					case let .inner(innerKey, _, _, _):
+					case let .place(placeSites):
+						sites.formUnion(placeSites)
+					case let .nested(innerKey, _),
+					     let .inner(innerKey, _, _, _):
 						keysToVisit.append(innerKey)
 					}
 				}
@@ -884,14 +915,10 @@ public struct SeamSignature: Sendable {
 		}
 	}
 
-	/// A builder of the generated initializer.
+	/// A builder of the generated initializer, over a root scope enum.
 	public struct Builder: Sendable {
-		public enum Kind: Sendable {
-			case scopeEnum(ScopeEnum.Key)
-			case staged(site: Hole.Site)
-		}
-
-		public let kind: Kind
+		/// The key of the root enum the builder is handed.
+		public let enumKey: ScopeEnum.Key
 		/// The label the widest tier takes the builder under.
 		public let label: String
 		public let internalName: String
@@ -929,7 +956,7 @@ public struct SeamSignature: Sendable {
 		/// The builder as the tier at `tier` takes it, which a call of that tier passes by `label`.
 		func atTier(_ tier: AccessLevel) -> Builder {
 			Builder(
-				kind: kind,
+				enumKey: enumKey,
 				label: label(inTierAt: tier),
 				internalName: internalName,
 				parameterType: parameterType,
@@ -991,17 +1018,14 @@ public struct SeamSignature: Sendable {
 			public let deferral: SeamSignature.Parameter.Deferral
 		}
 
-		/// A builder the call passes: its label, its type spelled without `any`, its tier access, and each field of
-		/// each stage's struct – label, type spelled without `any`, and access – in stage and field order.
+		/// A place a builder the call passes reaches: the builder's label, the place's tier access, and each of its fields –
+		/// label, type spelled without `any`, and access – in field order.
 		public struct Hole: Hashable, Sendable {
 			public init(_ hole: SeamSignature.Hole) {
 				builderLabel = hole.builderLabel
 				narrowerTierBuilderLabels = TierLabel.sorted(hole.narrowerTierBuilderLabels)
-				type = hole.builderTypeWithoutAny(qualifiedBy: hole.scopeSeamType).asSource
 				tierAccess = hole.tierAccess
-				fields = hole.stages.map { stage in
-					stage.map { Field(label: $0.property.label, type: $0.property.typeDescription.withoutAny.asSource, access: $0.access) }
-				}
+				fields = hole.fields.map { Field(label: $0.property.label, type: $0.property.typeDescription.withoutAny.asSource, access: $0.access) }
 			}
 
 			public struct Field: Hashable, Sendable {
@@ -1012,9 +1036,8 @@ public struct SeamSignature: Sendable {
 
 			public let builderLabel: String
 			public let narrowerTierBuilderLabels: [TierLabel]
-			public let type: String
 			public let tierAccess: AccessLevel
-			public let fields: [[Field]]
+			public let fields: [Field]
 		}
 
 		/// A label a narrower tier takes a builder under, where it differs from the widest tier's.
@@ -1081,14 +1104,25 @@ public struct SeamSignature: Sendable {
 	/// enum it holds.
 	static func scopeEnumShapes(of scopeEnums: [ScopeEnum], holes: [Hole]) -> [CallShape.ScopeEnum] {
 		let holesBySite = Dictionary(holes.map { ($0.site, $0) }, uniquingKeysWith: { first, _ in first })
+		func spelled(_ fields: some Sequence<Hole.Field>) -> [String] {
+			fields.map { "\($0.property.label): \($0.property.typeDescription.withoutAny.asSource) \($0.access.spelledOnGeneratedDeclaration)" }
+		}
+		// The payload struct of a case nested by type is named, and its fields listed, first.
+		func valuesPayload(of enumCase: ScopeEnum.Case) -> [String] {
+			enumCase.values.map { [$0.typeName] + spelled($0.fields) } ?? []
+		}
 		func payload(of enumCase: ScopeEnum.Case) -> String {
 			switch enumCase.kind {
 			case let .own(site):
 				guard let hole = holesBySite[site] else { return "" }
-				let fields = hole.stages.joined().map { "\($0.property.label): \($0.property.typeDescription.withoutAny.asSource) \($0.access.spelledOnGeneratedDeclaration)" }
-				return (fields + [hole.forwardedType?.withoutAny.asSource ?? ""]).joined(separator: ", ")
-			case let .inner(enumKey, _, _, _):
-				return enumKey.spelling
+				return (spelled(hole.fields) + [hole.forwardedType?.withoutAny.asSource ?? ""]).joined(separator: ", ")
+			case let .place(sites):
+				// Every site of a place builds one property, so each forwards one type.
+				let forwardedType = sites.first.flatMap { holesBySite[$0] }?.forwardedType
+				return (valuesPayload(of: enumCase) + [forwardedType?.withoutAny.asSource ?? ""]).joined(separator: ", ")
+			case let .nested(enumKey, _),
+			     let .inner(enumKey, _, _, _):
+				return (valuesPayload(of: enumCase) + [enumKey.spelling]).joined(separator: ", ")
 			}
 		}
 		// Each key spelled once, then sorted by its spelling.
@@ -1097,23 +1131,16 @@ public struct SeamSignature: Sendable {
 		}
 	}
 
-	/// Hashes into `hash`, after a signature's builders, every enum they reach and each staged place's stages: a field is
-	/// hashed, since a caller that computed the struct without it would resolve the label from its own scope instead. A
-	/// seam's guard and a public mock's guard both end with it.
-	static func combine(scopeEnums: [CallShape.ScopeEnum], holes: [CallShape.Hole], into hash: inout SeamSignatureHash) {
+	/// Hashes into `hash`, after a signature's builders, every enum they reach: each case's payload, its fields included,
+	/// since a caller that computed a payload without a field would resolve the label from its own scope instead. A seam's
+	/// guard and a public mock's guard both end with it.
+	static func combine(scopeEnums: [CallShape.ScopeEnum], into hash: inout SeamSignatureHash) {
 		for scopeEnum in scopeEnums {
 			hash.combine(scopeEnum.key)
 			hash.combine(scopeEnum.typeName)
 			for enumCase in scopeEnum.cases {
 				hash.combine(enumCase.name)
 				hash.combine(enumCase.payload)
-			}
-		}
-		for hole in holes where hole.fields.count > 1 {
-			for field in hole.fields.joined() {
-				hash.combine(field.label)
-				hash.combine(field.type)
-				hash.combine(field.access.spelledOnGeneratedDeclaration)
 			}
 		}
 	}
@@ -1218,8 +1245,7 @@ public struct SeamSignature: Sendable {
 			}
 		}
 		// Each builder after every parameter, so a seam without one hashes what it always hashed: the label, the type the
-		// signature spells, attributes included, and the tier access. Then every enum the builders reach, and each staged
-		// place's stages.
+		// signature spells, attributes included, and the tier access. Then every enum the builders reach.
 		for builder in callShape.builders {
 			hash.combine(builder.label)
 			hash.combine(builder.type)
@@ -1229,7 +1255,7 @@ public struct SeamSignature: Sendable {
 				hash.combine("\(tierLabel.tier.spelledOnGeneratedDeclaration) \(tierLabel.label)")
 			}
 		}
-		combine(scopeEnums: callShape.scopeEnums, holes: callShape.holes, into: &hash)
+		combine(scopeEnums: callShape.scopeEnums, into: &hash)
 		return "\(ReservedName.builderFunctionNamePrefix)\(seamType.asIdentifier)_\(hash.hexadecimal)".spelledAsJoinedIdentifier
 	}
 }
@@ -1361,14 +1387,9 @@ struct CalledBuilders: Sendable {
 		Dictionary(scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
 	}
 
-	/// The sites `builder` reaches: those of the places of its enum and of the enums its cases hold, or its staged place.
+	/// The sites `builder` reaches: those of the places of its enum and of the enums its cases hold.
 	func sitesReached(by builder: SeamSignature.Builder, in enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]) -> Set<SeamSignature.Hole.Site> {
-		switch builder.kind {
-		case let .scopeEnum(key):
-			SeamSignature.ScopeEnum.sitesReached(from: key, in: enumsByKey)
-		case let .staged(site):
-			[site]
-		}
+		SeamSignature.ScopeEnum.sitesReached(from: builder.enumKey, in: enumsByKey)
 	}
 }
 

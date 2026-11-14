@@ -100,8 +100,8 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		try await expectValuesEqualInlineBuild(
 			readerReceive: "@Received(onlyIfAvailable: true) public let tag: LazilyInstantiated<Tag>?",
 			liveApiReceive: "@Received(onlyIfAvailable: true) public let tag: LazilyInstantiated<Tag>?",
-			featureFile: Self.featureFile(tagType: "LazilyInstantiated<Tag>?", guardName: "__safeDI_Hub_AAD1A38956B5CFE4"),
-			appFile: Self.appFile(guardName: "__safeDI_Hub_AAD1A38956B5CFE4", liveApiTagArgument: "tag"),
+			featureFile: Self.featureFile(tagType: "LazilyInstantiated<Tag>?", guardName: "__safeDI_Hub_D708AD692F4FA289"),
+			appFile: Self.appFile(guardName: "__safeDI_Hub_D708AD692F4FA289", liveApiTagArgument: "tag"),
 		)
 	}
 
@@ -113,8 +113,8 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		try await expectValuesEqualInlineBuild(
 			readerReceive: "@Received public let tag: LazilyInstantiated<Tag>",
 			liveApiReceive: "@Received(onlyIfAvailable: true) public let tag: Tag?",
-			featureFile: Self.featureFile(tagType: "LazilyInstantiated<Tag>", guardName: "__safeDI_Hub_9B75BEC928738CA7"),
-			appFile: Self.appFile(guardName: "__safeDI_Hub_9B75BEC928738CA7", liveApiTagArgument: "tag.instance"),
+			featureFile: Self.featureFile(tagType: "LazilyInstantiated<Tag>", guardName: "__safeDI_Hub_7480356911040170"),
+			appFile: Self.appFile(guardName: "__safeDI_Hub_7480356911040170", liveApiTagArgument: "tag.instance"),
 		)
 	}
 
@@ -126,12 +126,20 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		["Feature.swift": generatedFileHeader + """
 		extension Hub {
 		    @frozen public enum SafeDIScope_Api {
-		        case aBuilder_api(aBuilder_api_Values)
+		        case aBuilder(aBuilder_Values, SafeDIScope_Api.A_Scope)
 
-		        public struct aBuilder_api_Values {
-		            public let tag: \(tagType)
-		            public let reader: Reader
-		            public let bBuilder: Instantiator<B>
+		        public struct aBuilder_Values {
+		            public let tag: LazilyInstantiated<Tag>
+		        }
+
+		        @frozen public enum A_Scope {
+		            case api(api_Values)
+
+		            public struct api_Values {
+		                public let tag: \(tagType)
+		                public let reader: Reader
+		                public let bBuilder: Instantiator<B>
+		            }
 		        }
 		    }
 
@@ -142,6 +150,7 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		            Tag()
 		        }
 		        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
+		        let __safeDI_apiValues_aBuilder = SafeDIScope_Api.aBuilder_Values(tag: tag)
 		        func __safeDI_aBuilder(tag: \(tagType)) -> A {
 		            let reader = Reader(tag: tag)
 		            func __safeDI_bBuilder() -> B {
@@ -155,7 +164,7 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		                return B(tag: tag, aBuilder: aBuilder)
 		            }
 		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-		            let api: any Api = __safeDI_apiBuilder(.aBuilder_api(SafeDIScope_Api.aBuilder_api_Values(tag: tag, reader: reader, bBuilder: bBuilder)))
+		            let api: any Api = __safeDI_apiBuilder(.aBuilder(__safeDI_apiValues_aBuilder, .api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))))
 		            return A(reader: reader, api: api, bBuilder: bBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
@@ -185,7 +194,12 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		            _ = Hub.\(guardName).self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature"))
 		            func __safeDI_apiBuilder_Hub(_ scope: Hub.SafeDIScope_Api) -> any Api {
 		                switch scope {
-		                case let .aBuilder_api(scope):
+		                case let .aBuilder(_, scope): return __safeDI_apiBuilder_Hub_A_Scope(scope)
+		                }
+		            }
+		            func __safeDI_apiBuilder_Hub_A_Scope(_ scope: Hub.SafeDIScope_Api.A_Scope) -> any Api {
+		                switch scope {
+		                case let .api(scope):
 		                    let tag = scope.tag
 		                    let api: any Api = LiveApi(tag: \(liveApiTagArgument))
 		                    return api

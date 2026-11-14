@@ -1254,10 +1254,10 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 		let seamFileName = try #require(files.keys.first { $0.hasSuffix("/S227_CycleSeam+SafeDI.swift") })
 		let seamFile = try #require(files[seamFileName])
-		let siteArguments = "cycle4Reader: cycle4Reader, cycle6Tag: cycle6Tag, "
+		let siteArguments = "cycle0Service_Values(cycle6Tag: cycle6Tag, "
 		try #require(seamFile.components(separatedBy: siteArguments).count == 2, "Seed \(seed)'s seam no longer hands its one site `CycleB`'s `cycle6Tag`")
 		var perturbedFiles = files
-		perturbedFiles[seamFileName] = seamFile.replacingOccurrences(of: siteArguments, with: "cycle4Reader: cycle4Reader, cycle6Tag: cycle4Reader.cycle6Tag, ")
+		perturbedFiles[seamFileName] = seamFile.replacingOccurrences(of: siteArguments, with: "cycle0Service_Values(cycle6Tag: cycle4Reader.cycle6Tag, ")
 		let perturbedRuns = GraphFuzzerToolRuns(fixture: runs.fixture, firstOutcome: .accepted(generatedFiles: perturbedFiles, warnings: warnings), secondOutcome: .accepted(generatedFiles: perturbedFiles, warnings: warnings), visibleOutcome: runs.visibleOutcome)
 
 		let failure = try #require(try await GraphFuzzerOracle.valueFailures(of: [perturbedRuns])[seed])
@@ -5224,7 +5224,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 78, 92, 93, 151, 153, 180, 196, 215, 277, 298, 304, 326, 347, 605, 609, 705, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xF1DA8C3DB0AAAAC8
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x7612D8B8F35CB51E
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -5326,7 +5326,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeBeneathLazilyInstantiated: 55,
 		.holeBeneathSendableLazilyInstantiated: 8,
 		.holeOwnerReachedAtTwoSites: 56,
-		.holeReadsField: 174,
+		.holeReadsField: 158,
 		.holeReadsCallerValue: 99,
 		.holePassedUp: 84,
 		.holeReentersSeam: 43,
@@ -5337,10 +5337,10 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeCrossPackage: 93,
 		.holeCrossPackageFulfillerInitializerPackage: 11,
 		.holeCrossPackageFulfillerBuildsPackageInitializerOfSeamsPackage: 14,
-		.holeNarrowerField: 21,
-		.holeAliasOrOnlyIfAvailable: 63,
-		.holeReadOnlyIfAvailable: 34,
-		.holeOwnerAliasesField: 24,
+		.holeNarrowerField: 16,
+		.holeAliasOrOnlyIfAvailable: 57,
+		.holeReadOnlyIfAvailable: 30,
+		.holeOwnerAliasesField: 25,
 		.holeMocks: 48,
 		.holeImplInNamespace: 48,
 		.holeSeamModuleWithoutPackageName: 33,
@@ -5603,7 +5603,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.moduleConfiguration: 80,
 		.publicTier: 95,
 		.secondTier: 57,
-		.stagedHoleBuilder: 1,
+		.sendableHoleBuilder: 1,
 		.thirdTier: 0,
 		.unreadTypeComment: 26,
 	]
@@ -5647,7 +5647,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x317D83B782EE90D2
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xEDD09AB314C7041D
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.

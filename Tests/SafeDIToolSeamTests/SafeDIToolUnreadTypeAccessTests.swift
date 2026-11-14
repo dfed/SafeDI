@@ -386,7 +386,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        let service: any UserService = __safeDI_userServiceBuilder(.service(SafeDIScope_UserService.service_Values(image: image, cache: cache)))
 		        self.init(image: image, service: service, cache: cache)
 		    }
-		""", guardHash: "3EA8086D06C81EDC"))
+		""", guardHash: "FCD2E4EF2696F24A"))
 	}
 
 	@Test
@@ -420,7 +420,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        let renderer: any Renderer = __safeDI_rendererBuilder(.renderer(SafeDIScope_Renderer.renderer_Values(cache: cache)))
 		        self.init(renderer: renderer, cache: cache)
 		    }
-		""", guardHash: "16232CF7C01DA9E6"))
+		""", guardHash: "4CCDF20E7039460C"))
 	}
 
 	// MARK: E: a `package` type of a module that does not run SafeDI

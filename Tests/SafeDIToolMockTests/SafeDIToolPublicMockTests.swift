@@ -2397,7 +2397,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesStagedBuilderForHole_whenHoleIsBuiltInSendableBuilderFunction() async throws {
+	mutating func generate_takesSendableBuilderForHole_whenHoleIsBuiltInSendableBuilderFunction() async throws {
 		// M7.4: a hole beneath a `SendableInstantiator` takes a staged builder, as a seam's does (decision 22): the mock
 		// calls its first stage before the `@Sendable` builder function, which calls the stage it returns.
 		let output = try await executeSafeDIToolTest(
@@ -2431,10 +2431,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"Root+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Root {
-			    public enum SafeDIStagedMockScope_Thing_childBuilder_thing {
-			        public struct Stage1 {}
+			    @frozen public enum SafeDISendableMockScope_Thing {
+			        case childBuilder_thing(childBuilder_thing_Values)
 
-			        public struct Stage2 {}
+			        public struct childBuilder_thing_Values {}
 			    }
 
 			    /// Overrides for the mock dependency tree.
@@ -2449,14 +2449,13 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    public static func mock(
-			        thingBuilder_childBuilder_thing: @escaping (Root.SafeDIStagedMockScope_Thing_childBuilder_thing.Stage1) -> @Sendable (Root.SafeDIStagedMockScope_Thing_childBuilder_thing.Stage2) -> Thing,
+			        thingSendableBuilder: @escaping @Sendable (Root.SafeDISendableMockScope_Thing) -> Thing,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        let __safeDI_thingBuilder_childBuilder_thing = thingBuilder_childBuilder_thing
+			        let __safeDI_thingSendableBuilder = thingSendableBuilder
 			        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder
-			        let __safeDI_thingBuilder_childBuilder_thing_Stage2 = __safeDI_thingBuilder_childBuilder_thing(SafeDIStagedMockScope_Thing_childBuilder_thing.Stage1())
 			        @Sendable func __safeDI_childBuilder() -> Child {
-			            let thing: Thing = __safeDI_thingBuilder_childBuilder_thing_Stage2(SafeDIStagedMockScope_Thing_childBuilder_thing.Stage2())
+			            let thing: Thing = __safeDI_thingSendableBuilder(.childBuilder_thing(SafeDISendableMockScope_Thing.childBuilder_thing_Values()))
 			            return if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(thing) } else { Child(thing: thing) }
 			        }
 			        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
@@ -2465,7 +2464,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 
 			extension Root {
-			    public enum __safeDI_Root_mock_98589B73D761718A {}
+			    public enum __safeDI_Root_mock_D079137918D4928E {}
 			}
 			#endif
 			""",
@@ -2475,11 +2474,11 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_callsStageBeforeSendableFunction_whenCycleInsideSendableInstantiatorClosesOnFunctionBuiltByValue() async throws {
+	mutating func generate_fillsSendablePlace_whenCycleInsideSendableInstantiatorClosesOnFunctionBuiltByValue() async throws {
 		// `Hub` builds `A` by value, and `B`, built in `A`'s `SendableInstantiator`, builds `A` again, which calls the function
-		// `Hub`'s mock builds `A` with from a `@Sendable` closure: that function is `@Sendable`, so it starts a stage of the
-		// place of `B`'s `api`, whose first stage the mock calls just before it, as a seam does. `A`'s `package` initializer
-		// keeps `App` from building `Hub` inline, so `Screen`'s mock calls `Hub`'s and fills the place with `LiveApi`.
+		// `Hub`'s mock builds `A` with from a `@Sendable` closure: that function is `@Sendable`, so the place of `B`'s `api` is
+		// a case of the `@Sendable` enum, handed what `B`'s function binds. `A`'s `package` initializer keeps `App` from
+		// building `Hub` inline, so `Screen`'s mock calls `Hub`'s and fills the place with `LiveApi`.
 		let modules = [
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 				"public protocol Api: Sendable {}",
@@ -2500,12 +2499,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		#if DEBUG
 		extension Hub {
-		    public enum SafeDIStagedMockScope_Api_a_bBuilder_api {
-		        public struct Stage1 {}
+		    @frozen public enum SafeDISendableMockScope_Api {
+		        case a_bBuilder_api(a_bBuilder_api_Values)
 
-		        public struct Stage2 {}
-
-		        public struct Stage3 {
+		        public struct a_bBuilder_api_Values {
 		            public let a: A
 		        }
 		    }
@@ -2522,18 +2519,16 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        apiBuilder_a_bBuilder_api: @escaping (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api,
+		        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Hub {
-		        let __safeDI_apiBuilder_a_bBuilder_api = apiBuilder_a_bBuilder_api
+		        let __safeDI_apiSendableBuilder = apiSendableBuilder
 		        let __safeDI_a__a_bBuilder_safeDIBuilder = safeDIOverrides.a.bBuilder.safeDIBuilder
 		        let __safeDI_a__safeDIBuilder = safeDIOverrides.a.safeDIBuilder
-		        let __safeDI_apiBuilder_a_bBuilder_api_Stage2 = __safeDI_apiBuilder_a_bBuilder_api(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1())
 		        @Sendable func __safeDI_a() -> A {
-		            let __safeDI_apiBuilder_a_bBuilder_api_Stage3 = __safeDI_apiBuilder_a_bBuilder_api_Stage2(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2())
 		            @Sendable func __safeDI_bBuilder() -> B {
 		                let a: A = __safeDI_a()
-		                let api: any Api = __safeDI_apiBuilder_a_bBuilder_api_Stage3(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3(a: a))
+		                let api: any Api = __safeDI_apiSendableBuilder(.a_bBuilder_api(SafeDISendableMockScope_Api.a_bBuilder_api_Values(a: a)))
 		                return B.__safeDI_init(api: api, a: a, safeDIBuilder: __safeDI_a__a_bBuilder_safeDIBuilder)
 		            }
 		            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
@@ -2545,7 +2540,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 
 		extension Hub {
-		    public enum __safeDI_Hub_mock_58C7C781F68678B2 {}
+		    public enum __safeDI_Hub_mock_322D3827C5473CF3 {}
 		}
 		#endif
 
@@ -2613,18 +2608,15 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_hub() -> Hub {
-		            func __safeDI_apiBuilder_a_bBuilder_api(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
-		                @Sendable func __safeDI_apiBuilder_a_bBuilder_api_Stage2(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
-		                    @Sendable func __safeDI_apiBuilder_a_bBuilder_api_Stage3(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
-		                        let api: any Api = LiveApi()
-		                        return api
-		                    }
-		                    return __safeDI_apiBuilder_a_bBuilder_api_Stage3
+		            @Sendable func __safeDI_apiSendableBuilder_Hub(_ scope: Hub.SafeDISendableMockScope_Api) -> any Api {
+		                switch scope {
+		                case .a_bBuilder_api:
+		                    let api: any Api = LiveApi()
+		                    return api
 		                }
-		                return __safeDI_apiBuilder_a_bBuilder_api_Stage2
 		            }
-		            _ = Hub.__safeDI_Hub_mock_58C7C781F68678B2.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature"))
-		            return Hub.mock(apiBuilder_a_bBuilder_api: __safeDI_apiBuilder_a_bBuilder_api, safeDIOverrides: safeDIOverrides.hub)
+		            _ = Hub.__safeDI_Hub_mock_322D3827C5473CF3.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature"))
+		            return Hub.mock(apiSendableBuilder: __safeDI_apiSendableBuilder_Hub, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)
@@ -2645,11 +2637,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_callsEachStageBeforeItsSendableFunction_whenTwoNestedFunctionsBuiltByValueAreClosedOnFromSendableInstantiator() async throws {
+	mutating func generate_fillsSendablePlace_whenTwoNestedFunctionsBuiltByValueAreClosedOnFromSendableInstantiator() async throws {
 		// `Hub` builds `A` by value, `A` builds `C` by value, and `B`, built in `C`'s `SendableInstantiator`, builds `A` and
 		// `C` again, which calls both functions `Hub`'s mock builds them with from a `@Sendable` closure: each function is
-		// `@Sendable`, so each starts a stage of the place of `B`'s `api`, and the mock calls the stage before each
-		// function, `Stage1`'s before `A`'s and `Stage2`'s before `C`'s, inside `A`'s.
+		// `@Sendable`, so the place of `B`'s `api` is a case of the `@Sendable` enum, handed what `B`'s function binds.
 		let modules = [
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 				"public protocol Api: Sendable {}",
@@ -2671,14 +2662,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		#if DEBUG
 		extension Hub {
-		    public enum SafeDIStagedMockScope_Api_a_c_bBuilder_api {
-		        public struct Stage1 {}
+		    @frozen public enum SafeDISendableMockScope_Api {
+		        case a_c_bBuilder_api(a_c_bBuilder_api_Values)
 
-		        public struct Stage2 {}
-
-		        public struct Stage3 {}
-
-		        public struct Stage4 {
+		        public struct a_c_bBuilder_api_Values {
 		            public let a: A
 		            public let c: C
 		        }
@@ -2696,22 +2683,19 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        apiBuilder_a_c_bBuilder_api: @escaping (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage3) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage4) -> any Api,
+		        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Hub {
-		        let __safeDI_apiBuilder_a_c_bBuilder_api = apiBuilder_a_c_bBuilder_api
+		        let __safeDI_apiSendableBuilder = apiSendableBuilder
 		        let __safeDI_a__a_c_safeDIBuilder = safeDIOverrides.a.c.safeDIBuilder
 		        let __safeDI_a__a_c_bBuilder_safeDIBuilder = safeDIOverrides.a.c.bBuilder.safeDIBuilder
 		        let __safeDI_a__safeDIBuilder = safeDIOverrides.a.safeDIBuilder
-		        let __safeDI_apiBuilder_a_c_bBuilder_api_Stage2 = __safeDI_apiBuilder_a_c_bBuilder_api(SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage1())
 		        @Sendable func __safeDI_a() -> A {
-		            let __safeDI_apiBuilder_a_c_bBuilder_api_Stage3 = __safeDI_apiBuilder_a_c_bBuilder_api_Stage2(SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage2())
 		            @Sendable func __safeDI_c() -> C {
-		                let __safeDI_apiBuilder_a_c_bBuilder_api_Stage4 = __safeDI_apiBuilder_a_c_bBuilder_api_Stage3(SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage3())
 		                @Sendable func __safeDI_bBuilder() -> B {
 		                    let a: A = __safeDI_a()
 		                    let c: C = __safeDI_c()
-		                    let api: any Api = __safeDI_apiBuilder_a_c_bBuilder_api_Stage4(SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage4(a: a, c: c))
+		                    let api: any Api = __safeDI_apiSendableBuilder(.a_c_bBuilder_api(SafeDISendableMockScope_Api.a_c_bBuilder_api_Values(a: a, c: c)))
 		                    return B.__safeDI_init(api: api, a: a, c: c, safeDIBuilder: __safeDI_a__a_c_bBuilder_safeDIBuilder)
 		                }
 		                let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
@@ -2726,7 +2710,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 
 		extension Hub {
-		    public enum __safeDI_Hub_mock_2313650B8A29E74F {}
+		    public enum __safeDI_Hub_mock_9BF47023BE7DAC6E {}
 		}
 		#endif
 
@@ -2815,21 +2799,15 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_hub() -> Hub {
-		            func __safeDI_apiBuilder_a_c_bBuilder_api(_ scope: Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage3) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage4) -> any Api {
-		                @Sendable func __safeDI_apiBuilder_a_c_bBuilder_api_Stage2(_ scope: Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage3) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage4) -> any Api {
-		                    @Sendable func __safeDI_apiBuilder_a_c_bBuilder_api_Stage3(_ scope: Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage3) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage4) -> any Api {
-		                        @Sendable func __safeDI_apiBuilder_a_c_bBuilder_api_Stage4(_ scope: Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage4) -> any Api {
-		                            let api: any Api = LiveApi()
-		                            return api
-		                        }
-		                        return __safeDI_apiBuilder_a_c_bBuilder_api_Stage4
-		                    }
-		                    return __safeDI_apiBuilder_a_c_bBuilder_api_Stage3
+		            @Sendable func __safeDI_apiSendableBuilder_Hub(_ scope: Hub.SafeDISendableMockScope_Api) -> any Api {
+		                switch scope {
+		                case .a_c_bBuilder_api:
+		                    let api: any Api = LiveApi()
+		                    return api
 		                }
-		                return __safeDI_apiBuilder_a_c_bBuilder_api_Stage2
 		            }
-		            _ = Hub.__safeDI_Hub_mock_2313650B8A29E74F.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature"))
-		            return Hub.mock(apiBuilder_a_c_bBuilder_api: __safeDI_apiBuilder_a_c_bBuilder_api, safeDIOverrides: safeDIOverrides.hub)
+		            _ = Hub.__safeDI_Hub_mock_9BF47023BE7DAC6E.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature"))
+		            return Hub.mock(apiSendableBuilder: __safeDI_apiSendableBuilder_Hub, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)
@@ -2842,10 +2820,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_callsStageBeforeSendableFunction_whenFunctionBuildsReceivedPropertyPromotedToMockRoot() async throws {
+	mutating func generate_fillsSendablePlace_whenFunctionBuildsReceivedPropertyPromotedToMockRoot() async throws {
 		// `Hub` receives `A`, so its mock builds `A` as a promoted root child, in a function that `B`, built in `A`'s
 		// `SendableInstantiator`, calls from a `@Sendable` closure as it builds `A` again: the function is `@Sendable`, so the
-		// mock calls the first stage of the place of `B`'s `api` before it, whether or not the caller passes `a`.
+		// place of `B`'s `api` is a case of the `@Sendable` enum, whether or not the caller passes `a`.
 		let modules = [
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 				"public protocol Api: Sendable {}",
@@ -2866,12 +2844,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		#if DEBUG
 		extension Hub {
-		    public enum SafeDIStagedMockScope_Api_a_bBuilder_api {
-		        public struct Stage1 {}
+		    @frozen public enum SafeDISendableMockScope_Api {
+		        case a_bBuilder_api(a_bBuilder_api_Values)
 
-		        public struct Stage2 {}
-
-		        public struct Stage3 {
+		        public struct a_bBuilder_api_Values {
 		            public let a: A
 		        }
 		    }
@@ -2888,19 +2864,17 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        apiBuilder_a_bBuilder_api: @escaping (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api,
+		        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
 		        a: A? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Hub {
-		        let __safeDI_apiBuilder_a_bBuilder_api = apiBuilder_a_bBuilder_api
+		        let __safeDI_apiSendableBuilder = apiSendableBuilder
 		        let __safeDI_a__a_bBuilder_safeDIBuilder = safeDIOverrides.a.bBuilder.safeDIBuilder
 		        let __safeDI_a__safeDIBuilder = safeDIOverrides.a.safeDIBuilder
-		        let __safeDI_apiBuilder_a_bBuilder_api_Stage2 = __safeDI_apiBuilder_a_bBuilder_api(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1())
 		        @Sendable func __safeDI_a() -> A {
-		            let __safeDI_apiBuilder_a_bBuilder_api_Stage3 = __safeDI_apiBuilder_a_bBuilder_api_Stage2(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2())
 		            @Sendable func __safeDI_bBuilder() -> B {
 		                let a: A = __safeDI_a()
-		                let api: any Api = __safeDI_apiBuilder_a_bBuilder_api_Stage3(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3(a: a))
+		                let api: any Api = __safeDI_apiSendableBuilder(.a_bBuilder_api(SafeDISendableMockScope_Api.a_bBuilder_api_Values(a: a)))
 		                return B.__safeDI_init(api: api, a: a, safeDIBuilder: __safeDI_a__a_bBuilder_safeDIBuilder)
 		            }
 		            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
@@ -2912,7 +2886,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 
 		extension Hub {
-		    public enum __safeDI_Hub_mock_930B6043A15E7421 {}
+		    public enum __safeDI_Hub_mock_C07B6DAF73777578 {}
 		}
 		#endif
 
@@ -2980,18 +2954,15 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_hub() -> Hub {
-		            func __safeDI_apiBuilder_a_bBuilder_api(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
-		                @Sendable func __safeDI_apiBuilder_a_bBuilder_api_Stage2(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
-		                    @Sendable func __safeDI_apiBuilder_a_bBuilder_api_Stage3(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
-		                        let api: any Api = LiveApi()
-		                        return api
-		                    }
-		                    return __safeDI_apiBuilder_a_bBuilder_api_Stage3
+		            @Sendable func __safeDI_apiSendableBuilder_Hub(_ scope: Hub.SafeDISendableMockScope_Api) -> any Api {
+		                switch scope {
+		                case .a_bBuilder_api:
+		                    let api: any Api = LiveApi()
+		                    return api
 		                }
-		                return __safeDI_apiBuilder_a_bBuilder_api_Stage2
 		            }
-		            _ = Hub.__safeDI_Hub_mock_930B6043A15E7421.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature"))
-		            return Hub.mock(apiBuilder_a_bBuilder_api: __safeDI_apiBuilder_a_bBuilder_api, a: nil, safeDIOverrides: safeDIOverrides.hub)
+		            _ = Hub.__safeDI_Hub_mock_C07B6DAF73777578.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature"))
+		            return Hub.mock(apiSendableBuilder: __safeDI_apiSendableBuilder_Hub, a: nil, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)
@@ -3004,11 +2975,11 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_handsEachStageTheValuesItCarries_whenStagesBeforeSendableFunctionsCarryFields() async throws {
-		// As above, with `B` receiving `user`, which `Hub` builds before `A`, and `dep`, which `A` builds before `B`: the
-		// stage the mock calls before `A`'s `@Sendable` function carries `user`, and the one it calls inside it, before
-		// `B`'s, carries `dep`. `LiveApi` stores both, and `User` and `Dep` are classes, so a stage handed another
-		// instance than the one `B` receives builds a value the inline mock does not.
+	mutating func generate_passesSendablePlaceUp_whenFillReadsValuesBoundOutsideTheSendableFunctionsThatBuildIt() async throws {
+		// As above, with `B` receiving `user`, which `Hub` builds before `A`, and `dep`, which `A` builds before `B`, and
+		// `LiveApi` reading both: a place is handed only what the innermost `@Sendable` function that builds it binds, and
+		// both are bound outside `B`'s, so `Screen`'s mock cannot fill it and passes it up, taking `apiSendableBuilder`
+		// itself. The inline mock fills it with `LiveApi`, so no probe reads both paths alike, and none is compared.
 		let modules = [
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 				"public protocol Api: Sendable {}",
@@ -3031,16 +3002,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		#if DEBUG
 		extension Hub {
-		    public enum SafeDIStagedMockScope_Api_a_bBuilder_api {
-		        public struct Stage1 {
-		            public let user: User
-		        }
+		    @frozen public enum SafeDISendableMockScope_Api {
+		        case a_bBuilder_api(a_bBuilder_api_Values)
 
-		        public struct Stage2 {
-		            public let dep: Dep
-		        }
-
-		        public struct Stage3 {
+		        public struct a_bBuilder_api_Values {
 		            public let a: A
 		        }
 		    }
@@ -3060,21 +3025,19 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        apiBuilder_a_bBuilder_api: @escaping (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api,
+		        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Hub {
-		        let __safeDI_apiBuilder_a_bBuilder_api = apiBuilder_a_bBuilder_api
+		        let __safeDI_apiSendableBuilder = apiSendableBuilder
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        let __safeDI_a__a_dep_safeDIBuilder = safeDIOverrides.a.dep
 		        let __safeDI_a__a_bBuilder_safeDIBuilder = safeDIOverrides.a.bBuilder.safeDIBuilder
 		        let __safeDI_a__safeDIBuilder = safeDIOverrides.a.safeDIBuilder
-		        let __safeDI_apiBuilder_a_bBuilder_api_Stage2 = __safeDI_apiBuilder_a_bBuilder_api(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1(user: user))
 		        @Sendable func __safeDI_a() -> A {
 		            let dep = if let safeDIBuilder = __safeDI_a__a_dep_safeDIBuilder { safeDIBuilder() } else { Dep() }
-		            let __safeDI_apiBuilder_a_bBuilder_api_Stage3 = __safeDI_apiBuilder_a_bBuilder_api_Stage2(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2(dep: dep))
 		            @Sendable func __safeDI_bBuilder() -> B {
 		                let a: A = __safeDI_a()
-		                let api: any Api = __safeDI_apiBuilder_a_bBuilder_api_Stage3(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3(a: a))
+		                let api: any Api = __safeDI_apiSendableBuilder(.a_bBuilder_api(SafeDISendableMockScope_Api.a_bBuilder_api_Values(a: a)))
 		                return B.__safeDI_init(api: api, a: a, user: user, dep: dep, safeDIBuilder: __safeDI_a__a_bBuilder_safeDIBuilder)
 		            }
 		            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
@@ -3086,7 +3049,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 
 		extension Hub {
-		    public enum __safeDI_Hub_mock_4BCFD21E3CE5C996 {}
+		    public enum __safeDI_Hub_mock_322D3827C5473CF3 {}
 		}
 		#endif
 
@@ -3154,31 +3117,16 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        apiSendableBuilder: @escaping @Sendable (Hub.SafeDISendableMockScope_Api) -> any Api,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_hub() -> Hub {
-		            func __safeDI_apiBuilder_a_bBuilder_api(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
-		                let user = scope.user
-		                @Sendable func __safeDI_apiBuilder_a_bBuilder_api_Stage2(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
-		                    let dep = scope.dep
-		                    @Sendable func __safeDI_apiBuilder_a_bBuilder_api_Stage3(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
-		                        let api: any Api = LiveApi(user: user, dep: dep)
-		                        return api
-		                    }
-		                    return __safeDI_apiBuilder_a_bBuilder_api_Stage3
-		                }
-		                return __safeDI_apiBuilder_a_bBuilder_api_Stage2
-		            }
-		            _ = Hub.__safeDI_Hub_mock_4BCFD21E3CE5C996.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature"))
-		            return Hub.mock(apiBuilder_a_bBuilder_api: __safeDI_apiBuilder_a_bBuilder_api, safeDIOverrides: safeDIOverrides.hub)
-		        }
-		        let hub: Hub = __safeDI_hub()
+		        _ = Hub.__safeDI_Hub_mock_322D3827C5473CF3.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature"))
+		        let hub = Hub.mock(apiSendableBuilder: apiSendableBuilder, safeDIOverrides: safeDIOverrides.hub)
 		        return Screen(hub: hub)
 		    }
 		}
 		#endif
 		"""])
-		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock().hub")])
 	}
 
 	@Test
@@ -4649,12 +4597,12 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorNamingStagedBuilder_whenPackageHoleTypeIsBuiltInsideSendableWrapper() async {
-		// As the previous test, with the hole held in a `Sendable` wrapper: its place is staged, so it has a builder of its
-		// own, which no case of an enum names.
+	mutating func generate_throwsErrorNamingSendableBuilder_whenPackageHoleTypeIsBuiltInsideSendableWrapper() async {
+		// As the previous test, with the hole held in a `Sendable` wrapper: its place is a case of the `@Sendable` enum, which
+		// the error names with the `@Sendable` builder.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):5:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `userServiceBuilder_userService`, which builds `UserService` for the hole `userService`, and cannot pass `nil` for it, since it is required. `UserService` is declared `package`. Declare `UserService` `public`; declare in this module, or a module it depends on, a `mockOnly` `@Instantiable` type that fulfills `UserService` (`@Instantiable(fulfillingAdditionalTypes: [UserService.self], mockOnly: true)`), which the mock builds instead of taking `userServiceBuilder_userService`, leaving production's hole as it is; or use `generateMock: .internal`.
+			\(fixtures["Service.swift"]):5:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `userServiceSendableBuilder`, whose case `userService` builds `UserService` for the hole `userService`, and cannot pass `nil` for it, since it is required. `UserService` is declared `package`. Declare `UserService` `public`; declare in this module, or a module it depends on, a `mockOnly` `@Instantiable` type that fulfills `UserService` (`@Instantiable(fulfillingAdditionalTypes: [UserService.self], mockOnly: true)`), which the mock builds instead of taking `userServiceSendableBuilder`, leaving production's hole as it is; or use `generateMock: .internal`.
 			\(fixtures["Service.swift"]):1:1: note: `UserService` is declared `package` here.
 			\(fixtures["Service.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Service.swift"]):11:5: note: `Service` instantiates `userService: SendableLazilyInstantiated<UserService>` here.
@@ -4893,7 +4841,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test(arguments: ["any Gadget", "Gadget"])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_hashesStagedBuilderWithoutAny_whenHolesTypeIsSpelledWithOrWithoutAny(gadget: String) async throws {
+	mutating func generate_hashesSendableBuilderWithoutAny_whenHolesTypeIsSpelledWithOrWithoutAny(gadget: String) async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -4916,19 +4864,18 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"Service+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
-			    public enum SafeDIStagedMockScope_Gadget_held {
-			        public struct Stage1 {}
+			    @frozen public enum SafeDISendableMockScope_Gadget {
+			        case held(held_Values)
 
-			        public struct Stage2 {}
+			        public struct held_Values {}
 			    }
 
 			    public static func mock(
-			        gadgetBuilder_held: @escaping (Service.SafeDIStagedMockScope_Gadget_held.Stage1) -> @Sendable (Service.SafeDIStagedMockScope_Gadget_held.Stage2) -> \(gadget)
+			        gadgetSendableBuilder: @escaping @Sendable (Service.SafeDISendableMockScope_Gadget) -> \(gadget)
 			    ) -> Service {
-			        let __safeDI_gadgetBuilder_held = gadgetBuilder_held
-			        let __safeDI_gadgetBuilder_held_Stage2 = __safeDI_gadgetBuilder_held(SafeDIStagedMockScope_Gadget_held.Stage1())
+			        let __safeDI_gadgetSendableBuilder = gadgetSendableBuilder
 			        @Sendable func __safeDI_held() -> \(gadget) {
-			            __safeDI_gadgetBuilder_held_Stage2(SafeDIStagedMockScope_Gadget_held.Stage2())
+			            __safeDI_gadgetSendableBuilder(.held(SafeDISendableMockScope_Gadget.held_Values()))
 			        }
 			        let held = SendableLazilyInstantiated<\(gadget)>(__safeDI_held)
 			        return Service(held: held)
@@ -4936,7 +4883,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_mock_617043EAB90EFCB2 {}
+			    public enum __safeDI_Service_mock_0626DE54C20C29AC {}
 			}
 			#endif
 			""",
@@ -10913,7 +10860,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 
 		extension FeedScreen {
-		    public enum __safeDI_FeedScreen_91C4FAF0D0AEF562 {}
+		    public enum __safeDI_FeedScreen_02075E6332BCA310 {}
 		}
 		"""
 		let mockCode = """

@@ -476,7 +476,7 @@ final class Scope: Hashable {
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			seamRoot: seamRoot,
 			mockBuilders: mockBuilders,
-			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes, builders: $0.signature.builders, scopeEnums: $0.signature.scopeEnums, parameters: $0.signature.parameters) }
+			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes, builders: $0.signature.builders, scopeEnums: $0.signature.scopeEnums, parameters: $0.signature.parameters, callRoutes: $0.signature.callRoutes) }
 				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, scopeEnums: $0.scopeEnums) }
 				?? SeamHoles(),
 			sitePath: [],
@@ -729,7 +729,8 @@ private struct ScopeGeneratorUnderConstruction {
 		self.mockBuilders = mockBuilders
 		self.seamHoles = seamHoles
 		self.declaredTypeNames = declaredTypeNames
-		// The path is kept only where a hole needs it: a site, and the stage calls of a staged builder, are found by it.
+		// The path is kept only where a hole needs it: a site, and the payloads bound on the routes to the sites, are found
+		// by it.
 		self.sitePath = seamHoles.isEmpty ? [] : sitePath + (property.map { [$0] } ?? [])
 		self.fill = fill
 		self.erasedToConcreteExistential = erasedToConcreteExistential
@@ -745,7 +746,7 @@ private struct ScopeGeneratorUnderConstruction {
 		self.enclosingFills = enclosingFills
 		holeArguments = isPropertyCycle ? [] : scope.holeArguments
 		// The call's own fills are those no enclosing call fills, and its own dispatchers those no enclosing call declares. One
-		// pass names both, fills and their later stages first, then dispatchers, apart from what encloses the call: the
+		// pass names both, fills first, then dispatchers, apart from what encloses the call: the
 		// fills and dispatchers enclosing it, and the names the seam whose tree holds it binds for its builders, which a call
 		// inside it passes by name and which a closer declaration would shadow.
 		var fillsOfThisCall = [(fill: Fill, scope: Scope)]()
@@ -753,13 +754,30 @@ private struct ScopeGeneratorUnderConstruction {
 		if !holeArguments.isEmpty {
 			var names = GeneratedNameAllocator(reserving: Set(enclosingFills.values).union(seamHoles.namesBoundForBuilders))
 			var fillNames = enclosingFills
+			// Every place of a case nested by type is filled by one function, the first place's: it can read whatever field
+			// any place of the case carries, each from the case or from the dispatchers that lead to it, in the form every
+			// route can hand it (`ScopeGenerator.caseFields(of:)`).
+			var placesByCaseKey = [String: [SeamSignature.Hole]]()
+			for case let .fill(hole, _) in holeArguments where hole.enumPlace?.isNestedByType == true {
+				placesByCaseKey[ScopeGenerator.fillCaseKey(of: hole), default: []].append(hole)
+			}
+			let caseFieldsByCaseKey = placesByCaseKey.mapValues(ScopeGenerator.caseFields(of:))
+			var functionNameByCaseKey = [String: String]()
 			for case let .fill(hole, fulfillingScope) in holeArguments where enclosingFills[ScopeGenerator.fillKey(of: hole)] == nil {
-				let functionName = names.claim(ScopeGenerator.fillFunctionName(of: hole), occupying: { name in
-					hole.stages.indices.map { hole.stageFunctionName(at: $0, ofFunctionNamed: name) }
-				})
 				let key = ScopeGenerator.fillKey(of: hole)
+				let caseKey = ScopeGenerator.fillCaseKey(of: hole)
+				if let functionName = functionNameByCaseKey[caseKey] {
+					fillNames[key] = functionName
+					fillsOfThisCall.append((Fill(hole: hole, key: key, functionName: functionName, fields: hole.fields, emitsCode: false), fulfillingScope))
+					continue
+				}
+				let functionName = names.claim(ScopeGenerator.fillFunctionName(of: hole))
 				fillNames[key] = functionName
-				fillsOfThisCall.append((Fill(hole: hole, key: key, functionName: functionName), fulfillingScope))
+				if hole.enumPlace?.isNestedByType == true {
+					functionNameByCaseKey[caseKey] = functionName
+				}
+				let caseFields = caseFieldsByCaseKey[caseKey]
+				fillsOfThisCall.append((Fill(hole: hole, key: key, functionName: functionName, fields: caseFields?.fields ?? hole.fields, emitsCode: true, callerReadLabels: caseFields?.callerReadLabels ?? []), fulfillingScope))
 			}
 			if let calledBuilders = scope.calledBuilders {
 				dispatchersOfThisCall = ScopeGenerator.FillDispatcher.dispatchers(
@@ -781,9 +799,22 @@ private struct ScopeGeneratorUnderConstruction {
 		let hole: SeamSignature.Hole
 		let key: String
 		let functionName: String
+		/// The fields the fill can bind: its hole's, or every place's of a case nested by type, for the fill that generates
+		/// the case's code.
+		let fields: [SeamSignature.Hole.Field]
+		/// Whether the fill's code is generated (see `ScopeGenerator.fillEmitsCode`).
+		let emitsCode: Bool
+		/// For the fill that generates the code of a case nested by type, the labels of `fields` that a level holds on some
+		/// route to the case and none holds on another, where the root dispatcher hands the fill the caller's declaration
+		/// (see `ScopeGenerator.caseFields(of:)`).
+		var callerReadLabels = Set<String>()
 		/// The labels of the fields of the hole's struct the fill binds from the struct (see `fillUnderConstruction`):
 		/// every field but one bound from a deferred parameter, which the fill reads from the caller's scope.
 		var boundLabels = Set<String>()
+		/// The declarations enclosing the call, which the root dispatcher reads the values of `callerReadLabels` from.
+		var callerNearestDeclarations = NearestDeclarations()
+		/// The received properties in scope at the call only as the instance of a `LazilyInstantiated` property.
+		var callerLazilyInstantiatedInstanceProperties = Set<Property>()
 	}
 
 	/// The generators created so far for `propertiesToGenerate`, in order, followed by those of `fillsOfThisCall`.
@@ -819,8 +850,10 @@ private struct ScopeGeneratorUnderConstruction {
 		// another declaration of the label (see `ScopeGenerator.fillDeferredLabelsHiddenByReenteringCalls`): the fill,
 		// one function, reads the struct's field there, which the pass before found.
 		let deferredLabelsBoundFromStruct = previousPassGenerator?.fillDeferredLabelsHiddenByReenteringCalls[fill.key] ?? []
-		let boundFields = hole.stages.joined().filter { !$0.isDeferredParameter || deferredLabelsBoundFromStruct.contains($0.property.label) }
+		let boundFields = fill.fields.filter { !$0.isDeferredParameter || deferredLabelsBoundFromStruct.contains($0.property.label) }
 		fill.boundLabels = Set(boundFields.map(\.property.label))
+		fill.callerNearestDeclarations = childNearestDeclarations
+		fill.callerLazilyInstantiatedInstanceProperties = childLazilyInstantiatedInstanceProperties
 		let fields = boundFields.map(\.property)
 		let fieldLabels = Set(fields.map(\.label))
 		var fieldInstanceProperties = Set<Property>()
@@ -869,9 +902,9 @@ private struct ScopeGeneratorUnderConstruction {
 			holeProperty: property,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			site: seamHoles.site(at: sitePath + [property]),
-			stageCalls: seamHoles.stageCalls(at: sitePath + [property]),
 			ownerPropertyStack: childPropertyStack,
 			ownerConcreteTypeStack: childConcreteTypeStack,
+			ownerLazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 		))
 	}
 
@@ -990,6 +1023,49 @@ private struct ScopeGeneratorUnderConstruction {
 		))
 	}
 
+	/// What `fill`, which generates the code of a case nested by type, reads of the caller's scope through the root
+	/// dispatcher, given `child`, the generator of what it builds: for each label a level holds on some route to the case
+	/// and none holds on another, each form `child`'s tree reads of it, which the fill receives from the scopes enclosing
+	/// the call as `child` would inline, so the caller builds a required one first; the parameter the fill takes for it,
+	/// optional where no read requires it, so a route on which the caller declares none passes `nil`; and the argument the
+	/// root dispatcher passes: the caller's declaration of the parameter's form, its instance where the caller holds it
+	/// lazily, or `nil`.
+	private static func callerReads(of fill: Fill, child: ScopeGenerator) -> ScopeGenerator.FillCallerReads {
+		var reads = ScopeGenerator.FillCallerReads()
+		for field in fill.fields where fill.callerReadLabels.contains(field.property.label) && fill.boundLabels.contains(field.property.label) {
+			let label = field.property.label
+			// A site inside the fill that carries the field reads it as the field's own form.
+			let isCarriedBySites = child.fieldsCarriedBySites.contains(field.property)
+			var forms = Set(child.receivedProperties.filter { $0.label == label })
+			if isCarriedBySites {
+				forms.insert(field.property)
+			}
+			guard !forms.isEmpty else { continue }
+			func isRequired(_ form: Property) -> Bool {
+				child.requiredReceivedProperties.contains(form) || (isCarriedBySites && form == field.property)
+			}
+			let parameter = forms.contains(where: isRequired) || field.property.typeDescription.isOptional
+				? field
+				: field.withProperty(field.property.asOptionalProperty)
+			reads.parameterByLabel[label] = parameter
+			for form in forms.sorted() {
+				reads.dependencies.append(Dependency(property: form, source: .received(onlyIfAvailable: !isRequired(form))))
+				if !isRequired(form), fill.callerNearestDeclarations.binding(of: form) == nil {
+					reads.unavailableProperties.insert(form)
+				}
+			}
+			reads.argumentByLabel[label] = if let binding = fill.callerNearestDeclarations.binding(of: parameter.property) {
+				!parameter.property.propertyType.isLazilyInstantiated
+					&& (binding.propertyType.isLazilyInstantiated || fill.callerLazilyInstantiatedInstanceProperties.contains(parameter.property.asUnwrappedProperty))
+					? "\(label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+					: label
+			} else {
+				"nil"
+			}
+		}
+		return reads
+	}
+
 	/// The sites of the places a call whose builders `holeArguments` are fills.
 	private static func filledSites(of holeArguments: [Scope.HoleArgument]) -> Set<SeamSignature.Hole.Site> {
 		Set(holeArguments.compactMap { holeArgument in
@@ -1001,15 +1077,13 @@ private struct ScopeGeneratorUnderConstruction {
 		})
 	}
 
-	/// What the call this scope makes passes each builder: the fill of a staged place or the staged builder of the seam or
-	/// public mock whose tree makes the call, and for an enum the dispatcher that fills it, a closure that hands the enum up
-	/// in a case of an enum of the seam or public mock whose tree makes the call, or the dispatcher handed that closure,
+	/// What the call this scope makes passes each builder: the dispatcher that fills its enum, a closure that hands the enum
+	/// up in a case of an enum of the seam or public mock whose tree makes the call, or the dispatcher handed that closure,
 	/// which it passes each place it does not fill: a seam's caller fills every place an enum reaches or none, a public
 	/// mock's caller each place it can. An internal mock takes each builder it passes up as a parameter, which the call
 	/// passes as its leaf's dependency of the builder's label: an empty value here, or the parameter called with the scope.
 	private func builderCallArguments(fillNames: [String: String]) -> [ScopeGenerator.BuilderCallArgument] {
 		guard let calledBuilders = scope.calledBuilders, !holeArguments.isEmpty else { return [] }
-		let holeArgumentsBySite = Dictionary(holeArguments.map { ($0.hole.site, $0) }, uniquingKeysWith: { first, _ in first })
 		let filledSites = Self.filledSites(of: holeArguments)
 		let enumsByKey = calledBuilders.enumsByKey
 		// A seam's caller calls the initializer only generated code calls, under its prefixed labels; a public mock's
@@ -1017,34 +1091,22 @@ private struct ScopeGeneratorUnderConstruction {
 		let isPublicMockCall = scope.publicMockCall != nil
 		return calledBuilders.builders.map { builder in
 			let label = isPublicMockCall ? builder.label : builder.generatedOnlyArgumentLabel
-			switch builder.kind {
-			case let .staged(site):
-				guard let holeArgument = holeArgumentsBySite[site] else { return .init(label: label, value: "") }
-				switch holeArgument {
-				case let .fill(hole, _):
-					let fillKey = ScopeGenerator.fillKey(of: hole)
-					return .init(label: label, value: fillNames[fillKey] ?? ScopeGenerator.fillFunctionName(of: hole), enclosingFillKey: enclosingFills[fillKey] == nil ? nil : fillKey, isSendable: hole.isSendable)
-				case let .passUp(hole):
-					let takingBuilder = seamHoles.hole(taking: hole)?.internalName
-					return .init(label: label, value: takingBuilder ?? (isPublicMockCall ? "" : hole.internalName))
-				}
-			case let .scopeEnum(enumKey):
-				let reachedSites = SeamSignature.ScopeEnum.sitesReached(from: enumKey, in: enumsByKey)
-				// In a tree built to compute the signature, which generates nothing, the case is not settled yet.
-				let route = seamHoles.routeCase(at: sitePath, innerKey: enumKey)
-				guard !reachedSites.isDisjoint(with: filledSites) else {
-					return .init(label: label, value: route.map { route in "{ \(route.builderName)(.\(route.caseName)($0)) }" } ?? "")
-				}
-				let dispatcherKey = ScopeGenerator.FillDispatcher.key(of: enumKey)
-				let dispatcher = fillNames[dispatcherKey] ?? ""
-				let enclosingFillKey = enclosingFills[dispatcherKey] == nil ? nil : dispatcherKey
-				guard reachedSites.isSubset(of: filledSites) else {
-					// The whole scope the call was given goes up, under the route's case.
-					let passUp = route.map { route in "\(route.builderName)(.\(route.caseName)(scope))" } ?? "\(builder.label)(scope)"
-					return .init(label: label, value: "{ scope in \(dispatcher)(scope, \(ScopeGenerator.FillDispatcher.passUpParameterName): { \(passUp) }) }", enclosingFillKey: enclosingFillKey, isSendable: enumKey.isSendable)
-				}
-				return .init(label: label, value: dispatcher, enclosingFillKey: enclosingFillKey, isSendable: enumKey.isSendable)
+			let enumKey = builder.enumKey
+			let reachedSites = SeamSignature.ScopeEnum.sitesReached(from: enumKey, in: enumsByKey)
+			// In a tree built to compute the signature, which generates nothing, the case is not settled yet.
+			let route = seamHoles.routeCase(at: sitePath, innerKey: enumKey)
+			guard !reachedSites.isDisjoint(with: filledSites) else {
+				return .init(label: label, value: route.map { route in "{ \(route.call(handing: "$0")) }" } ?? "")
 			}
+			let dispatcherKey = ScopeGenerator.FillDispatcher.key(of: enumKey)
+			let dispatcher = fillNames[dispatcherKey] ?? ""
+			let enclosingFillKey = enclosingFills[dispatcherKey] == nil ? nil : dispatcherKey
+			guard reachedSites.isSubset(of: filledSites) else {
+				// The whole scope the call was given goes up, under the route's case.
+				let passUp = route.map { route in route.call(handing: "scope") } ?? "\(builder.label)(scope)"
+				return .init(label: label, value: "{ scope in \(dispatcher)(scope, \(ScopeGenerator.FillDispatcher.passUpParameterName): { \(passUp) }) }", enclosingFillKey: enclosingFillKey, isSendable: enumKey.isSendable)
+			}
+			return .init(label: label, value: dispatcher, enclosingFillKey: enclosingFillKey, isSendable: enumKey.isSendable)
 		}
 	}
 
@@ -1101,7 +1163,7 @@ private struct ScopeGeneratorUnderConstruction {
 					nil
 				}
 			},
-			stageCalls: seamHoles.stageCalls(at: sitePath),
+			valuesBindings: seamHoles.valuesBindings(at: sitePath),
 			isBuiltByFill: fill != nil,
 			constructsWithHandWrittenMock: buildsWithHandWrittenMocks
 				&& scope.publicMockCall == nil
@@ -1117,7 +1179,16 @@ private struct ScopeGeneratorUnderConstruction {
 			placeHoldingProperties: placeHoldingPropertiesByType.map { $0[scope.instantiable.concreteInstantiable] ?? [] },
 		)
 		let scopeGenerator = if let fill {
-			ScopeGenerator(fill: fill.hole, key: fill.key, functionName: fill.functionName, boundLabels: fill.boundLabels, stageCalls: seamHoles.fillStageCalls(at: sitePath), child: builtGenerator)
+			ScopeGenerator(
+				fill: fill.hole,
+				key: fill.key,
+				functionName: fill.functionName,
+				boundLabels: fill.boundLabels,
+				fields: fill.fields,
+				emitsCode: fill.emitsCode,
+				callerReads: Self.callerReads(of: fill, child: builtGenerator),
+				child: builtGenerator,
+			)
 		} else {
 			builtGenerator
 		}
@@ -1195,7 +1266,7 @@ private struct ScopeGeneratorUnderConstruction {
 	private let seamRoot: ScopeGenerator.SeamRoot?
 	/// For a public mock's root, the builders its `mock()` takes; `nil` for every other scope.
 	private let mockBuilders: DependencyTreeGenerator.ShapedBuilders?
-	/// The holes of the seam whose tree is generated, by site, which the sites and the stage calls of staged builders
+	/// The holes of the seam whose tree is generated, by site, which the sites and the payloads bound on the routes to them
 	/// read. Empty outside a seam's tree, and in a seam's tree without holes.
 	private let seamHoles: SeamHoles
 	/// The names the modules SafeDI read declare types by at file scope, which
@@ -1341,8 +1412,8 @@ extension Instantiable {
 // MARK: - SeamHoles
 
 /// The holes of a seam's signature, as the generators of the seam's tree look them up: each site by its path, each
-/// hole the seam passes up by the inner seam's hole it passes, and the stage calls of each staged builder by the path
-/// of the `@Sendable` function before which they are made.
+/// hole the seam passes up by the inner seam's hole it passes, and the payloads the tree binds before building each property
+/// of a route to a place nested by type, by the property's path.
 struct SeamHoles {
 	/// No holes: a tree that is not a seam's, or a seam's tree without holes.
 	init() {
@@ -1350,34 +1421,48 @@ struct SeamHoles {
 		routeCasesByCall = [:]
 		sitesByPath = [:]
 		passedUpHolesBySite = [:]
-		stageCallsByPath = [:]
-		fillStageCallsByPath = [:]
+		valuesBindingsByPath = [:]
 		namesBoundForBuilders = []
 		namesBoundForDeferredParameters = []
 	}
 
-	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], scopeEnums: [SeamSignature.ScopeEnum], parameters: [SeamSignature.Parameter] = []) {
-		var routeCasesByCall = [RouteCall: (builderName: String, caseName: String)]()
-		let internalNameByEnum = Dictionary(builders.compactMap { builder -> (SeamSignature.ScopeEnum.Key, String)? in
-			if case let .scopeEnum(key) = builder.kind {
-				(key, builder.internalName)
-			} else {
-				nil
-			}
-		}, uniquingKeysWith: { first, _ in first })
+	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], scopeEnums: [SeamSignature.ScopeEnum], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = []) {
+		var routeCasesByCall = [RouteCall: RouteCase]()
+		let internalNameByEnum = Dictionary(builders.map { ($0.enumKey, $0.internalName) }, uniquingKeysWith: { first, _ in first })
 		for scopeEnum in scopeEnums where scopeEnum.key.seamType == seamType {
 			guard let builderName = internalNameByEnum[scopeEnum.key] else { continue }
 			for enumCase in scopeEnum.cases {
-				if case let .inner(enumKey, _, sitePath, _) = enumCase.kind {
-					routeCasesByCall[RouteCall(sitePath: sitePath, innerKey: enumKey)] = (builderName, enumCase.name)
+				if case let .inner(enumKey, _, sitePath, _) = enumCase.kind, !sitePath.isEmpty {
+					routeCasesByCall[RouteCall(sitePath: sitePath, innerKey: enumKey)] = RouteCase(builderName: builderName, prefix: ".\(enumCase.name)(", suffix: ")")
 				}
 			}
+		}
+		// The payload of each case that wraps another on the way to a place or a call nested by type, bound just before the
+		// case's property is built, once however many places it leads to. A case of a `@Sendable` enum carries none.
+		var valuesBindingsByName = [[Property]: [String: ValuesBinding]]()
+		func bindValues(of route: [SeamSignature.Hole.RouteStep], toSiteAt sitePath: [Property]) {
+			for (index, step) in route.enumerated() {
+				guard let values = step.values else { continue }
+				valuesBindingsByName[Array(sitePath.prefix(index + 1)), default: [:]][values.bindingName] = ValuesBinding(values: values)
+			}
+		}
+		/// The cases that lead to a place or a call's case, each opened, and what closes them.
+		func opening(_ route: [SeamSignature.Hole.RouteStep]) -> String {
+			route.map { step in step.values.map { ".\(step.caseName)(\($0.bindingName), " } ?? ".\(step.caseName)(" }.joined()
+		}
+		for callRoute in callRoutes {
+			guard let builderName = internalNameByEnum[callRoute.rootKey] else { continue }
+			bindValues(of: callRoute.route, toSiteAt: callRoute.sitePath)
+			let ownCase = callRoute.values.map { ".\(callRoute.caseName)(\($0.type.asSource)(\(Self.valuesArguments(of: $0.fields))), " } ?? ".\(callRoute.caseName)("
+			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(
+				builderName: builderName,
+				prefix: opening(callRoute.route) + ownCase,
+				suffix: String(repeating: ")", count: callRoute.route.count + 1),
+			)
 		}
 		self.routeCasesByCall = routeCasesByCall
 		var sitesByPath = [[Property]: SeamSignature.Hole]()
 		var passedUpHolesBySite = [SeamSignature.Hole.Site: SeamSignature.Hole]()
-		var stageCallsByPath = [[Property]: [String]]()
-		var fillStageCallsByPath = [[Property]: [Int: [String]]]()
 		var namesBoundForBuilders = Set(holes.map(\.internalName) + holes.compactMap(\.wrapperFunctionName) + builders.map(\.internalName))
 		for hole in holes {
 			guard hole.innerSeamType == nil else {
@@ -1385,32 +1470,77 @@ struct SeamHoles {
 				continue
 			}
 			sitesByPath[hole.sitePath] = hole
-			// Each stage but the last is called just before the `@Sendable` function that starts the next.
-			for (stageIndex, boundary) in hole.stageBoundaries.enumerated() {
-				let stageFunction = hole.stageFunctionName(at: stageIndex, ofFunctionNamed: hole.internalName)
-				let nextStageFunction = hole.stageFunctionName(at: stageIndex + 1, ofFunctionNamed: hole.internalName)
-				namesBoundForBuilders.insert(nextStageFunction)
-				let arguments = hole.stages[stageIndex].map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.label)" }.joined(separator: ", ")
-				let call = "let \(nextStageFunction) = \(stageFunction)(\(hole.stageStructType(at: stageIndex, qualifiedBy: nil).asSource)(\(arguments)))"
-				let path = Array(hole.sitePath.prefix(boundary.pathLength))
-				if let fillStageIndex = boundary.fillStageIndex {
-					fillStageCallsByPath[path, default: [:]][fillStageIndex, default: []].append(call)
-				} else {
-					stageCallsByPath[path, default: []].append(call)
-				}
+			if let enumPlace = hole.enumPlace, enumPlace.isNestedByType {
+				bindValues(of: enumPlace.route, toSiteAt: hole.sitePath)
 			}
+		}
+		// Each path's payloads are bound in the order of their names.
+		var valuesBindingsByPath = [[Property]: [ValuesBinding]]()
+		for (path, bindings) in valuesBindingsByName {
+			namesBoundForBuilders.formUnion(bindings.keys)
+			valuesBindingsByPath[path] = bindings.sorted { $0.key < $1.key }.map(\.value)
 		}
 		self.seamType = seamType
 		self.sitesByPath = sitesByPath
 		self.passedUpHolesBySite = passedUpHolesBySite
-		self.stageCallsByPath = stageCallsByPath
-		self.fillStageCallsByPath = fillStageCallsByPath
+		self.valuesBindingsByPath = valuesBindingsByPath
 		self.namesBoundForBuilders = namesBoundForBuilders
 		namesBoundForDeferredParameters = Set(parameters.filter(\.isDeferred).map(\.internalName))
 	}
 
+	/// The arguments of a payload struct's initializer that the seam's tree calls with `fields`, each read as the tree's
+	/// receivers read its label where the struct is built: by the label, or, where `lazilyInstantiatedInstanceProperties`
+	/// holds the field's by-value property, by the instance of the `LazilyInstantiated` the label names there. That is a
+	/// level's parameter of a builder function a lazy cycle closes on, in a build whose function does not take it, which
+	/// reads the seam's deferred parameter or a lazily instantiated declaration of the label. A deferred parameter's own
+	/// field takes the `LazilyInstantiated` itself.
+	static func valuesArguments(of fields: [SeamSignature.Hole.Field], readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = []) -> String {
+		fields.map { field in
+			let label = field.property.label
+			let value = if !field.isDeferredParameter, lazilyInstantiatedInstanceProperties.contains(field.property.asUnwrappedProperty) {
+				"\(label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+			} else {
+				label
+			}
+			return "\(label.spelledAsArgumentLabel): \(value)"
+		}.joined(separator: ", ")
+	}
+
+	/// A case's payload the seam's tree binds just before the builder function of a property on a route to a place nested
+	/// by type: its binding's name, its struct's type and its fields.
+	struct ValuesBinding: Sendable {
+		init(values: SeamSignature.Hole.RouteStep.Values) {
+			bindingName = values.bindingName
+			type = values.type
+			fields = values.fields
+		}
+
+		let bindingName: String
+		let type: TypeDescription
+		let fields: [SeamSignature.Hole.Field]
+
+		/// The line that binds the payload, each field read as `valuesArguments(of:readingInstancesOf:)` reads it.
+		func line(readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>) -> String {
+			"let \(bindingName) = \(type.asSource)(\(SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties)))"
+		}
+	}
+
+	/// How a call hands an inner enum up: the builder that takes it, and what wraps the inner value in the builder's enum.
+	struct RouteCase {
+		let builderName: String
+		/// What precedes the inner value: the case that holds it, after each case that leads there.
+		let prefix: String
+		/// What closes the cases `prefix` opens.
+		let suffix: String
+
+		/// The call of the builder with `innerValue` wrapped.
+		func call(handing innerValue: String) -> String {
+			"\(builderName)(\(prefix)\(innerValue)\(suffix))"
+		}
+	}
+
 	/// The name of every builder the seam's generated initializer takes, inside the initializer, which a call its tree
-	/// makes passes up by name, and of the later stage each of its stage calls binds. Empty outside a seam's tree.
+	/// makes passes up by name, and of each payload its tree binds. Empty outside a seam's tree.
 	let namesBoundForBuilders: Set<String>
 	/// The name each deferred parameter of the seam's generated initializer binds its autoclosure to, which the
 	/// initializer's body reads. Empty outside a seam's tree, and in a public mock's.
@@ -1441,19 +1571,13 @@ struct SeamHoles {
 	/// The builder of this seam that takes an inner seam's enum `innerKey` from the call at the end of `sitePath`, and the
 	/// case that carries it. `nil` when the signature holds none: a tree built to compute the signature, which generates
 	/// nothing.
-	func routeCase(at sitePath: [Property], innerKey: SeamSignature.ScopeEnum.Key) -> (builderName: String, caseName: String)? {
+	func routeCase(at sitePath: [Property], innerKey: SeamSignature.ScopeEnum.Key) -> RouteCase? {
 		routeCasesByCall[RouteCall(sitePath: sitePath, innerKey: innerKey)]
 	}
 
-	/// The stage calls made just before the `@Sendable` builder function of the property at the end of `sitePath`.
-	func stageCalls(at sitePath: [Property]) -> [String] {
-		stageCallsByPath.isEmpty ? [] : stageCallsByPath[sitePath, default: []]
-	}
-
-	/// The stage calls made just before each function of the fill that builds the property at the end of `sitePath`, by
-	/// the function's stage among the fill's.
-	func fillStageCalls(at sitePath: [Property]) -> [Int: [String]] {
-		fillStageCallsByPath[sitePath, default: [:]]
+	/// The payloads bound just before the builder function of the property at the end of `sitePath`.
+	func valuesBindings(at sitePath: [Property]) -> [ValuesBinding] {
+		valuesBindingsByPath.isEmpty ? [] : valuesBindingsByPath[sitePath, default: []]
 	}
 
 	/// A seam call in the tree and the inner enum it carries.
@@ -1464,11 +1588,10 @@ struct SeamHoles {
 
 	/// The seam whose tree is generated, or `nil` for a tree that is no seam's.
 	private let seamType: TypeDescription?
-	private let routeCasesByCall: [RouteCall: (builderName: String, caseName: String)]
+	private let routeCasesByCall: [RouteCall: RouteCase]
 	private let sitesByPath: [[Property]: SeamSignature.Hole]
 	private let passedUpHolesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]
-	private let stageCallsByPath: [[Property]: [String]]
-	private let fillStageCallsByPath: [[Property]: [Int: [String]]]
+	private let valuesBindingsByPath: [[Property]: [ValuesBinding]]
 }
 
 // MARK: - NearestDeclarations

@@ -132,27 +132,47 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		#expect(output.dependencyTreeFiles["Hub+SafeDI.swift"] == generatedFileHeader + """
 		extension Hub {
 		    @frozen public enum SafeDIScope_Api {
-		        case tBuilder_api(tBuilder_api_Values)
-		        case tBuilder_cBuilder_api(tBuilder_cBuilder_api_Values)
-		        case cBuilder_api(cBuilder_api_Values)
-		        case cBuilder_tBuilder_api(cBuilder_tBuilder_api_Values)
+		        case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
+		        case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
 
-		        public struct tBuilder_api_Values {}
+		        public struct tBuilder_Values {}
 
-		        public struct tBuilder_cBuilder_api_Values {}
+		        public struct cBuilder_Values {
+		            public let tBuilder: Instantiator<T>
+		        }
 
-		        public struct cBuilder_api_Values {}
+		        @frozen public enum T_Scope {
+		            case api(api_Values)
+		            indirect case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
 
-		        public struct cBuilder_tBuilder_api_Values {}
+		            public struct api_Values {}
+
+		            public struct cBuilder_Values {
+		                public let api: any Api
+		            }
+		        }
+
+		        @frozen public enum C_Scope {
+		            case api(api_Values)
+		            indirect case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
+
+		            public struct api_Values {}
+
+		            public struct tBuilder_Values {
+		                public let api: any Api
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
+		        let __safeDI_apiValues_tBuilder = SafeDIScope_Api.tBuilder_Values()
 		        func __safeDI_tBuilder() -> T {
-		            let api: any Api = __safeDI_apiBuilder(.tBuilder_api(SafeDIScope_Api.tBuilder_api_Values()))
+		            let api: any Api = __safeDI_apiBuilder(.tBuilder(__safeDI_apiValues_tBuilder, .api(SafeDIScope_Api.T_Scope.api_Values())))
+		            let __safeDI_apiValues_cBuilder = SafeDIScope_Api.T_Scope.cBuilder_Values(api: api)
 		            func __safeDI_cBuilder() -> C {
-		                let api: any Api = __safeDI_apiBuilder(.tBuilder_cBuilder_api(SafeDIScope_Api.tBuilder_cBuilder_api_Values()))
+		                let api: any Api = __safeDI_apiBuilder(.tBuilder(__safeDI_apiValues_tBuilder, .cBuilder(__safeDI_apiValues_cBuilder, .api(SafeDIScope_Api.C_Scope.api_Values()))))
 		                let tBuilder = Instantiator<T>(__safeDI_tBuilder)
 		                return C(api: api, tBuilder: tBuilder)
 		            }
@@ -160,10 +180,12 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            return T(api: api, cBuilder: cBuilder)
 		        }
 		        let tBuilder = Instantiator<T>(__safeDI_tBuilder)
+		        let __safeDI_apiValues_cBuilder = SafeDIScope_Api.cBuilder_Values(tBuilder: tBuilder)
 		        func __safeDI_cBuilder() -> C {
-		            let api: any Api = __safeDI_apiBuilder(.cBuilder_api(SafeDIScope_Api.cBuilder_api_Values()))
+		            let api: any Api = __safeDI_apiBuilder(.cBuilder(__safeDI_apiValues_cBuilder, .api(SafeDIScope_Api.C_Scope.api_Values())))
+		            let __safeDI_apiValues_tBuilder = SafeDIScope_Api.C_Scope.tBuilder_Values(api: api)
 		            func __safeDI_tBuilder() -> T {
-		                let api: any Api = __safeDI_apiBuilder(.cBuilder_tBuilder_api(SafeDIScope_Api.cBuilder_tBuilder_api_Values()))
+		                let api: any Api = __safeDI_apiBuilder(.cBuilder(__safeDI_apiValues_cBuilder, .tBuilder(__safeDI_apiValues_tBuilder, .api(SafeDIScope_Api.T_Scope.api_Values()))))
 		                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 		                return T(api: api, cBuilder: cBuilder)
 		            }
@@ -176,7 +198,7 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		}
 
 		extension Hub {
-		    public enum __safeDI_Hub_C241D8402BD32E82 {}
+		    public enum __safeDI_Hub_EE5F6BBBC85519A5 {}
 		}
 		""")
 	}
@@ -256,40 +278,63 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		#expect(output.dependencyTreeFiles["Hub+SafeDI.swift"] == generatedFileHeader + """
 		extension Hub {
 		    @frozen public enum SafeDIScope_Api {
-		        case tBuilder_r_api(tBuilder_r_api_Values)
-		        case tBuilder_uBuilder_api(tBuilder_uBuilder_api_Values)
-		        case tBuilder_uBuilder_otherT_r_api(tBuilder_uBuilder_otherT_r_api_Values)
+		        case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
 
-		        public struct tBuilder_r_api_Values {
-		            public let q: Q
+		        public struct tBuilder_Values {}
+
+		        @frozen public enum T_Scope {
+		            case r(r_Values, SafeDIScope_Api.R_Scope)
+		            indirect case uBuilder(uBuilder_Values, SafeDIScope_Api.U_Scope)
+
+		            public struct r_Values {
+		                public let q: Q
+		            }
+
+		            public struct uBuilder_Values {
+		                public let q: Q
+		                public let r: R
+		            }
 		        }
 
-		        public struct tBuilder_uBuilder_api_Values {
-		            public let q: Q
-		            public let r: R
+		        @frozen public enum R_Scope {
+		            case api(api_Values)
+
+		            public struct api_Values {}
 		        }
 
-		        public struct tBuilder_uBuilder_otherT_r_api_Values {
-		            public let q: Q
+		        @frozen public enum U_Scope {
+		            case api(api_Values)
+		            indirect case otherT(otherT_Values, SafeDIScope_Api.T_Scope)
+
+		            public struct api_Values {}
+
+		            public struct otherT_Values {
+		                public let api: any Api
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
+		        let __safeDI_apiValues_tBuilder = SafeDIScope_Api.tBuilder_Values()
 		        func __safeDI_tBuilder() -> T {
 		            let q = Q()
+		            let __safeDI_apiValues_r = SafeDIScope_Api.T_Scope.r_Values(q: q)
 		            func __safeDI_r() -> R {
-		                let api: any Api = __safeDI_apiBuilder(.tBuilder_r_api(SafeDIScope_Api.tBuilder_r_api_Values(q: q)))
+		                let api: any Api = __safeDI_apiBuilder(.tBuilder(__safeDI_apiValues_tBuilder, .r(__safeDI_apiValues_r, .api(SafeDIScope_Api.R_Scope.api_Values()))))
 		                return R(api: api)
 		            }
 		            let r: R = __safeDI_r()
+		            let __safeDI_apiValues_uBuilder = SafeDIScope_Api.T_Scope.uBuilder_Values(q: q, r: r)
 		            func __safeDI_uBuilder() -> U {
-		                let api: any Api = __safeDI_apiBuilder(.tBuilder_uBuilder_api(SafeDIScope_Api.tBuilder_uBuilder_api_Values(q: q, r: r)))
+		                let api: any Api = __safeDI_apiBuilder(.tBuilder(__safeDI_apiValues_tBuilder, .uBuilder(__safeDI_apiValues_uBuilder, .api(SafeDIScope_Api.U_Scope.api_Values()))))
+		                let __safeDI_apiValues_otherT = SafeDIScope_Api.U_Scope.otherT_Values(api: api)
 		                func __safeDI_otherT() -> T {
 		                    let q = Q()
+		                    let __safeDI_apiValues_r = SafeDIScope_Api.T_Scope.r_Values(q: q)
 		                    func __safeDI_r() -> R {
-		                        let api: any Api = __safeDI_apiBuilder(.tBuilder_uBuilder_otherT_r_api(SafeDIScope_Api.tBuilder_uBuilder_otherT_r_api_Values(q: q)))
+		                        let api: any Api = __safeDI_apiBuilder(.tBuilder(__safeDI_apiValues_tBuilder, .uBuilder(__safeDI_apiValues_uBuilder, .otherT(__safeDI_apiValues_otherT, .r(__safeDI_apiValues_r, .api(SafeDIScope_Api.R_Scope.api_Values()))))))
 		                        return R(api: api)
 		                    }
 		                    let r: R = __safeDI_r()
@@ -308,7 +353,7 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		}
 
 		extension Hub {
-		    public enum __safeDI_Hub_26FDA47FEE40A62A {}
+		    public enum __safeDI_Hub_2594C468261123AE {}
 		}
 		""")
 	}

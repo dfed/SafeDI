@@ -384,9 +384,9 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		#expect(file == Self.expectedFile(code: """
 		extension Screen {
 		    @frozen public enum SafeDIScope_Service {
-		        case owner_service(owner_service_Values)
+		        case owner(owner_Values, SafeDIScope_Service.ServiceOwner_Scope)
 
-		        public struct owner_service_Values {
+		        public struct owner_Values {
 		            public let onForward: OnTap
 		            public var config: Config { __safeDI_config.instance }
 		            let __safeDI_config: LazilyInstantiated<Config>
@@ -395,6 +395,12 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		                self.onForward = onForward
 		                __safeDI_config = config
 		            }
+		        }
+
+		        @frozen public enum ServiceOwner_Scope {
+		            case service(service_Values)
+
+		            public struct service_Values {}
 		        }
 		    }
 
@@ -402,8 +408,9 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_onForward onForward: @escaping OnTap, __safeDI_config: @autoclosure @escaping () -> Config, __safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
 		        let config = LazilyInstantiated<Config>(__safeDI_config)
+		        let __safeDI_serviceValues_owner = SafeDIScope_Service.owner_Values(onForward: onForward, config: config)
 		        func __safeDI_owner() -> ServiceOwner {
-		            let service: any Service = __safeDI_serviceBuilder(.owner_service(SafeDIScope_Service.owner_service_Values(onForward: onForward, config: config)))
+		            let service: any Service = __safeDI_serviceBuilder(.owner(__safeDI_serviceValues_owner, .service(SafeDIScope_Service.ServiceOwner_Scope.service_Values())))
 		            return ServiceOwner(onForward: onForward, config: config.instance, service: service)
 		        }
 		        let owner: ServiceOwner = __safeDI_owner()
@@ -412,83 +419,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_35392AC4A24860DB {}
-		}
-		"""), "Unexpected output \(file)")
-	}
-
-	@Test(arguments: MultiModuleIntegration.allCases)
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesFieldEscaping_whenStageStructHoldsTypealiasOfClosureBesideDeferredParameter(integration: MultiModuleIntegration) async throws {
-		// The place is held in a `Sendable` wrapper, so its builder is staged: the first stage's struct stores the forwarded
-		// function beside the memo of a deferred parameter, so its initializer takes the function `@escaping`.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [
-				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
-					Self.declarations,
-					"""
-					public protocol Service: Sendable {}
-					""",
-					"""
-					@Instantiable
-					public final class ServiceOwner: Instantiable {
-					    public init(onForward: @escaping OnTap, config: Config, service: SendableLazilyInstantiated<any Service>) { self.onForward = onForward; self.config = config; self.service = service }
-					    @Received let onForward: OnTap
-					    @Received let config: Config
-					    @Instantiated let service: SendableLazilyInstantiated<any Service>
-					}
-					""",
-					"""
-					@Instantiable(generateDependencyTree: true)
-					public final class Screen: Instantiable {
-					    public init(onForward: @escaping OnTap, owner: ServiceOwner) { self.onForward = onForward; self.owner = owner }
-					    @Forwarded let onForward: OnTap
-					    @Instantiated let owner: ServiceOwner
-					}
-					""",
-				]),
-			],
-			integration: integration,
-			filesToDelete: &filesToDelete,
-		)
-
-		let file = try generatedFile(ofModuleNamed: "Feature", typeName: "Screen", in: output, under: integration)
-		#expect(file == Self.expectedFile(code: """
-		extension Screen {
-		    public enum SafeDIStagedScope_Service_owner_service {
-		        public struct Stage1 {
-		            public let onForward: OnTap
-		            public var config: Config { __safeDI_config.instance }
-		            let __safeDI_config: LazilyInstantiated<Config>
-
-		            init(onForward: @escaping OnTap, config: LazilyInstantiated<Config>) {
-		                self.onForward = onForward
-		                __safeDI_config = config
-		            }
-		        }
-
-		        public struct Stage2 {}
-		    }
-
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
-		    public convenience init(__safeDI_onForward onForward: @escaping OnTap, __safeDI_config: @autoclosure @escaping () -> Config, __safeDI_serviceBuilder_owner_service: @escaping (SafeDIStagedScope_Service_owner_service.Stage1) -> @Sendable (SafeDIStagedScope_Service_owner_service.Stage2) -> any Service) {
-		        let config = LazilyInstantiated<Config>(__safeDI_config)
-		        func __safeDI_owner() -> ServiceOwner {
-		            let __safeDI_serviceBuilder_owner_service_Stage2 = __safeDI_serviceBuilder_owner_service(SafeDIStagedScope_Service_owner_service.Stage1(onForward: onForward, config: config))
-		            @Sendable func __safeDI_service() -> any Service {
-		                __safeDI_serviceBuilder_owner_service_Stage2(SafeDIStagedScope_Service_owner_service.Stage2())
-		            }
-		            let service = SendableLazilyInstantiated<any Service>(__safeDI_service)
-		            return ServiceOwner(onForward: onForward, config: config.instance, service: service)
-		        }
-		        let owner: ServiceOwner = __safeDI_owner()
-		        self.init(onForward: onForward, owner: owner)
-		    }
-		}
-
-		extension Screen {
-		    public enum __safeDI_Screen_DD790B818D2088B3 {}
+		    public enum __safeDI_Screen_58D52DF2C0FE798D {}
 		}
 		"""), "Unexpected output \(file)")
 	}

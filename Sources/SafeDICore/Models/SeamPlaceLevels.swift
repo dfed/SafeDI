@@ -39,7 +39,7 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 		/// The levels of the scopes on the path, nearest first: the hole's owner's, then each enclosing scope's, then the
 		/// seam's root's.
 		public let levels: [Level]
-		/// The fields of the place's scope struct, every stage's, in their order.
+		/// The fields of the place's path as its levels decide them, in their order, a `@Sendable` function on the path aside.
 		public let fields: [Property]
 		/// The declarations on the path the scope struct carries no field of, which hide the farther declarations of their
 		/// labels, in the order they are bound.

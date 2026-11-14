@@ -3547,7 +3547,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		}
 
 		extension FeedScreen {
-		    public enum __safeDI_FeedScreen_3DBB8F75AF60AC87 {}
+		    public enum __safeDI_FeedScreen_20605C185CC47251 {}
 		}
 		"""
 		let pluginComment = integration.seamCallComment(type: "FeedScreen", declaringModule: "FeedModule")
@@ -3556,7 +3556,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    public convenience init() {
 		        let shared = SharedThing()
 		        func __safeDI_feed() -> FeedScreen {
-		            _ = FeedScreen.__safeDI_FeedScreen_3DBB8F75AF60AC87.self\(pluginComment)
+		            _ = FeedScreen.__safeDI_FeedScreen_20605C185CC47251.self\(pluginComment)
 		            func __safeDI_feedServiceBuilder_FeedScreen(_ scope: FeedScreen.SafeDIScope_FeedService) -> FeedService {
 		                switch scope {
 		                case let .service(scope):

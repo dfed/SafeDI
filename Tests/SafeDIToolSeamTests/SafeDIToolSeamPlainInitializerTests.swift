@@ -1394,7 +1394,7 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_F61C88110D16DE79 {}
+		    public enum __safeDI_Service_47FCCD49F0077492 {}
 		}
 		""")
 	}

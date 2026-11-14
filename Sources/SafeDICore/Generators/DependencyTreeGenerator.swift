@@ -2464,12 +2464,12 @@ public actor DependencyTreeGenerator {
 						neededLevel: tier,
 						parameterLevel: hole.tierAccess,
 						seam: seam.concreteInstantiable,
-						parameter: Property(label: builder?.label(inTierAt: tier) ?? hole.builderLabel(inTierAt: tier), typeDescription: builder?.parameterType ?? hole.builderType(qualifiedBy: hole.scopeSeamType)),
+						parameter: Property(label: builder?.label(inTierAt: tier) ?? hole.builderLabel(inTierAt: tier), typeDescription: builder?.parameterType ?? hole.builtType),
 						receivers: [],
 						parameterKind: .builder(fulfilledType: hole.instantiatedType, seamModuleName: seam.moduleName, isPassedUp: hole.innerSeamType != nil),
 						seamAccessIsRequiredByPublicMock: isRequiredByPublicMock,
 					)
-					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder?.label(inTierAt: tier) ?? hole.builderLabel(inTierAt: tier)): \((builder?.parameterType ?? hole.builderType(qualifiedBy: hole.scopeSeamType)).asSource)`, the builder for `\(hole.ownerType.asSource)`'s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(publicMockRequirement)\(causeText) \(remedies)"
+					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder?.label(inTierAt: tier) ?? hole.builderLabel(inTierAt: tier)): \((builder?.parameterType ?? hole.builtType).asSource)`, the builder for `\(hole.ownerType.asSource)`'s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(publicMockRequirement)\(causeText) \(remedies)"
 					declarationNotes = SeamAccessExplanation.declarationNotes(for: hole.accessCause, neededLevel: tier)
 				case let .parameters(.initializerCollides(parameters, builderLabels, handWrittenInitializer)):
 					receivers = []
@@ -5094,7 +5094,8 @@ public actor DependencyTreeGenerator {
 	/// labels whose nearest declaration is outside the tree – a parameter – where the tree reads them
 	/// (`parameterReads`). A parameter no read reaches, whose label a declaration inside the tree hides from every
 	/// receiver, is taken by value, so no `LazilyInstantiated` goes unread. Whether a function is `@Sendable` is read
-	/// from the facts the emitters decorate from: `buildsInSendableFunction` and `ScopeGenerator.sendableStages(ofFill:)`.
+	/// from the facts the emitters decorate from: `buildsInSendableFunction` and
+	/// `ScopeGenerator.buildsInSendableFunction(ofFill:)`.
 	private static func receivers(in generator: ScopeGenerator, of _: Instantiable, instantiables: [TypeDescription: Instantiable]) -> (receivers: [SeamReceiver], parameterReads: ParameterReads) {
 		var receivers = [SeamReceiver]()
 		var keptDeclarationIndices = [ReceiverDeclaration: Int]()
@@ -5126,8 +5127,8 @@ public actor DependencyTreeGenerator {
 				recordRead(of: parameter.property.label, insideSendable: true)
 			}
 			// A site reads every parameter whose label no scope enclosing it declares, and never inside a `@Sendable` function:
-			// it reads them at the site or at the call of a staged builder's first stage, which is made before the first
-			// `@Sendable` function on the site's path.
+			// a place built in plain code reads them at the site, and one built inside a `@Sendable` function carries none, its
+			// fill reading the caller's own.
 			if visited.holeSite != nil {
 				parameterReads.siteDeclaredLabels.append(frame.declaredLabels)
 			}
@@ -5552,6 +5553,7 @@ public actor DependencyTreeGenerator {
 			holes: holes,
 			builders: shapedBuilders.builders,
 			scopeEnums: shapedBuilders.scopeEnums,
+			callRoutes: shapedBuilders.callRoutes,
 			typesDeclaredEscaping: generator.typesDeclaredEscaping.intersection(parameters.map(\.property.typeDescription)),
 		))
 	}
@@ -7705,7 +7707,7 @@ public actor DependencyTreeGenerator {
 			if scope.publicMockCall != nil {
 				for case let .fill(hole, fillScope) in scope.holeArguments {
 					// A public mock takes no deferred parameter, so its fill binds every field.
-					fills.append((fillScope, ScopeGenerator.fieldForms(of: hole, boundLabels: Set(hole.stages.joined().map(\.property.label)))))
+					fills.append((fillScope, ScopeGenerator.fieldForms(of: hole, boundLabels: Set(hole.fields.map(\.property.label)))))
 				}
 			}
 			self.fills = fills
@@ -8204,7 +8206,7 @@ public actor DependencyTreeGenerator {
 				else { continue }
 				// A field is read by value, only if available, and as a lazily instantiated property's instance too.
 				var fieldForms = Set<Property>()
-				for field in hole.stages.joined() {
+				for field in hole.fields {
 					for form in [field.property] + [field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding].compactMap(\.self) {
 						fieldForms.insert(form)
 						fieldForms.insert(form.asOptionalProperty)

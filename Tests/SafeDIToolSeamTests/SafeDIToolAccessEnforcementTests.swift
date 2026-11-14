@@ -1073,7 +1073,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_F61C88110D16DE79 {}
+		    public enum __safeDI_Service_47FCCD49F0077492 {}
 		}
 		"""
 		let featureImplCode = """
@@ -1093,7 +1093,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_F61C88110D16DE79.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
+		            _ = Service.__safeDI_Service_47FCCD49F0077492.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
 		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
 		                switch scope {
 		                case .userService:

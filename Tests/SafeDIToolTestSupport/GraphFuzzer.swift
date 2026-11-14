@@ -833,8 +833,8 @@ enum GraphFuzzerSeamOutputFeature: String, CaseIterable, Comparable {
 enum GraphFuzzerHoleOutputFeature: String, CaseIterable, Comparable {
 	/// A seam's generated initializer takes a builder for a hole, under an internal name.
 	case builderParameter
-	/// A builder that takes a `@Sendable` builder function's values in a later stage.
-	case stagedBuilder
+	/// A `@Sendable` builder, handed the places built inside `@Sendable` functions.
+	case sendableBuilder
 	/// A seam's builder of another seam's scope struct, which it passes up.
 	case passedUpBuilder
 	/// A function a caller generates to fill a builder.
@@ -1110,11 +1110,11 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case holeBeneathConstant
 	/// The hole's owner, which the seam instantiates through an `Instantiator`.
 	case holeBeneathInstantiator
-	/// The hole's owner, which the seam instantiates through a `SendableInstantiator`: a staged builder.
+	/// The hole's owner, which the seam instantiates through a `SendableInstantiator`: a place of the `@Sendable` enum.
 	case holeBeneathSendableInstantiator
 	/// The hole's owner, which the seam instantiates through a `LazilyInstantiated`.
 	case holeBeneathLazilyInstantiated
-	/// The hole's owner, which the seam instantiates through a `SendableLazilyInstantiated`: a staged builder.
+	/// The hole's owner, which the seam instantiates through a `SendableLazilyInstantiated`: a place of the `@Sendable` enum.
 	case holeBeneathSendableLazilyInstantiated
 	/// The seam instantiates the hole's owner a second time, a second site with a builder of its own.
 	case holeOwnerReachedAtTwoSites
@@ -1191,7 +1191,7 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `HolePing`, a seam `HoleSeam` builds that builds `HoleSeam` in a `SendableInstantiator`: a cycle of two seams with a
 	/// `@Sendable` edge.
 	case holeTwoSeamCycleWithSendableEdge
-	/// `HoleStager`, a seam `HoleSeam` builds in a `SendableInstantiator`, whose own place is in one too: an inner staged
+	/// `HoleStager`, a seam `HoleSeam` builds in a `SendableInstantiator`, whose own place is in one too: an inner
 	/// place on a `@Sendable` route.
 	case holeInnerStagedPlaceOnSendableRoute
 	/// The hole's owner also holds it in a `LazilyInstantiated`, or a `SendableLazilyInstantiated`, beside its by-value
@@ -4624,7 +4624,7 @@ enum GraphFuzzerGenerator {
 		/// the graph is split across modules (`GraphFuzzerModule`), the seam's tree and `HoleService`, a protocol, in the
 		/// seam's module, and `HoleImpl`, which fulfills `HoleService`, beside the roots. The first root instantiates the
 		/// seam. The property's owner is the seam itself, or `HoleOwner`, which the seam reaches by value or through a
-		/// wrapper the graph's sendability allows (a `Sendable` one stages the builder), now and then at a second site.
+		/// wrapper the graph's sendability allows (a `Sendable` one makes it a place of the `@Sendable` enum), now and then at a second site.
 		/// `HoleImpl` reads a field of the scope struct (`holeAnalytics`, which the seam builds before the owner) and now
 		/// and then a value only the root holds (`holeLogger`). Three further draws, each with a generator of its own,
 		/// so that each draws as it did whatever the others draw: a second seam of the seam's module, `HoleOuter`,
@@ -4645,7 +4645,7 @@ enum GraphFuzzerGenerator {
 		/// without its package name; a second re-entry, of `HoleRelay`, which passes the site up; a second hole, `holeTracker`,
 		/// filled by `HoleTrackerImpl`; a diamond of two seams that pass the site up, one taking the builder `@Sendable`;
 		/// and a seam, `HoleInner2`, whose hole has the label of `HoleSeam`'s, filled inside `HoleSeam`'s fill. Six more draw
-		/// the nested builders' shapes: a second hole type; a wrapper of the hole beside its by-value place; an inner staged
+		/// the nested builders' shapes: a second hole type; a wrapper of the hole beside its by-value place; an inner
 		/// place on a `@Sendable` route; a cycle of two seams with a `@Sendable` edge; an inner seam reached by a plain and a
 		/// `@Sendable` route, now and then passed up with both enums; and a place inside a `@Sendable` fill the seam generates.
 		/// The pass records the property that gives the graph its second place of a hole (`secondHolePlace`).
@@ -4742,6 +4742,7 @@ enum GraphFuzzerGenerator {
 			// instantiator, so a re-entry is drawn only where the seam builds the owner through one.
 			var ownerIndex: Int?
 			var ownerIsBuiltByInstantiator = false
+			var ownerIsBuiltInSendableFunction = false
 			if holeRandom.percentChance(25) {
 				seam.properties.append(holeProperty)
 			} else {
@@ -4759,6 +4760,12 @@ enum GraphFuzzerGenerator {
 					PropertyDeclaration(attribute: "@Instantiated", label: "holeOwner", type: "\(holeRandom.element(of: lazyWrappers))<\(owner.name)>")
 				}
 				seam.properties.append(ownerProperty)
+				// A place built inside a `@Sendable` function is handed only what that function binds: the owner there
+				// instantiates the `holeAnalytics` `HoleImpl` reads.
+				if ownerProperty.type.hasPrefix("Sendable") {
+					ownerIsBuiltInSendableFunction = true
+					seamModuleDeclarations[seamModuleDeclarations.count - 1].properties[1] = PropertyDeclaration(attribute: "@Instantiated", label: "holeAnalytics", type: analyticsName)
+				}
 				if holeRandom.percentChance(20) {
 					// A second site, built by value, at which a re-entry from its fill would close a constant cycle.
 					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeSecondOwner", type: owner.name))
@@ -4768,8 +4775,9 @@ enum GraphFuzzerGenerator {
 			// `HoleAnalytics` `package`, so the scope struct carries it as a `package` field, which only a filler in the seam's
 			// package can read: never drawn with the fillers in another package, which could not name the type, and only
 			// where `HoleOwner` holds the hole, which then does not receive the field, so that its `public` initializer
-			// proves `HoleService` `public`, as the builder's `public` tier needs.
-			let analyticsIsNarrower = drawsNarrowerField && !fillsFromOtherPackage && ownerIndex != nil
+			// proves `HoleService` `public`, as the builder's `public` tier needs. Never where a `@Sendable` function builds
+			// `HoleOwner`, which then instantiates the field itself.
+			let analyticsIsNarrower = drawsNarrowerField && !fillsFromOtherPackage && ownerIndex != nil && !ownerIsBuiltInSendableFunction
 			if analyticsIsNarrower, let ownerIndex {
 				seamModuleDeclarations[0].access = .package
 				proofTypeAccess[analyticsName] = .package
@@ -5011,11 +5019,15 @@ enum GraphFuzzerGenerator {
 				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeGadgetOwner", type: gadgetOwner.name))
 			}
 			// A wrapper of the hole beside its by-value place, on the type that holds it: a `LazilyInstantiated`, a plain
-			// wrapper whose place is a case of the plain enum, or a `SendableLazilyInstantiated`, whose place is staged. A mock
+			// wrapper whose place is a case of the plain enum, or a `SendableLazilyInstantiated`, whose place is a case of the `@Sendable` enum. A mock
 			// of the seam or the owner takes the wrapper as its parameter, as it takes every wrapper its tree instantiates and
-			// it cannot build.
+			// it cannot build. A `@Sendable` function that builds the place itself binds nothing `HoleImpl` could read, so
+			// there `HoleImpl` reads no value the seam or the owner binds.
 			if drawsWrapperBesidePlace {
 				let property = PropertyDeclaration(attribute: "@Instantiated", label: "holeServiceLazy", type: "\(besidePlaceWrapper)<any \(serviceName)>")
+				if besidePlaceWrapper.hasPrefix("Sendable") {
+					impl.properties.removeAll { ["holeAnalytics", "holeStats", "holeMetrics"].contains($0.label) }
+				}
 				if let ownerIndex {
 					seamModuleDeclarations[ownerIndex].properties.append(property)
 					if secondHolePlace == nil {
@@ -5030,13 +5042,13 @@ enum GraphFuzzerGenerator {
 			}
 			// The draws below build a seam in a `SendableInstantiator`, which a graph of other wrappers does not hold.
 			let drawsSendableRoutes = sendability != .nonSendable
-			// An inner seam with a staged place, reached on a `@Sendable` route: `HoleStager`, which `HoleSeam` builds in a
-			// `SendableInstantiator`, builds `HoleStageOwner`, whose hole `HoleImpl` fills, in one too. It receives
-			// `holeAnalytics`, so that its scope carries the field `HoleImpl` reads.
+			// An inner seam whose place is built in a `@Sendable` function, reached on a `@Sendable` route: `HoleStager`, which `HoleSeam` builds in a
+			// `SendableInstantiator`, builds `HoleStageOwner`, whose hole `HoleImpl` fills, in one too. `HoleStageOwner`
+			// instantiates `holeAnalytics`, so that the scope of the `@Sendable` function that builds it carries the field
+			// `HoleImpl` reads.
 			if drawsInnerStagedPlace, drawsSendableRoutes, !implReadsOwnersAlias {
-				let stageOwner = instantiable("HoleStageOwner", module: .seamModule, properties: [holeProperty])
+				let stageOwner = instantiable("HoleStageOwner", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeAnalytics", type: analyticsName), holeProperty])
 				var stager = instantiable("HoleStager", module: .seamModule, properties: [
-					PropertyDeclaration(attribute: "@Received", label: "holeAnalytics", type: analyticsName),
 					PropertyDeclaration(attribute: "@Instantiated", label: "holeStageOwnerBuilder", type: "SendableInstantiator<\(stageOwner.name)>"),
 				])
 				stager.instantiableArguments = ["generateDependencyTree: true"]
@@ -5086,13 +5098,14 @@ enum GraphFuzzerGenerator {
 			// A place inside a `@Sendable` fill the seam generates: `HoleDeep`, a seam in the module beneath the seam's, takes
 			// a builder for `HoleDeepService`, which `HoleDeepImpl`, in the seam's module, fills; `HoleSeam` builds `HoleDeep` in
 			// a `SendableInstantiator`, so the fill it generates is `@Sendable`, and `HoleDeepImpl`'s own hole in it is a place
-			// of `HoleSeam`'s, staged. Never where the seam's module has no package, which `HoleDeep`'s module has.
+			// of `HoleSeam`'s, built inside that function; `HoleDeepImpl` instantiates `holeAnalytics`, so that the function's
+			// scope carries the field `HoleImpl` reads. Never where the seam's module has no package, which `HoleDeep`'s module has.
 			if drawsPlaceInsideSendableFill, drawsSendableRoutes, !implReadsOwnersAlias, !modulesOmittingPackageName.contains(.seamModule) {
 				let deepServiceName = name("HoleDeepService")
 				var deep = instantiable("HoleDeep", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeDeepService", type: "any \(deepServiceName)")])
 				deep.instantiableArguments = ["generateDependencyTree: true"]
 				deep.additionalDeclarations.append("public protocol \(deepServiceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
-				var deepImpl = instantiable("HoleDeepImpl", module: .seamModule, properties: [holeProperty])
+				var deepImpl = instantiable("HoleDeepImpl", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeAnalytics", type: analyticsName), holeProperty])
 				deepImpl.instantiableArguments = ["fulfillingAdditionalTypes: [\(deepServiceName).self]"]
 				deepImpl.additionalConformances.append(deepServiceName)
 				seamModuleDeclarations += [deep, deepImpl]
@@ -8316,7 +8329,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		for (seamTypeName, parameters) in widestTiers {
 			// A builder for a hole is no pass-through: `holeOutputFeatures` reads it.
-			for parameter in parameters where !parameter.contains("SafeDIScope_") && !parameter.contains("SafeDISendableScope_") && !parameter.contains("SafeDIStagedScope_") {
+			for parameter in parameters where !parameter.contains("SafeDIScope_") && !parameter.contains("SafeDISendableScope_") {
 				let label = parameter.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces)
 				let type = parameter.drop { $0 != ":" }.dropFirst().trimmingCharacters(in: .whitespaces)
 				if parameterKinds.isOnlyIfAvailable(label: label, ofSeam: seamTypeName) {
@@ -8350,13 +8363,13 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// `generatedFiles`, an accepted graph's output.
 	static func holeOutputFeatures(generatedFiles: [String: String]) -> Set<GraphFuzzerHoleOutputFeature> {
 		var features = Set<GraphFuzzerHoleOutputFeature>()
-		let builderParameter = try! NSRegularExpression(pattern: #"\b\w+Builder\w*: @escaping (@Sendable )?\((\w+\.)?SafeDI(?:Sendable|Staged)?Scope_"#)
-		let otherSeamsStruct = try! NSRegularExpression(pattern: #"@escaping (?:@Sendable )?\((\w+)\.SafeDI(?:Sendable|Staged)?Scope_"#)
-		let enumCaseOfInnerSeam = try! NSRegularExpression(pattern: #"^ +(?:indirect )?case \w+\(\w+\.SafeDI(?:Sendable)?Scope_"#)
+		let builderParameter = try! NSRegularExpression(pattern: #"\b\w+Builder\w*: @escaping (@Sendable )?\((\w+\.)?SafeDI(?:Sendable)?Scope_"#)
+		let otherSeamsStruct = try! NSRegularExpression(pattern: #"@escaping (?:@Sendable )?\((\w+)\.SafeDI(?:Sendable)?Scope_"#)
+		let enumCaseOfInnerSeam = try! NSRegularExpression(pattern: #"^ +(?:indirect )?case \w+\((?:\w+, )?\w+\.SafeDI(?:Sendable)?Scope_"#)
 		// A fill takes a case's payload or a stage's struct; a dispatcher, the enum, which is no fill.
-		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Scope_\w+\.\w+_Values|StagedScope_\w+\.Stage1)"#)
-		let dispatcherDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+\) -> "#)
-		let enclosingDispatcherDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func __safeDI_\w+\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+\) -> "#)
+		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+_Scope_*)?\.\w+_Values"#)
+		let dispatcherDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
+		let enclosingDispatcherDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func __safeDI_\w+\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
 		// A case holding its fill's body ends its line at the colon; one that calls a fill or a dispatcher returns on its line.
 		let inlinedFillCase = try! NSRegularExpression(pattern: #"^( *)case (?:let )?\.[^:]+:$"#)
 		func firstMatch(_ expression: NSRegularExpression, in line: String) -> [String]? {
@@ -8388,8 +8401,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				}
 				if line.contains("init("), firstMatch(builderParameter, in: line) != nil {
 					features.insert(.builderParameter)
-					if line.contains(") -> @Sendable (") {
-						features.insert(.stagedBuilder)
+					if line.contains("@Sendable (SafeDISendableScope_") {
+						features.insert(.sendableBuilder)
 					}
 					if let extendedType, let match = firstMatch(otherSeamsStruct, in: line), match[1] != extendedType {
 						features.insert(.passedUpBuilder)
@@ -8431,7 +8444,19 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				} else {
 					continue
 				}
-				let namesPassed = fillNames + (dispatcherNamesBySeam[scopeSeam] ?? []).sorted()
+				var namesPassed = fillNames + (dispatcherNamesBySeam[scopeSeam] ?? []).sorted()
+				// A dispatcher declared inside the fill, for a seam that passes the site up, whose case forwards to the
+				// seam's own dispatcher, passes the fill too.
+				for (dispatcherIndex, dispatcherLine) in lines[(index + 1)..<end].enumerated() {
+					guard let dispatcher = firstMatch(enclosingDispatcherDeclaration, in: dispatcherLine),
+					      let name = firstMatch(dispatcherDeclaration, in: dispatcherLine)?[1]
+					else { continue }
+					let bodyStart = index + 1 + dispatcherIndex + 1
+					let bodyEnd = lines[bodyStart..<end].firstIndex(of: dispatcher[1] + "}") ?? end
+					if lines[bodyStart..<bodyEnd].contains(where: { line in namesPassed.contains { line.contains("return \($0)(scope)") } }) {
+						namesPassed.append(name)
+					}
+				}
 				let passesFill = { (body: String) in namesPassed.contains { body.contains(": \($0))") || body.contains(": \($0),") } }
 				let callsInside = lines[(index + 1)..<end].filter { $0.contains("return ") && passesFill($0) }
 				guard !callsInside.isEmpty else { continue }
@@ -10356,7 +10381,7 @@ enum GraphFuzzerOracle {
 
 	/// The names generated code gives a hole's builders and places, which a hand-written caller spells: each label of a
 	/// parameter of a seam's generated initializer or a generated mock whose type names a scope of places (`SafeDIScope_…`,
-	/// `SafeDISendableScope_…`, `SafeDIStagedScope_…`, or a public mock's `…MockScope_…`), as `<Type>(<label>:)`; each such
+	/// `SafeDISendableScope_…`, or a public mock's `…MockScope_…`), as `<Type>(<label>:)`; each such
 	/// scope type an extension declares, as `<Type>.<scope>`; and each case of one, as `<Type>.<scope>.<case>`. A seam's
 	/// labels are read from the initializer only generated code calls, which every module generates, without their
 	/// `__safeDI_` prefix: they are the labels of the plain initializer a module that sets
@@ -11106,7 +11131,7 @@ enum GraphFuzzerOracle {
 	static func callerSpelling(ofParameter parameter: String, of seamTypeName: String) -> String {
 		parameter
 			.trimmingCharacters(in: .whitespaces)
-			.replacingOccurrences(of: #"(?<![A-Za-z0-9_.])(SafeDI(?:Sendable|Staged)?Scope_)"#, with: "\(seamTypeName).$1", options: .regularExpression)
+			.replacingOccurrences(of: #"(?<![A-Za-z0-9_.])(SafeDI(?:Sendable)?Scope_)"#, with: "\(seamTypeName).$1", options: .regularExpression)
 	}
 
 	/// `seamInitializers(inGeneratedFile:)` without each tier's access.
