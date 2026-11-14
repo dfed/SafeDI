@@ -179,7 +179,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		// Cell 3: `App` builds `Clock`, which only `Feed`'s view carries: the view never fulfills a type of `App`'s trees.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable declaration of a module this module lists fulfills `Clock`, which @Instantiated property `clock: Clock` instantiates. `Clock` is declared in `Core`, which this module depends on through `Feed` but does not list; list `Core` where this module lists `Feed`: list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` with `--dependent-module-info-file-path` in another build.
+			\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable declaration of a module this module lists fulfills `Clock`, which @Instantiated property `clock: Clock` instantiates. `Clock` is declared in `Core`, which this module reaches only through `Feed`. Add `Core` beside `Feed` among this module’s SafeDI dependencies: list its `<name>_safedi` target in this target’s `safedi_deps` under Bazel, list its module in the `dependencies:` of this target’s `SafeDI.preCompileScript` under Tuist, or list its `.safedi` file in the file you pass to `--dependent-module-info-file-path` in a custom build.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -198,7 +198,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		// to list `Core`, which fulfills `Clock` as it would a type `Core`'s own files declare.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):11:5: error: No @Instantiable declaration of a module this module lists fulfills `Clock`, which @Instantiated property `clock: Clock` instantiates. `Clock` is declared in `Core`, which this module depends on through `Feed` but does not list; list `Core` where this module lists `Feed`: list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` with `--dependent-module-info-file-path` in another build.
+			\(fixtures["App"]!["Root.swift"]):11:5: error: No @Instantiable declaration of a module this module lists fulfills `Clock`, which @Instantiated property `clock: Clock` instantiates. `Clock` is declared in `Core`, which this module reaches only through `Feed`. Add `Core` beside `Feed` among this module’s SafeDI dependencies: list its `<name>_safedi` target in this target’s `safedi_deps` under Bazel, list its module in the `dependencies:` of this target’s `SafeDI.preCompileScript` under Tuist, or list its `.safedi` file in the file you pass to `--dependent-module-info-file-path` in a custom build.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

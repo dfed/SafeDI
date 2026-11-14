@@ -34,8 +34,25 @@ let generatedFileHeader = """
 /// The mock configuration file of a module whose mocks configure nothing and whose files import nothing.
 let emptyMockConfigurationFileOutput = generatedFileHeader
 
-/// The last remedy of an error about a type no `@Instantiable` declaration fulfills: what each integration does to
-/// read the module that declares one.
+/// The last sentence of an error about a type no `@Instantiable` declaration fulfills, in a run that cannot tell which
+/// modules it could have read: how the Xcode project plugin, or a run by hand, reads the target that declares one.
+func fulfillingDeclarationInTargetNotReadRemedy(for typeName: String) -> String {
+	"If a declaration that fulfills `\(typeName)` is in another target, add that target’s folder to `additionalDirectoriesToInclude` in this target’s `#SafeDIConfiguration`, or, in a SafeDITool run by hand, list the `.safedi` file of its module in the file you pass to `--dependent-module-info-file-path`."
+}
+
+/// The last sentences of an error about a type no `@Instantiable` declaration fulfills, at a file that may import a module
+/// the run read nothing of: how `integration` reads the module that declares one.
+func fulfillingDeclarationInModuleNotReadRemedy(for typeName: String, integration: MultiModuleIntegration) -> String {
+	switch integration {
+	case .moduleInfo:
+		"If a declaration that fulfills `\(typeName)` is in another module, run SafeDI on that module and list it among this module’s SafeDI dependencies: under Bazel, declare it with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target’s `safedi_deps`; under Tuist, give its target `SafeDI.preCompileScript` and list it in the `dependencies:` of this target’s `SafeDI.preCompileScript`; in a custom build, list its `.safedi` file in the file you pass to `--dependent-module-info-file-path`."
+	case .swiftPackagePlugin:
+		"If a declaration that fulfills `\(typeName)` is in another target, add that target to this target’s `dependencies` in `Package.swift`: SafeDI reads only the targets this target depends on. For a target of a package fetched from a URL, add the package’s checkout directory to `additionalDirectoriesToInclude` in a `#SafeDIConfiguration` instead."
+	}
+}
+
+/// The last remedy of an error about a type no `@Instantiable` declaration a seam's caller can see fulfills: what each
+/// integration does to read the module that declares one.
 let fulfillingDeclarationInAnotherModuleRemedy = "or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target's `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist."
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)

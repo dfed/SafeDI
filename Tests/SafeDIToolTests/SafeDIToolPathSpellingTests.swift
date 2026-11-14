@@ -142,7 +142,7 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 		_ = try await project.scan(reportingProjectRoot: projectRootSpelling)
 		let buildLog = Generate.BuildLog()
 
-		await assertThrowsError("\(project.absoluteProjectRoot(spelled: projectRootSpelling))/Extra/InnerRoot.swift:6:5: error: No @Instantiable type or extension fulfills `MissingDependency`, which @Instantiated property `dependency: MissingDependency` instantiates. Decorate `MissingDependency`, or an extension of it, with @Instantiable; list `MissingDependency` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)") {
+		await assertThrowsError("\(project.absoluteProjectRoot(spelled: projectRootSpelling))/Extra/InnerRoot.swift:6:5: error: No @Instantiable type or extension fulfills `MissingDependency`, which @Instantiated property `dependency: MissingDependency` instantiates. Decorate `MissingDependency`, or an extension of it, with @Instantiable, or list `MissingDependency` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInTargetNotReadRemedy(for: "MissingDependency"))") {
 			do {
 				try await project.generate(buildLog: buildLog)
 			} catch let error as any SourceLocatedError {

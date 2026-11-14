@@ -89,10 +89,11 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 	mutating func multiModuleTest_throwsErrorForGrandparentDeclaration_whenModuleInfoListsOnlyTheDirectDependency() async {
 		// Bazel lists a target's direct `deps` and a Tuist user lists modules by name, so a module whose tree
 		// reaches a declaration two levels down sees it only when that module is listed too. The property is in
-		// `Middle`'s file, which is not one of the run's own, so SafeDI does not read its imports and gives every remedy.
+		// `Middle`'s file, which is not one of the run's own, so SafeDI does not read its imports and gives the remedy of
+		// the run's integration.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Middle"]!["Pump.swift"]):8:5: error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable; list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["Middle"]!["Pump.swift"]):8:5: error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable, or list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInModuleNotReadRemedy(for: "Engine", integration: .moduleInfo))
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -114,12 +115,12 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func multiModuleTest_offersEveryRemedy_whenFileThatInstantiatesUnfulfilledTypeIsAbsentDependencyFile() async {
+	mutating func multiModuleTest_offersRemedyOfReadingAnotherModule_whenFileThatInstantiatesUnfulfilledTypeIsAbsentDependencyFile() async {
 		// Bazel's sandbox gives `App`'s action `Middle`'s `.safedi` but none of `Middle`'s files, so SafeDI cannot read
 		// what the file that instantiates `Engine` imports, and must not advise decorating `Engine` alone.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Middle"]!["Pump.swift"]):8:5: error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable; list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["Middle"]!["Pump.swift"]):8:5: error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable, or list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInModuleNotReadRemedy(for: "Engine", integration: .moduleInfo))
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -663,7 +664,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 	mutating func multiModuleTest_throwsErrorForCheckoutDeclaration_whenConfigurationDoesNotIncludeCheckoutDirectory() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(NormalizedFilePath(fixtures["App"]!.compilerPath(of: "Root.swift")).path):8:5: error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. This file imports `Shared`, which is not a target this target depends on, so SafeDI read none of its files. If `Shared` declares `Engine`, add its target to this target's `dependencies` in `Package.swift`; SafeDI does not read a package fetched from a URL, so for one of its modules add the package's checkout directory to `additionalDirectoriesToInclude` in a `#SafeDIConfiguration` instead. Otherwise, decorate `Engine`, or an extension of it, with @Instantiable, or list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it.
+			\(NormalizedFilePath(fixtures["App"]!.compilerPath(of: "Root.swift")).path):8:5: error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable, or list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. If a declaration that fulfills `Engine` is in another target, add that target to this target’s `dependencies` in `Package.swift`: SafeDI reads only the targets this target depends on. For a target of a package fetched from a URL, add the package’s checkout directory to `additionalDirectoriesToInclude` in a `#SafeDIConfiguration` instead.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -948,10 +949,10 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func multiModuleTest_namesImportedModuleSafeDIDidNotRead_whenNoDeclarationItReadFulfillsInstantiatedType(integration: MultiModuleIntegration) async {
+	mutating func multiModuleTest_offersRemedyOfReadingAnotherModule_whenFileThatInstantiatesUnfulfilledTypeImportsModuleSafeDIDidNotRead(integration: MultiModuleIntegration) async {
 		// `Feed` declares the seam `FeedScreen`, but `App` does not list it: Bazel's `App` is given no `Feed.safedi`, as when
-		// `Feed` is a plain `swift_library`, and the plugin's target graph has no `Feed`. The file imports `Feed`, which is
-		// all SafeDI can state of the cause, so the error leads with it and with the remedy of the run's integration.
+		// `Feed` is a plain `swift_library`, and the plugin's target graph has no `Feed`. The file imports `Feed`, so after
+		// the remedy of decorating the type comes the remedy of the run's integration for reading another module.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let path = switch integration {
 			case .moduleInfo:
@@ -959,13 +960,13 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 			case .swiftPackagePlugin:
 				NormalizedFilePath(fixtures["App"]!.compilerPath(of: "Root.swift")).path
 			}
-			let cause = switch integration {
+			let remedy = switch integration {
 			case .moduleInfo:
-				"This file imports `Feed`, whose SafeDI module info this run was not given. If `Feed` declares `FeedScreen`, build it with SafeDI and give this run its module info: under Bazel, declare it with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target's `safedi_deps`; under Tuist, give its target `SafeDI.preCompileScript` and list it in the `dependencies:` of this target's `SafeDI.preCompileScript`; in a custom build, pass its `.safedi` file to `--dependent-module-info-file-path`."
+				"If a declaration that fulfills `FeedScreen` is in another module, run SafeDI on that module and list it among this module’s SafeDI dependencies: under Bazel, declare it with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target’s `safedi_deps`; under Tuist, give its target `SafeDI.preCompileScript` and list it in the `dependencies:` of this target’s `SafeDI.preCompileScript`; in a custom build, list its `.safedi` file in the file you pass to `--dependent-module-info-file-path`."
 			case .swiftPackagePlugin:
-				"This file imports `Feed`, which is not a target this target depends on, so SafeDI read none of its files. If `Feed` declares `FeedScreen`, add its target to this target's `dependencies` in `Package.swift`; SafeDI does not read a package fetched from a URL, so for one of its modules add the package's checkout directory to `additionalDirectoriesToInclude` in a `#SafeDIConfiguration` instead."
+				"If a declaration that fulfills `FeedScreen` is in another target, add that target to this target’s `dependencies` in `Package.swift`: SafeDI reads only the targets this target depends on. For a target of a package fetched from a URL, add the package’s checkout directory to `additionalDirectoriesToInclude` in a `#SafeDIConfiguration` instead."
 			}
-			return "\(path):6:5: error: No @Instantiable type or extension fulfills `FeedScreen`, which @Instantiated property `feedScreen: FeedScreen` instantiates. \(cause) Otherwise, decorate `FeedScreen`, or an extension of it, with @Instantiable, or list `FeedScreen` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it."
+			return "\(path):6:5: error: No @Instantiable type or extension fulfills `FeedScreen`, which @Instantiated property `feedScreen: FeedScreen` instantiates. Decorate `FeedScreen`, or an extension of it, with @Instantiable, or list `FeedScreen` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(remedy)"
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1000,11 +1001,19 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		}
 	}
 
-	@Test
+	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func multiModuleTest_namesEachImportedModuleSafeDIDidNotReadInNameOrder_whenNoDeclarationItReadFulfillsInstantiatedType() async {
+	mutating func multiModuleTest_namesNoImportedModule_whenFileThatInstantiatesUnfulfilledTypeImportsFoundationAndSwiftUI(integration: MultiModuleIntegration) async {
+		// SafeDI reads neither `Foundation` nor `SwiftUI`, and cannot tell them from a module of the user's, so the error
+		// names no module the file imports.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"\(fixtures["App"]!["Root.swift"]):8:5: error: No @Instantiable type or extension fulfills `FeedScreen`, which @Instantiated property `feedScreen: FeedScreen` instantiates. This file imports `Feed` and `Foundation`, whose SafeDI module info this run was not given. If one of them declares `FeedScreen`, build that module with SafeDI and give this run its module info: under Bazel, declare it with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target's `safedi_deps`; under Tuist, give its target `SafeDI.preCompileScript` and list it in the `dependencies:` of this target's `SafeDI.preCompileScript`; in a custom build, pass its `.safedi` file to `--dependent-module-info-file-path`. Otherwise, decorate `FeedScreen`, or an extension of it, with @Instantiable, or list `FeedScreen` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it."
+			let path = switch integration {
+			case .moduleInfo:
+				fixtures["App"]!["Root.swift"]
+			case .swiftPackagePlugin:
+				NormalizedFilePath(fixtures["App"]!.compilerPath(of: "Root.swift")).path
+			}
+			return "\(path):8:5: error: No @Instantiable type or extension fulfills `FeedScreen`, which @Instantiated property `feedScreen: FeedScreen` instantiates. Decorate `FeedScreen`, or an extension of it, with @Instantiable, or list `FeedScreen` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInModuleNotReadRemedy(for: "FeedScreen", integration: integration))"
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1014,7 +1023,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 						swiftFileContentByFilePath: ["Root.swift": """
 						import SafeDI
 						import Foundation
-						import Feed
+						import SwiftUI
 
 						@Instantiable(isRoot: true)
 						public struct Root: Instantiable {
@@ -1024,7 +1033,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 						"""],
 					),
 				],
-				integration: .moduleInfo,
+				integration: integration,
 				compileVerification: .skipped,
 				filesToDelete: &filesToDelete,
 			)

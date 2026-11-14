@@ -99,7 +99,8 @@ public actor DependencyTreeGenerator {
 
 	/// What a run of `generate` knows of the modules a file imports that it read nothing of. A type no declaration the run
 	/// read fulfills may be declared in such a module, which the build did not give the run, so the error at a file that
-	/// instantiates the type leads with them.
+	/// instantiates the type says how the run's integration reads one more module. The error names none of the file's
+	/// modules: a file imports the SDK's and the toolchain's modules too, which SafeDI cannot tell from the user's.
 	public struct UnreadImports: Sendable {
 		/// How the run learns of the modules it reads, which decides how to give it one more.
 		public enum Integration: Hashable, Sendable {
@@ -109,16 +110,15 @@ public actor DependencyTreeGenerator {
 			case targetGraph
 		}
 
-		/// - Parameter importedModuleNamesNotRead: The modules the file at a path imports, as the run names the file, that
-		///   the run read nothing of, in name order, or `nil` when the run does not know what the file imports. Called
-		///   only on the path of an error.
-		public init(integration: Integration, importedModuleNamesNotRead: @escaping @Sendable (_ filePath: String) -> [String]?) {
+		/// - Parameter importsModuleNotRead: Whether the file at a path, as the run names the file, imports a module the run
+		///   read nothing of, or `nil` when the run does not know what the file imports. Called only on the path of an error.
+		public init(integration: Integration, importsModuleNotRead: @escaping @Sendable (_ filePath: String) -> Bool?) {
 			self.integration = integration
-			self.importedModuleNamesNotRead = importedModuleNamesNotRead
+			self.importsModuleNotRead = importsModuleNotRead
 		}
 
 		public let integration: Integration
-		public let importedModuleNamesNotRead: @Sendable (_ filePath: String) -> [String]?
+		public let importsModuleNotRead: @Sendable (_ filePath: String) -> Bool?
 	}
 
 	/// A module whose declarations a module info's view carries, which this module depends on through another module but
@@ -1614,10 +1614,11 @@ public actor DependencyTreeGenerator {
 							typeDescription: typeDescription,
 							referencingProperty: locatedProperty.property,
 							fulfilledByMockOnlyDeclaration: fulfilledByMockOnlyDeclaration,
-							unreadImports: unreadImports.flatMap { unreadImports in
-								locatedProperty.declarationLocation
-									.flatMap { unreadImports.moduleNamesByFilePath[$0.filePath] }
-									.map { (integration: unreadImports.integration, moduleNames: $0) }
+							unreadImports: unreadImports.map { unreadImports in
+								(
+									integration: unreadImports.integration,
+									importsModuleNotRead: locatedProperty.declarationLocation.flatMap { unreadImports.importsModuleNotReadByFilePath[$0.filePath] },
+								)
 							},
 							viewDeclaringModule: viewDeclaringModule,
 						),
@@ -1692,10 +1693,10 @@ public actor DependencyTreeGenerator {
 		}
 
 		/// What each integration whose modules are listed by hand does to list a module an error has just named.
-		static let listModuleRemedy = "list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` with `--dependent-module-info-file-path` in another build."
+		static let listModuleRemedy = "list its `<name>_safedi` target in this target’s `safedi_deps` under Bazel, list its module in the `dependencies:` of this target’s `SafeDI.preCompileScript` under Tuist, or list its `.safedi` file in the file you pass to `--dependent-module-info-file-path` in a custom build."
 
-		/// The last remedy for a type no `@Instantiable` declaration this module reads fulfills: what each integration
-		/// does to read the module that declares one.
+		/// The last remedy for a type no `@Instantiable` declaration a seam's caller can see fulfills: what each
+		/// integration does to read the module that declares one.
 		static let fulfillingDeclarationInAnotherModuleRemedy = "or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target's `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist."
 
 		/// How to break a cycle closed by a receive of a property that is still being built.
@@ -1712,71 +1713,64 @@ public actor DependencyTreeGenerator {
 			return " A lazily instantiated dependency is created once, so it cannot break a dependency cycle: \(validatedAs)."
 		}
 
-		/// The modules each file that instantiates a type no declaration fulfills imports that the run read nothing of, and
+		/// Whether each file that instantiates a type no declaration fulfills imports a module the run read nothing of, and
 		/// how the run learns of the modules it reads.
 		struct UnreadImportsOfFiles {
 			let integration: UnreadImports.Integration
-			/// The modules each file imports that the run read nothing of, in name order, by the file's path, for each file
-			/// whose imports the run knows.
-			let moduleNamesByFilePath: [String: [String]]
+			/// Whether each file imports a module the run read nothing of, by the file's path, for each file whose imports
+			/// the run knows.
+			let importsModuleNotReadByFilePath: [String: Bool]
 		}
 
-		/// - Parameter unreadImports: The modules the file that declares `referencingProperty` imports that the run read
-		///   nothing of, and how the run learns of the modules it reads, or `nil` when the run cannot tell which modules it
-		///   could have read (the Xcode project plugin's, or one run by hand) or what the file imports (another module's).
+		/// - Parameter unreadImports: How the run learns of the modules it reads, with whether the file that declares
+		///   `referencingProperty` imports a module the run read nothing of (`nil` when the run does not know what the file
+		///   imports, as for another module's file), or `nil` when the run cannot tell which modules it could have read (the
+		///   Xcode project plugin's, or one run by hand).
 		private static func noInstantiableFoundMessage(
 			typeDescription: TypeDescription,
 			referencingProperty: Property,
 			fulfilledByMockOnlyDeclaration: Bool,
-			unreadImports: (integration: UnreadImports.Integration, moduleNames: [String])?,
+			unreadImports: (integration: UnreadImports.Integration, importsModuleNotRead: Bool?)?,
 			viewDeclaringModule: ViewDeclaringModule?,
 		) -> String {
 			let typeName = typeDescription.asSource
 			let reference = "`\(typeName)`, which @\(Dependency.Source.instantiatedRawValue) property `\(referencingProperty.asSource)` instantiates"
 			if let viewDeclaringModule {
 				// A module info's view names the module, though it fulfills no type of this module's trees: list it.
-				return "No @\(InstantiableVisitor.macroName) declaration of a module this module lists fulfills \(reference). `\(typeName)` is declared in `\(viewDeclaringModule.moduleName)`, which this module depends on through `\(viewDeclaringModule.throughModuleName)` but does not list; list `\(viewDeclaringModule.moduleName)` where this module lists `\(viewDeclaringModule.throughModuleName)`: \(listModuleRemedy)"
+				return "No @\(InstantiableVisitor.macroName) declaration of a module this module lists fulfills \(reference). `\(typeName)` is declared in `\(viewDeclaringModule.moduleName)`, which this module reaches only through `\(viewDeclaringModule.throughModuleName)`. Add `\(viewDeclaringModule.moduleName)` beside `\(viewDeclaringModule.throughModuleName)` among this module’s SafeDI dependencies: \(listModuleRemedy)"
 			} else if fulfilledByMockOnlyDeclaration {
 				return "No production @\(InstantiableVisitor.macroName) declaration fulfills \(reference). A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills `\(typeName)`."
 			} else {
-				var message = "No @\(InstantiableVisitor.macroName) type or extension fulfills \(reference)."
-				// Declaring the type, or a type that fulfills it, where SafeDI reads it, after the verb that leads it.
-				let declaringRemedy = " `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName), or list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it."
+				// The usual cause, a declaration SafeDI reads that is not decorated, leads.
+				var message = "No @\(InstantiableVisitor.macroName) type or extension fulfills \(reference). Decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName), or list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it."
 				if let unreadImports {
-					if unreadImports.moduleNames.isEmpty {
-						message += " Decorate" + declaringRemedy
-					} else {
-						message += " " + unreadImportsCause(moduleNames: unreadImports.moduleNames, typeName: typeName, integration: unreadImports.integration)
-						message += " Otherwise, decorate" + declaringRemedy
+					// A file that imports only modules the run read names no type of a module the run could be given.
+					if unreadImports.importsModuleNotRead ?? true {
+						message += " " + fulfillingDeclarationInModuleNotReadRemedy(typeName: typeName, integration: unreadImports.integration)
 					}
 				} else {
-					message += " Decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName); list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)"
+					message += " " + fulfillingDeclarationInTargetNotReadRemedy(typeName: typeName)
 				}
 				return message
 			}
 		}
 
-		/// The sentences that say a file imports `moduleNames`, which the run read nothing of, so that one of them may
-		/// declare the type named `typeName`, and how `integration` gives the run that module.
-		private static func unreadImportsCause(moduleNames: [String], typeName: String, integration: UnreadImports.Integration) -> String {
-			let isOneModule = moduleNames.count == 1
-			let importedModules = moduleNames.map { "`\($0)`" }.joinedAsList
-			let declaringModuleCondition = isOneModule ? "If \(importedModules) declares `\(typeName)`," : "If one of them declares `\(typeName)`,"
-			var cause = "This file imports \(importedModules), "
+		/// The sentences that say how `integration` gives the run the module that declares a type that fulfills the type
+		/// named `typeName`, when that module is one the run read nothing of. They name none of the modules the file
+		/// imports: a file imports the SDK's and the toolchain's modules too, which SafeDI cannot tell from the user's.
+		private static func fulfillingDeclarationInModuleNotReadRemedy(typeName: String, integration: UnreadImports.Integration) -> String {
 			switch integration {
 			case .moduleInfo:
-				cause += "whose SafeDI module info this run was not given. "
-				cause += declaringModuleCondition
-				cause += isOneModule ? " build it with SafeDI" : " build that module with SafeDI"
-				cause += " and give this run its module info: under Bazel, declare it with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target's `safedi_deps`; under Tuist, give its target `SafeDI.preCompileScript` and list it in the `dependencies:` of this target's `SafeDI.preCompileScript`; in a custom build, pass its `.safedi` file to `--dependent-module-info-file-path`."
+				"If a declaration that fulfills `\(typeName)` is in another module, run SafeDI on that module and list it among this module’s SafeDI dependencies: under Bazel, declare it with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target’s `safedi_deps`; under Tuist, give its target `SafeDI.preCompileScript` and list it in the `dependencies:` of this target’s `SafeDI.preCompileScript`; in a custom build, list its `.safedi` file in the file you pass to `--dependent-module-info-file-path`."
 			case .targetGraph:
-				cause += isOneModule
-					? "which is not a target this target depends on, so SafeDI read none of its files. "
-					: "which are not targets this target depends on, so SafeDI read none of their files. "
-				cause += declaringModuleCondition
-				cause += " add its target to this target's `dependencies` in `Package.swift`; SafeDI does not read a package fetched from a URL, so for one of its modules add the package's checkout directory to `additionalDirectoriesToInclude` in a `#\(SafeDIConfigurationVisitor.macroName)` instead."
+				"If a declaration that fulfills `\(typeName)` is in another target, add that target to this target’s `dependencies` in `Package.swift`: SafeDI reads only the targets this target depends on. For a target of a package fetched from a URL, add the package’s checkout directory to `additionalDirectoriesToInclude` in a `#\(SafeDIConfigurationVisitor.macroName)` instead."
 			}
-			return cause
+		}
+
+		/// The sentence that says how a run that cannot tell which modules it could have read (the Xcode project plugin's,
+		/// or one run by hand) reads the target that declares a type that fulfills the type named `typeName`.
+		private static func fulfillingDeclarationInTargetNotReadRemedy(typeName: String) -> String {
+			"If a declaration that fulfills `\(typeName)` is in another target, add that target’s folder to `additionalDirectoriesToInclude` in this target’s `#\(SafeDIConfigurationVisitor.macroName)`, or, in a SafeDITool run by hand, list the `.safedi` file of its module in the file you pass to `--dependent-module-info-file-path`."
 		}
 
 		/// An `error:` line that names the type declaring the wrapper, since Xcode drops notes from build-tool
@@ -10359,8 +10353,8 @@ public actor DependencyTreeGenerator {
 				unreadImports: unreadImports.map { unreadImports in
 					DependencyTreeGeneratorError.UnreadImportsOfFiles(
 						integration: unreadImports.integration,
-						moduleNamesByFilePath: Set(referencingProperties.compactMap(\.declarationLocation?.filePath)).reduce(into: [:]) { moduleNamesByFilePath, filePath in
-							moduleNamesByFilePath[filePath] = unreadImports.importedModuleNamesNotRead(filePath)
+						importsModuleNotReadByFilePath: Set(referencingProperties.compactMap(\.declarationLocation?.filePath)).reduce(into: [:]) { importsModuleNotReadByFilePath, filePath in
+							importsModuleNotReadByFilePath[filePath] = unreadImports.importsModuleNotRead(filePath)
 						},
 					)
 				},

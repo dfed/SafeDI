@@ -706,7 +706,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsTheTypeUnfulfilled_whenOnlyAMockOnlyDeclarationBeneathNamesTheTypeARootBuilds() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"\(fixtures["App"]!["Root.swift"]):10:5: error: No @Instantiable type or extension fulfills `Clock`, which @Instantiated property `clock: Clock` instantiates. This file imports `Deep`, whose SafeDI module info this run was not given. If `Deep` declares `Clock`, build it with SafeDI and give this run its module info: under Bazel, declare it with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target's `safedi_deps`; under Tuist, give its target `SafeDI.preCompileScript` and list it in the `dependencies:` of this target's `SafeDI.preCompileScript`; in a custom build, pass its `.safedi` file to `--dependent-module-info-file-path`. Otherwise, decorate `Clock`, or an extension of it, with @Instantiable, or list `Clock` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it."
+			"\(fixtures["App"]!["Root.swift"]):10:5: error: No @Instantiable type or extension fulfills `Clock`, which @Instantiated property `clock: Clock` instantiates. Decorate `Clock`, or an extension of it, with @Instantiable, or list `Clock` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInModuleNotReadRemedy(for: "Clock", integration: .moduleInfo))"
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1330,7 +1330,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 	mutating func generate_reportsTheTypeUnfulfilled_whenOnlyAModuleItListsDeclaresARootAndThatRootNeedsAModuleBeneath(passesSet: Bool) async {
 		// A module with no tree of its own asks for nothing, whatever the trees of the modules it lists need.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"\(fixtures["Middle"]!["MiddleRoot.swift"]):9:5: error: No @Instantiable type or extension fulfills `Clock`, which @Instantiated property `clock: Clock` instantiates. Decorate `Clock`, or an extension of it, with @Instantiable; list `Clock` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target's `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist."
+			"\(fixtures["Middle"]!["MiddleRoot.swift"]):9:5: error: No @Instantiable type or extension fulfills `Clock`, which @Instantiated property `clock: Clock` instantiates. Decorate `Clock`, or an extension of it, with @Instantiable, or list `Clock` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInModuleNotReadRemedy(for: "Clock", integration: .moduleInfo))"
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
