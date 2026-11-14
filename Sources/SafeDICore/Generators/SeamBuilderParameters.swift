@@ -1299,7 +1299,7 @@ extension DependencyTreeGenerator {
 			// that value only where its tree builds a place or a call that passes one up, which the walk finds.
 			if let emittingFill = emittingFillByCaseKey[caseKey],
 			   Set(places.map { SeamSignature.ScopeEnum.rootKey(of: $0).isSendable }).count > 1,
-			   let place = firstPlaceBuilt(inTreeRootedAt: child),
+			   let place = firstPlaceBuilt(inFill: emittingFill),
 			   !emittingFill.fillCallerReads.innerScopeParameters.isEmpty
 			{
 				findings.append(.init(hole: firstPlace, kind: .placeInsideFillOfCaseOfBothRootEnums(place: place, callerModule: callerModule, seamModule: firstPlace.scopeSeamModule)))
@@ -1308,20 +1308,21 @@ extension DependencyTreeGenerator {
 		return findings
 	}
 
-	/// The first place the tree `root`, the tree of a fill, builds or a call in it passes up, in the order the tree declares
-	/// them: the type that declares it and the property, or `nil` where the tree holds neither. The walk goes on into a fill
-	/// nested in the tree, a generator that builds no type of its own, whose child roots the tree that fills it.
-	private static func firstPlaceBuilt(inTreeRootedAt root: ScopeGenerator) -> DependencyTreeGeneratorError.FillFinding.PlaceInsideFill? {
-		var generatorsToVisit = [root]
+	/// The first place the tree of `fill` builds or a call in it passes up, in the order the tree declares them: the type that
+	/// declares it and the property, or `nil` where the tree holds neither. The walk looks at the children of every generator
+	/// it visits, the fill's own among them, so the fill's root, a call that passes a place up included, is looked at first,
+	/// and the walk goes on into a fill nested in the tree, a generator that builds no type of its own, whose root it looks at
+	/// as any other call.
+	private static func firstPlaceBuilt(inFill fill: ScopeGenerator) -> DependencyTreeGeneratorError.FillFinding.PlaceInsideFill? {
+		var generatorsToVisit = [fill]
 		while let generator = generatorsToVisit.popLast() {
-			if let instantiable = generator.builtInstantiable {
-				for child in generator.children {
-					if let site = child.holeSite {
-						let dependency = instantiable.dependencies.first { $0.property == site.property }
-						return .init(ownerType: instantiable.concreteInstantiable, property: site.property, instantiatedType: dependency?.asInstantiatedType ?? site.property.typeDescription.asInstantiatedType, declarationLocation: dependency?.declarationLocation)
-					} else if let passedUpHole = child.passedUpHoles.first {
-						return .init(ownerType: passedUpHole.ownerType, property: passedUpHole.property, instantiatedType: passedUpHole.instantiatedType, declarationLocation: passedUpHole.declarationLocation)
-					}
+			for child in generator.children {
+				// A site is a child of the type that declares its property; a fill's child is the type that fulfills it.
+				if let site = child.holeSite, let instantiable = generator.builtInstantiable {
+					let dependency = instantiable.dependencies.first { $0.property == site.property }
+					return .init(ownerType: instantiable.concreteInstantiable, property: site.property, instantiatedType: dependency?.asInstantiatedType ?? site.property.typeDescription.asInstantiatedType, declarationLocation: dependency?.declarationLocation)
+				} else if let passedUpHole = child.passedUpHoles.first {
+					return .init(ownerType: passedUpHole.ownerType, property: passedUpHole.property, instantiatedType: passedUpHole.instantiatedType, declarationLocation: passedUpHole.declarationLocation)
 				}
 			}
 			generatorsToVisit.append(contentsOf: generator.children.reversed())
