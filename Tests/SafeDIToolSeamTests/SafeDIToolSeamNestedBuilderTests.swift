@@ -1852,6 +1852,90 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_holdsItsOwnEnumIndirectlyInTheChildsEnum_whenATypeTheSeamBuildsReentersTheSeam() async throws {
+		let feature = [
+			Self.service,
+			Self.type("Step", ["@Instantiated public let sBuilder: Instantiator<S>"]),
+			Self.type("S", seam: true, ["@Instantiated public let service: any Service", "@Instantiated public let step: Step"]),
+		]
+		let fulfiller = Self.fulfilling("DefaultService", "Service")
+		let root = Self.root(["@Instantiated public let s: S"])
+		try await expectOutput(of: Self.modules(feature: feature, app: [fulfiller, root]), [
+			"Feature": ["Feature.swift": """
+			extension S {
+			    @frozen public enum SafeDIScope_Service {
+			        case service(service_Values)
+			        indirect case step(step_Values, SafeDIScope_Service.Step_Scope)
+
+			        public struct service_Values {
+			            public let step: Step
+			        }
+
+			        public struct step_Values {}
+
+			        @frozen public enum Step_Scope {
+			            indirect case sBuilder(sBuilder_Values, S.SafeDIScope_Service)
+
+			            public struct sBuilder_Values {}
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public init(__safeDI_serviceBuilder: @escaping (SafeDIScope_Service) -> any Service) {
+			        let __safeDI_serviceValues_step = SafeDIScope_Service.step_Values()
+			        func __safeDI_step() -> Step {
+			            func __safeDI_sBuilder() -> S {
+			                _ = S.__safeDI_S_40C9AC73CB73A66B.self
+			                return S(__safeDI_serviceBuilder: { __safeDI_serviceBuilder(.step(__safeDI_serviceValues_step, .sBuilder(SafeDIScope_Service.Step_Scope.sBuilder_Values(), $0))) })
+			            }
+			            let sBuilder = Instantiator<S>(__safeDI_sBuilder)
+			            return Step(sBuilder: sBuilder)
+			        }
+			        let step: Step = __safeDI_step()
+			        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIScope_Service.service_Values(step: step)))
+			        self.init(service: service, step: step)
+			    }
+			}
+
+			extension S {
+			    public enum __safeDI_S_40C9AC73CB73A66B {}
+			}
+			"""],
+			"App": ["App.swift": """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_s() -> S {
+			            _ = S.__safeDI_S_40C9AC73CB73A66B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_serviceBuilder_S(_ scope: S.SafeDIScope_Service) -> any Service {
+			                switch scope {
+			                case .service:
+			                    let service: any Service = DefaultService()
+			                    return service
+			                case let .step(_, scope): return __safeDI_serviceBuilder_S_Step_Scope(scope)
+			                }
+			            }
+			            func __safeDI_serviceBuilder_S_Step_Scope(_ scope: S.SafeDIScope_Service.Step_Scope) -> any Service {
+			                switch scope {
+			                case let .sBuilder(_, scope): return __safeDI_serviceBuilder_S(scope)
+			                }
+			            }
+			            return S(__safeDI_serviceBuilder: __safeDI_serviceBuilder_S)
+			        }
+			        let s: S = __safeDI_s()
+			        self.init(s: s)
+			    }
+			}
+			"""],
+		], visible: Self.modules(feature: feature + [fulfiller], app: [root]), probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("Root().s.step.sBuilder.instantiate().step.sBuilder.instantiate()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_marksOnlyCasesOfTheCycleIndirect_whenAThirdSeamHangsOffIt() async throws {
 		let feature = [
 			Self.service,
