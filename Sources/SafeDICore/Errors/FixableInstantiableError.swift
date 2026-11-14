@@ -227,7 +227,7 @@ public enum FixableInstantiableError: DiagnosticError {
 		case .mockAttributesOnMockOnly:
 			"`mockAttributes` has no effect on a `mockOnly` declaration: its hand-written mock is the mock SafeDI uses."
 		case .generateDependencyTreeWithIsRoot:
-			"`isRoot` and `generateDependencyTree` cannot both be `true`: a root's dependency tree is generated as a `public init()` that takes nothing, and a type whose dependency tree SafeDI generates in its own module receives what its tree needs as parameters. Keep one."
+			"`isRoot` and `generateDependencyTree` cannot both be `true`: a root’s dependency tree is generated as a `public init()` that takes nothing, and a type whose dependency tree SafeDI generates in its own module receives what its tree needs as parameters. Keep one."
 		case .generateDependencyTreeWithMockOnly:
 			"`mockOnly` types cannot be marked `generateDependencyTree`: a `mockOnly` declaration provides a hand-written mock and has no dependency tree."
 		case let .mockOnlyMissingMockMethod(typeName, methodName, _):

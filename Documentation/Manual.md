@@ -291,12 +291,12 @@ public final class Root: Instantiable {
         self.presenter = presenter
     }
 
-    /// `Presenter`'s initializer is `@MainActor`.
+    /// `Presenter`’s initializer is `@MainActor`.
     @Instantiated private let presenter: Presenter
 }
 ```
 
-SafeDI writes the text before the generated declaration's modifiers, on the same line:
+SafeDI writes the text before the generated declaration’s modifiers, on the same line:
 
 ```swift
 extension Root {
@@ -759,7 +759,7 @@ SafeDI generates, in `Feature`:
 ```swift
 extension Screen {
     /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
     public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping () -> Database, __safeDI_logger: @autoclosure @escaping () -> Logger?) {
         let database = LazilyInstantiated<Database>(__safeDI_database)
         let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
@@ -868,7 +868,7 @@ extension Service {
     }
 
     /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
     public init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
         let analytics = Analytics()
         let __safeDI_userServiceValues_profile = SafeDIScope_UserService.profile_Values(analytics: analytics)
@@ -916,7 +916,7 @@ A hand-written call fills a builder with a closure that switches over the scope 
 
 ```swift
 // In module Feature, `ExportFeature` instantiates `screenBuilder: Instantiator<ExportScreen>` and `uploader: any Uploader`,
-// and `ExportScreen` receives `exportService`. SafeDI generates the hole's enum, whose public members are:
+// and `ExportScreen` receives `exportService`. SafeDI generates the hole’s enum, whose public members are:
 @frozen public enum SafeDIScope_Uploader {
     case uploader(uploader_Values)
 
@@ -927,7 +927,7 @@ A hand-written call fills a builder with a closure that switches over the scope 
 }
 
 // In module App, which declares `DefaultUploader`, whose `UploadJob`s receive `exportService`, a hand-written call,
-// which Feature's `generatePlainDependencyTreeInitializers: true` makes possible:
+// which Feature’s `generatePlainDependencyTreeInitializers: true` makes possible:
 let feature = ExportFeature(exportService: exportService, uploaderBuilder: { scope in
     switch scope {
     case let .uploader(values):
@@ -1324,7 +1324,7 @@ Each generated call of a public mock names an empty enum that encodes the mock�
 Another module calls a public mock like any `public` method, inside the declaring module’s `mockConditionalCompilation`; a module of another SwiftPM package depends on a [library product](#swift-package) of the declaring package. For `FeedScreen`, which [Adopting SafeDI in a large codebase](#adopting-safedi-in-a-large-codebase) declares with a hole, `service: FeedService`, a test passes a stub:
 
 ```swift
-// In a package that depends on Feed's library product.
+// In a package that depends on Feed’s library product.
 import Feed
 
 struct StubFeedService: FeedService {
@@ -1635,7 +1635,7 @@ About `.safedi` files:
 
 Pass `generate --compiler-receives-input-paths-unchanged` if your build hands the compiler every Swift file, including those of the modules whose `.safedi` files the run reads, at exactly the path it hands `SafeDITool`, as the Bazel rule does. Errors then point at better locations: a type mismatch in a renamed dependency is reported at its `@Received` declaration, rather than in generated code with a comment naming that declaration. Without a plugin manifest, `SafeDITool` also prints each error and warning at the path it was handed, as the compiler does (under Bazel, relative to the execution root). The `SafeDIGenerator` plugin needs no flag.
 
-[Running SafeDITool yourself](#running-safeditool-yourself) says how to print each subcommand's help.
+[Running SafeDITool yourself](#running-safeditool-yourself) says how to print each subcommand’s help.
 
 #### Which modules to list
 

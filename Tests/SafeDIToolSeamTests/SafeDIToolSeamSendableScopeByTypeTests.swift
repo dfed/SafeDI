@@ -103,7 +103,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_widgetBuilder: @escaping (SafeDIScope_Widget) -> any Widget, __safeDI_widgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Widget) -> any Widget) {
 			        let __safeDI_widgetValues_shell = SafeDIScope_Widget.shell_Values()
 			        func __safeDI_shell() -> Shell {
@@ -209,7 +209,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_defaultWidgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_DefaultWidget) -> any Widget) {
 			        func __safeDI_shell() -> Shell {
 			            let widgetBuilder = SendableErasedInstantiator<Int, any Widget> {
@@ -313,7 +313,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_widgetBuilder: @escaping (SafeDIScope_Widget) -> any Widget, __safeDI_widgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Widget) -> any Widget) {
 			        let __safeDI_widgetValues_shell = SafeDIScope_Widget.shell_Values()
 			        func __safeDI_shell() -> Shell {
@@ -427,7 +427,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_theme theme: Theme, __safeDI_widgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Widget) -> any Widget) {
 			        @Sendable func __safeDI_panelBuilder(name: String) -> Panel {
 			            let widget: any Widget = __safeDI_widgetSendableBuilder(.panelBuilder(.widget(SafeDIScope_Widget.Panel_Scope.widget_Values(name: name))))
@@ -524,7 +524,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_widgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Widget) -> any Widget) {
 			        func __safeDI_shell() -> Shell {
 			            func __safeDI_screen() -> Screen {
@@ -717,7 +717,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_service: @autoclosure @escaping () -> Service, __safeDI_apiSendableBuilder: @escaping @Sendable (SafeDISendableScope_Api) -> any Api) {
 			        let service = LazilyInstantiated<Service>(__safeDI_service)
 			        let appService = Service()
@@ -747,7 +747,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			    public init() {
 			        let service = Service()
 			        func __safeDI_home() -> Home {
-			            _ = Home.__safeDI_Home_11049848DD7A39A1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Home.__safeDI_Home_11049848DD7A39A1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            @Sendable func __safeDI_apiSendableBuilder_Home(_ scope: Home.SafeDISendableScope_Api) -> any Api {
 			                switch scope {
 			                case let .mid_Sendable(scope): return __safeDI_apiSendableBuilder_Home_Mid_Scope(scope)
@@ -865,7 +865,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiSendableBuilder: @escaping @Sendable (SafeDISendableScope_Api) -> any Api) {
 			        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 			        func __safeDI_aBuilder(tag: Tag) -> A {
@@ -908,7 +908,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			    public init() {
 			        let tag = Tag()
 			        func __safeDI_hub() -> Hub {
-			            _ = Hub.__safeDI_Hub_1C1E843EB2E86EBF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Hub.__safeDI_Hub_1C1E843EB2E86EBF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            @Sendable func __safeDI_apiSendableBuilder_Hub(_ scope: Hub.SafeDISendableScope_Api) -> any Api {
 			                switch scope {
 			                case let .aBuilder_Sendable(scope): return __safeDI_apiSendableBuilder_Hub_A_Scope(scope)
@@ -1009,7 +1009,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// receive it, so `Root`'s fill reads its own, which inline is the same value.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `tag: Tag?`, which `Mid` builds where it calls `Hub`, but `Mid` passes the builder for `A`'s `api: any Api` (case `A_Scope.api` of `apiSendableBuilder`) on from its own caller, which cannot hand it `Mid`'s values. Instantiate `tag` outside `Mid` and declare `@Received let tag: Tag` on `Mid`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Middle` or a module it lists among its SafeDI dependencies, so `Mid` fills the builder itself.
+			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `tag: Tag?`, which `Mid` builds where it calls `Hub`, but `Mid` passes the builder for `A`’s `api: any Api` (case `A_Scope.api` of `apiSendableBuilder`) on from its own caller, which cannot hand it `Mid`’s values. Instantiate `tag` outside `Mid` and declare `@Received let tag: Tag` on `Mid`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Middle` or a module it lists among its SafeDI dependencies, so `Mid` fills the builder itself.
 			\(fixtures["Middle"]!["Mid.swift"]):10:5: note: `Mid` declares `tag: Tag` here.
 			"""
 		}) {
@@ -1039,10 +1039,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_tag tag: Tag, __safeDI_apiSendableBuilder: @escaping @Sendable (SafeDISendableScope_Api) -> any Api) {
 		        func __safeDI_hub() -> Hub {
-		            _ = Hub.__safeDI_Hub_8A02327A64DD342F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Hub.__safeDI_Hub_8A02327A64DD342F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Hub(__safeDI_tag: tag, __safeDI_apiSendableBuilder: { __safeDI_apiSendableBuilder(.hub_Sendable($0)) })
 		        }
 		        let hub: Hub = __safeDI_hub()
@@ -1066,7 +1066,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		    public init() {
 		        let tag = Tag()
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_ED297296080C8B89.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Mid.__safeDI_Mid_ED297296080C8B89.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            @Sendable func __safeDI_apiSendableBuilder_Mid(_ scope: Mid.SafeDISendableScope_Api) -> any Api {
 		                switch scope {
 		                case let .hub_Sendable(scope): return __safeDI_apiSendableBuilder_Hub(scope)
@@ -1200,7 +1200,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_defaultWidgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_DefaultWidget) -> any Widget) {
 			        func __safeDI_shell() -> Shell {
 			            let widgetBuilder = SendableErasedInstantiator<Shell_Scope, any Widget> {
@@ -1225,7 +1225,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_7209700C34D575D7.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Host.__safeDI_Host_7209700C34D575D7.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            @Sendable func __safeDI_defaultWidgetSendableBuilder_Host(_ scope: Host.SafeDISendableScope_DefaultWidget) -> any Widget {
 			                switch scope {
 			                case let .shell_Sendable(scope): return __safeDI_defaultWidgetSendableBuilder_Host_Shell_Scope_(scope)
@@ -1328,7 +1328,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		]
 	}
 
-	private static let moduleInfoComment = "If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
+	private static let moduleInfoComment = "If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
 
 	/// Expects `feature`'s seam and `App`'s fill of it, the fulfillers and the root in `App`, to generate `expectedFeature`
 	/// and `expectedApp`, and the values `probes` read to equal those of the same graph built with every fulfiller in

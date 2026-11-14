@@ -10811,7 +10811,7 @@ enum GraphFuzzerOracle {
 					let type = parameter.drop { $0 != ":" }.dropFirst().prefix { $0 != "=" }
 					for name in typeNames(in: type) {
 						guard let typeLevel = typeAccess[name], typeLevel < tierAccess else { continue }
-						findings.append("\(fileName): `\(tier.seamTypeName)`'s `\(tier.access)` initializer takes `\(parameter.trimmingCharacters(in: .whitespaces))`, but `\(name)` is `\(typeLevel.spelling)`.")
+						findings.append("\(fileName): `\(tier.seamTypeName)`’s `\(tier.access)` initializer takes `\(parameter.trimmingCharacters(in: .whitespaces))`, but `\(name)` is `\(typeLevel.spelling)`.")
 					}
 				}
 			}

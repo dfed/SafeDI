@@ -455,7 +455,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 				"""
 				#if DEBUG
 				extension Worker {
-				    // These providers evaluate `Worker`'s own defaults outside any actor, since SafeDI sees no isolation on it. If one
+				    // These providers evaluate `Worker`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
 				    // reads the state of an actor `Worker` takes from a conformance or a superclass and does not compile, give its
 				    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
 				    @usableFromInline nonisolated static func __safeDI_publicMockDefault_qosClass() -> DispatchQoS.QoSClass? { .utility }
@@ -551,7 +551,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 					"""
 					extension Session {
 					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 					    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 					        let token = LazilyInstantiated<Token>(__safeDI_token)
 					        let vault = Vault(token: token.instance)
@@ -1520,7 +1520,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			        self.safeDIBuilder = safeDIBuilder
 			    }
 
-			    /// `nil` keeps the default of `Child`'s `date`.
+			    /// `nil` keeps the default of `Child`’s `date`.
 			    public let date: Date?
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
 			    public let safeDIBuilder: ((Date) -> Child)?
@@ -1832,7 +1832,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 	private static let feedTree = """
 	extension Feed {
 	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 	    public init(__safeDI_url: @autoclosure @escaping () -> URL) {
 	        let url = LazilyInstantiated<URL>(__safeDI_url)
 	        let loader = Loader(url: url.instance)
@@ -1848,7 +1848,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 	private static let shelfTree = """
 	extension Shelf {
 	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 	    package init(__safeDI_directory: @autoclosure @escaping () -> URL) {
 	        let directory = LazilyInstantiated<URL>(__safeDI_directory)
 	        let cache = Cache(directory: directory.instance)
@@ -1882,11 +1882,11 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		// A plugin's call carries the plugin comment, and a plugin's run reads every first-party module, so it names no
 		// type it reads no declaration of.
 		let pluginComment = integration.seamCallComment(type: "Session", declaringModule: "Mid")
-		let unreadTypeComment = integration == .moduleInfo ? "    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n" : ""
+		let unreadTypeComment = integration == .moduleInfo ? "    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n" : ""
 		return """
 		extension Screen {
 		\(unreadTypeComment)    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_window: @autoclosure @escaping () -> Window) {
 		        let window = LazilyInstantiated<Window>(__safeDI_window)
 		        func __safeDI_session() -> Session {
@@ -1909,7 +1909,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		// A plugin's call carries the plugin comment, and a plugin's run reads every first-party module, so it names no
 		// type it reads no declaration of.
 		let pluginComment = integration.seamCallComment(type: "Service", declaringModule: "Mid")
-		let unreadTypeComment = integration == .moduleInfo ? "    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n" : ""
+		let unreadTypeComment = integration == .moduleInfo ? "    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n" : ""
 		return """
 		#if DEBUG
 		extension Screen {
@@ -1944,14 +1944,14 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 	private static func sessionTree(integration: MultiModuleIntegration) -> String {
 		let unreadTypeComment = switch integration {
 		case .moduleInfo:
-			"    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+			"    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n"
 		case .swiftPackagePlugin:
 			""
 		}
 		return """
 		extension Session {
 		\(unreadTypeComment)    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_url: @autoclosure @escaping () -> URL, __safeDI_window: @autoclosure @escaping () -> Window) {
 		        let url = LazilyInstantiated<URL>(__safeDI_url)
 		        let window = LazilyInstantiated<Window>(__safeDI_window)

@@ -555,7 +555,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 		// reported, never handed `Root`'s.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultApi.swift"]):11:5: error: `DefaultApi` receives `theme: Theme`, which `Outer` builds where it calls `Inner`, but `Outer` passes the builder for `Panel`'s `api: any Api` (case `Panel_Scope.api` of `apiBuilder`) on from its own caller, which cannot hand it `Outer`'s values. Declare `@Received let theme: Theme` on `Inner`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies, so `Outer` fills the builder itself.
+			\(fixtures["App"]!["DefaultApi.swift"]):11:5: error: `DefaultApi` receives `theme: Theme`, which `Outer` builds where it calls `Inner`, but `Outer` passes the builder for `Panel`’s `api: any Api` (case `Panel_Scope.api` of `apiBuilder`) on from its own caller, which cannot hand it `Outer`’s values. Declare `@Received let theme: Theme` on `Inner`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies, so `Outer` fills the builder itself.
 			\(fixtures["Feature"]!["Outer.swift"]):8:5: note: `Outer` declares `theme: Theme` here.
 			"""
 		}) {
@@ -580,7 +580,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 		// value, but one fill fills both, and no one parameter takes a `LazilyInstantiated<Session>` and a `Session`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Home.swift"]):8:5: error: SafeDI fills every place of the builder for `Avatar`'s `userService: any UserService` (case `Avatar_Scope.userService` of `userServiceBuilder`) with one function, which reads `session`, but the types on the routes to those places declare it in forms one value cannot carry: `session: LazilyInstantiated<Session>` (`Home`) and `session: Session` (`Settings`). Declare `session: LazilyInstantiated<Session>` on each, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Home.swift"]):8:5: error: SafeDI fills every place of the builder for `Avatar`’s `userService: any UserService` (case `Avatar_Scope.userService` of `userServiceBuilder`) with one function, which reads `session`, but the types on the routes to those places declare it in forms one value cannot carry: `session: LazilyInstantiated<Session>` (`Home`) and `session: Session` (`Settings`). Declare `session: LazilyInstantiated<Session>` on each, or declare an @Instantiable type that fulfills `UserService` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Settings.swift"]):8:5: note: `Settings` declares `session: Session` here.
 			"""
 		}) {
@@ -663,7 +663,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 	private static let loggerFulfiller = SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let logger: Logger"])
 
 	/// The comment a call of `Feature`'s seam carries in a `.safedi` flow.
-	private static let moduleInfoComment = "If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
+	private static let moduleInfoComment = "If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
 
 	/// Generates `feature`, whose seam `Service` (or `Home`) holds a place `App` fills with `fulfillers`, and `App`'s
 	/// `root`; expects `App`'s file to equal `expectedApp`, and the values `Root` builds to equal those of the same graph

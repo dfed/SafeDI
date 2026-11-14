@@ -727,7 +727,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			        self.safeDIBuilder = safeDIBuilder
 			    }
 
-			    /// `nil` keeps the default of `Child`'s `capacity`.
+			    /// `nil` keeps the default of `Child`’s `capacity`.
 			    public let capacity: (() -> Int)?
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
 			    let safeDIBuilder: ((Int) -> Child)?
@@ -939,7 +939,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			        self.safeDIBuilder = safeDIBuilder
 			    }
 
-			    /// `nil` keeps the default of `Child`'s `limit`.
+			    /// `nil` keeps the default of `Child`’s `limit`.
 			    public let limit: @Sendable () -> (() -> Int?)?
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
 			    let safeDIBuilder: (@Sendable (Int?) -> Child)?

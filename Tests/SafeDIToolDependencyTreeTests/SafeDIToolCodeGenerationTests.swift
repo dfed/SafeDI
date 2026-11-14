@@ -13185,10 +13185,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Only `TargetRoot` is the module's own; the module that declares each additional root generates it.
 		#expect(output.dependencyTreeFiles == [
 			"AdditionalRootA+SafeDI.swift": generatedFileHeader + """
-			// SafeDI generates AdditionalRootA's init() only in the module that declares AdditionalRootA. If AdditionalRootA() does not compile, add the SafeDI plugin to the target that declares AdditionalRootA.
+			// SafeDI generates AdditionalRootA’s init() only in the module that declares AdditionalRootA. If AdditionalRootA() does not compile, add the SafeDI plugin to the target that declares AdditionalRootA.
 			""",
 			"AdditionalRootB+SafeDI.swift": generatedFileHeader + """
-			// SafeDI generates AdditionalRootB's init() only in the module that declares AdditionalRootB. If AdditionalRootB() does not compile, add the SafeDI plugin to the target that declares AdditionalRootB.
+			// SafeDI generates AdditionalRootB’s init() only in the module that declares AdditionalRootB. If AdditionalRootB() does not compile, add the SafeDI plugin to the target that declares AdditionalRootB.
 			""",
 			"TargetRoot+SafeDI.swift": generatedFileHeader + """
 			extension TargetRoot {
@@ -13238,7 +13238,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles == [
 			"AdditionalRoot+SafeDI.swift": generatedFileHeader + """
-			// SafeDI generates AdditionalRoot's init() only in the module that declares AdditionalRoot. If AdditionalRoot() does not compile, add the SafeDI plugin to the target that declares AdditionalRoot.
+			// SafeDI generates AdditionalRoot’s init() only in the module that declares AdditionalRoot. If AdditionalRoot() does not compile, add the SafeDI plugin to the target that declares AdditionalRoot.
 			""",
 		])
 	}

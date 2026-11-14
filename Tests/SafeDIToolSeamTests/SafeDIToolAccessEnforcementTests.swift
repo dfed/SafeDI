@@ -616,7 +616,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		let seamCode = """
 		extension Service {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_analytics analytics: LazilyInstantiated<Analytics>, __safeDI_session session: Session) {
 		        let tokenCache = TokenCache()
 		        self.init(analytics: analytics, session: session, tokenCache: tokenCache)
@@ -1065,7 +1065,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
 		        let userService: any UserService = __safeDI_userServiceBuilder(.userService(SafeDIScope_UserService.userService_Values()))
 		        self.init(userService: userService)
@@ -2887,7 +2887,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		// mock builds inline `public` with a public mock, which the mock would call instead.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let path = Self.declarationPath(of: "ProfileScreen.swift", in: "Feature", fixtures: fixtures, under: integration)
-			let remedy = "or declare `ProfileScreen` `public` with `generateMock: .public`: mocks build a seam's tree inline, and this mock would call the mock `Feature` generates instead."
+			let remedy = "or declare `ProfileScreen` `public` with `generateMock: .public`: mocks build a seam’s tree inline, and this mock would call the mock `Feature` generates instead."
 			return """
 			\(path):18:5: error: `ProfileStore`’s initializer is `internal`, so the mock of `LoggedInView`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, \(remedy)
 			\(path):18:5-18:5: fixit: package\(" ")
@@ -2907,7 +2907,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		// BZ-4: a sandboxed Bazel action is handed `Feature`'s `.safedi` but not its files, so each error is reported
 		// where `LoggedInView` instantiates the seam, naming the module that must change.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			let remedy = "or declare `ProfileScreen` `public` with `generateMock: .public`: mocks build a seam's tree inline, and this mock would call the mock `Feature` generates instead."
+			let remedy = "or declare `ProfileScreen` `public` with `generateMock: .public`: mocks build a seam’s tree inline, and this mock would call the mock `Feature` generates instead."
 			return """
 			\(fixtures["App"]!["Root.swift"]):24:5: error: `BioFormatter` is `internal` in module `Feature`, so the mock of `LoggedInView`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `BioFormatter` `package` in module `Feature` to fix, \(remedy)
 			\(fixtures["App"]!["Root.swift"]):24:5: error: `BioFormatter`’s initializer is `internal` in module `Feature`, so the mock of `LoggedInView`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` in module `Feature` to fix, \(remedy)
@@ -4101,7 +4101,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 		// Without a target graph, the file names the types it counts `public` because SafeDI reads no declaration of them.
 		let comment = integration == .moduleInfo
-			? "    // SafeDI counts `Theme` as `public`: no module it reads declares it narrower. If `Theme` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+			? "    // SafeDI counts `Theme` as `public`: no module it reads declares it narrower. If `Theme` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n"
 			: ""
 		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + """
 		#if canImport(Lib)
@@ -4113,7 +4113,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 		extension Screen {
 		\(comment)    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_theme theme: Theme) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
@@ -4189,7 +4189,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package convenience init(__safeDI_theme theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
@@ -4216,7 +4216,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 		extension SeamF {
 		\(Self.unreadStoreComment(integration: integration))    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_store store: Store) {
 		        let inner = Inner(store: store)
 		        self.init(store: store, inner: inner)
@@ -4242,7 +4242,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 		extension SeamF {
 		\(Self.unreadStoreComment(integration: integration))    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_store store: Store?) {
 		        let inner = Inner()
 		        self.init(store: store, inner: inner)
@@ -4297,7 +4297,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		)
 
 		let comment = integration == .moduleInfo
-			? "    // SafeDI counts `Outer` as `public`: no module it reads declares it narrower. If `Outer` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+			? "    // SafeDI counts `Outer` as `public`: no module it reads declares it narrower. If `Outer` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n"
 			: ""
 		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + """
 		#if canImport(Lib)
@@ -4306,7 +4306,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 		extension Screen {
 		\(comment)    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_inner inner: Outer.Inner) {
 		        let cache = Cache()
 		        self.init(inner: inner, cache: cache)
@@ -4333,7 +4333,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 				}
 			}
 			return """
-			\(path(of: "Screen.swift", in: "Feature")):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Styles`. Declare `Theme` `public` in module `Styles`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(path(of: "Screen.swift", in: "Feature")):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Styles`. Declare `Theme` `public` in module `Styles`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(path(of: "ThemeInstantiable.swift", in: "Styles")):3:1: note: `Theme` is declared `package` here.
 			\(path(of: "ThemeInstantiable.swift", in: "Styles")):3:1-3:8: fixit: public
 			\(path(of: "Screen.swift", in: "Feature")):10:5: note: `Screen` receives `theme: Theme` here.
@@ -4440,7 +4440,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	}
 
 	/// The error at `Screen` when the `Theme` it receives is `Brand`'s `package` one.
-	private static let screenThemeFromBrandMessage = "error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Brand`. Declare `Theme` `public` in module `Brand`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`."
+	private static let screenThemeFromBrandMessage = "error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Brand`. Declare `Theme` `public` in module `Brand`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`."
 
 	/// `Brand`, which declares a `package` `Theme`; `Mid`, which depends on `Brand`; `Styles`, which lists only `Mid`,
 	/// imports `Brand`, and declares `Brand`'s `Theme` `@Instantiable` by an extension; and `Feature`, which lists `Brand`
@@ -4599,7 +4599,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	/// The comment, under module info, that names `Store` as a type SafeDI counts `public` unread.
 	private static func unreadStoreComment(integration: MultiModuleIntegration) -> String {
 		integration == .moduleInfo
-			? "    // SafeDI counts `Store` as `public`: no module it reads declares it narrower. If `Store` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+			? "    // SafeDI counts `Store` as `public`: no module it reads declares it narrower. If `Store` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n"
 			: ""
 	}
 

@@ -165,7 +165,7 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
 		        let __safeDI_apiValues_tBuilder = SafeDIScope_Api.tBuilder_Values()
 		        func __safeDI_tBuilder() -> T {
@@ -315,7 +315,7 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
 		        let __safeDI_apiValues_tBuilder = SafeDIScope_Api.tBuilder_Values()
 		        func __safeDI_tBuilder() -> T {

@@ -773,7 +773,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 
 		extension Screen {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_onTap onTap: @escaping OnTap) {
 		        let child = Child(onTap: onTap)
 		        self.init(onTap: onTap, child: child)
@@ -1009,7 +1009,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 
 		extension Middle {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_onTap: @autoclosure @escaping () -> OnTap) {
 		        let onTap = LazilyInstantiated<OnTap>(__safeDI_onTap)
 		        func __safeDI_inner() -> Inner {
@@ -1119,7 +1119,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 	private static func guardComment(under integration: MultiModuleIntegration, moduleName: String, typeName: String) -> String {
 		switch integration {
 		case .moduleInfo:
-			"If this line does not compile, compile the code SafeDI generates for module \(moduleName) into \(moduleName): under Bazel, add \(moduleName)'s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
+			"If this line does not compile, compile the code SafeDI generates for module \(moduleName) into \(moduleName): under Bazel, add \(moduleName)’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
 		case .swiftPackagePlugin:
 			"If this line does not compile, add the SafeDI plugin to the target that declares \(typeName)."
 		}

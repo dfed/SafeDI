@@ -193,7 +193,7 @@ enum MultiModuleIntegration: CaseIterable {
 	func seamCallComment(type: String, declaringModule: String) -> String {
 		switch self {
 		case .moduleInfo:
-			" // If this line does not compile, compile the code SafeDI generates for module \(declaringModule) into \(declaringModule): under Bazel, add \(declaringModule)'s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
+			" // If this line does not compile, compile the code SafeDI generates for module \(declaringModule) into \(declaringModule): under Bazel, add \(declaringModule)’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
 		case .swiftPackagePlugin:
 			" // If this line does not compile, add the SafeDI plugin to the target that declares \(type)."
 		}

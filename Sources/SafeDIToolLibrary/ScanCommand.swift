@@ -38,7 +38,7 @@ struct Scan: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "Swift file paths scoped to the current target for mock generation. When provided, only these files are scanned for generateMock and #SafeDIConfiguration.") var mockScopedFiles: [String] = []
 
-	@Option(parsing: .upToNextOption, help: "The compilation conditions that are active for this build, matching the compiler's -D flags. SafeDI declarations in `#if` blocks are scanned only when the block's condition evaluates to true. Conditions are recorded in the manifest so `generate` applies them too.") var activeCompilationConditions: [String] = []
+	@Option(parsing: .upToNextOption, help: "The compilation conditions that are active for this build, matching the compiler’s -D flags. SafeDI declarations in `#if` blocks are scanned only when the block’s condition evaluates to true. Conditions are recorded in the manifest so `generate` applies them too.") var activeCompilationConditions: [String] = []
 
 	func run() async throws {
 		try await performScan(

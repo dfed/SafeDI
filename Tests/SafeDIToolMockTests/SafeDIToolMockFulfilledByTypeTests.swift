@@ -1243,7 +1243,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		                    return filter
 		                }
 		            }
-		            _ = Root.__safeDI_Root_mock_3217B111A25B15A3.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Root.__safeDI_Root_mock_3217B111A25B15A3.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return if let safeDIBuilder = safeDIOverrides.root { safeDIBuilder(__safeDI_appFilterBuilder_Root) } else { Root.mock(appFilterBuilder: __safeDI_appFilterBuilder_Root) }
 		        }
 		        let root: Root = __safeDI_root()
