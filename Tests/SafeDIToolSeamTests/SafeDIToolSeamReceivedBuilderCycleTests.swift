@@ -331,9 +331,9 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_carriesRebindingInHolesStage_whenHoleIsBuiltInsideSendableLoopMembersFunction() async throws {
-		// The loop above with `SendableInstantiator`s: `aBuilder`'s function is `@Sendable` and starts a stage of the
-		// builder for `widget`, and the wrapper it makes again of `bBuilder`'s function is bound in that stage.
+	mutating func generate_carriesRebindingInHolesSendableScope_whenHoleIsBuiltInsideSendableLoopMembersFunction() async throws {
+		// The loop above with `SendableInstantiator`s: `aBuilder`'s function is `@Sendable`, so `widget` is a case of the
+		// `@Sendable` enum, and `A`'s level carries the wrapper the function makes again of `bBuilder`'s function.
 		let feature = [
 			"public protocol Widget: Sendable {}",
 			seamFixtureType(named: "A", declarations: ["@Received let bBuilder: SendableInstantiator<B>", "@Instantiated let widget: any Widget"], conformances: ", Sendable"),
