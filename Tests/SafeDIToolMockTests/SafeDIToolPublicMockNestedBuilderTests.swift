@@ -1161,15 +1161,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Board {
 		    @frozen public enum SafeDIMockScope_Gizmo {
-		        case panel_service_gizmo(panel_service_gizmo_Values)
-		        case panel_row_service_gizmo(panel_row_service_gizmo_Values)
+		        case panel_serviceBuilder(panel_serviceBuilder_Values, Panel.SafeDIMockScope_Service, SafeDIMockScope_Gizmo.DefaultService_Scope)
 
-		        public struct panel_service_gizmo_Values {
-		            public let row: Row
-		        }
+		        public struct panel_serviceBuilder_Values {}
 
-		        public struct panel_row_service_gizmo_Values {
-		            public let token: Token
+		        @frozen public enum DefaultService_Scope {
+		            case gizmo(gizmo_Values)
+
+		            public struct gizmo_Values {}
 		        }
 		    }
 
@@ -1189,26 +1188,25 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Board {
 		        let __safeDI_gizmoBuilder = gizmoBuilder
+		        let __safeDI_gizmoValues_panel_serviceBuilder = SafeDIMockScope_Gizmo.panel_serviceBuilder_Values()
 		        func __safeDI_panel() -> Panel {
-		            func __safeDI_serviceBuilder_Panel(_ scope: Panel.SafeDIMockScope_Service) -> any Service {
-		                switch scope {
-		                case let .row(_, scope): return __safeDI_serviceBuilder_Panel_Row_Scope(scope)
-		                case let .service(scope):
-		                    let row = scope.row
+		            func __safeDI_serviceBuilder_Panel(_ __safeDI_panel_serviceBuilder: Panel.SafeDIMockScope_Service) -> any Service {
+		                switch __safeDI_panel_serviceBuilder {
+		                case let .row(_, scope): return __safeDI_serviceBuilder_Panel_Row_Scope(scope, __safeDI_panel_serviceBuilder: __safeDI_panel_serviceBuilder)
+		                case .service:
 		                    func __safeDI_service() -> DefaultService {
-		                        let gizmo: any Gizmo = __safeDI_gizmoBuilder(.panel_service_gizmo(SafeDIMockScope_Gizmo.panel_service_gizmo_Values(row: row)))
+		                        let gizmo: any Gizmo = __safeDI_gizmoBuilder(.panel_serviceBuilder(__safeDI_gizmoValues_panel_serviceBuilder, __safeDI_panel_serviceBuilder, .gizmo(SafeDIMockScope_Gizmo.DefaultService_Scope.gizmo_Values())))
 		                        return DefaultService(gizmo: gizmo)
 		                    }
 		                    let service: any Service = __safeDI_service()
 		                    return service
 		                }
 		            }
-		            func __safeDI_serviceBuilder_Panel_Row_Scope(_ scope: Panel.SafeDIMockScope_Service.Row_Scope) -> any Service {
+		            func __safeDI_serviceBuilder_Panel_Row_Scope(_ scope: Panel.SafeDIMockScope_Service.Row_Scope, __safeDI_panel_serviceBuilder: Panel.SafeDIMockScope_Service) -> any Service {
 		                switch scope {
-		                case let .service(scope):
-		                    let token = scope.token
+		                case .service:
 		                    func __safeDI_service() -> DefaultService {
-		                        let gizmo: any Gizmo = __safeDI_gizmoBuilder(.panel_row_service_gizmo(SafeDIMockScope_Gizmo.panel_row_service_gizmo_Values(token: token)))
+		                        let gizmo: any Gizmo = __safeDI_gizmoBuilder(.panel_serviceBuilder(__safeDI_gizmoValues_panel_serviceBuilder, __safeDI_panel_serviceBuilder, .gizmo(SafeDIMockScope_Gizmo.DefaultService_Scope.gizmo_Values())))
 		                        return DefaultService(gizmo: gizmo)
 		                    }
 		                    let service: any Service = __safeDI_service()
@@ -1224,7 +1222,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 
 		extension Board {
-		    public enum __safeDI_Board_mock_5B224ACF95D563A3 {}
+		    public enum __safeDI_Board_mock_4CB79D4B18E4B519 {}
 		}
 		#endif
 		"""])
@@ -4559,11 +4557,12 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_fillsEachRouteWithAFillOfItsOwn_whenPublicCallersFillHoldsAPlaceItsCallerFillsOnTwoRoutes() async throws {
+	mutating func generate_fillsEveryRouteWithOneFillHandingCalledMocksScope_whenPublicCallersFillHoldsAPlaceItsCallerFillsOnTwoRoutes() async throws {
 		let modules = Self.modules(core: [Self.hub], mid: [Self.defaultServiceInstantiatingGizmo, Self.boardCallingHub], app: [Self.boardScreen])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		// `Hub`'s case for `Model`'s `service` stands for two places, and the fill of each holds a place of `Board`'s own, whose
-		// case `Board` keeps per path: each route is dispatched apart, to a fill of its own.
+		// `Hub`'s case for `Model`'s `service` stands for two places, and the fill of each holds a place of `Board`'s own,
+		// nested by type in `Board`'s case for the builder it fills, `hub_serviceBuilder`, which holds the scope `Hub`'s mock
+		// handed the fill: one fill builds both places, each handing on its own route's scope.
 		#expect(output.modules["Mid"]?.generatedFiles == ["Mid.swift": generatedFileHeader + """
 		#if canImport(Core)
 		import Core
@@ -4575,15 +4574,14 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Board {
 		    @frozen public enum SafeDIMockScope_Gizmo {
-		        case hub_page_model_service_gizmo(hub_page_model_service_gizmo_Values)
-		        case hub_model_service_gizmo(hub_model_service_gizmo_Values)
+		        case hub_serviceBuilder(hub_serviceBuilder_Values, Hub.SafeDIMockScope_Service, SafeDIMockScope_Gizmo.DefaultService_Scope)
 
-		        public struct hub_page_model_service_gizmo_Values {
-		            public let token: Token
-		        }
+		        public struct hub_serviceBuilder_Values {}
 
-		        public struct hub_model_service_gizmo_Values {
-		            public let page: Page
+		        @frozen public enum DefaultService_Scope {
+		            case gizmo(gizmo_Values)
+
+		            public struct gizmo_Values {}
 		        }
 		    }
 
@@ -4603,34 +4601,24 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Board {
 		        let __safeDI_gizmoBuilder = gizmoBuilder
+		        let __safeDI_gizmoValues_hub_serviceBuilder = SafeDIMockScope_Gizmo.hub_serviceBuilder_Values()
 		        func __safeDI_hub() -> Hub {
-		            func __safeDI_serviceBuilder_Hub(_ scope: Hub.SafeDIMockScope_Service) -> any Service {
-		                switch scope {
-		                case let .page(_, scope): return __safeDI_serviceBuilder_Hub_Page_Scope(scope)
-		                case let .model(values, scope): return __safeDI_serviceBuilder_Hub_Model_Scope_(scope, page: values.page)
+		            func __safeDI_serviceBuilder_Hub(_ __safeDI_hub_serviceBuilder: Hub.SafeDIMockScope_Service) -> any Service {
+		                switch __safeDI_hub_serviceBuilder {
+		                case let .page(_, scope): return __safeDI_serviceBuilder_Hub_Page_Scope(scope, __safeDI_hub_serviceBuilder: __safeDI_hub_serviceBuilder)
+		                case let .model(_, scope): return __safeDI_serviceBuilder_Hub_Model_Scope(scope, __safeDI_hub_serviceBuilder: __safeDI_hub_serviceBuilder)
 		                }
 		            }
-		            func __safeDI_serviceBuilder_Hub_Page_Scope(_ scope: Hub.SafeDIMockScope_Service.Page_Scope) -> any Service {
+		            func __safeDI_serviceBuilder_Hub_Page_Scope(_ scope: Hub.SafeDIMockScope_Service.Page_Scope, __safeDI_hub_serviceBuilder: Hub.SafeDIMockScope_Service) -> any Service {
 		                switch scope {
-		                case let .model(values, scope): return __safeDI_serviceBuilder_Hub_Model_Scope(scope, token: values.token)
+		                case let .model(_, scope): return __safeDI_serviceBuilder_Hub_Model_Scope(scope, __safeDI_hub_serviceBuilder: __safeDI_hub_serviceBuilder)
 		                }
 		            }
-		            func __safeDI_serviceBuilder_Hub_Model_Scope(_ scope: Hub.SafeDIMockScope_Service.Model_Scope, token: Token) -> any Service {
+		            func __safeDI_serviceBuilder_Hub_Model_Scope(_ scope: Hub.SafeDIMockScope_Service.Model_Scope, __safeDI_hub_serviceBuilder: Hub.SafeDIMockScope_Service) -> any Service {
 		                switch scope {
 		                case .service:
 		                    func __safeDI_service() -> DefaultService {
-		                        let gizmo: any Gizmo = __safeDI_gizmoBuilder(.hub_page_model_service_gizmo(SafeDIMockScope_Gizmo.hub_page_model_service_gizmo_Values(token: token)))
-		                        return DefaultService(gizmo: gizmo)
-		                    }
-		                    let service: any Service = __safeDI_service()
-		                    return service
-		                }
-		            }
-		            func __safeDI_serviceBuilder_Hub_Model_Scope_(_ scope: Hub.SafeDIMockScope_Service.Model_Scope, page: Page) -> any Service {
-		                switch scope {
-		                case .service:
-		                    func __safeDI_service() -> DefaultService {
-		                        let gizmo: any Gizmo = __safeDI_gizmoBuilder(.hub_model_service_gizmo(SafeDIMockScope_Gizmo.hub_model_service_gizmo_Values(page: page)))
+		                        let gizmo: any Gizmo = __safeDI_gizmoBuilder(.hub_serviceBuilder(__safeDI_gizmoValues_hub_serviceBuilder, __safeDI_hub_serviceBuilder, .gizmo(SafeDIMockScope_Gizmo.DefaultService_Scope.gizmo_Values())))
 		                        return DefaultService(gizmo: gizmo)
 		                    }
 		                    let service: any Service = __safeDI_service()
@@ -4646,7 +4634,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 
 		extension Board {
-		    public enum __safeDI_Board_mock_9E24B1B9E1C3659A {}
+		    public enum __safeDI_Board_mock_5747D6E3CE55A7DA {}
 		}
 		#endif
 		"""])
@@ -4678,7 +4666,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        gizmoBuilder: @escaping (Board.SafeDIMockScope_Gizmo) -> any Gizmo,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> BoardScreen {
-		        _ = Board.__safeDI_Board_mock_9E24B1B9E1C3659A.self\(Self.comment("Mid"))
+		        _ = Board.__safeDI_Board_mock_5747D6E3CE55A7DA.self\(Self.comment("Mid"))
 		        let board = Board.mock(gizmoBuilder: gizmoBuilder, safeDIOverrides: safeDIOverrides.board)
 		        return BoardScreen(board: board)
 		    }

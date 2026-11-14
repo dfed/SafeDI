@@ -558,17 +558,6 @@ public struct SeamSignature: Sendable {
 
 		/// Where a scope enum carries a place.
 		public struct EnumPlace: Sendable {
-			init(enumTypeName: String, caseName: String, valuesTypeName: String, isBuiltBySendableBuilder: Bool) {
-				self.enumTypeName = enumTypeName
-				self.caseName = caseName
-				self.valuesTypeName = valuesTypeName
-				self.isBuiltBySendableBuilder = isBuiltBySendableBuilder
-				rootEnumTypeName = nil
-				route = []
-				values = []
-				isNestedByType = false
-			}
-
 			init(nestedByTypeIn enumTypeName: String, rootEnumTypeName: String?, caseName: String, valuesTypeName: String?, isBuiltBySendableBuilder: Bool, route: [RouteStep], values: [Field]) {
 				self.enumTypeName = enumTypeName
 				self.caseName = caseName
@@ -577,26 +566,21 @@ public struct SeamSignature: Sendable {
 				self.rootEnumTypeName = rootEnumTypeName
 				self.route = route
 				self.values = values
-				isNestedByType = true
 			}
 
 			public let enumTypeName: String
 			/// The case's name, spelled as Swift requires.
 			public let caseName: String
-			/// The name of the case's payload struct, or `nil` for a case of a `@Sendable` enum nested by type, which carries no
-			/// values: a place held in a `Sendable` wrapper.
+			/// The name of the case's payload struct, or `nil` for a case of a `@Sendable` enum, which carries no values: a place
+			/// held in a `Sendable` wrapper.
 			public let valuesTypeName: String?
-			/// In an enum nested by type, the name of the root enum `enumTypeName` is nested in, or `nil` where the place's
-			/// case is the root enum's own.
+			/// The name of the root enum `enumTypeName` is nested in, or `nil` where the place's case is the root enum's own.
 			public let rootEnumTypeName: String?
-			/// In an enum nested by type, the cases that lead from the root enum to the place's own, outermost first: each
-			/// wraps the next.
+			/// The cases that lead from the root enum to the place's own, outermost first: each wraps the next.
 			public let route: [RouteStep]
-			/// In an enum nested by type, what the place's owner binds before the property: the fields of the case's payload.
+			/// What the place's owner binds before the property: the fields of the case's payload.
 			public let values: [Field]
 
-			/// Whether the place's case is in an enum nested by type.
-			public let isNestedByType: Bool
 			/// Whether the place is built inside a `@Sendable` function, which the `@Sendable` builder builds: its route starts
 			/// at the `@Sendable` root enum, whatever enum its own case is in.
 			public let isBuiltBySendableBuilder: Bool
@@ -833,9 +817,9 @@ public struct SeamSignature: Sendable {
 	/// A seam's or a public mock's plain enum is nested by type: the root enum, `SafeDIScope_<Stem>` or `SafeDIMockScope_<Stem>`,
 	/// describes what the seam or the mocked type itself builds, and each other type of its tree that leads to a place has
 	/// an enum of its own, `<Type>_Scope`, nested in the root. A case is a property of the type its enum describes – a place,
-	/// a property that builds a type with an enum, a call of an inner seam or another module's public mock, or a seam's call
+	/// a property that builds a type with an enum, a call of an inner seam or another module's public mock, or such a call
 	/// and a builder it fills with a type whose tree leads to a place – and carries what that type binds before the property
-	/// (`Case.values`). A place inside a public mock's fill has one case per path.
+	/// (`Case.values`).
 	public struct ScopeEnum: Sendable {
 		public struct Key: Hashable, Sendable {
 			public init(seamType: TypeDescription, holeType: HoleType, isSendable: Bool, describedType: TypeDescription? = nil) {
@@ -885,18 +869,15 @@ public struct SeamSignature: Sendable {
 			}
 
 			public enum Kind: Sendable {
-				/// A place of the enum's seam, in an enum with one case per path.
-				case own(site: Hole.Site)
-				/// A place of the enum's seam, in an enum nested by type: every site at which the type the enum describes builds
-				/// the property, in the order the builders reach them.
+				/// A place of the enum's seam: every site at which the type the enum describes builds the property, in the order
+				/// the builders reach them.
 				case place(sites: [Hole.Site])
 				/// A property that builds the type whose enum, `enumKey`'s, the case holds.
 				case nested(enumKey: Key, isIndirect: Bool)
-				/// A call of a seam whose enum the case holds: `sitePath` is the path to the property that holds the call in an
-				/// enum with one case per path, and empty in an enum nested by type.
-				case inner(enumKey: Key, enumType: TypeDescription, sitePath: [Property], isIndirect: Bool)
-				/// A call of a seam, one of whose builders the seam's tree fills with a type whose tree leads to a place, in an
-				/// enum nested by type: one case per call and builder filled. It holds the scope value the inner seam handed the
+				/// A call of a seam whose enum the case holds.
+				case inner(enumKey: Key, enumType: TypeDescription, isIndirect: Bool)
+				/// A call of a seam, one of whose builders the seam's tree fills with a type whose tree leads to a place: one case
+				/// per call and builder filled. It holds the scope value the inner seam handed the
 				/// fill, of the type `innerEnumType` of the inner seam's root enum `innerKey` – or no such value, where
 				/// `innerEnumType` is `nil`: a `@Sendable` function inside the fill leads to the place – then the enum of the
 				/// fill's type, `enumKey`'s.
@@ -905,7 +886,7 @@ public struct SeamSignature: Sendable {
 
 			public let name: String
 			public internal(set) var kind: Kind
-			/// What the type the enum describes binds before the case's property, in an enum nested by type; `nil` otherwise.
+			/// What the type the enum describes binds before the case's property; `nil` for a case of a `@Sendable` enum.
 			public let values: Values?
 		}
 
@@ -948,10 +929,10 @@ public struct SeamSignature: Sendable {
 		/// The key of the enum `enumCase` holds, or `nil` for a place.
 		static func heldKey(of enumCase: Case) -> Key? {
 			switch enumCase.kind {
-			case .own, .place:
+			case .place:
 				nil
 			case let .nested(enumKey, _),
-			     let .inner(enumKey, _, _, _),
+			     let .inner(enumKey, _, _),
 			     let .fill(_, _, enumKey, _):
 				enumKey
 			}
@@ -977,12 +958,10 @@ public struct SeamSignature: Sendable {
 				guard visitedKeys.insert(visitedKey).inserted, let scopeEnum = enumsByKey[visitedKey] else { continue }
 				for enumCase in scopeEnum.cases {
 					switch enumCase.kind {
-					case let .own(site):
-						sites.insert(site)
 					case let .place(placeSites):
 						sites.formUnion(placeSites)
 					case let .nested(innerKey, _),
-					     let .inner(innerKey, _, _, _),
+					     let .inner(innerKey, _, _),
 					     let .fill(_, _, innerKey, _):
 						keysToVisit.append(innerKey)
 					}
@@ -1192,15 +1171,12 @@ public struct SeamSignature: Sendable {
 		}
 		func payload(of enumCase: ScopeEnum.Case) -> String {
 			switch enumCase.kind {
-			case let .own(site):
-				guard let hole = holesBySite[site] else { return "" }
-				return (spelled(hole.fields) + [hole.forwardedType?.withoutAny.asSource ?? ""]).joined(separator: ", ")
 			case let .place(sites):
 				// Every site of a place builds one property, so each forwards one type.
 				let forwardedType = sites.first.flatMap { holesBySite[$0] }?.forwardedType
 				return (valuesPayload(of: enumCase) + [forwardedType?.withoutAny.asSource ?? ""]).joined(separator: ", ")
 			case let .nested(enumKey, _),
-			     let .inner(enumKey, _, _, _):
+			     let .inner(enumKey, _, _):
 				return (valuesPayload(of: enumCase) + [enumKey.spelling]).joined(separator: ", ")
 			case let .fill(innerKey, innerEnumType, enumKey, _):
 				// The inner seam's root enum only where the case carries its value.
@@ -1487,6 +1463,32 @@ struct CalledBuilders: Sendable {
 	/// The sites `builder` reaches: those of the places of its enum and of the enums its cases hold.
 	func sitesReached(by builder: SeamSignature.Builder, in enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]) -> Set<SeamSignature.Hole.Site> {
 		SeamSignature.ScopeEnum.sitesReached(from: builder.enumKey, in: enumsByKey)
+	}
+
+	/// The sites `builder`'s routes reach: of those it reaches (`sitesReached(by:in:)`), a place of the called seam's own
+	/// inside a `@Sendable` function only where the builder is the `@Sendable` one, and every other place of its own only
+	/// where it is not (`SeamSignature.Hole.EnumPlace.isBuiltBySendableBuilder`). The plain and the `@Sendable` root enum of a
+	/// hole type hold the same enums nested by type, so each reaches the other's places through them, which no value of it
+	/// leads to. A place the seam passes up from a seam it calls is in that seam's enums, which either root may hold.
+	func sitesReachedOnItsRoutes(by builder: SeamSignature.Builder, in enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]) -> Set<SeamSignature.Hole.Site> {
+		Self.sites(sitesReached(by: builder, in: enumsByKey), onRoutesOf: builder.enumKey, holeBySite: holeBySite)
+	}
+
+	/// Each hole by its site, the first of `holes` at a site.
+	var holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole] {
+		var holeBySite = [SeamSignature.Hole.Site: SeamSignature.Hole]()
+		for hole in holes where holeBySite[hole.site] == nil {
+			holeBySite[hole.site] = hole
+		}
+		return holeBySite
+	}
+
+	/// The sites of `sites` that a route from the root enum of `rootKey` reaches (see `sitesReachedOnItsRoutes(by:in:)`).
+	static func sites(_ sites: Set<SeamSignature.Hole.Site>, onRoutesOf rootKey: SeamSignature.ScopeEnum.Key, holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) -> Set<SeamSignature.Hole.Site> {
+		sites.filter { site in
+			guard let hole = holeBySite[site], hole.scopeSeamType == rootKey.seamType, let enumPlace = hole.enumPlace else { return true }
+			return enumPlace.isBuiltBySendableBuilder == rootKey.isSendable
+		}
 	}
 }
 

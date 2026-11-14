@@ -481,8 +481,8 @@ final class Scope: Hashable {
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			seamRoot: seamRoot,
 			mockBuilders: mockBuilders,
-			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes, builders: $0.signature.builders, scopeEnums: $0.signature.scopeEnums, parameters: $0.signature.parameters, callRoutes: $0.signature.callRoutes) }
-				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, scopeEnums: $0.scopeEnums, callRoutes: $0.callRoutes) }
+			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes, builders: $0.signature.builders, parameters: $0.signature.parameters, callRoutes: $0.signature.callRoutes) }
+				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, callRoutes: $0.callRoutes) }
 				?? SeamHoles(),
 			sitePath: [],
 			erasedToConcreteExistential: erasedToConcreteExistential,
@@ -760,20 +760,11 @@ private struct ScopeGeneratorUnderConstruction {
 			let callPath = self.sitePath
 			var names = GeneratedNameAllocator(reserving: Set(enclosingFills.values).union(seamHoles.namesBoundForBuilders))
 			var fillNames = enclosingFills
-			// A public mock's caller keeps a case per path for a place inside a fill (`SeamBuilderFamilies`), so a call whose
-			// fills hold one fills each place with a fill of its own, and dispatches per route to choose it.
-			let unfoldsByRoute = scope.publicMockCall != nil && holeArguments.contains { holeArgument in
-				if case let .fill(_, fulfillingScope) = holeArgument {
-					Self.holdsAPlace(inTreeRootedAt: fulfillingScope)
-				} else {
-					false
-				}
-			}
 			// Every other place of a case nested by type is filled by one function, the first place's: it can read whatever
 			// field any place of the case carries, each from the case or from the dispatchers that lead to it, in the form every
 			// route can hand it (`ScopeGenerator.caseFields(of:)`).
 			var placesByCaseKey = [String: [SeamSignature.Hole]]()
-			for case let .fill(hole, _) in holeArguments where !unfoldsByRoute && hole.enumPlace?.isNestedByType == true {
+			for case let .fill(hole, _) in holeArguments where hole.enumPlace != nil {
 				placesByCaseKey[ScopeGenerator.fillCaseKey(of: hole), default: []].append(hole)
 			}
 			// A place inside a fill of an inner seam's builder reads, through the scope value the inner seam handed that fill, a
@@ -822,7 +813,7 @@ private struct ScopeGeneratorUnderConstruction {
 				}
 				let functionName = names.claim(ScopeGenerator.fillFunctionName(of: hole))
 				fillNames[key] = functionName
-				if !unfoldsByRoute, hole.enumPlace?.isNestedByType == true {
+				if hole.enumPlace != nil {
 					functionNameByCaseKey[caseKey] = functionName
 				}
 				let caseFields = caseFieldsByCaseKey[caseKey]
@@ -842,6 +833,7 @@ private struct ScopeGeneratorUnderConstruction {
 				dispatchersOfThisCall = ScopeGenerator.FillDispatcher.dispatchers(
 					of: calledBuilders,
 					filledSites: Self.filledSites(of: holeArguments),
+					sitesPassedUpOnSomeRoute: scope.publicMockCall?.sitesPassedUpOnSomeRoute ?? [],
 					enclosingDispatchers: enclosingFills,
 					fillNames: fillNames,
 					names: &names,
@@ -849,7 +841,6 @@ private struct ScopeGeneratorUnderConstruction {
 						seamHoles.innerScope(at: callPath, innerKey: scopeEnum.key).map { (scopeEnum.key, $0.name) }
 					}, uniquingKeysWith: { first, _ in first }),
 					decidesPerRoute: scope.publicMockCall != nil,
-					unfoldsByRoute: unfoldsByRoute,
 				)
 			}
 		}
@@ -1155,36 +1146,6 @@ private struct ScopeGeneratorUnderConstruction {
 		return reads
 	}
 
-	/// Whether the mock tree rooted at `scope` holds a place of the caller's own: a property nothing the caller sees builds,
-	/// or a call of a public mock that passes a place up.
-	private static func holdsAPlace(inTreeRootedAt scope: Scope) -> Bool {
-		var visitedScopes = Set<ObjectIdentifier>()
-		// A stack of its own, since a tree can be as deep as the module has types.
-		var scopesToVisit = [scope]
-		while let visitedScope = scopesToVisit.popLast() {
-			guard visitedScopes.insert(ObjectIdentifier(visitedScope)).inserted else { continue }
-			let passesAPlaceUp = visitedScope.holeArguments.contains { holeArgument in
-				if case .passUp = holeArgument {
-					true
-				} else {
-					false
-				}
-			}
-			guard !passesAPlaceUp else { return true }
-			for propertyToGenerate in visitedScope.propertiesToGenerate {
-				switch propertyToGenerate {
-				case let .instantiated(_, childScope, _):
-					scopesToVisit.append(childScope)
-				case .hole:
-					return true
-				case .aliased:
-					break
-				}
-			}
-		}
-		return false
-	}
-
 	/// The field a public mock caller's fill of a case nested by type takes for one label, given `fields`, the case's places'
 	/// fields of that label in place order, and `reads`, the forms of it the fill's tree receives: the form it reads that
 	/// provides every other (`CycleParameter.forms(providedBy:)`, the relation the per-place decision `holesFilled` fills
@@ -1229,12 +1190,16 @@ private struct ScopeGeneratorUnderConstruction {
 		let filledSites = Self.filledSites(of: holeArguments)
 		let enumsByKey = calledBuilders.enumsByKey
 		// A seam's caller calls the initializer only generated code calls, under its prefixed labels; a public mock's
-		// caller passes each builder by the leaf's argument of its label.
+		// caller passes each builder by the leaf's argument of its label, and passes up the places its builder's routes
+		// reach that it fills on some route only (`PublicMockCall.sitesPassedUpOnSomeRoute`).
 		let isPublicMockCall = scope.publicMockCall != nil
+		let sitesFilledOnEveryRoute = scope.publicMockCall?.sitesFilledOnEveryRoute ?? filledSites
 		return calledBuilders.builders.map { builder in
 			let label = isPublicMockCall ? builder.label : builder.generatedOnlyArgumentLabel
 			let enumKey = builder.enumKey
-			let reachedSites = SeamSignature.ScopeEnum.sitesReached(from: enumKey, in: enumsByKey)
+			let reachedSites = isPublicMockCall
+				? calledBuilders.sitesReachedOnItsRoutes(by: builder, in: enumsByKey)
+				: SeamSignature.ScopeEnum.sitesReached(from: enumKey, in: enumsByKey)
 			// In a tree built to compute the signature, which generates nothing, the case is not settled yet.
 			let route = seamHoles.routeCase(at: sitePath, innerKey: enumKey)
 			guard !reachedSites.isDisjoint(with: filledSites) else {
@@ -1243,7 +1208,7 @@ private struct ScopeGeneratorUnderConstruction {
 			let dispatcherKey = ScopeGenerator.FillDispatcher.key(of: enumKey)
 			let dispatcher = fillNames[dispatcherKey] ?? ""
 			let enclosingFillKey = enclosingFills[dispatcherKey] == nil ? nil : dispatcherKey
-			guard reachedSites.isSubset(of: filledSites) else {
+			guard reachedSites.isSubset(of: sitesFilledOnEveryRoute) else {
 				// The whole scope the call was given goes up, under the route's case.
 				let passUp = route.map { route in route.call(handing: "scope") } ?? "\(builder.label)(scope)"
 				return .init(label: label, value: "{ scope in \(dispatcher)(scope, \(ScopeGenerator.FillDispatcher.passUpParameterName): { \(passUp) }) }", enclosingFillKey: enclosingFillKey, isSendable: enumKey.isSendable)
@@ -1298,11 +1263,13 @@ private struct ScopeGeneratorUnderConstruction {
 			},
 			builderCallArguments: builderCallArguments(fillNames: fillNames),
 			fillDispatchers: dispatchersOfThisCall,
+			// A place a public mock's caller fills on some route only is passed up too.
 			passedUpHoles: holeArguments.compactMap { holeArgument in
-				if case let .passUp(hole) = holeArgument {
+				switch holeArgument {
+				case let .passUp(hole):
 					hole
-				} else {
-					nil
+				case let .fill(hole, _):
+					scope.publicMockCall?.sitesPassedUpOnSomeRoute.contains(hole.site) == true ? hole : nil
 				}
 			},
 			valuesBindings: seamHoles.valuesBindings(at: sitePath),
@@ -1570,17 +1537,9 @@ struct SeamHoles {
 		namesBoundForDeferredParameters = []
 	}
 
-	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], scopeEnums: [SeamSignature.ScopeEnum], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = []) {
+	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = []) {
 		var routeCasesByCall = [RouteCall: RouteCase]()
 		let internalNameByEnum = Dictionary(builders.map { ($0.enumKey, $0.internalName) }, uniquingKeysWith: { first, _ in first })
-		for scopeEnum in scopeEnums where scopeEnum.key.seamType == seamType {
-			guard let builderName = internalNameByEnum[scopeEnum.key] else { continue }
-			for enumCase in scopeEnum.cases {
-				if case let .inner(enumKey, _, sitePath, _) = enumCase.kind, !sitePath.isEmpty {
-					routeCasesByCall[RouteCall(sitePath: sitePath, innerKey: enumKey)] = RouteCase(builderName: builderName, prefix: ".\(enumCase.name)(", suffix: ")")
-				}
-			}
-		}
 		// The payload of each case that wraps another on the way to a place or a call nested by type, bound just before the
 		// case's property is built, once however many places it leads to. A case of a `@Sendable` enum carries none. A call's
 		// case for a builder it fills carries the scope value the inner seam handed the fill, which the fill takes.
@@ -1619,7 +1578,7 @@ struct SeamHoles {
 				continue
 			}
 			sitesByPath[hole.sitePath] = hole
-			if let enumPlace = hole.enumPlace, enumPlace.isNestedByType {
+			if let enumPlace = hole.enumPlace {
 				bindValues(of: enumPlace.route)
 			}
 		}
