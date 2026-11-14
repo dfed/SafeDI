@@ -1390,8 +1390,12 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			switch kind {
 			case let .fieldNotReadable(reader, field, callerModule, seamModule, requirement):
 				let level = "`\(field.access.spelledOnGeneratedDeclaration)`"
+				// A caller SafeDI is told no package of may be in the seam's package all the same.
+				let packageNameRemedy = ModuleIdentity.packageNameRemedy(emitter: callerModule, declarer: seamModule, requirement: requirement, declaredLevel: field.access)
 				let reach = if field.access == .package, let packageName = seamModule.packageName {
-					"\(module(callerModule)) is not in package `\(packageName)`"
+					callerModule.packageName == nil
+						? "\(module(callerModule)) is not told it is in package `\(packageName)`"
+						: "\(module(callerModule)) is not in package `\(packageName)`"
 				} else {
 					"\(module(callerModule)) is not \(module(seamModule))"
 				}
@@ -1399,8 +1403,12 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				// explains a seam parameter's access. A filler is never in the seam's own module, which then has no hole.
 				let neededLevel: AccessLevel = requirement == .public ? .public : .package
 				let causeText = field.accessCause.map { " " + SeamAccessExplanation.causeSentence($0, receivers: []) } ?? ""
-				let remedies = SeamAccessExplanation.causeRemedies(field.accessCause, neededLevel: neededLevel)
-					+ [SeamAccessExplanation.fulfillRemedy(fulfilling: hole.instantiatedType, seam: hole.scopeSeamType, seamModuleName: seamModule.moduleName, isPassedUp: false)]
+				var remedies = [String]()
+				if let packageNameRemedy {
+					remedies.append(packageNameRemedy)
+				}
+				remedies += SeamAccessExplanation.causeRemedies(field.accessCause, neededLevel: neededLevel)
+				remedies.append(SeamAccessExplanation.fulfillRemedy(fulfilling: hole.instantiatedType, seam: hole.scopeSeamType, seamModuleName: seamModule.moduleName, isPassedUp: false))
 				return [
 					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(scope) carries only at \(level) access, and \(reach).\(causeText) \(SeamAccessExplanation.joined(remedies))"),
 				] + SeamAccessExplanation.declarationNotes(for: field.accessCause, neededLevel: neededLevel) + [
@@ -1510,8 +1518,13 @@ extension SeamSignature.Hole {
 
 extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 	/// What a target the Xcode project plugin builds does for SafeDI to know its modules, in both errors that a run that
-	/// names no module reports about a seam, so the two read alike.
-	static let xcodeProjectPluginCannotNameModules = "the Xcode project plugin cannot name modules, so move the modules and the root into a local Swift package that the app target depends on"
+	/// names no module reports about a seam, so the two read alike. A sentence of its own, beside one for a run by hand.
+	static let xcodeProjectPluginCannotNameModules = "Under the Xcode project plugin, which cannot name modules, move the modules and the root into a local Swift package that the app target depends on."
+
+	/// What `package` access needs where SafeDI cannot tell whether two modules are in one package, which happens only in
+	/// a run that names no module or no package: under the Xcode project plugin, which passes no `-package-name`, or in
+	/// a run by hand. A clause that follows the suggestion to make a declaration `package`.
+	static let unverifiedPackageAccessNeed = "which needs both modules compiled with one package name (`SWIFT_PACKAGE_NAME` in an Xcode project)"
 
 	/// A hole in the tree of a seam whose module SafeDI does not know – a run without a module name, as a target the
 	/// Xcode project plugin builds is – so the initializer it generates cannot take a builder: what the module's callers
@@ -1531,7 +1544,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			return SourceDiagnostic(
 				severity: .error,
 				location: dependency.declarationLocation,
-				message: "\(seamName) generates its dependency tree, and `\(owner.asSource)`'s @\(Dependency.Source.instantiatedRawValue) property `\(dependency.property.asSource)` in it instantiates \(typeName), which no @\(InstantiableVisitor.macroName) declaration this module reads fulfills. SafeDI does not know which module declares \(seamName), so it cannot know what that module's callers see, and the initializer it generates cannot take a builder for \(label). Declare an @\(InstantiableVisitor.macroName) type that fulfills \(typeName) in this module or in a module it depends on, or declare \(seamName) without `generateDependencyTree: true`. For the initializer to take a builder instead, SafeDI must know \(seamName)'s module: \(DependencyTreeGenerator.DependencyTreeGeneratorError.xcodeProjectPluginCannotNameModules); a SafeDITool run by hand names this module with `--module-name`.",
+				message: "\(seamName) generates its dependency tree, and `\(owner.asSource)`’s @\(Dependency.Source.instantiatedRawValue) property `\(dependency.property.asSource)` in it instantiates \(typeName), which no @\(InstantiableVisitor.macroName) declaration this module reads fulfills. SafeDI does not know which module declares \(seamName), so it cannot know what that module’s callers see, and the initializer it generates cannot take a builder for \(label). Declare an @\(InstantiableVisitor.macroName) type that fulfills \(typeName) in this module or in a module it depends on, or declare \(seamName) without `generateDependencyTree: true`. For the initializer to take a builder instead, SafeDI must know \(seamName)’s module. \(DependencyTreeGenerator.DependencyTreeGeneratorError.xcodeProjectPluginCannotNameModules) A SafeDITool run by hand names this module with `--module-name`.",
 			)
 		}
 	}

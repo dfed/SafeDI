@@ -3880,6 +3880,42 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarryOfferingPackageName_whenFillInModuleRunWithoutItsPackageReadsPackageField() async {
+		// C6.3 with `App` compiled in `Service`'s package `Shop` but its run not told so: SafeDI cannot say `App` is in
+		// another package, and giving it the package name lets it read the `package` field, so that remedy comes first.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` (case `profile_userService` of `userServiceBuilder`) carries only at `package` access, and module `App` is not told it is in package `Shop`. `Session`'s own `@Instantiable` declaration is `package`. Give module `App` the package name of module `Feature` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package; declare `Session` `public`; or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it.
+			\(fixtures["Feature"]!["Service.swift"]):8:5: note: `Service` declares `session: Session` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Session", isFinalClass: true, declarations: []).replacingOccurrences(of: "public ", with: "package "),
+						seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let session: Session", "@Instantiated let profile: Profile"]).replacingOccurrences(of: "public init(", with: "package init("),
+					]),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [
+							Self.fulfillingType(named: "SessionUserService", fulfilling: "UserService", declarations: ["@Received let session: Session"]),
+							Self.canonicalRoot,
+						].map { "import Feature\n\n" + $0 },
+						dependencies: ["Feature"],
+						omitsPackageName: true,
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesFieldsAtProvenAccessAndCallsTierEachCallerReaches_whenCallersAreInSeamsPackageAndAnother() async throws {
 		// C3.2, C3.3, C5.4, C6.2 (the matrix's `ta`): each field is as visible as its type's proof – `session` and `theme`
 		// `package`, `badge` and `banner` `public` – and the `package` pass-through `theme`, which `Banner` receives only if
@@ -5419,7 +5455,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	/// The error at the canonical hole when the run that generates `Service` names no module: one wording for every such
 	/// run, the Xcode project plugin's included.
-	private static let holeInSeamOfUnnamedModuleMessage = "`Service` generates its dependency tree, and `Profile`'s @Instantiated property `userService: any UserService` in it instantiates `UserService`, which no @Instantiable declaration this module reads fulfills. SafeDI does not know which module declares `Service`, so it cannot know what that module's callers see, and the initializer it generates cannot take a builder for `userService`. Declare an @Instantiable type that fulfills `UserService` in this module or in a module it depends on, or declare `Service` without `generateDependencyTree: true`. For the initializer to take a builder instead, SafeDI must know `Service`'s module: the Xcode project plugin cannot name modules, so move the modules and the root into a local Swift package that the app target depends on; a SafeDITool run by hand names this module with `--module-name`."
+	private static let holeInSeamOfUnnamedModuleMessage = "`Service` generates its dependency tree, and `Profile`’s @Instantiated property `userService: any UserService` in it instantiates `UserService`, which no @Instantiable declaration this module reads fulfills. SafeDI does not know which module declares `Service`, so it cannot know what that module’s callers see, and the initializer it generates cannot take a builder for `userService`. Declare an @Instantiable type that fulfills `UserService` in this module or in a module it depends on, or declare `Service` without `generateDependencyTree: true`. For the initializer to take a builder instead, SafeDI must know `Service`’s module. Under the Xcode project plugin, which cannot name modules, move the modules and the root into a local Swift package that the app target depends on. A SafeDITool run by hand names this module with `--module-name`."
 
 	/// The canonical hole (`h01`): `Service`, the seam, instantiates `analytics` then `profile`; `Profile` instantiates
 	/// `userService: any UserService` and receives `analytics`.

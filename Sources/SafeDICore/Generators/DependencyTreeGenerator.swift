@@ -2006,7 +2006,7 @@ public actor DependencyTreeGenerator {
 				return SourceDiagnostic(
 					severity: .error,
 					location: referenceLocation,
-					message: "\(seamName) is declared with `generateDependencyTree: true`, but SafeDI does not know which module declares \(seamName), so this run builds \(seamName)'s tree inline. \(reachedDeclaration) Make the types in \(seamName)'s tree and their initializers `\(AccessLevel.package.spelling)`, or `\(AccessLevel.public.spelling)` where their module and this one are in different packages. For this module to call the initializer SafeDI generates for \(seamName) instead, SafeDI must know \(seamName)'s module: \(DependencyTreeGenerator.DependencyTreeGeneratorError.xcodeProjectPluginCannotNameModules); a SafeDITool run by hand needs the module info of \(seamName)'s module, written with `--module-name`.",
+					message: "\(seamName) is declared with `generateDependencyTree: true`, but SafeDI does not know which module declares \(seamName), so this run builds \(seamName)’s tree inline. \(reachedDeclaration) Make the types in \(seamName)’s tree and their initializers `\(AccessLevel.package.spelling)`, \(DependencyTreeGenerator.DependencyTreeGeneratorError.unverifiedPackageAccessNeed), or `\(AccessLevel.public.spelling)` where their module and this one are in different packages. For this module to call the initializer SafeDI generates for \(seamName) instead, SafeDI must know \(seamName)’s module. \(DependencyTreeGenerator.DependencyTreeGeneratorError.xcodeProjectPluginCannotNameModules) In a SafeDITool run by hand, list the `.safedi` file of \(seamName)’s module, written with `--module-name` and `--module-info-output`, in the file you pass to `--dependent-module-info-file-path`.",
 				)
 			}
 
@@ -2124,7 +2124,12 @@ public actor DependencyTreeGenerator {
 				case .package:
 					"\(emitter) another module of the same package, cannot \(inability) in the code SafeDI generates"
 				case .public:
-					"\(emitter) in another package, cannot \(inability) in the code SafeDI generates"
+					// Across a named module SafeDI is told no package of, SafeDI cannot say the two are in different packages.
+					if ModuleIdentity.namesOfModulesWithoutPackage(emitter: emittingModule, declarer: declaringModule, requirement: requirement).isEmpty {
+						"\(emitter) in another package, cannot \(inability) in the code SafeDI generates"
+					} else {
+						"\(emitter) which SafeDI is not told is in the same package, cannot \(inability) in the code SafeDI generates"
+					}
 				case .packageUnverified:
 					"\(emitter) which SafeDI cannot tell is in the same package, cannot \(inability) in the code SafeDI generates"
 				}
@@ -2154,38 +2159,52 @@ public actor DependencyTreeGenerator {
 						message: "\(subject) is `\(accessNeed.level.spelling)`\(declaringModuleName), so \(reason). \(leadingRemedy.prefix(1).uppercased())\(leadingRemedy.dropFirst()). Making \(fixedDeclaration) `\(level)` instead also needs a new name, if \(module) can then name another type called `\(constructedTypeDeclaredName.asSource)`.",
 					)
 				}
-				if case let .publicMockOfUnknownModule(type, emittingModuleIsUnknown)? = publicMockCandidate {
-					// `publicMockNotCallableFromThisView`: the type's public mock is the fix, which SafeDI cannot call here.
-					let access = "\(subject.hasPrefix("The ") ? "the " + subject.dropFirst(4) : subject) is `\(accessNeed.level.spelling)`"
-					// Whether a mock can call the public mock depends on the declaring module's name alone: a run that names no
-					// module calls the public mock of a module whose module info names it, and naming this run would not name
-					// the declaring module. A Swift package target's run reads that name from the target graph. A run that
-					// names its module reaches such a type only through a directory a `#SafeDIConfiguration` adds, or a file
-					// no target of the plugin's graph lists, since every module info names its module.
-					let message = emittingModuleIsUnknown
-						? "`\(type.asSource)` has a public `mock()`, but SafeDI does not know which module declares `\(type.asSource)`, so this run cannot call it, and \(access). Build these mocks in a Swift package target, or give this run the module info of the module that declares `\(type.asSource)`, written with `--module-name`."
-						: "`\(type.asSource)` has a public `mock()`, but SafeDI does not know which module declares `\(type.asSource)`, so this run cannot call it, and \(access): it is declared in a directory a `#SafeDIConfiguration` adds, or in a file no target of the plugin's graph lists. Declare it in a file of a module SafeDI knows."
-					return SourceDiagnostic(
-						severity: .error,
-						location: readableDeclarationLocation ?? referenceLocation,
-						message: message,
-					)
-				}
 				let fix = switch requirement {
 				case .internal, .package:
 					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix\(seamRemedyText)\(publicMockRemedy)."
 				case .public:
 					// Across a named module SafeDI is told no package of, a `package` declaration needs `public` unless the
-					// module belongs in the other's package, which the declaration's level makes the likelier fix.
+					// module belongs in the other's package, which the declaration's level makes the likelier fix. A
+					// narrower declaration needs widening either way, so `public`, which its fix-it inserts, comes first.
 					if let packageNameRemedy = ModuleIdentity.packageNameRemedy(emitter: emittingModule, declarer: declaringModule, requirement: requirement, declaredLevel: accessNeed.level) {
 						"\(packageNameRemedy.prefix(1).uppercased())\(packageNameRemedy.dropFirst()), or make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix\(seamRemedyText)\(publicMockRemedy)."
+					} else if let packageNameAndAccessRemedy = ModuleIdentity.packageNameAndAccessRemedy(emitter: emittingModule, declarer: declaringModule, requirement: requirement, declaredLevel: accessNeed.level), seamRemedyClause == nil, publicMockRemedyClause == nil {
+						"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix, or, \(packageNameAndAccessRemedy)."
+					} else if let packageNameAndAccessRemedy = ModuleIdentity.packageNameAndAccessRemedy(emitter: emittingModule, declarer: declaringModule, requirement: requirement, declaredLevel: accessNeed.level) {
+						// A remedy after the package-name remedy would read as part of its "if" clause, so three or more
+						// remedies are joined with semicolons.
+						SeamAccessExplanation.joined(["make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix", packageNameAndAccessRemedy] + [seamRemedyClause, publicMockRemedyClause].compactMap(\.self))
 					} else {
 						"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix\(seamRemedyText)\(publicMockRemedy)."
 					}
 				case .packageUnverified:
-					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix, or `\(AccessLevel.public.spelling)` if the two modules are in different packages\(seamRemedyText)\(publicMockRemedy)."
+					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix, \(DependencyTreeGeneratorError.unverifiedPackageAccessNeed), or `\(AccessLevel.public.spelling)` if the two modules are in different packages\(seamRemedyText)\(publicMockRemedy)."
 				}
-				let message = "\(subject) is `\(accessNeed.level.spelling)`\(declaringModuleName), so \(reason). \(fix)"
+				let message: String
+				// Only a mock's construction has a `.publicMockOfUnknownModule` candidate, and it is explained with its mock root.
+				if case let .publicMockOfUnknownModule(type, emittingModuleIsUnknown)? = publicMockCandidate, let mockRoot {
+					// `publicMockNotCallableFromThisView`: the type's public mock is the fix, which SafeDI cannot call here.
+					let typeName = "`\(type.asSource)`"
+					let mockReason = "the mock of `\(mockRoot.type.asSource)`, which builds \(typeName)’s tree here, cannot \(inability): \(typeName) has a public `mock()`, but SafeDI does not know which module declares \(typeName), so this run cannot call it"
+					// Whether a mock can call the public mock depends on the declaring module's name alone: a run that names no
+					// module calls the public mock of a module whose module info names it, and naming this run would not name
+					// the declaring module. A Swift package target's run reads that name from the target graph. A run that
+					// names its module reaches such a type only through a directory a `#SafeDIConfiguration` adds, or a file
+					// no target of the plugin's graph lists, since every module info names its module.
+					if emittingModuleIsUnknown {
+						// Widening works as for any construction, so that remedy and its fix-it come first.
+						message = "\(subject) is `\(accessNeed.level.spelling)`\(declaringModuleName), so \(mockReason). \(fix) To call `\(type.asSource).mock()` instead, build these mocks in a Swift package target, or, in a SafeDITool run by hand, list the `.safedi` file of \(typeName)’s module, written with `--module-name` and `--module-info-output`, in the file you pass to `--dependent-module-info-file-path`."
+					} else {
+						let access = "\(subject.hasPrefix("The ") ? "the " + subject.dropFirst(4) : subject) is `\(accessNeed.level.spelling)`"
+						return SourceDiagnostic(
+							severity: .error,
+							location: readableDeclarationLocation ?? referenceLocation,
+							message: "\(typeName) has a public `mock()`, but SafeDI does not know which module declares \(typeName), so this run cannot call it, and \(access): it is declared in a directory a `#SafeDIConfiguration` adds, or in a file no target of the plugin's graph lists. Declare it in a file of a module SafeDI knows.",
+						)
+					}
+				} else {
+					message = "\(subject) is `\(accessNeed.level.spelling)`\(declaringModuleName), so \(reason). \(fix)"
+				}
 
 				if let readableDeclarationLocation {
 					// A modifier is replaced, and one is inserted where the declaration begins when it spells none.

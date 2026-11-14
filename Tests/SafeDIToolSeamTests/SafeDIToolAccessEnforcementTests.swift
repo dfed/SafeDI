@@ -2066,7 +2066,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let servicePath = NormalizedFilePath(fixtures["Feature"]!.compilerPath(of: "Service.swift")).path
 			return """
-			\(servicePath):2:1: error: `Service` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix, or `public` if the two modules are in different packages.
+			\(servicePath):2:1: error: `Service` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix, which needs both modules compiled with one package name (`SWIFT_PACKAGE_NAME` in an Xcode project), or `public` if the two modules are in different packages.
 			\(servicePath):2:1-2:1: fixit: package\(" ")
 			"""
 		}) {
@@ -2103,11 +2103,11 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			let featureViewPath = fixtures["AdditionalDirectory/FeatureView.swift"]
 			let inlineSeamError = "\(rootPath):9:5: error: \(Self.inlineSeamMessage(reaching: "`Formatter` is `internal`"))"
 			let featureViewErrors = """
-			\(featureViewPath):5:5: error: `FeatureView`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
+			\(featureViewPath):5:5: error: `FeatureView`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, which needs both modules compiled with one package name (`SWIFT_PACKAGE_NAME` in an Xcode project), or `public` if the two modules are in different packages.
 			\(featureViewPath):5:5-5:5: fixit: package\(" ")
-			\(featureViewPath):15:1: error: `Formatter` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, or `public` if the two modules are in different packages.
+			\(featureViewPath):15:1: error: `Formatter` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, which needs both modules compiled with one package name (`SWIFT_PACKAGE_NAME` in an Xcode project), or `public` if the two modules are in different packages.
 			\(featureViewPath):15:1-15:1: fixit: package\(" ")
-			\(featureViewPath):16:5: error: `Formatter`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
+			\(featureViewPath):16:5: error: `Formatter`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, which needs both modules compiled with one package name (`SWIFT_PACKAGE_NAME` in an Xcode project), or `public` if the two modules are in different packages.
 			\(featureViewPath):16:5-16:5: fixit: package\(" ")
 			"""
 			return rootPath < featureViewPath ? "\(inlineSeamError)\n\(featureViewErrors)" : "\(featureViewErrors)\n\(inlineSeamError)"
@@ -2137,7 +2137,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsError(diagnostics: { fixtures in
 			let formatterPath = fixtures["AdditionalDirectory/Formatter.swift"]
 			return """
-			\(formatterPath):2:1: error: `Formatter` is `internal`, so the mock of `Screen`, generated in this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, or `public` if the two modules are in different packages.
+			\(formatterPath):2:1: error: `Formatter` is `internal`, so the mock of `Screen`, generated in this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, which needs both modules compiled with one package name (`SWIFT_PACKAGE_NAME` in an Xcode project), or `public` if the two modules are in different packages.
 			\(formatterPath):2:1-2:1: fixit: package\(" ")
 			"""
 		}) {
@@ -2179,7 +2179,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			let featureViewPath = NormalizedFilePath(fixtures["Feature"]!.compilerPath(of: "FeatureView.swift")).path
 			return """
 			\(rootPath):9:5: error: \(Self.inlineSeamMessage(reaching: "`FeatureView`’s initializer is `internal`"))
-			\(featureViewPath):5:5: error: `FeatureView`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
+			\(featureViewPath):5:5: error: `FeatureView`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, which needs both modules compiled with one package name (`SWIFT_PACKAGE_NAME` in an Xcode project), or `public` if the two modules are in different packages.
 			\(featureViewPath):5:5-5:5: fixit: package\(" ")
 			"""
 		}) {
@@ -2431,7 +2431,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			Issue.record("Did not throw error!")
 		} catch {
 			#expect("\(error)" == """
-			\(serviceFile.path):2:1: error: `Service` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix, or `public` if the two modules are in different packages.
+			\(serviceFile.path):2:1: error: `Service` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix, which needs both modules compiled with one package name (`SWIFT_PACKAGE_NAME` in an Xcode project), or `public` if the two modules are in different packages.
 			\(serviceFile.path):2:1-2:1: fixit: package\(" ")
 			""")
 		}
@@ -2447,9 +2447,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let servicePath = fixtures["Feature"]!["Service.swift"]
 			return """
-			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Give module `Feature` the package name of module `App` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package, or make `Service` `public` to fix.
+			\(servicePath):2:1: error: `Service` is `package`, so module `App`, which SafeDI is not told is in the same package, cannot construct it in the code SafeDI generates. Give module `Feature` the package name of module `App` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package, or make `Service` `public` to fix.
 			\(servicePath):2:1-2:8: fixit: public
-			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Give module `Feature` the package name of module `App` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package, or make the initializer `public` to fix.
+			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, which SafeDI is not told is in the same package, cannot call it in the code SafeDI generates. Give module `Feature` the package name of module `App` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package, or make the initializer `public` to fix.
 			\(servicePath):3:5-3:12: fixit: public
 			"""
 		}) {
@@ -2476,9 +2476,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let servicePath = fixtures["Feature"]!["Service.swift"]
 			return """
-			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Give module `App` the package name of module `Feature` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package, or make `Service` `public` to fix.
+			\(servicePath):2:1: error: `Service` is `package`, so module `App`, which SafeDI is not told is in the same package, cannot construct it in the code SafeDI generates. Give module `App` the package name of module `Feature` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package, or make `Service` `public` to fix.
 			\(servicePath):2:1-2:8: fixit: public
-			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Give module `App` the package name of module `Feature` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package, or make the initializer `public` to fix.
+			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, which SafeDI is not told is in the same package, cannot call it in the code SafeDI generates. Give module `App` the package name of module `Feature` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if the two are in one package, or make the initializer `public` to fix.
 			\(servicePath):3:5-3:12: fixit: public
 			"""
 		}) {
@@ -2507,9 +2507,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let servicePath = fixtures["Feature"]!["Service.swift"]
 			return """
-			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Service` `public` to fix.
+			\(servicePath):2:1: error: `Service` is `package`, so module `App`, which SafeDI is not told is in the same package, cannot construct it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Service` `public` to fix.
 			\(servicePath):2:1-2:8: fixit: public
-			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make the initializer `public` to fix.
+			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, which SafeDI is not told is in the same package, cannot call it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make the initializer `public` to fix.
 			\(servicePath):3:5-3:12: fixit: public
 			"""
 		}) {
@@ -2537,13 +2537,14 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorWithoutOfferingToPassPackages_whenNeitherModuleIsToldItsPackageAndInitializerIsInternal() async {
-		// Bazel's commonest slip: a `public` type whose initializer spells no access. Passing the packages would make
-		// `package` access enough, which an `internal` initializer still lacks, so the error offers only `public`.
+	mutating func generate_throwsErrorOfferingPublicThenBothPackagesAndPackageAccess_whenNeitherModuleIsToldItsPackageAndInitializerIsInternal() async {
+		// Bazel's commonest slip: a `public` type whose initializer spells no access. SafeDI cannot tell the two modules
+		// are in different packages, so beside `public`, which the fix-it inserts, the error offers passing the packages
+		// with `package` access, which an `internal` initializer still needs.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let servicePath = fixtures["Feature"]!["Service.swift"]
 			return """
-			\(servicePath):3:5: error: `Service`’s initializer is `internal`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(servicePath):3:5: error: `Service`’s initializer is `internal`, so module `App`, which SafeDI is not told is in the same package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or, if the two modules are in one package, give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) and make it `package`.
 			\(servicePath):3:5-3:5: fixit: public\(" ")
 			"""
 		}) {
@@ -2566,6 +2567,93 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 						name: "App",
 						packageName: "Shop",
 						swiftFileContent: [Self.rootInstantiating("Service")],
+						dependencies: ["Feature"],
+						omitsPackageName: true,
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingPublicThenPackageNameAndPackageAccess_whenModuleRunWithoutItsPackageConstructsInternalTypeOfModuleWithPackage() async {
+		// `App` is compiled in package `Shop`, but its run is not told so, and `Service` spells no access: beside `public`,
+		// the error offers giving `App` `Feature`'s package name with `package` access, which both declarations need.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let servicePath = fixtures["Feature"]!["Service.swift"]
+			return """
+			\(servicePath):2:1: error: `Service` is `internal`, so module `App`, which SafeDI is not told is in the same package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix, or, if the two modules are in one package, give module `App` the package name of module `Feature` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) and make it `package`.
+			\(servicePath):2:1-2:1: fixit: public\(" ")
+			\(servicePath):3:5: error: `Service`’s initializer is `internal`, so module `App`, which SafeDI is not told is in the same package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or, if the two modules are in one package, give module `App` the package name of module `Feature` (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) and make it `package`.
+			\(servicePath):3:5-3:5: fixit: public\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.feature(inPackage: "Shop", declaring: """
+					@Instantiable
+					final class Service: Instantiable {
+					    init() {}
+					}
+					"""),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [Self.rootInstantiating("Service")],
+						dependencies: ["Feature"],
+						omitsPackageName: true,
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorJoiningRemediesWithSemicolons_whenPackageNameRemedyIsFollowedBySeamRemedy() async {
+		// A remedy after the package-name remedy would read as part of its "if" clause, so the three remedies are joined
+		// with semicolons.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let formatterPath = fixtures["Feature"]!["Formatter.swift"]
+			return """
+			\(formatterPath):3:5: error: `Formatter`’s initializer is `internal`, so module `App`, which SafeDI is not told is in the same package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix; if the two modules are in one package, give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) and make it `package`; or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
+			\(formatterPath):3:5-3:5: fixit: public\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							@Instantiable
+							public final class Screen: Instantiable {
+							    public init(formatter: Formatter) {
+							        self.formatter = formatter
+							    }
+
+							    @Instantiated let formatter: Formatter
+							}
+							""",
+							"""
+							@Instantiable
+							public final class Formatter: Instantiable {
+							    init() {}
+							}
+							""",
+						],
+						omitsPackageName: true,
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [Self.rootInstantiating("Screen")],
 						dependencies: ["Feature"],
 						omitsPackageName: true,
 					),
@@ -2626,7 +2714,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let servicePath = fixtures["Feature"]!["Service.swift"]
 			return """
-			\(servicePath):5:5: error: `Service.mock()` is `package`, so the mock of `Screen`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Service.mock()` `public` to fix.
+			\(servicePath):5:5: error: `Service.mock()` is `package`, so the mock of `Screen`, generated in module `App`, which SafeDI is not told is in the same package, cannot call it in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Service.mock()` `public` to fix.
 			\(servicePath):5:5-5:12: fixit: public
 			"""
 		}) {
@@ -3354,7 +3442,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let spacePath = fixtures["Feature"]!["Space.swift"]
 			return """
-			\(spacePath):2:1: error: `Space`, which encloses `Space.Shelf`, is `package`, so module `App`, in another package, cannot construct `Space.Shelf` in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Space` `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
+			\(spacePath):2:1: error: `Space`, which encloses `Space.Shelf`, is `package`, so module `App`, which SafeDI is not told is in the same package, cannot construct `Space.Shelf` in the code SafeDI generates. Give modules `App` and `Feature` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Space` `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
 			\(spacePath):2:1-2:8: fixit: public
 			"""
 		}) {
@@ -3710,7 +3798,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let namespacePath = Self.declarationPath(of: "Namespace.swift", in: "Core", fixtures: fixtures, under: .moduleInfo)
 			return """
-			\(namespacePath):2:5: error: `Outer.Namespace`, which encloses `Outer.Namespace.Helper`, is `package`, so module `App`, in another package, cannot construct `Outer.Namespace.Helper` in the code SafeDI generates. Give modules `App` and `Core` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Outer.Namespace` `public` to fix.
+			\(namespacePath):2:5: error: `Outer.Namespace`, which encloses `Outer.Namespace.Helper`, is `package`, so module `App`, which SafeDI is not told is in the same package, cannot construct `Outer.Namespace.Helper` in the code SafeDI generates. Give modules `App` and `Core` the same package name (`SWIFT_PACKAGE_NAME` under Tuist, `package_name` on `safedi_swift_library` under Bazel, `--package-name` in a custom build) if they are in one package, or make `Outer.Namespace` `public` to fix.
 			\(namespacePath):2:5-2:12: fixit: public
 			"""
 		}) {
@@ -4854,7 +4942,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	/// which says that `reachedDeclaration`, the first declaration in source order in the tree that the target cannot
 	/// reach, keeps the tree from compiling, and leads with the remedy every build can apply.
 	private static func inlineSeamMessage(reaching reachedDeclaration: String) -> String {
-		"`FeatureView` is declared with `generateDependencyTree: true`, but SafeDI does not know which module declares `FeatureView`, so this run builds `FeatureView`'s tree inline. \(reachedDeclaration), so that tree cannot be built here. Make the types in `FeatureView`'s tree and their initializers `package`, or `public` where their module and this one are in different packages. For this module to call the initializer SafeDI generates for `FeatureView` instead, SafeDI must know `FeatureView`'s module: the Xcode project plugin cannot name modules, so move the modules and the root into a local Swift package that the app target depends on; a SafeDITool run by hand needs the module info of `FeatureView`'s module, written with `--module-name`."
+		"`FeatureView` is declared with `generateDependencyTree: true`, but SafeDI does not know which module declares `FeatureView`, so this run builds `FeatureView`’s tree inline. \(reachedDeclaration), so that tree cannot be built here. Make the types in `FeatureView`’s tree and their initializers `package`, which needs both modules compiled with one package name (`SWIFT_PACKAGE_NAME` in an Xcode project), or `public` where their module and this one are in different packages. For this module to call the initializer SafeDI generates for `FeatureView` instead, SafeDI must know `FeatureView`’s module. Under the Xcode project plugin, which cannot name modules, move the modules and the root into a local Swift package that the app target depends on. In a SafeDITool run by hand, list the `.safedi` file of `FeatureView`’s module, written with `--module-name` and `--module-info-output`, in the file you pass to `--dependent-module-info-file-path`."
 	}
 
 	/// `Core`, in its own package, declaring with `serviceAttribute` the `public` `Service`, whose `package` initializer
