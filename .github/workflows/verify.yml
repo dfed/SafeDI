@@ -3,17 +3,28 @@ name: Verify
 # Runs SafeDI's tests on Linux by hand, for one branch, so a change can be
 # checked without waiting on a local machine. Dispatch it on the branch to
 # test, for example `gh workflow run verify.yml --ref my-branch -f
-# filter=SafeDIToolSeam`; an empty filter runs the whole suite. It runs the
-# same build as "Build and Test on Linux" in ci.yml, so it restores main's
-# build and passed-compile-check caches, and pull request checks are
-# unaffected.
+# filter=SafeDIToolSeam`; an empty filter runs the whole suite. Pull request
+# checks are unaffected.
+#
+# Two modes. `release`, the default, runs the same build as "Build and Test on
+# Linux" in ci.yml, so it restores main's build and passed-compile-check
+# caches; it builds SafeDI's own targets in release with code coverage, which
+# takes most of a run however small the filter. `fast` builds in debug without
+# coverage, as "Build and Test on Latest Swift" does, from a build cache of its
+# own that "Warm the Fast Verify Build Cache" below keeps on main. Its build
+# takes half as long or less, but its tests run slower, because the parser and
+# macros come from a debug build of swift-syntax. So it pays off for a narrow
+# filter; for the whole suite, or a whole test target that compiles generated
+# code, the two modes take about as long, and `release` builds as CI does.
+# Each mode keeps its passed compile checks under its own identity, since the
+# identity hashes the test arguments.
 #
 # A dispatched run checks out and caches under the ref it is dispatched on, so
 # its caches are scoped to that branch and never become main's. Dispatching
 # takes write access to the repository, and the ref must be a branch or tag of
 # this repository, so a fork's code cannot run here. The job reads the
-# repository and nothing else: no secrets, and the filter reaches the shell
-# through an environment variable, never interpolated into the script.
+# repository and nothing else: no secrets, and the filter and mode reach the
+# shell through environment variables, never interpolated into a script.
 on:
   workflow_dispatch:
     inputs:
@@ -21,31 +32,70 @@ on:
         description: A `swift test --filter` pattern, or empty for the whole suite.
         required: false
         default: ''
+      mode:
+        description: '`release` builds as "Build and Test on Linux" does; `fast` builds in debug without coverage.'
+        required: false
+        type: choice
+        options:
+          - release
+          - fast
+        default: release
+  # Only to warm fast mode's build cache, which a dispatched run on any branch
+  # can restore because main saved it. Markdown cannot change what it builds.
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
 
 permissions: {}
+
+env:
+  # The same arguments as "Build and Test on Linux", so main's caches apply.
+  RELEASE_SWIFT_TEST_ARGUMENTS: -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
+  # Fast mode's arguments, which the warming job builds with too.
+  FAST_SWIFT_TEST_ARGUMENTS: --traits sourceBuild
 
 jobs:
   verify:
     # Nothing here needs macOS, so it uses the Linux test job's container.
     name: Verify on Linux
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     timeout-minutes: 75
     permissions:
       contents: read
-    env:
-      # The same arguments as "Build and Test on Linux", so main's caches apply.
-      SWIFT_TEST_ARGUMENTS: -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
-      - name: Cache Build Directory
+      - name: Choose Test Arguments
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          case "$MODE" in
+            release) echo "SWIFT_TEST_ARGUMENTS=$RELEASE_SWIFT_TEST_ARGUMENTS" >> "$GITHUB_ENV" ;;
+            fast) echo "SWIFT_TEST_ARGUMENTS=$FAST_SWIFT_TEST_ARGUMENTS" >> "$GITHUB_ENV" ;;
+            *) echo "Unknown mode '$MODE'."; exit 1 ;;
+          esac
+      - name: Cache Release Build Directory
+        if: ${{ inputs.mode == 'release' }}
         uses: actions/cache@v6
         with:
           path: .build
           key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/ci.yml') }}
           restore-keys: |
             spm-release-${{ runner.os }}-swift-6.2-
+      # The key is the warming job's. A hit is never re-saved, so this
+      # workflow, which sets the build's arguments, is in it.
+      - name: Cache Debug Build Directory
+        if: ${{ inputs.mode == 'fast' }}
+        uses: actions/cache@v6
+        with:
+          path: .build
+          key: verify-debug-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/verify.yml') }}
+          restore-keys: |
+            verify-debug-${{ runner.os }}-swift-6.2-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -53,6 +103,7 @@ jobs:
       - name: Compute Compile Check Identity
         id: compile-check-identity
         run: |
+          # shellcheck disable=SC2086 # The arguments are words to split.
           identity=$(.github/scripts/compile-check-identity.sh $SWIFT_TEST_ARGUMENTS)
           test "${#identity}" -eq 64
           echo "identity=$identity" >> "$GITHUB_OUTPUT"
@@ -69,6 +120,7 @@ jobs:
           FILTER: ${{ inputs.filter }}
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
         run: |
+          # shellcheck disable=SC2086 # The arguments are words to split.
           if [ -n "$FILTER" ]; then
             swift test $SWIFT_TEST_ARGUMENTS --filter "$FILTER"
           else
@@ -80,3 +132,57 @@ jobs:
         with:
           path: .compile-check-cache
           key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+  # Builds fast mode's tests on main, so that the dependencies' debug build
+  # products (swift-syntax's, most of a cold build) are in a cache every branch
+  # can restore. SafeDI's own targets rebuild in every run anyway: a checkout
+  # gives each source a new modification time. The key changes only with
+  # Package.resolved or this workflow, so most pushes find it and stop after
+  # the lookup. It runs on Linux beside CI and slows none of CI's jobs. Like
+  # the job above it reads the repository and nothing else; saving a cache
+  # takes no token permission.
+  warm-fast-cache:
+    name: Warm the Fast Verify Build Cache
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Look Up Debug Build Directory
+        id: lookup
+        uses: actions/cache/restore@v6
+        with:
+          path: .build
+          key: verify-debug-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/verify.yml') }}
+          lookup-only: true
+      # A miss restores the newest older cache, and the build is incremental
+      # from there.
+      - name: Restore Older Debug Build Directory
+        if: ${{ steps.lookup.outputs.cache-hit != 'true' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: .build
+          key: verify-debug-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/verify.yml') }}
+          restore-keys: |
+            verify-debug-${{ runner.os }}-swift-6.2-
+      - name: Resolve Package Dependencies
+        if: ${{ steps.lookup.outputs.cache-hit != 'true' }}
+        uses: ./.github/actions/retry
+        with:
+          command: swift package resolve
+      - name: Build Tests
+        if: ${{ steps.lookup.outputs.cache-hit != 'true' }}
+        timeout-minutes: 40
+        run: |
+          # shellcheck disable=SC2086 # The arguments are words to split.
+          swift build --build-tests $FAST_SWIFT_TEST_ARGUMENTS
+      - name: Save Debug Build Directory
+        if: ${{ steps.lookup.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .build
+          key: verify-debug-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/verify.yml') }}
