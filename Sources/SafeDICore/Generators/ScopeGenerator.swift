@@ -7540,6 +7540,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					for extraction in startedSendableOverrideExtractor?.extractions ?? [] {
 						lines.append("\(indent)let \(extraction.localName) = \(extraction.expression)")
 					}
+					// A function a cycle closes on from inside a `Sendable` wrapper is `@Sendable`, so the stages of a public
+					// mock's staged builders whose next stage starts in it are called before it, as before a wrapper's
+					// function.
+					for stageCall in node.stageCalls {
+						lines.append("\(indent)\(stageCall)")
+					}
 
 					// The function's return type gives both branches of the `if`
 					// expression a contextual type, so no annotation is needed.

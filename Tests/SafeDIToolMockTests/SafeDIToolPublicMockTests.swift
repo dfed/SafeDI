@@ -2475,6 +2475,714 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsStageBeforeSendableFunction_whenCycleInsideSendableInstantiatorClosesOnFunctionBuiltByValue() async throws {
+		// `Hub` builds `A` by value, and `B`, built in `A`'s `SendableInstantiator`, builds `A` again, which calls the function
+		// `Hub`'s mock builds `A` with from a `@Sendable` closure: that function is `@Sendable`, so it starts a stage of the
+		// place of `B`'s `api`, whose first stage the mock calls just before it, as a seam does. `A`'s `package` initializer
+		// keeps `App` from building `Hub` inline, so `Screen`'s mock calls `Hub`'s and fills the place with `LiveApi`.
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api: Sendable {}",
+				seamFixtureType(named: "A", declarations: ["@Instantiated public let bBuilder: SendableInstantiator<B>"], conformances: ", Sendable")
+					.replacingOccurrences(of: "public init(", with: "package init("),
+				seamFixtureType(named: "B", declarations: ["@Instantiated public let api: any Api", "@Instantiated public let a: A"], conformances: ", Sendable"),
+				seamFixtureType(named: "Hub", declarations: ["@Instantiated public let a: A"], conformances: ", Sendable")
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: .public)\n"),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"import Feature\n\n" + seamFixtureType(named: "LiveApi", declarations: [], conformances: ", Api")
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Api.self])\n"),
+				"import Feature\n\n" + seamFixtureType(named: "Screen", declarations: ["@Instantiated public let hub: Hub"])
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n"),
+			], dependencies: ["Feature"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if DEBUG
+		extension Hub {
+		    public enum SafeDIStagedMockScope_Api_a_bBuilder_api {
+		        public struct Stage1 {}
+
+		        public struct Stage2 {}
+
+		        public struct Stage3 {
+		            public let a: A
+		        }
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            a: __safeDI_Feature_A_MockConfiguration = .init()
+		        ) {
+		            self.a = a
+		        }
+
+		        public private(set) var a: __safeDI_Feature_A_MockConfiguration
+		    }
+
+		    public static func mock(
+		        apiBuilder_a_bBuilder_api: @escaping (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Hub {
+		        let __safeDI_apiBuilder_a_bBuilder_api = apiBuilder_a_bBuilder_api
+		        let __safeDI_a__a_bBuilder_safeDIBuilder = safeDIOverrides.a.bBuilder.safeDIBuilder
+		        let __safeDI_a__safeDIBuilder = safeDIOverrides.a.safeDIBuilder
+		        let __safeDI_apiBuilder_a_bBuilder_api_Stage2 = __safeDI_apiBuilder_a_bBuilder_api(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1())
+		        @Sendable func __safeDI_a() -> A {
+		            let __safeDI_apiBuilder_a_bBuilder_api_Stage3 = __safeDI_apiBuilder_a_bBuilder_api_Stage2(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2())
+		            @Sendable func __safeDI_bBuilder() -> B {
+		                let a: A = __safeDI_a()
+		                let api: any Api = __safeDI_apiBuilder_a_bBuilder_api_Stage3(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3(a: a))
+		                return B.__safeDI_init(api: api, a: a, safeDIBuilder: __safeDI_a__a_bBuilder_safeDIBuilder)
+		            }
+		            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
+		            return A.__safeDI_init(bBuilder: bBuilder, safeDIBuilder: __safeDI_a__safeDIBuilder)
+		        }
+		        let a: A = __safeDI_a()
+		        return Hub(a: a)
+		    }
+		}
+
+		extension Hub {
+		    public enum __safeDI_Hub_mock_58C7C781F68678B2 {}
+		}
+		#endif
+
+		#if DEBUG
+		/// Configuration for how `B` is constructed within the public mock trees of module `Feature`.
+		nonisolated public struct __safeDI_Feature_B_MockConfiguration {
+		    public init(
+		        _ safeDIBuilder: (@Sendable (any Api, A) -> B)? = nil
+		    ) {
+		        self.safeDIBuilder = safeDIBuilder
+		    }
+
+		    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public private(set) var safeDIBuilder: (@Sendable (any Api, A) -> B)?
+		}
+
+		extension B {
+		    static func __safeDI_init(api: any Api, a: A, safeDIBuilder: (@Sendable (any Api, A) -> B)?) -> B {
+		        if let safeDIBuilder { safeDIBuilder(api, a) } else { B(api: api, a: a) }
+		    }
+		}
+
+		/// Configuration for how `A` is constructed within the public mock trees of module `Feature`.
+		nonisolated public struct __safeDI_Feature_A_MockConfiguration {
+		    public init(
+		        bBuilder: __safeDI_Feature_B_MockConfiguration = .init(),
+		        _ safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> A)? = nil
+		    ) {
+		        self.bBuilder = bBuilder
+		        self.safeDIBuilder = safeDIBuilder
+		    }
+
+		    public private(set) var bBuilder: __safeDI_Feature_B_MockConfiguration
+		    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public private(set) var safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> A)?
+		}
+
+		extension A {
+		    static func __safeDI_init(bBuilder: SendableInstantiator<B>, safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> A)?) -> A {
+		        if let safeDIBuilder { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
+		    }
+		}
+		#endif
+
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            hub: Hub.SafeDIOverrides = .init()
+		        ) {
+		            self.hub = hub
+		        }
+
+		        private(set) var hub: Hub.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_hub() -> Hub {
+		            func __safeDI_apiBuilder_a_bBuilder_api(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
+		                @Sendable func __safeDI_apiBuilder_a_bBuilder_api_Stage2(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
+		                    @Sendable func __safeDI_apiBuilder_a_bBuilder_api_Stage3(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
+		                        let api: any Api = LiveApi()
+		                        return api
+		                    }
+		                    return __safeDI_apiBuilder_a_bBuilder_api_Stage3
+		                }
+		                return __safeDI_apiBuilder_a_bBuilder_api_Stage2
+		            }
+		            _ = Hub.__safeDI_Hub_mock_58C7C781F68678B2.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature"))
+		            return Hub.mock(apiBuilder_a_bBuilder_api: __safeDI_apiBuilder_a_bBuilder_api, safeDIOverrides: safeDIOverrides.hub)
+		        }
+		        let hub: Hub = __safeDI_hub()
+		        return Screen(hub: hub)
+		    }
+		}
+		#endif
+		"""])
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe(
+			name: "B's api at each level",
+			expression: """
+			{ () -> [String] in
+			    let b = Screen.mock().hub.a.bBuilder.instantiate()
+			    return [b.api, b.a.bBuilder.instantiate().api].map { "\\($0)" }
+			}()
+			""",
+		)])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsEachStageBeforeItsSendableFunction_whenTwoNestedFunctionsBuiltByValueAreClosedOnFromSendableInstantiator() async throws {
+		// `Hub` builds `A` by value, `A` builds `C` by value, and `B`, built in `C`'s `SendableInstantiator`, builds `A` and
+		// `C` again, which calls both functions `Hub`'s mock builds them with from a `@Sendable` closure: each function is
+		// `@Sendable`, so each starts a stage of the place of `B`'s `api`, and the mock calls the stage before each
+		// function, `Stage1`'s before `A`'s and `Stage2`'s before `C`'s, inside `A`'s.
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api: Sendable {}",
+				seamFixtureType(named: "A", declarations: ["@Instantiated public let c: C"], conformances: ", Sendable")
+					.replacingOccurrences(of: "public init(", with: "package init("),
+				seamFixtureType(named: "B", declarations: ["@Instantiated public let api: any Api", "@Instantiated public let a: A", "@Instantiated public let c: C"], conformances: ", Sendable"),
+				seamFixtureType(named: "C", declarations: ["@Instantiated public let bBuilder: SendableInstantiator<B>"], conformances: ", Sendable"),
+				seamFixtureType(named: "Hub", declarations: ["@Instantiated public let a: A"], conformances: ", Sendable")
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: .public)\n"),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"import Feature\n\n" + seamFixtureType(named: "LiveApi", declarations: [], conformances: ", Api")
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Api.self])\n"),
+				"import Feature\n\n" + seamFixtureType(named: "Screen", declarations: ["@Instantiated public let hub: Hub"])
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n"),
+			], dependencies: ["Feature"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if DEBUG
+		extension Hub {
+		    public enum SafeDIStagedMockScope_Api_a_c_bBuilder_api {
+		        public struct Stage1 {}
+
+		        public struct Stage2 {}
+
+		        public struct Stage3 {}
+
+		        public struct Stage4 {
+		            public let a: A
+		            public let c: C
+		        }
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            a: __safeDI_Feature_A_MockConfiguration = .init()
+		        ) {
+		            self.a = a
+		        }
+
+		        public private(set) var a: __safeDI_Feature_A_MockConfiguration
+		    }
+
+		    public static func mock(
+		        apiBuilder_a_c_bBuilder_api: @escaping (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage3) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage4) -> any Api,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Hub {
+		        let __safeDI_apiBuilder_a_c_bBuilder_api = apiBuilder_a_c_bBuilder_api
+		        let __safeDI_a__a_c_safeDIBuilder = safeDIOverrides.a.c.safeDIBuilder
+		        let __safeDI_a__a_c_bBuilder_safeDIBuilder = safeDIOverrides.a.c.bBuilder.safeDIBuilder
+		        let __safeDI_a__safeDIBuilder = safeDIOverrides.a.safeDIBuilder
+		        let __safeDI_apiBuilder_a_c_bBuilder_api_Stage2 = __safeDI_apiBuilder_a_c_bBuilder_api(SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage1())
+		        @Sendable func __safeDI_a() -> A {
+		            let __safeDI_apiBuilder_a_c_bBuilder_api_Stage3 = __safeDI_apiBuilder_a_c_bBuilder_api_Stage2(SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage2())
+		            @Sendable func __safeDI_c() -> C {
+		                let __safeDI_apiBuilder_a_c_bBuilder_api_Stage4 = __safeDI_apiBuilder_a_c_bBuilder_api_Stage3(SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage3())
+		                @Sendable func __safeDI_bBuilder() -> B {
+		                    let a: A = __safeDI_a()
+		                    let c: C = __safeDI_c()
+		                    let api: any Api = __safeDI_apiBuilder_a_c_bBuilder_api_Stage4(SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage4(a: a, c: c))
+		                    return B.__safeDI_init(api: api, a: a, c: c, safeDIBuilder: __safeDI_a__a_c_bBuilder_safeDIBuilder)
+		                }
+		                let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
+		                return C.__safeDI_init(bBuilder: bBuilder, safeDIBuilder: __safeDI_a__a_c_safeDIBuilder)
+		            }
+		            let c: C = __safeDI_c()
+		            return A.__safeDI_init(c: c, safeDIBuilder: __safeDI_a__safeDIBuilder)
+		        }
+		        let a: A = __safeDI_a()
+		        return Hub(a: a)
+		    }
+		}
+
+		extension Hub {
+		    public enum __safeDI_Hub_mock_2313650B8A29E74F {}
+		}
+		#endif
+
+		#if DEBUG
+		/// Configuration for how `B` is constructed within the public mock trees of module `Feature`.
+		nonisolated public struct __safeDI_Feature_B_MockConfiguration {
+		    public init(
+		        _ safeDIBuilder: (@Sendable (any Api, A, C) -> B)? = nil
+		    ) {
+		        self.safeDIBuilder = safeDIBuilder
+		    }
+
+		    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public private(set) var safeDIBuilder: (@Sendable (any Api, A, C) -> B)?
+		}
+
+		extension B {
+		    static func __safeDI_init(api: any Api, a: A, c: C, safeDIBuilder: (@Sendable (any Api, A, C) -> B)?) -> B {
+		        if let safeDIBuilder { safeDIBuilder(api, a, c) } else { B(api: api, a: a, c: c) }
+		    }
+		}
+
+		/// Configuration for how `C` is constructed within the public mock trees of module `Feature`.
+		nonisolated public struct __safeDI_Feature_C_MockConfiguration {
+		    public init(
+		        bBuilder: __safeDI_Feature_B_MockConfiguration = .init(),
+		        _ safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> C)? = nil
+		    ) {
+		        self.bBuilder = bBuilder
+		        self.safeDIBuilder = safeDIBuilder
+		    }
+
+		    public private(set) var bBuilder: __safeDI_Feature_B_MockConfiguration
+		    /// Overrides how `C` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public private(set) var safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> C)?
+		}
+
+		extension C {
+		    static func __safeDI_init(bBuilder: SendableInstantiator<B>, safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> C)?) -> C {
+		        if let safeDIBuilder { safeDIBuilder(bBuilder) } else { C(bBuilder: bBuilder) }
+		    }
+		}
+
+		/// Configuration for how `A` is constructed within the public mock trees of module `Feature`.
+		nonisolated public struct __safeDI_Feature_A_MockConfiguration {
+		    public init(
+		        c: __safeDI_Feature_C_MockConfiguration = .init(),
+		        _ safeDIBuilder: (@Sendable (C) -> A)? = nil
+		    ) {
+		        self.c = c
+		        self.safeDIBuilder = safeDIBuilder
+		    }
+
+		    public private(set) var c: __safeDI_Feature_C_MockConfiguration
+		    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public private(set) var safeDIBuilder: (@Sendable (C) -> A)?
+		}
+
+		extension A {
+		    static func __safeDI_init(c: C, safeDIBuilder: (@Sendable (C) -> A)?) -> A {
+		        if let safeDIBuilder { safeDIBuilder(c) } else { A(c: c) }
+		    }
+		}
+		#endif
+
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            hub: Hub.SafeDIOverrides = .init()
+		        ) {
+		            self.hub = hub
+		        }
+
+		        private(set) var hub: Hub.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_hub() -> Hub {
+		            func __safeDI_apiBuilder_a_c_bBuilder_api(_ scope: Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage3) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage4) -> any Api {
+		                @Sendable func __safeDI_apiBuilder_a_c_bBuilder_api_Stage2(_ scope: Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage3) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage4) -> any Api {
+		                    @Sendable func __safeDI_apiBuilder_a_c_bBuilder_api_Stage3(_ scope: Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage3) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage4) -> any Api {
+		                        @Sendable func __safeDI_apiBuilder_a_c_bBuilder_api_Stage4(_ scope: Hub.SafeDIStagedMockScope_Api_a_c_bBuilder_api.Stage4) -> any Api {
+		                            let api: any Api = LiveApi()
+		                            return api
+		                        }
+		                        return __safeDI_apiBuilder_a_c_bBuilder_api_Stage4
+		                    }
+		                    return __safeDI_apiBuilder_a_c_bBuilder_api_Stage3
+		                }
+		                return __safeDI_apiBuilder_a_c_bBuilder_api_Stage2
+		            }
+		            _ = Hub.__safeDI_Hub_mock_2313650B8A29E74F.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature"))
+		            return Hub.mock(apiBuilder_a_c_bBuilder_api: __safeDI_apiBuilder_a_c_bBuilder_api, safeDIOverrides: safeDIOverrides.hub)
+		        }
+		        let hub: Hub = __safeDI_hub()
+		        return Screen(hub: hub)
+		    }
+		}
+		#endif
+		"""])
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock().hub")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsStageBeforeSendableFunction_whenFunctionBuildsReceivedPropertyPromotedToMockRoot() async throws {
+		// `Hub` receives `A`, so its mock builds `A` as a promoted root child, in a function that `B`, built in `A`'s
+		// `SendableInstantiator`, calls from a `@Sendable` closure as it builds `A` again: the function is `@Sendable`, so the
+		// mock calls the first stage of the place of `B`'s `api` before it, whether or not the caller passes `a`.
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api: Sendable {}",
+				seamFixtureType(named: "A", declarations: ["@Instantiated public let bBuilder: SendableInstantiator<B>"], conformances: ", Sendable")
+					.replacingOccurrences(of: "public init(", with: "package init("),
+				seamFixtureType(named: "B", declarations: ["@Instantiated public let api: any Api", "@Instantiated public let a: A"], conformances: ", Sendable"),
+				seamFixtureType(named: "Hub", declarations: ["@Received public let a: A"], conformances: ", Sendable")
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: .public)\n"),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"import Feature\n\n" + seamFixtureType(named: "LiveApi", declarations: [], conformances: ", Api")
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Api.self])\n"),
+				"import Feature\n\n" + seamFixtureType(named: "Screen", declarations: ["@Instantiated public let hub: Hub"])
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n"),
+			], dependencies: ["Feature"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if DEBUG
+		extension Hub {
+		    public enum SafeDIStagedMockScope_Api_a_bBuilder_api {
+		        public struct Stage1 {}
+
+		        public struct Stage2 {}
+
+		        public struct Stage3 {
+		            public let a: A
+		        }
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            a: __safeDI_Feature_A_MockConfiguration = .init()
+		        ) {
+		            self.a = a
+		        }
+
+		        public private(set) var a: __safeDI_Feature_A_MockConfiguration
+		    }
+
+		    public static func mock(
+		        apiBuilder_a_bBuilder_api: @escaping (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api,
+		        a: A? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Hub {
+		        let __safeDI_apiBuilder_a_bBuilder_api = apiBuilder_a_bBuilder_api
+		        let __safeDI_a__a_bBuilder_safeDIBuilder = safeDIOverrides.a.bBuilder.safeDIBuilder
+		        let __safeDI_a__safeDIBuilder = safeDIOverrides.a.safeDIBuilder
+		        let __safeDI_apiBuilder_a_bBuilder_api_Stage2 = __safeDI_apiBuilder_a_bBuilder_api(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1())
+		        @Sendable func __safeDI_a() -> A {
+		            let __safeDI_apiBuilder_a_bBuilder_api_Stage3 = __safeDI_apiBuilder_a_bBuilder_api_Stage2(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2())
+		            @Sendable func __safeDI_bBuilder() -> B {
+		                let a: A = __safeDI_a()
+		                let api: any Api = __safeDI_apiBuilder_a_bBuilder_api_Stage3(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3(a: a))
+		                return B.__safeDI_init(api: api, a: a, safeDIBuilder: __safeDI_a__a_bBuilder_safeDIBuilder)
+		            }
+		            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
+		            return A.__safeDI_init(bBuilder: bBuilder, safeDIBuilder: __safeDI_a__safeDIBuilder)
+		        }
+		        let a: A = if let a { a } else { __safeDI_a() }
+		        return Hub(a: a)
+		    }
+		}
+
+		extension Hub {
+		    public enum __safeDI_Hub_mock_930B6043A15E7421 {}
+		}
+		#endif
+
+		#if DEBUG
+		/// Configuration for how `B` is constructed within the public mock trees of module `Feature`.
+		nonisolated public struct __safeDI_Feature_B_MockConfiguration {
+		    public init(
+		        _ safeDIBuilder: (@Sendable (any Api, A) -> B)? = nil
+		    ) {
+		        self.safeDIBuilder = safeDIBuilder
+		    }
+
+		    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public private(set) var safeDIBuilder: (@Sendable (any Api, A) -> B)?
+		}
+
+		extension B {
+		    static func __safeDI_init(api: any Api, a: A, safeDIBuilder: (@Sendable (any Api, A) -> B)?) -> B {
+		        if let safeDIBuilder { safeDIBuilder(api, a) } else { B(api: api, a: a) }
+		    }
+		}
+
+		/// Configuration for how `A` is constructed within the public mock trees of module `Feature`.
+		nonisolated public struct __safeDI_Feature_A_MockConfiguration {
+		    public init(
+		        bBuilder: __safeDI_Feature_B_MockConfiguration = .init(),
+		        _ safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> A)? = nil
+		    ) {
+		        self.bBuilder = bBuilder
+		        self.safeDIBuilder = safeDIBuilder
+		    }
+
+		    public private(set) var bBuilder: __safeDI_Feature_B_MockConfiguration
+		    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public private(set) var safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> A)?
+		}
+
+		extension A {
+		    static func __safeDI_init(bBuilder: SendableInstantiator<B>, safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> A)?) -> A {
+		        if let safeDIBuilder { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
+		    }
+		}
+		#endif
+
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            hub: Hub.SafeDIOverrides = .init()
+		        ) {
+		            self.hub = hub
+		        }
+
+		        private(set) var hub: Hub.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_hub() -> Hub {
+		            func __safeDI_apiBuilder_a_bBuilder_api(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
+		                @Sendable func __safeDI_apiBuilder_a_bBuilder_api_Stage2(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
+		                    @Sendable func __safeDI_apiBuilder_a_bBuilder_api_Stage3(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
+		                        let api: any Api = LiveApi()
+		                        return api
+		                    }
+		                    return __safeDI_apiBuilder_a_bBuilder_api_Stage3
+		                }
+		                return __safeDI_apiBuilder_a_bBuilder_api_Stage2
+		            }
+		            _ = Hub.__safeDI_Hub_mock_930B6043A15E7421.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature"))
+		            return Hub.mock(apiBuilder_a_bBuilder_api: __safeDI_apiBuilder_a_bBuilder_api, a: nil, safeDIOverrides: safeDIOverrides.hub)
+		        }
+		        let hub: Hub = __safeDI_hub()
+		        return Screen(hub: hub)
+		    }
+		}
+		#endif
+		"""])
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock().hub")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsEachStageTheValuesItCarries_whenStagesBeforeSendableFunctionsCarryFields() async throws {
+		// As above, with `B` receiving `user`, which `Hub` builds before `A`, and `dep`, which `A` builds before `B`: the
+		// stage the mock calls before `A`'s `@Sendable` function carries `user`, and the one it calls inside it, before
+		// `B`'s, carries `dep`. `LiveApi` stores both, and `User` and `Dep` are classes, so a stage handed another
+		// instance than the one `B` receives builds a value the inline mock does not.
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api: Sendable {}",
+				seamFixtureType(named: "User", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+				seamFixtureType(named: "Dep", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+				seamFixtureType(named: "A", declarations: ["@Instantiated public let dep: Dep", "@Instantiated public let bBuilder: SendableInstantiator<B>"], conformances: ", Sendable")
+					.replacingOccurrences(of: "public init(", with: "package init("),
+				seamFixtureType(named: "B", declarations: ["@Instantiated public let api: any Api", "@Instantiated public let a: A", "@Received public let user: User", "@Received public let dep: Dep"], conformances: ", Sendable"),
+				seamFixtureType(named: "Hub", declarations: ["@Instantiated public let user: User", "@Instantiated public let a: A"], conformances: ", Sendable")
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: .public)\n"),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"import Feature\n\n" + seamFixtureType(named: "LiveApi", declarations: ["@Received public let user: User", "@Received public let dep: Dep"], conformances: ", Api")
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Api.self])\n"),
+				"import Feature\n\n" + seamFixtureType(named: "Screen", declarations: ["@Instantiated public let hub: Hub"])
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n"),
+			], dependencies: ["Feature"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if DEBUG
+		extension Hub {
+		    public enum SafeDIStagedMockScope_Api_a_bBuilder_api {
+		        public struct Stage1 {
+		            public let user: User
+		        }
+
+		        public struct Stage2 {
+		            public let dep: Dep
+		        }
+
+		        public struct Stage3 {
+		            public let a: A
+		        }
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            user: (() -> User)? = nil,
+		            a: __safeDI_Feature_A_MockConfiguration = .init()
+		        ) {
+		            self.user = user
+		            self.a = a
+		        }
+
+		        public private(set) var user: (() -> User)?
+		        public private(set) var a: __safeDI_Feature_A_MockConfiguration
+		    }
+
+		    public static func mock(
+		        apiBuilder_a_bBuilder_api: @escaping (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Hub {
+		        let __safeDI_apiBuilder_a_bBuilder_api = apiBuilder_a_bBuilder_api
+		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
+		        let __safeDI_a__a_dep_safeDIBuilder = safeDIOverrides.a.dep
+		        let __safeDI_a__a_bBuilder_safeDIBuilder = safeDIOverrides.a.bBuilder.safeDIBuilder
+		        let __safeDI_a__safeDIBuilder = safeDIOverrides.a.safeDIBuilder
+		        let __safeDI_apiBuilder_a_bBuilder_api_Stage2 = __safeDI_apiBuilder_a_bBuilder_api(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1(user: user))
+		        @Sendable func __safeDI_a() -> A {
+		            let dep = if let safeDIBuilder = __safeDI_a__a_dep_safeDIBuilder { safeDIBuilder() } else { Dep() }
+		            let __safeDI_apiBuilder_a_bBuilder_api_Stage3 = __safeDI_apiBuilder_a_bBuilder_api_Stage2(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2(dep: dep))
+		            @Sendable func __safeDI_bBuilder() -> B {
+		                let a: A = __safeDI_a()
+		                let api: any Api = __safeDI_apiBuilder_a_bBuilder_api_Stage3(SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3(a: a))
+		                return B.__safeDI_init(api: api, a: a, user: user, dep: dep, safeDIBuilder: __safeDI_a__a_bBuilder_safeDIBuilder)
+		            }
+		            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
+		            return A.__safeDI_init(dep: dep, bBuilder: bBuilder, safeDIBuilder: __safeDI_a__safeDIBuilder)
+		        }
+		        let a: A = __safeDI_a()
+		        return Hub(user: user, a: a)
+		    }
+		}
+
+		extension Hub {
+		    public enum __safeDI_Hub_mock_4BCFD21E3CE5C996 {}
+		}
+		#endif
+
+		#if DEBUG
+		/// Configuration for how `B` is constructed within the public mock trees of module `Feature`.
+		nonisolated public struct __safeDI_Feature_B_MockConfiguration {
+		    public init(
+		        _ safeDIBuilder: (@Sendable (any Api, A, User, Dep) -> B)? = nil
+		    ) {
+		        self.safeDIBuilder = safeDIBuilder
+		    }
+
+		    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public private(set) var safeDIBuilder: (@Sendable (any Api, A, User, Dep) -> B)?
+		}
+
+		extension B {
+		    static func __safeDI_init(api: any Api, a: A, user: User, dep: Dep, safeDIBuilder: (@Sendable (any Api, A, User, Dep) -> B)?) -> B {
+		        if let safeDIBuilder { safeDIBuilder(api, a, user, dep) } else { B(api: api, a: a, user: user, dep: dep) }
+		    }
+		}
+
+		/// Configuration for how `A` is constructed within the public mock trees of module `Feature`.
+		nonisolated public struct __safeDI_Feature_A_MockConfiguration {
+		    public init(
+		        dep: (@Sendable () -> Dep)? = nil,
+		        bBuilder: __safeDI_Feature_B_MockConfiguration = .init(),
+		        _ safeDIBuilder: (@Sendable (Dep, SendableInstantiator<B>) -> A)? = nil
+		    ) {
+		        self.dep = dep
+		        self.bBuilder = bBuilder
+		        self.safeDIBuilder = safeDIBuilder
+		    }
+
+		    public private(set) var dep: (@Sendable () -> Dep)?
+		    public private(set) var bBuilder: __safeDI_Feature_B_MockConfiguration
+		    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public private(set) var safeDIBuilder: (@Sendable (Dep, SendableInstantiator<B>) -> A)?
+		}
+
+		extension A {
+		    static func __safeDI_init(dep: Dep, bBuilder: SendableInstantiator<B>, safeDIBuilder: (@Sendable (Dep, SendableInstantiator<B>) -> A)?) -> A {
+		        if let safeDIBuilder { safeDIBuilder(dep, bBuilder) } else { A(dep: dep, bBuilder: bBuilder) }
+		    }
+		}
+		#endif
+
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            hub: Hub.SafeDIOverrides = .init()
+		        ) {
+		            self.hub = hub
+		        }
+
+		        private(set) var hub: Hub.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_hub() -> Hub {
+		            func __safeDI_apiBuilder_a_bBuilder_api(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage1) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
+		                let user = scope.user
+		                @Sendable func __safeDI_apiBuilder_a_bBuilder_api_Stage2(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage2) -> @Sendable (Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
+		                    let dep = scope.dep
+		                    @Sendable func __safeDI_apiBuilder_a_bBuilder_api_Stage3(_ scope: Hub.SafeDIStagedMockScope_Api_a_bBuilder_api.Stage3) -> any Api {
+		                        let api: any Api = LiveApi(user: user, dep: dep)
+		                        return api
+		                    }
+		                    return __safeDI_apiBuilder_a_bBuilder_api_Stage3
+		                }
+		                return __safeDI_apiBuilder_a_bBuilder_api_Stage2
+		            }
+		            _ = Hub.__safeDI_Hub_mock_4BCFD21E3CE5C996.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature"))
+		            return Hub.mock(apiBuilder_a_bBuilder_api: __safeDI_apiBuilder_a_bBuilder_api, safeDIOverrides: safeDIOverrides.hub)
+		        }
+		        let hub: Hub = __safeDI_hub()
+		        return Screen(hub: hub)
+		    }
+		}
+		#endif
+		"""])
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock().hub")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenRequiredReceivedParameterAndHoleAreNarrower() async {
 		// M2.9b with two receivers, and M7.1b's hole whose type is narrower: each is reported, with a note at each receive or
 		// instantiation.
