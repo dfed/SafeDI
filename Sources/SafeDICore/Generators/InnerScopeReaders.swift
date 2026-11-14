@@ -432,7 +432,7 @@ struct InnerScopeReaders: Sendable {
 					bindings.append(readsOwnValue ? valuesName : "_")
 				}
 				bindings.append(heldReader == nil ? "_" : scopeName)
-			case let .fill(_, innerEnumType, _, _):
+			case let .fill(_, innerEnumType, _, _, _):
 				if enumCase.values != nil {
 					bindings.append(readsOwnValue ? valuesName : "_")
 				}

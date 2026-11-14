@@ -1490,9 +1490,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						}
 						let targetKey = ScopeGenerator.fillKey(of: hole)
 						return Case(name: enumCase.name, carriesPayload: enumCase.values != nil, hasForwardedValue: hole.forwardedType != nil, target: Case.Target(name: fillNames[targetKey] ?? "", key: targetKey, takesPassUp: false), values: enumCase.values?.fields, labelsBoundLater: enumCase.values?.labelsBoundLater ?? [])
-					case let .nested(innerKey, _),
+					case let .nested(innerKey, _, _),
 					     let .inner(innerKey, _, _),
-					     let .fill(_, _, innerKey, _):
+					     let .fill(_, _, innerKey, _, _):
 						// The routes this dispatcher serves reach the places of the enum the case holds that are on them.
 						let reachedSites = sitesReached(from: innerKey, onRoutesOf: family)
 						let target = targetInstance(of: innerKey, onRoutesOf: family)
@@ -5515,10 +5515,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let holesBySite = Dictionary(holes.map { ($0.site, $0) }, uniquingKeysWith: { first, _ in first })
 		return scopeEnums.filter { $0.rootTypeName == nil && $0.key.seamType == ownType }.map { scopeEnum in
 			let key = scopeEnum.key
-			// An enum nested by type holds the enums of the types it leads to, which are declared inside it; a case can hold an
-			// enum of the other family, which it spells from that family's root.
-			let enumsOfHoleType = scopeEnums.filter { $0.key.describedType != nil && $0.key.seamType == key.seamType && $0.key.holeType == key.holeType }
-			let nestedEnums = enumsOfHoleType.filter { $0.key.isSendable == key.isSendable }
+			// A root enum declares the enums of its family's types other than the seam's own, nested inside it; a case spells the
+			// enum it holds as its kind gives it, a root or a nested enum of either family.
+			let nestedEnums = scopeEnums.filter { $0.key.describedType != nil && $0.key.seamType == key.seamType && $0.key.holeType == key.holeType && $0.key.isSendable == key.isSendable }
 			var namedTypes = [TypeDescription]()
 			for enumCase in ([scopeEnum] + nestedEnums).flatMap(\.cases) {
 				namedTypes += enumCase.values?.fields.filter { $0.access == .public }.map(\.property.typeDescription) ?? []
@@ -5531,7 +5530,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					break
 				}
 			}
-			let declaration = scopeEnumDeclaration(of: scopeEnum, nestedEnums: nestedEnums, enumsOfHoleType: enumsOfHoleType, holesBySite: holesBySite, typesDeclaredEscaping: typesDeclaredEscaping)
+			let declaration = scopeEnumDeclaration(of: scopeEnum, nestedEnums: nestedEnums, holesBySite: holesBySite, typesDeclaredEscaping: typesDeclaredEscaping)
 			guard let marker = unreadTypeComment?.markerLine(namedBy: namedTypes, indent: standardIndent) else { return declaration }
 			return "\(marker)\n\(declaration)"
 		}
@@ -5540,8 +5539,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The declaration of `scopeEnum`, nested in the seam: its cases in the order the seam's generated code first reaches them,
 	/// then each case's payload struct, then, for a root enum nested by type, each of `nestedEnums`. `@frozen public`, so a
 	/// caller can switch over it without a default in any module, and so its access is the seam's. A case that holds an enum
-	/// nested by type spells it from its root, found among `enumsOfHoleType`.
-	static func scopeEnumDeclaration(of scopeEnum: SeamSignature.ScopeEnum, nestedEnums: [SeamSignature.ScopeEnum] = [], enumsOfHoleType: [SeamSignature.ScopeEnum] = [], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole], typesDeclaredEscaping: Set<TypeDescription>, indent: String = standardIndent) -> String {
+	/// of the seam spells it as its kind gives it: from its root, or the root itself.
+	static func scopeEnumDeclaration(of scopeEnum: SeamSignature.ScopeEnum, nestedEnums: [SeamSignature.ScopeEnum] = [], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole], typesDeclaredEscaping: Set<TypeDescription>, indent: String = standardIndent) -> String {
 		let caseIndent = indent + standardIndent
 		var caseLines = [String]()
 		var payloadStructs = [String]()
@@ -5567,14 +5566,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			switch enumCase.kind {
 			case let .place(sites):
 				caseLines.append(caseLine(enumCase.name, payloads: [valuesTypeName, forwardedPayload(of: sites.first.flatMap { holesBySite[$0] })]))
-			case let .nested(enumKey, isIndirect):
-				let nestedType = enumsOfHoleType.first { $0.key == enumKey }?.typeQualified(by: nil).asSource ?? ""
-				caseLines.append(caseLine(enumCase.name, isIndirect: isIndirect, payloads: [valuesTypeName, nestedType]))
+			case let .nested(_, enumType, isIndirect):
+				caseLines.append(caseLine(enumCase.name, isIndirect: isIndirect, payloads: [valuesTypeName, enumType.asSource]))
 			case let .inner(_, enumType, isIndirect):
 				caseLines.append(caseLine(enumCase.name, isIndirect: isIndirect, payloads: [valuesTypeName, enumType.asSource]))
-			case let .fill(_, innerEnumType, enumKey, isIndirect):
-				let nestedType = enumsOfHoleType.first { $0.key == enumKey }?.typeQualified(by: nil).asSource ?? ""
-				caseLines.append(caseLine(enumCase.name, isIndirect: isIndirect, payloads: [valuesTypeName, innerEnumType?.asSource, nestedType]))
+			case let .fill(_, innerEnumType, _, enumType, isIndirect):
+				caseLines.append(caseLine(enumCase.name, isIndirect: isIndirect, payloads: [valuesTypeName, innerEnumType?.asSource, enumType.asSource]))
 			}
 		}
 		var body = caseLines.joined(separator: "\n")
@@ -5584,7 +5581,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Only the root declares the enums nested in it; a nested enum's cases spell them from the root.
 		if scopeEnum.rootTypeName == nil {
 			for nestedEnum in nestedEnums {
-				body += (body.isEmpty ? "" : "\n\n") + scopeEnumDeclaration(of: nestedEnum, enumsOfHoleType: enumsOfHoleType, holesBySite: holesBySite, typesDeclaredEscaping: typesDeclaredEscaping, indent: caseIndent)
+				body += (body.isEmpty ? "" : "\n\n") + scopeEnumDeclaration(of: nestedEnum, holesBySite: holesBySite, typesDeclaredEscaping: typesDeclaredEscaping, indent: caseIndent)
 			}
 		}
 		return """

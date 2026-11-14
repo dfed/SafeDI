@@ -356,6 +356,8 @@ extension DependencyTreeGenerator {
 		// Names. A nested enum is named by its type as the seam's module spells it; every generated type nested in a root takes
 		// `_` while a type spelled inside that root, a case, or another generated type has its name.
 		var enumTypeNameByDescribed = [Described: String]()
+		/// The type of each described type's enum as it is declared: a root enum, or an enum nested in its family's root.
+		var enumTypeByDescribed = [Described: TypeDescription]()
 		var caseNamesByDescribed = [Described: [String]]()
 		var valuesTypeNamesByDescribed = [Described: [String?]]()
 		for isSendable in [false, true] {
@@ -403,6 +405,9 @@ extension DependencyTreeGenerator {
 			}
 			var takenTypeNames = spelledTypeNames.union([rootTypeNames.plain, rootTypeNames.sendable])
 			enumTypeNameByDescribed[Described(type: seamType, isSendable: isSendable)] = rootTypeName
+			for current in familyDescribed where current.type == seamType {
+				enumTypeByDescribed[current] = SeamSignature.ScopeEnum.nestedType(named: rootTypeName, in: nil)
+			}
 			let nestedTypes = familyDescribed.filter { $0.type != seamType }
 			for (current, name) in zip(nestedTypes, nestedEnumNames(of: nestedTypes.map(\.type), instantiables: instantiables)) {
 				var name = name
@@ -410,6 +415,7 @@ extension DependencyTreeGenerator {
 					name = "\(name)_".spelledAsJoinedIdentifier
 				}
 				enumTypeNameByDescribed[current] = name
+				enumTypeByDescribed[current] = SeamSignature.ScopeEnum.nestedType(named: name, in: rootTypeName)
 			}
 			// A payload struct's name is taken from its case.
 			for current in familyDescribed {
@@ -428,9 +434,6 @@ extension DependencyTreeGenerator {
 		}
 		func key(of current: Described) -> SeamSignature.ScopeEnum.Key {
 			SeamSignature.ScopeEnum.Key(seamType: seamType, holeType: holeType, isSendable: current.isSendable, describedType: current.type == seamType ? nil : current.type)
-		}
-		func enumType(of current: Described) -> TypeDescription? {
-			enumTypeNameByDescribed[current].map { SeamSignature.ScopeEnum.nestedType(named: $0, in: current.type == seamType ? nil : rootTypeName(isSendable: current.isSendable)) }
 		}
 
 		// The enums: the plain family's, its root declared where a case of either family leads to a plain enum, then the
@@ -471,16 +474,17 @@ extension DependencyTreeGenerator {
 					kind = .place(sites: [])
 				case let .nested(builtType, isSendable):
 					let heldDescribed = Described(type: builtType, isSendable: isSendable)
-					guard describedSet.contains(heldDescribed) else { continue }
-					kind = .nested(enumKey: key(of: heldDescribed), isIndirect: false)
+					// The case spells the enum it holds as the enum is declared, the seam's own root enum among them.
+					guard let heldEnumType = enumTypeByDescribed[heldDescribed] else { continue }
+					kind = .nested(enumKey: key(of: heldDescribed), enumType: heldEnumType, isIndirect: false)
 				case let .inner(innerKey):
 					guard let innerEnum = reachedEnum(innerKey) else { continue }
 					kind = .inner(enumKey: innerKey, enumType: innerEnum.type, isIndirect: false)
 				case let .fill(filledBuilder, _, _, fulfiller, isSendable):
 					let heldDescribed = Described(type: fulfiller, isSendable: isSendable)
-					guard describedSet.contains(heldDescribed), let innerEnum = reachedEnum(filledBuilder.innerKey) else { continue }
+					guard let heldEnumType = enumTypeByDescribed[heldDescribed], let innerEnum = reachedEnum(filledBuilder.innerKey) else { continue }
 					// A case that leads to a `@Sendable` function inside the fill carries no value bound outside it.
-					kind = .fill(innerKey: filledBuilder.innerKey, innerEnumType: filledBuilder.carriesInnerScope ? innerEnum.type : nil, enumKey: key(of: heldDescribed), isIndirect: false)
+					kind = .fill(innerKey: filledBuilder.innerKey, innerEnumType: filledBuilder.carriesInnerScope ? innerEnum.type : nil, enumKey: key(of: heldDescribed), enumType: heldEnumType, isIndirect: false)
 				}
 				let enumCase = SeamSignature.ScopeEnum.Case(name: caseNames[index], kind: kind, values: values)
 				let caseOfProperty = CaseOfProperty(described: current, property: draftCase.property, isSendableBeneath: draftCase.isSendableBeneath, filledBuilder: draftCase.filledBuilder)
@@ -508,11 +512,11 @@ extension DependencyTreeGenerator {
 		func routeStep(of caseOfProperty: CaseOfProperty, bindingPrefix: [Property]?) -> SeamSignature.Hole.RouteStep? {
 			guard let enumCase = casesByProperty[caseOfProperty] else { return nil }
 			var innerScope: SeamSignature.Hole.RouteStep.InnerScope?
-			if case let .fill(innerKey, innerEnumType?, _, _) = enumCase.kind, let bindingPrefix {
+			if case let .fill(innerKey, innerEnumType?, _, _, _) = enumCase.kind, let bindingPrefix {
 				innerScope = .init(callPath: bindingPrefix, innerKey: innerKey, enumType: innerEnumType, builderLabel: reachedEnum(innerKey)?.builderLabel ?? "", name: "")
 			}
 			let leadsIntoFill = caseOfProperty.filledBuilder != nil
-			guard let values = enumCase.values, let enumType = enumType(of: caseOfProperty.described) else {
+			guard let values = enumCase.values, let enumType = enumTypeByDescribed[caseOfProperty.described] else {
 				return SeamSignature.Hole.RouteStep(caseName: enumCase.name, values: nil, innerScope: innerScope, leadsIntoFill: leadsIntoFill)
 			}
 			if let bindingPrefix {
