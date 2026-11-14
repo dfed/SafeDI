@@ -1627,9 +1627,8 @@ public actor DependencyTreeGenerator {
 					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 			case let .fillFindings(fillFindings):
 				fillFindings
-					.map(\.sourceDiagnostics)
-					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
-					.flatMap(\.self)
+					.sorted { $0.precedesInSourceOrder($1) }
+					.flatMap(\.sourceDiagnostics)
 			case let .unfilledHoles(unfilledHoles):
 				unfilledHoles
 					.map(\.sourceDiagnostics)
