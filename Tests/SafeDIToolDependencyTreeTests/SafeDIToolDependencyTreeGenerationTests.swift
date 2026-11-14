@@ -1678,7 +1678,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// without `DEBUG`, caches what it reports, and generate, with `DEBUG`, reads the cache.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(session:)` at line 8, which can be called with the argument labels of its generated initializer, `init(session:)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename the hand-written initializer's argument labels, or remove it.
+			\(fixtures["Screen.swift"]):8:5: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(session:)`, which can be called with the argument labels of its generated initializer, `init(session:)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename this initializer’s argument labels; remove it; or, while code you write still calls it, remove `generatePlainDependencyTreeInitializers: true` from this module’s `#SafeDIConfiguration`.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
@@ -1743,7 +1743,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// `Session`, as its declaration does, and is found by its labels, whatever the spelling of its types.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):2:5: error: SafeDI cannot generate the dependency tree of `Feature.Screen`: it declares `init(session:)` at line 8, which can be called with the argument labels of its generated initializer, `init(session:)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename the hand-written initializer's argument labels, or remove it.
+			\(fixtures["Screen.swift"]):8:9: error: SafeDI cannot generate the dependency tree of `Feature.Screen`: it declares `init(session:)`, which can be called with the argument labels of its generated initializer, `init(session:)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename this initializer’s argument labels; remove it; or, while code you write still calls it, remove `generatePlainDependencyTreeInitializers: true` from this module’s `#SafeDIConfiguration`.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
@@ -2322,7 +2322,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// macro cannot report it: it cannot see the pass-through.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(user:database:)` at line 8, which can be called with the argument labels of its generated initializer, `init(user:database:)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename the hand-written initializer's argument labels, or remove it.
+			\(fixtures["Screen.swift"]):8:5: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(user:database:)`, which can be called with the argument labels of its generated initializer, `init(user:database:)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename this initializer’s argument labels; remove it; or, while code you write still calls it, remove `generatePlainDependencyTreeInitializers: true` from this module’s `#SafeDIConfiguration`.
 			"""
 		}) {
 			try await executeSafeDIToolTest(

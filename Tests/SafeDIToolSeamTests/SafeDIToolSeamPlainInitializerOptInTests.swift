@@ -292,7 +292,7 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 		// redeclare.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init()` at line 7, which can be called with the argument labels of its generated initializer, `init()`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename the hand-written initializer's argument labels, or remove it.
+			\(fixtures["Screen.swift"]):7:5: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init()`, which can be called with the argument labels of its generated initializer, `init()`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Remove this initializer, or give it a parameter that has no default value, so that `Screen()` can mean only the generated initializer.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
@@ -310,6 +310,42 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 					    }
 
 					    @Instantiated let header: Header
+					}
+					""",
+					seamFixtureType(named: "Header", declarations: []),
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingQualifiedCall_whenNestedSeamDeclaresInitializerTakingNoArgumentBesideTierTakingNoArgument() async {
+		// The remedy spells the call the generated initializer keeps as the seam's qualified name.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Screen.swift"]):8:9: error: SafeDI cannot generate the dependency tree of `Feature.Screen`: it declares `init()`, which can be called with the argument labels of its generated initializer, `init()`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Remove this initializer, or give it a parameter that has no default value, so that `Feature.Screen()` can mean only the generated initializer.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screen: Feature.Screen"]),
+					"""
+					public enum Feature {
+					    @Instantiable(generateDependencyTree: true)
+					    public struct Screen: Instantiable {
+					        public init(header: Header) {
+					            self.header = header
+					        }
+
+					        public init() {
+					            self.init(header: Header())
+					        }
+
+					        @Instantiated let header: Header
+					    }
 					}
 					""",
 					seamFixtureType(named: "Header", declarations: []),

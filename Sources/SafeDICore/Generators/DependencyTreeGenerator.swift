@@ -2466,9 +2466,18 @@ public actor DependencyTreeGenerator {
 				case let .parameters(.initializerCollides(parameters, builderLabels, handWrittenInitializer)):
 					receivers = []
 					let handWrittenSignature = "init(\(handWrittenInitializer.arguments.map { "\($0.label):" }.joined()))"
-					let generatedSignature = "init(\((parameters.map(\.property.label) + builderLabels).map { "\($0):" }.joined()))"
-					let location = handWrittenInitializer.access.declarationStartLocation.map { " at line \($0.line)" } ?? ""
-					message = "SafeDI cannot generate the dependency tree of \(seamName): it declares `\(handWrittenSignature)`\(location), which can be called with the argument labels of its generated initializer, `\(generatedSignature)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename the hand-written initializer's argument labels, or remove it."
+					let generatedLabels = parameters.map(\.property.label) + builderLabels
+					let generatedSignature = "init(\(generatedLabels.map { "\($0):" }.joined()))"
+					// Reported at the hand-written initializer, which the remedy calls "this initializer".
+					location = handWrittenInitializer.access.declarationStartLocation ?? location
+					// A tier that takes no argument is `init()` whatever the module sets, so only the hand-written initializer
+					// can give way; a labelled tier collides only where the module generates the plain initializer.
+					let remedy = if generatedLabels.isEmpty {
+						"Remove this initializer, or give it a parameter that has no default value, so that `\(seam.concreteInstantiable.asSource)()` can mean only the generated initializer."
+					} else {
+						"Rename this initializer’s argument labels; remove it; or, while code you write still calls it, remove `\(SafeDIConfigurationVisitor.generatePlainDependencyTreeInitializersArgumentLabel): true` from this module’s `#\(SafeDIConfigurationVisitor.macroName)`."
+					}
+					message = "SafeDI cannot generate the dependency tree of \(seamName): it declares `\(handWrittenSignature)`, which can be called with the argument labels of its generated initializer, `\(generatedSignature)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. \(remedy)"
 				}
 				// The notes follow the receivers in the order the tree declares them, which no name decides.
 				return [SourceDiagnostic(severity: .error, location: location, message: message)]

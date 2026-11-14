@@ -488,7 +488,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		let labels = handWrittenInitializer.contains("flag:") ? "user:flag:" : "user:"
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(\(labels))` at line 7, which can be called with the argument labels of its generated initializer, `init(user:)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename the hand-written initializer's argument labels, or remove it.
+			\(fixtures["Screen.swift"]):7:5: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(\(labels))`, which can be called with the argument labels of its generated initializer, `init(user:)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename this initializer’s argument labels; remove it; or, while code you write still calls it, remove `generatePlainDependencyTreeInitializers: true` from this module’s `#SafeDIConfiguration`.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
@@ -528,7 +528,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		// `User`, so the seam's tree would silently not be built.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(user:)` at line 7, which can be called with the argument labels of its generated initializer, `init(user:)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename the hand-written initializer's argument labels, or remove it.
+			\(fixtures["Screen.swift"]):7:5: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(user:)`, which can be called with the argument labels of its generated initializer, `init(user:)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename this initializer’s argument labels; remove it; or, while code you write still calls it, remove `generatePlainDependencyTreeInitializers: true` from this module’s `#SafeDIConfiguration`.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
@@ -569,7 +569,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		// The generated initializer takes `user`, the seam's own receive, by value, so the error names no autoclosure.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(user:)` at line 8, which can be called with the argument labels of its generated initializer, `init(user:)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename the hand-written initializer's argument labels, or remove it.
+			\(fixtures["Screen.swift"]):8:5: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(user:)`, which can be called with the argument labels of its generated initializer, `init(user:)`. Because the labels match, a call meant for one initializer can run the other instead, or the code can fail to compile. Rename this initializer’s argument labels; remove it; or, while code you write still calls it, remove `generatePlainDependencyTreeInitializers: true` from this module’s `#SafeDIConfiguration`.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
