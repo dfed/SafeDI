@@ -194,6 +194,15 @@ struct GraphFuzzerFixture: Equatable {
 		swiftFileContent.contains(where: GraphFuzzerModule.fillsHole(declaredIn:))
 	}
 
+	/// The sample values the comparator calls the instantiators `addingHoleShapes` draws that forward a value with:
+	/// `HoleNest`'s `holeNestScreenBuilder`, which forwards `holeNestId`, so that it traverses the route of the inner seam's
+	/// enum a place inside a plain fill reads `holeNestId` from (`DifferentialValueSample`). Empty for a graph without it.
+	var holeDrawForwardedPropertiesSamples: [DifferentialValueSample] {
+		let screenName = typeNamePrefix + "HoleNestScreen"
+		guard swiftFileContent.contains(where: { $0.contains("final class \(screenName): ") }) else { return [] }
+		return [DifferentialValueSample(type: "\(screenName).ForwardedProperties", expression: "7")]
+	}
+
 	/// The visible build of a graph with a hole: every file whose first line says it fills a hole declared in the seam's
 	/// module instead, which can then see the fulfilling type and builds it inline, so the seam takes no builder.
 	var withoutHoles: GraphFuzzerFixture {
@@ -1225,6 +1234,41 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// no cycle parameter, so `HoleTangleT`'s level binds `holeTangleMark` as that build's tree reads it there: the seam's
 	/// deferred parameter, which it holds lazily.
 	case holeTangleTBuiltByValue
+	/// `HoleNest`, a seam of the module beneath the seam's that `HoleSeam` calls by value or through an `Instantiator`,
+	/// whose hole `HoleNestImpl` fills in the seam's module with a place of `HoleSeam`'s own hole: a place inside a plain
+	/// fill (the design's section 2.6).
+	case holePlaceInsidePlainFill
+	/// `HoleNest` holds its place at its root and in `HoleNestScreen`, which it builds through an `Instantiator` that
+	/// forwards `holeNestId`: the place's case reaches two routes of the inner seam's enum.
+	case holePlaceInsidePlainFillOnTwoInnerRoutes
+	/// `HoleImpl` reads `holeNestId` only if available, which only `HoleNestScreen`'s level holds, so its dispatcher reads
+	/// it through the inner seam's levels (`InnerScopeReaders`).
+	case holePlaceInsidePlainFillReadsInnerLevel
+	/// `HoleNestImpl` holds its place on `HoleNestWidget`, which it instantiates: two types deep inside the fill.
+	case holePlaceInsidePlainFillTwoTypesDeep
+	/// `HoleSeam` calls `HoleNest` both by value and through an `Instantiator`: a case per call.
+	case holePlaceInsidePlainFillTwoCalls
+	/// `HoleNestImpl` reads `holeNestId` only if available, from its fill's struct.
+	case holePlaceInsidePlainFillFulfillerReadsInnerLevel
+	/// A loop of received instantiators, `HoleRingA` and `HoleRingB`, each receiving the next one's `Instantiator`, whose
+	/// later member holds a place of `HoleSeam`'s hole: its case is bound before the loop's first function and holds no
+	/// member of the loop.
+	case holeUnderLaterLoopMember
+	/// The loop's first member holds a place too: half the time every member does.
+	case holeUnderEveryLoopMember
+	/// The loop has a third member, `HoleRingC`.
+	case holeLoopOfThreeMembers
+	/// The members hold their places through `HoleRingLeaf`, a type each instantiates.
+	case holeLoopPlaceThroughSharedLeaf
+	/// `HoleRingFlow`, which the seam builds by value, declares the loop, one level beneath the seam.
+	case holeLoopBeneathSeam
+	/// The members instantiate `holeRingMark` before their places, which `HoleImpl` reads only if available: the payload
+	/// of a later member's level holds a value.
+	case holeLoopMemberLevelReadByFill
+	/// The scope that declares the loop also builds `HoleRingA` by value, beside the loop: that build wraps none of the
+	/// instantiators `HoleRingA`'s builder function wraps again, which a level of its type leaves out
+	/// (`SeamPlaceLevels.Level.fieldsOfType`).
+	case holeLoopMemberAlsoBuiltByValue
 
 	/// `addingUncreatedAliasExtensions`' second declaration of the alias's label: a lazily instantiated wrapper of the
 	/// alias's property, on `AliasLeft`, `AliasMid` or the seam.
@@ -4693,7 +4737,9 @@ enum GraphFuzzerGenerator {
 		/// the nested builders' shapes: a second hole type; a wrapper of the hole beside its by-value place; an inner
 		/// place on a `@Sendable` route; a cycle of two seams with a `@Sendable` edge; an inner seam reached by a plain and a
 		/// `@Sendable` route, now and then passed up with both enums; and a place inside a `@Sendable` fill the seam generates.
-		/// The pass records the property that gives the graph its second place of a hole (`secondHolePlace`).
+		/// Four more draw the shapes a scope nested by type is for: types shared under a hole, a tangle of cycles, a place
+		/// inside a plain fill, and a hole under a later member of a loop of received instantiators. The pass records the
+		/// property that gives the graph its second place of a hole (`secondHolePlace`).
 		private mutating func addingHoleShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.contains(.generateDependencyTree), holeRandom.percentChance(33) else { return declarations }
 			var declarations = declarations
@@ -4757,6 +4803,23 @@ enum GraphFuzzerGenerator {
 			let tangleReadsInstantiator = holeRolls.tangle.percentChance(50)
 			let tangleTReadsMark = holeRolls.tangle.percentChance(90)
 			let tangleTBuiltByValue = holeRolls.tangle.percentChance(50)
+			// A place inside a plain fill, and a hole under a later member of a loop of received instantiators, each on a
+			// generator of its own, made whatever the base draw.
+			let drawsPlainFillPlace = holeRolls.plainFillPlace.percentChance(25)
+			let plainFillRouteRoll = holeRolls.plainFillPlace.integer(in: 0...3)
+			let plainFillCallsByValue = holeRolls.plainFillPlace.percentChance(50)
+			let plainFillCallsTwice = holeRolls.plainFillPlace.percentChance(25)
+			let plainFillPlaceTwoTypesDeep = holeRolls.plainFillPlace.percentChance(35)
+			let plainFillImplReadsId = holeRolls.plainFillPlace.percentChance(75)
+			let plainFillFulfillerReadsId = holeRolls.plainFillPlace.percentChance(30)
+			let drawsLoopPlace = holeRolls.loopPlace.percentChance(25)
+			let loopLength = holeRolls.loopPlace.percentChance(30) ? 3 : 2
+			let loopPlaceOnEveryMember = holeRolls.loopPlace.percentChance(50)
+			let loopDeclaredBeneathSeam = holeRolls.loopPlace.percentChance(40)
+			let loopMembersBindMark = holeRolls.loopPlace.percentChance(60)
+			let loopImplReadsMark = holeRolls.loopPlace.percentChance(60)
+			let loopPlaceThroughLeaf = holeRolls.loopPlace.percentChance(30)
+			let loopMemberBuiltByValue = holeRolls.loopPlace.percentChance(35)
 			// The fillers and the root that reaches the seam are in another package than the seam's, unless the seam's module
 			// has no package, which this draw keeps apart from a caller in another package, as every other graph's draws were.
 			let fillsFromOtherPackage = drawsCrossPackage && !modulesOmittingPackageName.contains(.seamModule)
@@ -5239,6 +5302,139 @@ enum GraphFuzzerGenerator {
 					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeTangleTValue", type: name("HoleTangleT")))
 				}
 			}
+			// Whether a fill calls the seam again (`HoleImpl`, `HoleMiddle` or `HoleTrackerImpl`). Each place of the seam's hole
+			// then calls the seam, whose places call it again, and the value comparator, which calls each instantiator twice
+			// and goes round a loop of them twice, describes a tree that grows exponentially with the places a visit of the
+			// seam holds: past a batch's traversals, and an isolated seed's, with the draws below at their widest (seed 945
+			// with a place inside a plain fill on two calls and two routes; seeds 600, 945 and 1393 with a loop's places).
+			let fillCallsSeamAgain = ownerIsBuiltByInstantiator && (drawsReentry || drawsNestedFill && !drawsSecondHole)
+			// A place inside a plain fill the seam generates (the design's section 2.6): `HoleNest`, a seam in the module beneath
+			// the seam's, takes a builder for `HoleNestService`, which `HoleNestImpl`, in the seam's module, fills, so the seam
+			// generates the fill, and `HoleNestImpl`'s own place of `HoleService`, on it or, now and then, on `HoleNestWidget`
+			// beneath it, is a place of `HoleSeam`'s inside that fill. `HoleSeam` calls `HoleNest` by value or through an
+			// `Instantiator`, now and then both, so the fill is plain and each call has a case of its own. `HoleNest` holds its
+			// place at its root, in `HoleNestScreen`, which it builds through an `Instantiator` that forwards `holeNestId`, or
+			// both, so that the case reaches every route of the inner seam's enum; `HoleImpl` mostly reads `holeNestId` only if
+			// available, which only the screen's level holds, so its dispatcher reads it through the inner seam's levels
+			// (`InnerScopeReaders`), and is passed `nil` on the root route and at every other place, as inline; `HoleNestImpl`
+			// now and then reads it too, from its fill's struct. Only where the graph's types may hold an `Instantiator`, which
+			// `HoleNest` and `HoleSeam`'s call of it do, so that no `@Sendable` function inside the seam's tree encloses the
+			// place; not where `HoleImpl` reads `HoleOwner`'s alias, which the place's scope does not carry, nor where the
+			// seam's module has no package, which `HoleNest`'s module has. Where a fill calls the seam again
+			// (`fillCallsSeamAgain`), `HoleSeam` calls `HoleNest` once and `HoleNest` holds the place on one route, in
+			// `HoleNestScreen` where the roll gives both.
+			if drawsPlainFillPlace, sendability != .sendable, !implReadsOwnersAlias, !modulesOmittingPackageName.contains(.seamModule) {
+				let nestServiceName = name("HoleNestService")
+				let nestServiceProperty = PropertyDeclaration(attribute: "@Instantiated", label: "holeNestService", type: "any \(nestServiceName)")
+				let idProperty = PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeNestId", type: "Int?")
+				var nest = instantiable("HoleNest", module: .seamDependency)
+				nest.instantiableArguments = ["generateDependencyTree: true"]
+				nest.additionalDeclarations.append("public protocol \(nestServiceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+				var nestDeclarations = [TypeDeclaration]()
+				// 0: the root route alone; 1: the screen's alone; otherwise both, or the screen's alone where a fill calls the seam
+				// again.
+				let routeRoll = fillCallsSeamAgain && plainFillRouteRoll > 1 ? 1 : plainFillRouteRoll
+				if routeRoll != 1 {
+					nest.properties.append(nestServiceProperty)
+				}
+				if routeRoll != 0 {
+					let screen = instantiable("HoleNestScreen", module: .seamDependency, properties: [
+						PropertyDeclaration(attribute: "@Forwarded", label: "holeNestId", type: "Int"),
+						nestServiceProperty,
+					])
+					nest.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeNestScreenBuilder", type: "Instantiator<\(screen.name)>"))
+					nestDeclarations.append(screen)
+				}
+				var nestImpl = instantiable("HoleNestImpl", module: .seamModule)
+				if plainFillFulfillerReadsId {
+					nestImpl.properties.append(idProperty)
+				}
+				if plainFillPlaceTwoTypesDeep {
+					let widget = instantiable("HoleNestWidget", module: .seamModule, properties: [holeProperty])
+					nestImpl.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeNestWidget", type: widget.name))
+					nestDeclarations.append(widget)
+				} else {
+					nestImpl.properties.append(holeProperty)
+				}
+				nestImpl.instantiableArguments = ["fulfillingAdditionalTypes: [\(nestServiceName).self]"]
+				nestImpl.additionalConformances.append(nestServiceName)
+				seamModuleDeclarations += [nest] + nestDeclarations + [nestImpl]
+				let byValueCall = PropertyDeclaration(attribute: "@Instantiated", label: "holeNest", type: nest.name)
+				let instantiatorCall = PropertyDeclaration(attribute: "@Instantiated", label: "holeNestBuilder", type: "Instantiator<\(nest.name)>")
+				let firstCall = plainFillCallsByValue ? byValueCall : instantiatorCall
+				seam.properties.append(firstCall)
+				if plainFillCallsTwice, !fillCallsSeamAgain {
+					seam.properties.append(plainFillCallsByValue ? instantiatorCall : byValueCall)
+				}
+				if plainFillImplReadsId {
+					impl.properties.append(idProperty)
+				}
+				if secondHolePlace == nil {
+					secondHolePlace = (seamName, firstCall.label)
+				}
+			}
+			// A hole under a later member of a loop of received instantiators: the seam, or `HoleRingFlow`, which it builds by
+			// value, instantiates `holeRingABuilder` and `holeRingBBuilder`, and now and then `holeRingCBuilder`, each an
+			// `Instantiator` of a member that receives the next one's, so each member's builder function wraps the next again.
+			// The last member holds a place of `HoleService`, and half the time every member does, on itself or on
+			// `HoleRingLeaf`, which it instantiates; a member's case is bound before the loop's first function and holds no
+			// member of the loop, which its own level carries. The members now and then instantiate `holeRingMark` before
+			// the place, which `HoleImpl` then reads only if available, so the payload of a later member's level holds a value.
+			// The scope that declares the loop now and then also builds `HoleRingA` by value, after the loop's instantiators, so
+			// that `HoleRingA` has a build outside its builder function, which wraps none of the instantiators the function
+			// wraps again, and which receives `holeRingBBuilder` from that scope, so that the seam receives nothing the loop
+			// declares. Only where the graph's types may hold an `Instantiator`, which the members do, so that no `@Sendable`
+			// function inside the seam's tree encloses the places; not where `HoleImpl` reads `HoleOwner`'s alias, nor beside
+			// a mocked seam, whose mock's lazy cycle configuration a renaming can reorder; nor where a fill calls the seam
+			// again (`fillCallsSeamAgain`): each place in the loop then calls the seam, which declares the loop again.
+			if drawsLoopPlace, sendability != .sendable, !implReadsOwnersAlias, mockRoll != 0, !fillCallsSeamAgain {
+				let memberSuffixes = Array(["A", "B", "C"].prefix(loopLength))
+				func builderProperty(_ suffix: String) -> PropertyDeclaration {
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeRing\(suffix)Builder", type: "Instantiator<\(name("HoleRing" + suffix))>")
+				}
+				var ringDeclarations = [TypeDeclaration]()
+				let mark = instantiable("HoleRingMark", module: .seamModule)
+				if loopMembersBindMark {
+					ringDeclarations.append(mark)
+				}
+				var leafProperty: PropertyDeclaration?
+				if loopPlaceThroughLeaf {
+					let leaf = instantiable("HoleRingLeaf", module: .seamModule, properties: [holeProperty])
+					ringDeclarations.append(leaf)
+					leafProperty = PropertyDeclaration(attribute: "@Instantiated", label: "holeRingLeaf", type: leaf.name)
+				}
+				for (position, suffix) in memberSuffixes.enumerated() {
+					let nextSuffix = memberSuffixes[(position + 1) % memberSuffixes.count]
+					let nextBuilder = builderProperty(nextSuffix)
+					var member = instantiable("HoleRing" + suffix, module: .seamModule)
+					if loopMembersBindMark {
+						member.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeRingMark", type: mark.name))
+					}
+					member.properties.append(PropertyDeclaration(attribute: "@Received", label: nextBuilder.label, type: nextBuilder.type))
+					if position == memberSuffixes.count - 1 || loopPlaceOnEveryMember || position == 0 && loopMemberBuiltByValue {
+						member.properties.append(leafProperty ?? holeProperty)
+					}
+					ringDeclarations.append(member)
+				}
+				var builders = memberSuffixes.map(builderProperty)
+				if loopMemberBuiltByValue {
+					builders.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeRingAValue", type: name("HoleRingA")))
+				}
+				if loopDeclaredBeneathSeam {
+					let flow = instantiable("HoleRingFlow", module: .seamModule, properties: builders)
+					ringDeclarations.append(flow)
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeRingFlow", type: flow.name))
+					if secondHolePlace == nil {
+						secondHolePlace = (seamName, "holeRingFlow")
+					}
+				} else {
+					seam.properties += builders
+				}
+				seamModuleDeclarations += ringDeclarations
+				if loopMembersBindMark, loopImplReadsMark {
+					impl.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeRingMark", type: mark.name + "?"))
+				}
+			}
 			// The second place of a graph that draws none of the above, which the name-stability oracle removes.
 			if secondHolePlace == nil, drawsSecondHole {
 				secondHolePlace = (seamName, "holeSettings")
@@ -5293,6 +5489,8 @@ enum GraphFuzzerGenerator {
 				placeInsideSendableFill = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6544656570)
 				sharedTypes = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553686172)
 				tangle = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6554616E67)
+				plainFillPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6546696C6C)
+				loopPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6552696E67)
 			}
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
@@ -5317,6 +5515,10 @@ enum GraphFuzzerGenerator {
 			/// The draws of scopes nested by type: types shared under a hole, and a tangle of cycles with a place.
 			var sharedTypes: GraphFuzzerRandomNumberGenerator
 			var tangle: GraphFuzzerRandomNumberGenerator
+			/// A place inside a plain fill the seam generates, and a hole under a later member of a loop of received
+			/// instantiators.
+			var plainFillPlace: GraphFuzzerRandomNumberGenerator
+			var loopPlace: GraphFuzzerRandomNumberGenerator
 		}
 
 		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
@@ -8189,9 +8391,11 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		if fixture.swiftFileContent.contains(where: { $0.contains("package final class \(prefix)HoleAnalytics: ") }) {
 			features.insert(.holeNarrowerField)
 		}
-		if implProperties.contains(where: { $0.attribute.contains("fulfilledByDependencyNamed") || $0.attribute.contains("onlyIfAvailable: true") }) {
+		// `HoleImpl`'s read of `holeAnalytics`, which other draws' only-if-available reads of their own labels leave alone.
+		let analyticsReads = implProperties.filter { $0.label == "holeAnalytics" || $0.attribute.contains("fulfilledByDependencyNamed: \"holeAnalytics\"") }
+		if analyticsReads.contains(where: { $0.attribute.contains("fulfilledByDependencyNamed") || $0.attribute.contains("onlyIfAvailable: true") }) {
 			features.insert(.holeAliasOrOnlyIfAvailable)
-			if implProperties.contains(where: { $0.attribute.contains("onlyIfAvailable: true") }) {
+			if analyticsReads.contains(where: { $0.attribute.contains("onlyIfAvailable: true") }) {
 				features.insert(.holeReadOnlyIfAvailable)
 			}
 		}
@@ -8255,6 +8459,47 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 			if properties(of: "HoleSeam").contains(where: { $0.label == "holeTangleTValue" }) {
 				features.insert(.holeTangleTBuiltByValue)
+			}
+		}
+		if declares("HoleNest") {
+			features.insert(.holePlaceInsidePlainFill)
+			let nestLabels = Set(properties(of: "HoleNest").map(\.label))
+			if nestLabels.isSuperset(of: ["holeNestService", "holeNestScreenBuilder"]) {
+				features.insert(.holePlaceInsidePlainFillOnTwoInnerRoutes)
+			}
+			if nestLabels.contains("holeNestScreenBuilder"), properties(of: "HoleImpl").contains(where: { $0.label == "holeNestId" }) {
+				features.insert(.holePlaceInsidePlainFillReadsInnerLevel)
+			}
+			if declares("HoleNestWidget") {
+				features.insert(.holePlaceInsidePlainFillTwoTypesDeep)
+			}
+			if Set(seamProperties.map(\.label)).isSuperset(of: ["holeNest", "holeNestBuilder"]) {
+				features.insert(.holePlaceInsidePlainFillTwoCalls)
+			}
+			if nestLabels.contains("holeNestScreenBuilder"), properties(of: "HoleNestImpl").contains(where: { $0.label == "holeNestId" }) {
+				features.insert(.holePlaceInsidePlainFillFulfillerReadsInnerLevel)
+			}
+		}
+		if declares("HoleRingA") {
+			features.insert(.holeUnderLaterLoopMember)
+			let placeLabels: Set = ["holeService", "holeRingLeaf"]
+			if properties(of: "HoleRingA").contains(where: { placeLabels.contains($0.label) }) {
+				features.insert(.holeUnderEveryLoopMember)
+			}
+			if declares("HoleRingC") {
+				features.insert(.holeLoopOfThreeMembers)
+			}
+			if declares("HoleRingLeaf") {
+				features.insert(.holeLoopPlaceThroughSharedLeaf)
+			}
+			if declares("HoleRingFlow") {
+				features.insert(.holeLoopBeneathSeam)
+			}
+			if properties(of: "HoleImpl").contains(where: { $0.label == "holeRingMark" }) {
+				features.insert(.holeLoopMemberLevelReadByFill)
+			}
+			if (seamProperties + properties(of: "HoleRingFlow")).contains(where: { $0.label == "holeRingAValue" }) {
+				features.insert(.holeLoopMemberAlsoBuiltByValue)
 			}
 		}
 		if declares("HoleMiddle") {
@@ -9228,8 +9473,8 @@ struct GraphFuzzerFailure: Equatable {
 	let seed: UInt64
 	let kind: Kind
 	let details: String
-	/// For `seamBuildsOtherValuesThanInline`, each difference's description: a known issue of that kind documents
-	/// the failure only when every one of them matches one of its signatures.
+	/// For `seamBuildsOtherValuesThanInline` and the other value differences, each difference's description: a known
+	/// issue of that kind documents the failure only when every one of them matches one of its signatures.
 	var valueDifferences: [String] = []
 	/// For `valueOracleFixtureRejected`, each line of the tool's diagnostics that reports an error: a known issue of that
 	/// kind documents the failure only when every one of them contains the text of one of its rejection signatures.
@@ -9385,6 +9630,9 @@ struct GraphFuzzerKnownIssue: Equatable {
 		/// The seam build constructs other values than the inline build, with a difference whose description
 		/// contains this text.
 		case seamBuildsOtherValuesThanInline(containing: String)
+		/// The build that fills a hole constructs other values than its visible build, with a difference whose description
+		/// contains this text.
+		case holeBuildsOtherValuesThanVisibleBuild(containing: String)
 		/// The value comparator could not describe the graph, with details containing this text, such as the error of
 		/// an inline build that does not compile.
 		case valueComparatorCouldNotDescribeGraph(containing: String)
@@ -9427,7 +9675,7 @@ struct GraphFuzzerKnownIssue: Equatable {
 			switch signature {
 			case .mockBuildsOtherValuesThanProduction, .valueOracleFixtureDoesNotCompile, .valueOracleFixtureRejected, .remedyLeavesErrorAtSite:
 				true
-			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight, .holeNamesChangeWithSecondPlace:
+			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight, .holeNamesChangeWithSecondPlace:
 				false
 			}
 		}
@@ -9465,6 +9713,17 @@ struct GraphFuzzerKnownIssue: Equatable {
 				failure.kind == .seamBuildsOtherValuesThanInline && !failure.valueDifferences.isEmpty && failure.valueDifferences.allSatisfy { difference in
 					signatures.contains { signature in
 						if case let .seamBuildsOtherValuesThanInline(text) = signature {
+							difference.contains(text)
+						} else {
+							false
+						}
+					}
+				}
+			case .holeBuildsOtherValuesThanVisibleBuild:
+				// As for the seam's value signatures, every difference must match one.
+				failure.kind == .holeBuildsOtherValuesThanVisibleBuild && !failure.valueDifferences.isEmpty && failure.valueDifferences.allSatisfy { difference in
+					signatures.contains { signature in
+						if case let .holeBuildsOtherValuesThanVisibleBuild(text) = signature {
 							difference.contains(text)
 						} else {
 							false
@@ -9589,7 +9848,7 @@ enum GraphFuzzerFinding: Equatable {
 		case let (nil, knownIssue?):
 			self = .staleKnownIssue(knownIssue)
 		case let (failure?, knownIssue?) where knownIssue.matches(failure):
-			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .publicMockBuildsOtherValuesThanKnownRight, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile].contains(failure.kind)
+			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile].contains(failure.kind)
 			if let unmasked = laterFailures.first(where: { (masksNoLaterFailure || $0.kind == .renamedGraphDiffers) && !knownIssue.matches($0) }) {
 				self = .failure(unmasked)
 			} else {
@@ -9793,9 +10052,9 @@ struct GraphFuzzerToolRuns {
 	}
 
 	/// The failure of a graph with a second path to a type that holds a place, when the tool accepts it with and without
-	/// the path, whose levels (`GraphFuzzerPlaceFacts.secondPathLevelChanges(comparedWith:typeName:label:)`), or, where the
-	/// generator nests the graph's scopes by type (`nestsEveryScopeByType`), scope enums, cases, structs and fields
-	/// (`GraphFuzzerScopeDeclarations.secondPathChanges(comparedWith:typeName:label:)`), differ beyond the case of the
+	/// the path, whose levels (`GraphFuzzerPlaceFacts.secondPathLevelChanges(comparedWith:typeName:label:)`) or scope enums,
+	/// cases, structs and fields (`GraphFuzzerScopeDeclarations.secondPathChanges(comparedWith:typeName:label:)`) differ
+	/// beyond the case of the
 	/// path's own property, or `nil`: a second path to a type that holds a place adds nothing (the design's section 2.10).
 	var secondPathFailure: GraphFuzzerFailure? {
 		guard case let .accepted(generatedFiles, _) = firstOutcome,
@@ -9803,13 +10062,11 @@ struct GraphFuzzerToolRuns {
 		      case let .accepted(filesWithoutPath, _) = withoutSecondPath.outcome
 		else { return nil }
 		var changes = placeFacts.secondPathLevelChanges(comparedWith: withoutSecondPath.placeFacts, typeName: withoutSecondPath.typeName, label: withoutSecondPath.label)
-		if nestsEveryScopeByType {
-			changes += GraphFuzzerScopeDeclarations(generatedFiles: generatedFiles).secondPathChanges(
-				comparedWith: GraphFuzzerScopeDeclarations(generatedFiles: filesWithoutPath),
-				typeName: withoutSecondPath.typeName,
-				label: withoutSecondPath.label,
-			)
-		}
+		changes += GraphFuzzerScopeDeclarations(generatedFiles: generatedFiles).secondPathChanges(
+			comparedWith: GraphFuzzerScopeDeclarations(generatedFiles: filesWithoutPath),
+			typeName: withoutSecondPath.typeName,
+			label: withoutSecondPath.label,
+		)
 		guard !changes.isEmpty else { return nil }
 		return GraphFuzzerFailure(
 			seed: fixture.seed,
@@ -9818,22 +10075,14 @@ struct GraphFuzzerToolRuns {
 		)
 	}
 
-	/// Whether the generator nests every scope of the graph's holes by type: a root enum per hole type, one enum per type
-	/// that holds a place, nested in it, and a case per property that leads to a place. The oracles that read the
-	/// generated scope enums (`GraphFuzzerScopeDeclarations`: the second-path oracle's enums, cases and fields, and
-	/// `scopeCaseFailures`) run only where it does. A place inside a fill is reached through a call's case for the
-	/// builder filled, which they do not model yet, so a graph that holds one is skipped (`GraphFuzzerPlaceFacts.holdsPlaceInsideFill`); the
-	/// oracles that read the places' levels and paths run on every graph.
-	var nestsEveryScopeByType: Bool {
-		!placeFacts.holdsPlaceInsideFill
-	}
-
 	/// The failures of an accepted graph whose generated scope enums, nested by type, disagree with the cases its places'
 	/// paths produce (`GraphFuzzerScopeDeclarations`): a produced case no enum declares; in a graph without a tangle of
-	/// cycles, an enum or a case of its own no path produces; and a case that names no property of its type. Empty for a
-	/// graph some of whose scopes are not nested by type (`nestsEveryScopeByType`).
+	/// cycles, an enum, a case of its own or a fill case no path produces; and a case that names no property of its type.
+	/// A place inside a fill is judged as every other (`GraphFuzzerPlaceFacts`): its path produces the call's case for the
+	/// builder filled, `<call>_<builder>`, and a case of the enum of each type the fill builds. A public mock's enums keep a
+	/// case per path inside a fill and are left to the public mock corpus.
 	var scopeCaseFailures: [GraphFuzzerFailure] {
-		guard nestsEveryScopeByType, case let .accepted(generatedFiles, _) = firstOutcome else { return [] }
+		guard case let .accepted(generatedFiles, _) = firstOutcome else { return [] }
 		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: generatedFiles)
 		var failures = [GraphFuzzerFailure]()
 		func append(_ kind: GraphFuzzerFailure.Kind, _ descriptions: [String]) {
@@ -9851,8 +10100,8 @@ struct GraphFuzzerToolRuns {
 
 	/// The failure of a graph in whose seam's tree two builds of one type bind other values before the same property, or
 	/// `nil`: a scope enum nested by type holds one level per type, so what a type binds before a property, the seam's
-	/// root's parameters included, must not depend on the path the type is built on. A fill's tree is built with the stack
-	/// of the seam whose hole it fills, and is not judged.
+	/// root's parameters included, must not depend on the path the type is built on, inside a fill the seam generates too
+	/// (`SeamPlaceLevels.levelDisagreements()`).
 	var placeLevelsFailure: GraphFuzzerFailure? {
 		guard !placeLevelDisagreements.isEmpty else { return nil }
 		return GraphFuzzerFailure(
@@ -10166,7 +10415,10 @@ struct GraphFuzzerToolRuns {
 	/// without it, or `nil`. A seam that passes `nil` where inline passes a value loses a value a receiver gets today.
 	/// The constructions of a seam type itself are not compared: its own tiers and the calls of them pass `nil` for
 	/// what a tier omits, which inline has no counterpart of. A seam that reads a value inline does not (the
-	/// documented divergences) lowers its count, which is no failure.
+	/// documented divergences) lowers its count, which is no failure. A literal `nil` a call of a builder function passes
+	/// for a label – a cycle parameter of a function a lazy cycle closes on – counts at each construction in the function's
+	/// body that passes the parameter on by name (`GraphFuzzerOracle.nilArgumentCountsThroughBuilderFunctions`), on both
+	/// sides: inline's `nil` reaches those constructions through the parameter, where a seam's fill can write it at each.
 	var nilArgumentFailure: GraphFuzzerFailure? {
 		guard case let .accepted(seamFiles, _) = firstOutcome, case let .accepted(inlineFiles, _) = inlineOutcome else { return nil }
 		let seamTypeNames = Set(fixture.swiftFileContent.flatMap { content -> [String] in
@@ -10187,10 +10439,13 @@ struct GraphFuzzerToolRuns {
 			}
 			return names
 		})
-		let differences = GraphFuzzerOracle.nilArgumentCountsExceeding(
-			GraphFuzzerOracle.nilArgumentCounts(in: seamFiles, typeNamePrefix: fixture.typeNamePrefix, excluding: seamTypeNames),
-			GraphFuzzerOracle.nilArgumentCounts(in: inlineFiles, typeNamePrefix: fixture.typeNamePrefix, excluding: seamTypeNames),
-		)
+		func counts(in files: [String: String]) -> [String: Int] {
+			GraphFuzzerOracle.nilArgumentCounts(in: files, typeNamePrefix: fixture.typeNamePrefix, excluding: seamTypeNames).merging(
+				GraphFuzzerOracle.nilArgumentCountsThroughBuilderFunctions(in: files, typeNamePrefix: fixture.typeNamePrefix, excluding: seamTypeNames),
+				uniquingKeysWith: +,
+			)
+		}
+		let differences = GraphFuzzerOracle.nilArgumentCountsExceeding(counts(in: seamFiles), counts(in: inlineFiles))
 		guard !differences.isEmpty else { return nil }
 		return GraphFuzzerFailure(
 			seed: fixture.seed,
@@ -10452,7 +10707,11 @@ enum GraphFuzzerOracle {
 		}
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self) + runs.scopeCaseFailures + renamedGraphFailures
+			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
+			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
+			failures.append(contentsOf: runs.scopeCaseFailures)
+			failures.append(contentsOf: renamedGraphFailures)
 			// A base corpus graph is compared once its value-oracle graph is.
 			let isValueOracleGraphCompared = runs.valueOracle == nil || valueComparisons.comparedValueOracleSeeds.contains(runs.fixture.seed)
 			return GraphFuzzerResult(
@@ -10474,16 +10733,18 @@ enum GraphFuzzerOracle {
 		}
 	}
 
-	/// The failure of each graph of `toolRuns` the tool accepts with its seam and without it whose seam build
+	/// The failures of each graph of `toolRuns` the tool accepts with its seam and without it whose seam build
 	/// constructs other values than its inline build, or whose two builds the differential value comparator could
-	/// not describe, keyed by seed. The seam path is the graph with its seams and the files the tool generated for it,
+	/// not describe, keyed by seed. A graph with a hole is compared with its visible build too, and that comparison's
+	/// failure comes first: each comparison's failure is its own entry, so that a known issue that documents one
+	/// (`GraphFuzzerFinding`) masks no undocumented difference of the other. The seam path is the graph with its seams and the files the tool generated for it,
 	/// the known-right path the same graph with no seam and the files the tool generated for that; the probes are the
 	/// graph's roots and the generated mocks that take no required parameter. Each path is built from the graph drawn
 	/// storing every parameter, so the comparator sees every value the generated code passes; storing changes nothing
 	/// the tool generates. Nothing is exempted: a seam hands a hole's struct the memo of each value it defers, so a fill
 	/// creates the value where inline would. The graphs of one call are compared in one batch.
 	/// Nothing is compared when `compileVerificationIsEnabled` is `false`.
-	static func valueFailures(of toolRuns: [GraphFuzzerToolRuns]) async throws -> [UInt64: GraphFuzzerFailure] {
+	static func valueFailures(of toolRuns: [GraphFuzzerToolRuns]) async throws -> [UInt64: [GraphFuzzerFailure]] {
 		try await valueComparisons(of: toolRuns).failures
 	}
 
@@ -10496,7 +10757,7 @@ enum GraphFuzzerOracle {
 	static func valueComparisons(
 		of toolRuns: [GraphFuzzerToolRuns],
 		isolatingValueGraphsOf isolatedSeeds: Set<UInt64> = [],
-	) async throws -> (failures: [UInt64: GraphFuzzerFailure], comparedValueOracleSeeds: Set<UInt64>) {
+	) async throws -> (failures: [UInt64: [GraphFuzzerFailure]], comparedValueOracleSeeds: Set<UInt64>) {
 		let inspectedRuns = toolRuns.filter(\.isInspectedByValueOracle)
 		// A graph with a hole is compared with its visible build too, in which the seam builds the fulfilling type.
 		let visibleRuns = toolRuns.filter { runs in
@@ -10528,6 +10789,7 @@ enum GraphFuzzerOracle {
 				feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: seamFiles),
 				knownRight: DifferentialValuePath(fixture: storingFixture.withoutSeams, generatedFiles: inlineFiles),
 				probes: storingFixture.differentialValueProbes(generatedFiles: seamFiles),
+				samples: storingFixture.holeDrawForwardedPropertiesSamples,
 				exemptions: [],
 			))
 		}
@@ -10539,11 +10801,12 @@ enum GraphFuzzerOracle {
 				feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: holeFiles),
 				knownRight: DifferentialValuePath(fixture: storingFixture.withoutHoles, generatedFiles: visibleFiles),
 				probes: storingFixture.differentialValueProbes(generatedFiles: holeFiles),
+				samples: storingFixture.holeDrawForwardedPropertiesSamples,
 			))
 		}
 		guard let comparisons = try await compare(graphs + visibleGraphs + valueOracleGraphs, isolating: isolatedSeeds, filesToDelete: &filesToDelete) else { return ([:], []) }
 		let valueOracleComparisons = zip(valueOracleGraphs.map(\.runs), comparisons.suffix(valueOracleGraphs.count))
-		var failures = [UInt64: GraphFuzzerFailure]()
+		var failures = [UInt64: [GraphFuzzerFailure]]()
 		var comparedValueOracleSeeds = Set<UInt64>()
 		for (runs, comparison) in valueOracleComparisons {
 			let builds = "The value-oracle fixture:\n\(runs.valueOracle?.plan.valueOracleFixture(storingEveryParameter: true).description ?? "")\nWhat the tool generated for it:\n\(runs.valueOracle?.outcome?.description ?? "")"
@@ -10552,18 +10815,18 @@ enum GraphFuzzerOracle {
 				comparedValueOracleSeeds.insert(runs.fixture.seed)
 				let differences = valueComparison.differences
 				guard !differences.isEmpty else { continue }
-				failures[runs.fixture.seed] = GraphFuzzerFailure(
+				failures[runs.fixture.seed, default: []].append(GraphFuzzerFailure(
 					seed: runs.fixture.seed,
 					kind: .mockBuildsOtherValuesThanProduction,
 					details: "\(differences.map(\.description).joined(separator: "\n"))\n\(valueComparison.report)\(builds)",
 					valueDifferences: differences.map(\.description),
-				)
+				))
 			case let .failure(error):
-				failures[runs.fixture.seed] = GraphFuzzerFailure(
+				failures[runs.fixture.seed, default: []].append(GraphFuzzerFailure(
 					seed: runs.fixture.seed,
 					kind: .valueOracleFixtureDoesNotCompile,
 					details: "\(error)\n\(builds)",
-				)
+				))
 			}
 		}
 		for ((runs, _), comparison) in zip(visibleGraphs, comparisons.dropFirst(graphs.count)) {
@@ -10571,22 +10834,23 @@ enum GraphFuzzerOracle {
 			case let .success(valueComparison):
 				let differences = valueComparison.differences
 				guard !differences.isEmpty else { continue }
-				failures[runs.fixture.seed] = GraphFuzzerFailure(
+				failures[runs.fixture.seed, default: []].append(GraphFuzzerFailure(
 					seed: runs.fixture.seed,
 					kind: .holeBuildsOtherValuesThanVisibleBuild,
 					details: "\(differences.map(\.description).joined(separator: "\n"))\n\(valueComparison.report)With the hole:\n\(runs.firstOutcome.description)\nThe visible build:\n\(runs.visibleOutcome?.description ?? "")",
 					valueDifferences: differences.map(\.description),
-				)
+				))
 			case let .failure(error):
-				failures[runs.fixture.seed] = GraphFuzzerFailure(
+				failures[runs.fixture.seed, default: []].append(GraphFuzzerFailure(
 					seed: runs.fixture.seed,
 					kind: .valueComparatorCouldNotDescribeGraph,
 					details: "\(error)\nWith the hole:\n\(runs.firstOutcome.description)\nThe visible build:\n\(runs.visibleOutcome?.description ?? "")",
-				)
+				))
 			}
 		}
-		// A difference from the visible build is reported before one from the inline build.
-		for ((runs, _), comparison) in zip(graphs, comparisons) where failures[runs.fixture.seed] == nil {
+		// A difference from the visible build is reported before one from the inline build, which follows it as a failure of
+		// its own: a known issue that documents the first masks no difference of the second it does not document.
+		for ((runs, _), comparison) in zip(graphs, comparisons) {
 			let isPublicMockGraph = runs.knownRightOutcome != nil
 			let builds = isPublicMockGraph
 				? "As drawn:\n\(runs.firstOutcome.description)\nKnown right:\n\(runs.knownRightOutcome?.description ?? "")"
@@ -10597,18 +10861,18 @@ enum GraphFuzzerOracle {
 				let statedDivergences = isPublicMockGraph ? Self.statedPublicMockValueDivergences(in: valueComparison, of: runs) : []
 				let differences = valueComparison.differences.filter { !statedDivergences.contains($0) }
 				guard !differences.isEmpty else { continue }
-				failures[runs.fixture.seed] = GraphFuzzerFailure(
+				failures[runs.fixture.seed, default: []].append(GraphFuzzerFailure(
 					seed: runs.fixture.seed,
 					kind: isPublicMockGraph ? .publicMockBuildsOtherValuesThanKnownRight : .seamBuildsOtherValuesThanInline,
 					details: "\(differences.map(\.description).joined(separator: "\n"))\n\(valueComparison.report)\(builds)",
 					valueDifferences: differences.map(\.description),
-				)
+				))
 			case let .failure(error):
-				failures[runs.fixture.seed] = GraphFuzzerFailure(
+				failures[runs.fixture.seed, default: []].append(GraphFuzzerFailure(
 					seed: runs.fixture.seed,
 					kind: .valueComparatorCouldNotDescribeGraph,
 					details: "\(error)\n\(builds)",
-				)
+				))
 			}
 		}
 		return (failures, comparedValueOracleSeeds)
@@ -10646,36 +10910,96 @@ enum GraphFuzzerOracle {
 	/// argument's label, as `Type(label:)`. The oracle's own seam callers are not generated code and are skipped.
 	static func nilArgumentCounts(in generatedFiles: [String: String], typeNamePrefix: String, excluding excludedTypeNames: Set<String>) -> [String: Int] {
 		var counts = [String: Int]()
-		let expression = try! NSRegularExpression(pattern: "(?<![A-Za-z0-9_.])(" + NSRegularExpression.escapedPattern(for: typeNamePrefix) + "[A-Za-z0-9_]+)\\(")
 		for (fileName, contents) in generatedFiles where !fileName.hasSuffix("+SafeDISeamCaller.swift") {
-			let source = contents as NSString
-			for match in expression.matches(in: contents, range: NSRange(location: 0, length: source.length)) {
-				let typeName = source.substring(with: match.range(at: 1))
-				guard !excludedTypeNames.contains(typeName) else { continue }
-				// The arguments run from after the opening parenthesis to the one that closes it.
-				let start = match.range.location + match.range.length
-				var depth = 1
-				var end = start
-				while end < source.length, depth > 0 {
-					switch source.character(at: end) {
-					case 0x28, 0x5B, 0x7B: // ( [ {
-						depth += 1
-					case 0x29, 0x5D, 0x7D: // ) ] }
-						depth -= 1
-					default:
-						break
-					}
-					end += 1
-				}
-				let arguments = source.substring(with: NSRange(location: start, length: max(0, end - start - 1)))
-				for argument in topLevelParameters(arguments) {
-					let parts = argument.split(separator: ":", maxSplits: 1)
-					guard parts.count == 2, parts[1].trimmingCharacters(in: .whitespacesAndNewlines) == "nil" else { continue }
-					counts["\(typeName)(\(parts[0].trimmingCharacters(in: .whitespacesAndNewlines)):)", default: 0] += 1
+			for call in calls(in: contents, calleeExpression: constructionExpression(typeNamePrefix: typeNamePrefix)) where !excludedTypeNames.contains(call.callee) {
+				for argument in call.arguments where argument.value == "nil" {
+					counts["\(call.callee)(\(argument.label):)", default: 0] += 1
 				}
 			}
 		}
 		return counts
+	}
+
+	/// How many constructions in the code in `generatedFiles` a literal `nil` reaches through a builder function it
+	/// generates, keyed as `nilArgumentCounts(in:typeNamePrefix:excluding:)` keys them: for each call
+	/// `__safeDI_f(label: nil)`, each construction of a type whose name begins with `typeNamePrefix`, but those of
+	/// `excludedTypeNames`, in the body of the declaration of `__safeDI_f` the call reaches that passes `label: label`. The
+	/// call reaches the declaration of its name whose body holds it, else the last one before it, else the first after it.
+	/// Such a `nil` is a cycle parameter of a function a lazy cycle closes on, which the function's constructions read by
+	/// name. The oracle's own seam callers are not generated code and are skipped.
+	static func nilArgumentCountsThroughBuilderFunctions(in generatedFiles: [String: String], typeNamePrefix: String, excluding excludedTypeNames: Set<String>) -> [String: Int] {
+		var counts = [String: Int]()
+		// The expression is this file's own.
+		let declarationExpression = try! NSRegularExpression(pattern: #"\bfunc (__safeDI_[A-Za-z0-9_]+)\("#)
+		for (fileName, contents) in generatedFiles where !fileName.hasSuffix("+SafeDISeamCaller.swift") {
+			let source = contents as NSString
+			let declarations = declarationExpression.matches(in: contents, range: NSRange(location: 0, length: source.length)).compactMap { match -> (name: String, start: Int, body: NSRange)? in
+				let parametersEnd = closingDelimiterEnd(in: source, after: match.range.location + match.range.length)
+				let bodyStart = source.range(of: "{", range: NSRange(location: parametersEnd, length: source.length - parametersEnd)).location
+				guard bodyStart != NSNotFound else { return nil }
+				let bodyEnd = closingDelimiterEnd(in: source, after: bodyStart + 1)
+				return (source.substring(with: match.range(at: 1)), match.range.location, NSRange(location: bodyStart + 1, length: max(0, bodyEnd - bodyStart - 2)))
+			}
+			for call in calls(in: contents, calleeExpression: #"(?<![A-Za-z0-9_.])(__safeDI_[A-Za-z0-9_]+)\("#) {
+				let labels = call.arguments.filter { $0.value == "nil" }.map(\.label)
+				let namesakes = declarations.filter { $0.name == call.callee }
+				guard !labels.isEmpty,
+				      let declaration = namesakes.last(where: { NSLocationInRange(call.location, $0.body) })
+				      ?? namesakes.last(where: { $0.start < call.location })
+				      ?? namesakes.first
+				else { continue }
+				for construction in calls(in: source.substring(with: declaration.body), calleeExpression: constructionExpression(typeNamePrefix: typeNamePrefix)) where !excludedTypeNames.contains(construction.callee) {
+					for argument in construction.arguments where labels.contains(argument.label) && argument.value == argument.label {
+						counts["\(construction.callee)(\(argument.label):)", default: 0] += 1
+					}
+				}
+			}
+		}
+		return counts
+	}
+
+	/// The expression whose first capture is the callee of a construction of a type whose name begins with
+	/// `typeNamePrefix`, which the call's arguments follow.
+	private static func constructionExpression(typeNamePrefix: String) -> String {
+		"(?<![A-Za-z0-9_.])(" + NSRegularExpression.escapedPattern(for: typeNamePrefix) + "[A-Za-z0-9_]+)\\("
+	}
+
+	/// Each call in `contents` whose callee `calleeExpression` matches, the callee its first capture and the call's
+	/// arguments after it: the callee, where the call begins, and each top-level argument's label and value.
+	private static func calls(in contents: String, calleeExpression: String) -> [(callee: String, location: Int, arguments: [(label: String, value: String)])] {
+		// The expressions are this file's, built from escaped names.
+		let expression = try! NSRegularExpression(pattern: calleeExpression)
+		let source = contents as NSString
+		return expression.matches(in: contents, range: NSRange(location: 0, length: source.length)).map { match in
+			// The arguments run from after the opening parenthesis to the one that closes it.
+			let start = match.range.location + match.range.length
+			let end = closingDelimiterEnd(in: source, after: start)
+			let arguments = topLevelParameters(source.substring(with: NSRange(location: start, length: max(0, end - start - 1)))).compactMap { argument -> (label: String, value: String)? in
+				let parts = argument.split(separator: ":", maxSplits: 1)
+				guard parts.count == 2 else { return nil }
+				return (parts[0].trimmingCharacters(in: .whitespacesAndNewlines), parts[1].trimmingCharacters(in: .whitespacesAndNewlines))
+			}
+			return (source.substring(with: match.range(at: 1)), match.range.location, arguments)
+		}
+	}
+
+	/// The location just past the delimiter that closes the one opened just before `start` in `source`, or the end of
+	/// `source`.
+	private static func closingDelimiterEnd(in source: NSString, after start: Int) -> Int {
+		var depth = 1
+		var end = start
+		while end < source.length, depth > 0 {
+			switch source.character(at: end) {
+			case 0x28, 0x5B, 0x7B: // ( [ {
+				depth += 1
+			case 0x29, 0x5D, 0x7D: // ) ] }
+				depth -= 1
+			default:
+				break
+			}
+			end += 1
+		}
+		return end
 	}
 
 	/// A line for each construction argument `seamCounts` passes a literal `nil` more often than `inlineCounts`, in

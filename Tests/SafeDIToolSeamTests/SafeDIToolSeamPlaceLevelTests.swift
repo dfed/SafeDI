@@ -88,6 +88,25 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func holes_giveEveryBuildOfATypeTheSameLevels_whenALoopMemberIsAlsoBuiltByValue() async throws {
+		let (placeLevels, _) = try await placeLevels(of: [
+			"public protocol Widget {}",
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let bBuilder: Instantiator<B>?", "@Instantiated let widget: any Widget"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received let aBuilder: Instantiator<A>", "@Instantiated let widget: any Widget"]),
+			seamFixtureType(named: "Flow", isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "Hub", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let flow: Flow", "@Instantiated let a: A"]),
+		])
+
+		// `A`'s builder function, a member of `Flow`'s loop of builders, binds `bBuilder` again; the `A` `Hub` builds by value
+		// binds nothing. The rebinding is a fact of the function, which `A`'s levels leave out, and they agree.
+		let typeLevels = placeLevels.flatMap(\.places).flatMap(\.levels).filter { $0.builtType == .simple(name: "A", generics: []) && $0.nextProperty?.label == "widget" }
+		#expect(typeLevels.map { $0.fields.map(\.label) }.contains(["bBuilder"]))
+		#expect(typeLevels.map { $0.fields.map(\.label) }.contains([]))
+		#expect(placeLevels.flatMap { $0.levelDisagreements() } == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func holes_giveEveryBuildOfATypeTheSameLevels_whenTwoInstantiatorsCloseEachOthersCycle() async throws {
 		let (placeLevels, _) = try await placeLevels(of: Self.tangledCycleFiles)
 

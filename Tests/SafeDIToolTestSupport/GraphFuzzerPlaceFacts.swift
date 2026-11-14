@@ -26,24 +26,25 @@ import SwiftSyntax
 /// seam's holes (`SeamPlaceLevels`), as plain text, so that the oracles that compare it with the scope enums the tool
 /// generates (`GraphFuzzerScopeDeclarations`) need no type of `SafeDICore`.
 ///
-/// Only the scopes outside every fill count: a fill's tree is built with the stack of the seam whose hole it fills, and
-/// a place inside one is a case of the calling seam's enum of its own kind (`<call>_<builder>`), which the level before
-/// the fill, whose next property is `nil`, does not name. A place an inner seam passes up has no levels in the outer
-/// seam, so it produces no case here: the outer seam's case that wraps the inner seam's enum is left out of every
-/// comparison with produced cases (`GraphFuzzerScopeDeclarations.ScopeCase.wrapsAnotherSeamsEnum`).
+/// A place inside a fill counts as every other: a fill's tree is built with the stack of the seam whose hole it fills,
+/// and each type it builds holds a level of the calling seam's enum of its own (the design's section 2.6). The level
+/// before the call of the seam whose hole the fill fills produces the call's case for the builder filled,
+/// `<call>_<builder>` (`ProducedCase.filledType`), which holds the enum of the type the fill builds; the call's own scope,
+/// whose next property is `nil`, and the fill's, which binds the filled seam's struct, produce none. A place an inner
+/// seam passes up has no levels in the outer seam, so it produces no case here: the outer seam's case that wraps the
+/// inner seam's enum is left out of every comparison with produced cases
+/// (`GraphFuzzerScopeDeclarations.ScopeCase.wrapsAnotherSeamsEnum`).
 struct GraphFuzzerPlaceFacts: Equatable {
 	init(
 		producedCases: Set<ProducedCase> = [],
 		levelFields: [LevelKey: [String]] = [:],
 		declaredLabels: [Holder: Set<String>] = [:],
 		chainRepeats: [String] = [],
-		holdsPlaceInsideFill: Bool = false,
 	) {
 		self.producedCases = producedCases
 		self.levelFields = levelFields
 		self.declaredLabels = declaredLabels
 		self.chainRepeats = chainRepeats
-		self.holdsPlaceInsideFill = holdsPlaceInsideFill
 	}
 
 	/// The facts of `placeLevels`, every computation of a seam's holes a run made, in the order the run made them.
@@ -52,25 +53,32 @@ struct GraphFuzzerPlaceFacts: Equatable {
 		for computation in placeLevels {
 			let seamType = computation.seamType.asSource
 			for place in computation.places {
-				if place.levels.contains(where: \.isInFill) {
-					holdsPlaceInsideFill = true
-				}
-				// The levels from the seam's root inward, up to the first scope of a fill.
-				let outerLevels = Array(place.levels.reversed().prefix { !$0.isInFill })
+				// The levels from the seam's root inward, through every fill on the path.
+				let levels = Array(place.levels.reversed())
 				var declarationsOnPath = [String]()
-				for (index, level) in outerLevels.enumerated() {
-					guard let builtType = level.builtType else { continue }
-					let holder = Holder(seamType: seamType, typeName: builtType.asSource, isSeamRoot: index == 0)
-					declaredLabels[holder, default: []].formUnion(level.declarations.map(\.property.label))
+				for (index, level) in levels.enumerated() {
 					guard let nextProperty = level.nextProperty else { continue }
-					producedCases.insert(ProducedCase(holder: holder, label: nextProperty.label))
-					let key = LevelKey(holder: holder, nextProperty: nextProperty.asSource)
-					if levelFields[key] == nil {
-						levelFields[key] = level.fieldsOfType.map(\.asSource)
+					let nextBuiltType = index + 1 < levels.count ? levels[index + 1].builtType : nil
+					if let builtType = level.builtType {
+						let holder = Holder(seamType: seamType, typeName: builtType.asSource, isSeamRoot: index == 0)
+						declaredLabels[holder, default: []].formUnion(level.declarations.map(\.property.label))
+						// Where the next scope is the call of a seam whose hole the fill after it fills, the call's case for the
+						// builder filled holds the enum of the type the fill builds.
+						let filledType: String? = if index + 3 < levels.count, levels[index + 1].nextProperty == nil, levels[index + 2].builtType == nil {
+							levels[index + 3].builtType?.asSource
+						} else {
+							nil
+						}
+						producedCases.insert(ProducedCase(holder: holder, label: nextProperty.label, filledType: filledType))
+						let key = LevelKey(holder: holder, nextProperty: nextProperty.asSource)
+						if levelFields[key] == nil {
+							levelFields[key] = level.fieldsOfType.map(\.asSource)
+						}
 					}
 					// The declaration the next property makes, keyed as the cycle check keys it: the property with a lazily
-					// instantiated wrapper read as the instance it stands for, and the concrete type the next scope builds.
-					guard index + 1 < outerLevels.count, let nextBuiltType = outerLevels[index + 1].builtType else { continue }
+					// instantiated wrapper read as the instance it stands for, and the concrete type the next scope builds. A
+					// fill's next property is the hole it fills, which the scope after it builds.
+					guard let nextBuiltType else { continue }
 					let declaration = "`\(Self.cycleSpelling(of: nextProperty))` building `\(nextBuiltType.asSource)`"
 					if declarationsOnPath.contains(declaration) {
 						let repeatDescription = "The place `\(place.sitePath.map(\.label).joined(separator: "."))` of `\(seamType)` repeats the declaration \(declaration) on its path."
@@ -95,13 +103,22 @@ struct GraphFuzzerPlaceFacts: Equatable {
 		}
 	}
 
-	/// A case some place's path produces: the holder's property that leads toward the place.
+	/// A case some place's path produces: the holder's property that leads toward the place, or, where the property is a
+	/// call of a seam whose hole a fill on the path fills, the call's case for the builder filled, `<label>_<builder>`,
+	/// which holds the enum of `filledType`, the type the fill builds.
 	struct ProducedCase: Hashable, Comparable {
+		init(holder: Holder, label: String, filledType: String? = nil) {
+			self.holder = holder
+			self.label = label
+			self.filledType = filledType
+		}
+
 		let holder: Holder
 		let label: String
+		let filledType: String?
 
 		static func < (lhs: ProducedCase, rhs: ProducedCase) -> Bool {
-			(lhs.holder, lhs.label) < (rhs.holder, rhs.label)
+			(lhs.holder, lhs.label, lhs.filledType ?? "") < (rhs.holder, rhs.label, rhs.filledType ?? "")
 		}
 	}
 
@@ -119,8 +136,8 @@ struct GraphFuzzerPlaceFacts: Equatable {
 	/// Each case some place's path produces.
 	private(set) var producedCases: Set<ProducedCase>
 	/// The fields of each level that its type binds, as source, from the first place whose path holds it: every build of a
-	/// type binds the same (`placeLevelsDifferBetweenBuildsOfType` judges that), a builder function's cycle parameters aside
-	/// (`SeamPlaceLevels.Level.fieldsOfType`).
+	/// type binds the same (`placeLevelsDifferBetweenBuildsOfType` judges that), a builder function's cycle parameters and
+	/// the instantiators a loop member's function wraps again aside (`SeamPlaceLevels.Level.fieldsOfType`).
 	private(set) var levelFields: [LevelKey: [String]]
 	/// The labels each holder declares, on any path: its forwarded properties and its children, and the seam root's
 	/// parameters. A case of a holder's enum is named for one of them.
@@ -129,9 +146,6 @@ struct GraphFuzzerPlaceFacts: Equatable {
 	/// a cycle where its declaration is already being built above it, and a build that closes a cycle is the first
 	/// build, so a scope value's chain never repeats a declaration (the design's second promise of section 2.4).
 	private(set) var chainRepeats: [String]
-	/// Whether some place of a seam's hole is inside a fill, which a call's case for the builder filled leads to, holding the
-	/// inner seam's scope (the design's section 2.6), which the oracles that read the generated enums do not model yet.
-	private(set) var holdsPlaceInsideFill: Bool
 
 	/// These facts with the labels each seam that `sources` declare declares on its root: its parameters and its children,
 	/// as its `@Received`, `@Forwarded` and `@Instantiated` properties name them. A seam whose every place an inner seam
