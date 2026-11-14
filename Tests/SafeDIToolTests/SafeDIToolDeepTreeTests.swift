@@ -326,8 +326,8 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 			"            self.feature0 = feature0",
 			"        }",
 			"",
-			"        private(set) var service: (() -> Service)?",
-			"        private(set) var feature0: Feature0.SafeDIMockConfiguration",
+			"        let service: (() -> Service)?",
+			"        let feature0: Feature0.SafeDIMockConfiguration",
 			"    }",
 			"",
 			"    static func mock(",
@@ -377,9 +377,9 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var \(nextFeature): \(nextFeatureType)
+			        let \(nextFeature): \(nextFeatureType)
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: \(builderType)
+			        let safeDIBuilder: \(builderType)
 			    }
 			}
 			"""

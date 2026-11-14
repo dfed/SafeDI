@@ -954,7 +954,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		            self.screen = screen
 		        }
 
-		        private(set) var screen: Screen.SafeDIMockConfiguration
+		        let screen: Screen.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -2260,9 +2260,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		            self.user = user
 		        }
 
-		        private(set) var database: (() -> Database)?
-		        private(set) var cache: ((Database) -> Cache)?
-		        private(set) var user: (() -> User)?
+		        let database: (() -> Database)?
+		        let cache: ((Database) -> Cache)?
+		        let user: (() -> User)?
 		    }
 
 		    static func mock(

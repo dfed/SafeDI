@@ -215,7 +215,7 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        private(set) var child: (() -> Child)?
+		        let child: (() -> Child)?
 		    }
 
 		    @MainActor static func mock(
@@ -272,7 +272,7 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        private(set) var childBuilder: (() -> Child)?
+		        let childBuilder: (() -> Child)?
 		    }
 
 		    @MainActor static func mock(
@@ -336,7 +336,7 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        private(set) var child: (() -> Child)?
+		        let child: (() -> Child)?
 		    }
 
 		    @MainActor static func mock(
@@ -532,7 +532,7 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			            self.presenter = presenter
 			        }
 
-			        private(set) var presenter: (() -> Presenter)?
+			        let presenter: (() -> Presenter)?
 			    }
 
 			    @MainActor static func mock(
@@ -783,7 +783,7 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 			            self.presenter = presenter
 			        }
 
-			        private(set) var presenter: (() -> Presenter)?
+			        let presenter: (() -> Presenter)?
 			    }
 
 			    @MainActor static func mock(

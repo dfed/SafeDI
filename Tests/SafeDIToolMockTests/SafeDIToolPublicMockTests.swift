@@ -734,7 +734,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.screen = screen
 		        }
 
-		        public private(set) var screen: (() -> Screen)?
+		        public let screen: (() -> Screen)?
 		    }
 
 		    public static func mock(
@@ -825,10 +825,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.child = child
 			        }
 
-			        public private(set) var zebra: (() -> Zebra)?
-			        public private(set) var apple: (() -> Apple)?
-			        public private(set) var appleBuilder: (() -> Apple)?
-			        private(set) var child: ((Zebra, Apple, Instantiator<Apple>, Token?) -> Child)?
+			        public let zebra: (() -> Zebra)?
+			        public let apple: (() -> Apple)?
+			        public let appleBuilder: (() -> Apple)?
+			        let child: ((Zebra, Apple, Instantiator<Apple>, Token?) -> Child)?
 			    }
 
 			    public static func mock(
@@ -948,7 +948,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        public private(set) var child: __safeDI_Core_Child_MockConfiguration
+		        public let child: __safeDI_Core_Child_MockConfiguration
 		    }
 
 		    public static func mock(
@@ -989,9 +989,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        self.safeDIBuilder = safeDIBuilder
 		    }
 
-		    private(set) var grand: ((X?) -> Grand)?
+		    let grand: ((X?) -> Grand)?
 		    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-		    private(set) var safeDIBuilder: ((X?, Grand) -> Child)?
+		    let safeDIBuilder: ((X?, Grand) -> Child)?
 		}
 
 		extension Child {
@@ -1026,8 +1026,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.holder = holder
 		        }
 
-		        private(set) var x: (() -> X)?
-		        private(set) var holder: Holder.SafeDIOverrides
+		        let x: (() -> X)?
+		        let holder: Holder.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -1100,7 +1100,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.analytics = analytics
 			        }
 
-			        public private(set) var analytics: (() -> Analytics)?
+			        public let analytics: (() -> Analytics)?
 			    }
 
 			    public static func mock(
@@ -1177,11 +1177,11 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        self.safeDIBuilder = safeDIBuilder
 			    }
 
-			    private(set) var grand: (() -> Grand)?
+			    let grand: (() -> Grand)?
 			    /// `nil` keeps the default of `Child`'s `capacity`.
-			    public private(set) var capacity: Int?
+			    public let capacity: Int?
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-			    private(set) var safeDIBuilder: ((Grand, Int) -> Child)?
+			    let safeDIBuilder: ((Grand, Int) -> Child)?
 			}
 
 			extension Child {
@@ -1203,7 +1203,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.child = child
 			        }
 
-			        public private(set) var child: __safeDI_Child_MockConfiguration
+			        public let child: __safeDI_Child_MockConfiguration
 			    }
 
 			    public static func mock(
@@ -1275,7 +1275,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.childBuilder = childBuilder
 			        }
 
-			        public private(set) var childBuilder: __safeDI_Child_MockConfiguration
+			        public let childBuilder: __safeDI_Child_MockConfiguration
 			    }
 
 			    public static func mock(
@@ -1317,11 +1317,11 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Grand`'s `capacity`.
-			    public private(set) var capacity: @Sendable () -> Int?
+			    public let capacity: @Sendable () -> Int?
 			    /// The default of `Grand`'s `label` unless set.
-			    public private(set) var label: @Sendable () -> String?
+			    public let label: @Sendable () -> String?
 			    /// Overrides how `Grand` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: (@Sendable (Int, String?) -> Grand)?
+			    public let safeDIBuilder: (@Sendable (Int, String?) -> Grand)?
 			}
 
 			extension Grand {
@@ -1343,9 +1343,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        self.safeDIBuilder = safeDIBuilder
 			    }
 
-			    public private(set) var grand: __safeDI_Grand_MockConfiguration
+			    public let grand: __safeDI_Grand_MockConfiguration
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: (@Sendable (Grand) -> Child)?
+			    public let safeDIBuilder: (@Sendable (Grand) -> Child)?
 			}
 
 			extension Child {
@@ -1540,7 +1540,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.child = child
 			        }
 
-			        private(set) var child: ((Token?) -> Child)?
+			        let child: ((Token?) -> Child)?
 			    }
 
 			    @MainActor public static func mock(
@@ -1635,9 +1635,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Config`'s `capacity`.
-			    public private(set) var capacity: Int?
+			    public let capacity: Int?
 			    /// Overrides how `Config` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Int) -> Config)?
+			    public let safeDIBuilder: ((Int) -> Config)?
 			}
 
 			extension Config {
@@ -1677,10 +1677,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.onCancel = onCancel
 			        }
 
-			        public private(set) var config: __safeDI_Config_MockConfiguration
-			        public private(set) var child: ((Config, Config) -> Child)?
+			        public let config: __safeDI_Config_MockConfiguration
+			        public let child: ((Config, Config) -> Child)?
 			        /// The value of `Service`'s `onCancel`, `nil` unless set.
-			        public private(set) var onCancel: (() -> Void)?
+			        public let onCancel: (() -> Void)?
 			    }
 
 			    public static func mock(
@@ -1802,10 +1802,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.otherViewModel = otherViewModel
 			        }
 
-			        public private(set) var shelf: __safeDI_Shelf_MockConfiguration
-			        public private(set) var service: __safeDI_ConcreteService_MockConfiguration
-			        public private(set) var viewModel: __safeDI_Feed_ViewModel_MockConfiguration
-			        public private(set) var otherViewModel: __safeDI_Feed_ViewModel__MockConfiguration
+			        public let shelf: __safeDI_Shelf_MockConfiguration
+			        public let service: __safeDI_ConcreteService_MockConfiguration
+			        public let viewModel: __safeDI_Feed_ViewModel_MockConfiguration
+			        public let otherViewModel: __safeDI_Feed_ViewModel__MockConfiguration
 			    }
 
 			    public static func mock(
@@ -1851,11 +1851,11 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Shelf`'s `capacity`.
-			    public private(set) var capacity: Int?
+			    public let capacity: Int?
 			    /// The default of `Shelf`'s `label` unless set.
-			    public private(set) var label: String?
+			    public let label: String?
 			    /// Overrides how `Shelf` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Int, String?) -> Shelf)?
+			    public let safeDIBuilder: ((Int, String?) -> Shelf)?
 			}
 
 			extension Shelf {
@@ -1876,9 +1876,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `ConcreteService`'s `retries`.
-			    public private(set) var retries: Int?
+			    public let retries: Int?
 			    /// Overrides how `ConcreteService` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Int) -> ConcreteService)?
+			    public let safeDIBuilder: ((Int) -> ConcreteService)?
 			}
 
 			extension ConcreteService {
@@ -1899,9 +1899,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// The default of `Feed.ViewModel`'s `title` unless set.
-			    public private(set) var title: String?
+			    public let title: String?
 			    /// Overrides how `Feed.ViewModel` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((String?) -> Feed.ViewModel)?
+			    public let safeDIBuilder: ((String?) -> Feed.ViewModel)?
 			}
 
 			extension Feed.ViewModel {
@@ -1923,9 +1923,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// The default of `Feed_ViewModel`'s `title` unless set.
-			    public private(set) var title: String?
+			    public let title: String?
 			    /// Overrides how `Feed_ViewModel` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((String?) -> Feed_ViewModel)?
+			    public let safeDIBuilder: ((String?) -> Feed_ViewModel)?
 			}
 
 			extension Feed_ViewModel {
@@ -1966,7 +1966,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.b = b
 			        }
 
-			        public private(set) var b: __safeDI_B_MockConfiguration
+			        public let b: __safeDI_B_MockConfiguration
 			    }
 
 			    public static func mock(
@@ -2006,9 +2006,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        self.safeDIBuilder = safeDIBuilder
 			    }
 
-			    public private(set) var b: __safeDI_B_MockConfiguration
+			    public let b: __safeDI_B_MockConfiguration
 			    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((B) -> A)?
+			    public let safeDIBuilder: ((B) -> A)?
 			}
 
 			extension A {
@@ -2026,7 +2026,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// Overrides how `C` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((A) -> C)?
+			    public let safeDIBuilder: ((A) -> C)?
 			}
 
 			extension C {
@@ -2045,9 +2045,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        self.safeDIBuilder = safeDIBuilder
 			    }
 
-			    public private(set) var cBuilder: __safeDI_C_MockConfiguration
+			    public let cBuilder: __safeDI_C_MockConfiguration
 			    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Instantiator<C>) -> B)?
+			    public let safeDIBuilder: ((Instantiator<C>) -> B)?
 			}
 
 			extension B {
@@ -2091,8 +2091,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.b = b
 			        }
 
-			        public private(set) var session: (() -> Session)?
-			        public private(set) var b: __safeDI_B_MockConfiguration
+			        public let session: (() -> Session)?
+			        public let b: __safeDI_B_MockConfiguration
 			    }
 
 			    public static func mock(
@@ -2136,9 +2136,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        self.safeDIBuilder = safeDIBuilder
 			    }
 
-			    public private(set) var session: (() -> Session)?
+			    public let session: (() -> Session)?
 			    /// Overrides how `C` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Session, LazilyInstantiated<B>) -> C)?
+			    public let safeDIBuilder: ((Session, LazilyInstantiated<B>) -> C)?
 			}
 
 			extension C {
@@ -2157,9 +2157,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        self.safeDIBuilder = safeDIBuilder
 			    }
 
-			    public private(set) var cBuilder: __safeDI_C_MockConfiguration
+			    public let cBuilder: __safeDI_C_MockConfiguration
 			    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Session, Instantiator<C>) -> B)?
+			    public let safeDIBuilder: ((Session, Instantiator<C>) -> B)?
 			}
 
 			extension B {
@@ -2183,8 +2183,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.b = b
 			        }
 
-			        public private(set) var session: (() -> Session)?
-			        public private(set) var b: __safeDI_B_MockConfiguration
+			        public let session: (() -> Session)?
+			        public let b: __safeDI_B_MockConfiguration
 			    }
 
 			    public static func mock(
@@ -2224,9 +2224,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        self.safeDIBuilder = safeDIBuilder
 			    }
 
-			    public private(set) var session: (() -> Session)?
+			    public let session: (() -> Session)?
 			    /// Overrides how `C` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Session, B) -> C)?
+			    public let safeDIBuilder: ((Session, B) -> C)?
 			}
 
 			extension C {
@@ -2245,9 +2245,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        self.safeDIBuilder = safeDIBuilder
 			    }
 
-			    public private(set) var cBuilder: __safeDI_C_MockConfiguration
+			    public let cBuilder: __safeDI_C_MockConfiguration
 			    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Session, Instantiator<C>) -> B)?
+			    public let safeDIBuilder: ((Session, Instantiator<C>) -> B)?
 			}
 
 			extension B {
@@ -2311,9 +2311,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.tag = tag
 			        }
 
-			        public private(set) var bBuilder: __safeDI_B_MockConfiguration
+			        public let bBuilder: __safeDI_B_MockConfiguration
 			        /// The default of `A`'s `tag` unless set; `.init(tag: nil)` passes `nil`.
-			        public private(set) var tag: String?
+			        public let tag: String?
 			    }
 
 			    public static func mock(
@@ -2355,13 +2355,13 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        self.safeDIBuilder = safeDIBuilder
 			    }
 
-			    public private(set) var bBuilder: __safeDI_B_MockConfiguration
+			    public let bBuilder: __safeDI_B_MockConfiguration
 			    /// `nil` keeps the default of `A`'s `label`.
-			    public private(set) var label: String?
+			    public let label: String?
 			    /// The default of `A`'s `tag` unless set.
-			    public private(set) var tag: String?
+			    public let tag: String?
 			    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Instantiator<B>, String, String?) -> A)?
+			    public let safeDIBuilder: ((Instantiator<B>, String, String?) -> A)?
 			}
 
 			extension A {
@@ -2382,7 +2382,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Instantiator<A>) -> B)?
+			    public let safeDIBuilder: ((Instantiator<A>) -> B)?
 			}
 
 			extension B {
@@ -2445,7 +2445,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.childBuilder = childBuilder
 			        }
 
-			        public private(set) var childBuilder: (@Sendable (Thing) -> Child)?
+			        public let childBuilder: (@Sendable (Thing) -> Child)?
 			    }
 
 			    public static func mock(
@@ -2518,7 +2518,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.a = a
 		        }
 
-		        public private(set) var a: __safeDI_Feature_A_MockConfiguration
+		        public let a: __safeDI_Feature_A_MockConfiguration
 		    }
 
 		    public static func mock(
@@ -2559,7 +2559,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public private(set) var safeDIBuilder: (@Sendable (any Api, A) -> B)?
+		    public let safeDIBuilder: (@Sendable (any Api, A) -> B)?
 		}
 
 		extension B {
@@ -2578,9 +2578,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        self.safeDIBuilder = safeDIBuilder
 		    }
 
-		    public private(set) var bBuilder: __safeDI_Feature_B_MockConfiguration
+		    public let bBuilder: __safeDI_Feature_B_MockConfiguration
 		    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public private(set) var safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> A)?
+		    public let safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> A)?
 		}
 
 		extension A {
@@ -2606,7 +2606,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.hub = hub
 		        }
 
-		        private(set) var hub: Hub.SafeDIOverrides
+		        let hub: Hub.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -2692,7 +2692,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.a = a
 		        }
 
-		        public private(set) var a: __safeDI_Feature_A_MockConfiguration
+		        public let a: __safeDI_Feature_A_MockConfiguration
 		    }
 
 		    public static func mock(
@@ -2740,7 +2740,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public private(set) var safeDIBuilder: (@Sendable (any Api, A, C) -> B)?
+		    public let safeDIBuilder: (@Sendable (any Api, A, C) -> B)?
 		}
 
 		extension B {
@@ -2759,9 +2759,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        self.safeDIBuilder = safeDIBuilder
 		    }
 
-		    public private(set) var bBuilder: __safeDI_Feature_B_MockConfiguration
+		    public let bBuilder: __safeDI_Feature_B_MockConfiguration
 		    /// Overrides how `C` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public private(set) var safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> C)?
+		    public let safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> C)?
 		}
 
 		extension C {
@@ -2780,9 +2780,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        self.safeDIBuilder = safeDIBuilder
 		    }
 
-		    public private(set) var c: __safeDI_Feature_C_MockConfiguration
+		    public let c: __safeDI_Feature_C_MockConfiguration
 		    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public private(set) var safeDIBuilder: (@Sendable (C) -> A)?
+		    public let safeDIBuilder: (@Sendable (C) -> A)?
 		}
 
 		extension A {
@@ -2808,7 +2808,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.hub = hub
 		        }
 
-		        private(set) var hub: Hub.SafeDIOverrides
+		        let hub: Hub.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -2884,7 +2884,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.a = a
 		        }
 
-		        public private(set) var a: __safeDI_Feature_A_MockConfiguration
+		        public let a: __safeDI_Feature_A_MockConfiguration
 		    }
 
 		    public static func mock(
@@ -2926,7 +2926,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public private(set) var safeDIBuilder: (@Sendable (any Api, A) -> B)?
+		    public let safeDIBuilder: (@Sendable (any Api, A) -> B)?
 		}
 
 		extension B {
@@ -2945,9 +2945,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        self.safeDIBuilder = safeDIBuilder
 		    }
 
-		    public private(set) var bBuilder: __safeDI_Feature_B_MockConfiguration
+		    public let bBuilder: __safeDI_Feature_B_MockConfiguration
 		    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public private(set) var safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> A)?
+		    public let safeDIBuilder: (@Sendable (SendableInstantiator<B>) -> A)?
 		}
 
 		extension A {
@@ -2973,7 +2973,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.hub = hub
 		        }
 
-		        private(set) var hub: Hub.SafeDIOverrides
+		        let hub: Hub.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -3055,8 +3055,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.a = a
 		        }
 
-		        public private(set) var user: (() -> User)?
-		        public private(set) var a: __safeDI_Feature_A_MockConfiguration
+		        public let user: (() -> User)?
+		        public let a: __safeDI_Feature_A_MockConfiguration
 		    }
 
 		    public static func mock(
@@ -3100,7 +3100,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    /// Overrides how `B` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public private(set) var safeDIBuilder: (@Sendable (any Api, A, User, Dep) -> B)?
+		    public let safeDIBuilder: (@Sendable (any Api, A, User, Dep) -> B)?
 		}
 
 		extension B {
@@ -3121,10 +3121,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        self.safeDIBuilder = safeDIBuilder
 		    }
 
-		    public private(set) var dep: (@Sendable () -> Dep)?
-		    public private(set) var bBuilder: __safeDI_Feature_B_MockConfiguration
+		    public let dep: (@Sendable () -> Dep)?
+		    public let bBuilder: __safeDI_Feature_B_MockConfiguration
 		    /// Overrides how `A` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public private(set) var safeDIBuilder: (@Sendable (Dep, SendableInstantiator<B>) -> A)?
+		    public let safeDIBuilder: (@Sendable (Dep, SendableInstantiator<B>) -> A)?
 		}
 
 		extension A {
@@ -3150,7 +3150,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.hub = hub
 		        }
 
-		        private(set) var hub: Hub.SafeDIOverrides
+		        let hub: Hub.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -3275,7 +3275,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.vm = vm
 			        }
 
-			        public private(set) var vm: __safeDI_Core_ViewModel_MockConfiguration
+			        public let vm: __safeDI_Core_ViewModel_MockConfiguration
 			    }
 
 			    public static func mock(
@@ -3335,14 +3335,14 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.policy = policy
 			        }
 
-			        public private(set) var logger: __safeDI_Core_FakeLogger_MockConfiguration
-			        public private(set) var analytics: (() -> Analytics)?
-			        package private(set) var session: (() -> Session)?
-			        public private(set) var tokenCache: __safeDI_Core_TokenCache_MockConfiguration
+			        public let logger: __safeDI_Core_FakeLogger_MockConfiguration
+			        public let analytics: (() -> Analytics)?
+			        package let session: (() -> Session)?
+			        public let tokenCache: __safeDI_Core_TokenCache_MockConfiguration
 			        /// The default of `Service`'s `name` unless set; `.init(name: nil)` passes `nil`.
-			        public private(set) var name: String?
+			        public let name: String?
 			        /// The default of `Service`'s `policy` unless set; `.init(policy: nil)` passes `nil`.
-			        package private(set) var policy: Policy?
+			        package let policy: Policy?
 			    }
 
 			    public static func mock(
@@ -3403,9 +3403,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// The default of `ViewModel`'s `title` unless set.
-			    public private(set) var title: String?
+			    public let title: String?
 			    /// Overrides how `ViewModel` is constructed. Parameters match the type’s initializer or custom mock method.
-			    package private(set) var safeDIBuilder: ((String?) -> ViewModel)?
+			    package let safeDIBuilder: ((String?) -> ViewModel)?
 			}
 
 			extension ViewModel {
@@ -3434,9 +3434,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `FakeLogger`'s `verbose`.
-			    public private(set) var verbose: Bool?
+			    public let verbose: Bool?
 			    /// Overrides how `FakeLogger` is constructed. Parameters match the type’s initializer or custom mock method.
-			    package private(set) var safeDIBuilder: ((Bool) -> FakeLogger)?
+			    package let safeDIBuilder: ((Bool) -> FakeLogger)?
 			}
 
 			extension FakeLogger {
@@ -3464,9 +3464,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `TokenCache`'s `capacity`.
-			    public private(set) var capacity: Int?
+			    public let capacity: Int?
 			    /// Overrides how `TokenCache` is constructed. Parameters match the type’s initializer or custom mock method.
-			    package private(set) var safeDIBuilder: ((Analytics, Session, Theme?, Int) -> TokenCache)?
+			    package let safeDIBuilder: ((Analytics, Session, Theme?, Int) -> TokenCache)?
 			}
 
 			extension TokenCache {
@@ -3520,7 +3520,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.childBuilder = childBuilder
 			        }
 
-			        public private(set) var childBuilder: __safeDI_Child_MockConfiguration
+			        public let childBuilder: __safeDI_Child_MockConfiguration
 			    }
 
 			    public static func mock(
@@ -3554,9 +3554,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// The default of `Child`'s `onTap` unless set.
-			    public private(set) var onTap: @Sendable () -> (() -> Void)?
+			    public let onTap: @Sendable () -> (() -> Void)?
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: (@Sendable ((() -> Void)?) -> Child)?
+			    public let safeDIBuilder: (@Sendable ((() -> Void)?) -> Child)?
 			}
 
 			extension Child {
@@ -3627,7 +3627,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.child = child
 			        }
 
-			        public private(set) var child: __safeDI_Child_MockConfiguration
+			        public let child: __safeDI_Child_MockConfiguration
 			    }
 
 			    public static func mock(
@@ -3661,9 +3661,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Child`'s `onTap`.
-			    public private(set) var onTap: Handler?
+			    public let onTap: Handler?
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((@escaping Handler) -> Child)?
+			    public let safeDIBuilder: ((@escaping Handler) -> Child)?
 			}
 
 			extension Child {
@@ -3837,7 +3837,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.theme = theme
 			        }
 
-			        public private(set) var theme: (() -> Theme)?
+			        public let theme: (() -> Theme)?
 			    }
 
 			    public static func mock(
@@ -3961,9 +3961,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.label = label
 			        }
 
-			        public private(set) var theme: (() -> Theme)?
+			        public let theme: (() -> Theme)?
 			        /// The default of `ProfileView`'s `label` unless set; `.init(label: nil)` passes `nil`.
-			        public private(set) var label: String?
+			        public let label: String?
 			    }
 
 			    public static func mock(
@@ -4034,7 +4034,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.theme = theme
 			        }
 
-			        public private(set) var theme: (() -> Theme)?
+			        public let theme: (() -> Theme)?
 			    }
 
 			    @MainActor public static func mock(
@@ -4064,7 +4064,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.theme = theme
 			        }
 
-			        public private(set) var theme: (() -> Theme)?
+			        public let theme: (() -> Theme)?
 			    }
 
 			    @MainActor public static func mock(
@@ -4302,15 +4302,15 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.onCancel = onCancel
 		        }
 
-		        public private(set) var auth: (() -> Auth)?
-		        public private(set) var inner: (() -> Outer.Inner)?
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var sessionBuilder: (() -> Session)?
-		        public private(set) var leaf: __safeDI_Core_Leaf_MockConfiguration
+		        public let auth: (() -> Auth)?
+		        public let inner: (() -> Outer.Inner)?
+		        public let analytics: (() -> Analytics)?
+		        public let sessionBuilder: (() -> Session)?
+		        public let leaf: __safeDI_Core_Leaf_MockConfiguration
 		        /// The default of `Service`'s `title` unless set; `.init(title: nil)` passes `nil`.
-		        public private(set) var title: String?
+		        public let title: String?
 		        /// The value of `Service`'s `onCancel`, `nil` unless set.
-		        public private(set) var onCancel: (() -> Void)?
+		        public let onCancel: (() -> Void)?
 		    }
 
 		    // SafeDI counts `BaseTheme` as `public`: no module it reads declares it narrower. If `BaseTheme` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
@@ -4413,15 +4413,15 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    /// `nil` keeps the default of `Leaf`'s `capacity`.
-		    public private(set) var capacity: Int?
+		    public let capacity: Int?
 		    /// `nil` keeps the default of `Leaf`'s `onDone`.
-		    public private(set) var onDone: (() -> Void)?
+		    public let onDone: (() -> Void)?
 		    /// `nil` keeps the default of `Leaf`'s `names`.
-		    public private(set) var names: [String]?
+		    public let names: [String]?
 		    /// The default of `Leaf`'s `label` unless set.
-		    public private(set) var label: String?
+		    public let label: String?
 		    /// Overrides how `Leaf` is constructed. Parameters match the type’s initializer or custom mock method.
-		    package private(set) var safeDIBuilder: ((@escaping () -> Void, @escaping @Sendable () -> Void, (Int, Bool), Theme, BaseTheme, any Auth, Outer.Inner, Analytics, Instantiator<Session>, (() -> Void)?, Handler?, (any Auth)?, Int, @escaping () -> Void, [String], String?) -> Leaf)?
+		    package let safeDIBuilder: ((@escaping () -> Void, @escaping @Sendable () -> Void, (Int, Bool), Theme, BaseTheme, any Auth, Outer.Inner, Analytics, Instantiator<Session>, (() -> Void)?, Handler?, (any Auth)?, Int, @escaping () -> Void, [String], String?) -> Leaf)?
 		}
 
 		extension Leaf {
@@ -4499,7 +4499,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.theme = theme
 		        }
 
-		        public private(set) var theme: (() -> Theme)?
+		        public let theme: (() -> Theme)?
 		    }
 
 		    public static func mock(
@@ -4588,7 +4588,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.analytics = analytics
 			        }
 
-			        public private(set) var analytics: (() -> Analytics)?
+			        public let analytics: (() -> Analytics)?
 			    }
 
 			    public static func mock(
@@ -4746,7 +4746,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        package private(set) var userService: (() -> UserService)?
+		        package let userService: (() -> UserService)?
 		    }
 
 		    public static func mock(
@@ -4865,9 +4865,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
-		        package private(set) var session: (() -> Session)?
-		        private(set) var token: (() -> Token)?
-		        public private(set) var analytics: (() -> Analytics)?
+		        package let session: (() -> Session)?
+		        let token: (() -> Token)?
+		        public let analytics: (() -> Analytics)?
 		    }
 
 		    public static func mock(
@@ -5085,8 +5085,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.settings = settings
 			        }
 
-			        public private(set) var profileBuilder: ((UserService) -> Profile)?
-			        public private(set) var settings: ((Clock) -> Settings)?
+			        public let profileBuilder: ((UserService) -> Profile)?
+			        public let settings: ((Clock) -> Settings)?
 			    }
 
 			    public static func mock(
@@ -5224,8 +5224,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -5269,8 +5269,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -5339,9 +5339,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.backupService = backupService
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
-		        private(set) var backupService: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let backupService: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -5454,8 +5454,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var service: Service.SafeDIOverrides
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -5536,8 +5536,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -5702,8 +5702,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -5854,8 +5854,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -5930,8 +5930,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var service: Service.SafeDIOverrides
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -6003,8 +6003,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -6095,8 +6095,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var service: Service.SafeDIOverrides
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -6205,8 +6205,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var service: Service.SafeDIOverrides
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -6302,8 +6302,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var service: Service.SafeDIOverrides
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -6401,9 +6401,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.board = board
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var service: Service.SafeDIOverrides
-		        public private(set) var board: Board.SafeDIOverrides
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
+		        public let board: Board.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -6506,10 +6506,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.board = board
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var filter: (() -> FilterProtocol)?
-		        public private(set) var service: Service.SafeDIOverrides
-		        public private(set) var board: Board.SafeDIOverrides
+		        public let analytics: (() -> Analytics)?
+		        public let filter: (() -> FilterProtocol)?
+		        public let service: Service.SafeDIOverrides
+		        public let board: Board.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -6611,10 +6611,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.board = board
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var filter: (() -> FilterProtocol)?
-		        private(set) var service: Service.SafeDIOverrides
-		        private(set) var board: Board.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let filter: (() -> FilterProtocol)?
+		        let service: Service.SafeDIOverrides
+		        let board: Board.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -6715,10 +6715,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.board = board
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var filter: (() -> FilterProtocol)?
-		        public private(set) var service: Service.SafeDIOverrides
-		        public private(set) var board: Board.SafeDIOverrides
+		        public let analytics: (() -> Analytics)?
+		        public let filter: (() -> FilterProtocol)?
+		        public let service: Service.SafeDIOverrides
+		        public let board: Board.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -6825,8 +6825,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var service: Service.SafeDIOverrides
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -6905,9 +6905,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var filter: (() -> FilterProtocol)?
-		        public private(set) var service: Service.SafeDIOverrides
+		        public let analytics: (() -> Analytics)?
+		        public let filter: (() -> FilterProtocol)?
+		        public let service: Service.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -6971,9 +6971,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
-		        private(set) var filter: ((Service) -> FilterProtocol)?
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let filter: ((Service) -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -7031,9 +7031,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var service: Service.SafeDIOverrides
-		        public private(set) var filter: ((Service) -> FilterProtocol)?
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
+		        public let filter: ((Service) -> FilterProtocol)?
 		    }
 
 		    public static func mock(
@@ -7096,9 +7096,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var filter: ((Service?) -> FilterProtocol)?
-		        private(set) var service: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let filter: ((Service?) -> FilterProtocol)?
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -7160,10 +7160,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.laterService = laterService
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var service: Service.SafeDIOverrides
-		        public private(set) var filter: ((Service) -> FilterProtocol)?
-		        public private(set) var laterService: Service.SafeDIOverrides
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
+		        public let filter: ((Service) -> FilterProtocol)?
+		        public let laterService: Service.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -7264,9 +7264,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
-		        private(set) var filter: ((Service) -> FilterProtocol)?
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let filter: ((Service) -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -7356,9 +7356,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var filter: (() -> FilterProtocol)?
-		        private(set) var service: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let filter: (() -> FilterProtocol)?
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -7433,8 +7433,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var service: Service.SafeDIOverrides
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -7546,8 +7546,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -7610,8 +7610,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -7681,8 +7681,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -7729,8 +7729,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var service: Service.SafeDIOverrides
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -7801,12 +7801,12 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service5 = service5
 		        }
 
-		        public private(set) var service0: Service0.SafeDIOverrides
-		        public private(set) var service1: Service1.SafeDIOverrides
-		        public private(set) var service2: Service2.SafeDIOverrides
-		        public private(set) var service3: Service3.SafeDIOverrides
-		        public private(set) var service4: Service4.SafeDIOverrides
-		        public private(set) var service5: Service5.SafeDIOverrides
+		        public let service0: Service0.SafeDIOverrides
+		        public let service1: Service1.SafeDIOverrides
+		        public let service2: Service2.SafeDIOverrides
+		        public let service3: Service3.SafeDIOverrides
+		        public let service4: Service4.SafeDIOverrides
+		        public let service5: Service5.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -7868,7 +7868,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.screen = screen
 		        }
 
-		        private(set) var screen: Screen.SafeDIOverrides
+		        let screen: Screen.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -7921,7 +7921,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.screen = screen
 		        }
 
-		        private(set) var screen: Screen.SafeDIOverrides
+		        let screen: Screen.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -8127,7 +8127,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var service: Service.SafeDIOverrides
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -8191,8 +8191,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.serviceBuilder = serviceBuilder
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var serviceBuilder: (@Sendable () -> Service.SafeDIOverrides)?
+		        let analytics: (() -> Analytics)?
+		        let serviceBuilder: (@Sendable () -> Service.SafeDIOverrides)?
 		    }
 
 		    static func mock(
@@ -8323,9 +8323,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var theme: (() -> Theme)?
-		        private(set) var service: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let theme: (() -> Theme)?
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -8437,8 +8437,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -8551,8 +8551,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -8638,8 +8638,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -8724,8 +8724,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.serviceBuilder = serviceBuilder
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var serviceBuilder: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let serviceBuilder: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -8948,8 +8948,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var service: Service.SafeDIOverrides
-		        private(set) var filter: ((Service?) -> Hub.Filter)?
+		        let service: Service.SafeDIOverrides
+		        let filter: ((Service?) -> Hub.Filter)?
 		    }
 
 		    static func mock(
@@ -9073,8 +9073,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var service: Service.SafeDIOverrides
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -9116,8 +9116,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.dashboard = dashboard
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var dashboard: Dashboard.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let dashboard: Dashboard.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -9217,8 +9217,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.vault = vault
 		        }
 
-		        private(set) var service: Service.SafeDIOverrides
-		        private(set) var vault: Vault.SafeDIOverrides
+		        let service: Service.SafeDIOverrides
+		        let vault: Vault.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -9263,7 +9263,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        public private(set) var service: Service.SafeDIOverrides
+		        public let service: Service.SafeDIOverrides
 		    }
 
 		    public static func mock(
@@ -9301,7 +9301,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.outer = outer
 		        }
 
-		        private(set) var outer: Outer.SafeDIOverrides
+		        let outer: Outer.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -9385,7 +9385,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.service = service
 			        }
 
-			        private(set) var service: Service.SafeDIOverrides
+			        let service: Service.SafeDIOverrides
 			    }
 
 			    static func mock(
@@ -9523,7 +9523,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.wrapperBuilder = wrapperBuilder
 		        }
 
-		        private(set) var wrapperBuilder: Wrapper.SafeDIMockConfiguration
+		        let wrapperBuilder: Wrapper.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -9561,10 +9561,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        private(set) var analytics: (@Sendable () -> Analytics)?
-		        private(set) var service: (@Sendable () -> Service.SafeDIOverrides)?
+		        let analytics: (@Sendable () -> Analytics)?
+		        let service: (@Sendable () -> Service.SafeDIOverrides)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: (@Sendable (LazilyInstantiated<Analytics>, Service) -> Wrapper)?
+		        let safeDIBuilder: (@Sendable (LazilyInstantiated<Analytics>, Service) -> Wrapper)?
 		    }
 		}
 		#endif
@@ -9614,8 +9614,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.serviceBuilder = serviceBuilder
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var serviceBuilder: Service.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let serviceBuilder: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -9726,10 +9726,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.sendableErased = sendableErased
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var constant: Service.SafeDIOverrides
-		        private(set) var erased: Service.SafeDIOverrides
-		        private(set) var sendableErased: (@Sendable () -> Service.SafeDIOverrides)?
+		        let analytics: (() -> Analytics)?
+		        let constant: Service.SafeDIOverrides
+		        let erased: Service.SafeDIOverrides
+		        let sendableErased: (@Sendable () -> Service.SafeDIOverrides)?
 		    }
 
 		    static func mock(
@@ -9802,9 +9802,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.theme = theme
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
-		        private(set) var theme: Theme?
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let theme: Theme?
 		    }
 
 		    static func mock(
@@ -9935,7 +9935,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var service: Service.SafeDIOverrides
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -9983,7 +9983,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            self.service = service
 			        }
 
-			        private(set) var service: Service.SafeDIOverrides
+			        let service: Service.SafeDIOverrides
 			    }
 
 			    static func mock(
@@ -10054,7 +10054,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var service: (() -> Service)?
+		        let service: (() -> Service)?
 		    }
 
 		    static func mock(
@@ -10132,7 +10132,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var service: Service.SafeDIOverrides
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -10231,9 +10231,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.vault = vault
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
-		        private(set) var vault: Vault.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let vault: Vault.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -10327,9 +10327,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.vault = vault
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
-		        private(set) var vault: Vault.SafeDIOverrides
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let vault: Vault.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -10376,9 +10376,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
-		        private(set) var filter: ((Service) -> FilterProtocol)?
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let filter: ((Service) -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -10423,9 +10423,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
-		        private(set) var filter: ((Service) -> FilterProtocol)?
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let filter: ((Service) -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -10469,9 +10469,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
-		        private(set) var filter: ((Service) -> FilterProtocol)?
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let filter: ((Service) -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -10518,9 +10518,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var analyticsBuilder: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
-		        private(set) var filter: ((Service) -> FilterProtocol)?
+		        let analyticsBuilder: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let filter: ((Service) -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -10568,9 +10568,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIOverrides
-		        private(set) var filter: ((Analytics, Service) -> FilterProtocol)?
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let filter: ((Analytics, Service) -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -10614,9 +10614,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        public private(set) var analytics: (() -> Analytics)?
-		        public private(set) var service: Service.SafeDIOverrides
-		        public private(set) var filter: ((Service) -> FilterProtocol)?
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
+		        public let filter: ((Service) -> FilterProtocol)?
 		    }
 
 		    // SafeDI counts `FilterProtocol` as `public`: no module it reads declares it narrower. If `FilterProtocol` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
@@ -10691,8 +10691,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var filter: AppFilter.SafeDIMockConfiguration
+		        let analytics: (() -> Analytics)?
+		        let filter: AppFilter.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -10722,9 +10722,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        private(set) var service: Service.SafeDIOverrides
+		        let service: Service.SafeDIOverrides
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: ((Service) -> AppFilter)?
+		        let safeDIBuilder: ((Service) -> AppFilter)?
 		    }
 		}
 		#endif
@@ -10760,9 +10760,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var service: Service.SafeDIMockConfiguration
-		        private(set) var filter: ((Service) -> FilterProtocol)?
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIMockConfiguration
+		        let filter: ((Service) -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -10792,8 +10792,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
-		        private(set) var session: (() -> Session)?
-		        private(set) var analytics: (() -> Analytics)?
+		        let session: (() -> Session)?
+		        let analytics: (() -> Analytics)?
 		    }
 
 		    static func mock(
@@ -10818,9 +10818,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        private(set) var session: (() -> Session)?
+		        let session: (() -> Session)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: ((Analytics, Session) -> Service)?
+		        let safeDIBuilder: ((Analytics, Session) -> Service)?
 		    }
 		}
 		#endif
@@ -10945,8 +10945,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.store = store
 		        }
 
-		        public private(set) var shared: (() -> SharedThing)?
-		        private(set) var store: ((SharedThing) -> FeedStore)?
+		        public let shared: (() -> SharedThing)?
+		        let store: ((SharedThing) -> FeedStore)?
 		    }
 
 		    public static func mock(
@@ -11008,8 +11008,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.session = session
 		        }
 
-		        private(set) var tokenCache: (() -> TokenCache)?
-		        public private(set) var session: (() -> Session)?
+		        let tokenCache: (() -> TokenCache)?
+		        public let session: (() -> Session)?
 		    }
 
 		    public static func mock(
@@ -11080,7 +11080,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            self.store = store
 		        }
 
-		        private(set) var store: (() -> ProfileStore)?
+		        let store: (() -> ProfileStore)?
 		    }
 
 		    public static func mock(

@@ -97,8 +97,8 @@ struct SafeDIToolReservedNameTests: ~Copyable {
 		            self.instance = instance
 		        }
 
-		        private(set) var home: ((LazilyInstantiated<Analytics>?) -> Home)?
-		        private(set) var instance: Analytics?
+		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        let instance: Analytics?
 		    }
 
 		    static func mock(
@@ -186,9 +186,9 @@ struct SafeDIToolReservedNameTests: ~Copyable {
 		            self.formBuilder = formBuilder
 		        }
 
-		        private(set) var SafeDIOverrides: Child.SafeDIMockConfiguration
-		        private(set) var mock: (() -> Leaf)?
-		        private(set) var formBuilder: ((String) -> Form)?
+		        let SafeDIOverrides: Child.SafeDIMockConfiguration
+		        let mock: (() -> Leaf)?
+		        let formBuilder: ((String) -> Form)?
 		    }
 
 		    static func mock(
@@ -228,9 +228,9 @@ struct SafeDIToolReservedNameTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        private(set) var SafeDIMockConfiguration: (() -> Leaf)?
+		        let SafeDIMockConfiguration: (() -> Leaf)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: ((Leaf) -> Child)?
+		        let safeDIBuilder: ((Leaf) -> Child)?
 		    }
 		}
 		#endif

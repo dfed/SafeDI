@@ -466,8 +466,8 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        private(set) var tag: (() -> Tag)?
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
+		        let tag: (() -> Tag)?
+		        let aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -507,7 +507,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: ((Tag, Instantiator<A>) -> B)?
+		        let safeDIBuilder: ((Tag, Instantiator<A>) -> B)?
 		    }
 		}
 
@@ -524,10 +524,10 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        private(set) var reader: ((Tag) -> TagReader)?
-		        private(set) var bBuilder: B.SafeDIMockConfiguration
+		        let reader: ((Tag) -> TagReader)?
+		        let bBuilder: B.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: ((TagReader, any Api, Instantiator<B>) -> A)?
+		        let safeDIBuilder: ((TagReader, any Api, Instantiator<B>) -> A)?
 		    }
 		}
 		#endif

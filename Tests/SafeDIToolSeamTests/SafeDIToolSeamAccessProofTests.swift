@@ -3411,7 +3411,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			            self.clock = clock
 			        }
 
-			        private(set) var clock: (() -> Clock)?
+			        let clock: (() -> Clock)?
 			    }
 
 			    static func mock(

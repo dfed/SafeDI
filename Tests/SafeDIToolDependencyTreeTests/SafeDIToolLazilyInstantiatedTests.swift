@@ -3827,9 +3827,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.home = home
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var settingsBuilder: ((Analytics) -> Settings)?
-		        private(set) var home: ((LazilyInstantiated<Analytics>) -> Home)?
+		        let analytics: (() -> Analytics)?
+		        let settingsBuilder: ((Analytics) -> Settings)?
+		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
 		    }
 
 		    static func mock(
@@ -3892,7 +3892,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
+		        let analytics: (() -> Analytics)?
 		    }
 
 		    static func mock(
@@ -3975,9 +3975,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.settings = settings
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var home: ((LazilyInstantiated<Analytics>) -> Home)?
-		        private(set) var settings: ((Analytics) -> Settings)?
+		        let analytics: (() -> Analytics)?
+		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		        let settings: ((Analytics) -> Settings)?
 		    }
 
 		    static func mock(
@@ -4119,7 +4119,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.nodeBuilder = nodeBuilder
 		        }
 
-		        private(set) var nodeBuilder: Node?
+		        let nodeBuilder: Node?
 		    }
 
 		    static func mock(
@@ -4185,7 +4185,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.nodeBuilder = nodeBuilder
 		        }
 
-		        private(set) var nodeBuilder: ((LazilyInstantiated<Node>?) -> Node)?
+		        let nodeBuilder: ((LazilyInstantiated<Node>?) -> Node)?
 		    }
 
 		    static func mock(
@@ -4393,8 +4393,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.home = home
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var home: ((LazilyInstantiated<Analytics>) -> Home)?
+		        let analytics: (() -> Analytics)?
+		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
 		    }
 
 		    static func mock(
@@ -4456,7 +4456,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
+		        let analytics: (() -> Analytics)?
 		    }
 
 		    static func mock(
@@ -4520,7 +4520,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
+		        let analytics: (() -> Analytics)?
 		    }
 
 		    static func mock(
@@ -4595,8 +4595,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.logger = logger
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var logger: ((Analytics) -> Logger)?
+		        let analytics: (() -> Analytics)?
+		        let logger: ((Analytics) -> Logger)?
 		    }
 
 		    static func mock(
@@ -4681,9 +4681,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.settings = settings
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var home: ((LazilyInstantiated<Analytics>?) -> Home)?
-		        private(set) var settings: ((Analytics) -> Settings)?
+		        let analytics: (() -> Analytics)?
+		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        let settings: ((Analytics) -> Settings)?
 		    }
 
 		    static func mock(
@@ -4770,9 +4770,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.settings = settings
 		        }
 
-		        private(set) var tracker: (() -> Tracker)?
-		        private(set) var home: ((LazilyInstantiated<Tracker>?) -> Home)?
-		        private(set) var settings: ((Tracker?) -> Settings)?
+		        let tracker: (() -> Tracker)?
+		        let home: ((LazilyInstantiated<Tracker>?) -> Home)?
+		        let settings: ((Tracker?) -> Settings)?
 		    }
 
 		    static func mock(
@@ -4859,9 +4859,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.settings = settings
 		        }
 
-		        private(set) var tracker: (() -> Tracker)?
-		        private(set) var home: ((LazilyInstantiated<Tracker>?) -> Home)?
-		        private(set) var settings: ((Tracker?) -> Settings)?
+		        let tracker: (() -> Tracker)?
+		        let home: ((LazilyInstantiated<Tracker>?) -> Home)?
+		        let settings: ((Tracker?) -> Settings)?
 		    }
 
 		    static func mock(
@@ -4948,9 +4948,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.settings = settings
 		        }
 
-		        private(set) var tracker: (() -> Tracker)?
-		        private(set) var home: ((LazilyInstantiated<Tracker>) -> Home)?
-		        private(set) var settings: ((Tracker?) -> Settings)?
+		        let tracker: (() -> Tracker)?
+		        let home: ((LazilyInstantiated<Tracker>) -> Home)?
+		        let settings: ((Tracker?) -> Settings)?
 		    }
 
 		    static func mock(
@@ -5036,9 +5036,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.settings = settings
 		        }
 
-		        private(set) var tracker: (() -> Tracker)?
-		        private(set) var home: ((LazilyInstantiated<Tracker>?) -> Home)?
-		        private(set) var settings: ((Tracker) -> Settings)?
+		        let tracker: (() -> Tracker)?
+		        let home: ((LazilyInstantiated<Tracker>?) -> Home)?
+		        let settings: ((Tracker) -> Settings)?
 		    }
 
 		    static func mock(
@@ -5125,9 +5125,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.settings = settings
 		        }
 
-		        private(set) var tracker: (() -> Tracker)?
-		        private(set) var home: ((LazilyInstantiated<Tracker>?) -> Home)?
-		        private(set) var settings: ((Tracker?) -> Settings)?
+		        let tracker: (() -> Tracker)?
+		        let home: ((LazilyInstantiated<Tracker>?) -> Home)?
+		        let settings: ((Tracker?) -> Settings)?
 		    }
 
 		    static func mock(
@@ -5213,9 +5213,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.settings = settings
 		        }
 
-		        private(set) var tracker: (@Sendable () -> Tracker)?
-		        private(set) var home: ((SendableLazilyInstantiated<Tracker>?) -> Home)?
-		        private(set) var settings: ((Tracker?) -> Settings)?
+		        let tracker: (@Sendable () -> Tracker)?
+		        let home: ((SendableLazilyInstantiated<Tracker>?) -> Home)?
+		        let settings: ((Tracker?) -> Settings)?
 		    }
 
 		    static func mock(
@@ -5306,10 +5306,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.tracker_LazilyInstantiated__Tracker = tracker_LazilyInstantiated__Tracker
 		        }
 
-		        private(set) var tracker: (@Sendable () -> Tracker)?
-		        private(set) var home: ((SendableLazilyInstantiated<Tracker>) -> Home)?
-		        private(set) var settings: ((LazilyInstantiated<Tracker>?) -> Settings)?
-		        private(set) var tracker_LazilyInstantiated__Tracker: LazilyInstantiated<Tracker>?
+		        let tracker: (@Sendable () -> Tracker)?
+		        let home: ((SendableLazilyInstantiated<Tracker>) -> Home)?
+		        let settings: ((LazilyInstantiated<Tracker>?) -> Settings)?
+		        let tracker_LazilyInstantiated__Tracker: LazilyInstantiated<Tracker>?
 		    }
 
 		    static func mock(
@@ -5409,9 +5409,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.profile = profile
 		        }
 
-		        private(set) var home: ((LazilyInstantiated<Analytics>) -> Home)?
-		        private(set) var settings: ((Analytics) -> Settings)?
-		        private(set) var profile: ((LazilyInstantiated<Analytics>?) -> Profile)?
+		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		        let settings: ((Analytics) -> Settings)?
+		        let profile: ((LazilyInstantiated<Analytics>?) -> Profile)?
 		    }
 
 		    static func mock(
@@ -5623,9 +5623,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.analytics = analytics
 		        }
 
-		        private(set) var home: ((LazilyInstantiated<Analytics>?) -> Home)?
-		        private(set) var settings: ((Analytics?) -> Settings)?
-		        private(set) var analytics: Analytics?
+		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        let settings: ((Analytics?) -> Settings)?
+		        let analytics: Analytics?
 		    }
 
 		    static func mock(
@@ -5701,7 +5701,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.userService = userService
 		        }
 
-		        private(set) var userService: (() -> AnyUserService)?
+		        let userService: (() -> AnyUserService)?
 		    }
 
 		    static func mock(
@@ -5767,7 +5767,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        private(set) var child: ((Analytics) -> Child)?
+		        let child: ((Analytics) -> Child)?
 		    }
 
 		    static func mock(
@@ -5846,7 +5846,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.uploader = uploader
 		        }
 
-		        private(set) var uploader: ((Analytics) -> Uploader)?
+		        let uploader: ((Analytics) -> Uploader)?
 		    }
 
 		    static func mock(
@@ -5915,8 +5915,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var child: ((Analytics) -> Child)?
+		        let analytics: (() -> Analytics)?
+		        let child: ((Analytics) -> Child)?
 		    }
 
 		    static func mock(
@@ -5986,7 +5986,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var service: (() -> ServiceProtocol)?
+		        let service: (() -> ServiceProtocol)?
 		    }
 
 		    static func mock(
@@ -6059,8 +6059,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.logger = logger
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var logger: ((LazilyInstantiated<Analytics>) -> Logger)?
+		        let analytics: (() -> Analytics)?
+		        let logger: ((LazilyInstantiated<Analytics>) -> Logger)?
 		    }
 
 		    static func mock(
@@ -6167,11 +6167,11 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.other = other
 		        }
 
-		        private(set) var analytics_Analytics: (() -> Analytics)?
-		        private(set) var home: ((LazilyInstantiated<Analytics>) -> Home)?
-		        private(set) var settingsBuilder: ((Analytics) -> Settings)?
-		        private(set) var analytics_Legacy: (() -> Legacy)?
-		        private(set) var other: ((Legacy) -> Other)?
+		        let analytics_Analytics: (() -> Analytics)?
+		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		        let settingsBuilder: ((Analytics) -> Settings)?
+		        let analytics_Legacy: (() -> Legacy)?
+		        let other: ((Legacy) -> Other)?
 		    }
 
 		    static func mock(
@@ -6279,10 +6279,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.other = other
 		        }
 
-		        private(set) var analytics_Analytics: (() -> Analytics)?
-		        private(set) var home: ((LazilyInstantiated<Analytics>) -> Home)?
-		        private(set) var analytics_Legacy: (() -> Legacy)?
-		        private(set) var other: ((Legacy) -> Other)?
+		        let analytics_Analytics: (() -> Analytics)?
+		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		        let analytics_Legacy: (() -> Legacy)?
+		        let other: ((Legacy) -> Other)?
 		    }
 
 		    static func mock(
@@ -6380,8 +6380,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.screen = screen
 		        }
 
-		        private(set) var analytics: Analytics.SafeDIMockConfiguration
-		        private(set) var screen: Screen.SafeDIMockConfiguration
+		        let analytics: Analytics.SafeDIMockConfiguration
+		        let screen: Screen.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -6473,8 +6473,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.screen = screen
 		        }
 
-		        private(set) var analytics: Analytics.SafeDIMockConfiguration
-		        private(set) var screen: Screen.SafeDIMockConfiguration
+		        let analytics: Analytics.SafeDIMockConfiguration
+		        let screen: Screen.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -6556,8 +6556,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.logger = logger
 		        }
 
-		        private(set) var analytics: Analytics.SafeDIMockConfiguration
-		        private(set) var logger: ((LazilyInstantiated<Analytics>?) -> Logger)?
+		        let analytics: Analytics.SafeDIMockConfiguration
+		        let logger: ((LazilyInstantiated<Analytics>?) -> Logger)?
 		    }
 
 		    static func mock(
@@ -6642,8 +6642,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.settings = settings
 		        }
 
-		        private(set) var home: ((LazilyInstantiated<Analytics>?) -> Home)?
-		        private(set) var settings: ((Analytics?) -> Settings)?
+		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        let settings: ((Analytics?) -> Settings)?
 		    }
 
 		    static func mock(
@@ -6718,7 +6718,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        private(set) var childBuilder: Child.SafeDIMockConfiguration
+		        let childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -6799,7 +6799,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        private(set) var childBuilder: Child.SafeDIMockConfiguration
+		        let childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -6886,7 +6886,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        private(set) var child: Child.SafeDIMockConfiguration
+		        let child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -6970,7 +6970,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        private(set) var child: Child.SafeDIMockConfiguration
+		        let child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -7054,7 +7054,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        private(set) var childBuilder: Child.SafeDIMockConfiguration
+		        let childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -7141,7 +7141,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        private(set) var childBuilder: Child.SafeDIMockConfiguration
+		        let childBuilder: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -7228,7 +7228,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        private(set) var child: Child.SafeDIMockConfiguration
+		        let child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -7311,7 +7311,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        private(set) var child: Child.SafeDIMockConfiguration
+		        let child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -7437,7 +7437,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.home = home
 		        }
 
-		        private(set) var home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
 		    }
 
 		    static func mock(
@@ -7504,7 +7504,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.home = home
 		        }
 
-		        private(set) var home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
 		    }
 
 		    static func mock(
@@ -7582,7 +7582,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.home = home
 		        }
 
-		        private(set) var home: Home.SafeDIMockConfiguration
+		        let home: Home.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -7653,7 +7653,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.home = home
 		        }
 
-		        private(set) var home: ((LazilyInstantiated<Analytics>, Analytics) -> Home)?
+		        let home: ((LazilyInstantiated<Analytics>, Analytics) -> Home)?
 		    }
 
 		    static func mock(
@@ -7752,10 +7752,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.tracker = tracker
 		        }
 
-		        private(set) var analytics_Legacy: (() -> Legacy)?
-		        private(set) var analytics_Analytics: (() -> Analytics)?
-		        private(set) var logger: ((Analytics) -> Logger)?
-		        private(set) var tracker: ((LazilyInstantiated<Analytics>) -> Tracker)?
+		        let analytics_Legacy: (() -> Legacy)?
+		        let analytics_Analytics: (() -> Analytics)?
+		        let logger: ((Analytics) -> Logger)?
+		        let tracker: ((LazilyInstantiated<Analytics>) -> Tracker)?
 		    }
 
 		    static func mock(
@@ -7861,10 +7861,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.tracker = tracker
 		        }
 
-		        private(set) var analytics_Legacy: (() -> Legacy)?
-		        private(set) var analytics_Analytics: (() -> Analytics)?
-		        private(set) var logger: ((LazilyInstantiated<Analytics>?, Analytics) -> Logger)?
-		        private(set) var tracker: ((LazilyInstantiated<Analytics>) -> Tracker)?
+		        let analytics_Legacy: (() -> Legacy)?
+		        let analytics_Analytics: (() -> Analytics)?
+		        let logger: ((LazilyInstantiated<Analytics>?, Analytics) -> Logger)?
+		        let tracker: ((LazilyInstantiated<Analytics>) -> Tracker)?
 		    }
 
 		    static func mock(
@@ -7966,8 +7966,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.home = home
 		        }
 
-		        private(set) var userService: (() -> AnyUserService)?
-		        private(set) var home: ((LazilyInstantiated<AnyUserService>?) -> Home)?
+		        let userService: (() -> AnyUserService)?
+		        let home: ((LazilyInstantiated<AnyUserService>?) -> Home)?
 		    }
 
 		    static func mock(
@@ -8057,8 +8057,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.home = home
 		        }
 
-		        private(set) var userService: (() -> AnyUserService)?
-		        private(set) var home: ((LazilyInstantiated<AnyUserService>) -> Home)?
+		        let userService: (() -> AnyUserService)?
+		        let home: ((LazilyInstantiated<AnyUserService>) -> Home)?
 		    }
 
 		    static func mock(
@@ -8126,7 +8126,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.home = home
 		        }
 
-		        private(set) var home: ((LazilyInstantiated<Analytics>) -> Home)?
+		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
 		    }
 
 		    static func mock(
@@ -8209,8 +8209,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.b = b
 		        }
 
-		        private(set) var a: ((LazilyInstantiated<SessionA>) -> A)?
-		        private(set) var b: ((LazilyInstantiated<SessionB>) -> B)?
+		        let a: ((LazilyInstantiated<SessionA>) -> A)?
+		        let b: ((LazilyInstantiated<SessionB>) -> B)?
 		    }
 
 		    static func mock(
@@ -8313,9 +8313,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.session = session
 		        }
 
-		        private(set) var a: ((LazilyInstantiated<SessionA>?) -> A)?
-		        private(set) var b: ((LazilyInstantiated<SessionB>) -> B)?
-		        private(set) var session: SessionA?
+		        let a: ((LazilyInstantiated<SessionA>?) -> A)?
+		        let b: ((LazilyInstantiated<SessionB>) -> B)?
+		        let session: SessionA?
 		    }
 
 		    static func mock(
@@ -8396,8 +8396,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.b = b
 		        }
 
-		        private(set) var a: ((LazilyInstantiated<SessionA>) -> A)?
-		        private(set) var b: ((SessionB, LazilyInstantiated<SessionB>) -> B)?
+		        let a: ((LazilyInstantiated<SessionA>) -> A)?
+		        let b: ((SessionB, LazilyInstantiated<SessionB>) -> B)?
 		    }
 
 		    static func mock(
@@ -8517,8 +8517,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.draft_lazilyInstantiated = draft_lazilyInstantiated
 		        }
 
-		        private(set) var composer: ((LazilyInstantiated<Draft>, Int?) -> Composer)?
-		        private(set) var draft_lazilyInstantiated: Int?
+		        let composer: ((LazilyInstantiated<Draft>, Int?) -> Composer)?
+		        let draft_lazilyInstantiated: Int?
 		    }
 
 		    static func mock(
@@ -8583,7 +8583,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        private(set) var child: ((LazilyInstantiated<Value>?) -> Child)?
+		        let child: ((LazilyInstantiated<Value>?) -> Child)?
 		    }
 
 		    static func mock(
@@ -8653,8 +8653,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.feed = feed
 		        }
 
-		        private(set) var session_LazilyInstantiated__Session: (() -> Session)?
-		        private(set) var feed: ((LazilyInstantiated<Session>) -> Feed)?
+		        let session_LazilyInstantiated__Session: (() -> Session)?
+		        let feed: ((LazilyInstantiated<Session>) -> Feed)?
 		    }
 
 		    static func mock(
@@ -8729,8 +8729,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
-		        private(set) var feed: ((LazilyInstantiated<Session>?) -> Feed)?
-		        private(set) var session_LazilyInstantiated__Session: Session?
+		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		        let session_LazilyInstantiated__Session: Session?
 		    }
 
 		    static func mock(
@@ -8818,9 +8818,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
-		        private(set) var feed: ((LazilyInstantiated<Session>?) -> Feed)?
-		        private(set) var uploader: ((Session) -> Uploader)?
-		        private(set) var session_LazilyInstantiated__Session: Session?
+		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		        let uploader: ((Session) -> Uploader)?
+		        let session_LazilyInstantiated__Session: Session?
 		    }
 
 		    static func mock(
@@ -8902,9 +8902,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
-		        private(set) var feed: ((LazilyInstantiated<Session>?) -> Feed)?
-		        private(set) var cache: ((Session?) -> Cache)?
-		        private(set) var session_LazilyInstantiated__Session: Session?
+		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		        let cache: ((Session?) -> Cache)?
+		        let session_LazilyInstantiated__Session: Session?
 		    }
 
 		    static func mock(
@@ -8986,9 +8986,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
-		        private(set) var feed: ((LazilyInstantiated<Session>?) -> Feed)?
-		        private(set) var cache: ((Session?) -> Cache)?
-		        private(set) var session_LazilyInstantiated__Session: Session?
+		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		        let cache: ((Session?) -> Cache)?
+		        let session_LazilyInstantiated__Session: Session?
 		    }
 
 		    static func mock(
@@ -9051,7 +9051,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.feed = feed
 		        }
 
-		        private(set) var feed: ((LazilyInstantiated<User>) -> Feed)?
+		        let feed: ((LazilyInstantiated<User>) -> Feed)?
 		    }
 
 		    static func mock(
@@ -9121,8 +9121,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
-		        private(set) var feed: ((LazilyInstantiated<Session>?) -> Feed)?
-		        private(set) var session_LazilyInstantiated__Session: Session?
+		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		        let session_LazilyInstantiated__Session: Session?
 		    }
 
 		    static func mock(
@@ -9193,8 +9193,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.session_SendableLazilyInstantiated__Session = session_SendableLazilyInstantiated__Session
 		        }
 
-		        private(set) var feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?
-		        private(set) var session_SendableLazilyInstantiated__Session: Session?
+		        let feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?
+		        let session_SendableLazilyInstantiated__Session: Session?
 		    }
 
 		    static func mock(
@@ -9266,8 +9266,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
-		        private(set) var feed: ((LazilyInstantiated<Session>?) -> Feed)?
-		        private(set) var session_LazilyInstantiated__Session: Session?
+		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		        let session_LazilyInstantiated__Session: Session?
 		    }
 
 		    static func mock(
@@ -9332,7 +9332,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.feed = feed
 		        }
 
-		        private(set) var feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?
+		        let feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?
 		    }
 
 		    static func mock(
@@ -9396,7 +9396,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.feed = feed
 		        }
 
-		        private(set) var feed: ((SendableLazilyInstantiated<Session>) -> Feed)?
+		        let feed: ((SendableLazilyInstantiated<Session>) -> Feed)?
 		    }
 
 		    static func mock(
@@ -9468,8 +9468,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.feed = feed
 		        }
 
-		        private(set) var session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)?
-		        private(set) var feed: ((SendableLazilyInstantiated<Session>) -> Feed)?
+		        let session_SendableLazilyInstantiated__Session: (@Sendable () -> Session)?
+		        let feed: ((SendableLazilyInstantiated<Session>) -> Feed)?
 		    }
 
 		    static func mock(
@@ -9561,9 +9561,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.session_SendableLazilyInstantiated__Session = session_SendableLazilyInstantiated__Session
 		        }
 
-		        private(set) var feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?
-		        private(set) var uploader: ((Session) -> Uploader)?
-		        private(set) var session_SendableLazilyInstantiated__Session: Session?
+		        let feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?
+		        let uploader: ((Session) -> Uploader)?
+		        let session_SendableLazilyInstantiated__Session: Session?
 		    }
 
 		    static func mock(
@@ -9631,8 +9631,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.session_Session = session_Session
 		        }
 
-		        private(set) var feed: ((SendableLazilyInstantiated<Session?>?) -> Feed)?
-		        private(set) var session_Session: Session??
+		        let feed: ((SendableLazilyInstantiated<Session?>?) -> Feed)?
+		        let session_Session: Session??
 		    }
 
 		    static func mock(
@@ -9697,7 +9697,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.feed = feed
 		        }
 
-		        private(set) var feed: ((LazilyInstantiated<Session?>) -> Feed)?
+		        let feed: ((LazilyInstantiated<Session?>) -> Feed)?
 		    }
 
 		    static func mock(
@@ -9771,8 +9771,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.session_SendableLazilyInstantiated__Session = session_SendableLazilyInstantiated__Session
 		        }
 
-		        private(set) var feed: ((SendableLazilyInstantiated<Session>?, LazilyInstantiated<Analytics>) -> Feed)?
-		        private(set) var session_SendableLazilyInstantiated__Session: Session?
+		        let feed: ((SendableLazilyInstantiated<Session>?, LazilyInstantiated<Analytics>) -> Feed)?
+		        let session_SendableLazilyInstantiated__Session: Session?
 		    }
 
 		    static func mock(
@@ -9845,8 +9845,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.logger = logger
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var logger: ((LazilyInstantiated<Analytics>?) -> Logger)?
+		        let analytics: (() -> Analytics)?
+		        let logger: ((LazilyInstantiated<Analytics>?) -> Logger)?
 		    }
 
 		    static func mock(
@@ -9941,10 +9941,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.uploader = uploader
 		        }
 
-		        private(set) var config: (() -> Config)?
-		        private(set) var analytics: ((Config) -> Analytics)?
-		        private(set) var logger: ((LazilyInstantiated<Analytics>) -> Logger)?
-		        private(set) var uploader: ((Analytics) -> Uploader)?
+		        let config: (() -> Config)?
+		        let analytics: ((Config) -> Analytics)?
+		        let logger: ((LazilyInstantiated<Analytics>) -> Logger)?
+		        let uploader: ((Analytics) -> Uploader)?
 		    }
 
 		    static func mock(
@@ -10029,9 +10029,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            self.first = first
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var logger: ((LazilyInstantiated<Analytics>) -> Logger)?
-		        private(set) var first: ((Logger) -> First)?
+		        let analytics: (() -> Analytics)?
+		        let logger: ((LazilyInstantiated<Analytics>) -> Logger)?
+		        let first: ((Logger) -> First)?
 		    }
 
 		    static func mock(

@@ -935,7 +935,7 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			            self.thing = thing
 			        }
 
-			        private(set) var thing: (() -> Thing)?
+			        let thing: (() -> Thing)?
 			    }
 
 			    static func mock(
@@ -1500,10 +1500,10 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        private(set) var clock: (() -> Clock)?
-		        private(set) var seed: Int
+		        let clock: (() -> Clock)?
+		        let seed: Int
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: ((Clock, Int) -> DefaultThing)?
+		        let safeDIBuilder: ((Clock, Int) -> DefaultThing)?
 		    }
 		}
 		#endif
@@ -1555,9 +1555,9 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        private(set) var clock: (() -> Clock)?
+		        let clock: (() -> Clock)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: ((Clock) -> Panel)?
+		        let safeDIBuilder: ((Clock) -> Panel)?
 		    }
 		}
 		#endif
@@ -1635,7 +1635,7 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		            self.thing = thing
 		        }
 
-		        private(set) var thing: (() -> \(propertyType))?
+		        let thing: (() -> \(propertyType))?
 		    }
 
 		    static func mock(
@@ -1673,7 +1673,7 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 	            self.thing = thing
 	        }
 
-	        public private(set) var thing: __safeDI_App_DefaultThing_MockConfiguration
+	        public let thing: __safeDI_App_DefaultThing_MockConfiguration
 	    }
 
 	    public static func mock(
@@ -1706,9 +1706,9 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 	        self.safeDIBuilder = safeDIBuilder
 	    }
 
-	    public private(set) var clock: (() -> Clock)?
+	    public let clock: (() -> Clock)?
 	    /// Overrides how `DefaultThing` is constructed. Parameters match the type’s initializer or custom mock method.
-	    public private(set) var safeDIBuilder: ((Clock) -> DefaultThing)?
+	    public let safeDIBuilder: ((Clock) -> DefaultThing)?
 	}
 
 	extension DefaultThing {
@@ -1823,7 +1823,7 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		            self.panel = panel
 		        }
 
-		        private(set) var panel: Panel.SafeDIMockConfiguration
+		        let panel: Panel.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1849,7 +1849,7 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 		            self.clock = clock
 		        }
 
-		        private(set) var clock: (() -> Clock)?
+		        let clock: (() -> Clock)?
 		    }
 
 		    static func mock(
@@ -1921,7 +1921,7 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 	            self.thing = thing
 	        }
 
-	        private(set) var thing: DefaultThing.SafeDIMockConfiguration
+	        let thing: DefaultThing.SafeDIMockConfiguration
 	    }
 
 	    static func mock(
@@ -1951,9 +1951,9 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 	            self.safeDIBuilder = safeDIBuilder
 	        }
 
-	        private(set) var clock: (() -> Clock)?
+	        let clock: (() -> Clock)?
 	        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-	        private(set) var safeDIBuilder: ((Clock) -> DefaultThing)?
+	        let safeDIBuilder: ((Clock) -> DefaultThing)?
 	    }
 	}
 	#endif

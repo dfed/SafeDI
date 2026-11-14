@@ -1107,9 +1107,9 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			            self.secretToken = secretToken
 			        }
 
-			        private(set) var token: (() -> Token)?
-			        private(set) var child: Child.SafeDIMockConfiguration
-			        private(set) var secretToken: Token?
+			        let token: (() -> Token)?
+			        let child: Child.SafeDIMockConfiguration
+			        let secretToken: Token?
 			    }
 
 			    static func mock(

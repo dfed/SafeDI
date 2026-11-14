@@ -1849,10 +1849,10 @@ struct SafeDIToolGraphFuzzerTests {
 		            self.t1Builder = t1Builder
 		        }
 
-		        private(set) var t6: (() -> S2420_T6)?
-		        private(set) var t2: S2420_T2.SafeDIMockConfiguration
-		        private(set) var anyT1: (() -> S2420_AnyT1)?
-		        private(set) var t1Builder: (() -> S2420_T1)?
+		        let t6: (() -> S2420_T6)?
+		        let t2: S2420_T2.SafeDIMockConfiguration
+		        let anyT1: (() -> S2420_AnyT1)?
+		        let t1Builder: (() -> S2420_T1)?
 		    }
 
 		    static func mock(
@@ -2586,7 +2586,7 @@ struct SafeDIToolGraphFuzzerTests {
 			return Self.constructingWithoutOverridesRead(by: "safeDIOverrides.t2", in: code)
 				.replacingOccurrences(of: "\(otherParameter),\n            t2: \(fieldType) = .init()\n", with: "\(otherParameter)\n")
 				.replacingOccurrences(of: "            self.t2 = t2\n", with: "")
-				.replacingOccurrences(of: "        private(set) var t2: \(fieldType)\n", with: "")
+				.replacingOccurrences(of: "        let t2: \(fieldType)\n", with: "")
 		}
 
 		#expect(differences.map(\.aspect) == [.mockCode])
@@ -2649,7 +2649,7 @@ struct SafeDIToolGraphFuzzerTests {
 			configuration
 				.replacingOccurrences(of: "init(\n            _ safeDIBuilder", with: "init(\n            t7Builder: \(t7Configuration) = .init(),\n            _ safeDIBuilder")
 				.replacingOccurrences(of: "            self.safeDIBuilder = safeDIBuilder\n", with: "            self.t7Builder = t7Builder\n            self.safeDIBuilder = safeDIBuilder\n")
-				.replacingOccurrences(of: "        /// Overrides how this type", with: "        private(set) var t7Builder: \(t7Configuration)\n        /// Overrides how this type")
+				.replacingOccurrences(of: "        /// Overrides how this type", with: "        let t7Builder: \(t7Configuration)\n        /// Overrides how this type")
 		}.replacingOccurrences(of: "safeDIOverrides.t7Builder.t8Builder.", with: "safeDIOverrides.t7Builder.renamedLabel.")
 
 		let differences = GraphFuzzerToolOutcome.differences(between: toolRuns.firstOutcome, and: .accepted(generatedFiles: editedFiles, warnings: warnings), comparingCode: .inAnyOrderOfExtensions, renaming: Self.reversalOfEveryOrder)
@@ -2751,8 +2751,8 @@ struct SafeDIToolGraphFuzzerTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_nameNeitherReason_whenAConfigurationStructsBuilderFieldMovesFirst() async throws {
 		let toolRuns = try await GraphFuzzerOracle.toolRuns(of: Self.lazyCycleFixture, renamings: [], multiModuleRenamings: [])
-		let child = "        private(set) var t8Builder: \(Self.mockDifferencePrefix)T8.SafeDIMockConfiguration\n"
-		let builder = "        private(set) var safeDIBuilder: ((Instantiator<\(Self.mockDifferencePrefix)T8>) -> \(Self.mockDifferencePrefix)T7)?\n"
+		let child = "        let t8Builder: \(Self.mockDifferencePrefix)T8.SafeDIMockConfiguration\n"
+		let builder = "        let safeDIBuilder: ((Instantiator<\(Self.mockDifferencePrefix)T8>) -> \(Self.mockDifferencePrefix)T7)?\n"
 
 		let differences = Self.differences(of: toolRuns.firstOutcome, editingFileNamed: "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift") { code in
 			Self.editingConfigurationStruct(in: code) { configuration in
@@ -3091,7 +3091,7 @@ struct SafeDIToolGraphFuzzerTests {
 			// `T7`'s field of `T8`, a tree edge of the search under this naming, goes, and the reads of it across the files with it.
 			let fileName = Self.mockFileName(of: "T7")
 			files[fileName] = Self.editingConfigurationStruct(in: files[fileName, default: ""]) { configuration in
-				Self.replacing("            t8Builder: \(t8Configuration) = .init(),\n", with: "", in: Self.replacing("            self.t8Builder = t8Builder\n", with: "", in: Self.replacing("        private(set) var t8Builder: \(t8Configuration)\n", with: "", in: configuration)))
+				Self.replacing("            t8Builder: \(t8Configuration) = .init(),\n", with: "", in: Self.replacing("            self.t8Builder = t8Builder\n", with: "", in: Self.replacing("        let t8Builder: \(t8Configuration)\n", with: "", in: configuration)))
 			}
 			for name in files.keys {
 				let source = files[name, default: ""]

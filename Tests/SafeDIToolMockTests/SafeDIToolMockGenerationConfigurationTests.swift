@@ -168,7 +168,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            self.dependency = dependency
 		        }
 
-		        private(set) var dependency: (() -> Dependency)?
+		        let dependency: (() -> Dependency)?
 		    }
 
 		    static func mock(
@@ -489,7 +489,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            self.crossModuleService = crossModuleService
 		        }
 
-		        private(set) var crossModuleService: (() -> CrossModuleService)?
+		        let crossModuleService: (() -> CrossModuleService)?
 		    }
 
 		    static func mock(
@@ -561,7 +561,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        private(set) var child: Child.SafeDIMockConfiguration
+		        let child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -632,7 +632,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            self.middle = middle
 		        }
 
-		        private(set) var middle: Middle.SafeDIMockConfiguration
+		        let middle: Middle.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -682,9 +682,9 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        private(set) var leaf: (() -> Leaf)?
+		        let leaf: (() -> Leaf)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: ((Leaf) -> Middle)?
+		        let safeDIBuilder: ((Leaf) -> Middle)?
 		    }
 		}
 		#endif
@@ -754,7 +754,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            self.middle = middle
 		        }
 
-		        private(set) var middle: Middle.SafeDIMockConfiguration
+		        let middle: Middle.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -786,7 +786,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            self.middle = middle
 		        }
 
-		        private(set) var middle: Middle.SafeDIMockConfiguration
+		        let middle: Middle.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -822,9 +822,9 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        private(set) var leaf: (() -> Leaf)?
+		        let leaf: (() -> Leaf)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: ((Leaf) -> Middle)?
+		        let safeDIBuilder: ((Leaf) -> Middle)?
 		    }
 		}
 		#endif
@@ -1170,7 +1170,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            self.crossModuleService = crossModuleService
 		        }
 
-		        private(set) var crossModuleService: (() -> CrossModuleService)?
+		        let crossModuleService: (() -> CrossModuleService)?
 		    }
 
 		    static func mock(
@@ -1264,8 +1264,8 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            self.mid = mid
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var mid: Mid.SafeDIMockConfiguration
+		        let analytics: (() -> Analytics)?
+		        let mid: Mid.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1368,8 +1368,8 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            self.c = c
 		        }
 
-		        private(set) var b: B.SafeDIMockConfiguration
-		        private(set) var c: ((B) -> C)?
+		        let b: B.SafeDIMockConfiguration
+		        let c: ((B) -> C)?
 		    }
 
 		    static func mock(
@@ -1451,9 +1451,9 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 		            self.footer = footer
 		        }
 
-		        private(set) var fileLogger: (() -> FileLogger)?
-		        private(set) var header: ((FileLogger) -> Header)?
-		        private(set) var footer: ((Logger?) -> Footer)?
+		        let fileLogger: (() -> FileLogger)?
+		        let header: ((FileLogger) -> Header)?
+		        let footer: ((Logger?) -> Footer)?
 		    }
 
 		    static func mock(

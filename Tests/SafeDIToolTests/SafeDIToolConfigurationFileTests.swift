@@ -282,7 +282,7 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 		            self.dependency = dependency
 		        }
 
-		        private(set) var dependency: (() -> Dependency)?
+		        let dependency: (() -> Dependency)?
 		    }
 
 		    static func mock(
@@ -353,7 +353,7 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 		            self.dependency = dependency
 		        }
 
-		        private(set) var dependency: (() -> Dependency)?
+		        let dependency: (() -> Dependency)?
 		    }
 
 		    static func mock(
