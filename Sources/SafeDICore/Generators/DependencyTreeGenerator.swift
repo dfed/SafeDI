@@ -2653,8 +2653,8 @@ public actor DependencyTreeGenerator {
 			let instantiatedDeclaration: InstantiatedDeclaration
 
 			/// Whether an `@Instantiated` declaration of a received property's non-optional form could fulfill it. The
-			/// macro rejects an optional `@Instantiated` property, and a declaration of the non-optional form provides
-			/// a receive of the optional one, so the hint always suggests the non-optional form.
+			/// macro rejects an optional `@Instantiated` property, so the hint always suggests the non-optional form, which
+			/// fulfills a receive of the optional one only if available.
 			enum InstantiatedDeclaration: Hashable {
 				/// It could, as far as SafeDI checks: the non-optional form is not a constant, or a declaration without
 				/// `@Forwarded` properties fulfills its type.
@@ -2664,6 +2664,9 @@ public actor DependencyTreeGenerator {
 				case typeHasForwardedProperties
 				/// The non-optional form is a constant of a type no `@Instantiable` declaration fulfills.
 				case typeIsNotInstantiable
+				/// The tree of the type the non-optional form builds requires that form, or its optional form, from above
+				/// it, so wherever it is declared, that tree receives it while it is still being built: a dependency cycle.
+				case closesCycle
 
 				/// Whether an `@Instantiated` declaration of `property`'s non-optional form could fulfill it, among the
 				/// declarations of `fulfillingInstantiables`.
@@ -2701,22 +2704,36 @@ public actor DependencyTreeGenerator {
 						[]
 					}
 				} else if suggestedAlternatives.isEmpty {
-					// The macro rejects an optional `@Instantiated` property, and a declaration of the non-optional form
-					// provides a receive of the optional one (`ScopeGenerator.provides`).
+					// The macro rejects an optional `@Instantiated` property, so the hint suggests the non-optional form. A
+					// required receive of the optional form does not accept a declaration of the non-optional one; a receive
+					// only if available reads either, so for an optional receive the hint also has it received so.
 					let suggestedProperty = property.asUnwrappedProperty
 					let typeName = suggestedProperty.typeDescription.asSource
-					let forwardingRemedy = "Declare `@\(Dependency.Source.forwardedRawValue) let \(suggestedProperty.asSource)` on a type below `\(root.asSource)` in the chain, and pass the value to the `Instantiator` that builds that type"
+					let instantiatedDeclarationEnd = if property.typeDescription.isOptional {
+						", and add `onlyIfAvailable: true` to this property’s `@\(Dependency.Source.receivedRawValue)`, which then accepts the non-optional form, to fix."
+					} else {
+						" to fix."
+					}
+					// A forwarded property can be optional, and fulfills a required receive of exactly its type.
+					let forwardingRemedy = "Declare `@\(Dependency.Source.forwardedRawValue) let \(property.asSource)` on a type below `\(root.asSource)` in the chain, and pass the value to the `Instantiator` that builds that type"
 					hint = if suggestedProperty.propertyType.isErasedInstantiator {
 						// The `@Instantiated` macro requires an erased instantiator to name the type it builds.
-						"Declare `@\(Dependency.Source.instantiatedRawValue)(fulfilledByType:) let \(suggestedProperty.asSource)`, naming the type it builds, on `\(root.asSource)` or on another type in the chain to fix."
+						"Declare `@\(Dependency.Source.instantiatedRawValue)(fulfilledByType:) let \(suggestedProperty.asSource)`, naming the type it builds, on `\(root.asSource)` or on another type in the chain\(instantiatedDeclarationEnd)"
 					} else {
 						switch instantiatedDeclaration {
 						case .possible:
-							"Declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain to fix."
+							"Declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain\(instantiatedDeclarationEnd)"
+						case .closesCycle:
+							// The remedies of the cycle error a declaration would lead to.
+							"Declaring `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` would close a dependency cycle wherever it is declared, because the tree of `\(suggestedProperty.typeDescription.asInstantiatedType.asSource)` requires `\(suggestedProperty.label)`, which is still being built there. \(DependencyTreeGeneratorError.onlyIfAvailableRemedy)"
 						case .typeHasForwardedProperties:
 							"`\(typeName)` has @\(Dependency.Source.forwardedRawValue) properties, so SafeDI builds it only through an `Instantiator`, never as an @\(Dependency.Source.instantiatedRawValue) constant. \(forwardingRemedy), to fix."
 						case .typeIsNotInstantiable:
-							"No @\(InstantiableVisitor.macroName) declaration fulfills `\(typeName)`, so SafeDI cannot instantiate it. \(forwardingRemedy); or decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName) and declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain, to fix."
+							if property.typeDescription.isOptional {
+								"No @\(InstantiableVisitor.macroName) declaration fulfills `\(typeName)`, so SafeDI cannot instantiate it. \(forwardingRemedy); or decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName), declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain\(instantiatedDeclarationEnd)"
+							} else {
+								"No @\(InstantiableVisitor.macroName) declaration fulfills `\(typeName)`, so SafeDI cannot instantiate it. \(forwardingRemedy); or decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName) and declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain, to fix."
+							}
 						}
 					}
 					fixIts = []
@@ -7486,6 +7503,54 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
+	/// Whether the tree of `instantiable` – the types it builds, constants and builders alike, and theirs – requires
+	/// `property`, or its optional form, from above it: whether a type in it receives either without `onlyIfAvailable`, or
+	/// renames either without it, beneath no type of the tree that declares either form, the nearer declaration such a
+	/// receive resolves to. A declaration of `property` that builds `instantiable` is then still being
+	/// built where the tree receives it.
+	private static func treeRequires(
+		_ property: Property,
+		from instantiable: Instantiable,
+		typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
+	) -> Bool {
+		let requiredForms: Set<Property> = [property, property.asOptionalProperty]
+		var reachedTypes: Set<TypeDescription> = [instantiable.concreteInstantiable]
+		var instantiablesToVisit = [instantiable]
+		while let reachedInstantiable = instantiablesToVisit.popLast() {
+			var instantiablesBuilt = [Instantiable]()
+			var receivesProperty = false
+			var renamesProperty = false
+			var declaresForm = false
+			var renamesToForm = false
+			for dependency in reachedInstantiable.dependencies {
+				switch dependency.source {
+				case let .received(onlyIfAvailable):
+					receivesProperty = receivesProperty || (!onlyIfAvailable && requiredForms.contains(dependency.property))
+				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+					renamesProperty = renamesProperty || (!onlyIfAvailable && requiredForms.contains(fulfillingProperty))
+					renamesToForm = renamesToForm || requiredForms.contains(dependency.property)
+				case .instantiated:
+					if let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[dependency.asInstantiatedType] {
+						instantiablesBuilt.append(builtInstantiable)
+					}
+					declaresForm = declaresForm || requiredForms.contains(dependency.property)
+				case .forwarded:
+					declaresForm = declaresForm || requiredForms.contains(dependency.property)
+				}
+			}
+			// A rename of a property its own type declares binds to that declaration.
+			guard !receivesProperty, !renamesProperty || declaresForm else { return true }
+			// A receive beneath a declaration of either form, or beneath a rename to one, resolves to that declaration. A
+			// declaration of the label with another type does not: a receive matches label and type, so it passes it by.
+			if !declaresForm, !renamesToForm {
+				for builtInstantiable in instantiablesBuilt where reachedTypes.insert(builtInstantiable.concreteInstantiable).inserted {
+					instantiablesToVisit.append(builtInstantiable)
+				}
+			}
+		}
+		return false
+	}
+
 	/// The receive that closes a cycle: a dependency that receives a property in the cycle that is still being built.
 	private struct CycleClosingReceive {}
 
@@ -9044,6 +9109,26 @@ public actor DependencyTreeGenerator {
 		cyclesOnly: Bool,
 	) throws {
 		var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
+		/// Whether an `@Instantiated` declaration of `receivedProperty`'s non-optional form could fulfill it. One the tree
+		/// of the type it builds requires, in either form, would close a dependency cycle wherever it is declared: the
+		/// receive in that tree resolves to the declaration still building it. The tree is walked through the declarations
+		/// the module's types fulfill, since a type no root reaches has no scope; only an unfulfillable receive asks, so the
+		/// walk runs only on the failure path.
+		func instantiatedDeclaration(of receivedProperty: Property) -> DependencyTreeGeneratorError.UnfulfillableProperty.InstantiatedDeclaration {
+			let declaration = DependencyTreeGeneratorError.UnfulfillableProperty.InstantiatedDeclaration.of(receivedProperty, among: typeDescriptionToFulfillingInstantiableMap)
+			let declaredProperty = receivedProperty.asUnwrappedProperty
+			// An erased instantiator's declaration names the type it builds, which the hint leaves to the user. An
+			// instantiator's tree may receive that instantiator while it is still being built (see "Received builder loops"
+			// in `cycle-validation.md`), so only a constant or a `LazilyInstantiated` declaration can close a cycle.
+			guard case .possible = declaration,
+			      !declaredProperty.propertyType.isErasedInstantiator,
+			      !declaredProperty.propertyType.isInstantiator,
+			      let declaredInstantiable = typeDescriptionToFulfillingInstantiableMap[declaredProperty.typeDescription.asInstantiatedType]
+			else { return declaration }
+			return Self.treeRequires(declaredProperty, from: declaredInstantiable, typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap)
+				? .closesCycle
+				: declaration
+		}
 		/// Each hidden receive as reported, with the concrete types of every chain of scopes that reaches it, which its
 		/// rendering does not tell apart.
 		var hiddenReceivedProperties = [DependencyTreeGeneratorError.HiddenReceivedProperty: Set<[TypeDescription]>]()
@@ -10044,7 +10129,7 @@ public actor DependencyTreeGenerator {
 							receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
 								|| receivedProperty.label == $0.label
 						}.sorted(),
-						instantiatedDeclaration: .of(receivedProperty, among: typeDescriptionToFulfillingInstantiableMap),
+						instantiatedDeclaration: instantiatedDeclaration(of: receivedProperty),
 					))
 				}
 			}

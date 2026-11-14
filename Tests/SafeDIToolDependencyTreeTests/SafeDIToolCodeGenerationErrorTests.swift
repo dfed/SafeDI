@@ -1481,6 +1481,48 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithUnfulfillableRequiredOptionalReceivedErasedInstantiator_throwsErrorSuggestingInstantiatedPropertyAndReceivingItOnlyIfAvailable() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Middle.swift"]):7:5: error: @Received property `childBuilder: ErasedInstantiator<String, AnyChild>?` is not @Instantiated or @Forwarded in chain: Root -> Middle. Declare `@Instantiated(fulfilledByType:) let childBuilder: ErasedInstantiator<String, AnyChild>`, naming the type it builds, on `Root` or on another type in the chain, and add `onlyIfAvailable: true` to this property’s `@Received`, which then accepts the non-optional form, to fix.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(middle: Middle) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let middle: Middle
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Middle: Instantiable {
+					    public init(childBuilder: ErasedInstantiator<String, AnyChild>?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let childBuilder: ErasedInstantiator<String, AnyChild>?
+					}
+					""",
+					"""
+					public final class AnyChild {}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDiamondDependencyWhereAReceivedPropertyIsUnfulfillableOnOneBranch_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
@@ -5670,7 +5712,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):4:5: error: @Received property `user: User?` is not @Instantiated or @Forwarded in chain: Root -> Parent -> Child. No @Instantiable declaration fulfills `User`, so SafeDI cannot instantiate it. Declare `@Forwarded let user: User` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type; or decorate `User`, or an extension of it, with @Instantiable and declare `@Instantiated let user: User` on `Root` or on another type in the chain, to fix.
+				\(fixtures["Child.swift"]):4:5: error: @Received property `user: User?` is not @Instantiated or @Forwarded in chain: Root -> Parent -> Child. No @Instantiable declaration fulfills `User`, so SafeDI cannot instantiate it. Declare `@Forwarded let user: User?` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type; or decorate `User`, or an extension of it, with @Instantiable, declare `@Instantiated let user: User` on `Root` or on another type in the chain, and add `onlyIfAvailable: true` to this property’s `@Received`, which then accepts the non-optional form, to fix.
 				"""
 			},
 		) {
@@ -7061,13 +7103,374 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_suggestsInstantiatingUnwrappedType_whenRequiredOptionalReceiveIsUnfulfilled() async {
-		// The macro rejects `@Instantiated let user: User?`, and an ancestor's `user: User` fulfills the optional receive:
-		// `run_writesConvenienceExtensionOnRootOfTree_buildsUnwrappedSiblingFirst_whenRequiredOptionalReceiveUnderOnlyIfAvailableAncestorResolvesToIt`
-		// compiles the suggested declaration.
+	mutating func run_saysDeclaringReceivedPropertyClosesCycle_whenTreeOfReceivedTypeRequiresIt() async {
+		// Parent builds Child, which requires `parent`, so wherever `@Instantiated let parent: Parent` is declared, the
+		// Child it builds receives it while it is still being built. Declaring it is no remedy:
+		// `run_writesConvenienceExtensionOnRootOfTree_passesNil_whenReceiveOfTypeWhoseTreeRequiresItIsReceivedOnlyIfAvailable`
+		// generates the remedy the error states.
 		await assertThrowsError(
 			diagnostics: { fixtures in
-				"\(fixtures["Child.swift"]):4:5: error: @Received property `user: User?` is not @Instantiated or @Forwarded in chain: Root -> Child. Declare `@Instantiated let user: User` on `Root` or on another type in the chain to fix."
+				"\(fixtures["Child.swift"]):4:5: error: @Received property `parent: Parent` is not @Instantiated or @Forwarded in chain: Root -> Child. Declaring `@Instantiated let parent: Parent` would close a dependency cycle wherever it is declared, because the tree of `Parent` requires `parent`, which is still being built there. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(parent: Parent) { self.parent = parent }
+					    @Received let parent: Parent
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_saysDeclaringReceivedPropertyClosesCycle_whenTreeOfReceivedTypeRequiresItsOptionalForm() async {
+		// Child requires `parent: Parent?`, which a declaration of `parent: Parent` still being built would close a cycle
+		// on, so the cycle comes before the optional receive's own remedy.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Child.swift"]):4:5: error: @Received property `parent: Parent?` is not @Instantiated or @Forwarded in chain: Root -> Child. Declaring `@Instantiated let parent: Parent` would close a dependency cycle wherever it is declared, because the tree of `Parent` requires `parent`, which is still being built there. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(parent: Parent?) { self.parent = parent }
+					    @Received let parent: Parent?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_saysDeclaringRenamedPropertyClosesCycle_whenTreeOfRenamedTypeRequiresIt() async {
+		// Child's rename requires `parent`, and Parent builds Child, so a declaration of `parent` would be still being
+		// built where Child renames it.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Child.swift"]):4:5: error: @Received property `parent: Parent` is not @Instantiated or @Forwarded in chain: Root -> Child. Declaring `@Instantiated let parent: Parent` would close a dependency cycle wherever it is declared, because the tree of `Parent` requires `parent`, which is still being built there. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(owner: Parent) { self.owner = owner }
+					    @Received(fulfilledByDependencyNamed: "parent", ofType: Parent.self) let owner: Parent
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_suggestsInstantiatingReceivedType_whenTreeOfReceivedTypeIsForwardedItAboveItsReceiver() async {
+		// Middle is forwarded `parent`, so Child, beneath it, receives Middle's: a declaration of `parent` that builds
+		// Parent is not received in Parent's tree, and Reader gets it.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Reader.swift"]):4:5: error: @Received property `parent: Parent` is not @Instantiated or @Forwarded in chain: Root -> Reader. Declare `@Instantiated let parent: Parent` on `Root` or on another type in the chain to fix."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(reader: Reader) { self.reader = reader }
+					    @Instantiated let reader: Reader
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(middleBuilder: Instantiator<Middle>) { self.middleBuilder = middleBuilder }
+					    @Instantiated let middleBuilder: Instantiator<Middle>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Middle: Instantiable {
+					    public init(parent: Parent, child: Child) { self.parent = parent; self.child = child }
+					    @Forwarded let parent: Parent
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(parent: Parent) { self.parent = parent }
+					    @Received let parent: Parent
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Reader: Instantiable {
+					    public init(parent: Parent) { self.parent = parent }
+					    @Received let parent: Parent
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_suggestsInstantiatingReceivedType_whenTreeOfReceivedTypeReceivesItOnlyIfAvailable() async {
+		// Parent's tree receives `parent` only if available, so a declaration of it closes no cycle: Child is passed `nil`
+		// inside the Parent being built, and Reader gets the declaration.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Reader.swift"]):4:5: error: @Received property `parent: Parent` is not @Instantiated or @Forwarded in chain: Root -> Reader. Declare `@Instantiated let parent: Parent` on `Root` or on another type in the chain to fix."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(reader: Reader) { self.reader = reader }
+					    @Instantiated let reader: Reader
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(parent: Parent?) { self.parent = parent }
+					    @Received(onlyIfAvailable: true) let parent: Parent?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Reader: Instantiable {
+					    public init(parent: Parent) { self.parent = parent }
+					    @Received let parent: Parent
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_suggestsInstantiatingReceivedInstantiator_whenTreeOfTypeItBuildsReceivesIt() async {
+		// Parent builds Child, which receives `parentBuilder`, but a receive of an instantiator still being built closes a
+		// loop SafeDI accepts, so declaring it is a remedy:
+		// `run_writesConvenienceExtensionOnRootOfTree_rebindsReceivedInstantiator_whenTreeOfTypeItBuildsReceivesIt`
+		// generates it.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Child.swift"]):4:5: error: @Received property `parentBuilder: Instantiator<Parent>` is not @Instantiated or @Forwarded in chain: Root -> Child. Declare `@Instantiated let parentBuilder: Instantiator<Parent>` on `Root` or on another type in the chain to fix."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(parentBuilder: Instantiator<Parent>) { self.parentBuilder = parentBuilder }
+					    @Received let parentBuilder: Instantiator<Parent>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_saysDeclaringReceivedPropertyClosesCycle_whenTypeInTreeOfReceivedTypeDeclaresItsLabelWithAnotherType() async {
+		// Mid declares `parent: Other`, which Child's receive of `parent: Parent` passes by, so a declaration of
+		// `parent: Parent` is still being built where Child, in Parent's tree, receives it.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Child.swift"]):4:5: error: @Received property `parent: Parent` is not @Instantiated or @Forwarded in chain: Root -> Child. Declaring `@Instantiated let parent: Parent` would close a dependency cycle wherever it is declared, because the tree of `Parent` requires `parent`, which is still being built there. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(mid: Mid) { self.mid = mid }
+					    @Instantiated let mid: Mid
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Mid: Instantiable {
+					    public init(parent: Other, child: Child) { self.parent = parent; self.child = child }
+					    @Instantiated let parent: Other
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Other: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(parent: Parent) { self.parent = parent }
+					    @Received let parent: Parent
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_suggestsInstantiatingUnwrappedTypeAndAddingOnlyIfAvailableToRename_whenRequiredOptionalRenameIsUnfulfilled() async {
+		// The remedy keeps the rename and adds `onlyIfAvailable: true` to it:
+		// `run_writesConvenienceExtensionOnRootOfTree_passesUnwrappedSibling_whenOptionalRenameIsReceivedOnlyIfAvailable`
+		// generates it.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Child.swift"]):4:5: error: @Received property `user: User?` is not @Instantiated or @Forwarded in chain: Root -> Child. Declare `@Instantiated let user: User` on `Root` or on another type in the chain, and add `onlyIfAvailable: true` to this property’s `@Received`, which then accepts the non-optional form, to fix."
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(u: User?) { self.u = u }
+					    @Received(fulfilledByDependencyNamed: "user", ofType: User?.self) let u: User?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class User: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_suggestsInstantiatingUnwrappedTypeAndReceivingItOnlyIfAvailable_whenRequiredOptionalReceiveIsUnfulfilled() async {
+		// The macro rejects `@Instantiated let user: User?`, and a required receive of `user: User?` does not accept a
+		// declaration of `user: User`, which only a receive only if available reads:
+		// `run_writesConvenienceExtensionOnRootOfTree_passesUnwrappedSibling_whenOptionalReceiveIsReceivedOnlyIfAvailable`
+		// generates the remedy the error states.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"\(fixtures["Child.swift"]):4:5: error: @Received property `user: User?` is not @Instantiated or @Forwarded in chain: Root -> Child. Declare `@Instantiated let user: User` on `Root` or on another type in the chain, and add `onlyIfAvailable: true` to this property’s `@Received`, which then accepts the non-optional form, to fix."
 			},
 		) {
 			try await executeSafeDIToolTest(
@@ -7101,10 +7504,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_suggestsForwardingUnwrappedType_whenRequiredOptionalReceiveIsOfTypeWithForwardedProperties() async {
+	mutating func run_suggestsForwardingReceivedOptionalType_whenRequiredOptionalReceiveIsOfTypeWithForwardedProperties() async {
+		// A forwarded `session: Session?` fulfills the required optional receive, which a forwarded `session: Session`
+		// does not.
 		await assertThrowsError(
 			diagnostics: { fixtures in
-				"\(fixtures["Child.swift"]):4:5: error: @Received property `session: Session?` is not @Instantiated or @Forwarded in chain: Root -> Child. `Session` has @Forwarded properties, so SafeDI builds it only through an `Instantiator`, never as an @Instantiated constant. Declare `@Forwarded let session: Session` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type, to fix."
+				"\(fixtures["Child.swift"]):4:5: error: @Received property `session: Session?` is not @Instantiated or @Forwarded in chain: Root -> Child. `Session` has @Forwarded properties, so SafeDI builds it only through an `Instantiator`, never as an @Instantiated constant. Declare `@Forwarded let session: Session?` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type, to fix."
 			},
 		) {
 			try await executeSafeDIToolTest(
