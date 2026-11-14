@@ -1025,7 +1025,7 @@ extension ScopeGenerator {
 			hash.combine(parameter.defaultKind.rawValue)
 		}
 		// After every parameter, the builders among them and every enum they reach, as a seam hashes them.
-		SeamSignature.combine(scopeEnums: SeamSignature.scopeEnumShapes(of: shapedBuilders?.scopeEnums ?? [], holes: holes), into: &hash)
+		SeamSignature.combine(scopeEnums: SeamSignature.scopeEnumShapes(of: shapedBuilders?.scopeEnums ?? [], holes: holes), hashesLabelsBoundLater: true, into: &hash)
 		var plan = PublicMockPlan(
 			parameters: parameters,
 			tiers: tiers,
@@ -1595,6 +1595,23 @@ extension ScopeGenerator.PublicMockTierOmission {
 
 extension ScopeGenerator {
 	/// A call of another module's public mock, in a mock tree, that the calling module's mock condition does not reach.
+	/// A case of an enum of another module's public mock that a dispatcher of this module's call of the mock would pass up on
+	/// some route, though it is handed no way to, since the per-place decision fills every place the enum reaches: the
+	/// dispatchers decide over the enums by type, which in a tangle of cycles can combine cases no run produces.
+	struct PublicMockRouteWithoutPassUp: Sendable {
+		/// The enum whose dispatcher holds the case.
+		let enumType: TypeDescription
+		let caseName: String
+
+		var sourceDiagnostic: SourceDiagnostic {
+			SourceDiagnostic(
+				severity: .error,
+				location: nil,
+				message: "SafeDI cannot fill `\(enumType.asSource)`'s case `\(caseName)` on every route this module's mock can reach it on, though it fills every place the case stands for. Please report this tree to SafeDI.",
+			)
+		}
+	}
+
 	struct PublicMockCallUnderOtherMockCondition: Sendable {
 		let publicMockCall: PublicMockCall
 		/// The dependency that leads to the call.

@@ -1429,6 +1429,10 @@ public actor DependencyTreeGenerator {
 		case publicMockTierOmitsProvidedValue([ScopeGenerator.PublicMockTierOmission])
 		/// A mock tree calls another module's public mock that is generated under another mock condition.
 		case publicMockUnderOtherMockCondition([ScopeGenerator.PublicMockCallUnderOtherMockCondition])
+		/// A call of another module's public mock whose dispatcher would pass a place up on a route though it is handed no way
+		/// to, every place it reaches being filled (see `ScopeGenerator.FillDispatcher.RoutePlan`). Reported plainly: nothing
+		/// in source is at fault.
+		case publicMockRouteWithoutPassUp(ScopeGenerator.PublicMockRouteWithoutPassUp)
 		/// Reported at the dependency of a tree this module generates that calls a seam of another module whose files
 		/// this run read under a mock condition that module does not guard its mock-only declarations with. See
 		/// `SeamModuleMockConditionDifference`.
@@ -1569,6 +1573,8 @@ public actor DependencyTreeGenerator {
 					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 			case let .publicMockCannotBeGenerated(findings):
 				SourceDiagnostic.joiningInSourceOrder(findings.map(\.sourceDiagnostics))
+			case let .publicMockRouteWithoutPassUp(route):
+				[route.sourceDiagnostic]
 			case let .publicMockUnderOtherMockCondition(calls):
 				// One diagnostic per dependency that leads to such a call, in source order.
 				calls
@@ -6217,6 +6223,7 @@ public actor DependencyTreeGenerator {
 		let holes = Self.holes(
 			of: instantiable,
 			generator: generator,
+			bindsReceivesAgain: true,
 			parameters: [],
 			proof: publicMockContext.proof,
 			instantiables: typeDescriptionToFulfillingInstantiableMap,
@@ -6234,6 +6241,7 @@ public actor DependencyTreeGenerator {
 				instantiables: typeDescriptionToFulfillingInstantiableMap,
 				ownScopeEnums: [:],
 				scopeTypeNames: .publicMock,
+				bindsReceivesAgain: true,
 			)
 		}
 		let builders = shapedBuilders(namedApartFrom: [])
@@ -8111,6 +8119,13 @@ public actor DependencyTreeGenerator {
 						.passUp(hole)
 					}
 				}
+			}
+		}
+		// What each fill reads, once every scope's tree is complete: a fill's parameters take the forms it reads.
+		var receivedPropertiesCache = ReceivedPropertiesCache()
+		for scope in Set(typeDescriptionToScopeMap.values) where scope.publicMockCall != nil {
+			for case let .fill(hole, fulfillingScope) in scope.holeArguments {
+				scope.fillReceivedProperties[hole.site] = Self.collectReceivedProperties(from: fulfillingScope, cache: &receivedPropertiesCache).received
 			}
 		}
 		return typeDescriptionToScopeMap

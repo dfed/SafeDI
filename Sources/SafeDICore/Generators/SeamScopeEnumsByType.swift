@@ -18,10 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// MARK: - A seam's enums, nested by type
+// MARK: - A seam's or a public mock's enums, nested by type
 
 extension DependencyTreeGenerator {
-	/// A place, or a call of an inner seam that passes a place up, in a seam's tree, with the cases on its path.
+	/// A place, or a call of an inner seam or another module's public mock that passes a place up, in a seam's tree or in a
+	/// public mock's outside every fill, with the cases on its path.
 	struct ReachedPlace {
 		/// The properties from the seam's root to the place's property, or to the call's: inside a fill, the filled place's
 		/// path in the inner seam's tree comes between the call and what the fill builds (`Hole.pathBeforePropertyInItsFill`).
@@ -93,8 +94,10 @@ extension DependencyTreeGenerator {
 	///   - reached: The places of the hole type, and the calls that pass one up, in the order the seam's generated code
 	///     reaches them.
 	///   - takenTypeNames: The names every generated type nested in a root enum must not take beside those its own cases spell:
-	///     the names the root's other cases – cases per path, which only a public mock's enum keeps – declare or spell, in
+	///     the names the root's other cases – cases per path, of a place inside a public mock's fill – declare or spell, in
 	///     their fields, forwarded values and inner enums.
+	///   - bindsReceivesAgain: Whether the tree is a public mock's, whose types' levels hold the receives it binds again
+	///     (`receivesBoundAgainOfAnyBuild(inTreeRootedAt:)`).
 	static func scopeEnumsByType(
 		of seam: Instantiable,
 		holeType: SeamSignature.HoleType,
@@ -105,9 +108,11 @@ extension DependencyTreeGenerator {
 		takenTypeNames externallyTakenTypeNames: Set<String>,
 		holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole],
 		parameters: [SeamSignature.Parameter],
+		bindsReceivesAgain: Bool,
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
 		reachedEnum: (SeamSignature.ScopeEnum.Key) -> SeamSignature.ScopeEnum?,
+		entersFills: Bool = true,
 	) -> ScopeEnumsByType {
 		let seamType = seam.concreteInstantiable
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
@@ -159,7 +164,9 @@ extension DependencyTreeGenerator {
 				return [.declaration(inSendableFunction: child.buildsInSendableFunction)]
 			}
 		}, fillEdges: { _, call in
-			call.children.compactMap { fill in
+			// A public mock's places inside a fill keep a case per path: no fill of its own enters its enums.
+			guard entersFills else { return [] }
+			return call.children.compactMap { fill in
 				guard fill.fillEmitsCode,
 				      fill.containsBuildSite || fill.passesUpBuilder,
 				      let fulfiller = fill.children.first,
@@ -169,8 +176,9 @@ extension DependencyTreeGenerator {
 				return (SeamDeclarationGraph.FillEdge(innerKey: innerKey, inSendableFunction: inSendableFunction, fulfillerBuildsInSendableFunction: fulfiller.buildsInSendableFunction), fulfiller)
 			}
 		})
-		let cycleParametersOfAnyBuild = Self.cycleParametersOfAnyBuild(inTreeRootedAt: generator)
-		let reboundPropertiesOfAnyBuild = Self.reboundPropertiesOfAnyBuild(inTreeRootedAt: generator)
+		let cycleParametersOfAnyBuild = Self.cycleParametersOfAnyBuild(inTreeRootedAt: generator, entersFills: entersFills)
+		let reboundPropertiesOfAnyBuild = Self.reboundPropertiesOfAnyBuild(inTreeRootedAt: generator, entersFills: entersFills)
+		let receivesBoundAgainOfAnyBuild = bindsReceivesAgain ? Self.receivesBoundAgainOfAnyBuild(inTreeRootedAt: generator) : [:]
 
 		// What each type with an enum binds, in its order, and the cases each family's enum has.
 		struct DraftCase {
@@ -179,6 +187,9 @@ extension DependencyTreeGenerator {
 			/// What the type binds before the property, for a case of the plain family; `nil` for a case of the `@Sendable`
 			/// family, which carries no values.
 			let fields: [SeamSignature.Hole.Field]?
+			/// The labels the type binds from the property on, for a case of the plain family (see
+			/// `SeamSignature.ScopeEnum.Values.labelsBoundLater`).
+			var labelsBoundLater = Set<String>()
 			/// Whether the case is `<label>_Sendable`, holding the `@Sendable` enum of what the property builds or hands up.
 			var isSendableBeneath = false
 
@@ -221,8 +232,10 @@ extension DependencyTreeGenerator {
 			let declarations = plainProperties.isEmpty && plainFills.isEmpty ? [] : levelDeclarations(
 				of: build,
 				isSeamRoot: type == seamType,
+				labelsNamedApart: bindsReceivesAgain && type == seamType ? build.labelsChildrenShare : [],
 				cycleParameters: cycleParametersOfAnyBuild[type, default: []],
 				reboundProperties: reboundPropertiesOfAnyBuild[type, default: []],
+				receivesBoundAgain: receivesBoundAgainOfAnyBuild[type, default: []],
 				seam: seam,
 				parameters: parameters,
 				seamTypeAccess: seamTypeAccess,
@@ -244,16 +257,22 @@ extension DependencyTreeGenerator {
 					let position = declarations.firstIndex { $0.property == property } ?? declarations.count
 					// A member of the property's loop of builders (`ScopeGenerator.ReceivedBuilderLoops`) is still being built where
 					// the loop's payloads are bound, before the loop's first function: the property's own function wraps again what
-					// its tree receives of it.
-					let fields = declarations[..<position].filter { field in
-						childrenByProperty[field.property].map { !build.areMembersOfOneLoop($0, child) } ?? true
+					// its tree receives of it. It is bound later than the payload, as the declarations after the property are.
+					var fields = [SeamSignature.Hole.Field]()
+					var labelsBoundLater = Set(declarations[position...].map(\.property.label) + [property.label])
+					for field in declarations[..<position] {
+						if let fieldChild = childrenByProperty[field.property], build.areMembersOfOneLoop(fieldChild, child) {
+							labelsBoundLater.insert(field.property.label)
+						} else {
+							fields.append(field)
+						}
 					}
 					if child.holeSite != nil {
-						plainCases.append(DraftCase(property: property, kind: .place, fields: fields))
+						plainCases.append(DraftCase(property: property, kind: .place, fields: fields, labelsBoundLater: labelsBoundLater))
 					} else if isCall, let innerKey = innerKey(handedUpBy: child, isSendable: false) {
-						plainCases.append(DraftCase(property: property, kind: .inner(innerKey), fields: fields))
+						plainCases.append(DraftCase(property: property, kind: .inner(innerKey), fields: fields, labelsBoundLater: labelsBoundLater))
 					} else if !isCall, let builtType = builtType(of: property) {
-						plainCases.append(DraftCase(property: property, kind: .nested(builtType, isSendable: false), fields: fields))
+						plainCases.append(DraftCase(property: property, kind: .nested(builtType, isSendable: false), fields: fields, labelsBoundLater: labelsBoundLater))
 					}
 				}
 				if sendableOwnProperties.contains(property) {
@@ -448,7 +467,7 @@ extension DependencyTreeGenerator {
 			let valuesTypeNames = valuesTypeNamesByDescribed[current, default: []]
 			for (index, draftCase) in draftCases(of: current.type, isSendable: current.isSendable).enumerated() {
 				let values: SeamSignature.ScopeEnum.Values? = if let typeName = valuesTypeNames[index], let fields = draftCase.fields {
-					SeamSignature.ScopeEnum.Values(typeName: typeName, fields: fields)
+					SeamSignature.ScopeEnum.Values(typeName: typeName, fields: fields, labelsBoundLater: draftCase.labelsBoundLater)
 				} else {
 					nil
 				}
@@ -629,14 +648,16 @@ extension DependencyTreeGenerator {
 	/// (`SeamHoles.valuesArguments(of:readingInstancesOf:)`). Every build takes a label in one form: a parameter's form
 	/// follows from the receivers in the type's own tree, which every build shares. A build in a `@Sendable` function counts
 	/// as any other: its function binds its parameters.
-	static func cycleParametersOfAnyBuild(inTreeRootedAt root: ScopeGenerator) -> [TypeDescription: [LevelCycleParameter]] {
+	/// A public mock's levels are its builds' outside every fill (`entersFills` false), since a place inside its fill keeps a
+	/// case per path.
+	static func cycleParametersOfAnyBuild(inTreeRootedAt root: ScopeGenerator, entersFills: Bool = true) -> [TypeDescription: [LevelCycleParameter]] {
 		var parametersByType = [TypeDescription: [LevelCycleParameter]]()
 		var generatorsToVisit = [root]
 		while let generator = generatorsToVisit.popLast() {
 			for child in generator.children where child.holeSite == nil && !child.closesPropertyCycle {
 				// A fill whose code is generated builds a type whose levels are as any other's.
 				guard child.fillHole == nil else {
-					if child.fillEmitsCode {
+					if entersFills, child.fillEmitsCode {
 						generatorsToVisit.append(child)
 					}
 					continue
@@ -662,15 +683,16 @@ extension DependencyTreeGenerator {
 	/// build whose function does not binds the field from the label as Swift sees it there, the nearest declaration, which
 	/// the type's tree receives, and so reads inline. Where every receiver in the type's tree receives the label only if
 	/// available, the field takes the optional form: a build whose function does not rebind it can bind the label from an
-	/// optional declaration, and a wrapper converts to the optional form.
-	static func reboundPropertiesOfAnyBuild(inTreeRootedAt root: ScopeGenerator) -> [TypeDescription: [Property]] {
+	/// optional declaration, and a wrapper converts to the optional form. A public mock's levels are its builds' outside
+	/// every fill (`entersFills` false), as `cycleParametersOfAnyBuild(inTreeRootedAt:entersFills:)` reads them.
+	static func reboundPropertiesOfAnyBuild(inTreeRootedAt root: ScopeGenerator, entersFills: Bool = true) -> [TypeDescription: [Property]] {
 		var propertiesByType = [TypeDescription: [Property]]()
 		var generatorsToVisit = [root]
 		while let generator = generatorsToVisit.popLast() {
 			for child in generator.children where child.holeSite == nil && !child.closesPropertyCycle {
 				// A fill whose code is generated builds a type whose levels are as any other's.
 				guard child.fillHole == nil else {
-					if child.fillEmitsCode {
+					if entersFills, child.fillEmitsCode {
 						generatorsToVisit.append(child)
 					}
 					continue
@@ -688,16 +710,69 @@ extension DependencyTreeGenerator {
 		return propertiesByType
 	}
 
+	/// The received properties a public mock binds again (`mockBindsAgain(receiving:beneath:)`) in any build of each type
+	/// in the tree `root` roots, outside every fill, by type, in the type's declaration order. A level nested by type carries
+	/// each (`levelDeclarations`), as `fields(of:)` declares it on a place's path. A build that binds it again binds the field
+	/// from that binding, so a place beneath it is handed the value the type received, as inline's place reads it, never the
+	/// farther declaration of the label the binding hides. A build that does not binds the field from the label as Swift
+	/// sees it there, the nearest declaration, which provides the form the type receives, and so reads inline.
+	static func receivesBoundAgainOfAnyBuild(inTreeRootedAt root: ScopeGenerator) -> [TypeDescription: [Property]] {
+		var propertiesByType = [TypeDescription: [Property]]()
+		// The nearest declaration of each label above each scope, as `fields(of:)` declares them on a place's path: the root's
+		// children, then each scope's forwarded properties, its builder function's cycle parameters, the receives the mock
+		// binds again and its children.
+		func declaring(_ properties: some Sequence<Property>, in nearestDeclarations: inout [String: Property]) {
+			for property in properties {
+				nearestDeclarations[property.label] = property
+			}
+		}
+		// A label the root's children share is named apart there, so none of them declares it (`labelsChildrenShare`): each
+		// receiver of it binds it again from the binding the mock names apart.
+		let labelsNamedApart = root.labelsChildrenShare
+		var rootDeclarations = [String: Property]()
+		declaring(root.children.compactMap(\.property).filter { !labelsNamedApart.contains($0.label) }, in: &rootDeclarations)
+		var generatorsToVisit = root.children.map { (generator: $0, nearestDeclarations: rootDeclarations) }
+		while let (generator, inheritedDeclarations) = generatorsToVisit.popLast() {
+			guard generator.fillHole == nil, generator.holeSite == nil, !generator.closesPropertyCycle, let instantiable = generator.builtInstantiable else { continue }
+			var nearestDeclarations = inheritedDeclarations
+			declaring(instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property), in: &nearestDeclarations)
+			// A scope that closes no cycle declares every parameter of its builder function a lazy cycle closes on.
+			declaring(generator.cycleParameters.map(\.property), in: &nearestDeclarations)
+			// Every build of a type has its dependencies, so the type's are kept in their declaration order, whichever build
+			// binds each again.
+			var boundAgain = Set(propertiesByType[instantiable.concreteInstantiable, default: []])
+			for dependency in instantiable.dependencies {
+				let bindsAgain = if let nearest = nearestDeclarations[dependency.property.label] {
+					mockBindsAgain(receiving: dependency, beneath: nearest)
+				} else {
+					dependency.source.isReceived && labelsNamedApart.contains(dependency.property.label)
+				}
+				guard bindsAgain else { continue }
+				nearestDeclarations[dependency.property.label] = dependency.property
+				boundAgain.insert(dependency.property)
+			}
+			if !boundAgain.isEmpty {
+				propertiesByType[instantiable.concreteInstantiable] = instantiable.dependencies.map(\.property).filter(boundAgain.contains)
+			}
+			declaring(generator.children.compactMap(\.property), in: &nearestDeclarations)
+			generatorsToVisit.append(contentsOf: generator.children.map { (generator: $0, nearestDeclarations: nearestDeclarations) })
+		}
+		return propertiesByType
+	}
+
 	/// What the scope `build` builds declares, in the order it binds the declarations, each as a field of a payload struct:
-	/// for the seam's root, its parameters, then its children; for any other type, its `@Forwarded` properties, then the
+	/// for the seam's root, its parameters, then its children but those of `labelsNamedApart`, which a mock's root names
+	/// apart and so does not declare (`ScopeGenerator.labelsChildrenShare`); for any other type, its `@Forwarded` properties, then the
 	/// `cycleParameters` of its builder function that any build of the type declares, which hide every other declaration
-	/// of their labels, then the `reboundProperties` of any build of the type, then its children. A case's payload holds
-	/// those its type binds before the case's property.
+	/// of their labels, then the `reboundProperties` and `receivesBoundAgain` of any build of the type, then its children. A
+	/// case's payload holds those its type binds before the case's property.
 	private static func levelDeclarations(
 		of build: ScopeGenerator,
 		isSeamRoot: Bool,
+		labelsNamedApart: Set<String>,
 		cycleParameters: [LevelCycleParameter],
 		reboundProperties: [Property],
+		receivesBoundAgain: [Property],
 		seam: Instantiable,
 		parameters: [SeamSignature.Parameter],
 		seamTypeAccess: AccessLevel,
@@ -752,9 +827,13 @@ extension DependencyTreeGenerator {
 				fields.removeAll { $0.property.label == property.label }
 				fields.append(field(of: property))
 			}
+			for property in receivesBoundAgain {
+				fields.removeAll { $0.property.label == property.label }
+				fields.append(field(of: property))
+			}
 		}
 		for child in build.orderedChildrenComputedAfresh(propertiesGeneratedLater: []) {
-			guard let property = child.generator.property else { continue }
+			guard let property = child.generator.property, !labelsNamedApart.contains(property.label) else { continue }
 			// A declaration hides an earlier one of its label: the seam's own alias that keeps a deferred parameter's label.
 			fields.removeAll { $0.property.label == property.label }
 			fields.append(field(of: property))

@@ -97,6 +97,11 @@ final class Scope: Hashable {
 	/// each place the builders it passes reach, in the order they reach them. Empty for every other scope.
 	var holeArguments = [HoleArgument]()
 
+	/// For a scope that calls another module's public mock, by each filled place's site, what the tree of the type that
+	/// fills it receives: the forms its fill reads, which type the fill's parameters (see `parameterField(of:reading:)`).
+	/// Empty for every other scope.
+	var fillReceivedProperties = [SeamSignature.Hole.Site: Set<Property>]()
+
 	/// How a seam call passes the builder for one of the seam's holes.
 	enum HoleArgument {
 		/// A function the caller generates, which builds the hole's property with the scope of the type that fulfills
@@ -477,7 +482,7 @@ final class Scope: Hashable {
 			seamRoot: seamRoot,
 			mockBuilders: mockBuilders,
 			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes, builders: $0.signature.builders, scopeEnums: $0.signature.scopeEnums, parameters: $0.signature.parameters, callRoutes: $0.signature.callRoutes) }
-				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, scopeEnums: $0.scopeEnums) }
+				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, scopeEnums: $0.scopeEnums, callRoutes: $0.callRoutes) }
 				?? SeamHoles(),
 			sitePath: [],
 			erasedToConcreteExistential: erasedToConcreteExistential,
@@ -755,18 +760,27 @@ private struct ScopeGeneratorUnderConstruction {
 			let callPath = self.sitePath
 			var names = GeneratedNameAllocator(reserving: Set(enclosingFills.values).union(seamHoles.namesBoundForBuilders))
 			var fillNames = enclosingFills
-			// Every place of a case nested by type is filled by one function, the first place's: it can read whatever field
-			// any place of the case carries, each from the case or from the dispatchers that lead to it, in the form every
+			// A public mock's caller keeps a case per path for a place inside a fill (`SeamBuilderFamilies`), so a call whose
+			// fills hold one fills each place with a fill of its own, and dispatches per route to choose it.
+			let unfoldsByRoute = scope.publicMockCall != nil && holeArguments.contains { holeArgument in
+				if case let .fill(_, fulfillingScope) = holeArgument {
+					Self.holdsAPlace(inTreeRootedAt: fulfillingScope)
+				} else {
+					false
+				}
+			}
+			// Every other place of a case nested by type is filled by one function, the first place's: it can read whatever
+			// field any place of the case carries, each from the case or from the dispatchers that lead to it, in the form every
 			// route can hand it (`ScopeGenerator.caseFields(of:)`).
 			var placesByCaseKey = [String: [SeamSignature.Hole]]()
-			for case let .fill(hole, _) in holeArguments where hole.enumPlace?.isNestedByType == true {
+			for case let .fill(hole, _) in holeArguments where !unfoldsByRoute && hole.enumPlace?.isNestedByType == true {
 				placesByCaseKey[ScopeGenerator.fillCaseKey(of: hole), default: []].append(hole)
 			}
 			// A place inside a fill of an inner seam's builder reads, through the scope value the inner seam handed that fill, a
 			// label that some route of the inner seam's enum holds and another does not: on that other route inline reads the
 			// caller's declaration, as for a label one place of the case carries and another does not.
 			let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey, nameByKey: [:]) }
-			let caseFieldsByCaseKey = placesByCaseKey.mapValues { places in
+			var caseFieldsByCaseKey = placesByCaseKey.mapValues { places in
 				var caseFields = ScopeGenerator.caseFields(of: places)
 				if let innerScopeReaders {
 					let fieldLabels = Set(caseFields.fields.map(\.property.label))
@@ -775,6 +789,27 @@ private struct ScopeGeneratorUnderConstruction {
 					}
 				}
 				return caseFields
+			}
+			// A public mock's caller decides per route, and a route whose nearest type binds another form of a value its fill
+			// reads converts it, so the fill takes each value its case's payload does not carry in the form it reads
+			// (`parameterField(of:reading:)`). It reads nothing of its own scope through the root dispatcher: a route on which
+			// no type binds the value passes the place up.
+			if scope.publicMockCall != nil {
+				for (caseKey, places) in placesByCaseKey {
+					guard var caseFields = caseFieldsByCaseKey[caseKey] else { continue }
+					let carriedLabels = Set(places.flatMap { $0.enumPlace?.values.map(\.property.label) ?? [] })
+					let reads = places.reduce(into: Set<Property>()) { reads, place in
+						reads.formUnion(scope.fillReceivedProperties[place.site] ?? [])
+					}
+					caseFields.fields = caseFields.fields.map { field in
+						let label = field.property.label
+						guard !carriedLabels.contains(label) else { return field }
+						let fieldsOfLabel = places.flatMap { $0.fields.filter { $0.property.label == label } }
+						return Self.parameterField(of: fieldsOfLabel, reading: reads.filter { $0.label == label }) ?? field
+					}
+					caseFields.callerReadLabels = []
+					caseFieldsByCaseKey[caseKey] = caseFields
+				}
 			}
 			var functionNameByCaseKey = [String: String]()
 			for case let .fill(hole, fulfillingScope) in holeArguments where enclosingFills[ScopeGenerator.fillKey(of: hole)] == nil {
@@ -787,7 +822,7 @@ private struct ScopeGeneratorUnderConstruction {
 				}
 				let functionName = names.claim(ScopeGenerator.fillFunctionName(of: hole))
 				fillNames[key] = functionName
-				if hole.enumPlace?.isNestedByType == true {
+				if !unfoldsByRoute, hole.enumPlace?.isNestedByType == true {
 					functionNameByCaseKey[caseKey] = functionName
 				}
 				let caseFields = caseFieldsByCaseKey[caseKey]
@@ -813,6 +848,8 @@ private struct ScopeGeneratorUnderConstruction {
 					innerScopeNameByKey: Dictionary(calledBuilders.scopeEnums.compactMap { scopeEnum in
 						seamHoles.innerScope(at: callPath, innerKey: scopeEnum.key).map { (scopeEnum.key, $0.name) }
 					}, uniquingKeysWith: { first, _ in first }),
+					decidesPerRoute: scope.publicMockCall != nil,
+					unfoldsByRoute: unfoldsByRoute,
 				)
 			}
 		}
@@ -1116,6 +1153,59 @@ private struct ScopeGeneratorUnderConstruction {
 			}
 		}
 		return reads
+	}
+
+	/// Whether the mock tree rooted at `scope` holds a place of the caller's own: a property nothing the caller sees builds,
+	/// or a call of a public mock that passes a place up.
+	private static func holdsAPlace(inTreeRootedAt scope: Scope) -> Bool {
+		var visitedScopes = Set<ObjectIdentifier>()
+		// A stack of its own, since a tree can be as deep as the module has types.
+		var scopesToVisit = [scope]
+		while let visitedScope = scopesToVisit.popLast() {
+			guard visitedScopes.insert(ObjectIdentifier(visitedScope)).inserted else { continue }
+			let passesAPlaceUp = visitedScope.holeArguments.contains { holeArgument in
+				if case .passUp = holeArgument {
+					true
+				} else {
+					false
+				}
+			}
+			guard !passesAPlaceUp else { return true }
+			for propertyToGenerate in visitedScope.propertiesToGenerate {
+				switch propertyToGenerate {
+				case let .instantiated(_, childScope, _):
+					scopesToVisit.append(childScope)
+				case .hole:
+					return true
+				case .aliased:
+					break
+				}
+			}
+		}
+		return false
+	}
+
+	/// The field a public mock caller's fill of a case nested by type takes for one label, given `fields`, the case's places'
+	/// fields of that label in place order, and `reads`, the forms of it the fill's tree receives: the form it reads that
+	/// provides every other (`CycleParameter.forms(providedBy:)`, the relation the per-place decision `holesFilled` fills
+	/// by), else the first place's field that provides every form it reads. So a route whose nearest type binds a form
+	/// that provides it fills the place, and every other route passes the place up, as the per-place decision does. `nil`
+	/// where the fill reads no form of the label, or no field provides every form it reads: no place of the case is then
+	/// filled through the label, and the fill keeps its first place's field.
+	private static func parameterField(of fields: [SeamSignature.Hole.Field], reading reads: Set<Property>) -> SeamSignature.Hole.Field? {
+		guard let firstField = fields.first, !reads.isEmpty else { return nil }
+		let property = reads.sorted().first { reads.isSubset(of: CycleParameter.forms(providedBy: $0)) }
+			?? fields.map(\.property).first { reads.isSubset(of: CycleParameter.forms(providedBy: $0)) }
+		guard let property else { return nil }
+		return SeamSignature.Hole.Field(
+			property: property,
+			access: firstField.access,
+			accessCause: firstField.accessCause,
+			declaringType: firstField.declaringType,
+			declarationLocation: firstField.declarationLocation,
+			isReceivedOnlyIfAvailable: firstField.isReceivedOnlyIfAvailable,
+			deferral: firstField.deferral,
+		)
 	}
 
 	/// The sites of the places a call whose builders `holeArguments` are fills.
