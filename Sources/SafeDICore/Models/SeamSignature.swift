@@ -830,11 +830,12 @@ public struct SeamSignature: Sendable {
 
 	/// The enum a family's builder of one hole type is handed: which place of the seam, or which inner seam, wants a value.
 	///
-	/// A seam's plain enum is nested by type: the root enum, `SafeDIScope_<Stem>`, describes what the seam itself builds,
-	/// and each other type of the seam's tree that leads to a place has an enum of its own, `<Type>_Scope`, nested in the
-	/// root. A case is a property of the type its enum describes – a place, a property that builds a type with an enum, a
-	/// call of an inner seam, or such a call and a builder it fills with a type whose tree leads to a place – and carries
-	/// what that type binds before the property (`Case.values`). A public mock's enums have one case per path.
+	/// A seam's or a public mock's plain enum is nested by type: the root enum, `SafeDIScope_<Stem>` or `SafeDIMockScope_<Stem>`,
+	/// describes what the seam or the mocked type itself builds, and each other type of its tree that leads to a place has
+	/// an enum of its own, `<Type>_Scope`, nested in the root. A case is a property of the type its enum describes – a place,
+	/// a property that builds a type with an enum, a call of an inner seam or another module's public mock, or a seam's call
+	/// and a builder it fills with a type whose tree leads to a place – and carries what that type binds before the property
+	/// (`Case.values`). A place inside a public mock's fill has one case per path.
 	public struct ScopeEnum: Sendable {
 		public struct Key: Hashable, Sendable {
 			public init(seamType: TypeDescription, holeType: HoleType, isSendable: Bool, describedType: TypeDescription? = nil) {
@@ -860,8 +861,20 @@ public struct SeamSignature: Sendable {
 		/// the children it builds before the property, and, for the seam itself, its parameters first. The case's payload
 		/// struct holds them.
 		public struct Values: Sendable {
+			public init(typeName: String, fields: [Hole.Field], labelsBoundLater: Set<String> = []) {
+				self.typeName = typeName
+				self.fields = fields
+				self.labelsBoundLater = labelsBoundLater
+			}
+
 			public let typeName: String
 			public let fields: [Hole.Field]
+			/// The labels the type declares that it binds from the case's property on, the property's own among them: none is
+			/// a field, and each hides every farther declaration of its label from the places beneath the property, as Swift's
+			/// lookup would. A public mock's caller reads no value of such a label from a type further out, so whether it fills
+			/// or passes a place up depends on them: a public mock's guard hashes them (`CallShape.ScopeEnum.Case`). A seam's
+			/// caller reads none, and a seam's guard leaves them out.
+			public let labelsBoundLater: Set<String>
 		}
 
 		public struct Case: Sendable {
@@ -1136,6 +1149,8 @@ public struct SeamSignature: Sendable {
 				public let name: String
 				/// The key of the enum the case holds, or the values and forwarded type of the place it builds.
 				public let payload: String
+				/// The labels the case's type binds from the case's property on (`ScopeEnum.Values.labelsBoundLater`), sorted.
+				public let labelsBoundLater: [String]
 			}
 
 			public let key: String
@@ -1199,20 +1214,30 @@ public struct SeamSignature: Sendable {
 		}
 		// Each key spelled once, then sorted by its spelling.
 		return scopeEnums.map { (spelling: $0.key.spelling, scopeEnum: $0) }.sorted { $0.spelling < $1.spelling }.map { spelling, scopeEnum in
-			CallShape.ScopeEnum(key: spelling, typeName: scopeEnum.typeName, cases: scopeEnum.cases.map { CallShape.ScopeEnum.Case(name: $0.name, payload: payload(of: $0)) })
+			CallShape.ScopeEnum(key: spelling, typeName: scopeEnum.typeName, cases: scopeEnum.cases.map { CallShape.ScopeEnum.Case(name: $0.name, payload: payload(of: $0), labelsBoundLater: $0.values?.labelsBoundLater.sorted() ?? []) })
 		}
 	}
 
 	/// Hashes into `hash`, after a signature's builders, every enum they reach: each case's payload, its fields included,
 	/// since a caller that computed a payload without a field would resolve the label from its own scope instead. A seam's
 	/// guard and a public mock's guard both end with it.
-	static func combine(scopeEnums: [CallShape.ScopeEnum], into hash: inout SeamSignatureHash) {
+	/// - Parameter hashesLabelsBoundLater: Whether each case's `labelsBoundLater` is hashed too: a public mock's caller
+	///   decides from them whether a route fills a place or passes it up, so a caller that computed them otherwise would
+	///   take another set of builders. A seam's caller reads none.
+	static func combine(scopeEnums: [CallShape.ScopeEnum], hashesLabelsBoundLater: Bool = false, into hash: inout SeamSignatureHash) {
 		for scopeEnum in scopeEnums {
 			hash.combine(scopeEnum.key)
 			hash.combine(scopeEnum.typeName)
 			for enumCase in scopeEnum.cases {
 				hash.combine(enumCase.name)
 				hash.combine(enumCase.payload)
+				if hashesLabelsBoundLater {
+					// Counted first, so the labels end where the next case begins.
+					hash.combine("\(enumCase.labelsBoundLater.count)")
+					for label in enumCase.labelsBoundLater {
+						hash.combine(label)
+					}
+				}
 			}
 		}
 	}

@@ -1434,9 +1434,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			#if DEBUG
 			extension Service {
 			    @frozen public enum SafeDISendableMockScope_Panel {
-			        case part(part_Values, Panel.ForwardedProperties)
-
-			        public struct part_Values {}
+			        case part(Panel.ForwardedProperties)
 			    }
 
 			    /// Overrides for the mock dependency tree.
@@ -1457,14 +1455,14 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			        let __safeDI_panelSendableBuilder = panelSendableBuilder
 			        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 			        let part = SendableInstantiator<Panel> {
-			            __safeDI_panelSendableBuilder(.part(SafeDISendableMockScope_Panel.part_Values(), $0))
+			            __safeDI_panelSendableBuilder(.part($0))
 			        }
 			        return Service(analytics: analytics, part: part)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_mock_D453A5978D67C77A {}
+			    public enum __safeDI_Service_mock_27AF017839E8B473 {}
 			}
 			#endif
 			""",
@@ -1518,10 +1516,16 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		#if DEBUG
 		extension Service {
 		    @frozen public enum SafeDIMockScope_Gadget {
-		        case again_again(again_again_Values)
+		        case again(again_Values, SafeDIMockScope_Gadget.Middle_Scope)
 
-		        public struct again_again_Values {
-		            public let beneath: Beneath
+		        public struct again_Values {}
+
+		        @frozen public enum Middle_Scope {
+		            case again(again_Values)
+
+		            public struct again_Values {
+		                public let beneath: Beneath
+		            }
 		        }
 		    }
 
@@ -1541,6 +1545,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
 		        let __safeDI_gadgetBuilder = gadgetBuilder
+		        let __safeDI_gadgetValues_again = SafeDIMockScope_Gadget.again_Values()
 		        func __safeDI_again() -> Middle {
 		            func __safeDI_beneath() -> Beneath {
 		                let again = Instantiator<Middle>(__safeDI_again)
@@ -1548,7 +1553,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            }
 		            let beneath: Beneath = __safeDI_beneath()
 		            func __safeDI_again_Gadget() -> any Gadget {
-		                __safeDI_gadgetBuilder(.again_again(SafeDIMockScope_Gadget.again_again_Values(beneath: beneath)))
+		                __safeDI_gadgetBuilder(.again(__safeDI_gadgetValues_again, .again(SafeDIMockScope_Gadget.Middle_Scope.again_Values(beneath: beneath))))
 		            }
 		            let again = LazilyInstantiated<any Gadget>(__safeDI_again_Gadget)
 		            return Middle.__safeDI_init(again: again, beneath: beneath, safeDIBuilder: safeDIOverrides.again.safeDIBuilder)
@@ -1559,7 +1564,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_mock_EA22785EE73EBECA {}
+		    public enum __safeDI_Service_mock_00BD27B0A51ED46F {}
 		}
 		#endif
 		""")
@@ -2103,7 +2108,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_mock_D65F71046D0B5675 {}
+			    public enum __safeDI_Service_mock_32BFD4F1F0E93C07 {}
 			}
 			#endif
 			""",

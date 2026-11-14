@@ -34,10 +34,13 @@ extension DependencyTreeGenerator {
 	/// code the seam's module generates: the seam's parameters, then each scope's on the path, outermost first, each
 	/// in the order it binds them – its forwarded properties, then its children in generation order, an `onlyIfAvailable`
 	/// alias bound to `nil` among them. A declaration bound after the site and the property still being built carry no
-	/// field, and hide the farther declarations of their label, which Swift would bind instead.
+	/// field, and hide the farther declarations of their label, which Swift would bind instead. In a public mock's tree
+	/// (`bindsReceivesAgain`), a receive the mock binds again (`mockBindsAgain(receiving:beneath:)`) is a declaration of the
+	/// scope that makes it, bound before its children.
 	static func holes(
 		of seam: Instantiable,
 		generator: ScopeGenerator,
+		bindsReceivesAgain: Bool = false,
 		parameters: [SeamSignature.Parameter],
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
@@ -68,6 +71,7 @@ extension DependencyTreeGenerator {
 			let content = fields(
 				of: site,
 				seam: seam,
+				bindsReceivesAgain: bindsReceivesAgain,
 				parameters: parameters,
 				seamTypeAccess: seamTypeAccess,
 				proof: proof,
@@ -530,6 +534,26 @@ extension DependencyTreeGenerator {
 		return declarations
 	}
 
+	/// Whether a mock binds `dependency`, a dependency of a scope beneath its root, again under its label at the top of that
+	/// scope, given `nearestDeclaration`, the nearest declaration of the label above the scope: the dependency is received,
+	/// and `nearestDeclaration` provides no form it reads. The mock then supplies it from a parameter or override of its own,
+	/// which `nearestDeclaration` makes it name apart (`user_Draft` beside `user: User`), and the scope binds that back to the
+	/// label (`emitReceiverBindings`), so the scopes beneath it read the received value, never `nearestDeclaration`, as
+	/// inline's do. A seam's tree binds no receive again: there Swift's lookup reads `nearestDeclaration` beneath a receive
+	/// that is passed `nil`.
+	static func mockBindsAgain(receiving dependency: Dependency, beneath nearestDeclaration: Property) -> Bool {
+		switch dependency.source {
+		case let .received(onlyIfAvailable):
+			if onlyIfAvailable {
+				!ScopeGenerator.provides(nearestDeclaration, aFormReadBy: dependency.property)
+			} else {
+				!CycleParameter.forms(providedBy: nearestDeclaration).contains(dependency.property)
+			}
+		case .instantiated, .forwarded, .aliased:
+			false
+		}
+	}
+
 	/// The names of the builder functions the properties of the tree `generator` roots would have, which a builder's
 	/// name inside the generated initializer must not equal.
 	static func builderFunctionNamesOfProperties(in generator: ScopeGenerator, includingHoleSites: Bool = true) -> Set<String> {
@@ -579,11 +603,14 @@ extension DependencyTreeGenerator {
 	/// declaration bound outside it is uncarried (`boundOutsideSendableFunction`), and the seam's parameters are no field,
 	/// since a fill reads them from the caller's own scope.
 	/// - Parameters:
+	///   - bindsReceivesAgain: Whether the tree is a public mock's, which binds a receive again where the nearest declaration
+	///     of its label does not provide its form (see `mockBindsAgain(receiving:beneath:)`).
 	///   - declarationsBetweenByClosedOnScope: The `declarationsBetween(closedOnScope:)` of each scope already asked, by the
 	///     scope's identity.
 	private static func fields(
 		of site: BuildSite,
 		seam: Instantiable,
+		bindsReceivesAgain: Bool,
 		parameters: [SeamSignature.Parameter],
 		seamTypeAccess: AccessLevel,
 		proof: TypeAccessProof,
@@ -596,6 +623,8 @@ extension DependencyTreeGenerator {
 			let access = proof.access(ofParameterTyped: property.typeDescription, mentionedFrom: .declaration(seam), admittedModules: Set([seam.moduleName, declaringModuleName]))
 			return (min(access.level, seamTypeAccess), access.cause)
 		}
+		// The labels a mock's root names apart, which no declaration there declares (`ScopeGenerator.labelsChildrenShare`).
+		let labelsNamedApartAtRoot = bindsReceivesAgain ? site.frames.first?.generator.labelsChildrenShare ?? [] : []
 		// The nearest declaration of each label, and the order in which the labels are bound.
 		var nearestDeclarations = [String: PathDeclaration]()
 		var labelsInBindingOrder = [String]()
@@ -780,11 +809,27 @@ extension DependencyTreeGenerator {
 					declare(parameterDeclaration)
 				}
 			}
+			// A public mock binds a receive again, under its label, at the top of the scope that makes it, where the nearest
+			// declaration of the label above does not provide its form (`mockBindsAgain(receiving:beneath:)`): that binding hides
+			// the farther declaration, as a declaration of the scope's type does. `receivesBoundAgainOfAnyBuild` gives the type's
+			// level the same declarations.
+			// A label the mock's root names apart has no declaration above, and every receive of it is bound again.
+			if bindsReceivesAgain, level > 0, !isInFill {
+				for dependency in instantiable.dependencies {
+					let bindsAgain = if let nearest = nearestDeclarations[dependency.property.label] {
+						DependencyTreeGenerator.mockBindsAgain(receiving: dependency, beneath: nearest.property)
+					} else {
+						dependency.source.isReceived && labelsNamedApartAtRoot.contains(dependency.property.label)
+					}
+					guard bindsAgain else { continue }
+					declare(declaration(of: dependency.property, isBoundBeforeSite: true))
+				}
+			}
 			let pathPosition = frame.nextPosition - 1
 			let pathProperty = frame.orderedChildren[pathPosition].generator.property
 			let carrierProperties = frame.orderedChildren.compactMap { frame.generator.startsAsCarrier($0.generator) ? $0.generator.property : nil }
 			for (position, child) in frame.orderedChildren.enumerated() {
-				guard let property = child.generator.property else { continue }
+				guard let property = child.generator.property, level > 0 || !labelsNamedApartAtRoot.contains(property.label) else { continue }
 				// An `onlyIfAvailable` alias is bound, to `nil` where its fulfilling property is unavailable, as every other
 				// child is.
 				// A member of the loop of builders the scope on the path is on (`ScopeGenerator.ReceivedBuilderLoops`) is still
