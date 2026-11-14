@@ -25,8 +25,7 @@ import Testing
 
 /// The graph fuzzer's oracles of a hole's scope nested by type: the facts of the places a seam's tree builds, read by
 /// type (`GraphFuzzerPlaceFacts`), and the scope enums the generator nests by type (`GraphFuzzerScopeDeclarations`),
-/// against which they are judged in every graph whose scopes the generator nests by type
-/// (`GraphFuzzerToolRuns.nestsEveryScopeByType`).
+/// against which they are judged in every graph, places inside fills included.
 struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 	// MARK: Initialization
 
@@ -273,17 +272,91 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 	}
 
 	@Test
-	func unproducedDeclaredCases_judgesNoEnumOfAFillsTree_whenOnlyAPlaceInsideAFillReachesIt() {
+	func unproducedDeclaredCases_reportsFillCaseAndItsTypesEnum_whenNoPlaceInsideAFillProducesThem() {
 		// `Home`'s fill of `Inner`'s hole builds `DefaultGadget`, whose own place of `Service` is a case of `Home`'s enum
-		// holding `Inner`'s enum: the fill's tree has no levels, so its type's enum is not judged.
-		let generatedFile = Self.nestedHomeScope(screenBHoldsShared: true)
-			.replacingOccurrences(of: "        case inner(inner_Values, Inner.SafeDIScope_Service)\n", with: "        case inner(inner_Values, Inner.SafeDIScope_Service)\n        case inner_gadgetBuilder(inner_gadgetBuilder_Values, Inner.SafeDIScope_Gadget, SafeDIScope_Service.DefaultGadget_Scope)\n")
-			.replacingOccurrences(of: "        @frozen public enum Shared_Scope {", with: "        @frozen public enum DefaultGadget_Scope {\n            case service(service_Values)\n\n            public struct service_Values {}\n        }\n\n        @frozen public enum Shared_Scope {")
-		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": generatedFile])
+		// holding `Inner`'s enum: no place's path in the facts goes through the fill.
+		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": Self.nestedHomeScopeWithFillCase])
 
 		#expect(declarations.enums.map(\.qualifiedName).contains("Home.SafeDIScope_Service.DefaultGadget_Scope"))
-		#expect(declarations.unproducedDeclaredCases(of: Self.sharedTypeFacts) == [])
-		#expect(declarations.casesNamingNoPropertyOfTheirType(of: Self.sharedTypeFacts) == [])
+		#expect(declarations.unproducedDeclaredCases(of: Self.sharedTypeFacts) == [
+			"`Home.SafeDIScope_Service` declares the fill case `inner_gadgetBuilder`, which no place inside a fill produces.",
+			"`Home.SafeDIScope_Service.DefaultGadget_Scope` is the scope enum of no type a place's path builds.",
+		])
+	}
+
+	@Test
+	func scopeDeclarations_agreeWithTheFacts_whenAPlaceInsideAFillProducesItsCallsFillCase() {
+		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": Self.nestedHomeScopeWithFillCase])
+
+		#expect(declarations.undeclaredProducedCases(of: Self.sharedTypeFactsWithPlaceInsideFill) == [])
+		#expect(declarations.unproducedDeclaredCases(of: Self.sharedTypeFactsWithPlaceInsideFill) == [])
+		#expect(declarations.casesNamingNoPropertyOfTheirType(of: Self.sharedTypeFactsWithPlaceInsideFill) == [])
+	}
+
+	@Test
+	func undeclaredProducedCases_reportsFillCase_whenTheCallsCaseHoldsTheEnumOfAnotherType() {
+		// The call's case holds `Shared`'s enum rather than that of `DefaultGadget`, the type the fill builds.
+		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": Self.nestedHomeScopeWithFillCase.replacingOccurrences(
+			of: "Inner.SafeDIScope_Gadget, SafeDIScope_Service.DefaultGadget_Scope)",
+			with: "Inner.SafeDIScope_Gadget, SafeDIScope_Service.Shared_Scope)",
+		)])
+
+		#expect(declarations.undeclaredProducedCases(of: Self.sharedTypeFactsWithPlaceInsideFill) == [
+			"A place's path produces the case `inner_<builder>`, holding the enum of `DefaultGadget`, of the seam `Home`, which no scope enum declares.",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func placeFacts_produceTheCallsFillCaseAndAgreeWithTheToolsEnums_whenAPlaceIsInsideAFill() async throws {
+		// The design's example of section 2.6: `Outer` fills `Inner`'s `service`, at `Inner`'s root and in its `Screen`, with
+		// `DefaultService`, whose `gadget` only `App` can build, so that place of `Outer`'s is inside the fill.
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Service {}\npublic protocol Gadget {}",
+				seamFixtureType(named: "Screen", declarations: ["@Forwarded public let id: Int", "@Instantiated public let service: any Service"]),
+				seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated public let screenBuilder: Instantiator<Screen>", "@Instantiated public let service: any Service"]),
+			]),
+			ModuleFixture(name: "Middle", packageName: "Other", swiftFileContent: [
+				seamFixtureType(named: "Tag", isFinalClass: true, declarations: []),
+				Self.fulfillingType(named: "DefaultService", fulfilling: "Service", declarations: ["@Instantiated public let gadget: any Gadget"]),
+				seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated public let tag: Tag", "@Instantiated public let inner: Inner"]),
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				Self.fulfillingType(named: "LiveGadget", fulfilling: "Gadget", declarations: ["@Received public let tag: Tag", "@Received(onlyIfAvailable: true) public let id: Int?"]),
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let outer: Outer"]),
+			].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+		]
+		var filesToDelete = filesToDelete
+		let (output, facts) = try await collectingPlaceFacts {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		self.filesToDelete = filesToDelete
+		// Every module's generated code, `Feature`'s declaring `Inner`'s enums.
+		let featureCode = try #require(output.modules["Feature"]?.generatedFiles["Feature.swift"])
+		let middleCode = try #require(output.modules["Middle"]?.generatedFiles["Middle.swift"])
+		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Feature.swift": featureCode, "Middle.swift": middleCode])
+
+		// `Outer`'s root produces the call's case for `Inner`'s builder filled, holding `DefaultService`'s enum, whose case
+		// `gadget` the place's path produces too.
+		#expect(facts.producedCases.contains(GraphFuzzerPlaceFacts.ProducedCase(holder: Self.holder(of: "Outer", inTreeOf: "Outer", isSeamRoot: true), label: "inner", filledType: "DefaultService")))
+		#expect(facts.producedCases.contains(Self.producedCase(of: "DefaultService", inTreeOf: "Outer", "gadget")))
+		#expect(declarations.undeclaredProducedCases(of: facts) == [])
+		#expect(declarations.unproducedDeclaredCases(of: facts) == [])
+		#expect(declarations.casesNamingNoPropertyOfTheirType(of: facts) == [])
+		#expect(facts.chainRepeats == [])
+
+		// The case renamed after a property `Outer` does not declare: each oracle fires.
+		let renamedDeclarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Feature.swift": featureCode, "Middle.swift": middleCode.replacingOccurrences(of: "inner_serviceBuilder", with: "screen_serviceBuilder")])
+		#expect(renamedDeclarations.undeclaredProducedCases(of: facts) == [
+			"A place's path produces the case `inner_<builder>`, holding the enum of `DefaultService`, of the seam `Outer`, which no scope enum declares.",
+		])
+		#expect(renamedDeclarations.unproducedDeclaredCases(of: facts) == [
+			"`Outer.SafeDIScope_Gadget` declares the fill case `screen_serviceBuilder`, which no place inside a fill produces.",
+		])
+		#expect(renamedDeclarations.casesNamingNoPropertyOfTheirType(of: facts) == [
+			"`Outer.SafeDIScope_Gadget` declares the case `screen_serviceBuilder`, which names no property of the seam `Outer`.",
+		])
 	}
 
 	@Test
@@ -383,6 +456,27 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 			holder(of: "Shared"): ["service"],
 		],
 	)
+
+	/// `sharedTypeFacts` with a place inside `Home`'s fill of `Inner`'s `gadget`, which builds `DefaultGadget`.
+	private static let sharedTypeFactsWithPlaceInsideFill = GraphFuzzerPlaceFacts(
+		producedCases: sharedTypeFacts.producedCases.union([
+			GraphFuzzerPlaceFacts.ProducedCase(holder: holder(of: "Home", isSeamRoot: true), label: "inner", filledType: "DefaultGadget"),
+			producedCase(of: "DefaultGadget", "service"),
+		]),
+		declaredLabels: sharedTypeFacts.declaredLabels.merging([holder(of: "DefaultGadget"): ["service"]]) { $1 },
+	)
+
+	/// `nestedHomeScope(screenBHoldsShared: true)` with the call `inner`'s case for `Inner`'s `gadgetBuilder`, which `Home`
+	/// fills with `DefaultGadget`, which holds a place of `Service`.
+	private static let nestedHomeScopeWithFillCase = nestedHomeScope(screenBHoldsShared: true)
+		.replacingOccurrences(of: "        case inner(inner_Values, Inner.SafeDIScope_Service)\n", with: "        case inner(inner_Values, Inner.SafeDIScope_Service)\n        case inner_gadgetBuilder(inner_gadgetBuilder_Values, Inner.SafeDIScope_Gadget, SafeDIScope_Service.DefaultGadget_Scope)\n")
+		.replacingOccurrences(of: "        @frozen public enum Shared_Scope {", with: "        @frozen public enum DefaultGadget_Scope {\n            case service(service_Values)\n\n            public struct service_Values {}\n        }\n\n        @frozen public enum Shared_Scope {")
+
+	/// `name`, an `@Instantiable` type that fulfills `fulfilledType`, declaring `declarations`.
+	private static func fulfillingType(named name: String, fulfilling fulfilledType: String, declarations: [String]) -> String {
+		seamFixtureType(named: name, declarations: declarations, conformances: ", \(fulfilledType)")
+			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [\(fulfilledType).self])\n")
+	}
 
 	/// `Home`'s scope of `Service` nested by type, as the design's contract spells it, with `ScreenB`'s case for its second
 	/// path to `Shared` when `screenBHoldsShared`, and an inner seam's wrapping case.

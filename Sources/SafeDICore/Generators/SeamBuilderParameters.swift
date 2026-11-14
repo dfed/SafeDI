@@ -588,6 +588,8 @@ extension DependencyTreeGenerator {
 		var frameLevel = -1
 		/// Whether it is a parameter of the builder function of the scope at `frameLevel` that a lazy cycle closes on.
 		var isCycleParameter = false
+		/// Whether the builder function of the scope at `frameLevel` wraps it again as a member of a loop of builders.
+		var isReboundByBuilderFunction = false
 		/// Whether its type forwards it.
 		var isForwarded = false
 		/// Where it is a parameter of a builder function a lazy cycle closes on: whose, and what the cycle passes it.
@@ -640,6 +642,7 @@ extension DependencyTreeGenerator {
 			labelsInBindingOrder.append(label)
 			var levelDeclaration = SeamPlaceLevels.Level.Declaration(property: declaration.property, isBoundBeforeNextProperty: declaration.isBoundBeforeSite)
 			levelDeclaration.isCycleParameter = declaration.isCycleParameter
+			levelDeclaration.isReboundByBuilderFunction = declaration.isReboundByBuilderFunction
 			levelDeclarations.append(levelDeclaration)
 		}
 		var isInFill = false
@@ -764,7 +767,7 @@ extension DependencyTreeGenerator {
 				// function, bound before anything the function builds, and declared by the scope that declares the loop.
 				for reboundProperty in frame.generator.reboundProperties {
 					let reboundAccess = access(of: reboundProperty, declaredBy: loopDeclaringInstantiable.moduleName)
-					declare(PathDeclaration(
+					var reboundDeclaration = PathDeclaration(
 						property: reboundProperty,
 						isBoundBeforeSite: true,
 						sendableDepth: sendableDepth,
@@ -773,7 +776,9 @@ extension DependencyTreeGenerator {
 						declaringType: loopDeclaringInstantiable.concreteInstantiable,
 						declarationLocation: loopDeclaringInstantiable.dependencies.first { $0.property == reboundProperty }?.declarationLocation,
 						frameLevel: level,
-					))
+					)
+					reboundDeclaration.isReboundByBuilderFunction = true
+					declare(reboundDeclaration)
 				}
 			}
 			// The parameters of a builder function a lazy cycle closes on follow its forwarded ones, and hide every other

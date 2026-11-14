@@ -67,11 +67,13 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 			declarations.filter(\.isBoundBeforeNextProperty).map(\.property)
 		}
 
-		/// The values the level holds that its type binds: `fields` but the parameters of the scope's builder function. A
-		/// lazy cycle that closes on that function makes them (`CycleParameter`), which another build of the type, in another
-		/// function, need not take, so they are a fact of the function, not of the type.
+		/// The values the level holds that its type binds: `fields` but the parameters of the scope's builder function and the
+		/// instantiators it wraps again. A lazy cycle that closes on that function makes the parameters (`CycleParameter`), and
+		/// a loop of builders the function's scope is a member of makes the wrappers (`ScopeGenerator.reboundProperties`),
+		/// which another build of the type, in another function, need not take or make, so they are a fact of the function,
+		/// not of the type. A level nested by type carries both of any build of the type.
 		public var fieldsOfType: [Property] {
-			declarations.filter { $0.isBoundBeforeNextProperty && !$0.isCycleParameter }.map(\.property)
+			declarations.filter { $0.isBoundBeforeNextProperty && !$0.isCycleParameter && !$0.isReboundByBuilderFunction }.map(\.property)
 		}
 
 		/// A declaration of a level.
@@ -82,6 +84,9 @@ public struct SeamPlaceLevels: Sendable, Equatable {
 			public let isBoundBeforeNextProperty: Bool
 			/// Whether it is a parameter of the scope's builder function that a lazy cycle closes on (`CycleParameter`).
 			public var isCycleParameter = false
+			/// Whether the scope's builder function wraps it again as a member of a loop of builders
+			/// (`ScopeGenerator.reboundProperties`).
+			public var isReboundByBuilderFunction = false
 		}
 	}
 
