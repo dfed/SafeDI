@@ -115,6 +115,7 @@ Everything SafeDI produces must be identical on every run over the same inputs: 
 ## Testing Philosophy
 
 - **TDD**: Write failing tests first, then fix.
+- **The fuzzer draws what the generator newly does.** A change that makes the generator accept or emit a new shape adds a fuzzer draw for it in the same PR, whose graphs the tool accepts; a fixed generator defect adds a roll that fails with the fix reverted; a new oracle names the seed a hand mutation makes fail; no flag turns an oracle off. Late defects came from shapes the fuzzer did not draw yet. A small fix in a drawn shape needs only its roll; docs and diagnostic wording need nothing. Before changing the generator, read "Drawing a change" in `.claude/rules/fuzzer-corpora.md`.
 - **One behavior per test method.** Each test verifies one behavior, but may use multiple assertions to fully validate it (e.g., checking both the count and content of output). Do not test unrelated behaviors in the same method.
 - **No tautological tests.** Tests must exercise real code paths with real input. Never use test helpers that rewrite input before processing — the test content should be exactly what production code would see. Tests should verify input code → output code.
 - **Test through the pipeline**, not direct model construction. Mock tests use `executeSafeDIToolTest` which parses real Swift source through the full visitor → generator pipeline.
