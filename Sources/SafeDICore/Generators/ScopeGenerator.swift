@@ -7881,22 +7881,44 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// extractor exactly once, where the node's parent computes them. The
 	/// builder that created the extractor then emits the recorded
 	/// `let <localName> = <expression>` lines before its function.
+	///
+	/// A local is named after the function and the override's path, its labels
+	/// joined with underscores, which labels may hold too: `header.leaf` and
+	/// `header_leaf` join to one name, and a sibling labeled
+	/// `screenBuilder__safeDIBuilder` declares the function a local of
+	/// `screenBuilder` would be named. So each local is claimed from `names`, the
+	/// allocator of the scope the locals are declared in, which holds that scope's
+	/// names and those of each scope inside the function the walk has entered,
+	/// where the local is read (`reserve(_:)`). A builder function of a scope
+	/// enclosing that one needs no reservation: it builds a property on the
+	/// override's path, whose label every local of the function spells after
+	/// the function's own.
 	final class SendableOverrideExtractor {
-		init(functionName: String) {
+		init(functionName: String, names: GeneratedNameAllocator) {
 			self.functionName = functionName
+			self.names = names
 		}
 
 		/// Records that `expression` is read into a local named after the
 		/// outermost `@Sendable` function, and returns that local's name.
 		func extract(_ expression: String, localNameSuffix: String) -> String {
-			let localName = "\(functionName)__\(localNameSuffix)".spelledAsJoinedIdentifier
+			let localName = names.claim("\(functionName)__\(localNameSuffix)".spelledAsJoinedIdentifier)
 			extractions.append((localName: localName, expression: expression))
 			return localName
+		}
+
+		/// Keeps every later local apart from `names`, which a scope inside the function declares: a local named as one
+		/// would be hidden by it where it is read.
+		func reserve(_ names: some Sequence<String>) {
+			self.names.reserve(names)
 		}
 
 		/// The `(localName, expression)` pairs recorded so far, in the order
 		/// they were extracted.
 		private(set) var extractions = [(localName: String, expression: String)]()
+
+		/// The names of the scope the locals are declared in, the locals among them.
+		private(set) var names: GeneratedNameAllocator
 
 		private let functionName: String
 	}
@@ -7980,6 +8002,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			: nil
 		var propertyNodeIndex = 0
 		var holeSiteBuildingWrapperIndex = 0
+
+		// The builder functions this scope declares. A local a `@Sendable` function started here reads an override into is
+		// declared beside them, and one an enclosing `@Sendable` function reads is hidden by them where this scope reads it.
+		var builderFunctionNamesDeclaredHere = Set<String>()
+		for (index, node) in propertyNodes.enumerated() where !node.isPropertyCycle {
+			builderFunctionNamesDeclaredHere.insert(builderFunctionNamesByNode?[index].functionName ?? Self.functionName(toBuildPropertyNamed: disambiguatedLabel(for: node, labelMap: labelMap)))
+		}
+		for (index, alias) in holeSitesBuildingWrappers.enumerated() {
+			builderFunctionNamesDeclaredHere.insert(builderFunctionNamesByNode?[propertyNodes.count + index].functionName ?? alias.holeSite?.wrapperFunctionName ?? Self.functionName(toBuild: alias.property))
+		}
+		if let sendableOverrideExtractor {
+			// A node's override and arguments are read here, through the enclosing extractor, before the walk enters the
+			// node's builder function, where the node is constructed: so the functions declared there, under the names
+			// they have unless a cycle renames them, are reserved now too.
+			sendableOverrideExtractor.reserve(builderFunctionNamesDeclaredHere)
+			for node in propertyNodes {
+				let childNodes = node.children.propertyNodes
+				let childLabelMap = disambiguatePropertyLabels(for: childNodes)
+				sendableOverrideExtractor.reserve(childNodes.map { Self.functionName(toBuildPropertyNamed: disambiguatedLabel(for: $0, labelMap: childLabelMap)) })
+			}
+		}
+		// The names of this scope, from which each `@Sendable` function started here claims the locals it reads overrides
+		// into: the functions declared here, and the locals the mock's body reads its `@Sendable` autoclosure parameters into,
+		// which the scopes inside the function call.
+		var overrideLocalNames = GeneratedNameAllocator(reserving: builderFunctionNamesDeclaredHere)
+		overrideLocalNames.reserve(sendableAutoclosureParameters.values.map(\.localName))
 
 		// Merge sibling-level disambiguations into the receiver-disambiguation
 		// map so consumers can rebind colliding sibling names back to their raw
@@ -8184,6 +8232,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						publicMock: publicMock,
 						promotedParameterName: promotedParameterName,
 						publicMockOverridesIsSendableClosure: publicMockOverridesIsSendableClosure,
+						overrideLocalNames: &overrideLocalNames,
 						loopMemberEmission: loopMemberEmission,
 					)
 					if let loop = node.loop {
@@ -8258,7 +8307,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// `@Sendable` builder function – starts a new extraction, as an instantiator's does: every
 					// `safeDIOverrides` read in its body becomes a local declared before it.
 					let startedSendableOverrideExtractor: SendableOverrideExtractor? = if sendableOverrideExtractor == nil, node.buildsInSendableFunction {
-						SendableOverrideExtractor(functionName: functionName)
+						SendableOverrideExtractor(functionName: functionName, names: overrideLocalNames)
 					} else {
 						nil
 					}
@@ -8310,8 +8359,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					} else {
 						constructionExpression
 					}
-					for extraction in startedSendableOverrideExtractor?.extractions ?? [] {
-						lines.append("\(indent)let \(extraction.localName) = \(extraction.expression)")
+					if let startedSendableOverrideExtractor {
+						overrideLocalNames = startedSendableOverrideExtractor.names
+						for extraction in startedSendableOverrideExtractor.extractions {
+							lines.append("\(indent)let \(extraction.localName) = \(extraction.expression)")
+						}
 					}
 					// A function a cycle closes on from inside a `Sendable` wrapper is `@Sendable`, so the stages of a public
 					// mock's staged builders whose next stage starts in it are called before it, as before a wrapper's
@@ -8918,6 +8970,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		publicMock: PublicMockEmission? = nil,
 		promotedParameterName: String? = nil,
 		publicMockOverridesIsSendableClosure: Bool,
+		overrideLocalNames: inout GeneratedNameAllocator,
 		loopMemberEmission: LoopMemberEmission? = nil,
 	) async -> InstantiatorBindingLines {
 		let forwardedProperties = node.forwardedProperties.sorted()
@@ -8994,7 +9047,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// reads keep flowing to the outermost function's extractor, whose
 			// locals are already in scope.
 			let startedSendableOverrideExtractor: SendableOverrideExtractor? = if sendableOverrideExtractor == nil, node.buildsInSendableFunction {
-				SendableOverrideExtractor(functionName: functionName)
+				SendableOverrideExtractor(functionName: functionName, names: overrideLocalNames)
 			} else {
 				nil
 			}
@@ -9047,6 +9100,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				functionOverrideExpression = overrideExpression.map {
 					startedSendableOverrideExtractor.extract($0, localNameSuffix: ReservedName.configurationBuilderPropertyName)
 				}
+				overrideLocalNames = startedSendableOverrideExtractor.names
 				for extraction in startedSendableOverrideExtractor.extractions {
 					lines.prelude.append("\(indent)let \(extraction.localName) = \(extraction.expression)")
 				}
