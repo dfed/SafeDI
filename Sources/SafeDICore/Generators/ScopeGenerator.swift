@@ -63,8 +63,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		callSiteLazilyInstantiatedInstanceProperties: Set<Property>? = nil,
 		reboundProperties: Set<Property> = [],
 		previousPassReceivedBuilderLoops: ReceivedBuilderLoops? = nil,
+		namesBoundBySeam: Set<String> = [],
 	) {
 		self.builtInlineSeamComment = builtInlineSeamComment
+		self.namesBoundBySeam = namesBoundBySeam
 		self.constructsWithHandWrittenMock = constructsWithHandWrittenMock
 		self.closedOnDeclaration = closedOnDeclaration
 		self.closedOnFillPathDeclarationsBeneath = closedOnFillPathDeclarationsBeneath
@@ -599,8 +601,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.unpassableCycleLabelsInTree = unpassableCycleLabelsInTree
 		cycleParametersChangedInTree = foundCycleParameters != builtCycleParameters
 			|| propertiesToGenerate.contains(where: \.cycleParametersChangedInTree)
-		// A scope that closes a cycle builds nothing, so its children are on no loop.
-		let receivedBuilderLoops = isPropertyCycle
+		// A scope that closes a cycle builds nothing, so its children are on no loop. A fill's one child is the property it
+		// fills, whose builder function the seam's initializer declares: a receive of that property in the fill's tree is a
+		// fill finding (`receivesInstantiatorBuildingSite`), never a loop the fill rebinds.
+		let receivedBuilderLoops = isPropertyCycle || fill != nil
 			? ReceivedBuilderLoops()
 			: Self.receivedBuilderLoops(of: propertiesToGenerate, requiredOnlyIfAvailableAliasProperties: requiredOnlyIfAvailableAliasProperties)
 		self.receivedBuilderLoops = receivedBuilderLoops
@@ -713,6 +717,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builtInlineSeamComment = nil
 		publicMockCall = nil
 		mockBuilders = nil
+		namesBoundBySeam = []
 		ownerPropertyStack = []
 		ownerConcreteTypeStack = []
 		holeCallArguments = []
@@ -798,6 +803,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builtInlineSeamComment = nil
 		publicMockCall = nil
 		mockBuilders = nil
+		namesBoundBySeam = []
 		holeCallArguments = []
 		builderCallArguments = []
 		fillDispatchers = []
@@ -2657,6 +2663,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	let publicMockCall: PublicMockCall?
 	/// For a public mock's root, the builders its `mock()` takes; `nil` for every other generator.
 	let mockBuilders: DependencyTreeGenerator.ShapedBuilders?
+	/// In a seam's tree, the names its generated initializer binds for its deferred parameters and its builders, which
+	/// code anywhere in the tree may read and no `__safeDI_<label>_received` function may hide (see
+	/// `namesReceivedFunctionsAvoid`). Empty outside a seam's tree.
+	private let namesBoundBySeam: Set<String>
 
 	/// For a scope that calls another module's public mock: what the call passes each builder it fills or hands up through a
 	/// case of the calling public mock's own enum, by label. A builder it passes up as the calling internal mock's parameter
@@ -3983,7 +3993,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The names a `__safeDI_<label>_received` function this scope's body declares must not take (see
 	/// `ReceivedBuilderLoops`), since Swift resolves a name to the innermost declaration of it in scope and a local function
 	/// is in scope throughout the body that declares it: the builder functions the body declares, the enclosing functions
-	/// and fills a scope beneath refers to by name, which the function would hide, and the functions each member of a loop
+	/// and fills a scope beneath refers to by name and the names a seam's initializer binds, which the function would hide,
+	/// and the functions each member of a loop
 	/// declares in its own body, where its rebindings read the function and would resolve to them. A member's builder
 	/// function is named after its label (renamed only beside a cycle-closing scope beneath that refers to an enclosing
 	/// function of its name), and so is the `__safeDI_<label>_received` function of a loop in the member's body, so both
@@ -4002,7 +4013,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var names = Self.functionNamesReferenced(
 			beneath: orderedChildren.compactMap(\.generator.builderFunctionCandidate),
 			enclosingFunctionNames: enclosingFunctionNames,
-		)
+		).union(namesBoundBySeam)
 		for (index, child) in orderedChildren.enumerated() {
 			if child.generator.declaresBuilderFunction, let property = child.generator.property {
 				names.insert((childBuilderFunctionNames?[index] ?? nil)?.functionName ?? Self.functionName(toBuild: property))

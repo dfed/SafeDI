@@ -449,7 +449,7 @@ final class Scope: Hashable {
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			seamRoot: seamRoot,
 			mockBuilders: mockBuilders,
-			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes, builders: $0.signature.builders, scopeEnums: $0.signature.scopeEnums) }
+			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes, builders: $0.signature.builders, scopeEnums: $0.signature.scopeEnums, parameters: $0.signature.parameters) }
 				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, scopeEnums: $0.scopeEnums) }
 				?? SeamHoles(),
 			sitePath: [],
@@ -1081,6 +1081,7 @@ private struct ScopeGeneratorUnderConstruction {
 			callSiteLazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties,
 			reboundProperties: reboundProperties,
 			previousPassReceivedBuilderLoops: previousPassGenerator?.receivedBuilderLoops,
+			namesBoundBySeam: seamHoles.namesBoundForBuilders.union(seamHoles.namesBoundForDeferredParameters),
 		)
 		let scopeGenerator = if let fill {
 			ScopeGenerator(fill: fill.hole, key: fill.key, functionName: fill.functionName, boundLabels: fill.boundLabels, stageCalls: seamHoles.fillStageCalls(at: sitePath), child: builtGenerator)
@@ -1314,9 +1315,10 @@ struct SeamHoles {
 		stageCallsByPath = [:]
 		fillStageCallsByPath = [:]
 		namesBoundForBuilders = []
+		namesBoundForDeferredParameters = []
 	}
 
-	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], scopeEnums: [SeamSignature.ScopeEnum]) {
+	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], scopeEnums: [SeamSignature.ScopeEnum], parameters: [SeamSignature.Parameter] = []) {
 		var routeCasesByCall = [RouteCall: (builderName: String, caseName: String)]()
 		let internalNameByEnum = Dictionary(builders.compactMap { builder -> (SeamSignature.ScopeEnum.Key, String)? in
 			if case let .scopeEnum(key) = builder.kind {
@@ -1366,11 +1368,15 @@ struct SeamHoles {
 		self.stageCallsByPath = stageCallsByPath
 		self.fillStageCallsByPath = fillStageCallsByPath
 		self.namesBoundForBuilders = namesBoundForBuilders
+		namesBoundForDeferredParameters = Set(parameters.filter(\.isDeferred).map(\.internalName))
 	}
 
 	/// The name of every builder the seam's generated initializer takes, inside the initializer, which a call its tree
 	/// makes passes up by name, and of the later stage each of its stage calls binds. Empty outside a seam's tree.
 	let namesBoundForBuilders: Set<String>
+	/// The name each deferred parameter of the seam's generated initializer binds its autoclosure to, which the
+	/// initializer's body reads. Empty outside a seam's tree, and in a public mock's.
+	let namesBoundForDeferredParameters: Set<String>
 
 	/// Whether the seam has no hole.
 	var isEmpty: Bool {
