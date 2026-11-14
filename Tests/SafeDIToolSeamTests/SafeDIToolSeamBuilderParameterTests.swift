@@ -4562,7 +4562,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// property, as for any type.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["AdditionalDirectory/Profile.swift"]):7:5: error: No @Instantiable type or extension fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["AdditionalDirectory/Profile.swift"]):7:5: error: No @Instantiable type or extension fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates. Decorate `UserService`, or an extension of it, with @Instantiable, or list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInTargetNotReadRemedy(for: "UserService"))
 			"""
 		}) {
 			try await executeSafeDIToolTest(
@@ -5412,7 +5412,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 	private static let defaultUserService = "import Deep\n\n" + fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: [])
 
 	/// How the error at a root's module tells it to list a module, under each build system that lists modules by hand.
-	private static let listModuleRemedy = "list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` with `--dependent-module-info-file-path` in another build."
+	private static let listModuleRemedy = "list its `<name>_safedi` target in this target’s `safedi_deps` under Bazel, list its module in the `dependencies:` of this target’s `SafeDI.preCompileScript` under Tuist, or list its `.safedi` file in the file you pass to `--dependent-module-info-file-path` in a custom build."
 
 	/// The source of `UserService`, a public protocol.
 	private static let userServiceProtocol = "public protocol UserService {}"

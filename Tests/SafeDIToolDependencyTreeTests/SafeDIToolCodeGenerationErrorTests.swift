@@ -46,7 +46,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["RootViewController.swift"]):5:5: error: No @Instantiable type or extension fulfills `DoesNotExist`, which @Instantiated property `networkService: NetworkService` instantiates. Decorate `DoesNotExist`, or an extension of it, with @Instantiable; list `DoesNotExist` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+				\(fixtures["RootViewController.swift"]):5:5: error: No @Instantiable type or extension fulfills `DoesNotExist`, which @Instantiated property `networkService: NetworkService` instantiates. Decorate `DoesNotExist`, or an extension of it, with @Instantiable, or list `DoesNotExist` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInTargetNotReadRemedy(for: "DoesNotExist"))
 				"""
 			},
 		) {
@@ -247,7 +247,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultNetworkService.swift"]):7:5: error: No @Instantiable type or extension fulfills `URLSession`, which @Instantiated property `urlSession: URLSession` instantiates. Decorate `URLSession`, or an extension of it, with @Instantiable; list `URLSession` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+				\(fixtures["DefaultNetworkService.swift"]):7:5: error: No @Instantiable type or extension fulfills `URLSession`, which @Instantiated property `urlSession: URLSession` instantiates. Decorate `URLSession`, or an extension of it, with @Instantiable, or list `URLSession` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInTargetNotReadRemedy(for: "URLSession"))
 				"""
 			},
 		) {
@@ -4990,9 +4990,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):7:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `missing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable; list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-				\(fixtures["Root.swift"]):7:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `missing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable; list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-				\(fixtures["Root.swift"]):9:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `otherMissing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable; list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+				\(fixtures["Child.swift"]):7:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `missing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable, or list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInTargetNotReadRemedy(for: "Missing"))
+				\(fixtures["Root.swift"]):7:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `missing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable, or list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInTargetNotReadRemedy(for: "Missing"))
+				\(fixtures["Root.swift"]):9:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `otherMissing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable, or list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInTargetNotReadRemedy(for: "Missing"))
 				"""
 			},
 		) {
@@ -6997,11 +6997,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_offersEveryIntegrationsRemedy_whenRunNeitherReadsModuleInfoNorTargetGraph() async {
+	mutating func run_offersXcodeProjectPluginAndHandRunRemedies_whenRunNeitherReadsModuleInfoNorTargetGraph() async {
 		// As the Xcode project plugin runs the tool: `scan` while planning, then `generate` with the manifest, no target
-		// graph, and no module info. SafeDI cannot tell which modules it could have read, so it names no import.
+		// graph, and no module info. Only the Xcode project plugin and a run by hand run so, and neither reads another
+		// target the way Bazel, Tuist or a SwiftPM target graph does.
 		await assertThrowsError(diagnostics: { fixtures in
-			"\(NormalizedFilePath(fixtures.compilerPath(of: "Root.swift")).path):6:5: error: No @Instantiable type or extension fulfills `FeedScreen`, which @Instantiated property `feedScreen: FeedScreen` instantiates. Decorate `FeedScreen`, or an extension of it, with @Instantiable; list `FeedScreen` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)"
+			"\(NormalizedFilePath(fixtures.compilerPath(of: "Root.swift")).path):6:5: error: No @Instantiable type or extension fulfills `FeedScreen`, which @Instantiated property `feedScreen: FeedScreen` instantiates. Decorate `FeedScreen`, or an extension of it, with @Instantiable, or list `FeedScreen` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. If a declaration that fulfills `FeedScreen` is in another target, add that target’s folder to `additionalDirectoriesToInclude` in this target’s `#SafeDIConfiguration`, or, in a SafeDITool run by hand, list the `.safedi` file of its module in the file you pass to `--dependent-module-info-file-path`."
 		}) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [

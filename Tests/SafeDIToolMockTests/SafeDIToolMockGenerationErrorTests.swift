@@ -2421,7 +2421,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):4:5: error: No @Instantiable type or extension fulfills `Unknown`, which @Instantiated property `unknown: Unknown` instantiates. Decorate `Unknown`, or an extension of it, with @Instantiable; list `Unknown` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+				\(fixtures["Child.swift"]):4:5: error: No @Instantiable type or extension fulfills `Unknown`, which @Instantiated property `unknown: Unknown` instantiates. Decorate `Unknown`, or an extension of it, with @Instantiable, or list `Unknown` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInTargetNotReadRemedy(for: "Unknown"))
 				"""
 			},
 		) {

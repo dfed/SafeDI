@@ -1382,10 +1382,10 @@ public struct Generate: AsyncParsableCommand {
 		moduleInfoOutput != nil && swiftManifest == nil
 	}
 
-	/// What this run knows of the modules a file imports that it read nothing of: under the plugin's target graph, the
-	/// modules the graph does not hold; in a run that reads or writes module info, those whose module info it was not
-	/// given. `nil` for a run that does neither, as the Xcode project plugin's, since it cannot tell which modules it
-	/// read. `SafeDI` itself declares nothing SafeDI reads.
+	/// Whether a file imports a module this run read nothing of: under the plugin's target graph, a module the graph does
+	/// not hold; in a run that reads or writes module info, one whose module info it was not given. `nil` for a run that
+	/// does neither, as the Xcode project plugin's, since it cannot tell which modules it read. `SafeDI` itself declares
+	/// nothing SafeDI reads.
 	/// It reads only the imports of the run's own files: another module's file may be out of the run's reach (Bazel's
 	/// sandbox gives `generate` only its own sources), and a path another project recorded may name a different file of
 	/// this one.
@@ -1415,9 +1415,8 @@ public struct Generate: AsyncParsableCommand {
 			// A declaration records its file as this run named it: relative to the project root, or else to the working
 			// directory, or absolute.
 			isOwnFile(filePath)
-				? importedModuleNames(ofFileAt: comparisonFilePaths.projectFilePath(of: filePath).path, conditionalCompilation: evaluator)?
-				.subtracting(moduleNamesRead.union([Self.safeDIModuleName]))
-				.sorted()
+				? importedModuleNames(ofFileAt: comparisonFilePaths.projectFilePath(of: filePath).path, conditionalCompilation: evaluator)
+				.map { !$0.isSubset(of: moduleNamesRead.union([Self.safeDIModuleName])) }
 				: nil
 		}
 	}

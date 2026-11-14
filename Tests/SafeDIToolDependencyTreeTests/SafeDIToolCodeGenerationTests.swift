@@ -13843,7 +13843,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		try FileManager.default.removeItem(at: extraHelperFile)
 
 		await assertThrowsError(
-			"\(rootFile.path):8:5: error: No @Instantiable type or extension fulfills `ExtraHelper`, which @Instantiated property `helper: ExtraHelper` instantiates. Decorate `ExtraHelper`, or an extension of it, with @Instantiable; list `ExtraHelper` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)",
+			"\(rootFile.path):8:5: error: No @Instantiable type or extension fulfills `ExtraHelper`, which @Instantiated property `helper: ExtraHelper` instantiates. Decorate `ExtraHelper`, or an extension of it, with @Instantiable, or list `ExtraHelper` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInTargetNotReadRemedy(for: "ExtraHelper"))",
 		) {
 			try await (Generate.parse([
 				swiftFileCSV.path,
