@@ -1541,7 +1541,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 	            self.logger = logger
 	        }
 
-	        private(set) var logger: (() -> Logger)?
+	        let logger: (() -> Logger)?
 	    }
 
 	    static func mock(

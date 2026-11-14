@@ -101,7 +101,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childB = childB
 		        }
 
-		        private(set) var childB: (() -> Other)?
+		        let childB: (() -> Other)?
 		    }
 
 		    static func mock(
@@ -128,9 +128,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        private(set) var childB: (() -> Other)?
+		        let childB: (() -> Other)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: ((Instantiator<Other>) -> ChildA)?
+		        let safeDIBuilder: ((Instantiator<Other>) -> ChildA)?
 		    }
 		}
 		#endif
@@ -181,8 +181,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childB = childB
 		        }
 
-		        private(set) var childA: ChildA.SafeDIMockConfiguration
-		        private(set) var childB: (() -> ChildB)?
+		        let childA: ChildA.SafeDIMockConfiguration
+		        let childB: (() -> ChildB)?
 		    }
 
 		    static func mock(
@@ -276,8 +276,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childB = childB
 		        }
 
-		        private(set) var childA: ChildA.SafeDIMockConfiguration
-		        private(set) var childB: ChildB.SafeDIMockConfiguration
+		        let childA: ChildA.SafeDIMockConfiguration
+		        let childB: ChildB.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -365,9 +365,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var childA: ((ExternalService) -> ChildA)?
-		        private(set) var childB: ((LocalService?) -> ChildB)?
-		        private(set) var service: LocalService?
+		        let childA: ((ExternalService) -> ChildA)?
+		        let childB: ((LocalService?) -> ChildB)?
+		        let service: LocalService?
 		    }
 
 		    static func mock(
@@ -452,9 +452,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var childA: ChildA.SafeDIMockConfiguration
-		        private(set) var childB: ((Service?) -> ChildB)?
-		        private(set) var service: Service?
+		        let childA: ChildA.SafeDIMockConfiguration
+		        let childB: ((Service?) -> ChildB)?
+		        let service: Service?
 		    }
 
 		    static func mock(
@@ -544,8 +544,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childB = childB
 		        }
 
-		        private(set) var childABuilder: ((String, PresenterA) -> ChildA)?
-		        private(set) var childB: ((PresenterB) -> ChildB)?
+		        let childABuilder: ((String, PresenterA) -> ChildA)?
+		        let childB: ((PresenterB) -> ChildB)?
 		    }
 
 		    static func mock(
@@ -638,8 +638,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childB = childB
 		        }
 
-		        private(set) var parentBuilder: ((String, ConfigA) -> Parent)?
-		        private(set) var childB: ((ConfigB) -> ChildB)?
+		        let parentBuilder: ((String, ConfigA) -> Parent)?
+		        let childB: ((ConfigB) -> ChildB)?
 		    }
 
 		    static func mock(
@@ -728,8 +728,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        private(set) var parent: ((EngineA) -> Parent)?
-		        private(set) var child: ((EngineB) -> Child)?
+		        let parent: ((EngineA) -> Parent)?
+		        let child: ((EngineB) -> Child)?
 		    }
 
 		    static func mock(
@@ -817,9 +817,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var childA: ((ExternalService) -> ChildA)?
-		        private(set) var childB: ((LocalService?) -> ChildB)?
-		        private(set) var service: LocalService?
+		        let childA: ((ExternalService) -> ChildA)?
+		        let childB: ((LocalService?) -> ChildB)?
+		        let service: LocalService?
 		    }
 
 		    static func mock(
@@ -894,8 +894,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childB = childB
 		        }
 
-		        private(set) var childA: ChildA.SafeDIMockConfiguration
-		        private(set) var childB: ChildB.SafeDIMockConfiguration
+		        let childA: ChildA.SafeDIMockConfiguration
+		        let childB: ChildB.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -992,9 +992,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childC = childC
 		        }
 
-		        private(set) var childA: ((ServiceA) -> ChildA)?
-		        private(set) var childB: ((ServiceB) -> ChildB)?
-		        private(set) var childC: ((ServiceC) -> ChildC)?
+		        let childA: ((ServiceA) -> ChildA)?
+		        let childB: ((ServiceB) -> ChildB)?
+		        let childC: ((ServiceC) -> ChildC)?
 		    }
 
 		    static func mock(
@@ -1110,9 +1110,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.other = other
 		        }
 
-		        private(set) var childBuilder: ((String) -> ChildA)?
-		        private(set) var parentBuilder: Parent.SafeDIMockConfiguration
-		        private(set) var other: Other.SafeDIMockConfiguration
+		        let childBuilder: ((String) -> ChildA)?
+		        let parentBuilder: Parent.SafeDIMockConfiguration
+		        let other: Other.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1249,12 +1249,12 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childC = childC
 		        }
 
-		        private(set) var service_UserService_: (() -> UserService)?
-		        private(set) var childA: ((UserService) -> ChildA)?
-		        private(set) var service_AdminService: (() -> AdminService)?
-		        private(set) var childB: ((AdminService) -> ChildB)?
-		        private(set) var service_UserService: (() -> OtherType)?
-		        private(set) var childC: ((OtherType) -> ChildC)?
+		        let service_UserService_: (() -> UserService)?
+		        let childA: ((UserService) -> ChildA)?
+		        let service_AdminService: (() -> AdminService)?
+		        let childB: ((AdminService) -> ChildB)?
+		        let service_UserService: (() -> OtherType)?
+		        let childC: ((OtherType) -> ChildC)?
 		    }
 
 		    static func mock(
@@ -1348,8 +1348,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var child: Child.SafeDIMockConfiguration
-		        private(set) var service: (() -> TypeA)?
+		        let child: Child.SafeDIMockConfiguration
+		        let service: (() -> TypeA)?
 		    }
 
 		    static func mock(
@@ -1455,8 +1455,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childB = childB
 		        }
 
-		        private(set) var childA: ChildA.SafeDIMockConfiguration
-		        private(set) var childB: ChildB.SafeDIMockConfiguration
+		        let childA: ChildA.SafeDIMockConfiguration
+		        let childB: ChildB.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1568,9 +1568,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childC = childC
 		        }
 
-		        private(set) var childA: ChildA.SafeDIMockConfiguration
-		        private(set) var childB: ChildB.SafeDIMockConfiguration
-		        private(set) var childC: ChildC.SafeDIMockConfiguration
+		        let childA: ChildA.SafeDIMockConfiguration
+		        let childB: ChildB.SafeDIMockConfiguration
+		        let childC: ChildC.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1680,10 +1680,10 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childB = childB
 		        }
 
-		        private(set) var service_UserService: (() -> UserService)?
-		        private(set) var childA: ((UserService) -> ChildA)?
-		        private(set) var service_AdminService: (() -> AdminService)?
-		        private(set) var childB: ((AdminService) -> ChildB)?
+		        let service_UserService: (() -> UserService)?
+		        let childA: ((UserService) -> ChildA)?
+		        let service_AdminService: (() -> AdminService)?
+		        let childB: ((AdminService) -> ChildB)?
 		    }
 
 		    static func mock(
@@ -1759,7 +1759,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childBuilder = childBuilder
 		        }
 
-		        private(set) var childBuilder: (() -> Child)?
+		        let childBuilder: (() -> Child)?
 		    }
 
 		    static func mock(
@@ -1831,7 +1831,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        private(set) var child: ((ExternalService) -> Child)?
+		        let child: ((ExternalService) -> Child)?
 		    }
 
 		    static func mock(
@@ -1924,11 +1924,11 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.z = z
 		        }
 
-		        private(set) var service_ServiceA: (() -> ServiceA)?
-		        private(set) var x: ((ServiceA) -> X)?
-		        private(set) var service_ServiceB: (() -> ServiceB)?
-		        private(set) var y: ((ServiceB) -> Y)?
-		        private(set) var z: ((ServiceA?) -> Z)?
+		        let service_ServiceA: (() -> ServiceA)?
+		        let x: ((ServiceA) -> X)?
+		        let service_ServiceB: (() -> ServiceB)?
+		        let y: ((ServiceB) -> Y)?
+		        let z: ((ServiceA?) -> Z)?
 		    }
 
 		    static func mock(
@@ -2027,9 +2027,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.z = z
 		        }
 
-		        private(set) var x: ((ExternalA) -> X)?
-		        private(set) var y: ((ExternalB) -> Y)?
-		        private(set) var z: ((ExternalA?) -> Z)?
+		        let x: ((ExternalA) -> X)?
+		        let y: ((ExternalB) -> Y)?
+		        let z: ((ExternalA?) -> Z)?
 		    }
 
 		    static func mock(
@@ -2138,11 +2138,11 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.y = y
 		        }
 
-		        private(set) var z: ((ServiceA?) -> Z)?
-		        private(set) var service_ServiceA: ((Z) -> ServiceA)?
-		        private(set) var x: ((ServiceA) -> X)?
-		        private(set) var service_ServiceB: (() -> ServiceB)?
-		        private(set) var y: ((ServiceB) -> Y)?
+		        let z: ((ServiceA?) -> Z)?
+		        let service_ServiceA: ((Z) -> ServiceA)?
+		        let x: ((ServiceA) -> X)?
+		        let service_ServiceB: (() -> ServiceB)?
+		        let y: ((ServiceB) -> Y)?
 		    }
 
 		    static func mock(
@@ -2224,8 +2224,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.settings = settings
 		        }
 
-		        private(set) var home: (([String]) -> Home)?
-		        private(set) var settings: ((Set<String>) -> Settings)?
+		        let home: (([String]) -> Home)?
+		        let settings: ((Set<String>) -> Settings)?
 		    }
 
 		    static func mock(
@@ -2305,9 +2305,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.b = b
 		        }
 
-		        private(set) var x_X: (() -> X)?
-		        private(set) var x_Instantiator__X: (() -> X)?
-		        private(set) var b: ((Instantiator<X>) -> B)?
+		        let x_X: (() -> X)?
+		        let x_Instantiator__X: (() -> X)?
+		        let b: ((Instantiator<X>) -> B)?
 		    }
 
 		    static func mock(
@@ -2402,10 +2402,10 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childB = childB
 		        }
 
-		        private(set) var service_Outer_Service: (() -> Outer.Service)?
-		        private(set) var childA: ((Outer.Service) -> ChildA)?
-		        private(set) var service_Service: (() -> Service)?
-		        private(set) var childB: ((Service) -> ChildB)?
+		        let service_Outer_Service: (() -> Outer.Service)?
+		        let childA: ((Outer.Service) -> ChildA)?
+		        let service_Service: (() -> Service)?
+		        let childB: ((Service) -> ChildB)?
 		    }
 
 		    static func mock(
@@ -2561,14 +2561,14 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childH = childH
 		        }
 
-		        private(set) var childA: (([String: Int]) -> ChildA)?
-		        private(set) var childB: (((Int, String)) -> ChildB)?
-		        private(set) var childC: ((any Proto) -> ChildC)?
-		        private(set) var childD: ((Proto & OtherProto) -> ChildD)?
-		        private(set) var childE: ((Int.Type) -> ChildE)?
-		        private(set) var childF: ((Int?) -> ChildF)?
-		        private(set) var childG: ((Result<Int, any Error>) -> ChildG)?
-		        private(set) var childH: ((Outer.Inner) -> ChildH)?
+		        let childA: (([String: Int]) -> ChildA)?
+		        let childB: (((Int, String)) -> ChildB)?
+		        let childC: ((any Proto) -> ChildC)?
+		        let childD: ((Proto & OtherProto) -> ChildD)?
+		        let childE: ((Int.Type) -> ChildE)?
+		        let childF: ((Int?) -> ChildF)?
+		        let childG: ((Result<Int, any Error>) -> ChildG)?
+		        let childH: ((Outer.Inner) -> ChildH)?
 		    }
 
 		    static func mock(
@@ -2694,9 +2694,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childC = childC
 		        }
 
-		        private(set) var childA: ((@escaping () -> Void) -> ChildA)?
-		        private(set) var childB: ((@escaping @Sendable () -> Void) -> ChildB)?
-		        private(set) var childC: ((@escaping (Int) async throws -> String) -> ChildC)?
+		        let childA: ((@escaping () -> Void) -> ChildA)?
+		        let childB: ((@escaping @Sendable () -> Void) -> ChildB)?
+		        let childC: ((@escaping (Int) async throws -> String) -> ChildC)?
 		    }
 
 		    static func mock(
@@ -2789,8 +2789,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childB = childB
 		        }
 
-		        private(set) var childA: ((Outer.Inner) -> ChildA)?
-		        private(set) var childB: ((Outer_Inner) -> ChildB)?
+		        let childA: ((Outer.Inner) -> ChildA)?
+		        let childB: ((Outer_Inner) -> ChildB)?
 		    }
 
 		    static func mock(
@@ -2868,8 +2868,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.childB = childB
 		        }
 
-		        private(set) var childA: ((String) -> ChildA)?
-		        private(set) var childB: ((Int) -> ChildB)?
+		        let childA: ((String) -> ChildA)?
+		        let childB: ((Int) -> ChildB)?
 		    }
 
 		    static func mock(
@@ -2943,8 +2943,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.draft = draft
 		        }
 
-		        private(set) var editorBuilder: ((Draft?) -> Editor)?
-		        private(set) var draft: Draft?
+		        let editorBuilder: ((Draft?) -> Editor)?
+		        let draft: Draft?
 		    }
 
 		    static func mock(
@@ -3013,8 +3013,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.editor = editor
 		        }
 
-		        private(set) var service: (() -> Service)?
-		        private(set) var editor: ((Service) -> Editor)?
+		        let service: (() -> Service)?
+		        let editor: ((Service) -> Editor)?
 		    }
 
 		    static func mock(
@@ -3079,8 +3079,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.editor = editor
 		        }
 
-		        private(set) var service: (() -> Service)?
-		        private(set) var editor: ((Service?) -> Editor)?
+		        let service: (() -> Service)?
+		        let editor: ((Service?) -> Editor)?
 		    }
 
 		    static func mock(
@@ -3145,8 +3145,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.editor = editor
 		        }
 
-		        private(set) var service: (() -> Service)?
-		        private(set) var editor: ((Service?) -> Editor)?
+		        let service: (() -> Service)?
+		        let editor: ((Service?) -> Editor)?
 		    }
 
 		    static func mock(
@@ -3248,12 +3248,12 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var service_ServiceA: (() -> ServiceA)?
-		        private(set) var childA: ((ServiceA) -> ChildA)?
-		        private(set) var service_ServiceB: (() -> ServiceB)?
-		        private(set) var childB: ((ServiceB) -> ChildB)?
-		        private(set) var childC: ((Draft?) -> ChildC)?
-		        private(set) var service: Draft?
+		        let service_ServiceA: (() -> ServiceA)?
+		        let childA: ((ServiceA) -> ChildA)?
+		        let service_ServiceB: (() -> ServiceB)?
+		        let childB: ((ServiceB) -> ChildB)?
+		        let childC: ((Draft?) -> ChildC)?
+		        let service: Draft?
 		    }
 
 		    static func mock(
@@ -3336,9 +3336,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.user_Draft = user_Draft
 		        }
 
-		        private(set) var user: (() -> User)?
-		        private(set) var editor: ((User) -> Editor)?
-		        private(set) var user_Draft: Draft?
+		        let user: (() -> User)?
+		        let editor: ((User) -> Editor)?
+		        let user_Draft: Draft?
 		    }
 
 		    static func mock(
@@ -3407,9 +3407,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.user_Draft = user_Draft
 		        }
 
-		        private(set) var user: (() -> User)?
-		        private(set) var editor: ((Instantiator<User>) -> Editor)?
-		        private(set) var user_Draft: Draft?
+		        let user: (() -> User)?
+		        let editor: ((Instantiator<User>) -> Editor)?
+		        let user_Draft: Draft?
 		    }
 
 		    static func mock(
@@ -3494,11 +3494,11 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.user_Note = user_Note
 		        }
 
-		        private(set) var notes: ((Note?) -> Notes)?
-		        private(set) var user: (() -> User)?
-		        private(set) var editor: ((User) -> Editor)?
-		        private(set) var user_Draft: Draft?
-		        private(set) var user_Note: Note?
+		        let notes: ((Note?) -> Notes)?
+		        let user: (() -> User)?
+		        let editor: ((User) -> Editor)?
+		        let user_Draft: Draft?
+		        let user_Note: Note?
 		    }
 
 		    static func mock(
@@ -3568,8 +3568,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.user_Draft = user_Draft
 		        }
 
-		        private(set) var editorBuilder: ((Draft?) -> Editor)?
-		        private(set) var user_Draft: Draft?
+		        let editorBuilder: ((Draft?) -> Editor)?
+		        let user_Draft: Draft?
 		    }
 
 		    static func mock(
@@ -3637,9 +3637,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.user_User = user_User
 		        }
 
-		        private(set) var editorBuilder: ((Draft?) -> Editor)?
-		        private(set) var user_Draft: Draft?
-		        private(set) var user_User: User?
+		        let editorBuilder: ((Draft?) -> Editor)?
+		        let user_Draft: Draft?
+		        let user_User: User?
 		    }
 
 		    static func mock(
@@ -3725,11 +3725,11 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.user_User = user_User
 		        }
 
-		        private(set) var editorBuilder: ((Draft?) -> Editor)?
-		        private(set) var notesBuilder: ((Note?) -> Notes)?
-		        private(set) var user_Draft: Draft?
-		        private(set) var user_Note: Note?
-		        private(set) var user_User: User?
+		        let editorBuilder: ((Draft?) -> Editor)?
+		        let notesBuilder: ((Note?) -> Notes)?
+		        let user_Draft: Draft?
+		        let user_Note: Note?
+		        let user_User: User?
 		    }
 
 		    static func mock(
@@ -3802,8 +3802,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.editor_Draft = editor_Draft
 		        }
 
-		        private(set) var editor: ((Draft?) -> Editor)?
-		        private(set) var editor_Draft: Draft?
+		        let editor: ((Draft?) -> Editor)?
+		        let editor_Draft: Draft?
 		    }
 
 		    static func mock(
@@ -3874,8 +3874,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.editor_Draft = editor_Draft
 		        }
 
-		        private(set) var editor: Editor.SafeDIMockConfiguration
-		        private(set) var editor_Draft: Draft?
+		        let editor: Editor.SafeDIMockConfiguration
+		        let editor_Draft: Draft?
 		    }
 
 		    static func mock(
@@ -3953,9 +3953,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.user = user
 		        }
 
-		        private(set) var account: (() -> Account)?
-		        private(set) var editor: ((Draft?) -> Editor)?
-		        private(set) var user: Draft?
+		        let account: (() -> Account)?
+		        let editor: ((Draft?) -> Editor)?
+		        let user: Draft?
 		    }
 
 		    static func mock(
@@ -4045,9 +4045,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.user_Draft = user_Draft
 		        }
 
-		        private(set) var composer: Composer.SafeDIMockConfiguration
-		        private(set) var editor: ((Draft?) -> Editor)?
-		        private(set) var user_Draft: Draft?
+		        let composer: Composer.SafeDIMockConfiguration
+		        let editor: ((Draft?) -> Editor)?
+		        let user_Draft: Draft?
 		    }
 
 		    static func mock(
@@ -4145,9 +4145,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.user_Draft = user_Draft
 		        }
 
-		        private(set) var composer: Composer.SafeDIMockConfiguration
-		        private(set) var editor: ((Draft?) -> Editor)?
-		        private(set) var user_Draft: Draft?
+		        let composer: Composer.SafeDIMockConfiguration
+		        let editor: ((Draft?) -> Editor)?
+		        let user_Draft: Draft?
 		    }
 
 		    static func mock(
@@ -4243,9 +4243,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.analytics_Analytics = analytics_Analytics
 		        }
 
-		        private(set) var home: ((LazilyInstantiated<Analytics>?) -> Home)?
-		        private(set) var settings: ((Analytics?) -> Settings)?
-		        private(set) var analytics_Analytics: Analytics?
+		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        let settings: ((Analytics?) -> Settings)?
+		        let analytics_Analytics: Analytics?
 		    }
 
 		    static func mock(
@@ -4333,9 +4333,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.user_Draft = user_Draft
 		        }
 
-		        private(set) var editorBuilder: Editor.SafeDIMockConfiguration
-		        private(set) var notes: ((Draft?) -> Notes)?
-		        private(set) var user_Draft: Draft?
+		        let editorBuilder: Editor.SafeDIMockConfiguration
+		        let notes: ((Draft?) -> Notes)?
+		        let user_Draft: Draft?
 		    }
 
 		    static func mock(
@@ -4417,8 +4417,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.editor = editor
 		        }
 
-		        private(set) var user: (() -> User)?
-		        private(set) var editor: ((User) -> Editor)?
+		        let user: (() -> User)?
+		        let editor: ((User) -> Editor)?
 		    }
 
 		    static func mock(
@@ -4487,8 +4487,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.editor = editor
 		        }
 
-		        private(set) var service: (() -> ConcreteService)?
-		        private(set) var editor: ((ConcreteService) -> Editor)?
+		        let service: (() -> ConcreteService)?
+		        let editor: ((ConcreteService) -> Editor)?
 		    }
 
 		    static func mock(
@@ -4555,8 +4555,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.editor = editor
 		        }
 
-		        private(set) var user: (() -> User)?
-		        private(set) var editor: ((Instantiator<User>) -> Editor)?
+		        let user: (() -> User)?
+		        let editor: ((Instantiator<User>) -> Editor)?
 		    }
 
 		    static func mock(
@@ -4637,9 +4637,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.notes = notes
 		        }
 
-		        private(set) var user: (() -> User)?
-		        private(set) var editor: ((User) -> Editor)?
-		        private(set) var notes: ((Note) -> Notes)?
+		        let user: (() -> User)?
+		        let editor: ((User) -> Editor)?
+		        let notes: ((Note) -> Notes)?
 		    }
 
 		    static func mock(
@@ -4704,7 +4704,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.editor = editor
 		        }
 
-		        private(set) var editor: ((Draft) -> Editor)?
+		        let editor: ((Draft) -> Editor)?
 		    }
 
 		    static func mock(
@@ -4773,7 +4773,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.editor = editor
 		        }
 
-		        private(set) var editor: Editor.SafeDIMockConfiguration
+		        let editor: Editor.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -4874,10 +4874,10 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var sessionBuilder: Session.SafeDIMockConfiguration
-		        private(set) var editor: Editor.SafeDIMockConfiguration
-		        private(set) var profileViewBuilder: ProfileView.SafeDIMockConfiguration
-		        private(set) var service: Service?
+		        let sessionBuilder: Session.SafeDIMockConfiguration
+		        let editor: Editor.SafeDIMockConfiguration
+		        let profileViewBuilder: ProfileView.SafeDIMockConfiguration
+		        let service: Service?
 		    }
 
 		    static func mock(
@@ -4941,7 +4941,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: ((Instantiator<ProfileView>, ServiceProtocol?, Editor?, Instantiator<Session>?) -> ProfileView)?
+		        let safeDIBuilder: ((Instantiator<ProfileView>, ServiceProtocol?, Editor?, Instantiator<Session>?) -> ProfileView)?
 		    }
 		}
 		#endif
@@ -5011,9 +5011,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.y = y
 		        }
 
-		        private(set) var x_A: (() -> A)?
-		        private(set) var x_C: (() -> C)?
-		        private(set) var y: ((C) -> B)?
+		        let x_A: (() -> A)?
+		        let x_C: (() -> C)?
+		        let y: ((C) -> B)?
 		    }
 
 		    static func mock(
@@ -5089,9 +5089,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.x_A = x_A
 		        }
 
-		        private(set) var x_C: (() -> C)?
-		        private(set) var b: ((C) -> B)?
-		        private(set) var x_A: ((B) -> A)?
+		        let x_C: (() -> C)?
+		        let b: ((C) -> B)?
+		        let x_A: ((B) -> A)?
 		    }
 
 		    static func mock(
@@ -5168,9 +5168,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.xBuilder_A = xBuilder_A
 		        }
 
-		        private(set) var xBuilder_C: (() -> C)?
-		        private(set) var b: ((Instantiator<C>) -> B)?
-		        private(set) var xBuilder_A: ((B) -> A)?
+		        let xBuilder_C: (() -> C)?
+		        let b: ((Instantiator<C>) -> B)?
+		        let xBuilder_A: ((B) -> A)?
 		    }
 
 		    static func mock(
@@ -5263,9 +5263,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.other = other
 		        }
 
-		        private(set) var nodeBuilder_Node: Node.SafeDIMockConfiguration
-		        private(set) var nodeBuilder_Leaf: (() -> Leaf)?
-		        private(set) var other: ((Instantiator<Leaf>) -> Other)?
+		        let nodeBuilder_Node: Node.SafeDIMockConfiguration
+		        let nodeBuilder_Leaf: (() -> Leaf)?
+		        let other: ((Instantiator<Leaf>) -> Other)?
 		    }
 
 		    static func mock(
@@ -5351,9 +5351,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.x_A = x_A
 		        }
 
-		        private(set) var x_B: (() -> B)?
-		        private(set) var lazyX: ((B) -> A)?
-		        private(set) var x_A: ((B) -> A)?
+		        let x_B: (() -> B)?
+		        let lazyX: ((B) -> A)?
+		        let x_A: ((B) -> A)?
 		    }
 
 		    static func mock(
@@ -5449,10 +5449,10 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.z = z
 		        }
 
-		        private(set) var x_A: (() -> A)?
-		        private(set) var x_C: (() -> C)?
-		        private(set) var y: ((C) -> B)?
-		        private(set) var z: ((A) -> Z)?
+		        let x_A: (() -> A)?
+		        let x_C: (() -> C)?
+		        let y: ((C) -> B)?
+		        let z: ((A) -> Z)?
 		    }
 
 		    static func mock(
@@ -5557,8 +5557,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.guestView = guestView
 		        }
 
-		        private(set) var accountView: ((AccountSession) -> AccountView)?
-		        private(set) var guestView: GuestView.SafeDIMockConfiguration
+		        let accountView: ((AccountSession) -> AccountView)?
+		        let guestView: GuestView.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -5662,8 +5662,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.guestViewBuilder = guestViewBuilder
 		        }
 
-		        private(set) var accountView: ((AccountSession) -> AccountView)?
-		        private(set) var guestViewBuilder: GuestView.SafeDIMockConfiguration
+		        let accountView: ((AccountSession) -> AccountView)?
+		        let guestViewBuilder: GuestView.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -5788,10 +5788,10 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.user = user
 		        }
 
-		        private(set) var account: (() -> Account)?
-		        private(set) var home: Home.SafeDIMockConfiguration
-		        private(set) var editor: ((Draft?) -> Editor)?
-		        private(set) var user: Draft?
+		        let account: (() -> Account)?
+		        let home: Home.SafeDIMockConfiguration
+		        let editor: ((Draft?) -> Editor)?
+		        let user: Draft?
 		    }
 
 		    static func mock(
@@ -5886,7 +5886,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.garage = garage
 		        }
 
-		        private(set) var garage: Garage.SafeDIMockConfiguration
+		        let garage: Garage.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -5968,8 +5968,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.boat = boat
 		        }
 
-		        private(set) var car: ((Engine) -> Car)?
-		        private(set) var boat: ((Motor) -> Boat)?
+		        let car: ((Engine) -> Car)?
+		        let boat: ((Motor) -> Boat)?
 		    }
 
 		    static func mock(
@@ -6036,7 +6036,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.boat = boat
 		        }
 
-		        private(set) var boat: ((Motor) -> Boat)?
+		        let boat: ((Motor) -> Boat)?
 		    }
 
 		    static func mock(
@@ -6103,7 +6103,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.boat = boat
 		        }
 
-		        private(set) var boat: ((Motor) -> Boat)?
+		        let boat: ((Motor) -> Boat)?
 		    }
 
 		    static func mock(
@@ -6185,7 +6185,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.garage = garage
 		        }
 
-		        private(set) var garage: Garage.SafeDIMockConfiguration
+		        let garage: Garage.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -6269,8 +6269,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.garage = garage
 		        }
 
-		        private(set) var engine: (() -> Toolbox)?
-		        private(set) var garage: ((Toolbox) -> Garage)?
+		        let engine: (() -> Toolbox)?
+		        let garage: ((Toolbox) -> Garage)?
 		    }
 
 		    static func mock(
@@ -6344,8 +6344,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.engine = engine
 		        }
 
-		        private(set) var boat: ((Motor) -> Boat)?
-		        private(set) var engine: Toolbox?
+		        let boat: ((Motor) -> Boat)?
+		        let engine: Toolbox?
 		    }
 
 		    static func mock(
@@ -6434,10 +6434,10 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.consumerB = consumerB
 		        }
 
-		        private(set) var x_Xyz: (() -> Xyz)?
-		        private(set) var consumerA: ((Xyz) -> ConsumerA)?
-		        private(set) var x_Instantiator__Xyz: (() -> Xyz)?
-		        private(set) var consumerB: ((Instantiator<Xyz>) -> ConsumerB)?
+		        let x_Xyz: (() -> Xyz)?
+		        let consumerA: ((Xyz) -> ConsumerA)?
+		        let x_Instantiator__Xyz: (() -> Xyz)?
+		        let consumerB: ((Instantiator<Xyz>) -> ConsumerB)?
 		    }
 
 		    static func mock(
@@ -6577,12 +6577,12 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.consumerC = consumerC
 		        }
 
-		        private(set) var x_Xyz: (() -> Xyz)?
-		        private(set) var consumerA: ((Xyz) -> ConsumerA)?
-		        private(set) var x_Instantiator__Xyz: (() -> Xyz)?
-		        private(set) var consumerB: ((Instantiator<Xyz>) -> ConsumerB)?
-		        private(set) var x_AnyXyz: (() -> AnyXyz)?
-		        private(set) var consumerC: ((AnyXyzFactory) -> ConsumerC)?
+		        let x_Xyz: (() -> Xyz)?
+		        let consumerA: ((Xyz) -> ConsumerA)?
+		        let x_Instantiator__Xyz: (() -> Xyz)?
+		        let consumerB: ((Instantiator<Xyz>) -> ConsumerB)?
+		        let x_AnyXyz: (() -> AnyXyz)?
+		        let consumerC: ((AnyXyzFactory) -> ConsumerC)?
 		    }
 
 		    static func mock(
@@ -6690,9 +6690,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.consumerB = consumerB
 		        }
 
-		        private(set) var x: (() -> Xyz)?
-		        private(set) var consumerA: ((Xyz) -> ConsumerA)?
-		        private(set) var consumerB: ((Xyz?) -> ConsumerB)?
+		        let x: (() -> Xyz)?
+		        let consumerA: ((Xyz) -> ConsumerA)?
+		        let consumerB: ((Xyz?) -> ConsumerB)?
 		    }
 
 		    static func mock(
@@ -6778,9 +6778,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.consumerB = consumerB
 		        }
 
-		        private(set) var x: (() -> Service)?
-		        private(set) var consumerA: ((any Service) -> ConsumerA)?
-		        private(set) var consumerB: (((any Service)?) -> ConsumerB)?
+		        let x: (() -> Service)?
+		        let consumerA: ((any Service) -> ConsumerA)?
+		        let consumerB: (((any Service)?) -> ConsumerB)?
 		    }
 
 		    static func mock(
@@ -6866,10 +6866,10 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.consumerB = consumerB
 		        }
 
-		        private(set) var x_Xyz_Optional: (() -> Xyz)?
-		        private(set) var consumerA: ((Xyz?) -> ConsumerA)?
-		        private(set) var x_Instantiator__Xyz_Optional: (() -> Xyz)?
-		        private(set) var consumerB: ((Instantiator<Xyz>?) -> ConsumerB)?
+		        let x_Xyz_Optional: (() -> Xyz)?
+		        let consumerA: ((Xyz?) -> ConsumerA)?
+		        let x_Instantiator__Xyz_Optional: (() -> Xyz)?
+		        let consumerB: ((Instantiator<Xyz>?) -> ConsumerB)?
 		    }
 
 		    static func mock(
@@ -6983,11 +6983,11 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.consumerC = consumerC
 		        }
 
-		        private(set) var x_LazilyInstantiated__Xyz: (() -> Xyz)?
-		        private(set) var consumerA: ((LazilyInstantiated<Xyz>) -> ConsumerA)?
-		        private(set) var consumerB: ((Xyz) -> ConsumerB)?
-		        private(set) var x_Instantiator__Xyz: (() -> Xyz)?
-		        private(set) var consumerC: ((Instantiator<Xyz>) -> ConsumerC)?
+		        let x_LazilyInstantiated__Xyz: (() -> Xyz)?
+		        let consumerA: ((LazilyInstantiated<Xyz>) -> ConsumerA)?
+		        let consumerB: ((Xyz) -> ConsumerB)?
+		        let x_Instantiator__Xyz: (() -> Xyz)?
+		        let consumerC: ((Instantiator<Xyz>) -> ConsumerC)?
 		    }
 
 		    static func mock(
@@ -7110,10 +7110,10 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.consumerC = consumerC
 		        }
 
-		        private(set) var consumerA: ((LazilyInstantiated<Xyz>) -> ConsumerA)?
-		        private(set) var consumerB: ((Xyz) -> ConsumerB)?
-		        private(set) var x: ((String) -> Xyz)?
-		        private(set) var consumerC: ((Instantiator<Xyz>) -> ConsumerC)?
+		        let consumerA: ((LazilyInstantiated<Xyz>) -> ConsumerA)?
+		        let consumerB: ((Xyz) -> ConsumerB)?
+		        let x: ((String) -> Xyz)?
+		        let consumerC: ((Instantiator<Xyz>) -> ConsumerC)?
 		    }
 
 		    static func mock(
@@ -7199,8 +7199,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        private(set) var x: (() -> Xyz)?
-		        private(set) var child: ((LazilyInstantiated<Xyz>?) -> Child)?
+		        let x: (() -> Xyz)?
+		        let child: ((LazilyInstantiated<Xyz>?) -> Child)?
 		    }
 
 		    static func mock(
@@ -7280,8 +7280,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.consumerB = consumerB
 		        }
 
-		        private(set) var consumerA: ((Xyz) -> ConsumerA)?
-		        private(set) var consumerB: ((Instantiator<Xyz>) -> ConsumerB)?
+		        let consumerA: ((Xyz) -> ConsumerA)?
+		        let consumerB: ((Instantiator<Xyz>) -> ConsumerB)?
 		    }
 
 		    static func mock(
@@ -7377,10 +7377,10 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.x_Instantiator__Xyz = x_Instantiator__Xyz
 		        }
 
-		        private(set) var consumerA: ((Xyz?) -> ConsumerA)?
-		        private(set) var consumerB: ((Instantiator<Xyz>?) -> ConsumerB)?
-		        private(set) var x_Xyz: Xyz?
-		        private(set) var x_Instantiator__Xyz: Instantiator<Xyz>?
+		        let consumerA: ((Xyz?) -> ConsumerA)?
+		        let consumerB: ((Instantiator<Xyz>?) -> ConsumerB)?
+		        let x_Xyz: Xyz?
+		        let x_Instantiator__Xyz: Instantiator<Xyz>?
 		    }
 
 		    static func mock(
@@ -7457,8 +7457,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.feed = feed
 		        }
 
-		        private(set) var session_Instantiator__Session: (() -> Session)?
-		        private(set) var feed: ((Instantiator<Session>) -> Feed)?
+		        let session_Instantiator__Session: (() -> Session)?
+		        let feed: ((Instantiator<Session>) -> Feed)?
 		    }
 
 		    static func mock(
@@ -7541,9 +7541,9 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.feed = feed
 		        }
 
-		        private(set) var session_Instantiator__Session: (() -> Session)?
-		        private(set) var cache: ((Session?) -> Cache)?
-		        private(set) var feed: ((Instantiator<Session>, Cache) -> Feed)?
+		        let session_Instantiator__Session: (() -> Session)?
+		        let cache: ((Session?) -> Cache)?
+		        let feed: ((Instantiator<Session>, Cache) -> Feed)?
 		    }
 
 		    static func mock(
@@ -7617,8 +7617,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.feed = feed
 		        }
 
-		        private(set) var session_Instantiator__Session: (() -> Session)?
-		        private(set) var feed: ((Instantiator<Session>) -> Feed)?
+		        let session_Instantiator__Session: (() -> Session)?
+		        let feed: ((Instantiator<Session>) -> Feed)?
 		    }
 
 		    static func mock(
@@ -7694,8 +7694,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.editor = editor
 		        }
 
-		        private(set) var user_Draft: (() -> Draft)?
-		        private(set) var editor: ((Draft) -> Editor)?
+		        let user_Draft: (() -> Draft)?
+		        let editor: ((Draft) -> Editor)?
 		    }
 
 		    static func mock(
@@ -7764,8 +7764,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.feed = feed
 		        }
 
-		        private(set) var session_Session: (() -> Session)?
-		        private(set) var feed: ((Session) -> Feed)?
+		        let session_Session: (() -> Session)?
+		        let feed: ((Session) -> Feed)?
 		    }
 
 		    static func mock(
@@ -7855,10 +7855,10 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
-		        private(set) var feed: Feed.SafeDIMockConfiguration
-		        private(set) var session_Instantiator__Session: (() -> Session)?
-		        private(set) var cache: ((Instantiator<Session>) -> Cache)?
-		        private(set) var session_LazilyInstantiated__Session: Session?
+		        let feed: Feed.SafeDIMockConfiguration
+		        let session_Instantiator__Session: (() -> Session)?
+		        let cache: ((Instantiator<Session>) -> Cache)?
+		        let session_LazilyInstantiated__Session: Session?
 		    }
 
 		    static func mock(
@@ -7954,8 +7954,8 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            self.feed = feed
 		        }
 
-		        private(set) var session_Instantiator__Session: (() -> Session)?
-		        private(set) var feed: Feed.SafeDIMockConfiguration
+		        let session_Instantiator__Session: (() -> Session)?
+		        let feed: Feed.SafeDIMockConfiguration
 		    }
 
 		    static func mock(

@@ -178,8 +178,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.t3Builder = t3Builder
 		        }
 
-		        private(set) var session: (() -> Session)?
-		        private(set) var t3Builder: T3.SafeDIMockConfiguration
+		        let session: (() -> Session)?
+		        let t3Builder: T3.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -456,9 +456,9 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.logger = logger
 		        }
 
-		        private(set) var session: (() -> Session)?
-		        private(set) var t3Builder: T3.SafeDIMockConfiguration
-		        private(set) var logger: ((Instantiator<T3>?) -> Logger)?
+		        let session: (() -> Session)?
+		        let t3Builder: T3.SafeDIMockConfiguration
+		        let logger: ((Instantiator<T3>?) -> Logger)?
 		    }
 
 		    static func mock(
@@ -975,8 +975,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
-		        private(set) var session: (() -> Session)?
-		        private(set) var screenBuilder: Screen.SafeDIMockConfiguration
+		        let session: (() -> Session)?
+		        let screenBuilder: Screen.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1064,8 +1064,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
-		        private(set) var session: (() -> Session)?
-		        private(set) var screenBuilder: Screen.SafeDIMockConfiguration
+		        let session: (() -> Session)?
+		        let screenBuilder: Screen.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1185,8 +1185,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
-		        private(set) var session: (() -> Session)?
-		        private(set) var screenBuilder: Screen.SafeDIMockConfiguration
+		        let session: (() -> Session)?
+		        let screenBuilder: Screen.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1297,8 +1297,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
-		        private(set) var session: (() -> Session)?
-		        private(set) var screenBuilder: Screen.SafeDIMockConfiguration
+		        let session: (() -> Session)?
+		        let screenBuilder: Screen.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1471,9 +1471,9 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			            self.t1Builder_T1 = t1Builder_T1
 			        }
 
-			        private(set) var t1Builder_Instantiator__T1: (() -> T1)?
-			        private(set) var t3Builder: T3.SafeDIMockConfiguration
-			        private(set) var t1Builder_T1: (() -> T1)?
+			        let t1Builder_Instantiator__T1: (() -> T1)?
+			        let t3Builder: T3.SafeDIMockConfiguration
+			        let t1Builder_T1: (() -> T1)?
 			    }
 
 			    static func mock(
@@ -1519,8 +1519,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			            self.t3Builder = t3Builder
 			        }
 
-			        private(set) var t1Builder: (() -> T1)?
-			        private(set) var t3Builder: T3.SafeDIMockConfiguration
+			        let t1Builder: (() -> T1)?
+			        let t3Builder: T3.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -1611,7 +1611,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.hostBuilder = hostBuilder
 		        }
 
-		        private(set) var hostBuilder: Host.SafeDIMockConfiguration
+		        let hostBuilder: Host.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1662,7 +1662,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			            self.hostBuilder = hostBuilder
 			        }
 
-			        private(set) var hostBuilder: HostOverrides
+			        let hostBuilder: HostOverrides
 			    }
 
 			    struct HostOverrides {
@@ -1781,8 +1781,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        private(set) var renamed: ((X?) -> X)?
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
+		        let renamed: ((X?) -> X)?
+		        let aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1873,8 +1873,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        private(set) var renamed: ((X?) -> X)?
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
+		        let renamed: ((X?) -> X)?
+		        let aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1967,8 +1967,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        private(set) var x0: ((X?) -> X)?
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
+		        let x0: ((X?) -> X)?
+		        let aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -2061,8 +2061,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.renamed = renamed
 		        }
 
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
-		        private(set) var renamed: X?
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: X?
 		    }
 
 		    static func mock(
@@ -2152,8 +2152,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.renamed = renamed
 		        }
 
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
-		        private(set) var renamed: Instantiator<X>?
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: Instantiator<X>?
 		    }
 
 		    static func mock(
@@ -2242,8 +2242,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.renamed = renamed
 		        }
 
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
-		        private(set) var renamed: (any XProtocol)?
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: (any XProtocol)?
 		    }
 
 		    static func mock(
@@ -2380,8 +2380,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.renamed = renamed
 		        }
 
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
-		        private(set) var renamed: X?
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: X?
 		    }
 
 		    static func mock(
@@ -2494,7 +2494,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.renamed = renamed
 		        }
 
-		        private(set) var renamed: X.SafeDIMockConfiguration
+		        let renamed: X.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -2644,8 +2644,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.renamed = renamed
 		        }
 
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
-		        private(set) var renamed: X?
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: X?
 		    }
 
 		    static func mock(
@@ -2729,8 +2729,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        private(set) var renamed: ((X?) -> X)?
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
+		        let renamed: ((X?) -> X)?
+		        let aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -2824,8 +2824,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        private(set) var renamed: X.SafeDIMockConfiguration
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
+		        let renamed: X.SafeDIMockConfiguration
+		        let aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -2922,8 +2922,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        private(set) var renamed: ((X?) -> X)?
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
+		        let renamed: ((X?) -> X)?
+		        let aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -3025,8 +3025,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        private(set) var renamed: ((X?) -> X)?
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
+		        let renamed: ((X?) -> X)?
+		        let aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -3162,8 +3162,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.renamed = renamed
 		        }
 
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
-		        private(set) var renamed: X?
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: X?
 		    }
 
 		    static func mock(
@@ -3288,8 +3288,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        private(set) var renamed: ((X?) -> X)?
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
+		        let renamed: ((X?) -> X)?
+		        let aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -3416,8 +3416,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.renamed = renamed
 		        }
 
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
-		        private(set) var renamed: X?
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: X?
 		    }
 
 		    static func mock(
@@ -3539,8 +3539,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        private(set) var renamed: ((X?) -> X)?
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
+		        let renamed: ((X?) -> X)?
+		        let aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -3668,7 +3668,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.renamed = renamed
 		        }
 
-		        private(set) var renamed: X.SafeDIMockConfiguration
+		        let renamed: X.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -3768,8 +3768,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        private(set) var other: ((X?) -> X)?
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
+		        let other: ((X?) -> X)?
+		        let aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -4837,8 +4837,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		        }
 
-		        private(set) var renamed: ((X?) -> X)?
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
+		        let renamed: ((X?) -> X)?
+		        let aBuilder: A.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -4960,8 +4960,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.renamed = renamed
 		        }
 
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
-		        private(set) var renamed: \(type)?
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: \(type)?
 		    }
 
 		    static func mock(
@@ -5090,8 +5090,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            self.renamed = renamed
 		        }
 
-		        private(set) var aBuilder: A.SafeDIMockConfiguration
-		        private(set) var renamed: X?
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: X?
 		    }
 
 		    static func mock(

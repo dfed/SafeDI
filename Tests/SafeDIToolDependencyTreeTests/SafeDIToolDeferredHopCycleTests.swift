@@ -536,7 +536,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.a = a
 			        }
 
-			        private(set) var a: A.SafeDIMockConfiguration
+			        let a: A.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -601,7 +601,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.a = a
 			        }
 
-			        private(set) var a: A.SafeDIMockConfiguration
+			        let a: A.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -694,8 +694,8 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.b = b
 			        }
 
-			        private(set) var session: (() -> Session)?
-			        private(set) var b: B.SafeDIMockConfiguration
+			        let session: (() -> Session)?
+			        let b: B.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -733,9 +733,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var b: B.SafeDIMockConfiguration
+			        let b: B.SafeDIMockConfiguration
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((B) -> A)?
+			        let safeDIBuilder: ((B) -> A)?
 			    }
 			}
 			#endif
@@ -753,9 +753,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var session: (() -> Session)?
+			        let session: (() -> Session)?
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((Session, A) -> C)?
+			        let safeDIBuilder: ((Session, A) -> C)?
 			    }
 			}
 
@@ -770,9 +770,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var cBuilder: C.SafeDIMockConfiguration
+			        let cBuilder: C.SafeDIMockConfiguration
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((Session, Instantiator<C>) -> B)?
+			        let safeDIBuilder: ((Session, Instantiator<C>) -> B)?
 			    }
 			}
 			#endif
@@ -1014,7 +1014,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.b = b
 			        }
 
-			        private(set) var b: B.SafeDIMockConfiguration
+			        let b: B.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -1050,9 +1050,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var b: B.SafeDIMockConfiguration
+			        let b: B.SafeDIMockConfiguration
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((B) -> A)?
+			        let safeDIBuilder: ((B) -> A)?
 			    }
 			}
 			#endif
@@ -1101,7 +1101,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.a = a
 			        }
 
-			        private(set) var a: A.SafeDIMockConfiguration
+			        let a: A.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -1136,7 +1136,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			        }
 
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((A) -> C)?
+			        let safeDIBuilder: ((A) -> C)?
 			    }
 			}
 			#endif
@@ -1154,9 +1154,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var cBuilder: C.SafeDIMockConfiguration
+			        let cBuilder: C.SafeDIMockConfiguration
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((Instantiator<C>) -> B)?
+			        let safeDIBuilder: ((Instantiator<C>) -> B)?
 			    }
 			}
 
@@ -1171,9 +1171,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var b: B.SafeDIMockConfiguration
+			        let b: B.SafeDIMockConfiguration
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((B) -> A)?
+			        let safeDIBuilder: ((B) -> A)?
 			    }
 			}
 			#endif
@@ -1220,7 +1220,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.cBuilder = cBuilder
 			        }
 
-			        private(set) var cBuilder: C.SafeDIMockConfiguration
+			        let cBuilder: C.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -1256,9 +1256,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var cBuilder: C.SafeDIMockConfiguration
+			        let cBuilder: C.SafeDIMockConfiguration
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((Instantiator<C>) -> B)?
+			        let safeDIBuilder: ((Instantiator<C>) -> B)?
 			    }
 			}
 			#endif
@@ -1276,9 +1276,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var b: B.SafeDIMockConfiguration
+			        let b: B.SafeDIMockConfiguration
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((B) -> A)?
+			        let safeDIBuilder: ((B) -> A)?
 			    }
 			}
 
@@ -1292,7 +1292,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			        }
 
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((A) -> C)?
+			        let safeDIBuilder: ((A) -> C)?
 			    }
 			}
 			#endif
@@ -1324,7 +1324,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.b = b
 			        }
 
-			        private(set) var b: B.SafeDIMockConfiguration
+			        let b: B.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -1360,9 +1360,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var b: B.SafeDIMockConfiguration
+			        let b: B.SafeDIMockConfiguration
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((B) -> A)?
+			        let safeDIBuilder: ((B) -> A)?
 			    }
 			}
 			#endif
@@ -1378,7 +1378,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.a = a
 			        }
 
-			        private(set) var a: A.SafeDIMockConfiguration
+			        let a: A.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -1413,7 +1413,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			        }
 
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((A) -> C)?
+			        let safeDIBuilder: ((A) -> C)?
 			    }
 			}
 			#endif
@@ -1431,9 +1431,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var cBuilder: C.SafeDIMockConfiguration
+			        let cBuilder: C.SafeDIMockConfiguration
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((Instantiator<C>) -> B)?
+			        let safeDIBuilder: ((Instantiator<C>) -> B)?
 			    }
 			}
 			#endif
@@ -1487,10 +1487,10 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.d = d
 			        }
 
-			        private(set) var a_A: A.SafeDIMockConfiguration
-			        private(set) var p: ((A) -> P)?
-			        private(set) var a_Other: (() -> Other)?
-			        private(set) var d: ((Other) -> D)?
+			        let a_A: A.SafeDIMockConfiguration
+			        let p: ((A) -> P)?
+			        let a_Other: (() -> Other)?
+			        let d: ((Other) -> D)?
 			    }
 
 			    static func mock(
@@ -1660,8 +1660,8 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.x = x
 			        }
 
-			        private(set) var b: B.SafeDIMockConfiguration
-			        private(set) var x: (() -> X)?
+			        let b: B.SafeDIMockConfiguration
+			        let x: (() -> X)?
 			    }
 
 			    static func mock(
@@ -1703,10 +1703,10 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var b: B.SafeDIMockConfiguration
-			        private(set) var x: (@Sendable () -> X)?
+			        let b: B.SafeDIMockConfiguration
+			        let x: (@Sendable () -> X)?
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: (@Sendable (B, X) -> A)?
+			        let safeDIBuilder: (@Sendable (B, X) -> A)?
 			    }
 			}
 			#endif
@@ -1756,7 +1756,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.b = b
 			        }
 
-			        private(set) var b: B.SafeDIMockConfiguration
+			        let b: B.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -1794,9 +1794,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var b: B.SafeDIMockConfiguration
+			        let b: B.SafeDIMockConfiguration
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: (@Sendable (B) -> A)?
+			        let safeDIBuilder: (@Sendable (B) -> A)?
 			    }
 			}
 			#endif
@@ -1892,7 +1892,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.settingsBuilder = settingsBuilder
 			        }
 
-			        private(set) var settingsBuilder: Settings.SafeDIMockConfiguration
+			        let settingsBuilder: Settings.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -1920,9 +1920,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var settingsBuilder: Settings.SafeDIMockConfiguration
+			        let settingsBuilder: Settings.SafeDIMockConfiguration
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((Instantiator<Settings>) -> LoggedInFlow)?
+			        let safeDIBuilder: ((Instantiator<Settings>) -> LoggedInFlow)?
 			    }
 			}
 			#endif
@@ -1954,7 +1954,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.flow = flow
 			        }
 
-			        private(set) var flow: LoggedInFlow.SafeDIMockConfiguration
+			        let flow: LoggedInFlow.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -1986,7 +1986,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.flow = flow
 			        }
 
-			        private(set) var flow: (() -> Flow)?
+			        let flow: (() -> Flow)?
 			    }
 
 			    static func mock(
@@ -2010,9 +2010,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var flow: (() -> Flow)?
+			        let flow: (() -> Flow)?
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((Flow) -> Settings)?
+			        let safeDIBuilder: ((Flow) -> Settings)?
 			    }
 			}
 			#endif
@@ -2197,7 +2197,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.flow = flow
 			        }
 
-			        private(set) var flow: LoggedInFlow.SafeDIMockConfiguration
+			        let flow: LoggedInFlow.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -2259,7 +2259,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.flow = flow
 			        }
 
-			        private(set) var flow: SettingsFlow.SafeDIMockConfiguration
+			        let flow: SettingsFlow.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -2295,9 +2295,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var flow: SettingsFlow.SafeDIMockConfiguration
+			        let flow: SettingsFlow.SafeDIMockConfiguration
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((Flow) -> Settings)?
+			        let safeDIBuilder: ((Flow) -> Settings)?
 			    }
 			}
 			#endif
@@ -2637,7 +2637,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.c = c
 			        }
 
-			        private(set) var c: ((A) -> C)?
+			        let c: ((A) -> C)?
 			    }
 
 			    static func mock(
@@ -2662,9 +2662,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var c: ((A) -> C)?
+			        let c: ((A) -> C)?
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((A, C) -> B)?
+			        let safeDIBuilder: ((A, C) -> B)?
 			    }
 			}
 			#endif
@@ -2680,7 +2680,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.a = a
 			        }
 
-			        private(set) var a: A.SafeDIMockConfiguration
+			        let a: A.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -2773,8 +2773,8 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.d = d
 			        }
 
-			        private(set) var a: A.SafeDIMockConfiguration
-			        private(set) var d: ((A) -> D)?
+			        let a: A.SafeDIMockConfiguration
+			        let d: ((A) -> D)?
 			    }
 
 			    static func mock(
@@ -2812,9 +2812,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var d: ((A) -> D)?
+			        let d: ((A) -> D)?
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((A, D) -> C)?
+			        let safeDIBuilder: ((A, D) -> C)?
 			    }
 			}
 			#endif
@@ -2859,7 +2859,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.b = b
 			        }
 
-			        private(set) var b: B.SafeDIMockConfiguration
+			        let b: B.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -2896,9 +2896,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var b: B.SafeDIMockConfiguration
+			        let b: B.SafeDIMockConfiguration
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((B) -> A)?
+			        let safeDIBuilder: ((B) -> A)?
 			    }
 			}
 			#endif
@@ -3161,7 +3161,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 	        }
 
 	        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-	        private(set) var safeDIBuilder: ((A) -> C)?
+	        let safeDIBuilder: ((A) -> C)?
 	    }
 	}
 
@@ -3176,9 +3176,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 	            self.safeDIBuilder = safeDIBuilder
 	        }
 
-	        private(set) var cBuilder: C.SafeDIMockConfiguration
+	        let cBuilder: C.SafeDIMockConfiguration
 	        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-	        private(set) var safeDIBuilder: ((Instantiator<C>) -> B)?
+	        let safeDIBuilder: ((Instantiator<C>) -> B)?
 	    }
 	}
 	#endif
@@ -3198,7 +3198,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 	            self.b = b
 	        }
 
-	        private(set) var b: B.SafeDIMockConfiguration
+	        let b: B.SafeDIMockConfiguration
 	    }
 
 	    static func mock(
@@ -3236,9 +3236,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 	            self.safeDIBuilder = safeDIBuilder
 	        }
 
-	        private(set) var b: B.SafeDIMockConfiguration
+	        let b: B.SafeDIMockConfiguration
 	        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-	        private(set) var safeDIBuilder: (@Sendable (B) -> A)?
+	        let safeDIBuilder: (@Sendable (B) -> A)?
 	    }
 	}
 	#endif
@@ -3259,7 +3259,7 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 		        }
 
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)?
+		        let safeDIBuilder: (@Sendable (SendableLazilyInstantiated<A>) -> C)?
 		    }
 		}
 
@@ -3274,9 +3274,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        private(set) var cBuilder: C.SafeDIMockConfiguration
+		        let cBuilder: C.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: (@Sendable (\(instantiatorType)) -> B)?
+		        let safeDIBuilder: (@Sendable (\(instantiatorType)) -> B)?
 		    }
 		}
 		#endif

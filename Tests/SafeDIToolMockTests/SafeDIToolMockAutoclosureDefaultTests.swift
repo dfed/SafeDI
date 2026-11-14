@@ -124,7 +124,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.dependency = dependency
 			        }
 
-			        private(set) var dependency: (() -> Dependency)?
+			        let dependency: (() -> Dependency)?
 			    }
 
 			    static func mock(
@@ -193,7 +193,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.serviceBuilder = serviceBuilder
 			        }
 
-			        private(set) var serviceBuilder: Service.SafeDIMockConfiguration
+			        let serviceBuilder: Service.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -221,9 +221,9 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var retries: () -> Int
+			        let retries: () -> Int
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((Int) -> Service)?
+			        let safeDIBuilder: ((Int) -> Service)?
 			    }
 			}
 			#endif
@@ -288,7 +288,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.service = service
 			        }
 
-			        private(set) var service: Service.SafeDIMockConfiguration
+			        let service: Service.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -316,9 +316,9 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var retries: () -> Int
+			        let retries: () -> Int
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((Int) -> Service)?
+			        let safeDIBuilder: ((Int) -> Service)?
 			    }
 			}
 			#endif
@@ -386,7 +386,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.serviceBuilder = serviceBuilder
 			        }
 
-			        private(set) var serviceBuilder: Service.SafeDIMockConfiguration
+			        let serviceBuilder: Service.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -416,9 +416,9 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var attempts: () -> Int
+			        let attempts: () -> Int
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((Int, Int) -> Service)?
+			        let safeDIBuilder: ((Int, Int) -> Service)?
 			    }
 			}
 			#endif
@@ -480,7 +480,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.serviceBuilder = serviceBuilder
 			        }
 
-			        private(set) var serviceBuilder: Service.SafeDIMockConfiguration
+			        let serviceBuilder: Service.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -510,9 +510,9 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var retries: @Sendable () -> Int
+			        let retries: @Sendable () -> Int
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: (@Sendable (Int) -> Service)?
+			        let safeDIBuilder: (@Sendable (Int) -> Service)?
 			    }
 			}
 			#endif
@@ -573,7 +573,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.service = service
 			        }
 
-			        private(set) var service: Service.SafeDIMockConfiguration
+			        let service: Service.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -602,9 +602,9 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var retries: () -> Int
+			        let retries: () -> Int
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((Int) -> Service)?
+			        let safeDIBuilder: ((Int) -> Service)?
 			    }
 			}
 			#endif
@@ -665,7 +665,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.service = service
 			        }
 
-			        private(set) var service: (() -> Service)?
+			        let service: (() -> Service)?
 			    }
 
 			    static func mock(
@@ -728,9 +728,9 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Child`'s `capacity`.
-			    public private(set) var capacity: (() -> Int)?
+			    public let capacity: (() -> Int)?
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-			    private(set) var safeDIBuilder: ((Int) -> Child)?
+			    let safeDIBuilder: ((Int) -> Child)?
 			}
 
 			extension Child {
@@ -753,7 +753,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.child = child
 			        }
 
-			        public private(set) var child: __safeDI_Child_MockConfiguration
+			        public let child: __safeDI_Child_MockConfiguration
 			    }
 
 			    public static func mock(
@@ -843,7 +843,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.serviceBuilder = serviceBuilder
 			        }
 
-			        private(set) var serviceBuilder: Service.SafeDIMockConfiguration
+			        let serviceBuilder: Service.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -876,11 +876,11 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var limit: () -> Int?
-			        private(set) var onFinish: () -> () -> Void
-			        private(set) var formatter: () -> any Formatter
+			        let limit: () -> Int?
+			        let onFinish: () -> () -> Void
+			        let formatter: () -> any Formatter
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((Int?, @escaping () -> Void, any Formatter) -> Service)?
+			        let safeDIBuilder: ((Int?, @escaping () -> Void, any Formatter) -> Service)?
 			    }
 			}
 			#endif
@@ -940,9 +940,9 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Child`'s `limit`.
-			    public private(set) var limit: @Sendable () -> (() -> Int?)?
+			    public let limit: @Sendable () -> (() -> Int?)?
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-			    private(set) var safeDIBuilder: (@Sendable (Int?) -> Child)?
+			    let safeDIBuilder: (@Sendable (Int?) -> Child)?
 			}
 
 			extension Child {
@@ -965,7 +965,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			            self.childBuilder = childBuilder
 			        }
 
-			        public private(set) var childBuilder: __safeDI_Child_MockConfiguration
+			        public let childBuilder: __safeDI_Child_MockConfiguration
 			    }
 
 			    public static func mock(
@@ -1018,7 +1018,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 		            self.session = session
 		        }
 
-		        package private(set) var session: (() -> Session)?
+		        package let session: (() -> Session)?
 		    }
 
 		    public static func mock(
@@ -1056,7 +1056,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var service: Service.SafeDIOverrides
+		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(

@@ -2125,7 +2125,7 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 			            self.network = network
 			        }
 
-			        private(set) var network: (() -> Network)?
+			        let network: (() -> Network)?
 			    }
 
 			    static func mock(
@@ -2207,7 +2207,7 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 		            self.network = network
 		        }
 
-		        private(set) var network: (() -> Network)?
+		        let network: (() -> Network)?
 		    }
 
 		    static func mock(
@@ -2292,7 +2292,7 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 			            self.logger = logger
 			        }
 
-			        private(set) var logger: (() -> Logger)?
+			        let logger: (() -> Logger)?
 			    }
 
 			    static func mock(
@@ -2431,7 +2431,7 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 		            self.network = network
 		        }
 
-		        private(set) var network: (() -> Network)?
+		        let network: (() -> Network)?
 		    }
 
 		    static func mock(

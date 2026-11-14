@@ -1106,8 +1106,8 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		        }
 
-		        public private(set) var exportService: (() -> ExportService)?
-		        public private(set) var screenBuilder: ((ExportService) -> ExportScreen)?
+		        public let exportService: (() -> ExportService)?
+		        public let screenBuilder: ((ExportService) -> ExportScreen)?
 		    }
 
 		    public static func mock(

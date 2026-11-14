@@ -6987,21 +6987,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		lines.append("\(innerIndent)}")
 
-		// Generate stored properties, settable only in the generated file (see `generateConfigurationStruct`).
+		// Generate stored properties.
 		lines.append("")
 		for child in rootChildren {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
 			if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: child.requiresSendable) {
-				lines.append("\(innerIndent)private(set) var \(label): \(publicMockOverridesMember.type)")
+				lines.append("\(innerIndent)let \(label): \(publicMockOverridesMember.type)")
 			} else if child.needsConfigurationStruct {
-				lines.append("\(innerIndent)private(set) var \(label): \(child.configurationTypeName)")
+				lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
 			} else {
 				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
-				lines.append("\(innerIndent)private(set) var \(label): (\(sendableAnnotation)\(child.builderClosureType))?")
+				lines.append("\(innerIndent)let \(label): (\(sendableAnnotation)\(child.builderClosureType))?")
 			}
 		}
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
-			lines.append("\(innerIndent)private(set) var \(onlyIfAvailableOverride.name): \(onlyIfAvailableOverride.typeDescription.asSource)")
+			lines.append("\(innerIndent)let \(onlyIfAvailableOverride.name): \(onlyIfAvailableOverride.typeDescription.asSource)")
 		}
 
 		lines.append("\(indent)}")
@@ -7058,10 +7058,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let label = disambiguatedLabel(for: child, labelMap: childLabelMap)
 			if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: requiresSendable || child.requiresSendable) {
 				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(publicMockOverridesMember.type) = \(publicMockOverridesMember.defaultValue)")
-				storedProperties.append("\(innerIndent)private(set) var \(label): \(publicMockOverridesMember.type)")
+				storedProperties.append("\(innerIndent)let \(label): \(publicMockOverridesMember.type)")
 			} else if child.needsConfigurationStruct {
 				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.configurationTypeName) = .init()")
-				storedProperties.append("\(innerIndent)private(set) var \(label): \(child.configurationTypeName)")
+				storedProperties.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
 			} else {
 				// A leaf child field also needs `@Sendable` when the child itself
 				// is reached sendably — e.g. a `SendableInstantiator` dependency on
@@ -7070,7 +7070,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// to capture a non-sendable override closure.
 				let childSendable = (requiresSendable || child.requiresSendable) ? "@Sendable " : ""
 				initParameters.append("\(innerIndent)\(standardIndent)\(label): (\(childSendable)\(child.builderClosureType))? = nil")
-				storedProperties.append("\(innerIndent)private(set) var \(label): (\(childSendable)\(child.builderClosureType))?")
+				storedProperties.append("\(innerIndent)let \(label): (\(childSendable)\(child.builderClosureType))?")
 			}
 			assignments.append("\(innerIndent)\(standardIndent)self.\(label) = \(label)")
 		}
@@ -7085,10 +7085,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// returns the value, which its initializer takes as an autoclosure, as the parameter does, and the mock
 				// calls it once per construction (`resolveBuilderArguments`).
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping () -> \(typeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
-				storedProperties.append("\(innerIndent)private(set) var \(defaultParameter.label): () -> \(typeSource)")
+				storedProperties.append("\(innerIndent)let \(defaultParameter.label): () -> \(typeSource)")
 			} else if defaultParameter.isClosureType, !defaultParameter.isAutoclosure {
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(closureSendable)@escaping \(typeSource) = \(defaultExpression(defaultParameter))")
-				storedProperties.append("\(innerIndent)private(set) var \(defaultParameter.label): \(closureSendable)\(typeSource)")
+				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(closureSendable)\(typeSource)")
 			} else if requiresSendable {
 				// A `@Sendable` builder function cannot capture the value when its type is not `Sendable`, and
 				// SafeDI cannot tell whether it is, so the struct stores a `@Sendable` closure that returns the
@@ -7097,13 +7097,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// caller still passes a value. Swift rejects `@Sendable` on a typealias, so a typealiased function
 				// type is stored this way too, even when the parameter is declared `@escaping`.
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping @Sendable () -> \(typeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
-				storedProperties.append("\(innerIndent)private(set) var \(defaultParameter.label): @Sendable () -> \(typeSource)")
+				storedProperties.append("\(innerIndent)let \(defaultParameter.label): @Sendable () -> \(typeSource)")
 			} else {
 				// A parameter declared `@escaping` is of a function type, which the initializer stores, so it takes the
 				// value `@escaping` too, also when the type is a typealias of a function type.
 				let escaping = defaultParameter.isDeclaredEscaping ? "@escaping " : ""
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(escaping)\(typeSource) = \(defaultExpression(defaultParameter))")
-				storedProperties.append("\(innerIndent)private(set) var \(defaultParameter.label): \(typeSource)")
+				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(typeSource)")
 			}
 			assignments.append("\(innerIndent)\(standardIndent)self.\(defaultParameter.label) = \(defaultParameter.label)")
 		}
@@ -7115,7 +7115,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		initParameters.append("\(innerIndent)\(standardIndent)_ \(ReservedName.configurationBuilderPropertyName): (\(sendableAnnotation)\(closureType))? = nil")
 		assignments.append("\(innerIndent)\(standardIndent)self.\(ReservedName.configurationBuilderPropertyName) = \(ReservedName.configurationBuilderPropertyName)")
 		storedProperties.append("\(innerIndent)/// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.")
-		storedProperties.append("\(innerIndent)private(set) var \(ReservedName.configurationBuilderPropertyName): (\(sendableAnnotation)\(closureType))?")
+		storedProperties.append("\(innerIndent)let \(ReservedName.configurationBuilderPropertyName): (\(sendableAnnotation)\(closureType))?")
 
 		// Emit init.
 		lines.append("\(innerIndent)init(")
@@ -7124,9 +7124,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append(contentsOf: assignments)
 		lines.append("\(innerIndent)}")
 
-		// Emit stored properties. Each is `private(set)`: how a configuration stores its fields is not API, so code outside
-		// the generated file builds one only through its initializers, never by assigning its fields one by one in an
-		// initializer of its own, which a change to how the fields are stored would break.
+		// Emit stored properties. They are `let`, not `private(set) var`, which would keep an extension initializer from assigning
+		// them one by one but costs Debug builds of mocks; the Manual asks users to build a configuration through its
+		// initializers instead (see "Configuration fields are `let`" in `.claude/rules/mock-generation.md`).
 		lines.append("")
 		lines.append(contentsOf: storedProperties)
 

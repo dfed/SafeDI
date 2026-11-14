@@ -554,7 +554,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		            self.feedService = feedService
 		        }
 
-		        private(set) var feedService: FeedService.SafeDIOverrides
+		        let feedService: FeedService.SafeDIOverrides
 		    }
 
 		    static func mock(
@@ -907,7 +907,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		            self.feedService = feedService
 		        }
 
-		        private(set) var feedService: FeedService.SafeDIOverrides
+		        let feedService: FeedService.SafeDIOverrides
 		    }
 
 		    static func mock(

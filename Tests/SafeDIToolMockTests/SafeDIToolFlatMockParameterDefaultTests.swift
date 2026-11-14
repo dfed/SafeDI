@@ -488,7 +488,7 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		            self.session = session
 		        }
 
-		        private(set) var session: Session?
+		        let session: Session?
 		    }
 
 		    static func mock(
@@ -533,7 +533,7 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		            self.sessionBuilder = sessionBuilder
 		        }
 
-		        private(set) var sessionBuilder: ((Token) -> Session)?
+		        let sessionBuilder: ((Token) -> Session)?
 		    }
 
 		    static func mock(
@@ -838,7 +838,7 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		            self.consumer = consumer
 		        }
 
-		        private(set) var consumer: ((Session?) -> Consumer)?
+		        let consumer: ((Session?) -> Consumer)?
 		    }
 
 		    static func mock(

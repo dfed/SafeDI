@@ -260,11 +260,11 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Child`'s `style`.
-			    public private(set) var style: Child.Style?
+			    public let style: Child.Style?
 			    /// The default of `Child`'s `accent` unless set.
-			    public private(set) var accent: Child.Style?
+			    public let accent: Child.Style?
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Child.Style, Child.Style?) -> Child)?
+			    public let safeDIBuilder: ((Child.Style, Child.Style?) -> Child)?
 			}
 
 			extension Child {
@@ -333,9 +333,9 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Gadget`'s `mode`.
-			    public private(set) var mode: Gadget.Mode?
+			    public let mode: Gadget.Mode?
 			    /// Overrides how `Gadget` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Gadget.Mode) -> Gadget)?
+			    public let safeDIBuilder: ((Gadget.Mode) -> Gadget)?
 			}
 
 			extension Gadget {
@@ -401,11 +401,11 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Child`'s `onTap`.
-			    public private(set) var onTap: Child.Handler?
+			    public let onTap: Child.Handler?
 			    /// `nil` keeps the default of `Child`'s `onFinish`.
-			    public private(set) var onFinish: Child.Handler?
+			    public let onFinish: Child.Handler?
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((@escaping Child.Handler, Child.Handler) -> Child)?
+			    public let safeDIBuilder: ((@escaping Child.Handler, Child.Handler) -> Child)?
 			}
 
 			extension Child {
@@ -494,13 +494,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Outer.Child`'s `theme`.
-			    public private(set) var theme: Outer.Child.Theme?
+			    public let theme: Outer.Child.Theme?
 			    /// `nil` keeps the default of `Outer.Child`'s `mode`.
-			    public private(set) var mode: Outer.Mode?
+			    public let mode: Outer.Mode?
 			    /// `nil` keeps the default of `Outer.Child`'s `palette`.
-			    public private(set) var palette: Outer.Child.Inner.Palette?
+			    public let palette: Outer.Child.Inner.Palette?
 			    /// Overrides how `Outer.Child` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Outer.Child.Theme, Outer.Mode, Outer.Child.Inner.Palette) -> Outer.Child)?
+			    public let safeDIBuilder: ((Outer.Child.Theme, Outer.Mode, Outer.Child.Inner.Palette) -> Outer.Child)?
 			}
 
 			extension Outer.Child {
@@ -602,9 +602,9 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			            self.label = label
 			        }
 
-			        public private(set) var child: (() -> Child)?
+			        public let child: (() -> Child)?
 			        /// The default of `Root`'s `label` unless set; `.init(label: nil)` passes `nil`.
-			        public private(set) var label: Root.Label?
+			        public let label: Root.Label?
 			    }
 
 			    public static func mock(
@@ -639,7 +639,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			            self.root = root
 			        }
 
-			        public private(set) var root: __safeDI_Root_MockConfiguration
+			        public let root: __safeDI_Root_MockConfiguration
 			    }
 
 			    public static func mock(
@@ -685,13 +685,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			        self.safeDIBuilder = safeDIBuilder
 			    }
 
-			    public private(set) var child: (() -> Child)?
+			    public let child: (() -> Child)?
 			    /// `nil` keeps the default of `Root`'s `theme`.
-			    private(set) var theme: Root.Theme?
+			    let theme: Root.Theme?
 			    /// The default of `Root`'s `label` unless set.
-			    public private(set) var label: Root.Label?
+			    public let label: Root.Label?
 			    /// Overrides how `Root` is constructed. Parameters match the type’s initializer or custom mock method.
-			    private(set) var safeDIBuilder: ((Child, Root.Theme, Root.Label?) -> Root)?
+			    let safeDIBuilder: ((Child, Root.Theme, Root.Label?) -> Root)?
 			}
 
 			extension Root {
@@ -884,8 +884,8 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			            self.child = child
 			        }
 
-			        public private(set) var badge: __safeDI_Badge_MockConfiguration
-			        public private(set) var child: __safeDI_Child_MockConfiguration
+			        public let badge: __safeDI_Badge_MockConfiguration
+			        public let child: __safeDI_Child_MockConfiguration
 			    }
 
 			    public static func mock(
@@ -921,9 +921,9 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Badge`'s `tint`.
-			    public private(set) var tint: Badge.Tint?
+			    public let tint: Badge.Tint?
 			    /// Overrides how `Badge` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Badge.Tint) -> Badge)?
+			    public let safeDIBuilder: ((Badge.Tint) -> Badge)?
 			}
 
 			extension Badge {
@@ -944,9 +944,9 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Child`'s `onSelect`.
-			    public private(set) var onSelect: ((Child.Theme) -> Void)?
+			    public let onSelect: ((Child.Theme) -> Void)?
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((@escaping (Child.Theme) -> Void) -> Child)?
+			    public let safeDIBuilder: ((@escaping (Child.Theme) -> Void) -> Child)?
 			}
 
 			extension Child {
@@ -1038,15 +1038,15 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Child`'s `box`.
-			    public private(set) var box: Child.Box<Child.Theme>?
+			    public let box: Child.Box<Child.Theme>?
 			    /// `nil` keeps the default of `Child`'s `themes`.
-			    public private(set) var themes: [Child.Theme]?
+			    public let themes: [Child.Theme]?
 			    /// `nil` keeps the default of `Child`'s `themesByName`.
-			    public private(set) var themesByName: [String: Child.Theme]?
+			    public let themesByName: [String: Child.Theme]?
 			    /// `nil` keeps the default of `Child`'s `kind`.
-			    public private(set) var kind: Child.Theme.Type?
+			    public let kind: Child.Theme.Type?
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Child.Box<Child.Theme>, [Child.Theme], [String: Child.Theme], Child.Theme.Type) -> Child)?
+			    public let safeDIBuilder: ((Child.Box<Child.Theme>, [Child.Theme], [String: Child.Theme], Child.Theme.Type) -> Child)?
 			}
 
 			extension Child {
@@ -1107,7 +1107,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			            self.childBuilder = childBuilder
 			        }
 
-			        public private(set) var childBuilder: __safeDI_Child_MockConfiguration
+			        public let childBuilder: __safeDI_Child_MockConfiguration
 			    }
 
 			    public static func mock(
@@ -1141,9 +1141,9 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Child`'s `theme`.
-			    public private(set) var theme: @Sendable () -> Child.Theme?
+			    public let theme: @Sendable () -> Child.Theme?
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: (@Sendable (Child.Theme) -> Child)?
+			    public let safeDIBuilder: (@Sendable (Child.Theme) -> Child)?
 			}
 
 			extension Child {
@@ -1225,13 +1225,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Child`'s `theme`.
-			    public private(set) var theme: Child.Theme?
+			    public let theme: Child.Theme?
 			    /// `nil` keeps the default of `Child`'s `mode`.
-			    public private(set) var mode: Mode?
+			    public let mode: Mode?
 			    /// `nil` keeps the default of `Child`'s `count`.
-			    public private(set) var count: Swift.Int?
+			    public let count: Swift.Int?
 			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Child.Theme, Mode, Swift.Int) -> Child)?
+			    public let safeDIBuilder: ((Child.Theme, Mode, Swift.Int) -> Child)?
 			}
 
 			extension Child {
@@ -1296,7 +1296,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			            self.child = child
 			        }
 
-			        private(set) var child: Child.SafeDIMockConfiguration
+			        let child: Child.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -1325,9 +1325,9 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			            self.safeDIBuilder = safeDIBuilder
 			        }
 
-			        private(set) var theme: Child.Theme
+			        let theme: Child.Theme
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-			        private(set) var safeDIBuilder: ((Child.Theme) -> Child)?
+			        let safeDIBuilder: ((Child.Theme) -> Child)?
 			    }
 			}
 
@@ -1387,7 +1387,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        public private(set) var child: __safeDI_App_Child_MockConfiguration
+		        public let child: __safeDI_App_Child_MockConfiguration
 		    }
 
 		    public static func mock(
@@ -1419,9 +1419,9 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 		    }
 
 		    /// `nil` keeps the default of `Child`'s `theme`.
-		    public private(set) var theme: Child.Theme?
+		    public let theme: Child.Theme?
 		    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public private(set) var safeDIBuilder: ((Child.Theme) -> Child)?
+		    public let safeDIBuilder: ((Child.Theme) -> Child)?
 		}
 
 		extension Child {
@@ -1473,7 +1473,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 		            self.\(label) = \(label)
 		        }
 
-		        public private(set) var \(label): \(configurationTypeName)
+		        public let \(label): \(configurationTypeName)
 		    }
 
 		    public static func mock(
@@ -1528,9 +1528,9 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 	    }
 
 	    /// `nil` keeps the default of `Child`'s `theme`.
-	    public private(set) var theme: Child.Theme?
+	    public let theme: Child.Theme?
 	    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
-	    public private(set) var safeDIBuilder: ((Child.Theme) -> Child)?
+	    public let safeDIBuilder: ((Child.Theme) -> Child)?
 	}
 
 	extension Child {

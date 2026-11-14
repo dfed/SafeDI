@@ -158,8 +158,8 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            self.`class` = `class`
 		        }
 
-		        private(set) var `default`: Thing.SafeDIMockConfiguration
-		        private(set) var `class`: Thing.SafeDIMockConfiguration
+		        let `default`: Thing.SafeDIMockConfiguration
+		        let `class`: Thing.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -294,8 +294,8 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            self.thing = thing
 		        }
 
-		        private(set) var `default`: (() -> Leaf)?
-		        private(set) var thing: Thing.SafeDIMockConfiguration
+		        let `default`: (() -> Leaf)?
+		        let thing: Thing.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -402,7 +402,7 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            self.leaf = leaf
 		        }
 
-		        private(set) var leaf: (() -> Leaf)?
+		        let leaf: (() -> Leaf)?
 		    }
 
 		    static func mock(
@@ -458,9 +458,9 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 			    }
 
 			    /// `nil` keeps the default of `Session`'s `inout`.
-			    public private(set) var `inout`: Int?
+			    public let `inout`: Int?
 			    /// Overrides how `Session` is constructed. Parameters match the type’s initializer or custom mock method.
-			    public private(set) var safeDIBuilder: ((Int) -> Session)?
+			    public let safeDIBuilder: ((Int) -> Session)?
 			}
 
 			extension Session {
@@ -489,9 +489,9 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 			            self.`default` = `default`
 			        }
 
-			        public private(set) var session: __safeDI_Session_MockConfiguration
+			        public let session: __safeDI_Session_MockConfiguration
 			        /// The default of `Service`'s `default` unless set; `.init(default: nil)` passes `nil`.
-			        public private(set) var `default`: String?
+			        public let `default`: String?
 			    }
 
 			    public static func mock(
@@ -560,9 +560,9 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        private(set) var `default`: Int
+		        let `default`: Int
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: ((Int) -> Child)?
+		        let safeDIBuilder: ((Int) -> Child)?
 		    }
 		}
 		#endif
@@ -583,7 +583,7 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            self.child = child
 		        }
 
-		        private(set) var child: Child.SafeDIMockConfiguration
+		        let child: Child.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -719,9 +719,9 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            self.`my leaf` = `my leaf`
 		        }
 
-		        private(set) var `inout`: (() -> Leaf)?
-		        private(set) var `_`: (() -> Leaf)?
-		        private(set) var `my leaf`: Thing.SafeDIMockConfiguration
+		        let `inout`: (() -> Leaf)?
+		        let `_`: (() -> Leaf)?
+		        let `my leaf`: Thing.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -794,8 +794,8 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            self.`default` = `default`
 		        }
 
-		        private(set) var home: ((LazilyInstantiated<Analytics>?) -> Home)?
-		        private(set) var `default`: Analytics?
+		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		        let `default`: Analytics?
 		    }
 
 		    static func mock(
@@ -886,10 +886,10 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            self.childB = childB
 		        }
 
-		        private(set) var default_EngineA: (() -> EngineA)?
-		        private(set) var childA: ((EngineA) -> ChildA)?
-		        private(set) var default_EngineB: (() -> EngineB)?
-		        private(set) var childB: ((EngineB) -> ChildB)?
+		        let default_EngineA: (() -> EngineA)?
+		        let childA: ((EngineA) -> ChildA)?
+		        let default_EngineB: (() -> EngineB)?
+		        let childB: ((EngineB) -> ChildB)?
 		    }
 
 		    static func mock(
@@ -956,7 +956,7 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            self.`default` = `default`
 		        }
 
-		        private(set) var `default`: (() -> Analytics)?
+		        let `default`: (() -> Analytics)?
 		    }
 
 		    static func mock(
@@ -1024,7 +1024,7 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            self.thingBuilder = thingBuilder
 		        }
 
-		        private(set) var thingBuilder: Thing.SafeDIMockConfiguration
+		        let thingBuilder: Thing.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -1132,8 +1132,8 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            self.`let` = `let`
 		        }
 
-		        private(set) var `var`: (() -> Leaf)?
-		        private(set) var `let`: (() -> Leaf)?
+		        let `var`: (() -> Leaf)?
+		        let `let`: (() -> Leaf)?
 		    }
 
 		    static func mock(

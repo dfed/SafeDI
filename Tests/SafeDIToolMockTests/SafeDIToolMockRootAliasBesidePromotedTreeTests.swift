@@ -105,8 +105,8 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            self.promoted = promoted
 			        }
 
-			        private(set) var leaf: (() -> Leaf)?
-			        private(set) var promoted: ((LeafProtocol) -> Promoted)?
+			        let leaf: (() -> Leaf)?
+			        let promoted: ((LeafProtocol) -> Promoted)?
 			    }
 
 			    static func mock(
@@ -183,8 +183,8 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            self.promoted = promoted
 			        }
 
-			        private(set) var leaf: (() -> Leaf)?
-			        private(set) var promoted: ((OtherProtocol) -> Promoted)?
+			        let leaf: (() -> Leaf)?
+			        let promoted: ((OtherProtocol) -> Promoted)?
 			    }
 
 			    static func mock(
@@ -263,9 +263,9 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            self.leafProtocol = leafProtocol
 			        }
 
-			        private(set) var leaf: (() -> Leaf)?
-			        private(set) var promoted: ((OtherProtocol?) -> Promoted)?
-			        private(set) var leafProtocol: OtherProtocol?
+			        let leaf: (() -> Leaf)?
+			        let promoted: ((OtherProtocol?) -> Promoted)?
+			        let leafProtocol: OtherProtocol?
 			    }
 
 			    static func mock(
@@ -333,8 +333,8 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            self.valueBuilder = valueBuilder
 			        }
 
-			        private(set) var promoted: ((ErasedInstantiator<(), AnyValue>) -> Promoted)?
-			        private(set) var valueBuilder: ErasedInstantiator<(), AnyValue>?
+			        let promoted: ((ErasedInstantiator<(), AnyValue>) -> Promoted)?
+			        let valueBuilder: ErasedInstantiator<(), AnyValue>?
 			    }
 
 			    static func mock(
@@ -420,8 +420,8 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            self.promoted = promoted
 			        }
 
-			        private(set) var leaf: (() -> Leaf)?
-			        private(set) var promoted: Promoted.SafeDIMockConfiguration
+			        let leaf: (() -> Leaf)?
+			        let promoted: Promoted.SafeDIMockConfiguration
 			    }
 
 			    static func mock(
@@ -502,8 +502,8 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            self.promoted = promoted
 			        }
 
-			        private(set) var leafBuilder: (@Sendable () -> Leaf)?
-			        private(set) var promoted: ((SendableInstantiator<Leaf>?, SendableInstantiator<Leaf>?) -> Promoted)?
+			        let leafBuilder: (@Sendable () -> Leaf)?
+			        let promoted: ((SendableInstantiator<Leaf>?, SendableInstantiator<Leaf>?) -> Promoted)?
 			    }
 
 			    static func mock(
@@ -578,8 +578,8 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            self.promoted = promoted
 			        }
 
-			        private(set) var leafBuilder: (() -> Leaf)?
-			        private(set) var promoted: ((Instantiator<Leaf>?) -> Promoted)?
+			        let leafBuilder: (() -> Leaf)?
+			        let promoted: ((Instantiator<Leaf>?) -> Promoted)?
 			    }
 
 			    static func mock(
@@ -655,8 +655,8 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            self.promoted = promoted
 			        }
 
-			        private(set) var leaf: (() -> Leaf)?
-			        private(set) var promoted: ((Leaf?) -> Promoted)?
+			        let leaf: (() -> Leaf)?
+			        let promoted: ((Leaf?) -> Promoted)?
 			    }
 
 			    static func mock(
@@ -729,8 +729,8 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            self.promoted = promoted
 			        }
 
-			        private(set) var leaf: (() -> Leaf)?
-			        private(set) var promoted: ((Leaf?) -> Promoted)?
+			        let leaf: (() -> Leaf)?
+			        let promoted: ((Leaf?) -> Promoted)?
 			    }
 
 			    static func mock(

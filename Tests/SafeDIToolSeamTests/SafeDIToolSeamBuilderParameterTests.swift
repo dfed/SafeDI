@@ -4176,8 +4176,8 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            self.profile = profile
 		        }
 
-		        private(set) var analytics: (() -> Analytics)?
-		        private(set) var profile: ((any UserService, Analytics) -> Profile)?
+		        let analytics: (() -> Analytics)?
+		        let profile: ((any UserService, Analytics) -> Profile)?
 		    }
 
 		    static func mock(

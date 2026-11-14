@@ -607,7 +607,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		            self.engine = engine
 		        }
 
-		        private(set) var engine: (() -> Engine)?
+		        let engine: (() -> Engine)?
 		    }
 
 		    static func mock(

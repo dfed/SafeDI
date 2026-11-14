@@ -583,7 +583,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		            self.user = user
 		        }
 
-		        public private(set) var user: (() -> User)?
+		        public let user: (() -> User)?
 		    }
 
 		\(integration == .moduleInfo ? "    \(Self.comment(["User"]))\n" : "")    public static func mock(
@@ -1829,7 +1829,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		            self.badgeBuilder = badgeBuilder
 		        }
 
-		        private(set) var badgeBuilder: ((Image, Brush) -> Badge)?
+		        let badgeBuilder: ((Image, Brush) -> Badge)?
 		    }
 
 		    public static func mock(
@@ -1998,7 +1998,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		            self.badge = badge
 		        }
 
-		        private(set) var badge: ((Window) -> Badge)?
+		        let badge: ((Window) -> Badge)?
 		    }
 
 		    \(Self.comment(["Window"]))

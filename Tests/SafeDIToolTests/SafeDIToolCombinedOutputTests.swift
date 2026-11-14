@@ -87,7 +87,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		            self.dep = dep
 		        }
 
-		        private(set) var dep: (() -> Dep)?
+		        let dep: (() -> Dep)?
 		    }
 
 		    static func mock(
@@ -289,7 +289,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var service: (() -> Service)?
+		        let service: (() -> Service)?
 		    }
 
 		    static func mock(
@@ -370,7 +370,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		            self.middle = middle
 		        }
 
-		        private(set) var middle: Middle.SafeDIMockConfiguration
+		        let middle: Middle.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -398,9 +398,9 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        private(set) var leaf: (() -> Leaf)?
+		        let leaf: (() -> Leaf)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: ((Leaf) -> Middle)?
+		        let safeDIBuilder: ((Leaf) -> Middle)?
 		    }
 		}
 		#endif
@@ -841,7 +841,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		            self.crossModuleService = crossModuleService
 		        }
 
-		        private(set) var crossModuleService: (() -> CrossModuleService)?
+		        let crossModuleService: (() -> CrossModuleService)?
 		    }
 
 		    static func mock(
@@ -978,7 +978,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		            self.crossModuleService = crossModuleService
 		        }
 
-		        private(set) var crossModuleService: (() -> CrossModuleService)?
+		        let crossModuleService: (() -> CrossModuleService)?
 		    }
 
 		    static func mock(
@@ -1072,7 +1072,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		            self.service = service
 		        }
 
-		        private(set) var service: (() -> LocalService)?
+		        let service: (() -> LocalService)?
 		    }
 
 		    static func mock(
@@ -1168,7 +1168,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		            self.dep = dep
 		        }
 
-		        private(set) var dep: (() -> Dep)?
+		        let dep: (() -> Dep)?
 		    }
 
 		    static func mock(

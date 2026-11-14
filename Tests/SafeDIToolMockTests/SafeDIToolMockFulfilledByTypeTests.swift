@@ -116,7 +116,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var filter: AppFilter.SafeDIMockConfiguration
+		        let filter: AppFilter.SafeDIMockConfiguration
 		    }
 
 		    static func mock(
@@ -149,9 +149,9 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        private(set) var ruleSet: (() -> RuleSet)?
+		        let ruleSet: (() -> RuleSet)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        private(set) var safeDIBuilder: ((RuleSet) -> AppFilter)?
+		        let safeDIBuilder: ((RuleSet) -> AppFilter)?
 		    }
 		}
 		#endif
@@ -217,7 +217,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var filter: (() -> AnyFilter)?
+		        let filter: (() -> AnyFilter)?
 		    }
 
 		    static func mock(
@@ -289,7 +289,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.filterBuilder = filterBuilder
 		        }
 
-		        private(set) var filterBuilder: (() -> AnyFilter)?
+		        let filterBuilder: (() -> AnyFilter)?
 		    }
 
 		    static func mock(
@@ -355,7 +355,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.filterBuilder = filterBuilder
 		        }
 
-		        private(set) var filterBuilder: (() -> any FilterProtocol)?
+		        let filterBuilder: (() -> any FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -430,7 +430,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var filter: (() -> AnyFilter)?
+		        let filter: (() -> AnyFilter)?
 		    }
 
 		    static func mock(
@@ -496,7 +496,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var filter: (() -> FilterProtocol)?
+		        let filter: (() -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -568,7 +568,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var filter: (() -> FilterProtocol)?
+		        let filter: (() -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -639,7 +639,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var filter: (() -> FilterProtocol)?
+		        let filter: (() -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -710,7 +710,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var filter: (() -> FilterProtocol)?
+		        let filter: (() -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -783,7 +783,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var filter: (() -> FilterProtocol)?
+		        let filter: (() -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -846,7 +846,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var filter: (() -> FilterProtocol)?
+		        let filter: (() -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -903,7 +903,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var filter: (() -> FilterProtocol)?
+		        let filter: (() -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -977,7 +977,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var filter: (() -> FilterProtocol)?
+		        let filter: (() -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -1055,7 +1055,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        private(set) var filter: (() -> FilterProtocol)?
+		        let filter: (() -> FilterProtocol)?
 		    }
 
 		    static func mock(
@@ -1126,7 +1126,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.filter = filter
 		        }
 
-		        public private(set) var filter: (() -> FilterProtocol)?
+		        public let filter: (() -> FilterProtocol)?
 		    }
 
 		    public static func mock(
@@ -1229,7 +1229,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		            self.root = root
 		        }
 
-		        private(set) var root: ((@escaping (Root.SafeDIMockScope_AppFilter) -> any FilterProtocol) -> Root)?
+		        let root: ((@escaping (Root.SafeDIMockScope_AppFilter) -> any FilterProtocol) -> Root)?
 		    }
 
 		    static func mock(
