@@ -313,14 +313,16 @@ struct SafeDIToolGraphFuzzerTests {
 			.holeTwoSeamCycleWithSendableEdge,
 			.holeInnerSeamPlainAndSendableRoutes,
 			.holeInnerSeamWithBothEnums,
-			.holeInnerStagedPlaceOnSendableRoute,
+			.holeInnerSendablePlaceOnSendableRoute,
 			.holePlaceInsideSendableFill,
+			.holeSharedTypes,
+			.holeSharedTypesThroughModel,
 		]).subtracting(drawFeatures).sorted() == [])
 		// `addingCycleParameterShapes`' cycle, in accepted graphs: its hole between the cycle's ends at or beneath the type that
-		// declares the label again, filled by a fill that reads it (seeds 196 and 609); its hole on the seam (seed 705); the
-		// note received after the label, and the label aliased (seed 196); instantiator declarations in a nested cycle of both
-		// kinds of wrapper (seed 19); and opened by value inside `Sendable` wrappers, whose function the cycle closes on is
-		// `@Sendable` and starts a stage of the hole's place (seed 277).
+		// declares the label again, filled by a fill that reads it (seeds 227 and 609); its hole on the seam (seed 705); the
+		// note received after the label, and instantiator declarations in a nested cycle (seed 24); the label aliased, with
+		// both kinds of wrapper (seed 1010); and opened by value inside `Sendable` wrappers, whose function the cycle closes on
+		// is `@Sendable`, so the hole's place is a case of the `@Sendable` family (seed 277).
 		#expect(Set([
 			GraphFuzzerSeamDrawFeature.cycleParameterSeam,
 			.cycleParameterFillReadsLabel,
@@ -338,6 +340,9 @@ struct SafeDIToolGraphFuzzerTests {
 		// A graph with a hole whose builder labels and case names the name-stability oracle compared with those of the graph
 		// without its second place.
 		#expect(acceptedResults.contains { $0.isComparedWithoutSecondHolePlace })
+		// A graph with types shared under a hole whose levels the second-path oracle compared with those of the graph without
+		// its second path.
+		#expect(acceptedResults.contains { $0.isComparedWithoutSecondPath })
 		// A split graph whose modules all name their package, which the SwiftPM plugin flow agreed on with the module-info
 		// flow, and one of them declaring a type in a flag's clause in the seam's module, whose decision the plugin flow
 		// asserts in the caller's module too.
@@ -409,7 +414,7 @@ struct SafeDIToolGraphFuzzerTests {
 			.holeTwoSeamCycleWithSendableEdge,
 			.holeInnerSeamPlainAndSendableRoutes,
 			.holeInnerSeamWithBothEnums,
-			.holeInnerStagedPlaceOnSendableRoute,
+			.holeInnerSendablePlaceOnSendableRoute,
 			.holePlaceInsideSendableFill,
 		]
 		var seedsWithoutPlace = [UInt64: [GraphFuzzerSeamDrawFeature]]()
@@ -1779,9 +1784,9 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_reportNoRenamedGraphFailure_whenFixtureRootOfGraphSplitAcrossModulesLiesUnderPathHoldingALabelTheRenamingReverses() async throws {
-		// Seed 19 of the seam corpus is split across modules and warns at a fixture file, so its warnings name the
+		// Seed 215 of the seam corpus is split across modules and warns at a fixture file, so its warnings name the
 		// fixture root's path.
-		try await Self.expectNoRenamedGraphFailureUnderPathHoldingALabel(of: GraphFuzzerGenerator.fixture(forSeed: 19, features: [.generateDependencyTree]))
+		try await Self.expectNoRenamedGraphFailureUnderPathHoldingALabel(of: GraphFuzzerGenerator.fixture(forSeed: 215, features: [.generateDependencyTree]))
 	}
 
 	@Test
@@ -5117,12 +5122,12 @@ struct SafeDIToolGraphFuzzerTests {
 	)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0xD9E0E5824391BA47
-	static let seamCorpusAcceptedSeedCount = 292
-	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x70C5A79BF1553FBA
+	static let seamCorpusFixtureHash: UInt64 = 0xC88F6DA800F46D1D
+	static let seamCorpusAcceptedSeedCount = 289
+	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xF226EE7C76286253
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 207
+	static let seamCorpusValueOracleInspectedGraphCount = 205
 	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
 	static let seamCorpusOmittedValueGraphCount = 0
 	/// The errors of a cycle's label in a seam's tree whose rejections the seam corpus pins, which
@@ -5139,51 +5144,51 @@ struct SafeDIToolGraphFuzzerTests {
 		"cannot be received inside a `@Sendable` function in chain",
 	]
 	/// How many of the seam corpus's graphs the tool rejects with each error of `seamCorpusErrorMarkers`, in its order.
-	static let seamCorpusErrorGraphCounts = [1, 11, 0, 26]
+	static let seamCorpusErrorGraphCounts = [4, 11, 0, 26]
 	/// How many of the seam corpus's graphs the tool accepts show each of `addingCycleParameterShapes`' draws, so that a
 	/// draw the tool rejects every time, or a change that rejects more of them, names the shape. Two draws the tool rejects
 	/// by design are pinned at none: an instantiator declaration between beside by-value ones, which hides the reads beneath
 	/// it, and a fill's read of a label no cycle parameter carries (`declarationBoundOnCycleReentry`, among
 	/// `seamCorpusErrorMarkers`).
 	static let seamCorpusAcceptedDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
-		.cycleParameterDeclaredAfterCloser: 13,
-		.cycleParameterDeclaredAsAlias: 14,
+		.cycleParameterDeclaredAfterCloser: 12,
+		.cycleParameterDeclaredAsAlias: 12,
 		.cycleParameterDeclaredAsHidingInstantiator: 0,
 		.cycleParameterDeclaredAsInstantiators: 17,
-		.cycleParameterDeclaredBySeam: 60,
+		.cycleParameterDeclaredBySeam: 58,
 		.cycleParameterDeclaredLazily: 20,
-		.cycleParameterDeferredFromCaller: 21,
-		.cycleParameterDeferredNote: 26,
-		.cycleParameterFillReadsLabel: 56,
+		.cycleParameterDeferredFromCaller: 20,
+		.cycleParameterDeferredNote: 24,
+		.cycleParameterFillReadsLabel: 54,
 		.cycleParameterFillReadsLabelNoParameterCarries: 0,
-		.cycleParameterFillReadsNote: 30,
-		.cycleParameterHoleAtOrBeneathDeclaration: 30,
-		.cycleParameterHoleBetween: 34,
-		.cycleParameterHoleOnClosedOnType: 33,
-		.cycleParameterHoleOnReader: 7,
+		.cycleParameterFillReadsNote: 29,
+		.cycleParameterHoleAtOrBeneathDeclaration: 29,
+		.cycleParameterHoleBetween: 33,
+		.cycleParameterHoleOnClosedOnType: 32,
+		.cycleParameterHoleOnReader: 6,
 		.cycleParameterHoleOnSeam: 10,
 		.cycleParameterMixedWrapperKinds: 3,
-		.cycleParameterMocked: 19,
+		.cycleParameterMocked: 18,
 		.cycleParameterNestedCycle: 10,
-		.cycleParameterNoteDeclaredAgain: 8,
-		.cycleParameterNoteReceivedAfterLabel: 12,
-		.cycleParameterOpenedByInstantiator: 39,
+		.cycleParameterNoteDeclaredAgain: 7,
+		.cycleParameterNoteReceivedAfterLabel: 11,
+		.cycleParameterOpenedByInstantiator: 37,
 		.cycleParameterOpenedByValue: 13,
-		.cycleParameterOpenedLazily: 32,
+		.cycleParameterOpenedLazily: 31,
 		.cycleParameterReaderBetween: 13,
 		.cycleParameterReaderReceivesInstantiator: 15,
 		.cycleParameterReaderReceivesOnlyIfAvailable: 17,
 		.cycleParameterReaderReceivesWrapperOnlyIfAvailable: 2,
-		.cycleParameterReaderRequiresValue: 27,
+		.cycleParameterReaderRequiresValue: 25,
 		.cycleParameterReaderRequiresWrapper: 4,
-		.cycleParameterSeam: 84,
+		.cycleParameterSeam: 81,
 		.cycleParameterSendableWrappers: 19,
 		.cycleParameterSideReceivesInstantiator: 3,
-		.cycleParameterSideReceivesValue: 24,
+		.cycleParameterSideReceivesValue: 23,
 		.cycleParameterSideReceivesWrapper: 2,
-		.cycleParameterTwoLevelsDeep: 32,
+		.cycleParameterTwoLevelsDeep: 31,
 		.cycleParameterUndeclaredAbove: 3,
-		.cycleParameterWithoutReader: 11,
+		.cycleParameterWithoutReader: 10,
 	]
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
 	/// with their read twin.
@@ -5191,40 +5196,43 @@ struct SafeDIToolGraphFuzzerTests {
 	/// The seam corpus's seeds whose probes traverse more wrappers than a batch allows, compared on their own with
 	/// `DifferentialValueLimits.isolatedFuzzerGraph`: seed 391, whose `S391_Root0()` traverses 130,726 through a chain of
 	/// hole draws that re-enter one another (`HoleInner2`, `HoleDeep`, `HoleLoop`, `HoleSeam`), on its builds with the
-	/// hole, visible and inline alike.
-	static let seamCorpusSeedsTraversingPastTheBatchBudget: Set<UInt64> = [391]
+	/// hole, visible and inline alike; and seed 883, whose `S883_Root0()` spends a batch's traversals through `HoleBoth`,
+	/// `HolePing` and `HoleInner2` re-entering `HoleSeam`, with types shared under its hole, on both of its builds alike.
+	static let seamCorpusSeedsTraversingPastTheBatchBudget: Set<UInt64> = [391, 883]
 
 	/// The ordinary suite's batch of the seam corpus: graphs the tool accepts whose generated code, between them, shows
 	/// every `GraphFuzzerSeamOutputFeature` – both kinds of pass-through, a call reading `.instance`, an `@escaping`
 	/// closure parameter, an `@escaping @Sendable` one, an optional closure, and the comment naming a type SafeDI reads no
 	/// declaration of (seeds 16 and 609) – graphs split across modules, with a caller in another package, a caller in the
-	/// seam's package without a package and a seam's module without one (seeds 19, 31, 180, 215, 609 and 743 between
+	/// seam's package without a package and a seam's module without one (seeds 31, 84, 180, 215, 609 and 743 between
 	/// them), the last two also accepted inline, so the batch compiles every module, compares a split graph's values and
 	/// compares one across the two integrations;
 	/// graphs with a hole whose code, between them, shows every `GraphFuzzerHoleOutputFeature` – a passed-up builder whose
-	/// fill re-enters the inner seam, a staged builder whose fill re-enters its seam, a fill passed to a seam that passes
-	/// its site up, also `@Sendable` (seeds 196, 277 and 743 between them) – and that draw, between them, every roll of
-	/// `addingHoleShapes` with an accepted variant (with seeds 19, 605 and 743), the nested builders' draws among them – a
-	/// second hole type (seed 215), a wrapper of the hole beside its by-value place (seeds 78 and 605; seeds 196 and 326
-	/// beside a mock of the seam, which takes the wrapper as its parameter), a cycle of two seams
-	/// with a `@Sendable` edge (seed 93), and an inner seam reached by a plain and a `@Sendable` route, passed up with both
-	/// enums, an inner staged place on a `@Sendable` route and a place inside a `@Sendable` fill (seed 304) – of which the
-	/// name-stability oracle compares one without its second place; a split graph that
+	/// fill re-enters the inner seam, a `@Sendable` builder whose fill re-enters its seam, a fill passed to a seam that passes
+	/// its site up, also `@Sendable` (seeds 277, 743 and 1890 between them) – and that draw, between them, every roll of
+	/// `addingHoleShapes` with an accepted variant (with seeds 227, 605, 743 and 1890), the nested builders' draws among them
+	/// – a second hole type (seed 215), a wrapper of the hole beside its by-value place (seeds 78 and 605), a cycle of two
+	/// seams with a `@Sendable` edge (seed 93), and an inner seam reached by a plain and a `@Sendable` route, passed up with
+	/// both enums, an inner `@Sendable` place on a `@Sendable` route and a place inside a `@Sendable` fill (seed 304) – of
+	/// which the name-stability oracle compares one without its second place; a split graph that
 	/// declares a type in a flag's clause in the seam's module (`recordedInFlagClause`), which the two integrations agree
-	/// on once the plugin flow's assertions about that module's block are excused (seed 326); and a graph it rejects, which
+	/// on once the plugin flow's assertions about that module's block are excused (seed 84); and a graph it rejects, which
 	/// `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks; and declarations moved beneath the seam's module
 	/// (seed 153) and a chain of seams through the three modules beneath it (seed 347), which a caller computes from the
 	/// seam's module's view (`GraphFuzzerSeamDependencyDraw`); and seams naming a type declared in a block that guards
 	/// mock-only declarations, whose other clauses declare it at the same level (seed 277), wider (seed 151) or narrower
-	/// (seed 298), or which has none while another file declares it where `DEBUG` is inactive (seed 609, in the seam's
+	/// (seed 1814), or which has none while another file declares it where `DEBUG` is inactive (seed 609, in the seam's
 	/// module), each compiled as a release build too; and `addingCycleParameterShapes`' cycle, its hole between the cycle's
-	/// ends filled by a fill that reads the label the cycle declares again (seeds 196 and 609), its hole on the seam (seed
-	/// 705), instantiator declarations in a nested cycle (seed 19), and opened by value inside `Sendable` wrappers (seed 277).
-	/// The union of the batches the hole rolls and the seam tests' draws were each pinned with. Pinned by
+	/// ends filled by a fill that reads the label the cycle declares again (seeds 227 and 609), its hole on the seam (seed
+	/// 705), the label aliased and both kinds of wrapper (seed 1010), instantiator declarations in a nested cycle (seed 24),
+	/// and opened by value inside `Sendable` wrappers (seed 277). The union of the batches the hole rolls and the seam tests'
+	/// draws were each pinned with, less the seeds whose renamed graph shows a known issue's shape: a tangle of cycles, which
+	/// the tool now accepts, giving the seam a second hole type whose builders the move across wrapper names reorders
+	/// (`seamBuilderOrderReason`), or a lazy cycle's configuration field (`lazyCycleConfigurationFieldReason`). Pinned by
 	/// `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 78, 92, 93, 151, 153, 180, 196, 215, 277, 298, 304, 326, 347, 605, 609, 705, 743]
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 78, 84, 92, 93, 151, 153, 180, 215, 227, 277, 304, 347, 605, 609, 705, 743, 1_010, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x7612D8B8F35CB51E
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x14C4802E1FF8DE50
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -5356,10 +5364,16 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeInnerSeamPlainAndSendableRoutes: 36,
 		.holeInnerSeamWithBothEnums: 17,
 		.holeTwoSeamCycleWithSendableEdge: 26,
-		.holeInnerStagedPlaceOnSendableRoute: 26,
+		.holeInnerSendablePlaceOnSendableRoute: 26,
 		.holeLazyWrapperBesideByValuePlace: 56,
 		.holeSendableLazyWrapperBesideByValuePlace: 27,
 		.holePlaceInsideSendableFill: 31,
+		.holeSharedTypes: 87,
+		.holeSharedTypesThroughModel: 45,
+		.holeTangleOfCycles: 82,
+		.holeTangleReadsInstantiator: 36,
+		.holeTangleTReadsMark: 73,
+		.holeTangleTBuiltByValue: 42,
 		.uncreatedAliasLabelLazilyInstantiatedBeside: 29,
 		.uncreatedAliasLabelReceivedBeside: 20,
 		.uncreatedAliasLabelOnMid: 6,
@@ -5481,43 +5495,29 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeCode)],
-			seeds: [83, 273, 308, 391, 407, 556, 701, 930, 945],
+			seeds: [83, 108, 298, 308, 326, 391, 407, 556, 701, 930, 945],
 		),
-		// The design's output stability, section 8: a second hole type whose stem collides with another's renames both.
-		GraphFuzzerKnownIssue(
-			reason: collidingHoleTypesReason,
-			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`")],
-			seeds: [98, 931],
-		),
-		// Both, where the colliding hole types' names take other letters than the first hole type's.
+		// The design's output stability, section 8: a second hole type whose stem collides with another's renames both;
+		// and the two colliding hole types' builders, enums and payload bindings are ordered by their names, which the move
+		// across wrapper names reorders.
 		GraphFuzzerKnownIssue(
 			reason: "\(collidingHoleTypesReason); and \(seamBuilderOrderReason)",
 			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`"), .renamedGraphDiffers(.dependencyTreeCode)],
-			seeds: [481, 929],
+			seeds: [98, 481, 929, 931],
 		),
 		// The colliding hole types in a graph whose mock shows the inherited shape of a mock's API, which the base corpus
 		// lists 338, 595 and 948 under.
 		GraphFuzzerKnownIssue(
 			reason: "\(collidingHoleTypesReason); and \(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
 			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`"), .renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [338, 595, 836, 948],
+			seeds: [311, 338, 595, 836, 948],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(collidingHoleTypesReason); and \(lazyCycleConfigurationFieldReason)",
 			signatures: [.holeNamesChangeWithSecondPlace(containing: "`holeGadgetOther`"), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [311, 383],
-		),
-		// A seam that passes up the staged places of two inner seams labels each builder after the seam that holds the
-		// place, which the move across wrapper names reorders, in a mocked seam whose HolePing cycle shows the base
-		// corpus's shape of a lazy cycle's configuration field.
-		GraphFuzzerKnownIssue(
-			reason: "\(passedUpStagedBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [135],
+			seeds: [383],
 		),
 	]
-
-	private static let passedUpStagedBuilderOrderReason = "A seam's staged builders are ordered by label, which names the seam that holds each staged place it passes up, so moving type names across wrapper names reorders them, its generated initializers and the calls of them"
 
 	private static let seamBuilderOrderReason = "A seam's builders are ordered by label, which its hole type's name begins, so moving type names across wrapper names reorders the builders of a seam with two hole types, its generated initializers and the calls of them"
 
@@ -5531,12 +5531,12 @@ struct SafeDIToolGraphFuzzerTests {
 	/// at all, since the seam's draw changed their graphs, or the base corpus's mock vocabulary draw, which the seam
 	/// corpus does not draw, changed them there (154, 527, 657); the inherited lists leave them out. Observed, not
 	/// derived: a seed here that a run finds failing its inherited shape again is a new failure, and goes back.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 154, 309, 311, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 595, 632, 657, 714, 728, 735, 768, 774, 786, 808, 836, 840, 847, 903, 948]
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 154, 157, 309, 311, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 595, 632, 657, 714, 728, 735, 768, 774, 786, 808, 836, 840, 847, 903, 948]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
 	private static let seamCorpusSeedsAddedToInheritedShapes: [String: [UInt64]] = [
-		lazyCycleConfigurationFieldReason: [163, 854, 868],
+		lazyCycleConfigurationFieldReason: [19, 135, 163, 854],
 	]
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order
@@ -5609,7 +5609,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x25B6F9BBB91973CD
+	static let publicMockCorpusFixtureHash: UInt64 = 0xAD9CDA020E94461F
 	static let publicMockCorpusAcceptedSeedCount = 863
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x0ACCA7FED6243E41
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -5636,7 +5636,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// condition and a configuration whose members are all narrower than `public` (seed 142); two leaves that each build
 	/// the `session` their caller cannot name, M8.9b's, a leaf reached through an erased constant, and a hole's builder
 	/// passed up (seed 151); a consumer in another package filling a hole whose fill builds the `.public` type again
-	/// through an `Instantiator`, a fully lazy cycle (seed 197); a staged builder for a hole beneath a `Sendable` wrapper
+	/// through an `Instantiator`, a fully lazy cycle (seed 197); a `@Sendable` builder for a hole beneath a `Sendable` wrapper
 	/// (seed 59; seed 211, which showed it first, now draws `T6Twin` and is a known issue); a consumer in another package only and a differing mock condition (seed 253); a configuration's
 	/// module-level forwarder of a default's provider, and a hole's builder passed up into a `@Sendable` builder function
 	/// (seed 551); a third tier (seed 215); the comment naming a type SafeDI reads no declaration of (seed 10) – a graph the

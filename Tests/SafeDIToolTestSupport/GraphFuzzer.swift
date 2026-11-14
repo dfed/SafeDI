@@ -1193,7 +1193,7 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case holeTwoSeamCycleWithSendableEdge
 	/// `HoleStager`, a seam `HoleSeam` builds in a `SendableInstantiator`, whose own place is in one too: an inner
 	/// place on a `@Sendable` route.
-	case holeInnerStagedPlaceOnSendableRoute
+	case holeInnerSendablePlaceOnSendableRoute
 	/// The hole's owner also holds it in a `LazilyInstantiated`, or a `SendableLazilyInstantiated`, beside its by-value
 	/// place.
 	case holeLazyWrapperBesideByValuePlace
@@ -1201,6 +1201,30 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `HoleDeep`, a seam of the module beneath the seam's, built by `HoleSeam` in a `SendableInstantiator`, whose hole
 	/// `HoleDeepImpl` fills in the seam's module with a place of `HoleSeam`'s own hole: a place inside a `@Sendable` fill.
 	case holePlaceInsideSendableFill
+	/// Types shared under a hole, the design's shape E: `HoleScreenA` and `HoleScreenB`, which the seam builds by value,
+	/// both instantiate `holeShared: HoleShared`, which holds a place of the hole. `HoleScreenB` holds a place of its own
+	/// before it, so its `holeShared` is a second path to a type that holds a place, which the second-path oracle leaves
+	/// out (`GraphFuzzerGenerator.fixtureWithoutSecondPath(forSeed:features:)`).
+	case holeSharedTypes
+	/// `HoleShared` holds its place through `HoleModel`, a type it instantiates.
+	case holeSharedTypesThroughModel
+	/// A tangle of cycles no type always encloses (the design's `f1`): the seam builds `HoleTangleT` and `HoleTangleC`
+	/// through instantiators, `HoleTangleT` builds `HoleTangleC` before its place of `HoleTangleService`, and `HoleTangleC`
+	/// binds `holeTangleMark` and builds `HoleTangleT`. `HoleTangleImpl`, its fulfiller, reads `holeTangleMark` only if
+	/// available, which only the path through `HoleTangleC` binds, so the value oracle compares what the place of a build
+	/// of `HoleTangleT` that a closed cycle makes reads with what the visible build reads there.
+	case holeTangleOfCycles
+	/// `HoleTangleImpl` also reads `holeTangleC` only if available, which `HoleTangleT` binds before the place on every
+	/// path, the one where it closes the cycle included.
+	case holeTangleReadsInstantiator
+	/// `HoleTangleT` instantiates `HoleTangleReader`, which reads `holeTangleMark` only if available, so the function that
+	/// builds the seam's `HoleTangleT` takes it as a cycle parameter and the tool accepts the graph; without it, the tool
+	/// rejects the graph, whose fill reads a value a cycle declares again.
+	case holeTangleTReadsMark
+	/// With `holeTangleTReadsMark`, the seam also builds `HoleTangleT` by value, `holeTangleTValue`, in a function that takes
+	/// no cycle parameter, so `HoleTangleT`'s level binds `holeTangleMark` as that build's tree reads it there: the seam's
+	/// deferred parameter, which it holds lazily.
+	case holeTangleTBuiltByValue
 
 	/// `addingUncreatedAliasExtensions`' second declaration of the alias's label: a lazily instantiated wrapper of the
 	/// alias's property, on `AliasLeft`, `AliasMid` or the seam.
@@ -1812,6 +1836,18 @@ enum GraphFuzzerGenerator {
 		return builder.secondHolePlace.map { ($0.label, GraphFuzzerFixture(seed: seed, swiftFileContent: swiftFileContent)) }
 	}
 
+	/// The graph for `seed` and `features` without its second path to a type that holds a place – the property a hole draw
+	/// adds on a type that holds a place without it, which builds a type another path builds too – drawn otherwise exactly
+	/// as the graph is, with that property's type name and label, or `nil` when the graph has none. The second-path oracle
+	/// requires the property's own case to be all the path adds (`GraphFuzzerToolRuns.secondPathFailure`).
+	static func fixtureWithoutSecondPath(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>) -> (typeName: String, label: String, fixture: GraphFuzzerFixture)? {
+		guard features.contains(.generateDependencyTree) else { return nil }
+		var builder = Builder(seed: seed, features: features, storesEveryParameter: false)
+		builder.omitsSecondPath = true
+		let swiftFileContent = builder.build()
+		return builder.secondPath.map { ($0.typeName, $0.label, GraphFuzzerFixture(seed: seed, swiftFileContent: swiftFileContent)) }
+	}
+
 	/// The known-right path of the `generateMockPublic` feature's value differential for `seed`: its graph with every
 	/// declaration `public` and every `generateMock: .public` turned into `true`, so that every consumer constructs
 	/// everything and inlines today's internal mock of each `.public` type.
@@ -2136,6 +2172,9 @@ enum GraphFuzzerGenerator {
 			if omitsSecondHolePlace, let secondHolePlace, let index = finalDeclarations.firstIndex(where: { $0.name == secondHolePlace.typeName }) {
 				finalDeclarations[index].properties.removeAll { $0.label == secondHolePlace.label }
 			}
+			if omitsSecondPath, let secondPath, let index = finalDeclarations.firstIndex(where: { $0.name == secondPath.typeName }) {
+				finalDeclarations[index].properties.removeAll { $0.label == secondPath.label }
+			}
 			// Each declaration moved to a file without a SafeDI marker, in its owner's module, named on its own line.
 			let markerFreeSources = markerFreeFiles.map { file in
 				let fileNameLine = GraphFuzzerFixture.fileNameMarker + file.fileName
@@ -2384,6 +2423,12 @@ enum GraphFuzzerGenerator {
 		private(set) var secondHolePlace: (typeName: String, label: String)?
 		/// Whether `build()` leaves out `secondHolePlace`, after every draw, so that the graph is drawn as with it.
 		var omitsSecondHolePlace = false
+		/// The property `addingHoleShapes` adds that is a second path to a type that already holds a place on another path,
+		/// on a type that holds a place without it – by its type's name and its label – which the second-path oracle removes
+		/// (`GraphFuzzerGenerator.fixtureWithoutSecondPath`).
+		private(set) var secondPath: (typeName: String, label: String)?
+		/// Whether `build()` leaves out `secondPath`, after every draw, so that the graph is drawn as with it.
+		var omitsSecondPath = false
 		/// Draw only the choices of the passes added when the seam tests' siblings moved to the fuzzer, each after the
 		/// pass it extends, so that every graph those passes leave plain is drawn as before:
 		/// `addingUncreatedAliasExtensions`, `addingLabelFormsSeam`, `movingSelfContainedSeamsIntoSeamModule` and
@@ -4701,10 +4746,17 @@ enum GraphFuzzerGenerator {
 			let drawsInnerSeamRoutes = holeRolls.innerSeamRoutes.percentChance(25)
 			let innerSeamRoutesBeneathOuterSeam = holeRolls.innerSeamRoutes.percentChance(50)
 			let drawsTwoSeamCycle = holeRolls.twoSeamCycle.percentChance(20)
-			let drawsInnerStagedPlace = holeRolls.innerStagedPlace.percentChance(20)
+			let drawsInnerSendablePlace = holeRolls.innerSendablePlace.percentChance(20)
 			let drawsWrapperBesidePlace = holeRolls.wrapperBesidePlace.percentChance(25)
 			let besidePlaceWrapper = holeRolls.wrapperBesidePlace.element(of: lazyWrappers)
 			let drawsPlaceInsideSendableFill = holeRolls.placeInsideSendableFill.percentChance(25)
+			// The draws of scopes nested by type, each on a generator of its own, made whatever the base draw.
+			let drawsSharedTypes = holeRolls.sharedTypes.percentChance(30)
+			let sharedTypesThroughModel = holeRolls.sharedTypes.percentChance(50)
+			let drawsTangle = holeRolls.tangle.percentChance(30)
+			let tangleReadsInstantiator = holeRolls.tangle.percentChance(50)
+			let tangleTReadsMark = holeRolls.tangle.percentChance(90)
+			let tangleTBuiltByValue = holeRolls.tangle.percentChance(50)
 			// The fillers and the root that reaches the seam are in another package than the seam's, unless the seam's module
 			// has no package, which this draw keeps apart from a caller in another package, as every other graph's draws were.
 			let fillsFromOtherPackage = drawsCrossPackage && !modulesOmittingPackageName.contains(.seamModule)
@@ -5046,7 +5098,7 @@ enum GraphFuzzerGenerator {
 			// `SendableInstantiator`, builds `HoleStageOwner`, whose hole `HoleImpl` fills, in one too. `HoleStageOwner`
 			// instantiates `holeAnalytics`, so that the scope of the `@Sendable` function that builds it carries the field
 			// `HoleImpl` reads.
-			if drawsInnerStagedPlace, drawsSendableRoutes, !implReadsOwnersAlias {
+			if drawsInnerSendablePlace, drawsSendableRoutes, !implReadsOwnersAlias {
 				let stageOwner = instantiable("HoleStageOwner", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeAnalytics", type: analyticsName), holeProperty])
 				var stager = instantiable("HoleStager", module: .seamModule, properties: [
 					PropertyDeclaration(attribute: "@Instantiated", label: "holeStageOwnerBuilder", type: "SendableInstantiator<\(stageOwner.name)>"),
@@ -5114,6 +5166,79 @@ enum GraphFuzzerGenerator {
 					secondHolePlace = (seamName, "holeDeepBuilder")
 				}
 			}
+			// Types shared under a hole, the shape a scope nested by type is for (the design's shape E): `HoleScreenA` and
+			// `HoleScreenB`, which the seam builds by value, both instantiate `holeShared: HoleShared`, which holds a place of
+			// the hole or, half the time, instantiates `HoleModel`, which does. `HoleScreenB` holds a place of its own before
+			// it, so it has a scope enum without its `holeShared`, the graph's second path to `HoleShared` (`secondPath`),
+			// whose case the second-path oracle requires to be all that it adds. Not drawn where `HoleImpl` reads
+			// `HoleOwner`'s alias, which these places' scopes do not carry.
+			if drawsSharedTypes, !implReadsOwnersAlias {
+				var shared = instantiable("HoleShared", module: .seamModule, properties: [holeProperty])
+				if sharedTypesThroughModel {
+					let model = instantiable("HoleModel", module: .seamModule, properties: [holeProperty])
+					shared.properties = [PropertyDeclaration(attribute: "@Instantiated", label: "holeModel", type: model.name)]
+					seamModuleDeclarations.append(model)
+				}
+				let sharedProperty = PropertyDeclaration(attribute: "@Instantiated", label: "holeShared", type: shared.name)
+				let screenA = instantiable("HoleScreenA", module: .seamModule, properties: [sharedProperty])
+				let screenB = instantiable("HoleScreenB", module: .seamModule, properties: [holeProperty, sharedProperty])
+				seamModuleDeclarations += [shared, screenA, screenB]
+				seam.properties += [
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeScreenA", type: screenA.name),
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeScreenB", type: screenB.name),
+				]
+				secondPath = (screenB.name, sharedProperty.label)
+			}
+			// A tangle of cycles no type always encloses (the design's `f1`): the seam builds `HoleTangleT` and `HoleTangleC`
+			// through instantiators, `HoleTangleT` builds `HoleTangleC` before its place of `HoleTangleService`, and
+			// `HoleTangleC` binds `holeTangleMark` before it builds `HoleTangleT`. `HoleTangleImpl` fills the place and reads
+			// `holeTangleMark` only if available, which only the path through `HoleTangleC` binds, and half the time
+			// `holeTangleC` too. Nine times in ten `HoleTangleT` instantiates `HoleTangleReader`, which reads
+			// `holeTangleMark` only if available too, so the function that builds the seam's `HoleTangleT` takes it as a cycle
+			// parameter, which `HoleTangleT`'s level carries: the tool accepts the graph, and the value oracle compares what
+			// the place of each build of `HoleTangleT`, those a closed cycle makes included, reads with what the visible build
+			// reads there (the design's cycle value oracle). Without the reader, that function takes nothing, and a fill that
+			// reads a value a cycle declares again is an error. Only where the graph holds `Instantiator`, so that no
+			// `@Sendable` function encloses the place.
+			if drawsTangle, sendability != .sendable {
+				let tangleServiceName = name("HoleTangleService")
+				let mark = instantiable("HoleTangleMark", module: .seamModule)
+				let tangleTProperty = PropertyDeclaration(attribute: "@Instantiated", label: "holeTangleT", type: "Instantiator<\(name("HoleTangleT"))>")
+				let tangleCProperty = PropertyDeclaration(attribute: "@Instantiated", label: "holeTangleC", type: "Instantiator<\(name("HoleTangleC"))>")
+				var tangleT = instantiable("HoleTangleT", module: .seamModule, properties: [
+					tangleCProperty,
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeTangleService", type: "any \(tangleServiceName)"),
+				])
+				if tangleTReadsMark {
+					let reader = instantiable("HoleTangleReader", module: .seamModule, properties: [
+						PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeTangleMark", type: mark.name + "?"),
+					])
+					tangleT.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "holeTangleReader", type: reader.name), at: 0)
+					seamModuleDeclarations.append(reader)
+				}
+				tangleT.additionalDeclarations.append("public protocol \(tangleServiceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+				let tangleC = instantiable("HoleTangleC", module: .seamModule, properties: [
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeTangleMark", type: mark.name),
+					tangleTProperty,
+				])
+				var tangleImpl = instantiable("HoleTangleImpl", module: fillerModule, properties: [
+					PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeTangleMark", type: mark.name + "?"),
+				])
+				if tangleReadsInstantiator {
+					tangleImpl.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeTangleC", type: tangleCProperty.type + "?"))
+				}
+				tangleImpl.instantiableArguments = ["fulfillingAdditionalTypes: [\(tangleServiceName).self]"]
+				tangleImpl.additionalConformances.append(tangleServiceName)
+				tangleImpl.fillsHole = true
+				seamModuleDeclarations += [mark, tangleT, tangleC]
+				callerDeclarations.append(tangleImpl)
+				seam.properties += [tangleTProperty, tangleCProperty]
+				// Half the time, with the reader, the seam also builds `HoleTangleT` by value, in a function that takes no cycle
+				// parameter: its level binds `holeTangleMark` from the seam's parameter, which the seam's tree holds lazily.
+				if tangleTReadsMark, tangleTBuiltByValue {
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeTangleTValue", type: name("HoleTangleT")))
+				}
+			}
 			// The second place of a graph that draws none of the above, which the name-stability oracle removes.
 			if secondHolePlace == nil, drawsSecondHole {
 				secondHolePlace = (seamName, "holeSettings")
@@ -5163,9 +5288,11 @@ enum GraphFuzzerGenerator {
 				secondHoleType = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6554797065)
 				innerSeamRoutes = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C65526F7574)
 				twoSeamCycle = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6543796363)
-				innerStagedPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553746167)
+				innerSendablePlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553746167)
 				wrapperBesidePlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6557726170)
 				placeInsideSendableFill = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6544656570)
+				sharedTypes = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553686172)
+				tangle = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6554616E67)
 			}
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
@@ -5179,14 +5306,17 @@ enum GraphFuzzerGenerator {
 			var diamond: GraphFuzzerRandomNumberGenerator
 			var nestedFill: GraphFuzzerRandomNumberGenerator
 			/// The nested builders' draws: a second hole type, an inner seam reached by a plain and a `@Sendable` route, a
-			/// cycle of two seams with a `@Sendable` edge, an inner staged place on a `@Sendable` route, a wrapper beside a
+			/// cycle of two seams with a `@Sendable` edge, an inner place on a `@Sendable` route, a wrapper beside a
 			/// by-value place, and a place inside a `@Sendable` fill.
 			var secondHoleType: GraphFuzzerRandomNumberGenerator
 			var innerSeamRoutes: GraphFuzzerRandomNumberGenerator
 			var twoSeamCycle: GraphFuzzerRandomNumberGenerator
-			var innerStagedPlace: GraphFuzzerRandomNumberGenerator
+			var innerSendablePlace: GraphFuzzerRandomNumberGenerator
 			var wrapperBesidePlace: GraphFuzzerRandomNumberGenerator
 			var placeInsideSendableFill: GraphFuzzerRandomNumberGenerator
+			/// The draws of scopes nested by type: types shared under a hole, and a tangle of cycles with a place.
+			var sharedTypes: GraphFuzzerRandomNumberGenerator
+			var tangle: GraphFuzzerRandomNumberGenerator
 		}
 
 		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
@@ -8101,13 +8231,31 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			features.insert(.holeTwoSeamCycleWithSendableEdge)
 		}
 		if declares("HoleStager") {
-			features.insert(.holeInnerStagedPlaceOnSendableRoute)
+			features.insert(.holeInnerSendablePlaceOnSendableRoute)
 		}
 		for property in properties(of: "HoleSeam") + properties(of: "HoleOwner") where property.label == "holeServiceLazy" {
 			features.insert(property.type.hasPrefix("Sendable") ? .holeSendableLazyWrapperBesideByValuePlace : .holeLazyWrapperBesideByValuePlace)
 		}
 		if declares("HoleDeep") {
 			features.insert(.holePlaceInsideSendableFill)
+		}
+		if properties(of: "HoleScreenB").contains(where: { $0.label == "holeShared" }) {
+			features.insert(.holeSharedTypes)
+			if declares("HoleModel") {
+				features.insert(.holeSharedTypesThroughModel)
+			}
+		}
+		if declares("HoleTangleT") {
+			features.insert(.holeTangleOfCycles)
+			if properties(of: "HoleTangleImpl").contains(where: { $0.label == "holeTangleC" }) {
+				features.insert(.holeTangleReadsInstantiator)
+			}
+			if declares("HoleTangleReader") {
+				features.insert(.holeTangleTReadsMark)
+			}
+			if properties(of: "HoleSeam").contains(where: { $0.label == "holeTangleTValue" }) {
+				features.insert(.holeTangleTBuiltByValue)
+			}
 		}
 		if declares("HoleMiddle") {
 			features.insert(.holeReentersSeamBeneathRedeclaredLabel)
@@ -8366,7 +8514,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		let builderParameter = try! NSRegularExpression(pattern: #"\b\w+Builder\w*: @escaping (@Sendable )?\((\w+\.)?SafeDI(?:Sendable)?Scope_"#)
 		let otherSeamsStruct = try! NSRegularExpression(pattern: #"@escaping (?:@Sendable )?\((\w+)\.SafeDI(?:Sendable)?Scope_"#)
 		let enumCaseOfInnerSeam = try! NSRegularExpression(pattern: #"^ +(?:indirect )?case \w+\((?:\w+, )?\w+\.SafeDI(?:Sendable)?Scope_"#)
-		// A fill takes a case's payload or a stage's struct; a dispatcher, the enum, which is no fill.
+		// A fill takes a case's payload; a dispatcher, the enum, which is no fill.
 		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+_Scope_*)?\.\w+_Values"#)
 		let dispatcherDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
 		let enclosingDispatcherDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func __safeDI_\w+\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
@@ -9056,6 +9204,21 @@ struct GraphFuzzerFailure: Equatable {
 		/// Two builds of one type in a seam's tree bind other values before the same property (`SeamPlaceLevels.levelDisagreements()`):
 		/// the levels a scope enum would nest by type would depend on the path.
 		case placeLevelsDifferBetweenBuildsOfType = "two builds of one type in a seam's tree bind other values before the same property"
+		/// A place's path in a seam's tree repeats a declaration (`GraphFuzzerPlaceFacts.chainRepeats`): a scope value's
+		/// chain would repeat one, which a build that closes a cycle, being the first build, never makes.
+		case placeChainRepeatsDeclaration = "a place's path in a seam's tree repeats a declaration"
+		/// A second path to a type that holds a place adds or changes a level, or, where the generator nests by type, an
+		/// enum, a case, a struct or a field, besides its own property's case (`GraphFuzzerToolRuns.secondPathFailure`).
+		case secondPathChangesScope = "a second path to a type that holds a place changes the scope beyond its own case"
+		/// A case a place's path produces that no generated scope enum declares
+		/// (`GraphFuzzerScopeDeclarations.undeclaredProducedCases(of:)`).
+		case producedCaseUndeclared = "a place's path produces a case no scope enum declares"
+		/// A generated scope enum or case of its own that no place's path produces, in a graph without a tangle of cycles
+		/// (`GraphFuzzerScopeDeclarations.unproducedDeclaredCases(of:)`).
+		case declaredCaseNeverProduced = "a scope enum or case no place's path produces, without a tangle of cycles"
+		/// A case of a scope enum that names no property of the type the enum describes
+		/// (`GraphFuzzerScopeDeclarations.casesNamingNoPropertyOfTheirType(of:)`).
+		case scopeCaseNamesNoProperty = "a scope enum's case names no property of the type it describes"
 	}
 
 	let seed: UInt64
@@ -9102,9 +9265,11 @@ struct GraphFuzzerResult {
 		isComparedAcrossIntegrations: Bool = false,
 		isComparedWithReadTwin: Bool = false,
 		isComparedWithoutSecondHolePlace: Bool = false,
+		isComparedWithoutSecondPath: Bool = false,
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
 	) {
 		self.isComparedWithoutSecondHolePlace = isComparedWithoutSecondHolePlace
+		self.isComparedWithoutSecondPath = isComparedWithoutSecondPath
 		self.fixture = fixture
 		self.outcome = outcome
 		self.failure = failure
@@ -9152,6 +9317,10 @@ struct GraphFuzzerResult {
 	/// for the graph without its second place of a hole (`GraphFuzzerToolRuns.holeNameStabilityFailure`): the tool accepts
 	/// both.
 	let isComparedWithoutSecondHolePlace: Bool
+	/// Whether the oracle compared the levels, and where the generator nests by type the scope enums, the tool computes for
+	/// the graph with those of the graph without its second path to a type that holds a place
+	/// (`GraphFuzzerToolRuns.secondPathFailure`): the tool accepts both.
+	let isComparedWithoutSecondPath: Bool
 	/// A base corpus graph's value-oracle run, whose pairs and skips the long run counts.
 	let valueOracle: GraphFuzzerValueOracleRun?
 
@@ -9481,6 +9650,16 @@ struct GraphFuzzerHash {
 	}
 }
 
+/// The run of a graph without its second path to a type that holds a place
+/// (`GraphFuzzerGenerator.fixtureWithoutSecondPath(forSeed:features:)`): the property left out, by its type's name and its
+/// label, what the tool produced, and the facts of the places it computed.
+struct GraphFuzzerSecondPathRun {
+	let typeName: String
+	let label: String
+	let outcome: GraphFuzzerToolOutcome
+	let placeFacts: GraphFuzzerPlaceFacts
+}
+
 /// A graph with what two runs of the tool produced for it.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct GraphFuzzerToolRuns {
@@ -9503,6 +9682,9 @@ struct GraphFuzzerToolRuns {
 	///     (`GraphFuzzerGenerator.fixtureWithoutSecondHolePlace`), when it has one, with the place it leaves out.
 	///   - placeLevelDisagreements: Each level of a place of a seam that one build of a type gives with other values than
 	///     another build of it, in the run of `firstOutcome` (`SeamPlaceLevels.levelDisagreements()`).
+	///   - placeFacts: The facts of the places of every seam's holes the run of `firstOutcome` computes.
+	///   - withoutSecondPath: The run of the graph without its second path to a type that holds a place
+	///     (`GraphFuzzerGenerator.fixtureWithoutSecondPath(forSeed:features:)`), when it has one.
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
@@ -9518,9 +9700,13 @@ struct GraphFuzzerToolRuns {
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
 		withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)? = nil,
 		placeLevelDisagreements: [String] = [],
+		placeFacts: GraphFuzzerPlaceFacts = GraphFuzzerPlaceFacts(),
+		withoutSecondPath: GraphFuzzerSecondPathRun? = nil,
 	) {
 		self.withoutSecondHolePlaceOutcome = withoutSecondHolePlaceOutcome
 		self.placeLevelDisagreements = placeLevelDisagreements
+		self.placeFacts = placeFacts
+		self.withoutSecondPath = withoutSecondPath
 		self.fixture = fixture
 		self.firstOutcome = firstOutcome
 		self.secondOutcome = secondOutcome
@@ -9549,6 +9735,87 @@ struct GraphFuzzerToolRuns {
 	let valueOracle: GraphFuzzerValueOracleRun?
 	let withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)?
 	let placeLevelDisagreements: [String]
+	let placeFacts: GraphFuzzerPlaceFacts
+	let withoutSecondPath: GraphFuzzerSecondPathRun?
+
+	/// The failure of a graph some place of whose seam's tree has a path that repeats a declaration, or `nil`: the tree
+	/// closes a cycle where a declaration is already being built above, and a build that closes a cycle is the first build,
+	/// so a scope value's chain never repeats a declaration and a recursive scope enum's value has a bounded depth (the
+	/// design's section 2.4). The per-path bodies 2.3.0 generates build each place's scope value from its path, so this
+	/// judges their chains; a body with one function per type, after the tag, builds them at run time, which only a run of
+	/// the generated code can judge.
+	var placeChainFailure: GraphFuzzerFailure? {
+		guard !placeFacts.chainRepeats.isEmpty else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .placeChainRepeatsDeclaration,
+			details: "\(placeFacts.chainRepeats.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
+		)
+	}
+
+	/// Whether the tool accepts the graph and the graph without its second path to a type that holds a place, which
+	/// `secondPathFailure` compares.
+	var isComparedWithoutSecondPath: Bool {
+		guard case .accepted = firstOutcome, case .accepted? = withoutSecondPath?.outcome else { return false }
+		return true
+	}
+
+	/// The failure of a graph with a second path to a type that holds a place, when the tool accepts it with and without
+	/// the path, whose levels (`GraphFuzzerPlaceFacts.secondPathLevelChanges(comparedWith:typeName:label:)`), or, where the
+	/// generator nests the graph's scopes by type (`nestsEveryScopeByType`), scope enums, cases, structs and fields
+	/// (`GraphFuzzerScopeDeclarations.secondPathChanges(comparedWith:typeName:label:)`), differ beyond the case of the
+	/// path's own property, or `nil`: a second path to a type that holds a place adds nothing (the design's section 2.10).
+	var secondPathFailure: GraphFuzzerFailure? {
+		guard case let .accepted(generatedFiles, _) = firstOutcome,
+		      let withoutSecondPath,
+		      case let .accepted(filesWithoutPath, _) = withoutSecondPath.outcome
+		else { return nil }
+		var changes = placeFacts.secondPathLevelChanges(comparedWith: withoutSecondPath.placeFacts, typeName: withoutSecondPath.typeName, label: withoutSecondPath.label)
+		if nestsEveryScopeByType {
+			changes += GraphFuzzerScopeDeclarations(generatedFiles: generatedFiles).secondPathChanges(
+				comparedWith: GraphFuzzerScopeDeclarations(generatedFiles: filesWithoutPath),
+				typeName: withoutSecondPath.typeName,
+				label: withoutSecondPath.label,
+			)
+		}
+		guard !changes.isEmpty else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .secondPathChangesScope,
+			details: "The second path `\(withoutSecondPath.typeName).\(withoutSecondPath.label)`:\n\(changes.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)\nWithout its second path:\n\(withoutSecondPath.outcome.description)",
+		)
+	}
+
+	/// Whether the generator nests every scope of the graph's holes by type: a root enum per hole type, one enum per type
+	/// that holds a place, nested in it, and a case per property that leads to a place. The oracles that read the
+	/// generated scope enums (`GraphFuzzerScopeDeclarations`: the second-path oracle's enums, cases and fields, and
+	/// `scopeCaseFailures`) run only where it does. A place inside a fill is reached through a call's case for the
+	/// builder filled, which they do not model yet, so a graph that holds one is skipped (`GraphFuzzerPlaceFacts.holdsPlaceInsideFill`); the
+	/// oracles that read the places' levels and paths run on every graph.
+	var nestsEveryScopeByType: Bool {
+		!placeFacts.holdsPlaceInsideFill
+	}
+
+	/// The failures of an accepted graph whose generated scope enums, nested by type, disagree with the cases its places'
+	/// paths produce (`GraphFuzzerScopeDeclarations`): a produced case no enum declares; in a graph without a tangle of
+	/// cycles, an enum or a case of its own no path produces; and a case that names no property of its type. Empty for a
+	/// graph some of whose scopes are not nested by type (`nestsEveryScopeByType`).
+	var scopeCaseFailures: [GraphFuzzerFailure] {
+		guard nestsEveryScopeByType, case let .accepted(generatedFiles, _) = firstOutcome else { return [] }
+		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: generatedFiles)
+		var failures = [GraphFuzzerFailure]()
+		func append(_ kind: GraphFuzzerFailure.Kind, _ descriptions: [String]) {
+			guard !descriptions.isEmpty else { return }
+			failures.append(GraphFuzzerFailure(seed: fixture.seed, kind: kind, details: "\(descriptions.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)"))
+		}
+		append(.producedCaseUndeclared, declarations.undeclaredProducedCases(of: placeFacts))
+		// A tangle of cycles no type always encloses can keep a case no run produces, which the design accepts.
+		if !GraphFuzzerFeature.seamDrawFeatures(of: fixture).contains(.holeTangleOfCycles) {
+			append(.declaredCaseNeverProduced, declarations.unproducedDeclaredCases(of: placeFacts))
+		}
+		append(.scopeCaseNamesNoProperty, declarations.casesNamingNoPropertyOfTheirType(of: placeFacts.addingSeamRootLabels(declaredIn: fixture.swiftFileContent)))
+		return failures
+	}
 
 	/// The failure of a graph in whose seam's tree two builds of one type bind other values before the same property, or
 	/// `nil`: a scope enum nested by type holds one level per type, so what a type binds before a property, the seam's
@@ -10134,7 +10401,7 @@ enum GraphFuzzerOracle {
 		}
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.placeLevelsFailure, runs.multiModuleFailures.first].compactMap(\.self) + renamedGraphFailures
+			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first].compactMap(\.self) + runs.scopeCaseFailures + renamedGraphFailures
 			// A base corpus graph is compared once its value-oracle graph is.
 			let isValueOracleGraphCompared = runs.valueOracle == nil || valueComparisons.comparedValueOracleSeeds.contains(runs.fixture.seed)
 			return GraphFuzzerResult(
@@ -10149,6 +10416,7 @@ enum GraphFuzzerOracle {
 				isComparedAcrossIntegrations: runs.pluginOutcome != nil,
 				isComparedWithReadTwin: runs.readTwinOutcome != nil,
 				isComparedWithoutSecondHolePlace: runs.isComparedWithoutSecondHolePlace,
+				isComparedWithoutSecondPath: runs.isComparedWithoutSecondPath,
 				valueOracle: runs.valueOracle,
 			)
 		}
@@ -10602,7 +10870,11 @@ enum GraphFuzzerOracle {
 		}
 		// The levels of each place of a seam the first run computes must be the same on every build of a type
 		// (`placeLevelsFailure`).
-		let (firstOutcome, placeLevelDisagreements) = try await collectingPlaceLevelDisagreements(during: { try await toolOutcome(of: fixture) })
+		// The paths of the places the first run computes must repeat no declaration (`placeChainFailure`), and their cases
+		// must be the ones the generated scope enums declare (`scopeCaseFailures`).
+		let ((firstOutcome, placeLevelDisagreements), placeFacts) = try await collectingPlaceFacts(during: {
+			try await collectingPlaceLevelDisagreements(during: { try await toolOutcome(of: fixture) })
+		})
 		// A graph with a seam is run again with no seam: a rejection inline does not make is either a seam's own error
 		// or a defect (`differentialFailure`), and an accepted graph must pass no receiver `nil` that inline passes a
 		// value (`nilArgumentFailure`).
@@ -10650,11 +10922,20 @@ enum GraphFuzzerOracle {
 		// graph the generator draws for its seed has one.
 		var withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)?
 		let drawnFeatures = GraphFuzzerGeneratorFeature.features(drawnIn: fixture)
-		if !drawnFeatures.isEmpty, case .accepted = firstOutcome,
-		   let withoutPlace = GraphFuzzerGenerator.fixtureWithoutSecondHolePlace(forSeed: fixture.seed, features: drawnFeatures),
-		   GraphFuzzerGenerator.fixture(forSeed: fixture.seed, features: drawnFeatures).swiftFileContent == fixture.swiftFileContent
+		let isDrawnForItsSeed = !drawnFeatures.isEmpty && GraphFuzzerGenerator.fixture(forSeed: fixture.seed, features: drawnFeatures).swiftFileContent == fixture.swiftFileContent
+		if isDrawnForItsSeed, case .accepted = firstOutcome,
+		   let withoutPlace = GraphFuzzerGenerator.fixtureWithoutSecondHolePlace(forSeed: fixture.seed, features: drawnFeatures)
 		{
 			withoutSecondHolePlaceOutcome = try await (withoutPlace.place, toolOutcome(of: withoutPlace.fixture))
+		}
+		// A graph drawn with a second path to a type that holds a place is run again without it, which must change nothing
+		// but the path's own case (`secondPathFailure`).
+		var withoutSecondPath: GraphFuzzerSecondPathRun?
+		if isDrawnForItsSeed, case .accepted = firstOutcome,
+		   let withoutPath = GraphFuzzerGenerator.fixtureWithoutSecondPath(forSeed: fixture.seed, features: drawnFeatures)
+		{
+			let (outcome, facts) = try await collectingPlaceFacts(during: { try await toolOutcome(of: withoutPath.fixture) })
+			withoutSecondPath = GraphFuzzerSecondPathRun(typeName: withoutPath.typeName, label: withoutPath.label, outcome: outcome, placeFacts: facts)
 		}
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
@@ -10671,6 +10952,8 @@ enum GraphFuzzerOracle {
 			valueOracle: valueOracle,
 			withoutSecondHolePlaceOutcome: withoutSecondHolePlaceOutcome,
 			placeLevelDisagreements: placeLevelDisagreements,
+			placeFacts: placeFacts,
+			withoutSecondPath: withoutSecondPath,
 		)
 	}
 
