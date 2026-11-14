@@ -1866,8 +1866,16 @@ enum GraphFuzzerGenerator {
 		var enclosingExtension: String?
 		/// The access of the type the enclosing extension extends, which caps the type's own.
 		var enclosingTypeAccess = AccessLevel.public
+		/// Whether the type is a `struct` rather than a `final class`.
+		var isStruct = false
+		/// Declarations written before the type's own, in its file.
+		var precedingDeclarations = [String]()
 		/// Modules the type's file imports beyond those of its module's header.
 		var imports = [String]()
+		/// The name of the hand-written mock method the type declares in its body, inside an `#if DEBUG` block, which
+		/// takes every parameter its initializer takes, with the same defaults, and passes each on to it: `mock`, or the
+		/// method its `customMockName` names. `nil` for a type without one.
+		var handWrittenMockName: String?
 
 		/// The type's access as the compiler reads it: its own, capped by the type its extension extends.
 		var effectiveAccess: AccessLevel {
@@ -2033,6 +2041,7 @@ enum GraphFuzzerGenerator {
 			unreadTypeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unreadTypeRandomSeedMask)
 			unreadBoundaryRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unreadBoundaryRandomSeedMask)
 			mockOnlyBlockRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockOnlyBlockRandomSeedMask)
+			mockVocabularyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockVocabularyRandomSeedMask)
 			cycleParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.cycleParameterRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
@@ -2101,9 +2110,11 @@ enum GraphFuzzerGenerator {
 				))),
 			)
 			let aliasDeclarations = addingUncreatedAliasExtensions(to: addingUncreatedAliasShapes(to: addingSpelledProperties(to: seamDeclarations)))
-			var finalDeclarations = movingSelfContainedSeamsIntoSeamModule(
+			// The mock vocabulary is drawn after every other pass, from a stream of its own, so that every other draw of a
+			// graph it draws in is drawn as before.
+			var finalDeclarations = addingMockVocabulary(to: movingSelfContainedSeamsIntoSeamModule(
 				addingMockOnlyBlockParameterTypes(to: addingUnreadParameterTypes(to: addingLabelFormsSeam(to: addingHoleShapes(to: addingAccessProofExtensions(to: addingAccessProofShapes(to: aliasDeclarations)))))),
-			)
+			))
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -2400,6 +2411,7 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingMockOnlyBlockParameterTypes`' choices: whether a graph gains its tree with a value of a plain type
 		/// declared in a block that guards mock-only declarations, and how the clauses where `DEBUG` is inactive declare it.
 		private var mockOnlyBlockRandom: GraphFuzzerRandomNumberGenerator
+		private var mockVocabularyRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingCycleParameterShapes`' choices: whether a split graph gains `CycleSeam`'s tree, a lazy cycle that
 		/// closes through a cycle parameter with a hole beneath it, and every shape of that tree.
 		private var cycleParameterRandom: GraphFuzzerRandomNumberGenerator
@@ -5738,6 +5750,98 @@ enum GraphFuzzerGenerator {
 
 		private static let mockOnlyBlockRandomSeedMask: UInt64 = 0x6D6F636B4F6E6C79
 
+		// MARK: Mock vocabulary
+
+		/// The base corpus's draw of what an app's mocks are written with, each part independently, in the graph's own
+		/// types (`T<n>`) that every other pass has drawn:
+		/// - A `#SafeDIConfiguration` in the first root's file lists a type without `generateMock: true` in
+		///   `additionalMocksToGenerate`, so the module generates its `mock()` too.
+		/// - A type that another type instantiates, so that a mock builds it, declares a hand-written mock under
+		///   `#if DEBUG` in its body, which takes every parameter its initializer takes and passes each on to it: `mock`, or,
+		///   on a type whose `mock()` is generated, `customMock`, which `customMockName` names. A listed type never has one,
+		///   since the macro accepts `customMockName` only beside `generateMock: true` or `mockOnly: true`.
+		/// - A second type whose `mock()` is generated declares one named by `customMockName` too.
+		/// - `Service`, a leaf `final class` or `struct` every root instantiates and one to three types receive, required
+		///   or only if available, has a `mockOnly` extension under `#if DEBUG` in its file, before or after its
+		///   production declaration, whose `mock()` builds it as production does, so that a mock builds the received
+		///   service with it; or, when `Service` has `generateMock: true`, whose `preview()` `customMockName` names.
+		/// `mockVocabularyRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingMockVocabulary(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty else { return declarations }
+			var declarations = declarations
+			let graphTypeIndices = (0..<typeCount).compactMap { index in declarations.firstIndex { $0.name == typeName(index) } }
+			func generatesMock(_ index: Int) -> Bool {
+				declarations[index].instantiableArguments.contains("generateMock: true")
+			}
+			var listedIndex: Int?
+			let unmockedIndices = graphTypeIndices.filter { !generatesMock($0) }
+			if mockVocabularyRandom.percentChance(25), !unmockedIndices.isEmpty {
+				let index = mockVocabularyRandom.element(of: unmockedIndices)
+				listedIndex = index
+				declarations[0].additionalDeclarations.append("#SafeDIConfiguration(additionalMocksToGenerate: [\"\(declarations[index].name)\"])")
+			}
+			func addHandWrittenMock(to index: Int) {
+				if generatesMock(index) {
+					declarations[index].instantiableArguments.append("customMockName: \"customMock\"")
+					declarations[index].handWrittenMockName = "customMock"
+				} else {
+					declarations[index].handWrittenMockName = "mock"
+				}
+			}
+			let builtTypeNames = Set(edges.map { typeName($0.targetIndex) })
+			let builtIndices = graphTypeIndices.filter { $0 != listedIndex && builtTypeNames.contains(declarations[$0].name) }
+			if mockVocabularyRandom.percentChance(40), !builtIndices.isEmpty {
+				addHandWrittenMock(to: mockVocabularyRandom.element(of: builtIndices))
+			}
+			let mockedIndices = graphTypeIndices.filter { generatesMock($0) && declarations[$0].handWrittenMockName == nil }
+			if mockVocabularyRandom.percentChance(30), !mockedIndices.isEmpty {
+				addHandWrittenMock(to: mockVocabularyRandom.element(of: mockedIndices))
+			}
+			if mockVocabularyRandom.percentChance(40) {
+				let serviceName = "\(prefix)Service"
+				let isMocked = mockVocabularyRandom.percentChance(30)
+				var service = TypeDeclaration(
+					name: serviceName,
+					instantiableArguments: isMocked ? ["generateMock: true"] : [],
+					properties: [],
+					declaresHelperTypes: false,
+					// Built inside a `Sendable` builder in a mixed graph, whose types are `@unchecked Sendable`.
+					additionalConformances: sendability == .mixed ? ["Sendable"] : [],
+				)
+				service.isStruct = mockVocabularyRandom.percentChance(50)
+				let mockName = isMocked ? "preview" : "mock"
+				let mockOnlyExtension = [
+					"#if DEBUG",
+					isMocked ? "@Instantiable(mockOnly: true, customMockName: \"\(mockName)\")" : "@Instantiable(mockOnly: true)",
+					"extension \(serviceName) {",
+					"\tpublic static func \(mockName)() -> \(serviceName) {",
+					"\t\t\(serviceName)()",
+					"\t}",
+					"}",
+					"#endif",
+				].joined(separator: "\n")
+				if mockVocabularyRandom.percentChance(50) {
+					service.precedingDeclarations.append(mockOnlyExtension)
+				} else {
+					service.additionalDeclarations.append(mockOnlyExtension)
+				}
+				for index in 0..<rootCount {
+					declarations[index].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "service", type: serviceName))
+				}
+				var receiverIndices = graphTypeIndices
+				for _ in 0..<mockVocabularyRandom.integer(in: 1...3) where !receiverIndices.isEmpty {
+					let receiverIndex = receiverIndices.remove(at: mockVocabularyRandom.integer(in: 0...(receiverIndices.count - 1)))
+					declarations[receiverIndex].properties.append(mockVocabularyRandom.percentChance(25)
+						? PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "service", type: serviceName + "?")
+						: PropertyDeclaration(attribute: "@Received", label: "service", type: serviceName))
+				}
+				declarations.append(service)
+			}
+			return declarations
+		}
+
+		private static let mockVocabularyRandomSeedMask: UInt64 = 0x6D6F636B566F6361
+
 		// MARK: Cycle parameters
 
 		/// How a property of `addingCycleParameterShapes`' cycle builds its type.
@@ -6474,7 +6578,7 @@ enum GraphFuzzerGenerator {
 				"Instantiable"
 			}
 			let conformances = ([baseConformances] + declaration.additionalConformances).joined(separator: ", ")
-			var lines = [instantiableAttribute, "\(declaration.access.modifier)final class \(declaration.name): \(conformances) {"]
+			var lines = [instantiableAttribute, "\(declaration.access.modifier)\(declaration.isStruct ? "struct" : "final class") \(declaration.name): \(conformances) {"]
 			// A function-typed parameter is stored, so it escapes.
 			let parameters = (declaration.properties.map { "\($0.label): \(GraphFuzzerSpelling.escapingType(of: $0.type))" } + declaration.defaultValuedParameters.map(\.declaration)).joined(separator: ", ")
 			// The initializer is no wider, once its type caps it, than the narrowest type it names, so that the fixture
@@ -6494,10 +6598,24 @@ enum GraphFuzzerGenerator {
 				lines += declaration.properties.map { "\t\($0.attribute) let \($0.label): \($0.type)" }
 				lines += storedParameters.map { "\tlet \($0.storedDeclaration)" }
 			}
+			if let handWrittenMockName = declaration.handWrittenMockName {
+				// Under the mock condition, as SafeDI reads a declaration that only feeds mock generation. It passes each
+				// parameter on to the initializer, so it builds what the initializer builds.
+				let arguments = declaration.properties.map { "\($0.label): \($0.label)" } + declaration.defaultValuedParameters.map { $0.argumentLabel == "_" ? $0.name : $0.argument }
+				lines += [
+					"",
+					"\t#if DEBUG",
+					"\t\(initializerAccess.modifier)static func \(handWrittenMockName)(\(parameters)) -> \(declaration.name) {",
+					"\t\t\(declaration.name)(\(arguments.joined(separator: ", ")))",
+					"\t}",
+					"\t#endif",
+				]
+			}
 			lines.append("}")
 			if let enclosingExtension = declaration.enclosingExtension {
 				lines = ["\(enclosingExtension) {"] + lines.map { $0.isEmpty ? $0 : "\t" + $0 } + ["}"]
 			}
+			lines = declaration.precedingDeclarations.flatMap { [$0, ""] } + lines
 			if declaration.declaresHelperTypes {
 				let erasedName = declaration.name.replacingOccurrences(of: "\(prefix)T", with: "\(prefix)AnyT")
 				lines += [
@@ -6724,6 +6842,18 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// A type built through a `Sendable` wrapper whose subtree has a labeled default-valued initializer parameter and
 	/// a dependency the mock cannot build, both of types that are not `Sendable`.
 	case nonSendableValuesInsideSendableBuilder
+	/// A hand-written `mock` a type declares in its body under `#if DEBUG`, which generated mocks call to build it.
+	case handWrittenMockUnderMockCondition
+	/// A type with `generateMock: true` whose hand-written mock `customMockName` names, which its generated `mock()`
+	/// calls through to.
+	case customMockNameBesideGeneratedMock
+	/// A `mockOnly` extension of a type with a production declaration that another type receives, so that a mock that
+	/// builds the received type builds it with the extension's mock.
+	case mockOnlyExtensionOfReceivedType
+	/// An `@Instantiable` `struct`.
+	case instantiableStruct
+	/// A type a `#SafeDIConfiguration` lists in `additionalMocksToGenerate`.
+	case additionalMockToGenerate
 	/// A type declared with `generateDependencyTree: true`, whose tree SafeDI generates in an initializer of its own
 	/// that every tree reaching it calls. Drawn only with the `generateDependencyTree` generator feature on; what its
 	/// initializer takes is a `GraphFuzzerSeamOutputFeature`, read from the generated code.
@@ -7207,6 +7337,49 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 		}) {
 			features.insert(.dependencyMockCannotBuildLazilyInstantiatedReceivedAsOtherKindBesideItsMockedOwner)
+		}
+		return features.union(mockVocabularyFeatures(of: fixture))
+	}
+
+	/// The features of the mock vocabulary `addingMockVocabulary` draws, read from the source.
+	private static func mockVocabularyFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerFeature> {
+		var features = Set<GraphFuzzerFeature>()
+		var mockOnlyExtendedTypeNames = Set<String>()
+		var productionTypeNames = Set<String>()
+		var receivedTypes = Set<String>()
+		for content in fixture.swiftFileContent {
+			let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
+			for (line, nextLine) in zip(lines, lines.dropFirst()) {
+				if line == "#if DEBUG", nextLine.contains("static func mock("), !nextLine.hasPrefix("@") {
+					// A member: a top-level mock-only declaration begins with its attribute.
+					features.insert(.handWrittenMockUnderMockCondition)
+				}
+				if line.hasPrefix("@Instantiable("), line.contains("generateMock: true"), line.contains("customMockName: ") {
+					features.insert(.customMockNameBesideGeneratedMock)
+				}
+				if line.hasPrefix("@Instantiable"), !line.contains("mockOnly: true") {
+					let declaration = nextLine.split(separator: " ").drop { ["public", "package", "internal", "final"].contains($0) }
+					if declaration.first == "struct" {
+						features.insert(.instantiableStruct)
+					}
+					if let name = declaration.dropFirst().first?.prefix(while: { $0.isLetter || $0.isNumber || $0 == "_" }) {
+						productionTypeNames.insert(String(name))
+					}
+				}
+				if line.hasPrefix("@Instantiable("), line.contains("mockOnly: true"), nextLine.hasPrefix("extension ") {
+					mockOnlyExtendedTypeNames.insert(String(nextLine.dropFirst("extension ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }))
+				}
+				if line.hasPrefix("#SafeDIConfiguration(additionalMocksToGenerate: [") {
+					features.insert(.additionalMockToGenerate)
+				}
+			}
+			for line in lines where line.hasPrefix("@Received") {
+				guard let colon = line.range(of: ": ", options: .backwards) else { continue }
+				receivedTypes.insert(String(line[colon.upperBound...].prefix { $0.isLetter || $0.isNumber || $0 == "_" }))
+			}
+		}
+		if !mockOnlyExtendedTypeNames.intersection(productionTypeNames).isDisjoint(with: receivedTypes) {
+			features.insert(.mockOnlyExtensionOfReceivedType)
 		}
 		return features
 	}
@@ -8778,6 +8951,9 @@ struct GraphFuzzerFailure: Equatable {
 		case compilerCrashedOnGeneratedCode = "the Swift compiler crashed on generated code"
 		case renamedGraphDiffers = "the graph renamed to change an order gives other results"
 		case mockTakesWrapperParameterForReceive = "a generated mock takes a LazilyInstantiated parameter for a receive"
+		/// A base corpus graph's generated mock builds a type that has a hand-written mock with the type's initializer,
+		/// where it calls the hand-written mock.
+		case generatedMockBypassesHandWrittenMock = "a generated mock builds a type with its initializer rather than its hand-written mock"
 		case integrationsDiffer = "the graph split across modules gives other results under the two multi-module integrations"
 		case seamRejectsGraphInlineAccepts = "the tool rejects the graph with an error that is not a seam's own, and accepts it with no seam"
 		/// The tool accepts a graph in one module with its seam and rejects it with no seam. In one module the seam world is
@@ -9763,6 +9939,79 @@ struct GraphFuzzerToolRuns {
 		)
 	}
 
+	/// The failure of a base corpus graph whose generated mock builds a type that has a hand-written mock with the type's
+	/// initializer, or `nil`. A generated mock builds such a type by calling its hand-written mock (`mock`, or the method
+	/// `customMockName` names, in its body or in a `mockOnly` declaration), so no mock file names the type's initializer.
+	/// The value oracle cannot see this, since every drawn hand-written mock builds what the initializer builds. Only a
+	/// base corpus graph is judged, whose one module holds every declaration of every type.
+	var handWrittenMockBypassFailure: GraphFuzzerFailure? {
+		guard GraphFuzzerGeneratorFeature.features(drawnIn: fixture).isEmpty, fixture.modules == nil else { return nil }
+		let typeNames = Self.typeNamesWithHandWrittenMocks(in: fixture)
+		guard !typeNames.isEmpty else { return nil }
+		var constructions = [String]()
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix("+SafeDIMock.swift") {
+			let lines = contents.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+			for line in lines where !line.hasPrefix("//") {
+				for typeName in typeNames where Self.callsInitializer(of: typeName, in: line) {
+					constructions.append("`\(fileName)` builds `\(typeName)` with its initializer, not its hand-written mock: \(line)")
+				}
+			}
+		}
+		guard !constructions.isEmpty else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .generatedMockBypassesHandWrittenMock,
+			details: "\(constructions.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
+		)
+	}
+
+	/// The names of the types `fixture` declares a hand-written mock of, sorted: the type each static method named `mock`,
+	/// or named by a `customMockName` the fixture spells, returns, written on one line as
+	/// `static func <name>(<parameters>) -> <Type> {`.
+	private static func typeNamesWithHandWrittenMocks(in fixture: GraphFuzzerFixture) -> [String] {
+		var mockNames: Set = ["mock"]
+		for content in fixture.swiftFileContent {
+			var remaining = content[...]
+			while let range = remaining.range(of: "customMockName: \"") {
+				remaining = remaining[range.upperBound...]
+				mockNames.insert(String(remaining.prefix { $0 != "\"" }))
+			}
+		}
+		var typeNames = Set<String>()
+		for content in fixture.swiftFileContent {
+			for line in content.split(separator: "\n") {
+				guard let start = line.range(of: "static func "),
+				      let open = line[start.upperBound...].firstIndex(of: "("),
+				      mockNames.contains(String(line[start.upperBound..<open])),
+				      let close = line.range(of: ") -> ", options: .backwards),
+				      line.hasSuffix(" {")
+				else { continue }
+				let returnType = line[close.upperBound...].dropLast(" {".count)
+				typeNames.insert(String(returnType.split(separator: ".").last ?? returnType))
+			}
+		}
+		return typeNames.sorted()
+	}
+
+	/// Whether `line` calls the initializer of the type named `typeName`, spelled `<typeName>(` or `<typeName>.init`, alone
+	/// or qualified.
+	private static func callsInitializer(of typeName: String, in line: String) -> Bool {
+		func isIdentifierCharacter(_ character: Character) -> Bool {
+			character.isLetter || character.isNumber || character == "_"
+		}
+		var searchStart = line.startIndex
+		var callsInitializer = false
+		while !callsInitializer, let range = line.range(of: typeName, range: searchStart..<line.endIndex) {
+			searchStart = range.upperBound
+			let rest = line[range.upperBound...]
+			let characterAfterInit = rest.dropFirst(".init".count).first
+			let startsName = range.lowerBound == line.startIndex || !isIdentifierCharacter(line[line.index(before: range.lowerBound)])
+			let namesInitializer = rest.hasPrefix("(") || (rest.hasPrefix(".init") && !(characterAfterInit.map(isIdentifierCharacter) ?? false))
+			callsInitializer = startsName && namesInitializer
+		}
+		return callsInitializer
+	}
+
 	/// The mirror model of the declarations the module named `moduleName` sees: its own files' and those of the modules
 	/// it depends on, directly or through another, or every file's in a graph in one module.
 	private func mirrorModel(ofDeclarationsSeenByModuleNamed moduleName: String) -> GraphFuzzerMockMirrorModel {
@@ -9839,7 +10088,7 @@ enum GraphFuzzerOracle {
 		}
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.multiModuleFailures.first].compactMap(\.self) + renamedGraphFailures
+			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.multiModuleFailures.first].compactMap(\.self) + renamedGraphFailures
 			// A base corpus graph is compared once its value-oracle graph is.
 			let isValueOracleGraphCompared = runs.valueOracle == nil || valueComparisons.comparedValueOracleSeeds.contains(runs.fixture.seed)
 			return GraphFuzzerResult(

@@ -2484,15 +2484,17 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		public final class S35_Root0: Instantiable {
 			let differentialValueCreationStamp = S35_CreationStamp.next()
 
-			public init(anyT0Builder: ErasedInstantiator<S35_T3, S35_AnyT0>, t4_S35_T6: S35_Leaf, t6Builder: Instantiator<S35_T6>) {
+			public init(anyT0Builder: ErasedInstantiator<S35_T3, S35_AnyT0>, t4_S35_T6: S35_Leaf, t6Builder: Instantiator<S35_T6>, service: S35_Service) {
 				self.anyT0Builder = anyT0Builder
 				self.t4_S35_T6 = t4_S35_T6
 				self.t6Builder = t6Builder
+				self.service = service
 			}
 
 			@Instantiated(fulfilledByType: "S35_T0", erasedToConcreteExistential: true) let anyT0Builder: ErasedInstantiator<S35_T3, S35_AnyT0>
 			@Instantiated let t4_S35_T6: S35_Leaf
 			@Instantiated let t6Builder: Instantiator<S35_T6>
+			@Instantiated let service: S35_Service
 		}
 
 		public final class S35_Value: Instantiable {
@@ -2672,7 +2674,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			}), probes)
 		}
 		let knownRight = try await path(of: fixture, replacingDefault: false)
-		#expect(knownRight.probes == [DifferentialValueProbe("S0_Root0()"), DifferentialValueProbe("S0_Root1()"), DifferentialValueProbe("S0_Root2()"), DifferentialValueProbe("S0_Ext.mock()"), DifferentialValueProbe("S0_TupleHost.mock()")])
+		#expect(knownRight.probes == [DifferentialValueProbe("S0_Root0()"), DifferentialValueProbe("S0_Root1()"), DifferentialValueProbe("S0_Root2()"), DifferentialValueProbe("S0_Ext.mock()"), DifferentialValueProbe("S0_Service.mock()"), DifferentialValueProbe("S0_TupleHost.mock()")])
 
 		let blindComparison = try await DifferentialValueOracle.compare(
 			feature: try path(of: fixture, replacingDefault: true).path,
