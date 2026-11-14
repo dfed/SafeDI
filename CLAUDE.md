@@ -26,6 +26,7 @@ Always lint before pushing. Always run the full test suite after changes — don
 - `./CLI/lint.sh --check` reports what SwiftFormat would change and changes nothing. The committed `PreToolUse` hook (`.claude/hooks/lint-before-push.sh`, wired in `.claude/settings.json`) runs it before `git push`, `gh stack` and `gh pr create`, in the worktree the command runs in, and blocks the command when it fails.
 - `Scripts/changed-line-coverage.sh [BASE]` runs the suite with coverage as CI does and prints every added or changed line under `Sources/` and `Plugins/` that no test executed (default base `origin/main`).
 - `Scripts/fuzz-corpus.sh [--features …] [--seed N] [--iterations M|corpus] [--release]` runs the graph fuzzer's long run and prints its pin lines.
+- `Scripts/fuzzer-coverage-report.sh RUN [BASE]` lists the changed generator lines no fuzzer corpus graph executed, from a run's `fuzzer-coverage` artifact, against another base; `graph-fuzzer.yml`'s `coverage` input makes the report for a commit before review ("Coverage of a change" in `.claude/rules/fuzzer-corpora.md`).
 - `Scripts/multi-module-repro.sh [--conditions DEBUG,X] ROOT MODULE…` runs `generate` per module as Bazel and Tuist do and compiles the modules in order.
 - `Scripts/check-claude-instruction-files.sh` fails when an instruction file could be truncated or would load at launch by mistake; "Check Markdown links" runs it.
 
