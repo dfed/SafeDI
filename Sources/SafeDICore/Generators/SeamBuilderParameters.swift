@@ -1307,17 +1307,19 @@ extension DependencyTreeGenerator {
 	}
 
 	/// The first place the tree `root`, the tree of a fill, builds or a call in it passes up, in the order the tree declares
-	/// them: the type that declares it and the property, or `nil` where the tree holds neither.
+	/// them: the type that declares it and the property, or `nil` where the tree holds neither. The walk goes on into a fill
+	/// nested in the tree, a generator that builds no type of its own, whose child roots the tree that fills it.
 	private static func firstPlaceBuilt(inTreeRootedAt root: ScopeGenerator) -> DependencyTreeGeneratorError.FillFinding.PlaceInsideFill? {
 		var generatorsToVisit = [root]
 		while let generator = generatorsToVisit.popLast() {
-			guard let instantiable = generator.builtInstantiable else { continue }
-			for child in generator.children {
-				if let site = child.holeSite {
-					let dependency = instantiable.dependencies.first { $0.property == site.property }
-					return .init(ownerType: instantiable.concreteInstantiable, property: site.property, instantiatedType: dependency?.asInstantiatedType ?? site.property.typeDescription.asInstantiatedType, declarationLocation: dependency?.declarationLocation)
-				} else if let passedUpHole = child.passedUpHoles.first {
-					return .init(ownerType: passedUpHole.ownerType, property: passedUpHole.property, instantiatedType: passedUpHole.instantiatedType, declarationLocation: passedUpHole.declarationLocation)
+			if let instantiable = generator.builtInstantiable {
+				for child in generator.children {
+					if let site = child.holeSite {
+						let dependency = instantiable.dependencies.first { $0.property == site.property }
+						return .init(ownerType: instantiable.concreteInstantiable, property: site.property, instantiatedType: dependency?.asInstantiatedType ?? site.property.typeDescription.asInstantiatedType, declarationLocation: dependency?.declarationLocation)
+					} else if let passedUpHole = child.passedUpHoles.first {
+						return .init(ownerType: passedUpHole.ownerType, property: passedUpHole.property, instantiatedType: passedUpHole.instantiatedType, declarationLocation: passedUpHole.declarationLocation)
+					}
 				}
 			}
 			generatorsToVisit.append(contentsOf: generator.children.reversed())
