@@ -1087,10 +1087,16 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Middle"]?.generatedFiles, SafeDIToolSeamBuilderParameterTests.generatedFiles(module: "Middle", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Host": """
 		extension Host {
-		    @frozen public enum SafeDISendableScope_Gadget {
-		        case inner_widget_gadget(inner_widget_gadget_Values)
+		    @frozen public enum SafeDIScope_Gadget {
+		        @frozen public enum DefaultWidget_Scope {
+		            case gadget(gadget_Values)
 
-		        public struct inner_widget_gadget_Values {}
+		            public struct gadget_Values {}
+		        }
+		    }
+
+		    @frozen public enum SafeDISendableScope_Gadget {
+		        case inner_widgetSendableBuilder(SafeDIScope_Gadget.DefaultWidget_Scope)
 		    }
 
 		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
@@ -1103,7 +1109,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		                switch scope {
 		                case .widget:
 		                    @Sendable func __safeDI_widget() -> DefaultWidget {
-		                        let gadget: any Gadget = __safeDI_gadgetSendableBuilder(.inner_widget_gadget(SafeDISendableScope_Gadget.inner_widget_gadget_Values()))
+		                        let gadget: any Gadget = __safeDI_gadgetSendableBuilder(.inner_widgetSendableBuilder(.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())))
 		                        return DefaultWidget(gadget: gadget)
 		                    }
 		                    return __safeDI_widget()
@@ -1117,7 +1123,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_3EE1D18AF282F6EC {}
+		    public enum __safeDI_Host_4C72CB4C58FBDC50 {}
 		}
 		"""]))
 		try await expectValuesEqualVisibleBuild(

@@ -473,10 +473,10 @@ extension DependencyTreeGenerator {
 		reason: SeamSignature.Hole.UncarriedDeclaration.Reason,
 	) -> [SeamSignature.Hole.UncarriedDeclaration] {
 		var declarations = [SeamSignature.Hole.UncarriedDeclaration]()
-		if let filledHole = generator.fillHole {
+		if generator.fillHole != nil {
 			// A fill binds the fields it reads from its struct; one bound from a deferred parameter it reads from the
 			// caller's scope declares nothing.
-			for declaration in filledHole.uncarriedDeclarations.map({ ($0.property, $0.declaringType, $0.declarationLocation, $0.parameterTakingType) })
+			for declaration in generator.fillUncarriedDeclarations.map({ ($0.property, $0.declaringType, $0.declarationLocation, $0.parameterTakingType) })
 				+ generator.fillBoundFields.map({ ($0.property, $0.declaringType, $0.declarationLocation, $0.parameterTakingType) })
 			{
 				declarations.append(SeamSignature.Hole.UncarriedDeclaration(
@@ -655,11 +655,15 @@ extension DependencyTreeGenerator {
 			// passed it, so the nearest declaration of its label is the one above the call. A declaration the struct does
 			// not carry is on the called seam's path too, bound after its site or still being built, and hides the farther
 			// declarations of its label.
+			// A fill of a case nested by type stands for every place of the case: its fields and uncarried declarations are every
+			// place's (`ScopeGenerator.fillFields`, `ScopeGenerator.fillUncarriedDeclarations`), and a label whose nearest
+			// declaration on one route is uncarried is uncarried for the fill, as inline's tree reads it on that route.
 			if let filledHole = frame.generator.fillHole {
 				// The only property a fill builds is its hole's.
 				childDeclaringType = filledHole.ownerType
 				isInFill = true
-				for uncarriedDeclaration in filledHole.uncarriedDeclarations {
+				let uncarriedLabels = frame.generator.fillLabelsUncarriedOnSomeRoute
+				for uncarriedDeclaration in frame.generator.fillUncarriedDeclarations {
 					var pathDeclaration = PathDeclaration(
 						property: uncarriedDeclaration.property,
 						isBoundBeforeSite: false,
@@ -681,7 +685,7 @@ extension DependencyTreeGenerator {
 					sendableDepth += 1
 					sendableFunctions.append((filledHole.property, frame.generator.children.first?.builtInstantiable?.concreteInstantiable))
 				}
-				for field in filledHole.fields where frame.generator.fillStructBoundLabels.contains(field.property.label) {
+				for field in frame.generator.fillFields where frame.generator.fillStructBoundLabels.contains(field.property.label) && !uncarriedLabels.contains(field.property.label) {
 					let fieldAccess = access(of: field.property, declaredBy: instantiables[field.declaringType]?.moduleName)
 					declare(PathDeclaration(
 						property: field.property,
@@ -1202,7 +1206,7 @@ extension DependencyTreeGenerator {
 				// A seam call's children are its fills, which are judged against the calls inside any of them.
 				let hiddenByFillKey = generator.seamCall == nil ? [:] : hiddenByReenteringCalls(ofFillsOf: generator)
 				if generator.seamCall != nil {
-					findingsOfCasesNestedByType(filledBy: generator.children).forEach(record)
+					findingsOfCasesNestedByType(filledBy: generator.children, callerModule: callerModule).forEach(record)
 				}
 				generatorsToVisit.append(contentsOf: generator.children.reversed().map { child in
 					(child, child.fillKey.flatMap { hiddenByFillKey[$0] })
@@ -1217,8 +1221,10 @@ extension DependencyTreeGenerator {
 	/// The findings of the cases nested by type that `fills`, the children of one seam call's generator, fill: one function
 	/// fills every place of such a case, so a value its tree reads that the places' routes hold in forms that differ in more
 	/// than optionality (`ScopeGenerator.irreconcilableFields(of:)`) is one no parameter can take. Each label once per
-	/// case, in label order.
-	private static func findingsOfCasesNestedByType(filledBy fills: [ScopeGenerator]) -> [DependencyTreeGeneratorError.FillFinding] {
+	/// case, in label order. A case whose places the inner seam's two root enums both reach, whose fill's tree builds a place
+	/// or passes one up, is one such function could hand only one of the two scope values its root enums' dispatchers hold
+	/// (`placeInsideFillOfCaseOfBothRootEnums`).
+	private static func findingsOfCasesNestedByType(filledBy fills: [ScopeGenerator], callerModule: ModuleIdentity) -> [DependencyTreeGeneratorError.FillFinding] {
 		var placesByCaseKey = [String: [SeamSignature.Hole]]()
 		var emittingFillByCaseKey = [String: ScopeGenerator]()
 		var caseKeys = [String]()
@@ -1243,8 +1249,35 @@ extension DependencyTreeGenerator {
 				else { continue }
 				findings.append(.init(hole: firstPlace, kind: .fieldFormsDifferBetweenPlaces(label: label, fields: fields, seamModule: firstPlace.scopeSeamModule)))
 			}
+			// The fill takes the scope value the inner seam handed it (`Scope.Fill.innerScopeParameter`), which the dispatchers
+			// that lead to the case pass on: a dispatcher both root enums reach could pass only one root enum's value.
+			if let emittingFill = emittingFillByCaseKey[caseKey],
+			   !emittingFill.fillCallerReads.innerScopeParameters.isEmpty,
+			   Set(places.map { SeamSignature.ScopeEnum.rootKey(of: $0).isSendable }).count > 1
+			{
+				findings.append(.init(hole: firstPlace, kind: .placeInsideFillOfCaseOfBothRootEnums(place: firstPlaceBuilt(inTreeRootedAt: child), callerModule: callerModule, seamModule: firstPlace.scopeSeamModule)))
+			}
 		}
 		return findings
+	}
+
+	/// The first place the tree `root`, the tree of a fill, builds or a call in it passes up, in the order the tree declares
+	/// them: the type that declares it and the property, or `nil` where the tree holds neither.
+	private static func firstPlaceBuilt(inTreeRootedAt root: ScopeGenerator) -> DependencyTreeGeneratorError.FillFinding.PlaceInsideFill? {
+		var generatorsToVisit = [root]
+		while let generator = generatorsToVisit.popLast() {
+			guard let instantiable = generator.builtInstantiable else { continue }
+			for child in generator.children {
+				if let site = child.holeSite {
+					let dependency = instantiable.dependencies.first { $0.property == site.property }
+					return .init(ownerType: instantiable.concreteInstantiable, property: site.property, instantiatedType: dependency?.asInstantiatedType ?? site.property.typeDescription.asInstantiatedType, declarationLocation: dependency?.declarationLocation)
+				} else if let passedUpHole = child.passedUpHoles.first {
+					return .init(ownerType: passedUpHole.ownerType, property: passedUpHole.property, instantiatedType: passedUpHole.instantiatedType, declarationLocation: passedUpHole.declarationLocation)
+				}
+			}
+			generatorsToVisit.append(contentsOf: generator.children.reversed())
+		}
+		return nil
 	}
 
 	/// The findings of the fill of `hole` whose tree `child` roots, in the order the tree declares them. A closer is judged
@@ -1492,6 +1525,18 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			/// The routes to the places of the hole's case, nested by type, hold `label`, which the one fill of the case reads,
 			/// as `fields`, whose forms differ in more than optionality: no one parameter takes them all.
 			case fieldFormsDifferBetweenPlaces(label: String, fields: [SeamSignature.Hole.Field], seamModule: ModuleIdentity)
+			/// The places of the hole's case, nested by type, are reached from both the inner seam's plain root enum and its
+			/// `@Sendable` one, and the one fill of the case builds `place`, a place `callerModule` cannot fill, or passes one up,
+			/// whose case would carry the scope value of either root enum.
+			case placeInsideFillOfCaseOfBothRootEnums(place: PlaceInsideFill?, callerModule: ModuleIdentity, seamModule: ModuleIdentity)
+		}
+
+		/// A place a fill's tree builds: the type that declares it, and the property.
+		struct PlaceInsideFill {
+			let ownerType: TypeDescription
+			let property: Property
+			let instantiatedType: TypeDescription
+			let declarationLocation: Dependency.DeclarationLocation?
 		}
 
 		let hole: SeamSignature.Hole
@@ -1544,6 +1589,8 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				"closesCycleInSeamTree"
 			case .fieldFormsDifferBetweenPlaces:
 				"fieldFormsDifferBetweenPlaces"
+			case .placeInsideFillOfCaseOfBothRootEnums:
+				"placeInsideFillOfCaseOfBothRootEnums"
 			}
 		}
 
@@ -1767,6 +1814,12 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				] + fields.dropFirst().map { field in
 					SourceDiagnostic(severity: .note, location: field.declarationLocation, message: "`\(field.declaringType.asSource)` declares `\(field.property.asSource)` here.")
 				}
+			case let .placeInsideFillOfCaseOfBothRootEnums(place, callerModule, seamModule):
+				let placeDescription = place.map { "`\($0.ownerType.asSource)`’s `\($0.property.asSource)`" } ?? "a place"
+				let placeRemedy = place.map { "\(SeamAccessExplanation.fulfillRemedy(fulfilling: $0.instantiatedType, seamModuleName: callerModule.moduleName, effect: nil)), " } ?? ""
+				return [
+					SourceDiagnostic(severity: .error, location: place?.declarationLocation ?? hole.declarationLocation, message: "SafeDI fills every place of \(builderDescription(of: hole, apostrophe: "’")) with one function, whose tree builds \(placeDescription), which no type that \(module(callerModule)) can see fulfills. \(seamName) builds `\(hole.ownerType.asSource)` both inside and outside a `@Sendable` function, so that function is handed a scope of either of \(seamName)’s two root enums, and the case of \(placeDescription) can carry only one. To fill it, \(placeRemedy)or \(fulfillRemedy(seamModule))."),
+				] + (place == nil ? [] : [SourceDiagnostic(severity: .note, location: hole.declarationLocation, message: "`\(hole.ownerType.asSource)` instantiates `\(hole.property.asSource)` here.")])
 			}
 		}
 	}

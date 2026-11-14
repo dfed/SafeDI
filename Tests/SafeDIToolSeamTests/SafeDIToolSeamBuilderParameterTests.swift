@@ -1981,11 +1981,16 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Mid"]?.generatedFiles, Self.generatedFiles(module: "Mid", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Shell": """
 		extension Shell {
 		    @frozen public enum SafeDIScope_Logger {
-		        case service_profile_userService_logger(service_profile_userService_logger_Values)
+		        case service_userServiceBuilder(service_userServiceBuilder_Values, Service.SafeDIScope_UserService, SafeDIScope_Logger.DefaultUserService_Scope)
 
-		        public struct service_profile_userService_logger_Values {
+		        public struct service_userServiceBuilder_Values {
 		            public let theme: Theme
-		            public let analytics: Analytics
+		        }
+
+		        @frozen public enum DefaultUserService_Scope {
+		            case logger(logger_Values)
+
+		            public struct logger_Values {}
 		        }
 		    }
 
@@ -1994,18 +1999,19 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_loggerBuilder: @escaping (SafeDIScope_Logger) -> any Logger) {
 		        let theme = Theme()
+		        let __safeDI_loggerValues_service_userServiceBuilder = SafeDIScope_Logger.service_userServiceBuilder_Values(theme: theme)
 		        func __safeDI_service() -> Service {
 		            _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
+		            func __safeDI_userServiceBuilder_Service(_ __safeDI_service_userServiceBuilder: Service.SafeDIScope_UserService) -> any UserService {
+		                switch __safeDI_service_userServiceBuilder {
+		                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, __safeDI_service_userServiceBuilder: __safeDI_service_userServiceBuilder, analytics: values.analytics)
 		                }
 		            }
-		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
+		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, __safeDI_service_userServiceBuilder: Service.SafeDIScope_UserService, analytics: Analytics) -> any UserService {
 		                switch scope {
 		                case .userService:
 		                    func __safeDI_userService() -> DefaultUserService {
-		                        let logger: any Logger = __safeDI_loggerBuilder(.service_profile_userService_logger(SafeDIScope_Logger.service_profile_userService_logger_Values(theme: theme, analytics: analytics)))
+		                        let logger: any Logger = __safeDI_loggerBuilder(.service_userServiceBuilder(__safeDI_loggerValues_service_userServiceBuilder, __safeDI_service_userServiceBuilder, .logger(SafeDIScope_Logger.DefaultUserService_Scope.logger_Values())))
 		                        return DefaultUserService(analytics: analytics, logger: logger)
 		                    }
 		                    let userService: any UserService = __safeDI_userService()
@@ -2020,21 +2026,29 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 
 		extension Shell {
-		    public enum __safeDI_Shell_5B6B3CE21DEF4F63 {}
+		    public enum __safeDI_Shell_DAF792BC2BCEC191 {}
 		}
 		"""]))
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature", "Mid"], rootFiles: ["Root": """
 		extension Root {
 		    public init() {
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_5B6B3CE21DEF4F63.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Shell.__safeDI_Shell_DAF792BC2BCEC191.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_loggerBuilder_Shell(_ scope: Shell.SafeDIScope_Logger) -> any Logger {
 		                switch scope {
-		                case let .service_profile_userService_logger(scope):
-		                    let theme = scope.theme
-		                    let analytics = scope.analytics
+		                case let .service_userServiceBuilder(values, innerScope, scope): return __safeDI_loggerBuilder_Shell_DefaultUserService_Scope(scope, analytics: __safeDI_analytics_Service_SafeDIScope_UserService(innerScope), theme: values.theme)
+		                }
+		            }
+		            func __safeDI_loggerBuilder_Shell_DefaultUserService_Scope(_ scope: Shell.SafeDIScope_Logger.DefaultUserService_Scope, analytics: Analytics, theme: Theme) -> any Logger {
+		                switch scope {
+		                case .logger:
 		                    let logger: any Logger = DefaultLogger(analytics: analytics, theme: theme)
 		                    return logger
+		                }
+		            }
+		            func __safeDI_analytics_Service_SafeDIScope_UserService(_ scope: Service.SafeDIScope_UserService) -> Analytics {
+		                switch scope {
+		                case let .profile(values, _): return values.analytics
 		                }
 		            }
 		            return Shell(__safeDI_loggerBuilder: __safeDI_loggerBuilder_Shell)
@@ -2554,12 +2568,16 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 		extension Shell {
 		    @frozen public enum SafeDIScope_Logger {
-		        case service_profile_userService_logger(service_profile_userService_logger_Values)
+		        case service_userServiceBuilder(service_userServiceBuilder_Values, Service.SafeDIScope_UserService, SafeDIScope_Logger.DefaultUserService_Scope)
 
-		        public struct service_profile_userService_logger_Values {
+		        public struct service_userServiceBuilder_Values {
 		            public let theme: Theme
-		            public let analytics: Analytics
-		            public let cache: Cache
+		        }
+
+		        @frozen public enum DefaultUserService_Scope {
+		            case logger(logger_Values)
+
+		            public struct logger_Values {}
 		        }
 		    }
 
@@ -2568,19 +2586,19 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_loggerBuilder: @escaping (SafeDIScope_Logger) -> any Logger) {
 		        let theme = Theme()
+		        let __safeDI_loggerValues_service_userServiceBuilder = SafeDIScope_Logger.service_userServiceBuilder_Values(theme: theme)
 		        func __safeDI_service() -> Service {
 		            _ = Service.__safeDI_Service_3EDB4CCD82126CB9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
+		            func __safeDI_userServiceBuilder_Service(_ __safeDI_service_userServiceBuilder: Service.SafeDIScope_UserService) -> any UserService {
+		                switch __safeDI_service_userServiceBuilder {
+		                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, __safeDI_service_userServiceBuilder: __safeDI_service_userServiceBuilder, analytics: values.analytics)
 		                }
 		            }
-		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
+		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, __safeDI_service_userServiceBuilder: Service.SafeDIScope_UserService, analytics: Analytics) -> any UserService {
 		                switch scope {
-		                case let .userService(scope):
-		                    let cache = scope.cache
+		                case .userService:
 		                    func __safeDI_userService() -> DefaultUserService {
-		                        let logger: any Logger = __safeDI_loggerBuilder(.service_profile_userService_logger(SafeDIScope_Logger.service_profile_userService_logger_Values(theme: theme, analytics: analytics, cache: cache)))
+		                        let logger: any Logger = __safeDI_loggerBuilder(.service_userServiceBuilder(__safeDI_loggerValues_service_userServiceBuilder, __safeDI_service_userServiceBuilder, .logger(SafeDIScope_Logger.DefaultUserService_Scope.logger_Values())))
 		                        return DefaultUserService(analytics: analytics, logger: logger)
 		                    }
 		                    let userService: any UserService = __safeDI_userService()
@@ -2595,7 +2613,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 
 		extension Shell {
-		    public enum __safeDI_Shell_1244CD39F2F23B42 {}
+		    public enum __safeDI_Shell_8D6565985412E4D4 {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
@@ -2609,13 +2627,27 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_1244CD39F2F23B42.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Shell.__safeDI_Shell_8D6565985412E4D4.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_loggerBuilder_Shell(_ scope: Shell.SafeDIScope_Logger) -> any Logger {
 		                switch scope {
-		                case let .service_profile_userService_logger(scope):
-		                    let cache = scope.cache
+		                case let .service_userServiceBuilder(_, innerScope, scope): return __safeDI_loggerBuilder_Shell_DefaultUserService_Scope(scope, cache: __safeDI_cache_Service_SafeDIScope_UserService(innerScope))
+		                }
+		            }
+		            func __safeDI_loggerBuilder_Shell_DefaultUserService_Scope(_ scope: Shell.SafeDIScope_Logger.DefaultUserService_Scope, cache: Cache) -> any Logger {
+		                switch scope {
+		                case .logger:
 		                    let logger: any Logger = DefaultLogger(cache: cache)
 		                    return logger
+		                }
+		            }
+		            func __safeDI_cache_Service_SafeDIScope_UserService(_ scope: Service.SafeDIScope_UserService) -> Cache {
+		                switch scope {
+		                case let .profile(_, scope): return __safeDI_cache_Service_Profile_Scope(scope)
+		                }
+		            }
+		            func __safeDI_cache_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope) -> Cache {
+		                switch scope {
+		                case let .userService(values): return values.cache
 		                }
 		            }
 		            return Shell(__safeDI_loggerBuilder: __safeDI_loggerBuilder_Shell)
@@ -4924,26 +4956,35 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Mid"]?.generatedFiles, Self.generatedFiles(module: "Mid", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Shell": """
 		extension Shell {
 		    @frozen public enum SafeDIScope_UserService {
-		        case inner_badgeBuilder_userService_serviceBuilder(Service.SafeDIScope_UserService)
+		        case inner_trackerBuilder(inner_trackerBuilder_Values, Inner.SafeDIScope_Tracker, SafeDIScope_UserService.DefaultTracker_Scope)
+
+		        public struct inner_trackerBuilder_Values {}
+
+		        @frozen public enum DefaultTracker_Scope {
+		            case serviceBuilder(serviceBuilder_Values, Service.SafeDIScope_UserService)
+
+		            public struct serviceBuilder_Values {}
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
 		    public init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
+		        let __safeDI_userServiceValues_inner_trackerBuilder = SafeDIScope_UserService.inner_trackerBuilder_Values()
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_E0B7229E32F61E76.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_trackerBuilder_Inner(_ scope: Inner.SafeDIScope_Tracker) -> any Tracker {
-		                switch scope {
-		                case let .badgeBuilder(_, scope): return __safeDI_trackerBuilder_Inner_Badge_Scope(scope)
+		            func __safeDI_trackerBuilder_Inner(_ __safeDI_inner_trackerBuilder: Inner.SafeDIScope_Tracker) -> any Tracker {
+		                switch __safeDI_inner_trackerBuilder {
+		                case let .badgeBuilder(_, scope): return __safeDI_trackerBuilder_Inner_Badge_Scope(scope, __safeDI_inner_trackerBuilder: __safeDI_inner_trackerBuilder)
 		                }
 		            }
-		            func __safeDI_trackerBuilder_Inner_Badge_Scope(_ scope: Inner.SafeDIScope_Tracker.Badge_Scope) -> any Tracker {
+		            func __safeDI_trackerBuilder_Inner_Badge_Scope(_ scope: Inner.SafeDIScope_Tracker.Badge_Scope, __safeDI_inner_trackerBuilder: Inner.SafeDIScope_Tracker) -> any Tracker {
 		                switch scope {
 		                case .userService:
 		                    func __safeDI_userService() -> DefaultTracker {
 		                        func __safeDI_serviceBuilder() -> Service {
 		                            _ = Service.__safeDI_Service_F88A7C8ABB77D41F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                            return Service(__safeDI_userServiceBuilder: { __safeDI_userServiceBuilder(.inner_badgeBuilder_userService_serviceBuilder($0)) })
+		                            return Service(__safeDI_userServiceBuilder: { __safeDI_userServiceBuilder(.inner_trackerBuilder(__safeDI_userServiceValues_inner_trackerBuilder, __safeDI_inner_trackerBuilder, .serviceBuilder(SafeDIScope_UserService.DefaultTracker_Scope.serviceBuilder_Values(), $0))) })
 		                        }
 		                        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
 		                        return DefaultTracker(serviceBuilder: serviceBuilder)
@@ -4960,7 +5001,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 
 		extension Shell {
-		    public enum __safeDI_Shell_3F3D376D06562BD2 {}
+		    public enum __safeDI_Shell_D84F55E2023CCACC {}
 		}
 		"""]))
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: [
@@ -5343,7 +5384,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// site: the chain walks `Shell`'s `inner` to `Inner`, the call that presented the hole.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultGadget.swift"]):11:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `shell_Inner_panelMaker_widget_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panelMaker: Instantiator<Panel>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panelMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultGadget.swift"]):11:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `DefaultWidget_Scope.gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panelMaker: Instantiator<Panel>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panelMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panelMaker: Instantiator<Panel>` here.
 			"""
 		}) {
@@ -5367,7 +5408,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `Shell` reaches `Inner` through `Carrier`, and `Outer` passes `Shell`'s copy on: every call on the way is a hop.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultGadget.swift"]):11:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `outer_Inner_panelMaker_widget_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panelMaker: Instantiator<Panel>`, which `Host`'s tree is building where it builds `gadget` (Host -> outer -> Outer -> shell -> Shell -> carrier -> Carrier -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panelMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultGadget.swift"]):11:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `DefaultWidget_Scope.gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panelMaker: Instantiator<Panel>`, which `Host`'s tree is building where it builds `gadget` (Host -> outer -> Outer -> shell -> Shell -> carrier -> Carrier -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panelMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panelMaker: Instantiator<Panel>` here.
 			"""
 		}) {
@@ -5394,7 +5435,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// route goes through that fill.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultGadget.swift"]):11:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `shell_Inner_panelMaker_widget_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panelMaker: Instantiator<Panel>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> holder -> Holder -> slot -> DefaultSlot -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panelMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultGadget.swift"]):11:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `DefaultWidget_Scope.gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panelMaker: Instantiator<Panel>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> holder -> Holder -> slot -> DefaultSlot -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panelMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panelMaker: Instantiator<Panel>` here.
 			"""
 		}) {
@@ -5423,7 +5464,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `Inner`'s declaration, in its own spelling.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `shell_Inner_panel_rowMaker_widget_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panel: Panel`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panel -> Panel -> rowMaker -> Row -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panel). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `DefaultWidget_Scope.gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `panel: Panel`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panel -> Panel -> rowMaker -> Row -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panel). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Panel` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panel: LazilyInstantiated<Panel>` here.
 			"""
 		}) {
@@ -5451,7 +5492,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// generation finds a closer: the note is at `Row`'s.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `shell_Inner_pane_rowMaker_pane_widgetMaker_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `pane: any Pane`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> pane -> OuterPane -> rowMaker -> Row -> pane -> InnerPane -> widgetMaker -> DefaultWidget -> gadget -> DefaultGadget -> pane). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Pane` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Pane` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `DefaultWidget_Scope.gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `pane: any Pane`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> pane -> OuterPane -> rowMaker -> Row -> pane -> InnerPane -> widgetMaker -> DefaultWidget -> gadget -> DefaultGadget -> pane). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Pane` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Pane` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Row.swift"]):7:5: note: `Row` instantiates `pane: any Pane` here.
 			"""
 		}) {
@@ -5481,7 +5522,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// has its place.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `shell_Inner_panelMaker_widgetMaker_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `widgetMaker: Instantiator<Widget>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panelMaker -> Panel -> widgetMaker -> DefaultWidget -> gadget -> DefaultGadget -> widgetMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Widget` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Widget` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`; declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies; or give `widgetMaker` on `DefaultGadget` another label, so the cycle closes at `gadget` itself.
+			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `DefaultWidget`'s `gadget: any Gadget` (case `DefaultWidget_Scope.gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `widgetMaker: Instantiator<Widget>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panelMaker -> Panel -> widgetMaker -> DefaultWidget -> gadget -> DefaultGadget -> widgetMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Widget` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Widget` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`; declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies; or give `widgetMaker` on `DefaultGadget` another label, so the cycle closes at `gadget` itself.
 			\(fixtures["Feature"]!["Panel.swift"]):7:5: note: `Panel` instantiates `widgetMaker: Instantiator<Widget>` here.
 			"""
 		}) {
@@ -5507,7 +5548,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `DefaultWidget` fills `any Widget` and declares `midMaker`: the chain and the note name it, not the protocol.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `Mid`'s `gadget: any Gadget` (case `shell_Inner_panelMaker_widget_midMaker_gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `midMaker: Instantiator<Mid>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> midMaker -> Mid -> gadget -> DefaultGadget -> midMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Mid` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Mid` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`; declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies; or give `midMaker` on `DefaultGadget` another label, so the cycle closes at `gadget` itself.
+			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `Mid`'s `gadget: any Gadget` (case `Mid_Scope.gadget` of `gadgetBuilder`) in `Host`'s dependency tree: `DefaultGadget`, which fills it, instantiates `midMaker: Instantiator<Mid>`, which `Host`'s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panelMaker -> Panel -> widget -> DefaultWidget -> midMaker -> Mid -> gadget -> DefaultGadget -> midMaker). Code generated outside module `Upper` cannot refer to the function `Host`'s initializer builds `Mid` with, and building it again would hand it other values than `Host`'s tree holds. Instantiate the seam where `DefaultGadget` builds `Mid` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`; declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies; or give `midMaker` on `DefaultGadget` another label, so the cycle closes at `gadget` itself.
 			\(fixtures["Upper"]!["DefaultWidget.swift"]):9:5: note: `DefaultWidget` instantiates `midMaker: Instantiator<Mid>` here.
 			"""
 		}) {
@@ -5544,7 +5585,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let chain = "Host -> shell -> Shell -> inner -> Inner -> panel -> Panel -> \(rowHop) -> Row -> widget -> DefaultWidget -> gadget -> \(fillHops) -> panel"
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["\(closerName).swift"]):10:5: error: \(Self.gadgetCycleMessage(chain: chain, closingProperty: "panel: \(spelling.closer)", closer: hop == .onSeamPath ? nil : "Helper", caseName: "shell_Inner_panel_\(hop == .onSeamPath ? "rowMaker" : "row")_widget_gadget", builderLabel: spelling.path.hasPrefix("Sendable") ? "gadgetSendableBuilder" : "gadgetBuilder"))
+			\(fixtures["App"]!["\(closerName).swift"]):10:5: error: \(Self.gadgetCycleMessage(chain: chain, closingProperty: "panel: \(spelling.closer)", closer: hop == .onSeamPath ? nil : "Helper", caseName: "DefaultWidget_Scope.gadget", builderLabel: spelling.path.hasPrefix("Sendable") ? "gadgetSendableBuilder" : "gadgetBuilder"))
 			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panel: \(spelling.path)` here.
 			"""
 		}) {
@@ -5596,7 +5637,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// every call on the way to the fill, and the type that declares `gadget`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):10:5: error: No @Instantiable type or extension that module `App` can see fulfills `Gadget`, which @Instantiated property `gadget: any Gadget` instantiates in chain: Root -> Host -> Outer -> Shell -> Carrier -> Inner -> Panel -> DefaultWidget. `Host` generates its dependency tree in module `Upper`, which cannot see one either, so the initializer SafeDI generated for it takes `gadgetBuilder`, whose case `outer_Inner_panelMaker_widget_gadget` builds `gadget`, and the root `Root` must fill it. Decorate `Gadget`, or an extension of it, with @Instantiable; list `Gadget` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["App"]!["Root.swift"]):10:5: error: No @Instantiable type or extension that module `App` can see fulfills `Gadget`, which @Instantiated property `gadget: any Gadget` instantiates in chain: Root -> Host -> Outer -> Shell -> Carrier -> Inner -> Panel -> DefaultWidget. `Host` generates its dependency tree in module `Upper`, which cannot see one either, so the initializer SafeDI generated for it takes `gadgetBuilder`, whose case `DefaultWidget_Scope.gadget` builds `gadget`, and the root `Root` must fill it. Decorate `Gadget`, or an extension of it, with @Instantiable; list `Gadget` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 			\(fixtures["Upper"]!["DefaultWidget.swift"]):9:5: note: `DefaultWidget` instantiates `gadget: any Gadget` here.
 			"""
 		}) {

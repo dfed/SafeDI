@@ -360,10 +360,12 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func collectingPlaceLevelDisagreements_reportsEachTangledTypesLevels_whenItJudgesFillsAndAFillsTreeHoldsATangleOfCycles() async throws {
-		// `App` fills `Hub`'s `api` with `DefaultApi`, whose tree, built with `Hub`'s stack, keeps the order by path: in it,
-		// `T` and `C` close each other's cycle, a tangle, and each holds `App`'s hole `gadget`.
-		let (_, disagreements) = try await collectingPlaceLevelDisagreements(judgingLevelsInFills: true) {
+	mutating func collectingPlaceLevelDisagreements_reportsNone_whenAFillsTreeHoldsATangleOfCycles() async throws {
+		// `App` fills `Hub`'s `api` with `DefaultApi`, whose tree is built with `Hub`'s stack: in it, `T` and `C` close each
+		// other's cycle, a tangle, and each holds `App`'s hole `gadget`. A place inside a fill is a place of the type the fill
+		// builds, so the fill's tree starts each type's children in the type's order, as any tree does, and every build of a
+		// type binds the same values before `gadget`.
+		let (_, disagreements) = try await collectingPlaceLevelDisagreements {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: SafeDIToolSeamBuilderParameterTests.modules(
 					feature: [
@@ -384,10 +386,7 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 			)
 		}
 
-		#expect(disagreements == [
-			"`C` holds [tBuilder: Instantiator<T>] before `gadget: any Gadget` on the path to the place `hub.api.tBuilder.cBuilder.gadget` of `Screen`, but [] on the path to the place `hub.api.cBuilder.gadget`.",
-			"`T` holds [] before `gadget: any Gadget` on the path to the place `hub.api.tBuilder.gadget` of `Screen`, but [cBuilder: Instantiator<C>] on the path to the place `hub.api.cBuilder.tBuilder.gadget`.",
-		])
+		#expect(disagreements == [])
 	}
 
 	// MARK: Private

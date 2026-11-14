@@ -47,13 +47,12 @@ extension SeamPlaceLevels {
 		}
 	}
 
-	/// A description of each level outside every fill that one build of its type gives with other fields than another build
-	/// of the same type does: the level a type holds before a property, or the seam's root's level, is the same on every
-	/// path. The parameters of a builder function a lazy cycle closes on are left out (`Level.fieldsOfType`): a fact of
-	/// the function, which another build of the type need not take. A fill's tree is built with the stack of the seam whose hole it fills, and keeps the order by path, so its
-	/// levels are judged only where `judgingLevelsInFills` is set, which only a test that the judgment finds a disagreement
-	/// sets: a tangle of cycles inside a fill gives one.
-	func levelDisagreements(judgingLevelsInFills: Bool = false) -> [String] {
+	/// A description of each level that one build of its type gives with other fields than another build of the same type
+	/// does: the level a type holds before a property, or the seam's root's level, is the same on every path, inside a fill
+	/// too, whose tree starts its children in the order of its types as any other. The parameters of a builder function a
+	/// lazy cycle closes on are left out (`Level.fieldsOfType`): a fact of the function, which another build of the type need
+	/// not take.
+	func levelDisagreements() -> [String] {
 		struct Key: Hashable {
 			let builtType: TypeDescription
 			let nextProperty: Property
@@ -62,7 +61,7 @@ extension SeamPlaceLevels {
 		var firstFieldsByKey = [Key: (fields: [Property], place: Place)]()
 		var disagreements = [String]()
 		for place in places {
-			for (index, level) in place.levels.enumerated() where judgingLevelsInFills || !level.isInFill {
+			for (index, level) in place.levels.enumerated() {
 				guard let builtType = level.builtType, let nextProperty = level.nextProperty else { continue }
 				let key = Key(builtType: builtType, nextProperty: nextProperty, isSeamRoot: index == place.levels.count - 1)
 				if let (firstFields, firstPlace) = firstFieldsByKey[key] {
@@ -97,13 +96,12 @@ extension SeamPlaceLevels {
 }
 
 /// What `operation` returns, with each distinct level disagreement (`SeamPlaceLevels.levelDisagreements`) of the holes
-/// of every seam the tool computes while it runs, in the order the tool first computes them, judging the levels inside
-/// fills too where `judgingLevelsInFills` is set.
-func collectingPlaceLevelDisagreements<Result>(judgingLevelsInFills: Bool = false, during operation: () async throws -> Result) async rethrows -> (result: Result, disagreements: [String]) {
+/// of every seam the tool computes while it runs, in the order the tool first computes them.
+func collectingPlaceLevelDisagreements<Result>(during operation: () async throws -> Result) async rethrows -> (result: Result, disagreements: [String]) {
 	let (stream, continuation) = AsyncStream.makeStream(of: [String].self)
 	let enclosingObserver = SeamPlaceLevels.observer
 	let result = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
-		continuation.yield(placeLevels.levelDisagreements(judgingLevelsInFills: judgingLevelsInFills))
+		continuation.yield(placeLevels.levelDisagreements())
 		enclosingObserver?(placeLevels)
 	}) {
 		try await operation()

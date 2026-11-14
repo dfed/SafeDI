@@ -3437,13 +3437,22 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			    public init() {
 			        let user = User()
 			        func __safeDI_host() -> Host {
-			            _ = Host.__safeDI_Host_99305A554F65E2EB.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Host.__safeDI_Host_84829EB378A22BA4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            func __safeDI_serviceBuilder_Host(_ scope: Host.SafeDIScope_Service) -> any Service {
 			                switch scope {
-			                case let .mid_Helper_gadget_service(scope):
-			                    let user = scope.user
+			                case let .mid_gadgetBuilder_Helper(_, innerScope, scope): return __safeDI_serviceBuilder_Host_FeatureGadget_Scope(scope, user: __safeDI_user_Helper_SafeDIScope_Gadget(innerScope))
+			                }
+			            }
+			            func __safeDI_serviceBuilder_Host_FeatureGadget_Scope(_ scope: Host.SafeDIScope_Service.FeatureGadget_Scope, user: User) -> any Service {
+			                switch scope {
+			                case .service:
 			                    let service: any Service = DefaultService(user: user)
 			                    return service
+			                }
+			            }
+			            func __safeDI_user_Helper_SafeDIScope_Gadget(_ scope: Helper.SafeDIScope_Gadget) -> User {
+			                switch scope {
+			                case let .gadget(values): return values.user
 			                }
 			            }
 			            return Host(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Host)

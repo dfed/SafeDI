@@ -624,23 +624,69 @@ public struct SeamSignature: Sendable {
 		/// A case on the way from a root enum nested by type to a place, which wraps the next: its name, and what it carries
 		/// before the value it wraps.
 		public struct RouteStep: Sendable {
+			init(caseName: String, values: Values?, innerScope: InnerScope? = nil, leadsIntoFill: Bool = false) {
+				self.caseName = caseName
+				self.values = values
+				self.innerScope = innerScope
+				self.leadsIntoFill = leadsIntoFill
+			}
+
 			public let caseName: String
 			/// The case's payload, or `nil` for a case of a `@Sendable` enum, which carries no values: a place is handed only
 			/// what the innermost `@Sendable` function that builds it binds.
 			public let values: Values?
+			/// For a case of a call whose fill builds a type that leads to the place (`ScopeEnum.Case.Kind.fill`), the scope value
+			/// the inner seam handed the fill, which the case carries after its payload; `nil` for every other case, and for such
+			/// a case of a `@Sendable` enum that a `@Sendable` function inside the fill leads through, which carries no value
+			/// bound outside that function.
+			public let innerScope: InnerScope?
+			/// Whether the case is a call's for a builder it fills, which leads into what the fill builds.
+			let leadsIntoFill: Bool
 
 			/// A case's payload on a route: the name the seam's tree binds it under, before the case's property is built, the
 			/// type of its struct, as the seam's extension spells it, and its fields, what the case's type binds before its
 			/// property.
 			public struct Values: Sendable {
+				init(bindingName: String, type: TypeDescription, fields: [Field], bindingPath: [Property] = []) {
+					self.bindingName = bindingName
+					self.type = type
+					self.fields = fields
+					self.bindingPath = bindingPath
+				}
+
 				public let bindingName: String
 				public let type: TypeDescription
 				public let fields: [Field]
+				/// The path, from the seam's root, of the property the seam's tree binds the payload just before building.
+				let bindingPath: [Property]
 			}
 
-			/// The step with its payload bound under `bindingName`.
-			func named(_ bindingName: String?) -> RouteStep {
-				RouteStep(caseName: caseName, values: values.map { Values(bindingName: bindingName ?? $0.bindingName, type: $0.type, fields: $0.fields) })
+			/// The scope value an inner seam hands a fill its caller declares, as a place inside the fill's tree reads it: the
+			/// call's path, the inner seam's root enum the builder the fill is passed for is handed, and the name of the
+			/// parameter the fill, and each dispatcher that leads to it, take the value under.
+			public struct InnerScope: Sendable {
+				let callPath: [Property]
+				let innerKey: ScopeEnum.Key
+				let enumType: TypeDescription
+				/// The label of the builder the fill is passed for, which the name is made from.
+				let builderLabel: String
+				public let name: String
+			}
+
+			/// The step with its payload bound under `bindingName`, and its inner scope named `innerScopeName`.
+			func named(_ bindingName: String?, innerScopeName: String? = nil) -> RouteStep {
+				RouteStep(
+					caseName: caseName,
+					values: values.map { Values(bindingName: bindingName ?? $0.bindingName, type: $0.type, fields: $0.fields, bindingPath: $0.bindingPath) },
+					innerScope: innerScope.map { InnerScope(callPath: $0.callPath, innerKey: $0.innerKey, enumType: $0.enumType, builderLabel: $0.builderLabel, name: innerScopeName ?? $0.name) },
+					leadsIntoFill: leadsIntoFill,
+				)
+			}
+
+			/// What the case carries before the value it wraps, each followed by a comma: its payload's binding, then the inner
+			/// scope.
+			var leadingArguments: String {
+				[values?.bindingName, innerScope?.name].compactMap(\.self).map { "\($0), " }.joined()
 			}
 		}
 
@@ -786,9 +832,9 @@ public struct SeamSignature: Sendable {
 	///
 	/// A seam's plain enum is nested by type: the root enum, `SafeDIScope_<Stem>`, describes what the seam itself builds,
 	/// and each other type of the seam's tree that leads to a place has an enum of its own, `<Type>_Scope`, nested in the
-	/// root. A case is a property of the type its enum describes – a place, a property that builds a type with an enum, or
-	/// a call of an inner seam – and carries what that type binds before the property (`Case.values`). A public mock's
-	/// enums, and a seam's `@Sendable` enum, have one case per path.
+	/// root. A case is a property of the type its enum describes – a place, a property that builds a type with an enum, a
+	/// call of an inner seam, or such a call and a builder it fills with a type whose tree leads to a place – and carries
+	/// what that type binds before the property (`Case.values`). A public mock's enums have one case per path.
 	public struct ScopeEnum: Sendable {
 		public struct Key: Hashable, Sendable {
 			public init(seamType: TypeDescription, holeType: HoleType, isSendable: Bool, describedType: TypeDescription? = nil) {
@@ -836,6 +882,12 @@ public struct SeamSignature: Sendable {
 				/// A call of a seam whose enum the case holds: `sitePath` is the path to the property that holds the call in an
 				/// enum with one case per path, and empty in an enum nested by type.
 				case inner(enumKey: Key, enumType: TypeDescription, sitePath: [Property], isIndirect: Bool)
+				/// A call of a seam, one of whose builders the seam's tree fills with a type whose tree leads to a place, in an
+				/// enum nested by type: one case per call and builder filled. It holds the scope value the inner seam handed the
+				/// fill, of the type `innerEnumType` of the inner seam's root enum `innerKey` – or no such value, where
+				/// `innerEnumType` is `nil`: a `@Sendable` function inside the fill leads to the place – then the enum of the
+				/// fill's type, `enumKey`'s.
+				case fill(innerKey: Key, innerEnumType: TypeDescription?, enumKey: Key, isIndirect: Bool)
 			}
 
 			public let name: String
@@ -886,8 +938,19 @@ public struct SeamSignature: Sendable {
 			case .own, .place:
 				nil
 			case let .nested(enumKey, _),
-			     let .inner(enumKey, _, _, _):
+			     let .inner(enumKey, _, _, _),
+			     let .fill(_, _, enumKey, _):
 				enumKey
+			}
+		}
+
+		/// The key of the inner seam's root enum whose value `enumCase` carries, for a case of a call whose fill leads to a
+		/// place: the enum a reader of the inner seam's levels walks. `nil` for every other case.
+		static func carriedInnerKey(of enumCase: Case) -> Key? {
+			if case let .fill(innerKey, innerEnumType, _, _) = enumCase.kind, innerEnumType != nil {
+				innerKey
+			} else {
+				nil
 			}
 		}
 
@@ -906,7 +969,8 @@ public struct SeamSignature: Sendable {
 					case let .place(placeSites):
 						sites.formUnion(placeSites)
 					case let .nested(innerKey, _),
-					     let .inner(innerKey, _, _, _):
+					     let .inner(innerKey, _, _, _),
+					     let .fill(_, _, innerKey, _):
 						keysToVisit.append(innerKey)
 					}
 				}
@@ -1123,6 +1187,14 @@ public struct SeamSignature: Sendable {
 			case let .nested(enumKey, _),
 			     let .inner(enumKey, _, _, _):
 				return (valuesPayload(of: enumCase) + [enumKey.spelling]).joined(separator: ", ")
+			case let .fill(innerKey, innerEnumType, enumKey, _):
+				// The inner seam's root enum only where the case carries its value.
+				var payload = valuesPayload(of: enumCase)
+				if innerEnumType != nil {
+					payload.append("inner \(innerKey.spelling)")
+				}
+				payload.append(enumKey.spelling)
+				return payload.joined(separator: ", ")
 			}
 		}
 		// Each key spelled once, then sorted by its spelling.

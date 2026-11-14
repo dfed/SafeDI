@@ -1269,24 +1269,23 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesNestedEnumApart_whenCasePerPathOfPlaceInsideFillSpellsTypeOfItsName() async throws {
+	mutating func generate_namesNestedEnumApart_whenLevelOfTypeInsideFillSpellsTypeOfItsName() async throws {
 		// `Outer` builds `Widget`, whose place `gadget` gives a nested enum `Widget_Scope`, and calls `Inner`, whose place
-		// `Middle` fills with `DefaultUserService`, whose own place `gadget` is a case per path of the same root enum. That
-		// case's payload carries `Inner`'s `widgetScope: Widget_Scope`, a type of `Feature`'s, which the nested enum would
-		// shadow, so the nested enum takes `_`. `Outer`'s own place `inner_avatar_userService_gadget` is a case nested by type
-		// whose name the case per path would take, so the case per path takes `_`.
+		// `Middle` fills with `DefaultUserService`, whose own place `gadget` is a case of `DefaultUserService_Scope`, nested
+		// in the same root enum. That case's payload carries `DefaultUserService`'s `widgetScope: Widget_Scope`, a type of
+		// `Feature`'s, which the nested enum would shadow, so the nested enum takes `_`.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 					"public protocol UserService {}\npublic protocol Gadget {}",
 					Self.type(named: "Widget_Scope", properties: []),
 					Self.type(named: "Avatar", properties: ["@Instantiated let userService: any UserService"]),
-					Self.type(named: "Inner", attributes: "@Instantiable(generateDependencyTree: true)", properties: ["@Instantiated let widgetScope: Widget_Scope", "@Instantiated let avatar: Avatar"]),
+					Self.type(named: "Inner", attributes: "@Instantiable(generateDependencyTree: true)", properties: ["@Instantiated let avatar: Avatar"]),
 				]),
 				ModuleFixture(name: "Middle", packageName: "Other", swiftFileContent: [
-					"@Instantiable(fulfillingAdditionalTypes: [UserService.self]) public final class DefaultUserService: UserService, Instantiable {\n    public init(gadget: any Gadget) { self.gadget = gadget }\n    @Instantiated let gadget: any Gadget\n}",
+					"@Instantiable(fulfillingAdditionalTypes: [UserService.self]) public final class DefaultUserService: UserService, Instantiable {\n    public init(widgetScope: Widget_Scope, gadget: any Gadget) {\n        self.widgetScope = widgetScope\n        self.gadget = gadget\n    }\n    @Instantiated let widgetScope: Widget_Scope\n    @Instantiated let gadget: any Gadget\n}",
 					Self.type(named: "Widget", properties: ["@Instantiated let gadget: any Gadget"]),
-					Self.type(named: "Outer", attributes: "@Instantiable(generateDependencyTree: true)", properties: ["@Instantiated let widget: Widget", "@Instantiated let inner: Inner", "@Instantiated let inner_avatar_userService_gadget: any Gadget"]),
+					Self.type(named: "Outer", attributes: "@Instantiable(generateDependencyTree: true)", properties: ["@Instantiated let widget: Widget", "@Instantiated let inner: Inner"]),
 				].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
 				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
 					"@Instantiable(fulfillingAdditionalTypes: [Gadget.self]) final class DefaultGadget: Gadget, Instantiable { init() {} }",
@@ -1304,25 +1303,26 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		extension Outer {
 		    @frozen public enum SafeDIScope_Gadget {
 		        case widget(widget_Values, SafeDIScope_Gadget.Widget_Scope_)
-		        case inner_avatar_userService_gadget(inner_avatar_userService_gadget_Values)
-		        case inner_avatar_userService_gadget_(inner_avatar_userService_gadget__Values)
+		        case inner_userServiceBuilder(inner_userServiceBuilder_Values, Inner.SafeDIScope_UserService, SafeDIScope_Gadget.DefaultUserService_Scope)
 
 		        public struct widget_Values {}
 
-		        public struct inner_avatar_userService_gadget_Values {
+		        public struct inner_userServiceBuilder_Values {
 		            public let widget: Widget
-		            public let inner: Inner
-		        }
-
-		        public struct inner_avatar_userService_gadget__Values {
-		            public let widget: Widget
-		            public let widgetScope: Widget_Scope
 		        }
 
 		        @frozen public enum Widget_Scope_ {
 		            case gadget(gadget_Values)
 
 		            public struct gadget_Values {}
+		        }
+
+		        @frozen public enum DefaultUserService_Scope {
+		            case gadget(gadget_Values)
+
+		            public struct gadget_Values {
+		                public let widgetScope: Widget_Scope
+		            }
 		        }
 		    }
 
@@ -1336,19 +1336,21 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            return Widget(gadget: gadget)
 		        }
 		        let widget: Widget = __safeDI_widget()
+		        let __safeDI_gadgetValues_inner_userServiceBuilder = SafeDIScope_Gadget.inner_userServiceBuilder_Values(widget: widget)
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_BE14381C6C54B898.self // \(Self.moduleInfoComment)
-		            func __safeDI_userServiceBuilder_Inner(_ scope: Inner.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .avatar(values, scope): return __safeDI_userServiceBuilder_Inner_Avatar_Scope(scope, widgetScope: values.widgetScope)
+		            _ = Inner.__safeDI_Inner_50A6AA8E32006A5E.self // \(Self.moduleInfoComment)
+		            func __safeDI_userServiceBuilder_Inner(_ __safeDI_inner_userServiceBuilder: Inner.SafeDIScope_UserService) -> any UserService {
+		                switch __safeDI_inner_userServiceBuilder {
+		                case let .avatar(_, scope): return __safeDI_userServiceBuilder_Inner_Avatar_Scope(scope, __safeDI_inner_userServiceBuilder: __safeDI_inner_userServiceBuilder)
 		                }
 		            }
-		            func __safeDI_userServiceBuilder_Inner_Avatar_Scope(_ scope: Inner.SafeDIScope_UserService.Avatar_Scope, widgetScope: Widget_Scope) -> any UserService {
+		            func __safeDI_userServiceBuilder_Inner_Avatar_Scope(_ scope: Inner.SafeDIScope_UserService.Avatar_Scope, __safeDI_inner_userServiceBuilder: Inner.SafeDIScope_UserService) -> any UserService {
 		                switch scope {
 		                case .userService:
 		                    func __safeDI_userService() -> DefaultUserService {
-		                        let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_avatar_userService_gadget_(SafeDIScope_Gadget.inner_avatar_userService_gadget__Values(widget: widget, widgetScope: widgetScope)))
-		                        return DefaultUserService(gadget: gadget)
+		                        let widgetScope = Widget_Scope()
+		                        let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_userServiceBuilder(__safeDI_gadgetValues_inner_userServiceBuilder, __safeDI_inner_userServiceBuilder, .gadget(SafeDIScope_Gadget.DefaultUserService_Scope.gadget_Values(widgetScope: widgetScope))))
+		                        return DefaultUserService(widgetScope: widgetScope, gadget: gadget)
 		                    }
 		                    let userService: any UserService = __safeDI_userService()
 		                    return userService
@@ -1357,13 +1359,12 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		            return Inner(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Inner)
 		        }
 		        let inner: Inner = __safeDI_inner()
-		        let inner_avatar_userService_gadget: any Gadget = __safeDI_gadgetBuilder(.inner_avatar_userService_gadget(SafeDIScope_Gadget.inner_avatar_userService_gadget_Values(widget: widget, inner: inner)))
-		        self.init(widget: widget, inner: inner, inner_avatar_userService_gadget: inner_avatar_userService_gadget)
+		        self.init(widget: widget, inner: inner)
 		    }
 		}
 
 		extension Outer {
-		    public enum __safeDI_Outer_92079ED475A01A70 {}
+		    public enum __safeDI_Outer_AA37FBAC181F631D {}
 		}
 		""")
 	}
