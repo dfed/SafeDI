@@ -291,7 +291,7 @@ public final class Root: Instantiable {
         self.presenter = presenter
     }
 
-    /// `Presenter`'s initializer is `@MainActor`.
+    /// `Presenter`’s initializer is `@MainActor`.
     @Instantiated private let presenter: Presenter
 }
 ```
@@ -759,7 +759,7 @@ SafeDI generates, in `Feature`:
 ```swift
 extension Screen {
     /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
     public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping () -> Database, __safeDI_logger: @autoclosure @escaping () -> Logger?) {
         let database = LazilyInstantiated<Database>(__safeDI_database)
         let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
@@ -868,7 +868,7 @@ extension Service {
     }
 
     /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
     public init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
         let analytics = Analytics()
         let __safeDI_userServiceValues_profile = SafeDIScope_UserService.profile_Values(analytics: analytics)

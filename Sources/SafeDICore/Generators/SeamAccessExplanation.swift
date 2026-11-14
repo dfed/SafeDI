@@ -45,7 +45,7 @@ enum SeamAccessExplanation {
 	static func causeSentence(_ cause: TypeAccessProof.Cause, receivers: [Receiver]) -> String {
 		switch cause {
 		case let .ownDeclaration(type, level):
-			return "\(name(type))'s own `@Instantiable` declaration is `\(level.spelledOnGeneratedDeclaration)`."
+			return "\(name(type))’s own `@Instantiable` declaration is `\(level.spelledOnGeneratedDeclaration)`."
 		case let .plainDeclaration(type, level, declarations, namesModules):
 			return plainDeclarationSentence(type: type, level: level, declarations: declarations, namesModules: namesModules)
 		case let .declarationInExtensionOfRecordedType(type, ownLevel, extendedType, extendedTypeLevel, _, extendedTypeIsPlain, _, extendedTypeEnclosingType):
@@ -81,7 +81,7 @@ enum SeamAccessExplanation {
 			}
 		case let .unproven(type):
 			let aliasMentions = receivers.compactMap { receiver in
-				receiver.aliasProperty.map { "\(name(receiver.declaringType))'s initializer mentions only `\($0.typeDescription.asSource)`" }
+				receiver.aliasProperty.map { "\(name(receiver.declaringType))’s initializer mentions only `\($0.typeDescription.asSource)`" }
 			}
 			return "\(name(type)) is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and no initializer, `instantiate(…)` or mock method SafeDI records mentions it\(aliasMentions.isEmpty ? "" : " (\(aliasMentions.joined(separator: "; ")))")."
 		case let .enclosedBy(type, enclosingType, cause):
@@ -118,7 +118,7 @@ enum SeamAccessExplanation {
 			// public mock requires it to be `public` cannot be narrower, so the compiler then requires the type to be wider.
 			let compilerRequirement = seamAccessIsRequiredByPublicMock
 				? "if \(name(type)) is narrower than `\(neededLevel.spelledOnGeneratedDeclaration)`, the compiler then requires it to be `\(neededLevel.spelledOnGeneratedDeclaration)`"
-				: "the compiler may then require \(name(seam))'s initializer, and so the seam, to be narrower"
+				: "the compiler may then require \(name(seam))’s initializer, and so the seam, to be narrower"
 			remedies.append("declare `@\(Dependency.Source.receivedRawValue) let \(parameter.label): \(type.asSource)` on \(name(seam)), so that its initializer, which the compiler checks, states how visible \(name(type)) is (\(compilerRequirement))")
 		}
 		remedies += causeRemedies(cause, neededLevel: neededLevel)
@@ -253,7 +253,7 @@ enum SeamAccessExplanation {
 		if omission.isNoTierParameter, let nestedSeamCall = parameter.nestedSeamCall {
 			// The nested seam's tier this seam's tree calls, which omits the parameter, so no tier of this seam takes it.
 			let nestedTakes = nestedSeamCall.parameterTierAccess.map { "takes \(label) only on its `\($0.spelledOnGeneratedDeclaration)` initializer" } ?? "takes \(label) on none of its initializers"
-			what = "no initializer SafeDI generated for \(seam) takes it: \(seam)'s dependency tree calls the `\(nestedSeamCall.tier.spelledOnGeneratedDeclaration)` initializer SafeDI generated for \(name(nestedSeamCall.seamType))\(inModule(nestedSeamCall.seamModuleName)), the narrowest one \(caller(moduleName: nestedSeamCall.callerModuleName, requirement: nestedSeamCall.requirement)) can call, which \(nestedTakes), so calling it would pass `nil` to \(nestedSeamCall.receivingTypes.map(name).joinedAsList), which the tree would hand \(label) were it built inline."
+			what = "no initializer SafeDI generated for \(seam) takes it: \(seam)’s dependency tree calls the `\(nestedSeamCall.tier.spelledOnGeneratedDeclaration)` initializer SafeDI generated for \(name(nestedSeamCall.seamType))\(inModule(nestedSeamCall.seamModuleName)), the narrowest one \(caller(moduleName: nestedSeamCall.callerModuleName, requirement: nestedSeamCall.requirement)) can call, which \(nestedTakes), so calling it would pass `nil` to \(nestedSeamCall.receivingTypes.map(name).joinedAsList), which the tree would hand \(label) were it built inline."
 		} else if !parameter.isPassThrough {
 			what = "the `\(seamCall.tier.spelledOnGeneratedDeclaration)` initializer SafeDI generated for \(seam)\(inModule(seamCall.seamModuleName)), the narrowest one \(caller(moduleName: seamCall.callerModuleName, requirement: seamCall.requirement)) can call, does not take it: \(seam) receives \(label) itself, only if available, on its `\(parameter.tierAccess.spelledOnGeneratedDeclaration)` initializer, so this call would pass `nil` to \(seam), which would be handed \(label) were its tree built inline."
 		} else {
@@ -358,11 +358,11 @@ enum SeamAccessExplanation {
 	private static func memberPhrase(_ prover: TypeAccessProof.Prover) -> String {
 		switch prover.member {
 		case .initializer:
-			"\(name(prover.carrier))'s initializer"
+			"\(name(prover.carrier))’s initializer"
 		case .instantiateMethod:
-			"\(name(prover.carrier))'s `instantiate(…)`"
+			"\(name(prover.carrier))’s `instantiate(…)`"
 		case let .mockMethod(mockName):
-			"\(name(prover.carrier))'s `\(mockName)(…)`"
+			"\(name(prover.carrier))’s `\(mockName)(…)`"
 		}
 	}
 
@@ -401,11 +401,11 @@ enum SeamAccessExplanation {
 		} else if extensionIsSpelled {
 			// A spelled extension of a top-level type bounds it, as the compiler does; SafeDI reads the extended type's own
 			// access only from a declaration in the same module, which another module's `@Instantiable` type is not.
-			"an extension of \(name(extendedType)) that spells its access level, which SafeDI counts with \(shortName(type))'s own, since it reads \(name(extendedType))'s access only from a declaration of \(name(extendedType)) in the same module"
+			"an extension of \(name(extendedType)) that spells its access level, which SafeDI counts with \(shortName(type))’s own, since it reads \(name(extendedType))’s access only from a declaration of \(name(extendedType)) in the same module"
 		} else if isRaisedByMentions {
 			"an extension of \(name(extendedType)) that spells no access level"
 		} else {
-			"an extension of \(name(extendedType)) that spells no access level, which SafeDI counts as `internal`, since it reads \(name(extendedType))'s access only from a declaration of \(name(extendedType)) in the same module that is outside every extension, or inside an extension of a type it reads the same way"
+			"an extension of \(name(extendedType)) that spells no access level, which SafeDI counts as `internal`, since it reads \(name(extendedType))’s access only from a declaration of \(name(extendedType)) in the same module that is outside every extension, or inside an extension of a type it reads the same way"
 		}
 	}
 
@@ -435,7 +435,7 @@ enum SeamAccessExplanation {
 		if extendedTypeLevel < neededLevel, extendedTypeLevel < ownLevel || ownLevel >= neededLevel {
 			return "declare \(name(extendedTypeEnclosingType ?? extendedType)) \(level)"
 		} else if !spellsOwnLevel, extendedTypeLevel >= neededLevel {
-			return "declare \(shortName(type)) \(level), or spell the extension's access level (`\(neededLevel.spelledOnGeneratedDeclaration) extension \(extendedType.asSource) { … }`)"
+			return "declare \(shortName(type)) \(level), or spell the extension’s access level (`\(neededLevel.spelledOnGeneratedDeclaration) extension \(extendedType.asSource) { … }`)"
 		} else {
 			return "declare \(shortName(type)) \(level)"
 		}
@@ -456,13 +456,13 @@ enum SeamAccessExplanation {
 				""
 			}
 			return isMockOnly
-				? "if \(name(type)) can be `\(levelSpelling)`, \(enclosingTypeRemedy)spell the extension's access level as `@\(InstantiableVisitor.macroName)(mockOnly: true) \(levelSpelling) extension \(type.asSource)`"
-				: "if \(name(type)) can be `\(levelSpelling)`, \(enclosingTypeRemedy)spell the extension's access level as `@Instantiable(conformsElsewhere: true) \(levelSpelling) extension \(type.asSource)`, declaring the `Instantiable` conformance on \(name(type))'s own declaration or in a separate `extension \(type.asSource): Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares \(name(type)), apply `@Instantiable` to its declaration instead"
+				? "if \(name(type)) can be `\(levelSpelling)`, \(enclosingTypeRemedy)spell the extension’s access level as `@\(InstantiableVisitor.macroName)(mockOnly: true) \(levelSpelling) extension \(type.asSource)`"
+				: "if \(name(type)) can be `\(levelSpelling)`, \(enclosingTypeRemedy)spell the extension’s access level as `@Instantiable(conformsElsewhere: true) \(levelSpelling) extension \(type.asSource)`, declaring the `Instantiable` conformance on \(name(type))’s own declaration or in a separate `extension \(type.asSource): Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares \(name(type)), apply `@Instantiable` to its declaration instead"
 		}
 		guard let extendedType else { return "declare \(shortName(type)) outside every extension" }
-		let declareInBody = "declare \(shortName(type)) in \(name(extendedType))'s body or at top level"
+		let declareInBody = "declare \(shortName(type)) in \(name(extendedType))’s body or at top level"
 		guard extendedType.popNested == nil else { return declareInBody }
-		return "if \(name(extendedType)) can be `\(levelSpelling)`, spell the extension's access level (`\(levelSpelling) extension \(extendedType.asSource) { … }`, dropping the modifier on \(shortName(type)) that Swift then reports as redundant; the compiler rejects a level wider than \(name(extendedType))'s), or \(declareInBody)"
+		return "if \(name(extendedType)) can be `\(levelSpelling)`, spell the extension’s access level (`\(levelSpelling) extension \(extendedType.asSource) { … }`, dropping the modifier on \(shortName(type)) that Swift then reports as redundant; the compiler rejects a level wider than \(name(extendedType))’s), or \(declareInBody)"
 	}
 
 	/// How `type`'s plain declarations prove it: `level`, the narrowest of theirs, in the module of each when
@@ -493,7 +493,7 @@ enum SeamAccessExplanation {
 		}
 		var remedies = ["declare \(name(type)) `\(neededLevel.spelledOnGeneratedDeclaration)`\(modules)"]
 		if let wideEnough = levelsByModule.first(where: { $0.level >= neededLevel }), let moduleName = wideEnough.moduleName {
-			remedies.append("spell the type with its module where it is mentioned (`\(moduleName).\(type.asSource)`), so that it names that module's declaration")
+			remedies.append("spell the type with its module where it is mentioned (`\(moduleName).\(type.asSource)`), so that it names that module’s declaration")
 		}
 		if namesModules, narrowerModuleNames.contains(nil) {
 			// SafeDI takes the level of a declaration in a module it knows no name of as declared, whichever package that

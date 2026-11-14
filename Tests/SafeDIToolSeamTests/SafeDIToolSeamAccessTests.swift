@@ -367,7 +367,7 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 		#expect(Self.seamFile(of: output, integration: integration) == generatedFileHeader + """
 		extension Screen {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 		        let token = LazilyInstantiated<Token>(__safeDI_token)
 		        let reader = Reader(token: token.instance)
@@ -427,7 +427,7 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_logger: @autoclosure @escaping () -> Logger?) {
 				        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
 				        let detail = Detail(logger: logger.instance)
@@ -464,7 +464,7 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_logger: @autoclosure @escaping () -> Logger?) {
 				        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
 				        let detail = Detail(logger: logger.instance)

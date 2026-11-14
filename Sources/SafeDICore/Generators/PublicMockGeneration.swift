@@ -208,7 +208,7 @@ extension ScopeGenerator {
 					defaultExpression: isNilLiteral ? "nil" : (access == .public ? forwarder : provider),
 					omittedValue: isNilLiteral ? "nil" : provider,
 					requiresSendable: requiresSendable,
-					documentation: "The default of `\(concreteType.asSource)`'s `\(defaultParameter.label.spelledWithoutBackticks)` unless set.",
+					documentation: "The default of `\(concreteType.asSource)`’s `\(defaultParameter.label.spelledWithoutBackticks)` unless set.",
 				))
 			} else {
 				members.append(publicDefaultMember(
@@ -218,7 +218,7 @@ extension ScopeGenerator {
 					defaultExpression: "nil",
 					omittedValue: "nil",
 					requiresSendable: requiresSendable,
-					documentation: "`nil` keeps the default of `\(concreteType.asSource)`'s `\(defaultParameter.label.spelledWithoutBackticks)`.",
+					documentation: "`nil` keeps the default of `\(concreteType.asSource)`’s `\(defaultParameter.label.spelledWithoutBackticks)`.",
 				))
 			}
 		}
@@ -895,7 +895,7 @@ extension ScopeGenerator {
 				// SafeDI cannot see isolation a type takes from a conformance or a superclass (a SwiftUI `View`, a
 				// `UIViewController` subclass), which is the user's to opt into through `mockAttributes`; the comment says so
 				// where the compiler reports a default that reads the actor's state.
-				providerDeclarations.append("\(standardIndent)// These providers evaluate `\(typeName)`'s own defaults outside any actor, since SafeDI sees no isolation on it. If one")
+				providerDeclarations.append("\(standardIndent)// These providers evaluate `\(typeName)`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one")
 				providerDeclarations.append("\(standardIndent)// reads the state of an actor `\(typeName)` takes from a conformance or a superclass and does not compile, give its")
 				providerDeclarations.append("\(standardIndent)// `@\(InstantiableVisitor.macroName)` `mockAttributes: \"@MainActor\"` (or that actor).")
 			}
@@ -943,8 +943,8 @@ extension ScopeGenerator {
 						omittedValue: providerCall,
 						requiresSendable: false,
 						documentation: isNilLiteral
-							? "The value of `\(typeName)`'s `\(rootDefault.label.spelledWithoutBackticks)`, `nil` unless set."
-							: "The default of `\(typeName)`'s `\(rootDefault.label.spelledWithoutBackticks)` unless set; `.init(\(rootDefault.label.spelledAsArgumentLabel): nil)` passes `nil`.",
+							? "The value of `\(typeName)`’s `\(rootDefault.label.spelledWithoutBackticks)`, `nil` unless set."
+							: "The default of `\(typeName)`’s `\(rootDefault.label.spelledWithoutBackticks)` unless set; `.init(\(rootDefault.label.spelledAsArgumentLabel): nil)` passes `nil`.",
 					))
 					constructionDefaultValues[rootDefault.label] = "\(ReservedName.mockOverridesParameterName).\(rootDefault.label)"
 				} else {
@@ -1232,7 +1232,7 @@ struct PublicMockFinding: Hashable, Sendable {
 	static func callersCannotSee(_ declaration: TypeDescription, of instantiable: Instantiable) -> PublicMockFinding {
 		let typeName = instantiable.concreteInstantiable.asSource
 		let declarationName = declaration.asSource
-		let message = "SafeDI cannot generate the public mock of `\(typeName)`: its signature depends on `\(declarationName)`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call the mock cannot see that declaration, so their calls would not match the mock. Declare `\(declarationName)` in a file of this module, or of a module it depends on."
+		let message = "SafeDI cannot generate the public mock of `\(typeName)`: its signature depends on `\(declarationName)`, which is declared in a directory this module’s `#SafeDIConfiguration` adds, and the modules that call the mock cannot see that declaration, so their calls would not match the mock. Declare `\(declarationName)` in a file of this module, or of a module it depends on."
 		return PublicMockFinding(sourceDiagnostics: [
 			SourceDiagnostic(severity: .error, location: instantiable.mockGenerationArgumentLocation, message: message),
 		])
@@ -1244,7 +1244,7 @@ struct PublicMockFinding: Hashable, Sendable {
 	static func callersCannotSeePlainDeclaration(_ declaration: PlainTypeDeclaration, of instantiable: Instantiable) -> PublicMockFinding {
 		let typeName = "`\(instantiable.concreteInstantiable.asSource)`"
 		let declarationName = "`\(declaration.typeDescription.asSource)`"
-		let message = "SafeDI cannot generate the public mock of \(typeName): it takes its parameters at the access this declaration of \(declarationName) proves, which is in a directory this module's `#SafeDIConfiguration` adds, and the modules that call the mock cannot see it, so they would count \(declarationName) as `public`, and their calls would not match the mock. Declare \(declarationName) in a file of this module, or of a module it depends on."
+		let message = "SafeDI cannot generate the public mock of \(typeName): it takes its parameters at the access this declaration of \(declarationName) proves, which is in a directory this module’s `#SafeDIConfiguration` adds, and the modules that call the mock cannot see it, so they would count \(declarationName) as `public`, and their calls would not match the mock. Declare \(declarationName) in a file of this module, or of a module it depends on."
 		return PublicMockFinding(sourceDiagnostics: [
 			SourceDiagnostic(severity: .error, location: declaration.access.declarationStartLocation ?? instantiable.mockGenerationArgumentLocation, message: message),
 		])
@@ -1297,7 +1297,7 @@ struct PublicMockFinding: Hashable, Sendable {
 			// A stub the mock builds in place of taking the builder, which production never sees.
 			let holeType = hole.property.typeDescription.asInstantiatedType.withoutAny.asSource
 			let module = instantiable.moduleName.map { "module `\($0)`" } ?? "this module"
-			remedies.append("declare in \(module), or a module it depends on, a `mockOnly` `@\(InstantiableVisitor.macroName)` type that fulfills `\(holeType)` (`@\(InstantiableVisitor.macroName)(fulfillingAdditionalTypes: [\(holeType).self], mockOnly: true)`), which the mock builds instead of taking `\(hole.builderLabel)`, leaving production's hole as it is")
+			remedies.append("declare in \(module), or a module it depends on, a `mockOnly` `@\(InstantiableVisitor.macroName)` type that fulfills `\(holeType)` (`@\(InstantiableVisitor.macroName)(fulfillingAdditionalTypes: [\(holeType).self], mockOnly: true)`), which the mock builds instead of taking `\(hole.builderLabel)`, leaving production’s hole as it is")
 		}
 		if case let .signatures(_, _, provers, _) = parameter.cause {
 			// The members that prove the type, by name, each of which proves it at the level it spells.
@@ -1587,7 +1587,7 @@ extension ScopeGenerator.PublicMockTierOmission {
 			let nestedCallerModule = nested.callerModule.moduleName.map { "module `\($0)`" } ?? "this module"
 			let nestedCaller = nested.requirement == .packageUnverified ? "\(nestedCallerModule), which SafeDI cannot tell is in the same package," : nestedCallerModule
 			let nestedReceiverNames = nested.receivers.map(\.declaringType).uniqued().map(name).joinedAsList
-			what = "no mock SafeDI generated for \(type) takes it: \(type)'s mock tree calls the `\(nested.tier.spelledOnGeneratedDeclaration)` mock SafeDI generated for \(name(nested.type))\(nested.declaringModule.moduleName.map { " in module `\($0)`" } ?? ""), the narrowest one \(nestedCaller) can call, which takes \(label) only on its `\(nested.parameterAccess.spelledOnGeneratedDeclaration)` tier, so calling it would pass `nil` to \(nestedReceiverNames.isEmpty ? name(nested.type) : nestedReceiverNames), which the inline mock would hand \(label)."
+			what = "no mock SafeDI generated for \(type) takes it: \(type)’s mock tree calls the `\(nested.tier.spelledOnGeneratedDeclaration)` mock SafeDI generated for \(name(nested.type))\(nested.declaringModule.moduleName.map { " in module `\($0)`" } ?? ""), the narrowest one \(nestedCaller) can call, which takes \(label) only on its `\(nested.parameterAccess.spelledOnGeneratedDeclaration)` tier, so calling it would pass `nil` to \(nestedReceiverNames.isEmpty ? name(nested.type) : nestedReceiverNames), which the inline mock would hand \(label)."
 		} else {
 			what = "the `\(call.tier.spelledOnGeneratedDeclaration)` mock SafeDI generated for \(type)\(declaringModule), the narrowest one \(caller) can call, does not take it: `\(call.type.asSource).mock` takes \(label) only on its `\(parameter.access.spelledOnGeneratedDeclaration)` tier, so this call would pass `nil` to \(receiverNames.isEmpty ? type : receiverNames), which the inline mock would hand \(label)."
 		}
@@ -1619,7 +1619,7 @@ extension ScopeGenerator {
 			SourceDiagnostic(
 				severity: .error,
 				location: nil,
-				message: "SafeDI cannot fill `\(enumType.asSource)`'s case `\(caseName)` on every route this module's mock can reach it on, though it fills every place the case stands for. Please report this tree to SafeDI.",
+				message: "SafeDI cannot fill `\(enumType.asSource)`’s case `\(caseName)` on every route this module’s mock can reach it on, though it fills every place the case stands for. Please report this tree to SafeDI.",
 			)
 		}
 	}
@@ -1638,7 +1638,7 @@ extension ScopeGenerator {
 			return SourceDiagnostic(
 				severity: .error,
 				location: referenceLocation,
-				message: "`\(publicMockCall.type.asSource).mock()` is generated under \(declaringCondition) in \(declaringModule), but this module's mocks \(spelling(of: publicMockCall.callerModuleMockCondition)). Give both modules one `mockConditionalCompilation`.",
+				message: "`\(publicMockCall.type.asSource).mock()` is generated under \(declaringCondition) in \(declaringModule), but this module’s mocks \(spelling(of: publicMockCall.callerModuleMockCondition)). Give both modules one `mockConditionalCompilation`.",
 			)
 		}
 	}

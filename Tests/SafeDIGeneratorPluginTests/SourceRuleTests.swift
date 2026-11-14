@@ -54,6 +54,11 @@ struct SourceRuleTests {
 	}
 
 	@Test
+	func sources_spellEachApostropheInALiteralCurly() throws {
+		#expect(try findings(of: [.apostrophe]) == [])
+	}
+
+	@Test
 	func waivers_eachNameARuleGiveAReasonAndWaiveASite() throws {
 		let findings = try Self.checkedFiles.get().flatMap { checkedFile in
 			checkedFile.findings.filter { $0.subject == .waiver }.map(\.description)
@@ -321,6 +326,48 @@ struct SourceRuleTests {
 		""") == [])
 	}
 
+	@Test(arguments: [
+		#""the type's value""#,
+		#""it doesn't compile""#,
+		#""`\(name)`'s initializer""#,
+		#""\(name)'s initializer""#,
+		#""module 2's files""#,
+		##"#"the type's value"#"##,
+	])
+	func sourceRuleCheck_findsApostrophe_whenALiteralSpellsAStraightApostropheBetweenLetters(literal: String) {
+		#expect(findings(in: "_ = \(literal)") == [
+			"Sources/SafeDICore/Models/Fixture.swift:1: apostrophe: the text SafeDI emits spells an apostrophe ’, never '",
+		])
+	}
+
+	@Test
+	func sourceRuleCheck_findsApostrophe_whenAMultilineLiteralSpellsAStraightApostrophe() {
+		#expect(findings(in: #"""
+		_ = """
+		// The seam's tree.
+		"""
+		"""#, at: "Plugins/SafeDIGenerator/Fixture.swift") == [
+			"Plugins/SafeDIGenerator/Fixture.swift:2: apostrophe: the text SafeDI emits spells an apostrophe ’, never '",
+		])
+	}
+
+	@Test
+	func sourceRuleCheck_findsNoApostrophe_whenNoStraightQuoteInALiteralIsBetweenLetters() {
+		#expect(findings(in: #"""
+		_ = "the type’s value"
+		_ = "the module '\(name)' at '\(path)'"
+		_ = "requires '--module-name'"
+		_ = character == "'"
+		_ = "the types' declarations"
+		// the type's value
+		"""#) == [])
+	}
+
+	@Test
+	func sourceRuleCheck_findsNothing_whenAWaiverWithAReasonFollowsAnApostrophe() {
+		#expect(findings(in: #"_ = "doesn't" // safedi-source-rule: allow apostrophe — matches the compiler's output verbatim"#) == [])
+	}
+
 	// MARK: Waivers
 
 	@Test
@@ -348,7 +395,7 @@ struct SourceRuleTests {
 	func sourceRuleCheck_findsSiteAndWaiver_whenAWaiverNamesNoRule() {
 		#expect(findings(in: "_ = value! // safedi-source-rule: allow forceUnwrapping — `value` is set before this line") == [
 			"Sources/SafeDICore/Models/Fixture.swift:1: forceUnwrap: a force unwrap traps on `nil`",
-			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `builderFunctionNamePrefix`, `backtick`",
+			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `builderFunctionNamePrefix`, `backtick`, `apostrophe`",
 		])
 	}
 

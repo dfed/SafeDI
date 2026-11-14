@@ -1193,7 +1193,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		)
 		// The module's run validated `Root`, which it does not generate, with `Deep`'s declarations.
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.generatedFile(importing: ["Deep", "Middle"], """
-		// SafeDI generates Root's init() only in the module that declares Root. If Root() does not compile, add the SafeDI plugin to the target that declares Root.
+		// SafeDI generates Root’s init() only in the module that declares Root. If Root() does not compile, add the SafeDI plugin to the target that declares Root.
 		""")])
 	}
 
@@ -1700,7 +1700,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		// `App` opens the files for `Clock`, and no module beneath declares what fills the hole, so a root cannot fill it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `Tracker`, which @Instantiated property `tracker: any Tracker` instantiates in chain: Root -> Feature. `Feature` generates its dependency tree in module `SeamModule`, which cannot see one either, so the initializer SafeDI generated for it takes `trackerBuilder`, whose case `tracker` builds `tracker`, and the root `Root` must fill it. Decorate `Tracker`, or an extension of it, with @Instantiable; list `Tracker` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target's `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist.
+			\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `Tracker`, which @Instantiated property `tracker: any Tracker` instantiates in chain: Root -> Feature. `Feature` generates its dependency tree in module `SeamModule`, which cannot see one either, so the initializer SafeDI generated for it takes `trackerBuilder`, whose case `tracker` builds `tracker`, and the root `Root` must fill it. Decorate `Tracker`, or an extension of it, with @Instantiable; list `Tracker` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target’s `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target’s `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target’s `SafeDI.preCompileScript` under Tuist.
 			\(fixtures["SeamModule"]!["Feature.swift"]):9:5: note: `Feature` instantiates `tracker: any Tracker` here.
 			"""
 		}) {

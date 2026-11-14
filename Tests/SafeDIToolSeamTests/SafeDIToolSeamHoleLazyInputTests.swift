@@ -192,7 +192,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderSendableBuilder: @escaping @Sendable (SafeDISendableScope_Uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_screenBuilder() -> ExportScreen {
@@ -260,7 +260,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		// capture it, as `ExportFeature`'s `SendableInstantiator` would inline.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(Self.path(of: "UploadJob.swift", inModule: "App", fixtures: fixtures, integration: integration)):9:5: error: @Received property `exportService: ExportService` cannot be received inside a `@Sendable` function in chain: Root -> ExportFeature -> DefaultUploader -> UploadJob. `ExportFeature`'s tree builds `uploader: any Uploader` on `Panel` inside a `@Sendable` function, so the function SafeDI generates to fill its builder is `@Sendable` too, and it cannot capture `exportService: LazilyInstantiated<ExportService>` on `Root`, because `LazilyInstantiated<ExportService>` is not `Sendable`. Declare `exportService` on `Root` as `SendableLazilyInstantiated<ExportService>` to fix. A `SendableLazilyInstantiated` requires its instance type, `ExportService`, to be `Sendable`.
+			\(Self.path(of: "UploadJob.swift", inModule: "App", fixtures: fixtures, integration: integration)):9:5: error: @Received property `exportService: ExportService` cannot be received inside a `@Sendable` function in chain: Root -> ExportFeature -> DefaultUploader -> UploadJob. `ExportFeature`’s tree builds `uploader: any Uploader` on `Panel` inside a `@Sendable` function, so the function SafeDI generates to fill its builder is `@Sendable` too, and it cannot capture `exportService: LazilyInstantiated<ExportService>` on `Root`, because `LazilyInstantiated<ExportService>` is not `Sendable`. Declare `exportService` on `Root` as `SendableLazilyInstantiated<ExportService>` to fix. A `SendableLazilyInstantiated` requires its instance type, `ExportService`, to be `Sendable`.
 			\(Self.path(of: "Root.swift", inModule: "App", fixtures: fixtures, integration: integration)):12:5: note: `exportService: LazilyInstantiated<ExportService>` is declared here
 			"""
 		}) {
@@ -383,7 +383,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_logger: @autoclosure @escaping () -> Logger, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
@@ -480,7 +480,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_logger: @autoclosure @escaping () -> Logger?, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
@@ -610,7 +610,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_logger: @autoclosure @escaping () -> Logger?, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
@@ -704,7 +704,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_reportBuilder reportBuilder: Instantiator<Report>, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_screenBuilder() -> ExportScreen {
@@ -793,7 +793,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_screenBuilder() -> ExportScreen {
@@ -872,7 +872,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_exportService __safeDI_exportService_: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
 			        #sourceLocation(file: "\(seamPath)", line: 9)
 			        let exportService: any Exporting = __safeDI_exportService_()
@@ -959,7 +959,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_screenBuilder() -> ExportScreen {
@@ -993,7 +993,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_headerBuilder() -> Header {
@@ -1080,7 +1080,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_exportService: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: @escaping (SafeDIScope_Uploader) -> any Uploader) {
 		        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 		        func __safeDI_screenBuilder() -> ExportScreen {

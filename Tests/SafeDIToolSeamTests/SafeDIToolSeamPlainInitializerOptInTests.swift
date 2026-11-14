@@ -88,7 +88,7 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 	private static let screenWithoutPlainInitializer = """
 	extension Screen {
 	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 	    public init(__safeDI_user: @autoclosure @escaping () -> User) {
 	        let user = LazilyInstantiated<User>(__safeDI_user)
 	        func __safeDI_detailBuilder() -> Detail {
@@ -371,7 +371,7 @@ struct SafeDIToolSeamPlainInitializerOptInTests: ~Copyable {
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_user user: Instantiator<User>) {
 		        func __safeDI_detailBuilder() -> Detail {
 		            Detail(user: user)

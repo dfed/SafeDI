@@ -333,7 +333,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 				"Core": ["CoreRoot+SafeDI.swift": generatedFileHeader + coreRootCode],
 				"App": [
 					"CoreRoot+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + """
-					// SafeDI generates CoreRoot's init() only in Core, the module that declares CoreRoot. If CoreRoot() does not compile, add the SafeDI plugin to the target that declares CoreRoot.
+					// SafeDI generates CoreRoot’s init() only in Core, the module that declares CoreRoot. If CoreRoot() does not compile, add the SafeDI plugin to the target that declares CoreRoot.
 					""",
 					"Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + Self.rootInstantiatingEngineCode,
 				],

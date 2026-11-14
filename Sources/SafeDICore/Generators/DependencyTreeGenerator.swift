@@ -269,7 +269,7 @@ public actor DependencyTreeGenerator {
 				sourceFilePath: root.sourceFilePath,
 				code: root.dependencies.isEmpty
 					? ""
-					: "// SafeDI generates \(rootType)'s init() only in \(declaringModule). If \(rootType)() does not compile, add the SafeDI plugin to the target that declares \(rootType).",
+					: "// SafeDI generates \(rootType)’s init() only in \(declaringModule). If \(rootType)() does not compile, add the SafeDI plugin to the target that declares \(rootType).",
 				fulfillers: [],
 			)
 		}
@@ -1700,7 +1700,7 @@ public actor DependencyTreeGenerator {
 
 		/// The last remedy for a type no `@Instantiable` declaration a seam's caller can see fulfills: what each
 		/// integration does to read the module that declares one.
-		static let fulfillingDeclarationInAnotherModuleRemedy = "or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target's `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist."
+		static let fulfillingDeclarationInAnotherModuleRemedy = "or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target’s `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target’s `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target’s `SafeDI.preCompileScript` under Tuist."
 
 		/// How to break a cycle closed by a receive of a property that is still being built.
 		fileprivate static let onlyIfAvailableRemedy = "Remove this @\(Dependency.Source.receivedRawValue) property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."
@@ -1813,11 +1813,11 @@ public actor DependencyTreeGenerator {
 			// A seam's generated initializer that takes the property as a `@Sendable` closure captures what the call passes, as
 			// the `@Sendable` builder function inside the seam's tree that reads it would built inline.
 			let capturingFunction = if let seamType = capture.capturingSeamType {
-				"`\(seamType.asSource)`'s generated initializer takes `\(capture.receivedProperty.label)` as a `@Sendable` closure, because a `@Sendable` function inside `\(seamType.asSource)`'s tree reads it, and that closure"
+				"`\(seamType.asSource)`’s generated initializer takes `\(capture.receivedProperty.label)` as a `@Sendable` closure, because a `@Sendable` function inside `\(seamType.asSource)`’s tree reads it, and that closure"
 			} else if capture.capturingFillIsPassedOn {
 				"The function SafeDI generates to fill the builder for `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` is passed to a seam from inside a `@Sendable` function, or to a seam that takes it `@Sendable`, so it is `@Sendable` too, and it"
 			} else if let fillSeamType = capture.capturingFillSeamType {
-				"`\(fillSeamType.asSource)`'s tree builds `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` inside a `@Sendable` function, so the function SafeDI generates to fill its builder is `@Sendable` too, and it"
+				"`\(fillSeamType.asSource)`’s tree builds `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` inside a `@Sendable` function, so the function SafeDI generates to fill its builder is `@Sendable` too, and it"
 			} else {
 				"SafeDI builds `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` in a `@Sendable` function\(sendableBuilderReason), which"
 			}
@@ -2148,7 +2148,7 @@ public actor DependencyTreeGenerator {
 						? "declare `\(type.asSource)` `public` with `generateMock: .public`"
 						: "give `\(type.asSource)` a public mock: `generateMock: .public`, or a hand-written public `mock`")
 						// A seam's tree is one a mock builds inline, which the user may not expect.
-						+ (isSeam ? ": mocks build a seam's tree inline, and this mock would call the mock \(declaringModuleName.map { "`\($0)`" } ?? "its module") generates instead" : "")
+						+ (isSeam ? ": mocks build a seam’s tree inline, and this mock would call the mock \(declaringModuleName.map { "`\($0)`" } ?? "its module") generates instead" : "")
 				} else {
 					nil
 				}
@@ -2202,7 +2202,7 @@ public actor DependencyTreeGenerator {
 						return SourceDiagnostic(
 							severity: .error,
 							location: readableDeclarationLocation ?? referenceLocation,
-							message: "\(typeName) has a public `mock()`, but SafeDI does not know which module declares \(typeName), so this run cannot call it, and \(access): it is declared in a directory a `#SafeDIConfiguration` adds, or in a file no target of the plugin's graph lists. Declare it in a file of a module SafeDI knows.",
+							message: "\(typeName) has a public `mock()`, but SafeDI does not know which module declares \(typeName), so this run cannot call it, and \(access): it is declared in a directory a `#SafeDIConfiguration` adds, or in a file no target of the plugin’s graph lists. Declare it in a file of a module SafeDI knows.",
 						)
 					}
 				} else {
@@ -2272,7 +2272,7 @@ public actor DependencyTreeGenerator {
 				return SourceDiagnostic(
 					severity: .error,
 					location: callingDependencyLocation,
-					message: "\(callingModuleName) calls the initializer SafeDI generated for `\(seam.asSource)` in module \(seamModuleName), whose signature SafeDI computes from \(seamModuleName)'s declarations as \(seamModuleName) reads them, mock-only declarations under \(seamModuleName)'s mock condition included. \(seamModuleName) guards its mocks with \(spelling(of: seamModuleMockCondition)) and \(callingModuleName) with \(spelling(of: callingModuleMockCondition)), so \(callingModuleName) cannot read them as \(seamModuleName) does. Use the same `mockConditionalCompilation` in both modules.",
+					message: "\(callingModuleName) calls the initializer SafeDI generated for `\(seam.asSource)` in module \(seamModuleName), whose signature SafeDI computes from \(seamModuleName)’s declarations as \(seamModuleName) reads them, mock-only declarations under \(seamModuleName)’s mock condition included. \(seamModuleName) guards its mocks with \(spelling(of: seamModuleMockCondition)) and \(callingModuleName) with \(spelling(of: callingModuleMockCondition)), so \(callingModuleName) cannot read them as \(seamModuleName) does. Use the same `mockConditionalCompilation` in both modules.",
 				)
 			}
 		}
@@ -2373,7 +2373,7 @@ public actor DependencyTreeGenerator {
 				if seam.generateMock == .public, tier == .public {
 					(true, "", " " + SeamAccessExplanation.publicMockRequirementSentence(seam: seam.concreteInstantiable))
 				} else {
-					(false, ", which `\(seam.concreteInstantiable.asSource)`'s `\(tier.spelledOnGeneratedDeclaration)` access requires,", "")
+					(false, ", which `\(seam.concreteInstantiable.asSource)`’s `\(tier.spelledOnGeneratedDeclaration)` access requires,", "")
 				}
 			}
 
@@ -2405,12 +2405,12 @@ public actor DependencyTreeGenerator {
 					// Who takes the parameter: the seam's own initializer, the seam itself, or the receivers in its tree.
 					let receiverNames = treeReceivers.map { receiver in
 						receiver.isInstantiateMethodParameter
-							? "`\(receiver.declaringType.asSource)`'s `instantiate(…)`"
+							? "`\(receiver.declaringType.asSource)`’s `instantiate(…)`"
 							: "`\(receiver.declaringType.asSource)`"
 					}.uniqued()
 					let takers: String = switch ownParameter {
 					case .forwarded:
-						"\(seamName)'s own initializer takes"
+						"\(seamName)’s own initializer takes"
 					case .required:
 						receiverNames.isEmpty ? "\(seamName) receives" : "\(([seamName] + receiverNames).joinedAsList) receive"
 					case .none:
@@ -2446,15 +2446,15 @@ public actor DependencyTreeGenerator {
 					declarationNotes = SeamAccessExplanation.declarationNotes(for: cause, neededLevel: tier)
 				case let .signaturesDidNotSettle(seams):
 					receivers = []
-					message = "SafeDI cannot generate the dependency tree of \(seamName): the generated initializers of \(seams.map { "`\($0.asSource)`" }.joined(separator: ", ")), which reach one another, took a parameter from one another on every pass up to the limit. This is a defect in SafeDI; report it with these types' declarations."
+					message = "SafeDI cannot generate the dependency tree of \(seamName): the generated initializers of \(seams.map { "`\($0.asSource)`" }.joined(separator: ", ")), which reach one another, took a parameter from one another on every pass up to the limit. This is a defect in SafeDI; report it with these types’ declarations."
 				case let .treeReachesDeclarationCallersCannotSee(declaration):
 					receivers = []
-					message = "SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it depends on `\(declaration.asSource)`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see that declaration, so their calls would not match the initializer. Declare `\(declaration.asSource)` in a file of this module, or of a module it depends on."
+					message = "SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it depends on `\(declaration.asSource)`, which is declared in a directory this module’s `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see that declaration, so their calls would not match the initializer. Declare `\(declaration.asSource)` in a file of this module, or of a module it depends on."
 				case let .treeReachesPlainDeclarationCallersCannotSee(declaration):
 					receivers = []
 					location = declaration.access.declarationStartLocation ?? location
 					let typeName = "`\(declaration.typeDescription.asSource)`"
-					message = "SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it takes its parameters at the access this declaration of \(typeName) proves, which is in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see it, so they would count \(typeName) as `public`, and their calls would not match the initializer. Declare \(typeName) in a file of this module, or of a module it depends on."
+					message = "SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it takes its parameters at the access this declaration of \(typeName) proves, which is in a directory this module’s `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see it, so they would count \(typeName) as `public`, and their calls would not match the initializer. Declare \(typeName) in a file of this module, or of a module it depends on."
 				case let .tierOmitsBuilderHoldingInnerSeam(builder, innerSeam, tier):
 					receivers = []
 					let (_, requiredBy, publicMockRequirement) = tierRequirement(tier)
@@ -2477,7 +2477,7 @@ public actor DependencyTreeGenerator {
 						parameterKind: .builder(fulfilledType: hole.instantiatedType, seamModuleName: seam.moduleName, isPassedUp: hole.innerSeamType != nil),
 						seamAccessIsRequiredByPublicMock: isRequiredByPublicMock,
 					)
-					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder?.label(inTierAt: tier) ?? hole.builderLabel(inTierAt: tier)): \((builder?.parameterType ?? hole.builtType).asSource)`, the builder for `\(hole.ownerType.asSource)`'s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(publicMockRequirement)\(causeText) \(remedies)"
+					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder?.label(inTierAt: tier) ?? hole.builderLabel(inTierAt: tier)): \((builder?.parameterType ?? hole.builtType).asSource)`, the builder for `\(hole.ownerType.asSource)`’s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(publicMockRequirement)\(causeText) \(remedies)"
 					declarationNotes = SeamAccessExplanation.declarationNotes(for: hole.accessCause, neededLevel: tier)
 				case let .parameters(.initializerCollides(parameters, builderLabels, handWrittenInitializer)):
 					receivers = []

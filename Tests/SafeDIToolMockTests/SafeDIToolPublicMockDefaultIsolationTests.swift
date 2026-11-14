@@ -268,7 +268,7 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 	        self.safeDIBuilder = safeDIBuilder
 	    }
 
-	    /// `nil` keeps the default of `Service`'s `name`.
+	    /// `nil` keeps the default of `Service`’s `name`.
 	    public let name: String?
 	    /// Overrides how `Service` is constructed. Parameters match the type’s initializer or custom mock method.
 	    public let safeDIBuilder: ((String) -> Service)?
@@ -347,7 +347,7 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 	        self.safeDIBuilder = safeDIBuilder
 	    }
 
-	    /// `nil` keeps the default of `Service`'s `name`.
+	    /// `nil` keeps the default of `Service`’s `name`.
 	    public let name: String?
 	    /// Overrides how `Service` is constructed. Parameters match the type’s initializer or custom mock method.
 	    public let safeDIBuilder: ((String) -> Service)?
@@ -444,7 +444,7 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 	        self.safeDIBuilder = safeDIBuilder
 	    }
 
-	    /// `nil` keeps the default of `Service`'s `name`.
+	    /// `nil` keeps the default of `Service`’s `name`.
 	    public let name: String?
 	    /// Overrides how `Service` is constructed. Parameters match the type’s initializer or custom mock method.
 	    public let safeDIBuilder: ((String) -> Service)?
@@ -606,7 +606,7 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 	        safeDIOverrides: SafeDIOverrides = .init()
 	    ) -> Page {
 	        func __safeDI_panel() -> Panel {
-	            _ = Card.__safeDI_Card_mock_546AE63BE69A02EC.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+	            _ = Card.__safeDI_Card_mock_546AE63BE69A02EC.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 	            let card = Card.mock(safeDIOverrides: safeDIOverrides.panel.card)
 	            return Panel.__safeDI_init(card: card, name: safeDIOverrides.panel.name, safeDIBuilder: safeDIOverrides.panel.safeDIBuilder)
 	        }
@@ -634,7 +634,7 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 	    }
 
 	    public let card: Card.SafeDIOverrides
-	    /// `nil` keeps the default of `Panel`'s `name`.
+	    /// `nil` keeps the default of `Panel`’s `name`.
 	    public let name: String?
 	    /// Overrides how `Panel` is constructed. Parameters match the type’s initializer or custom mock method.
 	    public let safeDIBuilder: ((Card, String) -> Panel)?

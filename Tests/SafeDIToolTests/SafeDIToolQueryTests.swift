@@ -1859,7 +1859,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 		await assertThrowsQueryError(
 			diagnostics: { moduleFiles in
 				let missingDirectory = moduleFiles["FeatureModule"]![0].deletingLastPathComponent().appendingPathComponent("Missing").path
-				return "The module 'Missing' has no Swift files at '\(missingDirectory)'. Include a directory that holds the module's Swift files, or a Swift file; a `.safedi` module info file is named with --module-info."
+				return "The module 'Missing' has no Swift files at '\(missingDirectory)'. Include a directory that holds the module’s Swift files, or a Swift file; a `.safedi` module info file is named with --module-info."
 			},
 			json: { moduleFiles in
 				let missingDirectory = moduleFiles["FeatureModule"]![0].deletingLastPathComponent().appendingPathComponent("Missing").path
@@ -1867,7 +1867,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 				{
 				  "error" : {
 				    "kind" : "moduleHasNoSwiftFiles",
-				    "message" : "The module 'Missing' has no Swift files at '\(missingDirectory)'. Include a directory that holds the module's Swift files, or a Swift file; a `.safedi` module info file is named with --module-info.",
+				    "message" : "The module 'Missing' has no Swift files at '\(missingDirectory)'. Include a directory that holds the module’s Swift files, or a Swift file; a `.safedi` module info file is named with --module-info.",
 				    "paths" : [
 				      "\(missingDirectory)"
 				    ]

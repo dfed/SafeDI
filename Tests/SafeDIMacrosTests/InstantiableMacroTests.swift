@@ -782,7 +782,7 @@ import Testing
 				diagnostics: [
 					DiagnosticSpec(
 						message: """
-						`Foo` is declared with `generateDependencyTree: true` on an extension, but SafeDI generates a dependency tree only for a type declaration: an extension's `instantiate(…)` method takes every dependency it needs, and SafeDI cannot add an initializer that builds them to a type it does not declare. Remove `generateDependencyTree: true`, or declare the dependency tree on an @Instantiable type that instantiates `Foo`.
+						`Foo` is declared with `generateDependencyTree: true` on an extension, but SafeDI generates a dependency tree only for a type declaration: an extension’s `instantiate(…)` method takes every dependency it needs, and SafeDI cannot add an initializer that builds them to a type it does not declare. Remove `generateDependencyTree: true`, or declare the dependency tree on an @Instantiable type that instantiates `Foo`.
 						""",
 						line: 1,
 						column: 1,
@@ -9452,7 +9452,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`isRoot` and `generateDependencyTree` cannot both be `true`: a root's dependency tree is generated as a `public init()` that takes nothing, and a type whose dependency tree SafeDI generates in its own module receives what its tree needs as parameters. Keep one.",
+						message: "`isRoot` and `generateDependencyTree` cannot both be `true`: a root’s dependency tree is generated as a `public init()` that takes nothing, and a type whose dependency tree SafeDI generates in its own module receives what its tree needs as parameters. Keep one.",
 						line: 1,
 						column: 1,
 						fixIts: [

@@ -648,7 +648,7 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 	    }
 
 	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 	    package init(__safeDI_token token: Token?) {
 	        let cache = Cache()
 	        self.init(token: token, cache: cache)
@@ -664,7 +664,7 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 	private static let publicTierBadge = """
 	extension Badge {
 	    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+	    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 	    public init(__safeDI_token token: Token?) {
 	        let cache = Cache()
 	        self.init(token: token, cache: cache)

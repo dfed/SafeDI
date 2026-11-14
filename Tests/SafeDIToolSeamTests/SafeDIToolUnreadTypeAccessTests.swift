@@ -56,7 +56,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_window window: Window) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
@@ -77,7 +77,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_window: @autoclosure @escaping () -> Window) {
 		        let window = LazilyInstantiated<Window>(__safeDI_window)
 		        let badge = Badge(window: window.instance)
@@ -98,7 +98,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Image", "Window"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_image image: Image, __safeDI_window window: Window) {
 		        let cache = Cache()
 		        self.init(image: image, window: window, cache: cache)
@@ -117,7 +117,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_window window: Window?) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
@@ -136,7 +136,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window"], imports: ["Kit", "SafeDI"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_windowBuilder windowBuilder: ErasedInstantiator<(), Window>) {
 		        let cache = Cache()
 		        self.init(windowBuilder: windowBuilder, cache: cache)
@@ -155,7 +155,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window.Scene"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_scene scene: Window.Scene) {
 		        let cache = Cache()
 		        self.init(scene: scene, cache: cache)
@@ -178,7 +178,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Image", "Window"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_images images: [Image], __safeDI_render render: @escaping (Image) -> Void, __safeDI_pair pair: (Image, Int), __safeDI_kind kind: Window.Type) {
 		        let cache = Cache()
 		        self.init(images: images, render: render, pair: pair, kind: kind, cache: cache)
@@ -192,7 +192,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// A8: the generic argument, `Secret`, decides, not the array.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `secrets: [Secret]`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Secret` is declared `package`. Declare `Secret` `public`; declare `Screen` `package`; receive `secrets` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `secrets: [Secret]`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Secret` is declared `package`. Declare `Secret` `public`; declare `Screen` `package`; receive `secrets` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Secret.swift"]):1:1: note: `Secret` is declared `package` here.
 			\(fixtures["Feature"]!["Secret.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `secrets: [Secret]` here.
@@ -212,7 +212,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// `Box<Secret>.Bar` names `Secret`, as `[Secret]` does: the compiler checks it against the initializer's access.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `token: Box<Secret>.Bar`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Secret` is declared `package`. Declare `Secret` `public`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `token: Box<Secret>.Bar`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Secret` is declared `package`. Declare `Secret` `public`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Secret.swift"]):1:1: note: `Secret` is declared `package` here.
 			\(fixtures["Feature"]!["Secret.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `token: Box<Secret>.Bar` here.
@@ -240,7 +240,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Renderer"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_renderer renderer: any Renderer, __safeDI_sendableRenderer sendableRenderer: any (Renderer & Sendable)) {
 		        let cache = Cache()
 		        self.init(renderer: renderer, sendableRenderer: sendableRenderer, cache: cache)
@@ -259,7 +259,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Kit.Window"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_window window: Kit.Window) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
@@ -283,7 +283,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_store store: Store) {
 		        let cache = Cache()
 		        self.init(store: store, cache: cache)
@@ -312,7 +312,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window"], imports: ["Kit", "SafeDI"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_window window: Window) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
@@ -332,7 +332,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_badge badge: Window.Badge) {
 		        let cache = Cache()
 		        self.init(badge: badge, cache: cache)
@@ -346,7 +346,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// A19: the `package` `Badge` is required on a public seam: its own declaration is what to widen.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `badge: Window.Badge`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Window.Badge` is declared `package`. Declare `Badge` `public`; declare `Screen` `package`; receive `badge` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `badge: Window.Badge`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Window.Badge` is declared `package`. Declare `Badge` `public`; declare `Screen` `package`; receive `badge` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `badge: Window.Badge` here.
 			"""
 		}) {
@@ -380,7 +380,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_image image: Image, __safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
 		        let cache = Cache()
 		        let service: any UserService = __safeDI_userServiceBuilder(.service(SafeDIScope_UserService.service_Values(image: image, cache: cache)))
@@ -414,7 +414,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 		    {COMMENT}
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_rendererBuilder: @escaping (SafeDIScope_Renderer) -> any Renderer) {
 		        let cache = Cache()
 		        let renderer: any Renderer = __safeDI_rendererBuilder(.renderer(SafeDIScope_Renderer.renderer_Values(cache: cache)))
@@ -443,7 +443,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Store"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_store store: Store) {
 		        let cache = Cache()
 		        self.init(store: store, cache: cache)
@@ -492,7 +492,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// E3: `Kit` declares no `@Instantiable` type but runs SafeDI, so its `.safedi` records its `package` `Store`.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `store: Store`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Store` is declared `package` in module `Kit`. Declare `Store` `public` in module `Kit`; declare `Screen` `package`; receive `store` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `store: Store`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Store` is declared `package` in module `Kit`. Declare `Store` `public` in module `Kit`; declare `Screen` `package`; receive `store` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Kit"]!["Store.swift"]):1:1: note: `Store` is declared `package` here.
 			\(fixtures["Kit"]!["Store.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `store: Store` here.
@@ -626,7 +626,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_mode mode: ChatService.TurnTakingMode) {
 		        let cache = Cache()
 		        self.init(mode: mode, cache: cache)
@@ -641,7 +641,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let spacePath = Self.path(of: "Space.swift", in: "Feature", fixtures, integration)
 			return """
-			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `config: Space.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Config` is declared `internal`. Declare `Space.Config` `public`; declare `Screen` `internal`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `config: Space.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Config` is declared `internal`. Declare `Space.Config` `public`; declare `Screen` `internal`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(spacePath):4:5: note: `Space.Config` is declared `internal` here.
 			\(spacePath):4:5-4:5: fixit: public\(" ")
 			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `config: Space.Config` here.
@@ -661,7 +661,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// EX3: `Space.Config` spells `public`, but `Space` is `package`, which caps it.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `config: Space.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Config` is `package`: it is declared inside an extension of `Space`, whose own declaration is `package`. Declare `Space` `public`; declare `Screen` `package`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `config: Space.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Config` is `package`: it is declared inside an extension of `Space`, whose own declaration is `package`. Declare `Space` `public`; declare `Screen` `package`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Space.swift"]):1:1: note: `Space` is declared `package` here.
 			\(fixtures["Feature"]!["Space.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `config: Space.Config` here.
@@ -692,7 +692,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_config config: Space.Config?, __safeDI_id id: Space.ID?) {
 		        let cache = Cache()
 		        self.init(config: config, id: id, cache: cache)
@@ -707,7 +707,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let extensionPath = Self.path(of: "SpaceExtension.swift", in: "Core", fixtures, integration)
 			return """
-			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `config: Space.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Config` is declared `package` in module `Core`. Declare `Space.Config` `public` in module `Core`; declare `Screen` `package`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `config: Space.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Config` is declared `package` in module `Core`. Declare `Space.Config` `public` in module `Core`; declare `Screen` `package`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(extensionPath):1:1: note: The extension that declares `Space.Config` is `package` here.
 			\(extensionPath):1:1-1:8: fixit: public
 			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `config: Space.Config` here.
@@ -733,7 +733,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_badge badge: Window.Badge) {
 		        let cache = Cache()
 		        self.init(badge: badge, cache: cache)
@@ -749,7 +749,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let configPath = Self.path(of: "Config.swift", in: "Feature", fixtures, integration)
 			return """
-			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `config: Space.Inner.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Inner.Config` is declared `internal`. Declare `Space.Inner.Config` `public`; declare `Screen` `internal`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `config: Space.Inner.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Inner.Config` is declared `internal`. Declare `Space.Inner.Config` `public`; declare `Screen` `internal`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(configPath):2:5: note: `Space.Inner.Config` is declared `internal` here.
 			\(configPath):2:5-2:5: fixit: public\(" ")
 			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `config: Space.Inner.Config` here.
@@ -788,7 +788,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_ledger ledger: Shelf.Ledger?, __safeDI_label label: Shelf.Label?) {
 		        let cache = Cache()
 		        self.init(ledger: ledger, label: label, cache: cache)
@@ -817,7 +817,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_ledger ledger: Space.Ledger?) {
 		        let cache = Cache()
 		        self.init(ledger: ledger, cache: cache)
@@ -841,7 +841,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window.Scene"], imports: ["Kit", "SafeDI"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_ledger ledger: Window.Scene.Ledger) {
 		        let cache = Cache()
 		        self.init(ledger: ledger, cache: cache)
@@ -863,7 +863,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_userID userID: UserID) {
 		        let cache = Cache()
 		        self.init(userID: userID, cache: cache)
@@ -878,7 +878,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let aliasPath = Self.path(of: "UserID.swift", in: "Feature", fixtures, integration)
 			return """
-			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `userID: UserID`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `UserID` is declared `internal`. Declare `UserID` `public`; declare `Screen` `internal`; receive `userID` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `userID: UserID`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `UserID` is declared `internal`. Declare `UserID` `public`; declare `Screen` `internal`; receive `userID` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(aliasPath):1:1: note: `UserID` is declared `internal` here.
 			\(aliasPath):1:1-1:1: fixit: public\(" ")
 			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `userID: UserID` here.
@@ -913,7 +913,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_token token: Token?) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
@@ -929,7 +929,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			let screenPath = Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)
 			let aliasPath = Self.path(of: "Token.swift", in: "Core", fixtures, integration)
 			return """
-			\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Token` is declared `package` in module `Core`. Declare `Token` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Token` is declared `package` in module `Core`. Declare `Token` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(aliasPath):1:1: note: `Token` is declared `package` here.
 			\(aliasPath):1:1-1:8: fixit: public
 			\(screenPath):10:5: note: `Screen` receives `token: Token` here.
@@ -959,7 +959,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_id id: Space.ID) {
 		        let cache = Cache()
 		        self.init(id: id, cache: cache)
@@ -973,7 +973,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// HOLE: the builder of a hole typed by an `internal` closure typealias is as visible as the typealias.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `handlerBuilder: @escaping (SafeDIScope_Handler) -> Handler`, the builder for `Screen`'s `handler: Handler`, which no @Instantiable declaration that module `Feature` can see fulfills. `Handler` is declared `internal`. Declare `Handler` `public`; declare `Screen` `internal`; declare an @Instantiable type that fulfills `Handler` in module `Feature` or a module it lists among its SafeDI dependencies, so `Screen`’s tree builds it; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `handlerBuilder: @escaping (SafeDIScope_Handler) -> Handler`, the builder for `Screen`’s `handler: Handler`, which no @Instantiable declaration that module `Feature` can see fulfills. `Handler` is declared `internal`. Declare `Handler` `public`; declare `Screen` `internal`; declare an @Instantiable type that fulfills `Handler` in module `Feature` or a module it lists among its SafeDI dependencies, so `Screen`’s tree builds it; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Handler.swift"]):1:1: note: `Handler` is declared `internal` here.
 			\(fixtures["Feature"]!["Handler.swift"]):1:1-1:1: fixit: public\(" ")
 			"""
@@ -994,7 +994,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// N1: SafeDI reads no member of a protocol's body, so `Renderer.ID` counts as `Renderer` does.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `id: Renderer.ID`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Renderer.ID` is nested in `Renderer`, which is declared `internal`. Declare `Renderer` `public`; declare `Screen` `internal`; receive `id` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `id: Renderer.ID`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Renderer.ID` is nested in `Renderer`, which is declared `internal`. Declare `Renderer` `public`; declare `Screen` `internal`; receive `id` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Renderer.swift"]):1:1: note: `Renderer` is declared `internal` here.
 			\(fixtures["Feature"]!["Renderer.swift"]):1:1-1:1: fixit: public\(" ")
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `id: Renderer.ID` here.
@@ -1014,7 +1014,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// N2: the enclosing protocol is `Core`'s.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `id: Renderer.ID`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Renderer.ID` is nested in `Renderer`, which is declared `package` in module `Core`. Declare `Renderer` `public` in module `Core`; declare `Screen` `package`; receive `id` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `id: Renderer.ID`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Renderer.ID` is nested in `Renderer`, which is declared `package` in module `Core`. Declare `Renderer` `public` in module `Core`; declare `Screen` `package`; receive `id` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Core"]!["Renderer.swift"]):1:1: note: `Renderer` is declared `package` here.
 			\(fixtures["Core"]!["Renderer.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `id: Renderer.ID` here.
@@ -1040,7 +1040,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// it counts as the `package` `@Instantiable` `Shelf` that encloses it does.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `label: Shelf.Label`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Shelf.Label` is nested in `Shelf`, whose own `@Instantiable` declaration is `package`. Declare `Shelf` `public`; declare `Screen` `package`; receive `label` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `label: Shelf.Label`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Shelf.Label` is nested in `Shelf`, whose own `@Instantiable` declaration is `package`. Declare `Shelf` `public`; declare `Screen` `package`; receive `label` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `label: Shelf.Label` here.
 			"""
 		}) {
@@ -1068,7 +1068,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// D1: `Feature`'s own `package struct Result` is what the mention names, not `Swift.Result`.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `result: Result`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Result` is declared `package`. Declare `Result` `public`; declare `Screen` `package`; receive `result` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `result: Result`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Result` is declared `package`. Declare `Result` `public`; declare `Screen` `package`; receive `result` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Result.swift"]):1:1: note: `Result` is declared `package` here.
 			\(fixtures["Feature"]!["Result.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `result: Result` here.
@@ -1097,7 +1097,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_result result: Swift.Result<Int, any Error>) {
 		        let cache = Cache()
 		        self.init(result: result, cache: cache)
@@ -1111,7 +1111,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// D3: `Core`'s `package struct Result` is recorded, and precedes the standard type.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `result: Result`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Result` is declared `package` in module `Core`. Declare `Result` `public` in module `Core`; declare `Screen` `package`; receive `result` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `result: Result`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Result` is declared `package` in module `Core`. Declare `Result` `public` in module `Core`; declare `Screen` `package`; receive `result` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Core"]!["Result.swift"]):1:1: note: `Result` is declared `package` here.
 			\(fixtures["Core"]!["Result.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `result: Result` here.
@@ -1138,7 +1138,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// U1: SafeDI cannot read `[3 of Int]`, which counts as `internal`, with the mention remedy alone.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `buffer: [3 of Int]`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(buffer:cache:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Screen` `internal`; receive `buffer` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `buffer: [3 of Int]`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(buffer:cache:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Screen` `internal`; receive `buffer` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `buffer: [3 of Int]` here.
 			"""
 		}) {
@@ -1171,7 +1171,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["DateInterval"], imports: ["Foundation", "Logs"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_interval interval: DateInterval) {
 		        let cache = Cache()
 		        self.init(interval: interval, cache: cache)
@@ -1189,11 +1189,11 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		case .moduleInfo:
 			"`Theme` is declared `package` in module `Shades`. Declare `Theme` `public` in module `Shades`;"
 		case .swiftPackagePlugin:
-			"`Theme` is declared `public` in module `Paints` and `package` in module `Shades`, and SafeDI takes the narrower. Declare `Theme` `public` in module `Shades`; spell the type with its module where it is mentioned (`Paints.Theme`), so that it names that module's declaration;"
+			"`Theme` is declared `public` in module `Paints` and `package` in module `Shades`, and SafeDI takes the narrower. Declare `Theme` `public` in module `Shades`; spell the type with its module where it is mentioned (`Paints.Theme`), so that it names that module’s declaration;"
 		}
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):4:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. \(cause) declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):4:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. \(cause) declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(Self.path(of: "Theme.swift", in: "Shades", fixtures, integration)):2:1: note: `Theme` is declared `package` here.
 			\(Self.path(of: "Theme.swift", in: "Shades", fixtures, integration)):2:1-2:8: fixit: public
 			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):11:5: note: `Screen` receives `theme: Theme` here.
@@ -1231,7 +1231,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Paints"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_theme theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
@@ -1256,7 +1256,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Brush", "Canvas", "Image", "Palette", "Window", "Window.Scene"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_zebra zebra: Canvas, __safeDI_apple apple: Window.Scene, __safeDI_mango mango: Brush, __safeDI_kiwi kiwi: Image, __safeDI_berry berry: Palette, __safeDI_fig fig: Window, __safeDI_date date: [Brush]) {
 		        let cache = Cache()
 		        self.init(zebra: zebra, apple: apple, mango: mango, kiwi: kiwi, berry: berry, fig: fig, date: date, cache: cache)
@@ -1279,13 +1279,13 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_window window: Window) {
 		        self.init(__safeDI_window: window, __safeDI_token: nil)
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_window window: Window, __safeDI_token token: Token?) {
 		        let cache = Cache()
 		        self.init(window: window, token: token, cache: cache)
@@ -1316,7 +1316,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_palette palette: Palette?) {
 		        let cache = Cache()
 		        self.init(palette: palette, cache: cache)
@@ -1346,7 +1346,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_inner inner: Outer.Inner?) {
 		        let cache = Cache()
 		        self.init(inner: inner, cache: cache)
@@ -1372,7 +1372,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.isEmpty == true)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Palette"], imports: ["Core"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_palette palette: Palette) {
 		        let cache = Cache()
 		        self.init(palette: palette, cache: cache)
@@ -1386,7 +1386,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// W4: the text search finds the word `package` wherever it is, so a comment between it and `struct` hides nothing.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `commented: Commented`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Commented` is declared `package` in module `Core`. Declare `Commented` `public` in module `Core`; declare `Screen` `package`; receive `commented` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `commented: Commented`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Commented` is declared `package` in module `Core`. Declare `Commented` `public` in module `Core`; declare `Screen` `package`; receive `commented` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Core"]!["Commented.swift"]):1:1: note: `Commented` is declared `package` here.
 			\(fixtures["Core"]!["Commented.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `commented: Commented` here.
@@ -1428,7 +1428,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_kind kind: `Protocol`?) {
 		        let cache = Cache()
 		        self.init(kind: kind, cache: cache)
@@ -1458,7 +1458,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_commented commented: Commented?) {
 		        let cache = Cache()
 		        self.init(commented: commented, cache: cache)
@@ -1484,7 +1484,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_token token: Token?) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
@@ -1499,7 +1499,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// initializer. The error names the type as its declaration spells it.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. ``Token`` is declared `package` in module `Core`. Declare ``Token`` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. ``Token`` is declared `package` in module `Core`. Declare ``Token`` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)):1:1: note: ``Token`` is declared `package` here.
 			\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)):1:1-1:8: fixit: public
 			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `token: Token` here.
@@ -1524,7 +1524,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: [], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_token token: Token) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
@@ -1544,7 +1544,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Token"], imports: [], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_token token: Token) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
@@ -1569,7 +1569,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    internal init(__safeDI_token token: Token?) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
@@ -1598,7 +1598,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_token token: Token?) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
@@ -1615,7 +1615,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// files, at its declared level.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Token` is declared `package` in module `Core`. Declare `Token` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Token` is declared `package` in module `Core`. Declare `Token` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)):2:1: note: `Token` is declared `package` here.
 			\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)):2:1-2:8: fixit: public
 			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `token: Token` here.
@@ -1656,7 +1656,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    internal init(__safeDI_handler handler: Handler?) {
 		        let cache = Cache()
 		        self.init(handler: handler, cache: cache)
@@ -1693,7 +1693,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_store store: Store?) {
 		        let cache = Cache()
 		        self.init(store: store, cache: cache)
@@ -1723,7 +1723,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_window window: Window) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
@@ -1733,11 +1733,11 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		extension Frame {
 		    \(Self.comment(["Window"]))
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_window: @autoclosure @escaping () -> Window) {
 		        let window = LazilyInstantiated<Window>(__safeDI_window)
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_564C5E6539CF6AA0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Screen.__safeDI_Screen_564C5E6539CF6AA0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Screen(__safeDI_window: window.instance)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -1955,7 +1955,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    \(Self.comment(["Palette", "Window"]))
-		    // These providers evaluate `Screen`'s own defaults outside any actor, since SafeDI sees no isolation on it. If one
+		    // These providers evaluate `Screen`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
 		    // reads the state of an actor `Screen` takes from a conformance or a superclass and does not compile, give its
 		    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
 		    @usableFromInline nonisolated static func __safeDI_publicMockDefault_tint() -> Palette? { Palette() }
@@ -2035,7 +2035,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// seam, whose initializer the compiler checks: `generate_throwsError_whenRequiredAliasesFulfillingTypeIsUnproven`.)
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `token: [3 of Int]`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Badge.init(token:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Screen` `internal`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `token: [3 of Int]`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Badge.init(token:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Screen` `internal`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `token: [3 of Int]` here.
 			"""
 		}) {
@@ -2067,7 +2067,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Image"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_pair pair: Pair<Image>) {
 		        let cache = Cache()
 		        self.init(pair: pair, cache: cache)
@@ -2091,7 +2091,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_window window: Window) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
@@ -2117,7 +2117,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_buffer: @autoclosure @escaping () -> [3 of Int]) {
 		        let buffer = LazilyInstantiated<[3 of Int]>(__safeDI_buffer)
 		        let badge = Badge(buffer: buffer.instance)
@@ -2137,7 +2137,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// it.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):2:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `store: Store`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Store` is declared `package` in a module SafeDI knows no name of. Declare `Store` `public` in a module SafeDI knows no name of; name the module that declares `Store` where SafeDI runs on it (`module_name` under Bazel, `--module-name` otherwise); declare `Screen` `package`; receive `store` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Screen.swift"]):2:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `store: Store`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Store` is declared `package` in a module SafeDI knows no name of. Declare `Store` `public` in a module SafeDI knows no name of; name the module that declares `Store` where SafeDI runs on it (`module_name` under Bazel, `--module-name` otherwise); declare `Screen` `package`; receive `store` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["AdditionalDirectory/Store.swift"]):1:1: note: `Store` is declared `package` here.
 			\(fixtures["AdditionalDirectory/Store.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Screen.swift"]):9:5: note: `Screen` receives `store: Store` here.
@@ -2162,7 +2162,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// reads exactly too: the tie goes to the first declaration, `Base`'s, which the error points at.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Base`. Declare `Theme` `public` in module `Base`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Base`. Declare `Theme` `public` in module `Base`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(Self.path(of: "Theme.swift", in: "Base", fixtures, integration)):1:1: note: `Theme` is declared `package` here.
 			\(Self.path(of: "Theme.swift", in: "Base", fixtures, integration)):1:1-1:8: fixit: public
 			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
@@ -2190,7 +2190,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// configuration adds, so they would count `Store` as `public`: the error is at `Store`'s declaration.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["AdditionalDirectory/Store.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: the initializer SafeDI generates for it takes its parameters at the access this declaration of `Store` proves, which is in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see it, so they would count `Store` as `public`, and their calls would not match the initializer. Declare `Store` in a file of this module, or of a module it depends on.
+			\(fixtures["AdditionalDirectory/Store.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: the initializer SafeDI generates for it takes its parameters at the access this declaration of `Store` proves, which is in a directory this module’s `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see it, so they would count `Store` as `public`, and their calls would not match the initializer. Declare `Store` in a file of this module, or of a module it depends on.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
@@ -2214,7 +2214,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// parameter by label, not the first or the last.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["AdditionalDirectory/T1.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: the initializer SafeDI generates for it takes its parameters at the access this declaration of `T1` proves, which is in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see it, so they would count `T1` as `public`, and their calls would not match the initializer. Declare `T1` in a file of this module, or of a module it depends on.
+			\(fixtures["AdditionalDirectory/T1.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: the initializer SafeDI generates for it takes its parameters at the access this declaration of `T1` proves, which is in a directory this module’s `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see it, so they would count `T1` as `public`, and their calls would not match the initializer. Declare `T1` in a file of this module, or of a module it depends on.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
@@ -2246,7 +2246,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// X5: the public mock's twin of X4.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["AdditionalDirectory/Store.swift"]):1:1: error: SafeDI cannot generate the public mock of `Screen`: it takes its parameters at the access this declaration of `Store` proves, which is in a directory this module's `#SafeDIConfiguration` adds, and the modules that call the mock cannot see it, so they would count `Store` as `public`, and their calls would not match the mock. Declare `Store` in a file of this module, or of a module it depends on.
+			\(fixtures["AdditionalDirectory/Store.swift"]):1:1: error: SafeDI cannot generate the public mock of `Screen`: it takes its parameters at the access this declaration of `Store` proves, which is in a directory this module’s `#SafeDIConfiguration` adds, and the modules that call the mock cannot see it, so they would count `Store` as `public`, and their calls would not match the mock. Declare `Store` in a file of this module, or of a module it depends on.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
@@ -2278,10 +2278,10 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			case .moduleInfo:
 				"`Theme` is declared `package` in module `Cedar`. Declare `Theme` `public` in module `Cedar`;"
 			case .swiftPackagePlugin:
-				"`Theme` is declared `public` in module `Ash`, `public` in module `Birch`, `package` in module `Cedar`, `public` in module `Dogwood`, `public` in module `Elm`, and `public` in module `Fir`, and SafeDI takes the narrowest. Declare `Theme` `public` in module `Cedar`; spell the type with its module where it is mentioned (`Ash.Theme`), so that it names that module's declaration;"
+				"`Theme` is declared `public` in module `Ash`, `public` in module `Birch`, `package` in module `Cedar`, `public` in module `Dogwood`, `public` in module `Elm`, and `public` in module `Fir`, and SafeDI takes the narrowest. Declare `Theme` `public` in module `Cedar`; spell the type with its module where it is mentioned (`Ash.Theme`), so that it names that module’s declaration;"
 			}
 			return """
-			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):8:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. \(declarationsAndRemedies) declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):8:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. \(declarationsAndRemedies) declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(cedarPath):1:1: note: `Theme` is declared `package` here.
 			\(cedarPath):1:1-1:8: fixit: public
 			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):15:5: note: `Screen` receives `theme: Theme` here.
@@ -2311,7 +2311,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let themePath = Self.path(of: "Theme.swift", in: "Core", fixtures, integration)
 			return """
-			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(themePath):2:1: note: `Theme` is declared `package` here.
 			\(themePath):2:1-2:8: fixit: public
 			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
@@ -2337,7 +2337,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		let assertions = integration == .swiftPackagePlugin ? Self.inactiveAssertion("FLAG") : ""
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Core", "Kit"], assertions: assertions, tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_theme theme: Theme) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
@@ -2361,7 +2361,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		let assertions = integration == .swiftPackagePlugin ? Self.inactiveAssertion("FLAG") : ""
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Core"], assertions: assertions, tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_theme theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
@@ -2390,7 +2390,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_theme theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
@@ -2426,7 +2426,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    internal init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
@@ -2440,7 +2440,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    package init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
@@ -2449,7 +2449,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		default:
 			Self.screenFiles(.moduleInfo, comment: [], assertions: Self.inactiveAssertion("A") + Self.inactiveAssertion("B"), tiers: """
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
@@ -2481,7 +2481,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_theme theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
@@ -2513,7 +2513,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    package init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
@@ -2522,7 +2522,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		} else {
 			Self.screenFiles(.moduleInfo, comment: ["Theme"], assertions: Self.inactiveAssertion("FLAG"), tiers: """
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
@@ -2540,7 +2540,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let themePath = Self.path(of: "Theme.swift", in: "Core", fixtures, integration)
 			return """
-			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(themePath):2:1: note: `Theme` is declared `package` here.
 			\(themePath):2:1-2:8: fixit: public
 			\(themePath):4:1: note: `Theme` is declared `package` here.
@@ -2564,7 +2564,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let themePath = Self.path(of: "Theme.swift", in: "Core", fixtures, integration)
 			return """
-			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(themePath):2:1: note: `Theme` is declared `package` here.
 			\(themePath):2:1-2:8: fixit: public
 			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
@@ -2586,7 +2586,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let themePath = Self.path(of: "Theme.swift", in: "Core", fixtures, .swiftPackagePlugin)
 			return """
-			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, .swiftPackagePlugin)):4:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core` and `public` in module `Paints`, and SafeDI takes the narrower. Declare `Theme` `public` in module `Core`; spell the type with its module where it is mentioned (`Paints.Theme`), so that it names that module's declaration; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, .swiftPackagePlugin)):4:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core` and `public` in module `Paints`, and SafeDI takes the narrower. Declare `Theme` `public` in module `Core`; spell the type with its module where it is mentioned (`Paints.Theme`), so that it names that module’s declaration; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(themePath):2:1: note: `Theme` is declared `package` here.
 			\(themePath):2:1-2:8: fixit: public
 			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, .swiftPackagePlugin)):11:5: note: `Screen` receives `theme: Theme` here.
@@ -2704,7 +2704,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Endpoint"], imports: ["Core"], assertions: Self.releaseEndpointAssertion(integration, isReleaseConfiguration: isReleaseConfiguration), tiers: """
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_endpoint endpoint: Endpoint) {
 			        let cache = Cache()
 			        self.init(endpoint: endpoint, cache: cache)
@@ -2728,7 +2728,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Endpoint"], imports: ["Core"], assertions: Self.releaseEndpointAssertion(integration, isReleaseConfiguration: isReleaseConfiguration), tiers: """
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_endpoint endpoint: Endpoint?) {
 			        let cache = Cache()
 			        self.init(endpoint: endpoint, cache: cache)
@@ -2753,7 +2753,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], assertions: isReleaseConfiguration ? Self.activeAssertion("!DEBUG") : Self.inactiveAssertion("!DEBUG"), tiers: """
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_endpoint endpoint: Endpoint) {
 			        let cache = Cache()
 			        self.init(endpoint: endpoint, cache: cache)
@@ -2777,7 +2777,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Core"], tiers: """
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
@@ -2828,7 +2828,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		for isReleaseConfiguration in [false, true] {
 			await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 				\(Self.path(of: "Theme.swift", in: "Core", fixtures, integration)):13:1: note: `Theme` is declared `package` here.
 				\(Self.path(of: "Theme.swift", in: "Core", fixtures, integration)):13:1-13:8: fixit: public
 				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
@@ -2866,7 +2866,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				let assertions = integration == .swiftPackagePlugin ? (conditions.isEmpty ? Self.inactiveAssertion("FLAG") : Self.activeAssertion("FLAG")) : ""
 				let expectedFiles = conditions.isEmpty ? Self.packageThemeTiers(integration, assertions: assertions) : Self.screenFiles(integration, comment: ["Theme"], imports: ["Core"], assertions: assertions, tiers: """
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_theme theme: Theme?) {
 				        let cache = Cache()
 				        self.init(theme: theme, cache: cache)
@@ -2938,7 +2938,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		for isReleaseConfiguration in [false, true] {
 			await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 				"""
-				\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `painterBuilder: @escaping (SafeDIScope_Painter) -> any Painter`, the builder for `Screen`'s `painter: any Painter`, which no @Instantiable declaration that module `Feature` can see fulfills. `Painter` is declared `package`. Declare `Painter` `public`; declare `Screen` `package`; declare an @Instantiable type that fulfills `Painter` in module `Feature` or a module it lists among its SafeDI dependencies, so `Screen`’s tree builds it; or declare the dependency tree on a `package` type that instantiates `Screen`.
+				\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `painterBuilder: @escaping (SafeDIScope_Painter) -> any Painter`, the builder for `Screen`’s `painter: any Painter`, which no @Instantiable declaration that module `Feature` can see fulfills. `Painter` is declared `package`. Declare `Painter` `public`; declare `Screen` `package`; declare an @Instantiable type that fulfills `Painter` in module `Feature` or a module it lists among its SafeDI dependencies, so `Screen`’s tree builds it; or declare the dependency tree on a `package` type that instantiates `Screen`.
 				\(fixtures["Feature"]!["Painter.swift"]):13:1: note: `Painter` is declared `package` here.
 				\(fixtures["Feature"]!["Painter.swift"]):13:1-13:8: fixit: public
 				"""
@@ -2976,7 +2976,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], tiers: """
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_token token: Token) {
 			        let cache = Cache()
 			        self.init(token: token, cache: cache)
@@ -3007,7 +3007,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Theme"], imports: ["Core"], tiers: """
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
@@ -3105,7 +3105,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Window"], imports: ["Core", "Kit"], tiers: """
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_window window: Window) {
 			        let cache = Cache()
 			        self.init(window: window, cache: cache)
@@ -3148,7 +3148,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			)
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Core"], tiers: """
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
@@ -3180,7 +3180,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], assertions: Self.activeAssertion("DEBUG"), tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_token token: Token) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
@@ -3195,7 +3195,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// the extended type's, as one outside the block is.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `config: Space.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Config` is `package`: it is declared inside an extension of `Space`, whose own declaration is `package`. Declare `Space` `public`; declare `Screen` `package`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `config: Space.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Config` is `package`: it is declared inside an extension of `Space`, whose own declaration is `package`. Declare `Space` `public`; declare `Screen` `package`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Space.swift"]):1:1: note: `Space` is declared `package` here.
 			\(fixtures["Feature"]!["Space.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `config: Space.Config` here.
@@ -3224,14 +3224,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			let spacePath = fixtures["Feature"]!["Space.swift"]
 			return if isFlagReported {
 				"""
-				\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `config: Space.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Config` is declared `internal`. Declare `Space.Config` `public`; declare `Screen` `internal`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+				\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `config: Space.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Config` is declared `internal`. Declare `Space.Config` `public`; declare `Screen` `internal`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 				\(spacePath):5:5: note: `Space.Config` is declared `internal` here.
 				\(spacePath):5:5-5:5: fixit: public\(" ")
 				\(screenPath):10:5: note: `Screen` receives `config: Space.Config` here.
 				"""
 			} else {
 				"""
-				\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `config: Space.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Config` is nested in `Space`, which is declared `package`. Declare `Space` `public`; declare `Screen` `package`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+				\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `config: Space.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Config` is nested in `Space`, which is declared `package`. Declare `Space` `public`; declare `Screen` `package`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 				\(spacePath):1:1: note: `Space` is declared `package` here.
 				\(spacePath):1:1-1:8: fixit: public
 				\(screenPath):10:5: note: `Screen` receives `config: Space.Config` here.
@@ -3279,7 +3279,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    package init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
@@ -3289,7 +3289,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		case .swiftPackagePlugin:
 			#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], assertions: Self.inactiveAssertion("FLAG"), tiers: """
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_theme theme: Theme?) {
 			        let cache = Cache()
 			        self.init(theme: theme, cache: cache)
@@ -3318,7 +3318,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Token"], assertions: Self.inactiveAssertion("FLAG"), tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_token token: Token?) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
@@ -3345,7 +3345,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_window window: Window?) {
 		        let cache = Cache()
 		        self.init(window: window, cache: cache)
@@ -3406,7 +3406,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + Self.inactiveAssertion("FLAG")])
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Theme"], imports: ["Core", "Kit"], tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_theme theme: Theme) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
@@ -3433,7 +3433,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		let assertions = integration == .swiftPackagePlugin ? Self.activeAssertion("DEBUG") : ""
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: ["Theme"], imports: ["Paints"], assertions: assertions, tiers: """
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_theme theme: Theme) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
@@ -3449,11 +3449,11 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			let rendererPath = Self.path(of: "Renderer.swift", in: "Core", fixtures, integration)
 			let screenPath = Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)
 			return """
-			\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `id: ID`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `ID` is declared `package` in module `Core`. Declare `ID` `public` in module `Core`; declare `Screen` `package`; receive `id` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `id: ID`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `ID` is declared `package` in module `Core`. Declare `ID` `public` in module `Core`; declare `Screen` `package`; receive `id` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(rendererPath):3:1: note: `ID` is declared `package` here.
 			\(rendererPath):3:1-3:8: fixit: public
 			\(screenPath):12:5: note: `Screen` receives `id: ID` here.
-			\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `renderer: any Renderer`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Renderer` is declared `package` in module `Core`. Declare `Renderer` `public` in module `Core`; declare `Screen` `package`; receive `renderer` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `renderer: any Renderer`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Renderer` is declared `package` in module `Core`. Declare `Renderer` `public` in module `Core`; declare `Screen` `package`; receive `renderer` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(rendererPath):2:1: note: `Renderer` is declared `package` here.
 			\(rendererPath):2:1-2:8: fixit: public
 			\(screenPath):11:5: note: `Screen` receives `renderer: any Renderer` here.
@@ -3478,7 +3478,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// IF24: U1's seam inside the clause `FLAG` selects: SafeDI still cannot read `[3 of Int]`, which only mentions prove.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `buffer: [3 of Int]`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(buffer:cache:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Screen` `internal`; receive `buffer` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `buffer: [3 of Int]`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(buffer:cache:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Screen` `internal`; receive `buffer` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Screen.swift"]):11:5: note: `Screen` receives `buffer: [3 of Int]` here.
 			"""
 		}) {
@@ -3503,7 +3503,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// leaves to mentions, besides a spelling SafeDI cannot read.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `z: Y.Z`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Y.Z` is `internal` as far as SafeDI can tell: it is declared inside an extension of `Y` that spells no access level, which SafeDI counts as `internal`, since it reads `Y`'s access only from a declaration of `Y` in the same module that is outside every extension, or inside an extension of a type it reads the same way. If `Y` can be `public`, spell the extension's access level (`public extension Y { … }`, dropping the modifier on `Z` that Swift then reports as redundant; the compiler rejects a level wider than `Y`'s), or declare `Z` in `Y`'s body or at top level; mention `Y.Z` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Screen` `internal`; receive `z` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `z: Y.Z`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Y.Z` is `internal` as far as SafeDI can tell: it is declared inside an extension of `Y` that spells no access level, which SafeDI counts as `internal`, since it reads `Y`’s access only from a declaration of `Y` in the same module that is outside every extension, or inside an extension of a type it reads the same way. If `Y` can be `public`, spell the extension’s access level (`public extension Y { … }`, dropping the modifier on `Z` that Swift then reports as redundant; the compiler rejects a level wider than `Y`’s), or declare `Z` in `Y`’s body or at top level; mention `Y.Z` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Screen` `internal`; receive `z` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `z: Y.Z` here.
 			"""
 		}) {
@@ -3528,7 +3528,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// encloses it, is `Core`'s `package` declaration, which bounds `Space.Inner`, and so `Space.Inner.Shelf`.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):5:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `shelf: Space.Inner.Shelf`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Inner.Shelf` is `package`: it is declared inside an extension of `Space.Inner`, which is nested in `Space`, whose own declaration is `package`. Declare `Space` `public`; declare `Screen` `package`; receive `shelf` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):5:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `shelf: Space.Inner.Shelf`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Inner.Shelf` is `package`: it is declared inside an extension of `Space.Inner`, which is nested in `Space`, whose own declaration is `package`. Declare `Space` `public`; declare `Screen` `package`; receive `shelf` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Screen.swift"]):12:5: note: `Screen` receives `shelf: Space.Inner.Shelf` here.
 			"""
 		}) {
@@ -3555,7 +3555,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// bounds them.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):5:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `shelf: Space.Inner.Deep.Shelf`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Inner.Deep.Shelf` is `package`: it is declared inside an extension of `Space.Inner.Deep`, which is nested in `Space`, whose own declaration is `package`. Declare `Space` `public`; declare `Screen` `package`; receive `shelf` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):5:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `shelf: Space.Inner.Deep.Shelf`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Inner.Deep.Shelf` is `package`: it is declared inside an extension of `Space.Inner.Deep`, which is nested in `Space`, whose own declaration is `package`. Declare `Space` `public`; declare `Screen` `package`; receive `shelf` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Screen.swift"]):12:5: note: `Screen` receives `shelf: Space.Inner.Deep.Shelf` here.
 			"""
 		}) {
@@ -3582,7 +3582,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// SafeDI reads, as IF25's entry is.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):5:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `z: Y.Inner.Z`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Y.Inner.Z` is `internal` as far as SafeDI can tell: it is declared inside an extension of `Y.Inner` that spells no access level, which SafeDI counts as `internal`, since it reads `Y.Inner`'s access only from a declaration of `Y.Inner` in the same module that is outside every extension, or inside an extension of a type it reads the same way. Declare `Z` in `Y.Inner`'s body or at top level; mention `Y.Inner.Z` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Screen` `internal`; receive `z` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):5:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `z: Y.Inner.Z`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Y.Inner.Z` is `internal` as far as SafeDI can tell: it is declared inside an extension of `Y.Inner` that spells no access level, which SafeDI counts as `internal`, since it reads `Y.Inner`’s access only from a declaration of `Y.Inner` in the same module that is outside every extension, or inside an extension of a type it reads the same way. Declare `Z` in `Y.Inner`’s body or at top level; mention `Y.Inner.Z` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Screen` `internal`; receive `z` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Screen.swift"]):12:5: note: `Screen` receives `z: Y.Inner.Z` here.
 			"""
 		}) {
@@ -3608,7 +3608,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// nearest type enclosing it is `Feature`'s own `@Instantiable` `A`, whose `package` declaration bounds `A.B.X`.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `x: A.B.X`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `A.B.X` is `package`: it is declared inside an extension of `A.B`, which is nested in `A`, whose own `@Instantiable` declaration is `package`. Declare `A` `public`; declare `Screen` `package`; receive `x` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `x: A.B.X`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `A.B.X` is `package`: it is declared inside an extension of `A.B`, which is nested in `A`, whose own `@Instantiable` declaration is `package`. Declare `A` `public`; declare `Screen` `package`; receive `x` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `x: A.B.X` here.
 			"""
 		}) {
@@ -3805,7 +3805,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_theme theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
@@ -3823,7 +3823,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package init(__safeDI_config config: Space.Config?) {
 		        let cache = Cache()
 		        self.init(config: config, cache: cache)
@@ -4059,8 +4059,8 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	private static func comment(_ names: [String]) -> String {
 		let list = names.map { "`\($0)`" }.joinedAsTestList
 		return names.count == 1
-			? "// SafeDI counts \(list) as `public`: no module it reads declares it narrower. If \(list) is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies."
-			: "// SafeDI counts \(list) as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies."
+			? "// SafeDI counts \(list) as `public`: no module it reads declares it narrower. If \(list) is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies."
+			: "// SafeDI counts \(list) as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies."
 	}
 
 	/// `Feature`'s generated files under `integration` for the seam `Screen`, whose extension holds `tiers`, with the

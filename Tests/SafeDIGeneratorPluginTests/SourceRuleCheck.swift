@@ -47,6 +47,10 @@ enum SourceRule: String, CaseIterable {
 	/// A string literal of one backtick: the identifier-spelling extensions alone add and remove backticks, so a name
 	/// joined with other text keeps the spelling of a keyword or a raw identifier.
 	case backtick
+	/// A straight apostrophe between letters in a string literal, such as `type's` or "`\(name)`'s": the text SafeDI
+	/// emits spells an apostrophe ’ (U+2019). `Scripts/sweep-apostrophes.py` rewrites each site and the tests that
+	/// compare it.
+	case apostrophe
 
 	/// Whether the rule applies to the file at `path`, relative to the repository root. SafeDI ships its sources and
 	/// plugins, so neither traps.
@@ -60,6 +64,8 @@ enum SourceRule: String, CaseIterable {
 			path.hasPrefix("Sources/") && path != "Sources/SafeDICore/Models/ReservedName.swift"
 		case .backtick:
 			path.hasPrefix("Sources/") && path != "Sources/SafeDICore/Extensions/IdentifierSpellingExtensions.swift"
+		case .apostrophe:
+			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/")
 		}
 	}
 }
@@ -283,6 +289,9 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 		if node.content.text.contains(Self.builderFunctionNamePrefix) {
 			record(.builderFunctionNamePrefix, at: node.content, Self.builderFunctionNamePrefixMessage)
 		}
+		if Self.containsStraightApostrophe(node) {
+			record(.apostrophe, at: node.content, "the text SafeDI emits spells an apostrophe ’, never '")
+		}
 		return .visitChildren
 	}
 
@@ -306,6 +315,20 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 
 	private let path: String
 	private let converter: SourceLocationConverter
+
+	/// Whether `segment` holds a ' that a letter follows and that a letter, a digit, a backtick or an interpolation
+	/// precedes: an apostrophe, not a quotation mark such as `'\(path)'` or a quoted character such as `"'"`.
+	private static func containsStraightApostrophe(_ segment: StringSegmentSyntax) -> Bool {
+		let characters = Array(segment.content.text)
+		// After an interpolation, the token before the segment's text is the interpolation's closing parenthesis.
+		let followsInterpolation = segment.content.previousToken(viewMode: .sourceAccurate)?.parent?.is(ExpressionSegmentSyntax.self) == true
+		return characters.indices.contains { index in
+			characters[index] == "'"
+				&& index + 1 < characters.count
+				&& characters[index + 1].isLetter
+				&& (index == 0 ? followsInterpolation : characters[index - 1].isLetter || characters[index - 1].isNumber || characters[index - 1] == "`")
+		}
+	}
 
 	private func record(_ rule: SourceRule, at node: some SyntaxProtocol, _ message: String) {
 		guard rule.applies(toFileAt: path) else { return }
