@@ -834,11 +834,11 @@ A new parameter at least as visible as the seam is on every tier, so hand-writte
 
 A hole is a type the seam’s tree instantiates that no `@Instantiable` declaration visible to the seam’s module fulfills, such as a protocol that only the app implements. The seam’s initializer takes one builder per hole type, named for that type: `userServiceBuilder` for `UserService`, `urlLoaderBuilder` for `URLLoader`. A builder is a closure that is handed a scope saying which place in the tree wants a value, and returns the value the property holds.
 
-The scope is an enum, such as `SafeDIScope_UserService`, with a case for each of the seam’s properties that leads to a place of the type. Each case’s first value holds what that type has bound before the property, and the seam’s own cases also hold its parameters:
+The scope is an enum, such as `SafeDIScope_UserService`, with a case for each of the seam’s properties that leads to a place of the type. Each case’s first value, except an inner seam’s case, holds what that type has bound before the property, and the seam’s own cases also hold its parameters:
 
 - A place’s case is named for its label, such as `.userService`.
 - The case of a property that builds a type with places beneath it, such as `profile: Profile`, also holds that type’s enum, `SafeDIScope_UserService.Profile_Scope`, whose cases follow these rules for `Profile`’s properties. So the place where `Profile` builds its `userService` is `.profile(values, .userService)`. A type has one enum, however many properties build it.
-- The case of a property that calls an inner seam holding places of the type also holds that seam’s enum: `case .inner:` leaves it closed, and `case let .inner(values, inner):` opens it.
+- The case of a property that calls an inner seam holding places of the type holds only that seam’s enum, and no values: `case .inner:` leaves it closed, and `case let .inner(innerScope):` opens it.
 
 `{ _ in Implementation() }` fills every place alike, and one pattern, such as `case let .profile(values, .userService):`, singles out one place. For anything deeper, write a function on a type’s enum, which treats every place beneath that type alike, whoever builds it. Renaming a type, even an `internal` one, renames its enum, which such a function names and a pattern never does.
 

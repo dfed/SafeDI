@@ -154,11 +154,10 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 			"enum Home.SafeDIScope_Service",
 			"case Home.SafeDIScope_Service.screenA(screenA_Values, SafeDIScope_Service.ScreenA_Scope)",
 			"case Home.SafeDIScope_Service.screenB(screenB_Values, SafeDIScope_Service.ScreenB_Scope)",
-			"case Home.SafeDIScope_Service.inner(inner_Values, Inner.SafeDIScope_Service)",
+			"case Home.SafeDIScope_Service.inner(Inner.SafeDIScope_Service)",
 			"struct Home.SafeDIScope_Service.screenA_Values",
 			"struct Home.SafeDIScope_Service.screenB_Values",
 			"field Home.SafeDIScope_Service.screenB_Values: public screenA: ScreenA",
-			"struct Home.SafeDIScope_Service.inner_Values",
 			"enum Home.SafeDIScope_Service.ScreenA_Scope",
 			"case Home.SafeDIScope_Service.ScreenA_Scope.shared(shared_Values, SafeDIScope_Service.Shared_Scope)",
 			"struct Home.SafeDIScope_Service.ScreenA_Scope.shared_Values",
@@ -260,7 +259,7 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 	func unproducedDeclaredCases_reportsEachEnumAndCase_whenNoPathProducesThemOrNoCaseHoldsThem() {
 		let generatedFile = Self.nestedHomeScope(screenBHoldsShared: true)
 			.replacingOccurrences(of: "            case service(service_Values)\n\n            public struct service_Values {}\n        }\n    }", with: "            case service(service_Values)\n            case extra(extra_Values)\n\n            public struct service_Values {}\n\n            public struct extra_Values {}\n        }\n\n        @frozen public enum Ghost_Scope {\n            case service(service_Values)\n\n            public struct service_Values {}\n        }\n\n        @frozen public enum Phantom_Scope {\n            case service(service_Values)\n\n            public struct service_Values {}\n        }\n    }")
-			.replacingOccurrences(of: "        case inner(inner_Values, Inner.SafeDIScope_Service)\n", with: "        case inner(inner_Values, Inner.SafeDIScope_Service)\n        case phantom(phantom_Values, SafeDIScope_Service.Phantom_Scope)\n")
+			.replacingOccurrences(of: "        case inner(Inner.SafeDIScope_Service)\n", with: "        case inner(Inner.SafeDIScope_Service)\n        case phantom(phantom_Values, SafeDIScope_Service.Phantom_Scope)\n")
 		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": generatedFile])
 
 		// `Ghost_Scope` is held by no case; `Phantom_Scope`, held by `phantom`, describes no type a path builds.
@@ -277,7 +276,7 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 		// `Home`'s fill of `Inner`'s hole builds `DefaultGadget`, whose own place of `Service` is a case of `Home`'s enum
 		// holding `Inner`'s enum: the fill's tree has no levels, so its type's enum is not judged.
 		let generatedFile = Self.nestedHomeScope(screenBHoldsShared: true)
-			.replacingOccurrences(of: "        case inner(inner_Values, Inner.SafeDIScope_Service)\n", with: "        case inner(inner_Values, Inner.SafeDIScope_Service)\n        case inner_gadgetBuilder(inner_gadgetBuilder_Values, Inner.SafeDIScope_Gadget, SafeDIScope_Service.DefaultGadget_Scope)\n")
+			.replacingOccurrences(of: "        case inner(Inner.SafeDIScope_Service)\n", with: "        case inner(Inner.SafeDIScope_Service)\n        case inner_gadgetBuilder(inner_gadgetBuilder_Values, Inner.SafeDIScope_Gadget, SafeDIScope_Service.DefaultGadget_Scope)\n")
 			.replacingOccurrences(of: "        @frozen public enum Shared_Scope {", with: "        @frozen public enum DefaultGadget_Scope {\n            case service(service_Values)\n\n            public struct service_Values {}\n        }\n\n        @frozen public enum Shared_Scope {")
 		let declarations = GraphFuzzerScopeDeclarations(generatedFiles: ["Home+SafeDI.swift": generatedFile])
 
@@ -392,15 +391,13 @@ struct GraphFuzzerNestedScopeOracleTests: ~Copyable {
 		    @frozen public enum SafeDIScope_Service {
 		        case screenA(screenA_Values, SafeDIScope_Service.ScreenA_Scope)
 		        case screenB(screenB_Values, SafeDIScope_Service.ScreenB_Scope)
-		        case inner(inner_Values, Inner.SafeDIScope_Service)
+		        case inner(Inner.SafeDIScope_Service)
 
 		        public struct screenA_Values {}
 
 		        public struct screenB_Values {
 		            public let screenA: ScreenA
 		        }
-
-		        public struct inner_Values {}
 
 		        @frozen public enum ScreenA_Scope {
 		            case shared(shared_Values, SafeDIScope_Service.Shared_Scope)

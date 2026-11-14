@@ -698,7 +698,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        let __safeDI_serviceBuilder = serviceBuilder
 		        let __safeDI_serviceSendableBuilder = serviceSendableBuilder
 		        _ = Panel.\(Self.panelGuard).self\(Self.comment("Core"))
-		        let panel = Panel.mock(serviceBuilder: { __safeDI_serviceBuilder(.panel(SafeDIMockScope_Service.panel_Values(), $0)) }, safeDIOverrides: safeDIOverrides.panel)
+		        let panel = Panel.mock(serviceBuilder: { __safeDI_serviceBuilder(.panel($0)) }, safeDIOverrides: safeDIOverrides.panel)
 		        _ = Panel.\(Self.panelGuard).self\(Self.comment("Core"))
 		        let __safeDI_held__safeDIBuilder = safeDIOverrides.held
 		        @Sendable func __safeDI_held() -> Panel {
@@ -814,7 +814,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        func __safeDI_board() -> Board {
 		            func __safeDI_serviceBuilder_Board(_ scope: Board.SafeDIMockScope_Service) -> any Service {
 		                switch scope {
-		                case let .panel(_, scope): return __safeDI_serviceBuilder_Panel(scope)
+		                case let .panel(scope): return __safeDI_serviceBuilder_Panel(scope)
 		                }
 		            }
 		            @Sendable func __safeDI_serviceBuilder_Panel(_ scope: Panel.SafeDIMockScope_Service) -> any Service {
@@ -879,7 +879,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                }
 		            }
 		            _ = Panel.\(Self.panelGuard).self\(Self.comment("Core"))
-		            return Panel.mock(serviceBuilder: { scope in __safeDI_serviceBuilder_Panel(scope, passUp: { __safeDI_serviceBuilder(.panel(SafeDIMockScope_Service.panel_Values(), scope)) }) }, safeDIOverrides: safeDIOverrides.panel)
+		            return Panel.mock(serviceBuilder: { scope in __safeDI_serviceBuilder_Panel(scope, passUp: { __safeDI_serviceBuilder(.panel(scope)) }) }, safeDIOverrides: safeDIOverrides.panel)
 		        }
 		        let panel: Panel = __safeDI_panel()
 		        let __safeDI_held__safeDIBuilder = safeDIOverrides.held
@@ -907,7 +907,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 
 		extension Board {
-		    public enum __safeDI_Board_mock_BF79549AA273C1E9 {}
+		    public enum __safeDI_Board_mock_4662ED7FC5EFB391 {}
 		}
 		#endif
 		"""])
@@ -1063,7 +1063,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        func __safeDI_board() -> Board {
 		            func __safeDI_serviceBuilder_Board(_ scope: Board.SafeDIMockScope_Service) -> any Service {
 		                switch scope {
-		                case let .panel(_, scope): return __safeDI_serviceBuilder_Panel(scope)
+		                case let .panel(scope): return __safeDI_serviceBuilder_Panel(scope)
 		                }
 		            }
 		            func __safeDI_serviceBuilder_Panel(_ scope: Panel.SafeDIMockScope_Service) -> any Service {
@@ -1081,7 +1081,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                    return service
 		                }
 		            }
-		            _ = Board.__safeDI_Board_mock_30CF55A21C61E08A.self\(Self.comment("Mid"))
+		            _ = Board.__safeDI_Board_mock_A4B4C82FC2CF18AD.self\(Self.comment("Mid"))
 		            return Board.mock(serviceBuilder: __safeDI_serviceBuilder_Board, safeDIOverrides: safeDIOverrides.board)
 		        }
 		        let board: Board = __safeDI_board()
@@ -1104,7 +1104,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        func __safeDI_board() -> Board {
 		            func __safeDI_serviceBuilder_Board(_ scope: Board.SafeDIMockScope_Service) -> any Service {
 		                switch scope {
-		                case let .panel(_, scope): return __safeDI_serviceBuilder_Panel(scope)
+		                case let .panel(scope): return __safeDI_serviceBuilder_Panel(scope)
 		                }
 		            }
 		            @Sendable func __safeDI_serviceBuilder_Panel(_ scope: Panel.SafeDIMockScope_Service) -> any Service {
@@ -1127,7 +1127,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		                case let .held(scope): return __safeDI_serviceBuilder_Panel(scope)
 		                }
 		            }
-		            _ = Board.__safeDI_Board_mock_BF79549AA273C1E9.self\(Self.comment("Mid"))
+		            _ = Board.__safeDI_Board_mock_4662ED7FC5EFB391.self\(Self.comment("Mid"))
 		            return Board.mock(serviceBuilder: __safeDI_serviceBuilder_Board, serviceSendableBuilder: __safeDI_serviceSendableBuilder_Board, safeDIOverrides: safeDIOverrides.board)
 		        }
 		        let board: Board = __safeDI_board()
@@ -1865,11 +1865,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		#if DEBUG
 		extension Board {
 		    @frozen public enum SafeDIMockScope_Service {
-		        case panel(panel_Values, Panel.SafeDIMockScope_Service)
-
-		        public struct panel_Values {
-		            public let serviceBuilder: Thing
-		        }
+		        case panel(Panel.SafeDIMockScope_Service)
 		    }
 
 		    /// Overrides for the mock dependency tree.
@@ -1893,7 +1889,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        let __safeDI_serviceBuilder_ = serviceBuilder
 		        let serviceBuilder = if let safeDIBuilder = safeDIOverrides.serviceBuilder { safeDIBuilder() } else { Thing() }
 		        _ = Panel.\(Self.panelGuard).self\(Self.comment("Core"))
-		        let panel = Panel.mock(serviceBuilder: { __safeDI_serviceBuilder_(.panel(SafeDIMockScope_Service.panel_Values(serviceBuilder: serviceBuilder), $0)) }, safeDIOverrides: safeDIOverrides.panel)
+		        let panel = Panel.mock(serviceBuilder: { __safeDI_serviceBuilder_(.panel($0)) }, safeDIOverrides: safeDIOverrides.panel)
 		        return Board(serviceBuilder: serviceBuilder, panel: panel)
 		    }
 		}
@@ -4855,13 +4851,13 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	private static let hubGuard = "__safeDI_Hub_mock_0CBEE4F814566C33"
 
 	/// The guard enum of `Board`'s public mock.
-	private static let boardGuard = "__safeDI_Board_mock_BF79549AA273C1E9"
+	private static let boardGuard = "__safeDI_Board_mock_4662ED7FC5EFB391"
 
 	/// The guard enum of `Deck`'s public mock, whose tree builds one place of `Service`.
 	private static let deckGuard = "__safeDI_Deck_mock_1FA707DBE1590F10"
 
 	/// The guard enum of the public mock of a `Board` that instantiates `serviceBuilder: Thing` beside `panel: Panel`.
-	private static let boardBesideThingGuard = "__safeDI_Board_mock_8EC1C6E33844184F"
+	private static let boardBesideThingGuard = "__safeDI_Board_mock_A4B4C82FC2CF18AD"
 
 	/// The comment that ends the line that names the guard of a public mock `module` declares.
 	private static func comment(_ module: String) -> String {
@@ -4919,9 +4915,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	#if DEBUG
 	extension Board {
 	    @frozen public enum SafeDIMockScope_Service {
-	        case panel(panel_Values, Panel.SafeDIMockScope_Service)
-
-	        public struct panel_Values {}
+	        case panel(Panel.SafeDIMockScope_Service)
 	    }
 
 	    @frozen public enum SafeDISendableMockScope_Service {

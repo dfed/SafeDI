@@ -1793,10 +1793,10 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			        let __safeDI_gadgetValues_inner_serviceBuilder_DeepA = SafeDIScope_Gadget.inner_serviceBuilder_DeepA_Values()
 			        let __safeDI_gadgetValues_inner_serviceBuilder_DeepB = SafeDIScope_Gadget.inner_serviceBuilder_DeepB_Values()
 			        func __safeDI_inner() -> Inner {
-			            _ = Inner.__safeDI_Inner_49AAF66E32A4BA77.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Inner.__safeDI_Inner_C05F94F963115305.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            func __safeDI_serviceBuilder_Inner(_ __safeDI_inner_serviceBuilder__: Inner.SafeDIScope_Service) -> any Service {
 			                switch __safeDI_inner_serviceBuilder__ {
-			                case let .deepB(_, scope): return __safeDI_serviceBuilder_DeepB(scope)
+			                case let .deepB(scope): return __safeDI_serviceBuilder_DeepB(scope)
 			                case .service:
 			                    func __safeDI_service() -> DefaultService {
 			                        let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_serviceBuilder(__safeDI_gadgetValues_inner_serviceBuilder, __safeDI_inner_serviceBuilder__, .gadget(SafeDIScope_Gadget.DefaultService_Scope.gadget_Values())))
@@ -1804,7 +1804,7 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			                    }
 			                    let service: any Service = __safeDI_service()
 			                    return service
-			                case let .deepA(_, scope): return __safeDI_serviceBuilder_DeepA(scope)
+			                case let .deepA(scope): return __safeDI_serviceBuilder_DeepA(scope)
 			                }
 			            }
 			            func __safeDI_serviceBuilder_DeepB(_ __safeDI_inner_serviceBuilder_: DeepB.SafeDIScope_Service) -> any Service {
@@ -1842,7 +1842,7 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			}
 
 			extension Outer {
-			    public enum __safeDI_Outer_44A9EE567889C1AC {}
+			    public enum __safeDI_Outer_ECF5DC9EEA6EBF30 {}
 			}
 			""",
 			expectedApp: """
@@ -1856,7 +1856,7 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_outer() -> Outer {
-			            _ = Outer.__safeDI_Outer_44A9EE567889C1AC.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Outer.__safeDI_Outer_ECF5DC9EEA6EBF30.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            func __safeDI_gadgetBuilder_Outer(_ scope: Outer.SafeDIScope_Gadget) -> any Gadget {
 			                switch scope {
 			                case let .inner_serviceBuilder(_, innerScope, scope): return __safeDI_gadgetBuilder_Outer_DefaultService_Scope(scope, id: __safeDI_id_Inner_SafeDIScope_Service(innerScope))
@@ -1873,7 +1873,7 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			            }
 			            func __safeDI_id_Inner_SafeDIScope_Service(_ scope: Inner.SafeDIScope_Service) -> Int? {
 			                switch scope {
-			                case let .deepB(_, scope): return __safeDI_id_DeepB_SafeDIScope_Service(scope)
+			                case let .deepB(scope): return __safeDI_id_DeepB_SafeDIScope_Service(scope)
 			                case .service: return nil
 			                case .deepA: return nil
 			                }

@@ -82,14 +82,15 @@ extension DependencyTreeGenerator {
 	/// `p` holds the plain enum of the type `p`'s own `@Sendable` builder function builds, or is a place held in a `Sendable`
 	/// wrapper; its case `p_Sendable` holds the `@Sendable` enum of the type `p` builds. A call of an inner seam whose enum
 	/// reaches a place the call passes up holds a place: its plain enum in the family the call is made in, its `@Sendable` enum
-	/// in the `@Sendable` family. A call one of whose builders the seam's tree fills with a type whose tree leads to a place
-	/// has a case per such builder after its own, `<call>_<builder>`, which holds the scope value the inner seam handed the
-	/// fill and the enum of the type the fill builds, nested by type as any type of the tree: a place inside a fill is a place
-	/// of that type. A place the inner seam passes up from a seam it calls has a case per such seam, `<call>_<builder>_<Seam>`,
-	/// holding that seam's scope value; fills that differ in whether they carry the scope value take a case each. A case of the plain family carries what its type binds before the property, read from a build of the
-	/// type, every build of a type binding the same values in the same order; a case of the `@Sendable` family carries none,
-	/// since a place is handed only what the innermost `@Sendable` function that builds it binds, which is why a call's case
-	/// that leads to a `@Sendable` function inside the fill carries no inner scope.
+	/// in the `@Sendable` family, and no value. A call one of whose builders the seam's tree fills with a type whose tree
+	/// leads to a place has a case per such builder after its own, `<call>_<builder>`, which holds the scope value the inner
+	/// seam handed the fill and the enum of the type the fill builds, nested by type as any type of the tree: a place inside a
+	/// fill is a place of that type. A place the inner seam passes up from a seam it calls has a case per such seam,
+	/// `<call>_<builder>_<Seam>`, holding that seam's scope value; fills that differ in whether they carry the scope value take
+	/// a case each. Every other case of the plain family carries what its type binds before the property, read from a build
+	/// of the type, every build of a type binding the same values in the same order; a case of the `@Sendable` family carries
+	/// none, since a place is handed only what the innermost `@Sendable` function that builds it binds, which is why a call's
+	/// case that leads to a `@Sendable` function inside the fill carries no inner scope.
 	/// - Parameters:
 	///   - reached: The places of the hole type, and the calls that pass one up, in the order the seam's generated code
 	///     reaches them.
@@ -132,10 +133,10 @@ extension DependencyTreeGenerator {
 			return nil
 		}
 		// The graph: a place of the hole type is a site of it, or a call that hands up an inner enum of it. A fill is left out
-		// with what it builds. A call's case carries what its type binds before the call for a builder a person writes: no
-		// generated fill reads it, since the inner seam's root dispatcher takes no parameters, and a fill that would read
-		// what this seam binds before the call is `boundByPassingUpSeam`, by ruling for 2.3.0. Nor is the call a carrier in
-		// the start order (`SeamDeclarationGraph`).
+		// with what it builds. A call's case holds the inner enum and nothing its type binds before the call: no generated
+		// fill could read such a value, since the inner seam's root dispatcher takes no parameters, and a fill that would read
+		// what this seam binds before the call is `boundByPassingUpSeam`. Nor is the call a carrier in the start order
+		// (`SeamDeclarationGraph`).
 		// A call's fill is entered where it is the fill whose code is generated and builds a place or a call that passes one
 		// up: an edge from the call's declaration to the type the fill builds.
 		let placeHolding = SeamDeclarationGraph.placeHolding(inTreeRootedAt: generator, edges: { parent, child in
@@ -263,7 +264,9 @@ extension DependencyTreeGenerator {
 					if child.holeSite != nil {
 						plainCases.append(DraftCase(property: property, kind: .place, fields: fields, labelsBoundLater: labelsBoundLater))
 					} else if isCall, let innerKey = innerKey(handedUpBy: child, isSendable: false) {
-						plainCases.append(DraftCase(property: property, kind: .inner(innerKey), fields: fields, labelsBoundLater: labelsBoundLater))
+						// A call's case holds the inner enum alone, as in the `@Sendable` family: no generated fill reads what the type
+						// binds before the call (`boundByPassingUpSeam`), and the builder the called type holds would capture it.
+						plainCases.append(DraftCase(property: property, kind: .inner(innerKey), fields: nil))
 					} else if !isCall, let builtType = builtType(of: property) {
 						plainCases.append(DraftCase(property: property, kind: .nested(builtType, isSendable: false), fields: fields, labelsBoundLater: labelsBoundLater))
 					}
@@ -575,7 +578,6 @@ extension DependencyTreeGenerator {
 							rootKey: SeamSignature.ScopeEnum.Key(seamType: seamType, holeType: holeType, isSendable: innermostSendableIndex != nil),
 							route: steps,
 							caseName: enumCase.name,
-							values: step.values.map { ($0.type, $0.fields) },
 						))
 					} else {
 						let site = SeamSignature.Hole.Site(seamType: seamType, path: reached.sitePath)

@@ -1561,10 +1561,11 @@ struct SeamHoles {
 		for callRoute in callRoutes {
 			guard let builderName = internalNameByEnum[callRoute.rootKey] else { continue }
 			bindValues(of: callRoute.route)
-			let ownCase = callRoute.values.map { ".\(callRoute.caseName)(\($0.type.asSource)(\(Self.valuesArguments(of: $0.fields))), " } ?? ".\(callRoute.caseName)("
+			// The call's own case holds only the inner enum: no value of the calling type, so nothing it binds is captured by the
+			// builder the called type holds.
 			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(
 				builderName: builderName,
-				prefix: opening(callRoute.route) + ownCase,
+				prefix: opening(callRoute.route) + ".\(callRoute.caseName)(",
 				suffix: String(repeating: ")", count: callRoute.route.count + 1),
 			)
 		}
