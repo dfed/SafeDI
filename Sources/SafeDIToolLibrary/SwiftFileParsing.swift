@@ -314,6 +314,30 @@ public func parseModule(
 	keepsTypeDeclarationsOtherModulesCanName: Bool = false,
 	isReadingModuleFile: (String) -> Bool = { _ in true },
 ) async throws -> (module: ParsedModule, fileScans: [FileScan]) {
+	let parsed = try await parseModuleKeepingPlainTypeNames(
+		filePaths: filePaths,
+		configurationFilePaths: configurationFilePaths,
+		activeCompilationConditions: activeCompilationConditions,
+		keepsTypeDeclarationsOtherModulesCanName: keepsTypeDeclarationsOtherModulesCanName,
+		isReadingModuleFile: isReadingModuleFile,
+	)
+	return (parsed.module, parsed.fileScans)
+}
+
+/// Parses a module's input files as `parseModule(filePaths:configurationFilePaths:activeCompilationConditions:keepsTypeDeclarationsOtherModulesCanName:isReadingModuleFile:)`
+/// does, and also returns the names of the types whose plain declarations the module keeps, which the parse computes to
+/// keep them, so that `scan` need not compute them again.
+/// - Returns: The module, what each file contributed to it, and the names of the types whose plain declarations it kept:
+///   `keptPlainTypeNames(of:)` of those contributions, to which the files parsed only for their plain declarations add
+///   nothing.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+func parseModuleKeepingPlainTypeNames(
+	filePaths: Set<String>,
+	configurationFilePaths: Set<String>,
+	activeCompilationConditions: Set<String>,
+	keepsTypeDeclarationsOtherModulesCanName: Bool,
+	isReadingModuleFile: (String) -> Bool,
+) async throws -> (module: ParsedModule, fileScans: [FileScan], keptPlainTypeNames: KeptPlainTypeNames) {
 	let defaultEvaluator = ConditionalCompilationEvaluator(activeCompilationConditions: activeCompilationConditions)
 
 	let conventionalConfigurationFilePaths = filePaths.filter { filePath in
@@ -382,19 +406,22 @@ public func parseModule(
 	// behind a comment, which a `package` declaration other modules read can have.
 	let skippedFilePathsMentioningPackageAccessModifier = walkedFiles.skippedFilePathsMentioningPackageAccessModifier
 		.union(conventionalConfigurationFileReads.filter(\.read.mayDeclareTypeOtherModulesCanName).map(\.path))
-	let moduleFileScans = try await (finalFileScans + walkFilesDeclaringTypes(
+	let unkeptFileScans = try await finalFileScans + walkFilesDeclaringTypes(
 		among: Set(mayDeclareTypesNamedBySkippedFilePath.filter { !$0.value.isDisjoint(with: keptTypeNames.outermostTypeNames) }.map(\.key))
 			.union(skippedFilePathsMentioningPackageAccessModifier)
 			.sorted(),
 		conditionalCompilation: evaluator,
-	))
-	.map { fileScan in
-		fileScan.keepingPlainTypeDeclarations(
-			ofTypesWithin: keptTypeNames,
-			keepingThoseOtherModulesPackageCanName: keepsTypeDeclarationsOtherModulesCanName,
-			isInReadingModule: isReadingModuleFile(fileScan.path),
-		)
-	}
+	)
+	// Each file's declarations are kept apart from every other's, so the files are kept concurrently.
+	let moduleFileScans = await unkeptFileScans
+		.map { (fileScan: $0, isInReadingModule: isReadingModuleFile($0.path)) }
+		.concurrentlyMapped { file in
+			file.fileScan.keepingPlainTypeDeclarations(
+				ofTypesWithin: keptTypeNames,
+				keepingThoseOtherModulesPackageCanName: keepsTypeDeclarationsOtherModulesCanName,
+				isInReadingModule: file.isInReadingModule,
+			)
+		}
 	return (
 		ParsedModule(
 			moduleInfo: ModuleInfo(moduleFileScans),
@@ -403,6 +430,7 @@ public func parseModule(
 			additionalDirectories: configuration?.additionalDirectoriesToInclude.map(AdditionalDirectory.init(entry:)) ?? [],
 		),
 		moduleFileScans,
+		keptTypeNames,
 	)
 }
 
@@ -980,6 +1008,9 @@ private func walkFilesDeclaringTypes(
 					sourceLocationConverter: SourceLocationConverter(fileName: filePath, tree: syntaxTree),
 				)
 				fileVisitor.walk(syntaxTree)
+				// `keptPlainTypeNames(of:)` reads only a scan's instantiables and output file declarations, which these
+				// scans leave empty, so they add no kept name: `scan` writes the kept names the parse computed before
+				// adding them, and would write too few if either field were filled here.
 				return FileScan(
 					path: filePath,
 					imports: [],
@@ -1051,12 +1082,6 @@ private func readSwiftFile(atPath filePath: String, findingPackageAccessModifier
 	}
 }
 
-/// The keywords that introduce a declaration of a type whose access SafeDI reads.
-private let typeDeclarationKeywords = ["enum", "struct", "class", "actor", "protocol", "typealias"].map { Array($0.utf8) }
-
-/// The access modifier with which only another module of the same package can name a declaration.
-private let packageAccessModifier = Array("package".utf8)
-
 /// What `UnsafeBufferPointer<UInt8>.typeDeclarationWords` found in a file's text.
 struct TypeDeclarationWords {
 	/// Each name that follows `enum`, `struct`, `class`, `actor`, `protocol`, or `typealias` and whitespace, the keyword a
@@ -1118,9 +1143,8 @@ extension UnsafeBufferPointer<UInt8> {
 				if followsTypeKeyword {
 					found.namesFollowingKeywords.insert(String(decoding: word, as: UTF8.self))
 				}
-				// Most words are not four to nine bytes long, which the comparisons need not see.
-				followsTypeKeyword = (4...9).contains(word.count) && typeDeclarationKeywords.contains { $0.elementsEqual(word) }
-				if word.count == packageAccessModifier.count, packageAccessModifier.elementsEqual(word) {
+				followsTypeKeyword = word.isTypeDeclarationKeyword
+				if word.spells("package") {
 					found.mayDeclareTypeOtherModulesCanName = true
 				}
 			} else if self[index] == backtickByte, let nameEnd = closingBacktickIndexOnLine(ofBacktickAt: index) {
@@ -1135,6 +1159,31 @@ extension UnsafeBufferPointer<UInt8> {
 			}
 		}
 		return found
+	}
+
+	/// Whether these bytes, a word, are a keyword that introduces a declaration of a type whose access SafeDI reads:
+	/// `enum`, `struct`, `class`, `actor`, `protocol`, or `typealias`. A word's length rules out most words, and every
+	/// other keyword, before any byte is compared.
+	private var isTypeDeclarationKeyword: Bool {
+		switch count {
+		case 4:
+			spells("enum")
+		case 5:
+			spells("class") || spells("actor")
+		case 6:
+			spells("struct")
+		case 8:
+			spells("protocol")
+		case 9:
+			spells("typealias")
+		default:
+			false
+		}
+	}
+
+	/// Whether these bytes are exactly those of `word`, whose bytes are compared only when the lengths match.
+	private func spells(_ word: StaticString) -> Bool {
+		count == word.utf8CodeUnitCount && elementsEqual(UnsafeBufferPointer(start: word.utf8Start, count: word.utf8CodeUnitCount))
 	}
 
 	/// The index of the backtick that closes the one at `openingIndex` on the same line, or `nil` when the line has none:
