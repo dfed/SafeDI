@@ -89,6 +89,13 @@ public enum ReservedName: Hashable, Sendable {
 		"\(builderFunctionNamePrefix)\(label)".spelledAsJoinedIdentifier
 	}
 
+	/// The name of the function a scope declares beside the builder function named `functionName` of a member of a loop of
+	/// builders whose function takes parameters a lazy cycle needs: the function of no such parameters that every wrapper of
+	/// the member hands, which passes them (see `ScopeGenerator.ReceivedBuilderLoops`).
+	static func receivedBuilderFunctionName(of functionName: String) -> String {
+		"\(functionName)_received".spelledAsJoinedIdentifier
+	}
+
 	/// The name of the parameter through which a function building a hole held in an instantiator takes the value the
 	/// instantiator forwards.
 	static let forwardedValueParameterName = "\(builderFunctionNamePrefix)forwarded"

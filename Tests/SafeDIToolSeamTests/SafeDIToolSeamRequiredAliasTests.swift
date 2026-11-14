@@ -214,12 +214,11 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsDependencyCycleErrorAtReceiverOfAlias_whenInstantiatorPassThroughReceivesInstantiatorOfSeamWhoseTreeRequiresAliasOfIt() async {
-		// `Root` builds `tokenBuilder` and then `Screen` through instantiators, each of which captures what its tree
-		// receives when it is created. `Screen`'s tree requires `tokenBuilder` through `Detail`'s `onlyIfAvailable` alias,
-		// so `tokenBuilder` must be built first, but `Token` requires `screenBuilder`. No received walk follows an
-		// instantiator, so the siblings are found requiring each other in the tree validated with every seam built inline:
-		// the error is at `Child`'s receive of the alias, as inline.
+	mutating func generate_rebindsInstantiatorPassedToSeam_whenInstantiatorPassThroughReceivesInstantiatorOfSeamWhoseTreeRequiresAliasOfIt() async throws {
+		// `Root` builds `tokenBuilder` and `screenBuilder`, and `Token` requires `screenBuilder`. `Screen`'s tree requires
+		// `tokenBuilder` through `Detail`'s `onlyIfAvailable` alias, so the two instantiators receive each other: a loop of
+		// instantiators, whose functions rebind each other. The seam's caller passes `Screen` the rebinding by name, as the
+		// tree built inline reads it.
 		let fixture = [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let tokenBuilder: Instantiator<Token>", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
 			seamFixtureType(named: "Screen", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let detail: Detail"]),
@@ -227,20 +226,76 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			seamFixtureType(named: "Child", isFinalClass: true, declarations: ["@Received let authTokenBuilder: Instantiator<Token>?"]),
 			seamFixtureType(named: "Token", isFinalClass: true, declarations: ["@Received let screenBuilder: Instantiator<Screen>"]),
 		]
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Child.swift"]):7:5: error: Dependency cycle: @Instantiated `tokenBuilder: Instantiator<Token>` -> @Received `screenBuilder: Instantiator<Screen>` -> @Received `tokenBuilder: Instantiator<Token>`. `tokenBuilder: Instantiator<Token>` is received while it is still being instantiated. `authTokenBuilder: Instantiator<Token>?` renames `tokenBuilder: Instantiator<Token>` only if available, so a type that receives `authTokenBuilder` without `onlyIfAvailable` must be built after `tokenBuilder: Instantiator<Token>`. Receive `authTokenBuilder` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tokenBuilder: Instantiator<Token>` cannot be built first.
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Child.swift"]):7:5: error: Dependency cycle: @Instantiated `tokenBuilder: Instantiator<Token>` -> @Received `screenBuilder: Instantiator<Screen>` -> @Received `tokenBuilder: Instantiator<Token>`. `tokenBuilder: Instantiator<Token>` is received while it is still being instantiated. `authTokenBuilder: Instantiator<Token>?` renames `tokenBuilder: Instantiator<Token>` only if available, so a type that receives `authTokenBuilder` without `onlyIfAvailable` must be built after `tokenBuilder: Instantiator<Token>`. Receive `authTokenBuilder` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tokenBuilder: Instantiator<Token>` cannot be built first.
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_tokenBuilder() -> Token {
+			            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+			            return Token(screenBuilder: screenBuilder)
+			        }
+			        let tokenBuilder = Instantiator<Token>(__safeDI_tokenBuilder)
+			        func __safeDI_screenBuilder() -> Screen {
+			            let tokenBuilder = Instantiator<Token>(__safeDI_tokenBuilder)
+			            _ = Screen.__safeDI_Screen_82F2BAC6DACDC4D9.self
+			            return Screen(__safeDI_tokenBuilder: tokenBuilder)
+			        }
+			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+			        self.init(tokenBuilder: tokenBuilder, screenBuilder: screenBuilder)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    public convenience init(__safeDI_tokenBuilder tokenBuilder: Instantiator<Token>?) {
+			        func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+			            let authTokenBuilder: Instantiator<Token>? = tokenBuilder
+			            #sourceLocation()
+			            let child = Child(authTokenBuilder: authTokenBuilder)
+			            return Detail(authTokenBuilder: authTokenBuilder, child: child)
+			        }
+			        let detail: Detail = __safeDI_detail()
+			        self.init(detail: detail)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_82F2BAC6DACDC4D9 {}
+			}
+			""",
+		])
+		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(inlineOutput.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_tokenBuilder() -> Token {
+			            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+			            return Token(screenBuilder: screenBuilder)
+			        }
+			        let tokenBuilder = Instantiator<Token>(__safeDI_tokenBuilder)
+			        func __safeDI_screenBuilder() -> Screen {
+			            let tokenBuilder = Instantiator<Token>(__safeDI_tokenBuilder)
+			            func __safeDI_detail() -> Detail {
+			                #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                let authTokenBuilder: Instantiator<Token>? = tokenBuilder
+			                #sourceLocation()
+			                let child = Child(authTokenBuilder: authTokenBuilder)
+			                return Detail(authTokenBuilder: authTokenBuilder, child: child)
+			            }
+			            let detail: Detail = __safeDI_detail()
+			            return Screen(detail: detail)
+			        }
+			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+			        self.init(tokenBuilder: tokenBuilder, screenBuilder: screenBuilder)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test

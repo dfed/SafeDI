@@ -61,6 +61,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builtCycleParameters: [CycleParameter] = [],
 		cycleParameterUnavailableProperties: Set<Property> = [],
 		callSiteLazilyInstantiatedInstanceProperties: Set<Property>? = nil,
+		reboundProperties: Set<Property> = [],
+		previousPassReceivedBuilderLoops: ReceivedBuilderLoops? = nil,
+		findsReceivedBuilderLoops: Bool = true,
 	) {
 		self.builtInlineSeamComment = builtInlineSeamComment
 		self.constructsWithHandWrittenMock = constructsWithHandWrittenMock
@@ -356,6 +359,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 		}
+		// A scope that closes a cycle builds nothing, but the builder function it calls declares what its type instantiates
+		// and forwards, so an alias of one of those is bound inside that function, which binds its own: the scope receives
+		// nothing for it.
+		let aliasBindingDeclaredProperties = isPropertyCycle ? Self.propertiesDeclared(byOwnDependencies: instantiable.dependencies) : propertiesToDeclare
 		// The properties this scope's own dependencies receive.
 		var ownReceivedProperties = Set<Property>()
 		for dependency in instantiable.dependencies {
@@ -375,7 +382,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				guard !Self.declaresFulfillingProperty(
 					of: fulfillingProperty,
 					onlyIfAvailable: isOnlyIfAvailable,
-					declaredProperties: propertiesToDeclare,
+					declaredProperties: aliasBindingDeclaredProperties,
 					forwardedProperties: forwardedProperties,
 				) else { continue }
 				receivedProperty = fulfillingProperty
@@ -497,7 +504,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				guard onlyIfAvailable, !Self.declaresFulfillingProperty(
 					of: fulfillingProperty,
 					onlyIfAvailable: true,
-					declaredProperties: propertiesToDeclare,
+					declaredProperties: aliasBindingDeclaredProperties,
 					forwardedProperties: forwardedProperties,
 				) else { continue }
 				onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.insert(fulfillingProperty.asUnwrappedProperty)
@@ -557,7 +564,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						builtType: instantiable.concreteInstantiable,
 						ownDependencies: instantiable.dependencies,
 						children: propertiesToGenerate,
-					),
+					).map { (label: $0.label, receiver: $0.receiver, redeclaration: $0.value) },
 					receivedProperties: receivedProperties,
 					requiredReceivedProperties: requiredReceivedProperties,
 					requiredAliasFulfillingProperties: requiredAliasFulfillingProperties,
@@ -593,6 +600,49 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.unpassableCycleLabelsInTree = unpassableCycleLabelsInTree
 		cycleParametersChangedInTree = foundCycleParameters != builtCycleParameters
 			|| propertiesToGenerate.contains(where: \.cycleParametersChangedInTree)
+		// A scope that closes a cycle builds nothing, so its children are on no loop. A mock's tree finds none: mock emission
+		// does not rebind a loop yet, and validation rejects one in any tree a mock generates.
+		let receivedBuilderLoops = isPropertyCycle || !findsReceivedBuilderLoops
+			? ReceivedBuilderLoops()
+			: Self.receivedBuilderLoops(of: propertiesToGenerate, requiredOnlyIfAvailableAliasProperties: requiredOnlyIfAvailableAliasProperties)
+		self.receivedBuilderLoops = receivedBuilderLoops
+		receivedBuilderLoopsChangedInTree = receivedBuilderLoops != (previousPassReceivedBuilderLoops ?? ReceivedBuilderLoops())
+			|| propertiesToGenerate.contains(where: \.receivedBuilderLoopsChangedInTree)
+		// The function rebinds what its tree receives inside its loop, in the order its body first receives each, except a
+		// label its own parameters name: the body reads the parameter.
+		if let property, let declaration, !isPropertyCycle, !reboundProperties.isEmpty {
+			var parameterLabels = Set(forwardedProperties.map(\.label))
+			for parameter in cycleParameters {
+				parameterLabels.insert(parameter.property.label)
+			}
+			// The forms of each label, in property order: a mock root can promote a label in two forms, both on one loop.
+			var reboundFormsByLabel = [String: [Property]]()
+			for reboundProperty in reboundProperties.sorted() where !parameterLabels.contains(reboundProperty.label) {
+				reboundFormsByLabel[reboundProperty.label, default: []].append(reboundProperty)
+			}
+			// Of a label promoted in two forms, the function rebinds each form its body reads – the form a receive names, or
+			// the non-optional one where a required optional receive has no form of its own – and none it does not read, which
+			// would be an unused binding. Each label is decided on its own, so the order of the dictionary reaches nothing.
+			for (label, forms) in reboundFormsByLabel where forms.count > 1 {
+				let readForms = forms.filter { form in
+					receivedProperties.contains(form)
+						|| (!form.typeDescription.isOptional && receivedProperties.contains(form.asOptionalProperty) && !forms.contains(form.asOptionalProperty))
+				}
+				reboundFormsByLabel[label] = readForms.isEmpty ? nil : readForms
+			}
+			let firstReceives = Self.inOrderTheBodyFirstReceives(
+				ofLabels: reboundFormsByLabel,
+				builtProperty: property,
+				builtDeclaration: declaration,
+				builtType: instantiable.concreteInstantiable,
+				ownDependencies: instantiable.dependencies,
+				children: propertiesToGenerate,
+			)
+			// Every label rebound is received in the body, so the walk meets each.
+			self.reboundProperties = firstReceives.flatMap(\.value)
+		} else {
+			self.reboundProperties = []
+		}
 	}
 
 	init(
@@ -650,6 +700,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		foundCycleParameters = []
 		unpassableCycleLabelsInTree = []
 		cycleParametersChangedInTree = false
+		receivedBuilderLoops = ReceivedBuilderLoops()
+		receivedBuilderLoopsChangedInTree = false
+		reboundProperties = []
 		description = property.asSource
 		propertiesToGenerate = []
 		propertiesToDeclare = []
@@ -731,6 +784,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		foundCycleParameters = []
 		unpassableCycleLabelsInTree = []
 		cycleParametersChangedInTree = false
+		receivedBuilderLoops = ReceivedBuilderLoops()
+		receivedBuilderLoopsChangedInTree = false
+		reboundProperties = []
 		description = holeProperty.asSource
 		propertiesToGenerate = []
 		propertiesToDeclare = []
@@ -1183,6 +1239,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		(onlyIfAvailable ? fulfillingProperty.formsReadByOnlyIfAvailableReceive : [fulfillingProperty]).contains {
 			declaredProperties.contains($0) || forwardedProperties.contains($0)
 		}
+	}
+
+	/// The properties `dependencies`, a type's own, declare for the scopes the type builds: those it instantiates and
+	/// those it forwards, each lazily instantiated one followed by the property that receives its instance by value. An
+	/// alias of one of them is bound inside the type's builder function, and receives nothing from above it.
+	private static func propertiesDeclared(byOwnDependencies dependencies: [Dependency]) -> Set<Property> {
+		var declaredProperties = Set<Property>()
+		for dependency in dependencies {
+			switch dependency.source {
+			case .instantiated, .forwarded:
+				declaredProperties.formUnion(dependency.receivableProperties)
+			case .received, .aliased:
+				continue
+			}
+		}
+		return declaredProperties
 	}
 
 	/// Generates the code of this scope as the root of what is generated, with nothing
@@ -2022,7 +2094,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// closure, which captures what the call passes, as a `@Sendable` builder function inside the seam's tree would
 		// built inline.
 		let sendableDeferredLabels = Set(seamCall?.parameters.filter { $0.deferral == .deferred(isSendable: true) }.map(\.property.label) ?? [])
-		for dependency in instantiable.dependencies where dependency.source.isReceived && !unavailableProperties.contains(dependency.property) {
+		// A member of a loop of builders reads what it rebinds inside its own builder function, where it is available, from
+		// a wrapper of the declaring scope's function: a read of that declaration, as a cycle argument is.
+		let ownUnavailableProperties = reboundProperties.isEmpty ? unavailableProperties : unavailableProperties.subtracting(reboundProperties.flatMap(CycleParameter.forms(providedBy:)))
+		for dependency in instantiable.dependencies where dependency.source.isReceived && !ownUnavailableProperties.contains(dependency.property) {
 			if let property, sendableDeferredLabels.contains(dependency.property.label) {
 				if let capture = capture(
 					of: dependency.property,
@@ -2433,6 +2508,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Whether a scope in this tree found other parameters for its builder function than it was created with, so that
 	/// `Scope.createScopeGenerator` creates the tree again.
 	let cycleParametersChangedInTree: Bool
+	/// The loops among this scope's children (see `ReceivedBuilderLoops`), which the next pass of
+	/// `Scope.createScopeGenerator` creates the children with.
+	nonisolated let receivedBuilderLoops: ReceivedBuilderLoops
+	/// Whether a scope in this tree found other loops among its children than the pass before, so that
+	/// `Scope.createScopeGenerator` creates the tree again.
+	let receivedBuilderLoopsChangedInTree: Bool
+	/// The properties of the siblings this scope's builder function rebinds, as a member of a loop of its scope (see
+	/// `ReceivedBuilderLoops`), in the order its body first receives them. Empty for nearly every scope.
+	let reboundProperties: [Property]
 	/// The `cycleClosedOnDeclarations` whose builder functions a cycle-closing scope in this subtree refers to
 	/// from inside a `@Sendable` builder function that does not enclose them.
 	private let cycleClosedOnDeclarationsReferencedFromSendableFunction: Set<BuiltDeclaration>
@@ -2669,17 +2753,139 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `orderedPropertyToGenerateIndices`, computed afresh, which reads nothing but what the generator and its
 	/// children hold from their creation, so a walk of a seam's tree can order a scope's children without awaiting it.
 	nonisolated func computeOrderedPropertyToGenerateIndices() -> [Int] {
+		let siblingGraph = Self.siblingGraph(of: propertiesToGenerate, requiredOnlyIfAvailableAliasProperties: requiredOnlyIfAvailableAliasProperties)
+		// Each child is ordered as a unit of its own, but a loop of builders that receive one another, which is ordered as
+		// one unit (see `ReceivedBuilderLoops`): a receive inside a loop reads a rebinding in the receiving member's function,
+		// so it orders nothing, and creating one member's wrapper uses every member's function, which captures what the
+		// member reads, so the unit waits on everything any member waits on outside it, and whatever waits on a member
+		// follows the unit. Its members are emitted together, in declaration order, the renames this scope declares of them
+		// after the members they rename. A graph without a loop is ordered child by child.
+		let unitByIndex = propertiesToGenerate.indices.map { receivedBuilderLoops.loopByChildIndex[$0] ?? $0 }
+		var membersByUnit = [Int: [Int]]()
+		if !receivedBuilderLoops.loopByChildIndex.isEmpty {
+			for index in propertiesToGenerate.indices where receivedBuilderLoops.loopByChildIndex[index] != nil && !propertiesToGenerate[index].isAlias {
+				membersByUnit[unitByIndex[index], default: []].append(index)
+			}
+			for index in propertiesToGenerate.indices where receivedBuilderLoops.loopByChildIndex[index] != nil && propertiesToGenerate[index].isAlias {
+				membersByUnit[unitByIndex[index], default: []].append(index)
+			}
+		}
+		var siblingDependencies = siblingGraph.dependencies
+		if !membersByUnit.isEmpty {
+			var unitDependencies = propertiesToGenerate.indices.map { _ in Set<Int>() }
+			for index in propertiesToGenerate.indices {
+				for dependencyIndex in siblingDependencies[index] where unitByIndex[dependencyIndex] != unitByIndex[index] {
+					unitDependencies[unitByIndex[index]].insert(unitByIndex[dependencyIndex])
+				}
+			}
+			siblingDependencies = unitDependencies
+		}
+		func dependsOn(_ dependencyIndex: Int, from dependentIndex: Int) -> Bool {
+			var visitedIndices = Set<Int>()
+			var indicesToVisit = [dependentIndex]
+			while let index = indicesToVisit.popLast() {
+				guard index != dependencyIndex else { return true }
+				for siblingIndex in siblingDependencies[index] where visitedIndices.insert(siblingIndex).inserted {
+					indicesToVisit.append(siblingIndex)
+				}
+			}
+			return false
+		}
+
+		// Each sibling follows the siblings it depends upon, depth first in index order. The search keeps its own path, since
+		// a scope can have as many children depending on one another in turn as the module has types.
+		var orderedIndices = [Int]()
+		// A seam call's fills declare no property, and each is generated. A loop is visited as the unit its first member
+		// stands for.
+		var unfulfilledIndices = Set(siblingGraph.siblings.map { unitByIndex[$0.index] }).union(propertiesToGenerate.indices.filter { propertiesToGenerate[$0].property == nil })
+		// In a seam's tree, a child whose subtree holds a site of one of its holes – a carrier – starts last: first every
+		// child that is no carrier and depends on none through the edges above, in index order, then the rest, in index
+		// order. No edge is added or dropped, so every receive keeps the availability it has; the start order only puts
+		// every sibling that can be built before a site there, so the site's scope struct carries it. Without a carrier
+		// the order is the index order. A sibling that depends on a carrier and is declared after a later carrier is
+		// built after that one, so a fill of the later carrier's site that reads it is reported, not supported
+		// (`FillFinding.Kind.declarationBoundAfterSite`): a deliberate gap, which a finer order could close later.
+		let startIndices: [Int] = if propertiesToGenerate.contains(where: \.containsBuildSite) {
+			{
+				let carrierIndices = propertiesToGenerate.indices.filter { propertiesToGenerate[$0].containsBuildSite }.map { unitByIndex[$0] }
+				let reachesCarrier = propertiesToGenerate.indices.map { index in
+					carrierIndices.contains { dependsOn($0, from: unitByIndex[index]) }
+				}
+				return propertiesToGenerate.indices.filter { !reachesCarrier[$0] }.map { unitByIndex[$0] } + propertiesToGenerate.indices.filter { reachesCarrier[$0] }.map { unitByIndex[$0] }
+			}()
+		} else {
+			propertiesToGenerate.indices.map { unitByIndex[$0] }
+		}
+		/// Appends the children `unit` stands for.
+		func appendUnit(_ unit: Int) {
+			if let members = membersByUnit[unit] {
+				orderedIndices.append(contentsOf: members)
+			} else {
+				orderedIndices.append(unit)
+			}
+		}
+		for startIndex in startIndices where unfulfilledIndices.contains(startIndex) {
+			// Mark as fulfilled before descending to prevent cycles.
+			unfulfilledIndices.remove(startIndex)
+			// Each sibling on the path, with the siblings it depends upon and the position of the next one to fulfill.
+			var path = [(index: startIndex, dependencyIndices: siblingDependencies[startIndex].sorted(), nextDependencyPosition: 0)]
+			while let (index, dependencyIndices, dependencyPosition) = path.last {
+				if dependencyPosition < dependencyIndices.count {
+					path[path.count - 1].nextDependencyPosition += 1
+					let dependencyIndex = dependencyIndices[dependencyPosition]
+					if unfulfilledIndices.remove(dependencyIndex) != nil {
+						path.append((index: dependencyIndex, dependencyIndices: siblingDependencies[dependencyIndex].sorted(), nextDependencyPosition: 0))
+					}
+				} else {
+					appendUnit(index)
+					path.removeLast()
+				}
+			}
+		}
+		return orderedIndices
+	}
+
+	/// The edges between the children of one scope that decide their order, and the receives only if available among them
+	/// that the order leaves `nil`.
+	struct SiblingGraph {
+		/// The first child declaring each property, with the property that receives its instance when it is lazily
+		/// instantiated, and its index among the children.
+		var siblings = [(property: Property, instanceProperty: Property?, index: Int)]()
+		/// For each child, the siblings it is built after: those its tree requires, and those it receives only if available
+		/// where that closes no cycle among the siblings, considered in sibling order. Never the child itself.
+		var dependencies = [Set<Int>]()
+		/// The receives only if available that the order leaves `nil` because the sibling received already waits on the
+		/// receiver, in the order they were considered, with a child's receive of its own property, which is still being
+		/// built inside its tree.
+		var receivesLeftNil = [(receiver: Int, sibling: Int)]()
+		/// The children whose tree requires the child's own property.
+		var childrenRequiringThemselves = Set<Int>()
+	}
+
+	/// The edges between `children`, the children of one scope (see `SiblingGraph`).
+	///
+	/// A child depends on a sibling when the child's subtree receives the sibling. A required receive must be honored, and
+	/// the subtree's receive is required when any receiver in it requires the sibling, or requires an `onlyIfAvailable`
+	/// alias the sibling fulfills (see `requiredAliasFulfillingProperties`). A `@Received(onlyIfAvailable: true)` receive is
+	/// honored only when it does not close a cycle among the siblings — e.g. when `b`'s subtree receives `c` only if
+	/// available but `c` receives `b`, `c` cannot be built before `b`. Receives are considered in sibling order, so the
+	/// result is deterministic, and it matches a plain topological order whenever every receive can be honored.
+	nonisolated private static func siblingGraph(
+		of children: [ScopeGenerator],
+		requiredOnlyIfAvailableAliasProperties: Set<Property>,
+	) -> SiblingGraph {
+		var siblingGraph = SiblingGraph()
 		// A property can be listed more than once — a mock root promotes a received
 		// property that a promoted scope receives even when the root already
 		// instantiates it. Only the first child for each property is generated.
 		// A lazily instantiated sibling is also received by value, as the instance it creates.
-		var siblings = [(property: Property, instanceProperty: Property?, index: Int)]()
 		var listedProperties = Set<Property>()
-		for (index, scope) in propertiesToGenerate.enumerated() {
+		for (index, scope) in children.enumerated() {
 			if let property = scope.property, listedProperties.insert(property).inserted {
-				siblings.append((property, scope.declaredLazilyInstantiatedInstanceProperty, index))
+				siblingGraph.siblings.append((property, scope.declaredLazilyInstantiatedInstanceProperty, index))
 			}
 		}
+		let siblings = siblingGraph.siblings
 		// Required receives first: they are always honored. A required property whose unwrapped form is
 		// the sibling's is the sibling's own non-optional property, which the first test finds, since
 		// a required property is never received only if available, or an optional one, which
@@ -2701,7 +2907,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for sibling in siblings {
 			siblingsByLabel[sibling.property.label, default: []].append((sibling.property, sibling.index))
 		}
-		var siblingDependencies = propertiesToGenerate.enumerated().map { scopeIndex, scope in
+		var childrenRequiringThemselves = Set<Int>()
+		var siblingDependencies = children.enumerated().map { scopeIndex, scope in
 			var dependencies = Set<Int>()
 			func isRequiredReceive(_ property: Property) -> Bool {
 				!scope.onlyIfAvailableUnwrappedReceivedProperties.contains(property.asUnwrappedProperty)
@@ -2741,6 +2948,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					dependencies.insert(sibling.index)
 				}
 			}
+			// A child's tree that requires the child's own property receives the declaration being built: an instantiator,
+			// which the child's builder function rebinds (see `ReceivedBuilderLoops`). It orders nothing.
+			if dependencies.remove(scopeIndex) != nil {
+				childrenRequiringThemselves.insert(scopeIndex)
+			}
 			return dependencies
 		}
 		func dependsOn(_ dependencyIndex: Int, from dependentIndex: Int) -> Bool {
@@ -2758,10 +2970,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// declares its fulfilling property's label, as a required alias is, where that sibling
 		// provides a form the alias reads. A sibling that receives the alias only if available
 		// then waits on it only when that does not close a cycle (below).
-		for case let (index, aliasProperty?) in propertiesToGenerate.map(\.property).enumerated()
+		for case let (index, aliasProperty?) in children.map(\.property).enumerated()
 			where requiredOnlyIfAvailableAliasProperties.contains(aliasProperty)
 		{
-			guard let fulfillingProperty = propertiesToGenerate[index].onlyIfAvailableAliasFulfillingProperty else { continue }
+			guard let fulfillingProperty = children[index].onlyIfAvailableAliasFulfillingProperty else { continue }
 			for sibling in siblingsByLabel[fulfillingProperty.label, default: []] where Self.provides(sibling.property, aFormReadBy: fulfillingProperty) {
 				siblingDependencies[index].insert(sibling.index)
 			}
@@ -2772,64 +2984,231 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// sibling is built, and a sibling whose tree receives the alias only if available
 		// is then generated with the alias unavailable, as it is still being built.
 		for considersAliases in [true, false] {
-			for (index, scope) in propertiesToGenerate.enumerated()
+			for (index, scope) in children.enumerated()
 				where (scope.onlyIfAvailableAliasFulfillingProperty != nil) == considersAliases
 				&& !scope.onlyIfAvailableUnwrappedReceivedProperties.isEmpty
 			{
 				for sibling in siblings
-					where (
-						scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property.asUnwrappedProperty)
-							|| sibling.instanceProperty.map(scope.onlyIfAvailableUnwrappedReceivedProperties.contains) == true
-					)
-					&& !dependsOn(index, from: sibling.index)
+					where scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property.asUnwrappedProperty)
+					|| sibling.instanceProperty.map(scope.onlyIfAvailableUnwrappedReceivedProperties.contains) == true
 				{
-					siblingDependencies[index].insert(sibling.index)
+					if dependsOn(index, from: sibling.index) {
+						siblingGraph.receivesLeftNil.append((receiver: index, sibling: sibling.index))
+					} else {
+						siblingDependencies[index].insert(sibling.index)
+					}
 				}
 			}
 		}
+		siblingGraph.dependencies = siblingDependencies
+		siblingGraph.childrenRequiringThemselves = childrenRequiringThemselves
+		return siblingGraph
+	}
 
-		// Each sibling follows the siblings it depends upon, depth first in index order. The search keeps its own
-		// path, since a scope can have as many children depending on one another in turn as the module has types.
-		var orderedIndices = [Int]()
-		// A seam call's fills declare no property, and each is generated.
-		var unfulfilledIndices = Set(siblings.map(\.index)).union(propertiesToGenerate.indices.filter { propertiesToGenerate[$0].property == nil })
-		// In a seam's tree, a child whose subtree holds a site of one of its holes – a carrier – starts last: first every
-		// child that is no carrier and depends on none through the edges above, in index order, then the rest, in index
-		// order. No edge is added or dropped, so every receive keeps the availability it has; the start order only puts
-		// every sibling that can be built before a site there, so the site's scope struct carries it. Without a carrier
-		// the order is the index order. A sibling that depends on a carrier and is declared after a later carrier is
-		// built after that one, so a fill of the later carrier's site that reads it is reported, not supported
-		// (`FillFinding.Kind.declarationBoundAfterSite`): a deliberate gap, which a finer order could close later.
-		let startIndices: [Int] = if propertiesToGenerate.contains(where: \.containsBuildSite) {
-			{
-				let carrierIndices = propertiesToGenerate.indices.filter { propertiesToGenerate[$0].containsBuildSite }
-				let reachesCarrier = propertiesToGenerate.indices.map { index in
-					carrierIndices.contains { dependsOn($0, from: index) }
+	/// The loops among a scope's children, builders whose trees receive one another, and what each member's builder function
+	/// rebinds.
+	///
+	/// Arrows run from each child to each sibling its tree receives, and from a child whose tree receives its own property to
+	/// itself. A loop is a strongly connected set of builders – instantiators, and the renames the scope declares of them that
+	/// do not erase them – with an arrow inside it. A receive inside a loop is read from a wrapper the receiving member's
+	/// function makes again of the received member's function (a rebinding), so no wrapper holds itself and a tree released
+	/// by its owner is freed. Validation rejects a cycle of required receives with any other property on it.
+	///
+	/// A receive only if available is decided in two passes. The first is the order's (see `siblingGraph(of:)`), in sibling
+	/// order. The second takes every receive the first left `nil` whose receiver and received sibling are both builders, adds
+	/// them all to the graph at once, and gives each one exactly when its strongly connected component holds only builders,
+	/// so it reads no order: renaming or reordering cannot change it.
+	struct ReceivedBuilderLoops: Equatable, Sendable {
+		/// For each child on a loop, by its index among the children, the loop it is on, named by the index of its first
+		/// member.
+		var loopByChildIndex = [Int: Int]()
+		/// For each child on a loop, by its index among the children, the properties of the siblings its tree receives
+		/// inside the loop – its own among them when its tree receives it – which its builder function rebinds.
+		var reboundPropertiesByChildIndex = [Int: Set<Property>]()
+	}
+
+	/// Whether this scope, one of `siblings`, the children of one scope, is a builder that can be on a loop (see
+	/// `ReceivedBuilderLoops`): it builds an instantiator, in a builder function of its own or, closing a cycle, in the one
+	/// it closes on, or it is a rename of one that does not erase it – required, or only if available of an instantiator a
+	/// sibling builds, which it is then always bound from.
+	nonisolated private func isLoopBuilder(amongSiblings siblings: [ScopeGenerator]) -> Bool {
+		switch scopeData {
+		case let .property(_, property, _, _, _, _):
+			// A cycle-closing scope's wrapper hands the function it closes on.
+			return Self.isBuilder(property)
+		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, _):
+			guard !erasedToConcreteExistential, Self.isBuilder(property) else { return false }
+			if onlyIfAvailable {
+				return siblings.contains { sibling in
+					guard case let .property(_, siblingProperty, _, _, _, _) = sibling.scopeData else { return false }
+					return siblingProperty.label == fulfillingProperty.label
+						&& Self.isBuilder(siblingProperty)
+						&& Self.provides(siblingProperty, aFormReadBy: fulfillingProperty)
 				}
-				return propertiesToGenerate.indices.filter { !reachesCarrier[$0] } + propertiesToGenerate.indices.filter { reachesCarrier[$0] }
-			}()
-		} else {
-			Array(propertiesToGenerate.indices)
+			} else {
+				return true
+			}
+		case .root, .hole, .fill:
+			return false
 		}
-		for startIndex in startIndices where unfulfilledIndices.contains(startIndex) {
-			// Mark as fulfilled before descending to prevent cycles.
-			unfulfilledIndices.remove(startIndex)
-			// Each sibling on the path, with the siblings it depends upon and the position of the next one to fulfill.
-			var path = [(index: startIndex, dependencyIndices: siblingDependencies[startIndex].sorted(), nextDependencyPosition: 0)]
-			while let (index, dependencyIndices, dependencyPosition) = path.last {
-				if dependencyPosition < dependencyIndices.count {
-					path[path.count - 1].nextDependencyPosition += 1
-					let dependencyIndex = dependencyIndices[dependencyPosition]
-					if unfulfilledIndices.remove(dependencyIndex) != nil {
-						path.append((index: dependencyIndex, dependencyIndices: siblingDependencies[dependencyIndex].sorted(), nextDependencyPosition: 0))
+	}
+
+	/// Whether this scope is a rename its scope declares.
+	nonisolated private var isAlias: Bool {
+		switch scopeData {
+		case .alias:
+			true
+		case .root, .property, .hole, .fill:
+			false
+		}
+	}
+
+	/// Whether `property` is an instantiator of any kind.
+	nonisolated static func isBuilder(_ property: Property) -> Bool {
+		switch property.propertyType {
+		case .instantiator, .erasedInstantiator, .sendableInstantiator, .sendableErasedInstantiator:
+			true
+		case .constant, .lazilyInstantiated, .sendableLazilyInstantiated:
+			false
+		}
+	}
+
+	/// The loops among `children`, the children of one scope (see `ReceivedBuilderLoops`).
+	nonisolated private static func receivedBuilderLoops(
+		of children: [ScopeGenerator],
+		requiredOnlyIfAvailableAliasProperties: Set<Property>,
+	) -> ReceivedBuilderLoops {
+		let isBuilder = children.map { $0.isLoopBuilder(amongSiblings: children) }
+		// Nearly every scope has fewer than two builders and receives none of them inside its own tree.
+		guard isBuilder.contains(true) else { return ReceivedBuilderLoops() }
+		let siblingGraph = siblingGraph(of: children, requiredOnlyIfAvailableAliasProperties: requiredOnlyIfAvailableAliasProperties)
+		// The second pass's receives: each the first left `nil` between two builders.
+		var candidates = [(receiver: Int, sibling: Int)]()
+		// A receive given here is checked like any given receive: a `Sendable` builder's receive of one that is not is
+		// `nonSendableWrapperCaptures`' error, as it is outside a loop.
+		for receive in siblingGraph.receivesLeftNil where isBuilder[receive.receiver] && isBuilder[receive.sibling] {
+			candidates.append(receive)
+		}
+		guard !candidates.isEmpty || !siblingGraph.childrenRequiringThemselves.isEmpty || siblingGraph.dependencies.indices.contains(where: { index in
+			isBuilder[index] && siblingGraph.dependencies[index].contains { isBuilder[$0] }
+		}) else { return ReceivedBuilderLoops() }
+		var arrows = siblingGraph.dependencies
+		var selfArrows = siblingGraph.childrenRequiringThemselves
+		for candidate in candidates {
+			if candidate.receiver == candidate.sibling {
+				selfArrows.insert(candidate.receiver)
+			} else {
+				arrows[candidate.receiver].insert(candidate.sibling)
+			}
+		}
+		let componentByIndex = stronglyConnectedComponents(of: arrows)
+		var componentHoldsOnlyBuilders = [Int: Bool]()
+		for index in children.indices {
+			componentHoldsOnlyBuilders[componentByIndex[index], default: true] = componentHoldsOnlyBuilders[componentByIndex[index], default: true] && isBuilder[index]
+		}
+		func isOnLoop(_ index: Int) -> Bool {
+			componentHoldsOnlyBuilders[componentByIndex[index]] == true
+		}
+		// A candidate is given when its component holds only builders; every other one stays `nil`.
+		var givenCandidates = Set<Int>()
+		var givenSelfArrows = siblingGraph.childrenRequiringThemselves
+		for candidate in candidates where componentByIndex[candidate.receiver] == componentByIndex[candidate.sibling] && isOnLoop(candidate.receiver) {
+			if candidate.receiver == candidate.sibling {
+				givenSelfArrows.insert(candidate.receiver)
+			} else {
+				givenCandidates.insert(candidate.receiver * children.count + candidate.sibling)
+			}
+		}
+		var loops = ReceivedBuilderLoops()
+		for index in children.indices where isOnLoop(index) {
+			var reboundProperties = Set<Property>()
+			for siblingIndex in siblingGraph.dependencies[index] where componentByIndex[siblingIndex] == componentByIndex[index] {
+				if let property = children[siblingIndex].property {
+					reboundProperties.insert(property)
+				}
+			}
+			for candidate in candidates
+				where candidate.receiver == index && candidate.sibling != index && givenCandidates.contains(candidate.receiver * children.count + candidate.sibling)
+			{
+				if let property = children[candidate.sibling].property {
+					reboundProperties.insert(property)
+				}
+			}
+			if givenSelfArrows.contains(index), let property = children[index].property {
+				reboundProperties.insert(property)
+			}
+			guard !reboundProperties.isEmpty else { continue }
+			loops.reboundPropertiesByChildIndex[index] = reboundProperties
+		}
+		// A loop's members are the builders of a component that holds only builders and an arrow inside it.
+		var componentHoldsArrow = Set<Int>()
+		for index in loops.reboundPropertiesByChildIndex.keys {
+			componentHoldsArrow.insert(componentByIndex[index])
+		}
+		var firstMemberByComponent = [Int: Int]()
+		for index in children.indices where isOnLoop(index) && componentHoldsArrow.contains(componentByIndex[index]) {
+			let firstMember = firstMemberByComponent[componentByIndex[index]] ?? index
+			firstMemberByComponent[componentByIndex[index]] = firstMember
+			loops.loopByChildIndex[index] = firstMember
+		}
+		return loops
+	}
+
+	/// The strongly connected component of each node of the graph `arrows` describes, each node's arrows by index, named by
+	/// the order Tarjan's algorithm finishes them, visiting nodes and arrows in index order. The search keeps its own stack,
+	/// since a scope can have as many children receiving one another in turn as the module has types.
+	nonisolated static func stronglyConnectedComponents(of arrows: [Set<Int>]) -> [Int] {
+		var indexByNode = [Int?](repeating: nil, count: arrows.count)
+		var lowLinkByNode = [Int](repeating: 0, count: arrows.count)
+		var isOnStack = [Bool](repeating: false, count: arrows.count)
+		var componentByNode = [Int](repeating: 0, count: arrows.count)
+		var stack = [Int]()
+		var nextIndex = 0
+		var componentCount = 0
+		let sortedArrows = arrows.map { $0.sorted() }
+		for startNode in arrows.indices where indexByNode[startNode] == nil {
+			var path = [(node: startNode, nextArrowPosition: 0)]
+			indexByNode[startNode] = nextIndex
+			lowLinkByNode[startNode] = nextIndex
+			nextIndex += 1
+			stack.append(startNode)
+			isOnStack[startNode] = true
+			while let (node, arrowPosition) = path.last {
+				if arrowPosition < sortedArrows[node].count {
+					path[path.count - 1].nextArrowPosition += 1
+					let target = sortedArrows[node][arrowPosition]
+					if let targetIndex = indexByNode[target] {
+						if isOnStack[target] {
+							lowLinkByNode[node] = min(lowLinkByNode[node], targetIndex)
+						}
+					} else {
+						indexByNode[target] = nextIndex
+						lowLinkByNode[target] = nextIndex
+						nextIndex += 1
+						stack.append(target)
+						isOnStack[target] = true
+						path.append((node: target, nextArrowPosition: 0))
 					}
 				} else {
-					orderedIndices.append(index)
 					path.removeLast()
+					if let parent = path.last?.node {
+						lowLinkByNode[parent] = min(lowLinkByNode[parent], lowLinkByNode[node])
+					}
+					if lowLinkByNode[node] == indexByNode[node] {
+						var poppedNode: Int?
+						repeat {
+							poppedNode = stack.popLast()
+							if let poppedNode {
+								isOnStack[poppedNode] = false
+								componentByNode[poppedNode] = componentCount
+							}
+						} while poppedNode != nil && poppedNode != node
+						componentCount += 1
+					}
 				}
 			}
 		}
-		return orderedIndices
+		return componentByNode
 	}
 
 	/// Whether a declaration of `declaredProperty` provides a form an `onlyIfAvailable` alias of `fulfillingProperty`
@@ -2996,7 +3375,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The first receive of each of `labels` – labels the body of the builder function of the scope that builds
 	/// `builtType` for `builtProperty`, the declaration `builtDeclaration`, receives from the scopes enclosing it, each with
-	/// its declaration between the function and one of its cycle-closing scopes, which is returned beside it – in the
+	/// a value that is returned beside it (for a cycle parameter, its label's declaration between the function and one of
+	/// its cycle-closing scopes) – in the
 	/// order a walk of the body meets them: the type's own dependencies, `ownDependencies`, then each of `children`'s
 	/// trees, depth first, each scope's dependencies (and a cycle-closing scope's parameters, which it receives for the
 	/// function it refers to, where that function's body first receives them) before its children's, all in declaration
@@ -3004,16 +3384,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// renaming a graph never reorders a function's parameters. Every label the body receives is met: a receive comes
 	/// from a dependency of a type the walk visits, an alias among the dependencies of the type declaring it, which the
 	/// walk visits first, or a cycle-closing scope's parameter.
-	private static func inOrderTheBodyFirstReceives(
-		ofLabels labels: [String: CycleParameter.Redeclaration],
+	private static func inOrderTheBodyFirstReceives<Value>(
+		ofLabels labels: [String: Value],
 		builtProperty: Property,
 		builtDeclaration: BuiltDeclaration,
 		builtType: TypeDescription,
 		ownDependencies: [Dependency],
 		children: [ScopeGenerator],
-	) -> [(label: String, receiver: CycleParameter.Receiver, redeclaration: CycleParameter.Redeclaration)] {
+	) -> [(label: String, receiver: CycleParameter.Receiver, value: Value)] {
 		var unmetLabels = labels
-		var firstReceives = [(label: String, receiver: CycleParameter.Receiver, redeclaration: CycleParameter.Redeclaration)]()
+		var firstReceives = [(label: String, receiver: CycleParameter.Receiver, value: Value)]()
 		// The types the walk visits, each with the index of the type it is built inside, so that a receiver's chain is
 		// spelled only for the receives the walk meets first.
 		var visitedTypes: [(type: TypeDescription, parentIndex: Int?)] = [(builtType, nil)]
@@ -3028,17 +3408,29 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return chain.reversed()
 		}
 		func meet(_ label: String, receiver: @autoclosure () -> CycleParameter.Receiver) {
-			if let redeclaration = unmetLabels.removeValue(forKey: label) {
-				firstReceives.append((label, receiver(), redeclaration))
+			if let value = unmetLabels.removeValue(forKey: label) {
+				firstReceives.append((label, receiver(), value))
 			}
 		}
 		/// Meets the receives among `dependencies`, those of the type at `index` in `visitedTypes`.
 		func meet(_ dependencies: [Dependency], ofTypeAt index: Int) {
+			// Read only for a type with an alias, which few are.
+			var ownDeclaredProperties: Set<Property>?
 			for dependency in dependencies {
 				switch dependency.source {
 				case .received:
 					meet(dependency.property.label, receiver: .init(property: dependency.property, declarationLocation: dependency.declarationLocation, chain: chain(endingAt: index)))
-				case let .aliased(fulfillingProperty, _, _):
+				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+					// An alias of a property its own type declares reads that declaration, also where a cycle-closing scope
+					// calls the type's builder function, which binds its own: it receives nothing.
+					let declaredProperties = ownDeclaredProperties ?? propertiesDeclared(byOwnDependencies: dependencies)
+					ownDeclaredProperties = declaredProperties
+					guard !declaresFulfillingProperty(
+						of: fulfillingProperty,
+						onlyIfAvailable: onlyIfAvailable,
+						declaredProperties: declaredProperties,
+						forwardedProperties: [],
+					) else { continue }
 					meet(fulfillingProperty.label, receiver: .init(property: fulfillingProperty, declarationLocation: dependency.declarationLocation, chain: chain(endingAt: index)))
 				case .instantiated, .forwarded:
 					continue
@@ -3116,14 +3508,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `unavailableProperties`, which are unavailable where the function is called: the forms the function's parameters
 	/// provide are bound inside it, whatever the scope calling it passes.
 	nonisolated private func bodyUnavailableProperties(_ unavailableProperties: Set<Property>) -> Set<Property> {
-		declaresCycleParameters ? unavailableProperties.subtracting(cycleParameterProvidedForms) : unavailableProperties
+		let bodyProvidedForms = bodyProvidedForms
+		return bodyProvidedForms.isEmpty ? unavailableProperties : unavailableProperties.subtracting(bodyProvidedForms)
+	}
+
+	/// The forms the body of this scope's builder function binds before anything in it reads them: those its parameters
+	/// that a lazy cycle needs provide, and those of the properties it rebinds as a member of a loop of builders (see
+	/// `ReceivedBuilderLoops`). Empty for nearly every scope.
+	nonisolated private var bodyProvidedForms: Set<Property> {
+		guard !reboundProperties.isEmpty else { return cycleParameterProvidedForms }
+		var bodyProvidedForms = cycleParameterProvidedForms
+		for reboundProperty in reboundProperties {
+			bodyProvidedForms.formUnion(CycleParameter.forms(providedBy: reboundProperty))
+		}
+		return bodyProvidedForms
 	}
 
 	/// The `propertiesGeneratedLater` of the scopes this scope's builder function builds, given those of this scope: the
 	/// forms the function's parameters provide are bound inside it.
 	nonisolated private func bodyPropertiesGeneratedLater(_ propertiesGeneratedLater: Set<Property>) -> Set<Property> {
-		guard declaresCycleParameters, !propertiesGeneratedLater.isEmpty else { return propertiesGeneratedLater }
-		return propertiesGeneratedLater.subtracting(cycleParameterProvidedForms.map(\.asUnwrappedProperty))
+		guard declaresCycleParameters || !reboundProperties.isEmpty, !propertiesGeneratedLater.isEmpty else { return propertiesGeneratedLater }
+		return propertiesGeneratedLater.subtracting(bodyProvidedForms.map(\.asUnwrappedProperty))
 	}
 
 	/// The name of the builder function this scope, which closes a property cycle on `closedOnDeclaration` and is built for
@@ -3189,15 +3594,69 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		} else {
 			nil
 		}
+		// Each member of a loop of builders rebinds the members its tree receives inside the loop as this body declares them,
+		// wrapping the functions this body names. A member whose function takes parameters a lazy cycle needs – a member
+		// that declares such a function, or a cycle-closing scope that calls one – is wrapped through a function of no
+		// such parameters, `__safeDI_<label>_received`, that this body declares beside it and that passes the parameters
+		// what this body binds, a member of the same loop as a wrapper the function makes. Nearly every body holds no loop.
+		var loopMemberDeclarationsByLoop = [Int: [Property: String]]()
+		var receivedFunctionNameByIndex = [Int: String]()
+		var memberFunctionByProperty = [Property: (property: Property, generator: ScopeGenerator, functionName: String)]()
+		if !receivedBuilderLoops.loopByChildIndex.isEmpty {
+			let loopByGenerator = Dictionary(
+				receivedBuilderLoops.loopByChildIndex.map { (ObjectIdentifier(propertiesToGenerate[$0.key]), $0.value) },
+				uniquingKeysWith: { first, _ in first },
+			)
+			// A `__safeDI_<label>_received` function is named apart, with underscores appended, from every name in scope
+			// where it is declared or read (see `namesReceivedFunctionsAvoid`).
+			var names = GeneratedNameAllocator(reserving: namesReceivedFunctionsAvoid(
+				orderedChildren: orderedChildren,
+				childBuilderFunctionNames: childBuilderFunctionNames,
+				loopMembers: orderedChildren.compactMap { loopByGenerator[ObjectIdentifier($0.generator)] == nil ? nil : $0.generator },
+				enclosingFunctionNames: enclosingFunctionNames,
+			))
+			for (index, child) in orderedChildren.enumerated() where !child.generator.isAlias {
+				guard let property = child.generator.property, let loop = loopByGenerator[ObjectIdentifier(child.generator)] else { continue }
+				let childBuilderFunctionNames = childBuilderFunctionNames?[index] ?? nil
+				var functionName = if child.generator.closesPropertyCycle {
+					child.generator.closedOnFunctionName(builtFor: property, enclosingFunctionNames: childBuilderFunctionNames?.enclosingFunctionNames ?? [:])
+				} else {
+					childBuilderFunctionNames?.functionName ?? Self.functionName(toBuild: property)
+				}
+				if !child.generator.cycleParameters.isEmpty {
+					functionName = names.claim(ReservedName.receivedBuilderFunctionName(of: functionName))
+					receivedFunctionNameByIndex[index] = functionName
+				}
+				loopMemberDeclarationsByLoop[loop, default: [:]][property] = child.generator.loopRebindingDeclaration(functionName: functionName)
+				memberFunctionByProperty[property] = (property, child.generator, functionName)
+			}
+			// A rename this body declares of a member is rebound under its own label, wrapping the member's function.
+			for child in orderedChildren where child.generator.isAlias {
+				guard case let .alias(property, fulfillingProperty, _, _, _) = child.generator.scopeData,
+				      let loop = loopByGenerator[ObjectIdentifier(child.generator)],
+				      let memberFunction = memberFunctionByProperty[fulfillingProperty],
+				      let declaration = child.generator.loopRebindingDeclaration(ofRenameOf: memberFunction)
+				else { continue }
+				loopMemberDeclarationsByLoop[loop, default: [:]][property] = declaration
+			}
+		}
 		var generatedProperties = [String]()
 		var inlinedFills = [String: FillDispatcher.InlinedFill]()
 		for (index, child) in orderedChildren.enumerated() {
+			var builderFunctionNames = childBuilderFunctionNames?[index].flatMap(\.self)
+				?? BuilderFunctionNames(fillStagesAreSendable: sendableStages(ofFill: child.generator))
+			if !loopMemberDeclarationsByLoop.isEmpty,
+			   let childIndex = propertiesToGenerate.firstIndex(where: { $0 === child.generator }),
+			   let loop = receivedBuilderLoops.loopByChildIndex[childIndex]
+			{
+				builderFunctionNames.loopMemberDeclarations = loopMemberDeclarationsByLoop[loop, default: [:]]
+				builderFunctionNames.receivedFunctionName = receivedFunctionNameByIndex[index]
+			}
 			let code = try await child.generator.generateCode(
 				codeGeneration: codeGeneration,
 				unavailableProperties: child.unavailableProperties,
 				propertiesGeneratedLater: child.propertiesGeneratedLater,
-				builderFunctionNames: childBuilderFunctionNames?[index].flatMap(\.self)
-					?? BuilderFunctionNames(fillStagesAreSendable: sendableStages(ofFill: child.generator)),
+				builderFunctionNames: builderFunctionNames,
 				leadingWhitespace: leadingMemberWhitespace,
 			)
 			if let key = child.generator.fillKey,
@@ -3245,6 +3704,102 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
+	/// `code` with each line indented once more.
+	private static func indented(_ code: String) -> String {
+		code.split(separator: "\n", omittingEmptySubsequences: false).map { standardIndent + $0 }.joined(separator: "\n")
+	}
+
+	/// The arguments a builder function of a type whose `@Forwarded` properties are `forwardedProperties`, in their order,
+	/// is passed from `forwardedValue`: the value itself for one property, and its elements by label for several.
+	private static func forwardedArguments(of forwardedProperties: [Property], spreading forwardedValue: String) -> [String] {
+		let forwardedPropertiesHaveLabels = forwardedProperties.count > 1
+		return forwardedProperties.map {
+			if forwardedPropertiesHaveLabels {
+				"\($0.label.spelledAsArgumentLabel): \(forwardedValue).\($0.label)"
+			} else {
+				"\($0.label.spelledAsArgumentLabel): \(forwardedValue)"
+			}
+		}
+	}
+
+	/// The declaration of this scope's instantiator, which hands its wrapper the function named `functionName`, called
+	/// with `forwardedArguments`: the function itself when it takes no arguments and erases nothing, and otherwise a
+	/// closure that calls it. Empty for a scope that builds no instantiator, which no caller asks.
+	nonisolated private func instantiatorDeclaration(handing functionName: String, forwardedArguments: String) -> String {
+		guard case let .property(instantiable, property, _, _, _, _) = scopeData else { return "" }
+		let typeDescription = property.typeDescription.asSource
+		// A type constructed by annotation spells its generic arguments only in `propertyDeclaration`.
+		let unwrappedTypeDescription = property
+			.typeDescription
+			.unwrapped
+			.spelledForConstruction
+		let propertyDeclaration = if !instantiable.declarationType.isExtension, typeDescription == unwrappedTypeDescription {
+			"let \(property.label)"
+		} else {
+			"let \(property.asSource)"
+		}
+		return "\(propertyDeclaration) = \(instantiatorExpression(handing: functionName, forwardedArguments: forwardedArguments))"
+	}
+
+	/// The wrapper `instantiatorDeclaration(handing:forwardedArguments:)` declares.
+	nonisolated private func instantiatorExpression(handing functionName: String, forwardedArguments: String) -> String {
+		guard case let .property(_, property, _, erasedToConcreteExistential, _, _) = scopeData else { return "" }
+		let unwrappedTypeDescription = property
+			.typeDescription
+			.unwrapped
+			.spelledForConstruction
+		let instantiatedTypeDescription = property
+			.typeDescription
+			.unwrapped
+			.asInstantiatedType
+			.asSource
+		return if forwardedArguments.isEmpty, !erasedToConcreteExistential {
+			"\(unwrappedTypeDescription)(\(functionName))"
+		} else if erasedToConcreteExistential {
+			"""
+			\(unwrappedTypeDescription) {
+			\(Self.standardIndent)\(instantiatedTypeDescription)(\(functionName)(\(forwardedArguments)))
+			}
+			"""
+		} else {
+			"""
+			\(unwrappedTypeDescription) {
+			\(Self.standardIndent)\(functionName)(\(forwardedArguments))
+			}
+			"""
+		}
+	}
+
+	/// The declaration with which a member of a loop of builders rebinds this scope's instantiator, a member of the same
+	/// loop, whose builder function its scope's body names `functionName` (see `ReceivedBuilderLoops`): the declaration the
+	/// scope's body makes of it, which wraps the function again.
+	nonisolated private func loopRebindingDeclaration(functionName: String) -> String {
+		guard case let .property(_, _, forwardedProperties, _, _, _) = scopeData else { return "" }
+		return instantiatorDeclaration(
+			handing: functionName,
+			forwardedArguments: Self.forwardedArguments(of: forwardedProperties.sorted(), spreading: "$0").joined(separator: ", "),
+		)
+	}
+
+	/// The declaration with which a member of a loop of builders rebinds this scope, a rename its scope declares of a member
+	/// of the same loop, whose rebinding is `fulfillingDeclaration`: the rename bound to a wrapper made again of the member's
+	/// function. `nil` for any other scope.
+	nonisolated private func loopRebindingDeclaration(ofRenameOf fulfillingDeclaration: (property: Property, generator: ScopeGenerator, functionName: String)) -> String? {
+		guard case let .alias(property, _, _, _, _) = scopeData,
+		      case let .property(_, _, forwardedProperties, _, _, _) = fulfillingDeclaration.generator.scopeData
+		else { return nil }
+		return Self.aliasDeclaration(
+			of: property,
+			fulfilledBy: fulfillingDeclaration.generator.instantiatorExpression(
+				handing: fulfillingDeclaration.functionName,
+				forwardedArguments: Self.forwardedArguments(of: forwardedProperties.sorted(), spreading: "$0").joined(separator: ", "),
+			),
+			ofType: fulfillingDeclaration.property.typeDescription,
+			erasedToConcreteExistential: false,
+			fulfillingValueMayBeOptional: false,
+		)
+	}
+
 	private static func functionName(toBuild property: Property) -> String {
 		functionName(toBuildPropertyNamed: property.label)
 	}
@@ -3274,6 +3829,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var enclosingFunctionNames = [BuiltDeclaration: String]()
 		/// For a fill, whether each of its functions is `@Sendable` (see `sendableStages(ofFill:)`), one per stage.
 		var fillStagesAreSendable = [Bool]()
+		/// For a member of a loop of builders, the declarations with which the members of its loop are wrapped again, by
+		/// their property: its builder function rebinds those its tree receives, and its `__safeDI_<label>_received`
+		/// function those it passes as parameters a lazy cycle needs (see `ReceivedBuilderLoops`).
+		var loopMemberDeclarations = [Property: String]()
+		/// For a member of a loop of builders whose function takes parameters a lazy cycle needs, the name of the function
+		/// of no such parameters its wrappers hand, which passes them; `nil` for every other scope.
+		var receivedFunctionName: String?
 	}
 
 	/// A child scope that one generated body holds, as builder function naming sees it.
@@ -3321,15 +3883,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for children: [BuilderFunctionCandidate],
 		enclosingFunctionNames: [BuiltDeclaration: String],
 	) -> [BuilderFunctionNames] {
-		var referencedDeclarations = Set<BuiltDeclaration>()
-		for child in children where !child.cycleClosedOnDeclarations.isEmpty {
-			referencedDeclarations.formUnion(child.cycleClosedOnDeclarations)
-		}
-		// A call inside a fill of its seam's call refers to the fill by name, as a cycle-closing scope refers to the
-		// function it closes on, so no builder function between the two may share that name either.
-		let referencedFunctionNames = Set(referencedDeclarations.map {
-			enclosingFunctionNames[$0, default: functionName(toBuild: $0.property)]
-		}).union(children.flatMap(\.referencedFillNames))
+		let referencedFunctionNames = functionNamesReferenced(beneath: children, enclosingFunctionNames: enclosingFunctionNames)
 		let childNames = children.map { $0.name ?? functionName(toBuild: $0.property) }
 		let renamedIndices = children.indices.filter {
 			children[$0].declaresFunction && referencedFunctionNames.contains(childNames[$0])
@@ -3361,6 +3915,66 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				enclosingFunctionNames: childEnclosingFunctionNames,
 			)
 		}
+	}
+
+	/// The names of the functions enclosing the body that holds `children` that a scope in a child's subtree refers to by
+	/// name, so that no function the body declares may share them: the function each cycle-closing scope closes on, and
+	/// each fill of an enclosing seam call that a call inside it passes on.
+	/// - Parameter enclosingFunctionNames: The `BuilderFunctionNames.enclosingFunctionNames` of the scope whose body
+	///   holds `children`.
+	private static func functionNamesReferenced(
+		beneath children: [BuilderFunctionCandidate],
+		enclosingFunctionNames: [BuiltDeclaration: String],
+	) -> Set<String> {
+		var referencedDeclarations = Set<BuiltDeclaration>()
+		for child in children where !child.cycleClosedOnDeclarations.isEmpty {
+			referencedDeclarations.formUnion(child.cycleClosedOnDeclarations)
+		}
+		// A call inside a fill of its seam's call refers to the fill by name, as a cycle-closing scope refers to the
+		// function it closes on, so no builder function between the two may share that name either.
+		return Set(referencedDeclarations.map {
+			enclosingFunctionNames[$0, default: functionName(toBuild: $0.property)]
+		}).union(children.flatMap(\.referencedFillNames))
+	}
+
+	/// The names a `__safeDI_<label>_received` function this scope's body declares must not take (see
+	/// `ReceivedBuilderLoops`), since Swift resolves a name to the innermost declaration of it in scope and a local function
+	/// is in scope throughout the body that declares it: the builder functions the body declares, the enclosing functions
+	/// and fills a scope beneath refers to by name, which the function would hide, and the functions each member of a loop
+	/// declares in its own body, where its rebindings read the function and would resolve to them. A member's builder
+	/// function is named after its label (renamed only beside a cycle-closing scope beneath that refers to an enclosing
+	/// function of its name), and so is the `__safeDI_<label>_received` function of a loop in the member's body, so both
+	/// are counted for each of the member's children that declares a builder function. A seam call's fills and dispatchers
+	/// are declared in the body of the call's own builder function, which holds nothing else, so no loop is beside them.
+	/// - Parameters:
+	///   - childBuilderFunctionNames: The names each of `orderedChildren` was given, where the body renames any.
+	///   - loopMembers: The children on a loop of builders.
+	///   - enclosingFunctionNames: This scope's `BuilderFunctionNames.enclosingFunctionNames`.
+	nonisolated private func namesReceivedFunctionsAvoid(
+		orderedChildren: [OrderedChild],
+		childBuilderFunctionNames: [BuilderFunctionNames?]?,
+		loopMembers: [ScopeGenerator],
+		enclosingFunctionNames: [BuiltDeclaration: String],
+	) -> Set<String> {
+		var names = Self.functionNamesReferenced(
+			beneath: orderedChildren.compactMap(\.generator.builderFunctionCandidate),
+			enclosingFunctionNames: enclosingFunctionNames,
+		)
+		for (index, child) in orderedChildren.enumerated() {
+			if child.generator.declaresBuilderFunction, let property = child.generator.property {
+				names.insert((childBuilderFunctionNames?[index] ?? nil)?.functionName ?? Self.functionName(toBuild: property))
+			}
+		}
+		for member in loopMembers {
+			for child in member.propertiesToGenerate where child.declaresBuilderFunction {
+				if let property = child.property {
+					let functionName = Self.functionName(toBuild: property)
+					names.insert(functionName)
+					names.insert(ReservedName.receivedBuilderFunctionName(of: functionName))
+				}
+			}
+		}
+		return names
 	}
 
 	/// This scope as a child that a generated body holds, for `builderFunctionNames`, or `nil` for a
@@ -3508,19 +4122,36 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			     .sendableInstantiator,
 			     .sendableErasedInstantiator:
 				let forwardedProperties = forwardedProperties.sorted()
-				let forwardedPropertiesHaveLabels = forwardedProperties.count > 1
 				// The wrapper's closure spreads its argument; a fill, which leaves the wrapper to the seam, spreads its parameter.
 				let forwardedValue = isBuiltByFill ? Self.forwardedValueParameterName(forBuilding: property) : "$0"
 				let forwardedArguments = (
-					forwardedProperties.map {
-						if forwardedPropertiesHaveLabels {
-							"\($0.label.spelledAsArgumentLabel): \(forwardedValue).\($0.label)"
-						} else {
-							"\($0.label.spelledAsArgumentLabel): \(forwardedValue)"
-						}
-					} + cycleParameterArguments(unavailableProperties: unavailableProperties),
+					Self.forwardedArguments(of: forwardedProperties, spreading: forwardedValue)
+						+ cycleParameterArguments(unavailableProperties: unavailableProperties),
 				).joined(separator: ", ")
-				let generatedProperties = try await seamGuardLines + generateProperties(
+				// A member of a loop of builders first wraps again the functions of the members its tree receives inside the
+				// loop, each as the member's own declaration wraps it, so each receiver beneath reads a wrapper this call made.
+				// A cycle-closing scope declares no function: it refers to the enclosing one it closes on.
+				let functionName = if isPropertyCycle {
+					closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
+				} else {
+					builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
+				}
+				let rebindingLines = reboundProperties.compactMap { reboundProperty in
+					if reboundProperty == property, declaresCycleParameters {
+						// The function's own property is wrapped again with the function's own parameters: where a cycle-closing
+						// scope builds the tree again, they are that scope's, which is then the nearest declaration of each.
+						Self.indented(instantiatorDeclaration(
+							handing: functionName,
+							forwardedArguments: (
+								Self.forwardedArguments(of: forwardedProperties, spreading: "$0")
+									+ cycleParameters.map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.label)" },
+							).joined(separator: ", "),
+						))
+					} else {
+						builderFunctionNames.loopMemberDeclarations[reboundProperty].map(Self.indented)
+					}
+				}
+				let generatedProperties = try await rebindingLines + seamGuardLines + generateProperties(
 					codeGeneration: codeGeneration,
 					propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater),
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
@@ -3532,12 +4163,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					""
 				} else {
 					functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
-				}
-				// A cycle-closing scope declares no function: it refers to the enclosing one it closes on.
-				let functionName = if isPropertyCycle {
-					closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
-				} else {
-					builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
 				}
 				let functionDecorator = if buildsInSendableFunction {
 					"@Sendable "
@@ -3561,40 +4186,42 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					return "\(stageCallLines)\(functionDeclaration)return \(erasedToConcreteExistential ? "\(property.typeDescription.unwrapped.asInstantiatedType.asSource)(\(builderCall))" : builderCall)"
 				}
 
-				let typeDescription = property.typeDescription.asSource
-				// A type constructed by annotation spells its generic arguments only in `propertyDeclaration`.
-				let unwrappedTypeDescription = property
-					.typeDescription
-					.unwrapped
-					.spelledForConstruction
-				let instantiatedTypeDescription = property
-					.typeDescription
-					.unwrapped
-					.asInstantiatedType
-					.asSource
-				let propertyDeclaration = if !instantiable.declarationType.isExtension, typeDescription == unwrappedTypeDescription {
-					"let \(property.label)"
-				} else {
-					"let \(property.asSource)"
-				}
-				let instantiatorInstantiation = if forwardedArguments.isEmpty, !erasedToConcreteExistential {
-					"\(unwrappedTypeDescription)(\(functionName))"
-				} else if erasedToConcreteExistential {
-					"""
-					\(unwrappedTypeDescription) {
-					\(Self.standardIndent)\(instantiatedTypeDescription)(\(functionName)(\(forwardedArguments)))
+				if let receivedFunctionName = builderFunctionNames.receivedFunctionName {
+					// The function every wrapper of this member hands: it passes the parameters a lazy cycle needs what this
+					// scope's body binds, and a member of the same loop as a wrapper it makes, which no wrapper the body
+					// declares later can be.
+					var memberLines = [String]()
+					let cycleArguments = zip(cycleParameters, cycleParameterArguments(unavailableProperties: unavailableProperties)).map { parameter, argument in
+						// A scope declares each label once, so at most one of the two forms is a member.
+						let unwrappedProperty = parameter.property.asUnwrappedProperty
+						let memberDeclaration = builderFunctionNames.loopMemberDeclarations[unwrappedProperty] ?? builderFunctionNames.loopMemberDeclarations[unwrappedProperty.asOptionalProperty]
+						if let memberDeclaration {
+							memberLines.append(Self.indented(memberDeclaration))
+							return "\(parameter.property.label.spelledAsArgumentLabel): \(parameter.property.label)"
+						} else {
+							return argument
+						}
 					}
-					"""
-				} else {
-					"""
-					\(unwrappedTypeDescription) {
-					\(Self.standardIndent)\(functionName)(\(forwardedArguments))
+					let receivedFunctionParameters = forwardedProperties.isEmpty
+						? ""
+						: forwardedProperties.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
+					let callArguments = (forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments).joined(separator: ", ")
+					let receivedFunctionDecorator = buildsInSendableFunction || property.propertyType.isSendable ? "@Sendable " : ""
+					let receivedFunctionDeclaration = """
+					\(receivedFunctionDecorator)func \(receivedFunctionName)(\(receivedFunctionParameters)) -> \(concreteTypeName) {
+					\((memberLines + ["\(Self.standardIndent)\(memberLines.isEmpty ? "" : "return ")\(functionName)(\(callArguments))"]).joined(separator: "\n"))
 					}
-					"""
-				}
 
+					"""
+					return """
+					\(stageCallLines)\(functionDeclaration)\(receivedFunctionDeclaration)\(instantiatorDeclaration(
+						handing: receivedFunctionName,
+						forwardedArguments: Self.forwardedArguments(of: forwardedProperties, spreading: forwardedValue).joined(separator: ", "),
+					))
+					"""
+				}
 				return """
-				\(stageCallLines)\(functionDeclaration)\(propertyDeclaration) = \(instantiatorInstantiation)
+				\(stageCallLines)\(functionDeclaration)\(instantiatorDeclaration(handing: functionName, forwardedArguments: forwardedArguments))
 				"""
 			case .lazilyInstantiated,
 			     .sendableLazilyInstantiated:

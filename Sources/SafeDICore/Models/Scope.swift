@@ -415,7 +415,7 @@ final class Scope: Hashable {
 				generatorsToStart: &generatorsToStart,
 			)
 			previousPassGenerator = scopeGenerator
-		} while scopeGenerator.cycleParametersChangedInTree || scopeGenerator.fillStructBoundLabelsChangedInTree
+		} while scopeGenerator.cycleParametersChangedInTree || scopeGenerator.fillStructBoundLabelsChangedInTree || scopeGenerator.receivedBuilderLoopsChangedInTree
 		for generator in generatorsToStart ?? [] {
 			ScopeGeneratorUnderConstruction.startCodeGeneration(of: generator)
 		}
@@ -531,6 +531,7 @@ private struct ScopeGeneratorUnderConstruction {
 		declaredTypeNames: DeclaredTypeNames,
 		previousPassGenerator: ScopeGenerator?,
 		cycleParameterContexts: [ScopeGenerator.BuiltDeclaration: CycleParameterContext],
+		reboundProperties: Set<Property> = [],
 	) {
 		var childPropertyStack = propertyStack
 		var childConcreteTypeStack = concreteTypeStack
@@ -559,6 +560,11 @@ private struct ScopeGeneratorUnderConstruction {
 				childConcreteTypeStack.insert(concreteType, at: 0)
 			}
 			nearestDeclarations.build(property)
+			// A member of a loop of builders rebinds, at the top of its builder function, what its tree receives inside the
+			// loop, its own property among them, so the rebinding is the nearest declaration of each such label in the body.
+			for reboundProperty in reboundProperties.sorted() {
+				nearestDeclarations.replace(reboundProperty, providing: CycleParameter.forms(providedBy: reboundProperty))
+			}
 		}
 		// The declaration repeated is built for this scope's concrete type, as its entry records.
 		let closedOnDeclaration = closedOnDeclarationIndex.map {
@@ -664,6 +670,7 @@ private struct ScopeGeneratorUnderConstruction {
 		passedCycleParameters = closedOnContext?.parameters ?? ownCycleParameters
 		self.cycleParameterUnavailableProperties = cycleParameterUnavailableProperties
 		self.callSiteLazilyInstantiatedInstanceProperties = callSiteLazilyInstantiatedInstanceProperties
+		self.reboundProperties = reboundProperties
 		// The scopes beneath this one see what it declares as the nearest declaration of each label: a declaration of a
 		// label hides every one above it, as Swift's scoping does. At a root, nothing is built and nothing encloses its
 		// declarations but what the tree is given – a mock root's bindings name every form apart (see
@@ -870,6 +877,8 @@ private struct ScopeGeneratorUnderConstruction {
 			declaredTypeNames: declaredTypeNames,
 			previousPassGenerator: previousPassChildGenerator,
 			cycleParameterContexts: childCycleParameterContexts,
+			// The loops the pass before found among this scope's children.
+			reboundProperties: previousPassGenerator?.receivedBuilderLoops.reboundPropertiesByChildIndex[childGenerators.count] ?? [],
 		)
 	}
 
@@ -1070,6 +1079,9 @@ private struct ScopeGeneratorUnderConstruction {
 			builtCycleParameters: ownCycleParameters,
 			cycleParameterUnavailableProperties: cycleParameterUnavailableProperties,
 			callSiteLazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties,
+			reboundProperties: reboundProperties,
+			previousPassReceivedBuilderLoops: previousPassGenerator?.receivedBuilderLoops,
+			findsReceivedBuilderLoops: !forMockGeneration,
 		)
 		let scopeGenerator = if let fill {
 			ScopeGenerator(fill: fill.hole, key: fill.key, functionName: fill.functionName, boundLabels: fill.boundLabels, stageCalls: seamHoles.fillStageCalls(at: sitePath), child: builtGenerator)
@@ -1136,6 +1148,9 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The nearest declaration of each label, as the scopes this scope builds see it before they are built: those
 	/// enclosing this scope, with this scope's own declarations in place of every other of their labels.
 	private let childNearestDeclarations: NearestDeclarations
+	/// The properties this scope's builder function rebinds as a member of a loop of builders (see
+	/// `ScopeGenerator.ReceivedBuilderLoops`), which the pass before found.
+	private let reboundProperties: Set<Property>
 	/// The declared property each `onlyIfAvailable` alias this scope declares is bound from, where its fulfilling property
 	/// is available. An alias absent here is bound to `nil`.
 	private let aliasBindings: [Property: Property]

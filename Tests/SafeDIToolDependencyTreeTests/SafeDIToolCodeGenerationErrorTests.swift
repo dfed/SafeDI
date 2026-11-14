@@ -2119,8 +2119,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	mutating func run_throwsReceivedCycleErrorWithinTimeLimit_whenEveryReceivedInstantiatorPathFromEarlierSiblingsEndsInReceivedCycle() async {
 		// Each layer holds a Left and a Right service that both receive Instantiators of the two
 		// services of the next layer, and the last layer's services receive an Instantiator of Ping,
-		// which receives one of Pong, which receives one of Ping. Root instantiates every Instantiator,
-		// so the number of received paths from any layer to that cycle doubles with each layer.
+		// which receives Pong, which receives the Instantiator of Ping. Root instantiates every Instantiator,
+		// and Pong, so the number of received paths from any layer to that cycle doubles with each layer.
 		let layerCount = 40
 		let layerFiles = (0..<layerCount).flatMap { layer in
 			let receivedProperties = layer == layerCount - 1
@@ -2139,11 +2139,11 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				"""
 			}
 		}
-		let rootProperties = (0..<layerCount).flatMap { ["left\($0)Builder: Instantiator<Left\($0)>", "right\($0)Builder: Instantiator<Right\($0)>"] } + ["pingBuilder: Instantiator<Ping>", "pongBuilder: Instantiator<Pong>"]
+		let rootProperties = (0..<layerCount).flatMap { ["left\($0)Builder: Instantiator<Left\($0)>", "right\($0)Builder: Instantiator<Right\($0)>"] } + ["pingBuilder: Instantiator<Ping>", "pong: Pong"]
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `pingBuilder: Instantiator<Ping>` -> @Received `pongBuilder: Instantiator<Pong>` -> @Received `pingBuilder: Instantiator<Ping>`. `pingBuilder: Instantiator<Ping>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `pingBuilder: Instantiator<Ping>` -> @Received `pong: Pong` -> @Received `pingBuilder: Instantiator<Ping>`. `pingBuilder: Instantiator<Ping>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -2162,11 +2162,11 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					"""
 					@Instantiable
 					public struct Ping: Instantiable {
-					    public init(pongBuilder: Instantiator<Pong>) {
+					    public init(pong: Pong) {
 					        fatalError("SafeDI doesn't inspect the initializer body")
 					    }
 
-					    @Received let pongBuilder: Instantiator<Pong>
+					    @Received let pong: Pong
 					}
 					""",
 					"""
@@ -2194,8 +2194,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	mutating func run_throwsReceivedCycleErrorWithinTimeLimit_whenEveryReceivedAliasPathFromEarlierSiblingsEndsInReceivedCycleOfLazyCycles() async {
 		// Each layer holds a Left and a Right service that instantiate Instantiators of each other and
 		// receive aliases of the Instantiators of the two services of the next layer. The last layer's
-		// services receive an alias of Ping's Instantiator, and Ping and Pong receive aliases of each other's.
-		// Root declares the aliases of the last layer first.
+		// services receive an alias of Ping's Instantiator, Pong receives it too, and Ping receives an alias
+		// of Pong. Root declares the aliases of the last layer first.
 		let layerCount = 40
 		let layerFiles = (0..<layerCount).flatMap { layer in
 			let receivedProperties = layer == layerCount - 1
@@ -2219,7 +2219,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		func alias(_ label: String, of fulfillingLabel: String, type: String) -> (property: String, declaration: String) {
 			("\(label): \(type)", "@Received(fulfilledByDependencyNamed: \"\(fulfillingLabel)\", ofType: \(type).self) let \(label): \(type)")
 		}
-		let rootBuilders = (0..<layerCount).flatMap { ["left\($0)Builder: Instantiator<Left\($0)>", "right\($0)Builder: Instantiator<Right\($0)>"] } + ["pingBuilder: Instantiator<Ping>", "pongBuilder: Instantiator<Pong>"]
+		let rootBuilders = (0..<layerCount).flatMap { ["left\($0)Builder: Instantiator<Left\($0)>", "right\($0)Builder: Instantiator<Right\($0)>"] } + ["pingBuilder: Instantiator<Ping>", "pong: Pong"]
 		let rootAliases = (0..<layerCount).reversed().flatMap { layer in
 			["Left\(layer)", "Right\(layer)"].map { type in
 				let label = type.prefix(1).lowercased() + type.dropFirst()
@@ -2228,12 +2228,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 			+ [
 				alias("pingAlias", of: "pingBuilder", type: "Instantiator<Ping>"),
-				alias("pongAlias", of: "pongBuilder", type: "Instantiator<Pong>"),
+				alias("pongAlias", of: "pong", type: "Pong"),
 			]
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `pingBuilder: Instantiator<Ping>` -> @Received `pongAlias: Instantiator<Pong>` -> @Received `pingAlias: Instantiator<Ping>` -> @Received `pingBuilder: Instantiator<Ping>`. `pingBuilder: Instantiator<Ping>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `pingBuilder: Instantiator<Ping>` -> @Received `pongAlias: Pong` -> @Received `pingAlias: Instantiator<Ping>` -> @Received `pingBuilder: Instantiator<Ping>`. `pingBuilder: Instantiator<Ping>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -2253,11 +2253,11 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					"""
 					@Instantiable
 					public struct Ping: Instantiable {
-					    public init(pongAlias: Instantiator<Pong>) {
+					    public init(pongAlias: Pong) {
 					        fatalError("SafeDI doesn't inspect the initializer body")
 					    }
 
-					    @Received let pongAlias: Instantiator<Pong>
+					    @Received let pongAlias: Pong
 					}
 					""",
 					"""
@@ -2865,92 +2865,118 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndReceived_throwsError() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
+	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndReceived_rebindsInstantiatorInsideItsTree() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["C.swift"]):3:5: error: Dependency cycle: `Instantiator<A>` -> `Instantiator<B>` -> `Instantiator<C>` -> `Instantiator<A>`. `C` receives `aBuilder: Instantiator<A>` inside the tree that `aBuilder` builds. Declare `aBuilder: Instantiator<A>` on `C` as @Instantiated instead of @Received.
-				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
-				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
-				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+				    @Instantiated let aBuilder: Instantiator<A>
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    @Instantiated let aBuilder: Instantiator<A>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct A: Instantiable {
-					    @Instantiated let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct B: Instantiable {
-					    @Instantiated let cBuilder: Instantiator<C>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct C: Instantiable {
-					    @Received let aBuilder: Instantiator<A>
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				@Instantiable
+				public struct A: Instantiable {
+				    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+				    @Instantiated let bBuilder: Instantiator<B>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct B: Instantiable {
+				    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
+				    @Instantiated let cBuilder: Instantiator<C>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct C: Instantiable {
+				    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+				    @Received let aBuilder: Instantiator<A>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_aBuilder() -> A {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            func __safeDI_bBuilder() -> B {
+			                func __safeDI_cBuilder() -> C {
+			                    C(aBuilder: aBuilder)
+			                }
+			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			                return B(cBuilder: cBuilder)
+			            }
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return A(bBuilder: bBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        self.init(aBuilder: aBuilder)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndReceivedThroughAlias_throwsErrorNamingAlias() async {
-		// B, built inside `aBuilder`, receives `aBuilder` as `renamedBuilder`. B declares no `aBuilder`, so the
-		// error names the alias it would declare as @Instantiated instead.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndReceivedThroughAlias_rebindsInstantiatorForAliasInsideItsTree() async throws {
+		// B, built inside `aBuilder`, receives `aBuilder` as `renamedBuilder`: `aBuilder`'s function wraps itself again,
+		// and B's rename reads that wrapper.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency cycle: `Instantiator<A>` -> `Instantiator<B>` -> `Instantiator<A>`. `B` receives `aBuilder: Instantiator<A>` as `renamedBuilder: Instantiator<A>` inside the tree that `aBuilder` builds. Declare `renamedBuilder: Instantiator<A>` on `B` as @Instantiated instead of @Received(fulfilledByDependencyNamed:ofType:).
-				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
-				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+				    @Instantiated let aBuilder: Instantiator<A>
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public final class Root: Instantiable {
-					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
-					    @Instantiated let aBuilder: Instantiator<A>
-					}
-					""",
-					"""
-					@Instantiable
-					public final class A: Instantiable {
-					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
-					    @Instantiated let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public final class B: Instantiable {
-					    public init(renamedBuilder: Instantiator<A>) { self.renamedBuilder = renamedBuilder }
-					    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self) let renamedBuilder: Instantiator<A>
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				@Instantiable
+				public final class A: Instantiable {
+				    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+				    @Instantiated let bBuilder: Instantiator<B>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class B: Instantiable {
+				    public init(renamedBuilder: Instantiator<A>) { self.renamedBuilder = renamedBuilder }
+				    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self) let renamedBuilder: Instantiator<A>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_aBuilder() -> A {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            func __safeDI_bBuilder() -> B {
+			                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 4)
+			                let renamedBuilder: Instantiator<A> = aBuilder
+			                #sourceLocation()
+			                return B(renamedBuilder: renamedBuilder)
+			            }
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return A(bBuilder: bBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        self.init(aBuilder: aBuilder)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -3225,537 +3251,495 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsReceivedCycleError_whenSiblingInstantiatorsReceiveEachOther() async {
-		// Each Instantiator captures the other when it is created, so neither can be created first.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+	mutating func generate_rebindsEachSiblingInstantiator_whenSiblingInstantiatorsOfInstantiatedParentReceiveEachOther() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(parentBuilder: Instantiator<Parent>) { self.parentBuilder = parentBuilder }
+				    @Instantiated private let parentBuilder: Instantiator<Parent>
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
-					        self.aBuilder = aBuilder
-					        self.bBuilder = bBuilder
-					    }
+				@Instantiable
+				public struct Parent: Instantiable {
+				    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+				        self.aBuilder = aBuilder
+				        self.bBuilder = bBuilder
+				    }
 
-					    @Instantiated private let aBuilder: Instantiator<A>
-					    @Instantiated private let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct A: Instantiable {
-					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
-					    @Received private let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct B: Instantiable {
-					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
-					    @Received private let aBuilder: Instantiator<A>
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				    @Instantiated private let aBuilder: Instantiator<A>
+				    @Instantiated private let bBuilder: Instantiator<B>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct A: Instantiable {
+				    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+				    @Received private let bBuilder: Instantiator<B>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct B: Instantiable {
+				    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+				    @Received private let aBuilder: Instantiator<A>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_parentBuilder() -> Parent {
+			            func __safeDI_aBuilder() -> A {
+			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			                return A(bBuilder: bBuilder)
+			            }
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            func __safeDI_bBuilder() -> B {
+			                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			                return B(aBuilder: aBuilder)
+			            }
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return Parent(aBuilder: aBuilder, bBuilder: bBuilder)
+			        }
+			        let parentBuilder = Instantiator<Parent>(__safeDI_parentBuilder)
+			        self.init(parentBuilder: parentBuilder)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsReceivedCycleError_whenSiblingSendableInstantiatorsReceiveEachOther() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: SendableInstantiator<A>` -> @Received `bBuilder: SendableInstantiator<B>` -> @Received `aBuilder: SendableInstantiator<A>`. `aBuilder: SendableInstantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(aBuilder: SendableInstantiator<A>, bBuilder: SendableInstantiator<B>) {
-					        self.aBuilder = aBuilder
-					        self.bBuilder = bBuilder
-					    }
-
-					    @Instantiated private let aBuilder: SendableInstantiator<A>
-					    @Instantiated private let bBuilder: SendableInstantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct A: Instantiable {
-					    public init(bBuilder: SendableInstantiator<B>) { self.bBuilder = bBuilder }
-					    @Received private let bBuilder: SendableInstantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct B: Instantiable {
-					    public init(aBuilder: SendableInstantiator<A>) { self.aBuilder = aBuilder }
-					    @Received private let aBuilder: SendableInstantiator<A>
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsReceivedCycleError_whenThreeSiblingInstantiatorsReceiveEachOtherInRing() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["C.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `cBuilder: Instantiator<C>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>, cBuilder: Instantiator<C>) {
-					        self.aBuilder = aBuilder
-					        self.bBuilder = bBuilder
-					        self.cBuilder = cBuilder
-					    }
-
-					    @Instantiated private let aBuilder: Instantiator<A>
-					    @Instantiated private let bBuilder: Instantiator<B>
-					    @Instantiated private let cBuilder: Instantiator<C>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct A: Instantiable {
-					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
-					    @Received private let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct B: Instantiable {
-					    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
-					    @Received private let cBuilder: Instantiator<C>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct C: Instantiable {
-					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
-					    @Received private let aBuilder: Instantiator<A>
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsReceivedCycleError_whenSiblingInstantiatorsOfLazilyBuiltParentReceiveEachOther() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(parentBuilder: Instantiator<Parent>) { self.parentBuilder = parentBuilder }
-					    @Instantiated private let parentBuilder: Instantiator<Parent>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct Parent: Instantiable {
-					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
-					        self.aBuilder = aBuilder
-					        self.bBuilder = bBuilder
-					    }
-
-					    @Instantiated private let aBuilder: Instantiator<A>
-					    @Instantiated private let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct A: Instantiable {
-					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
-					    @Received private let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct B: Instantiable {
-					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
-					    @Received private let aBuilder: Instantiator<A>
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsReceivedCycleErrorAtDeepestReceiver_whenSiblingInstantiatorIsReceivedBelowOtherSiblingsChildren() async {
+	mutating func generate_rebindsSiblingInstantiatorForDeepestReceiver_whenSiblingInstantiatorIsReceivedBelowOtherSiblingsChildren() async throws {
 		// Only `D`, below `B`, receives `aBuilder`; `B` and `C` receive nothing.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["D.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+				        self.aBuilder = aBuilder
+				        self.bBuilder = bBuilder
+				    }
+
+				    @Instantiated private let aBuilder: Instantiator<A>
+				    @Instantiated private let bBuilder: Instantiator<B>
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
-					        self.aBuilder = aBuilder
-					        self.bBuilder = bBuilder
-					    }
+				@Instantiable
+				public struct A: Instantiable {
+				    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+				    @Received private let bBuilder: Instantiator<B>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct B: Instantiable {
+				    public init(c: C, d: D) {
+				        self.c = c
+				        self.d = d
+				    }
 
-					    @Instantiated private let aBuilder: Instantiator<A>
-					    @Instantiated private let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct A: Instantiable {
-					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
-					    @Received private let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct B: Instantiable {
-					    public init(c: C, d: D) {
-					        self.c = c
-					        self.d = d
-					    }
-
-					    @Instantiated private let c: C
-					    @Instantiated private let d: D
-					}
-					""",
-					"""
-					@Instantiable
-					public struct C: Instantiable {
-					    public init() {}
-					}
-					""",
-					"""
-					@Instantiable
-					public struct D: Instantiable {
-					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
-					    @Received private let aBuilder: Instantiator<A>
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				    @Instantiated private let c: C
+				    @Instantiated private let d: D
+				}
+				""",
+				"""
+				@Instantiable
+				public struct C: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public struct D: Instantiable {
+				    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+				    @Received private let aBuilder: Instantiator<A>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return A(bBuilder: bBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            let c = C()
+			            let d = D(aBuilder: aBuilder)
+			            return B(c: c, d: d)
+			        }
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsReceivedCycleErrorAtAlias_whenSiblingInstantiatorIsReceivedUnderAnotherName() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
+	mutating func generate_rebindsSiblingInstantiatorForRename_whenSiblingInstantiatorIsReceivedUnderAnotherName() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
-					        self.aBuilder = aBuilder
-					        self.bBuilder = bBuilder
-					    }
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+				        self.aBuilder = aBuilder
+				        self.bBuilder = bBuilder
+				    }
 
-					    @Instantiated private let aBuilder: Instantiator<A>
-					    @Instantiated private let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct A: Instantiable {
-					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
-					    @Received private let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct B: Instantiable {
-					    public init(renamedABuilder: Instantiator<A>) { self.renamedABuilder = renamedABuilder }
-					    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self) private let renamedABuilder: Instantiator<A>
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				    @Instantiated private let aBuilder: Instantiator<A>
+				    @Instantiated private let bBuilder: Instantiator<B>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct A: Instantiable {
+				    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+				    @Received private let bBuilder: Instantiator<B>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct B: Instantiable {
+				    public init(renamedABuilder: Instantiator<A>) { self.renamedABuilder = renamedABuilder }
+				    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self) private let renamedABuilder: Instantiator<A>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return A(bBuilder: bBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 4)
+			            let renamedABuilder: Instantiator<A> = aBuilder
+			            #sourceLocation()
+			            return B(renamedABuilder: renamedABuilder)
+			        }
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsReceivedCycleErrorAtDeepestReceiver_whenLazyCycleWithoutReceiverPrecedesIt() async {
+	mutating func generate_rebindsSiblingInstantiatorForDeepestReceiver_whenLazyCycleWithoutReceiverPrecedesIt() async throws {
 		// `C` instantiates an Instantiator of itself, so the search for the receiver of `aBuilder`
 		// below `B` must leave that cycle to reach `D`.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["D.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+				        self.aBuilder = aBuilder
+				        self.bBuilder = bBuilder
+				    }
+
+				    @Instantiated private let aBuilder: Instantiator<A>
+				    @Instantiated private let bBuilder: Instantiator<B>
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
-					        self.aBuilder = aBuilder
-					        self.bBuilder = bBuilder
-					    }
+				@Instantiable
+				public struct A: Instantiable {
+				    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+				    @Received private let bBuilder: Instantiator<B>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct B: Instantiable {
+				    public init(cBuilder: Instantiator<C>, d: D) {
+				        self.cBuilder = cBuilder
+				        self.d = d
+				    }
 
-					    @Instantiated private let aBuilder: Instantiator<A>
-					    @Instantiated private let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct A: Instantiable {
-					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
-					    @Received private let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct B: Instantiable {
-					    public init(cBuilder: Instantiator<C>, d: D) {
-					        self.cBuilder = cBuilder
-					        self.d = d
-					    }
-
-					    @Instantiated private let cBuilder: Instantiator<C>
-					    @Instantiated private let d: D
-					}
-					""",
-					"""
-					@Instantiable
-					public struct C: Instantiable {
-					    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
-					    @Instantiated private let cBuilder: Instantiator<C>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct D: Instantiable {
-					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
-					    @Received private let aBuilder: Instantiator<A>
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				    @Instantiated private let cBuilder: Instantiator<C>
+				    @Instantiated private let d: D
+				}
+				""",
+				"""
+				@Instantiable
+				public struct C: Instantiable {
+				    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
+				    @Instantiated private let cBuilder: Instantiator<C>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct D: Instantiable {
+				    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+				    @Received private let aBuilder: Instantiator<A>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return A(bBuilder: bBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            func __safeDI_cBuilder() -> C {
+			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			                return C(cBuilder: cBuilder)
+			            }
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            let d = D(aBuilder: aBuilder)
+			            return B(cBuilder: cBuilder, d: d)
+			        }
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsReceivedCycleErrorAtUnshadowedReceiver_whenEarlierReceiverOfSiblingInstantiatorIsFulfilledByForwardedProperty() async {
+	mutating func generate_rebindsSiblingInstantiatorForUnshadowedReceiver_whenEarlierReceiverOfSiblingInstantiatorIsFulfilledByForwardedProperty() async throws {
 		// `E` receives the `aBuilder` that `C` forwards, so only `D` receives Root's `aBuilder`.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["D.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+				        self.aBuilder = aBuilder
+				        self.bBuilder = bBuilder
+				    }
+
+				    @Instantiated private let aBuilder: Instantiator<A>
+				    @Instantiated private let bBuilder: Instantiator<B>
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
-					        self.aBuilder = aBuilder
-					        self.bBuilder = bBuilder
-					    }
+				@Instantiable
+				public struct A: Instantiable {
+				    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+				    @Received private let bBuilder: Instantiator<B>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct B: Instantiable {
+				    public init(cBuilder: Instantiator<C>, d: D) {
+				        self.cBuilder = cBuilder
+				        self.d = d
+				    }
 
-					    @Instantiated private let aBuilder: Instantiator<A>
-					    @Instantiated private let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct A: Instantiable {
-					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
-					    @Received private let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct B: Instantiable {
-					    public init(cBuilder: Instantiator<C>, d: D) {
-					        self.cBuilder = cBuilder
-					        self.d = d
-					    }
+				    @Instantiated private let cBuilder: Instantiator<C>
+				    @Instantiated private let d: D
+				}
+				""",
+				"""
+				@Instantiable
+				public struct C: Instantiable {
+				    public init(aBuilder: Instantiator<A>, e: E) {
+				        self.aBuilder = aBuilder
+				        self.e = e
+				    }
 
-					    @Instantiated private let cBuilder: Instantiator<C>
-					    @Instantiated private let d: D
-					}
-					""",
-					"""
-					@Instantiable
-					public struct C: Instantiable {
-					    public init(aBuilder: Instantiator<A>, e: E) {
-					        self.aBuilder = aBuilder
-					        self.e = e
-					    }
-
-					    @Forwarded private let aBuilder: Instantiator<A>
-					    @Instantiated private let e: E
-					}
-					""",
-					"""
-					@Instantiable
-					public struct D: Instantiable {
-					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
-					    @Received private let aBuilder: Instantiator<A>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct E: Instantiable {
-					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
-					    @Received private let aBuilder: Instantiator<A>
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				    @Forwarded private let aBuilder: Instantiator<A>
+				    @Instantiated private let e: E
+				}
+				""",
+				"""
+				@Instantiable
+				public struct D: Instantiable {
+				    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+				    @Received private let aBuilder: Instantiator<A>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct E: Instantiable {
+				    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+				    @Received private let aBuilder: Instantiator<A>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return A(bBuilder: bBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            func __safeDI_cBuilder(aBuilder: Instantiator<A>) -> C {
+			                let e = E(aBuilder: aBuilder)
+			                return C(aBuilder: aBuilder, e: e)
+			            }
+			            let cBuilder = Instantiator<C> {
+			                __safeDI_cBuilder(aBuilder: $0)
+			            }
+			            let d = D(aBuilder: aBuilder)
+			            return B(cBuilder: cBuilder, d: d)
+			        }
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsReceivedCycleError_whenSiblingInstantiatorReceivesAliasOfSiblingThatReceivesIt() async {
-		// `aBuilder` captures `renamedBBuilder`, which is assigned from `bBuilder`, which captures `aBuilder`.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+	mutating func generate_rebindsRenameOfSibling_whenSiblingInstantiatorReceivesRenameOfSiblingThatReceivesIt() async throws {
+		// `aBuilder`'s tree receives `renamedBBuilder`, the root's rename of `bBuilder`, whose tree receives `aBuilder`:
+		// `aBuilder`'s function binds the rename to a wrapper of `bBuilder`'s function.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `renamedBBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(renamedBBuilder: Instantiator<B>, aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
-					        self.renamedBBuilder = renamedBBuilder
-					        self.aBuilder = aBuilder
-					        self.bBuilder = bBuilder
-					    }
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(renamedBBuilder: Instantiator<B>, aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+				        self.renamedBBuilder = renamedBBuilder
+				        self.aBuilder = aBuilder
+				        self.bBuilder = bBuilder
+				    }
 
-					    @Received(fulfilledByDependencyNamed: "bBuilder", ofType: Instantiator<B>.self) private let renamedBBuilder: Instantiator<B>
-					    @Instantiated private let aBuilder: Instantiator<A>
-					    @Instantiated private let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct A: Instantiable {
-					    public init(renamedBBuilder: Instantiator<B>) { self.renamedBBuilder = renamedBBuilder }
-					    @Received private let renamedBBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct B: Instantiable {
-					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
-					    @Received private let aBuilder: Instantiator<A>
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				    @Received(fulfilledByDependencyNamed: "bBuilder", ofType: Instantiator<B>.self) private let renamedBBuilder: Instantiator<B>
+				    @Instantiated private let aBuilder: Instantiator<A>
+				    @Instantiated private let bBuilder: Instantiator<B>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct A: Instantiable {
+				    public init(renamedBBuilder: Instantiator<B>) { self.renamedBBuilder = renamedBBuilder }
+				    @Received private let renamedBBuilder: Instantiator<B>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct B: Instantiable {
+				    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+				    @Received private let aBuilder: Instantiator<A>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_aBuilder() -> A {
+			            let renamedBBuilder: Instantiator<B> = Instantiator<B>(__safeDI_bBuilder)
+			            return A(renamedBBuilder: renamedBBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return B(aBuilder: aBuilder)
+			        }
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 9)
+			        let renamedBBuilder: Instantiator<B> = bBuilder
+			        #sourceLocation()
+			        self.init(renamedBBuilder: renamedBBuilder, aBuilder: aBuilder, bBuilder: bBuilder)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsReceivedCycleError_whenInstantiatorReceivesAliasOfItselfDeclaredOnRoot() async {
-		// `aBuilder` captures `renamedABuilder`, which is assigned from `aBuilder`.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+	mutating func generate_rebindsRootsRenameInsideInstantiatorsFunction_whenInstantiatorReceivesRenameOfItselfDeclaredOnRoot() async throws {
+		// `aBuilder`'s tree receives `renamedABuilder`, the root's rename of `aBuilder`, which `aBuilder`'s function binds
+		// to a wrapper it makes again of itself.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["A.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `renamedABuilder: Instantiator<A>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(aBuilder: Instantiator<A>, renamedABuilder: Instantiator<A>) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(aBuilder: Instantiator<A>, renamedABuilder: Instantiator<A>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated private let aBuilder: Instantiator<A>
-					    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self) private let renamedABuilder: Instantiator<A>
-					}
-					""",
-					"""
-					@Instantiable
-					public final class A: Instantiable {
-					    public init(renamedABuilder: Instantiator<A>) { self.renamedABuilder = renamedABuilder }
-					    @Received private let renamedABuilder: Instantiator<A>
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				    @Instantiated private let aBuilder: Instantiator<A>
+				    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self) private let renamedABuilder: Instantiator<A>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class A: Instantiable {
+				    public init(renamedABuilder: Instantiator<A>) { self.renamedABuilder = renamedABuilder }
+				    @Received private let renamedABuilder: Instantiator<A>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_aBuilder() -> A {
+			            let renamedABuilder: Instantiator<A> = Instantiator<A>(__safeDI_aBuilder)
+			            return A(renamedABuilder: renamedABuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 8)
+			        let renamedABuilder: Instantiator<A> = aBuilder
+			        #sourceLocation()
+			        self.init(aBuilder: aBuilder, renamedABuilder: renamedABuilder)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -3812,60 +3796,93 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsReceivedCycleError_whenSiblingInstantiatorIsReceivedInsideLazyCycleOfEarlierSibling() async {
-		// `bBuilder` captures `qBuilder`, which `A` receives below `B`'s `innerABuilder`, and `qBuilder`
-		// captures `bBuilder`. `A` and `B` instantiate one another lazily, and `aBuilder` precedes them.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+	mutating func generate_rebindsSiblingInstantiator_whenSiblingInstantiatorIsReceivedInsideLazyCycleOfEarlierSibling() async throws {
+		// `bBuilder`'s tree receives `qBuilder`, which `A` receives below `B`'s `innerABuilder`, and `qBuilder`'s tree
+		// receives `bBuilder`: each one's function wraps the other again. `A` and `B` instantiate one another lazily.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["A.swift"]):8:5: error: Dependency cycle: @Instantiated `qBuilder: Instantiator<Q>` -> @Received `bBuilder: Instantiator<B>` -> @Received `qBuilder: Instantiator<Q>`. `qBuilder: Instantiator<Q>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>, qBuilder: Instantiator<Q>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated private let aBuilder: Instantiator<A>
+				    @Instantiated private let bBuilder: Instantiator<B>
+				    @Instantiated private let qBuilder: Instantiator<Q>
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>, qBuilder: Instantiator<Q>) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				@Instantiable
+				public struct A: Instantiable {
+				    public init(innerBBuilder: Instantiator<B>, qBuilder: Instantiator<Q>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated private let aBuilder: Instantiator<A>
-					    @Instantiated private let bBuilder: Instantiator<B>
-					    @Instantiated private let qBuilder: Instantiator<Q>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct A: Instantiable {
-					    public init(innerBBuilder: Instantiator<B>, qBuilder: Instantiator<Q>) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
-
-					    @Instantiated private let innerBBuilder: Instantiator<B>
-					    @Received private let qBuilder: Instantiator<Q>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct B: Instantiable {
-					    public init(innerABuilder: Instantiator<A>) { self.innerABuilder = innerABuilder }
-					    @Instantiated private let innerABuilder: Instantiator<A>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct Q: Instantiable {
-					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
-					    @Received private let bBuilder: Instantiator<B>
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				    @Instantiated private let innerBBuilder: Instantiator<B>
+				    @Received private let qBuilder: Instantiator<Q>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct B: Instantiable {
+				    public init(innerABuilder: Instantiator<A>) { self.innerABuilder = innerABuilder }
+				    @Instantiated private let innerABuilder: Instantiator<A>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Q: Instantiable {
+				    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+				    @Received private let bBuilder: Instantiator<B>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_bBuilder() -> B {
+			            let qBuilder = Instantiator<Q>(__safeDI_qBuilder)
+			            func __safeDI_innerABuilder() -> A {
+			                func __safeDI_innerBBuilder() -> B {
+			                    let innerABuilder = Instantiator<A>(__safeDI_innerABuilder)
+			                    return B(innerABuilder: innerABuilder)
+			                }
+			                let innerBBuilder = Instantiator<B>(__safeDI_innerBBuilder)
+			                return A(innerBBuilder: innerBBuilder, qBuilder: qBuilder)
+			            }
+			            let innerABuilder = Instantiator<A>(__safeDI_innerABuilder)
+			            return B(innerABuilder: innerABuilder)
+			        }
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        func __safeDI_qBuilder() -> Q {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return Q(bBuilder: bBuilder)
+			        }
+			        let qBuilder = Instantiator<Q>(__safeDI_qBuilder)
+			        func __safeDI_aBuilder() -> A {
+			            func __safeDI_innerBBuilder() -> B {
+			                func __safeDI_innerABuilder() -> A {
+			                    let innerBBuilder = Instantiator<B>(__safeDI_innerBBuilder)
+			                    return A(innerBBuilder: innerBBuilder, qBuilder: qBuilder)
+			                }
+			                let innerABuilder = Instantiator<A>(__safeDI_innerABuilder)
+			                return B(innerABuilder: innerABuilder)
+			            }
+			            let innerBBuilder = Instantiator<B>(__safeDI_innerBBuilder)
+			            return A(innerBBuilder: innerBBuilder, qBuilder: qBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        self.init(aBuilder: aBuilder, bBuilder: bBuilder, qBuilder: qBuilder)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -5693,12 +5710,14 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithRequiredOptionalReceiveOfInstantiatorThatBuildsTheReceiver_throwsError() async {
-		// C, built by `cBuilder`, requires `cBuilder: Instantiator<C>?`. The only `cBuilder` is
-		// the one still building C, as for a receive of `cBuilder: Instantiator<C>`.
+		// C, built by `cBuilder`, requires `cBuilder: Instantiator<C>?`. The `cBuilder` building C is rebound inside its
+		// builder function, so C can receive it, but a required optional receive of a non-optional declaration is the
+		// error it is anywhere else.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):4:5: error: Dependency cycle: @Instantiated `cBuilder: Instantiator<C>` -> @Received `cBuilder: Instantiator<C>?`. `cBuilder: Instantiator<C>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["C.swift"]):4:5: error: @Received property `cBuilder: Instantiator<C>?` is not @Instantiated or @Forwarded in chain: Root -> C. The non-optional `cBuilder: Instantiator<C>` is available in chain. Did you mean to decorate this property with `@Received(onlyIfAvailable: true)`?
+				\(fixtures["C.swift"]):4:5-4:14: fixit: @Received(onlyIfAvailable: true)
 				"""
 			},
 		) {
@@ -5728,14 +5747,14 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithRequiredOptionalReceiveOfInstantiatorStillBuildingAnAncestor_throwsError() async {
-		// D, built inside `cBuilder`, requires `cBuilder: Instantiator<C>?`. The only `cBuilder`
-		// is still being built, as for a receive of `cBuilder: Instantiator<C>`.
+		// D, built inside `cBuilder`, requires `cBuilder: Instantiator<C>?`. The `cBuilder` still being built is rebound
+		// inside its builder function, so D can receive it, but a required optional receive of a non-optional declaration
+		// is the error it is anywhere else.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["D.swift"]):4:5: error: Dependency cycle: `Instantiator<C>` -> `D` -> `Instantiator<C>?`. `D` receives `cBuilder: Instantiator<C>` inside the tree that `cBuilder` builds. Declare `cBuilder: Instantiator<C>` on `D` as @Instantiated instead of @Received.
-				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
-				\(fixtures["D.swift"]):1:1: note: `D` is part of the cycle
+				\(fixtures["D.swift"]):4:5: error: @Received property `cBuilder: Instantiator<C>?` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<C> -> D. The non-optional `cBuilder: Instantiator<C>` is available in chain. Did you mean to decorate this property with `@Received(onlyIfAvailable: true)`?
+				\(fixtures["D.swift"]):4:5-4:14: fixit: @Received(onlyIfAvailable: true)
 				"""
 			},
 		) {
@@ -6097,56 +6116,73 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithRequiredReceiveOfSecondOnlyIfAvailableAliasOfSiblingInstantiatorThatReceivesTheReceiversInstantiator_throwsError() async {
+	mutating func run_onCodeWithRequiredReceiveOfSecondOnlyIfAvailableAliasOfSiblingInstantiatorThatReceivesTheReceiversInstantiator_bindsAliasesToRebinding() async throws {
 		// Grand requires `maybe`, Child's second `onlyIfAvailable` alias of `xBuilder` after `other`, which nothing
-		// requires, so `xBuilder` must be built before `childBuilder`, which captures what its tree receives when it is
-		// created. But X requires `childBuilder`. No received walk follows an instantiator, so the siblings are found
-		// requiring each other.
-		await assertThrowsError(
-			diagnostics: { fixtures in
+		// requires, and X requires `childBuilder`: two instantiators that require each other, so each one's function wraps
+		// the other again, and both aliases read the wrapper.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["Grand.swift"]):4:5: error: Dependency cycle: @Instantiated `xBuilder: Instantiator<X>` -> @Received `childBuilder: Instantiator<Child>` -> @Received `xBuilder: Instantiator<X>`. `xBuilder: Instantiator<X>` is received while it is still being instantiated. `maybe: Instantiator<X>?` renames `xBuilder: Instantiator<X>` only if available, so a type that receives `maybe` without `onlyIfAvailable` must be built after `xBuilder: Instantiator<X>`. Receive `maybe` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `xBuilder: Instantiator<X>` cannot be built first.
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(xBuilder: Instantiator<X>, childBuilder: Instantiator<Child>) { self.xBuilder = xBuilder; self.childBuilder = childBuilder }
+				    @Instantiated let xBuilder: Instantiator<X>
+				    @Instantiated let childBuilder: Instantiator<Child>
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public final class Root: Instantiable {
-					    public init(xBuilder: Instantiator<X>, childBuilder: Instantiator<Child>) { self.xBuilder = xBuilder; self.childBuilder = childBuilder }
-					    @Instantiated let xBuilder: Instantiator<X>
-					    @Instantiated let childBuilder: Instantiator<Child>
-					}
-					""",
-					"""
-					@Instantiable
-					public final class X: Instantiable {
-					    public init(childBuilder: Instantiator<Child>) { self.childBuilder = childBuilder }
-					    @Received let childBuilder: Instantiator<Child>
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Child: Instantiable {
-					    public init(other: Instantiator<X>?, maybe: Instantiator<X>?, grand: Grand) { self.other = other; self.maybe = maybe; self.grand = grand }
-					    @Received(fulfilledByDependencyNamed: "xBuilder", ofType: Instantiator<X>.self, onlyIfAvailable: true) let other: Instantiator<X>?
-					    @Received(fulfilledByDependencyNamed: "xBuilder", ofType: Instantiator<X>.self, onlyIfAvailable: true) let maybe: Instantiator<X>?
-					    @Instantiated let grand: Grand
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Grand: Instantiable {
-					    public init(maybe: Instantiator<X>?) { self.maybe = maybe }
-					    @Received let maybe: Instantiator<X>?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				@Instantiable
+				public final class X: Instantiable {
+				    public init(childBuilder: Instantiator<Child>) { self.childBuilder = childBuilder }
+				    @Received let childBuilder: Instantiator<Child>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(other: Instantiator<X>?, maybe: Instantiator<X>?, grand: Grand) { self.other = other; self.maybe = maybe; self.grand = grand }
+				    @Received(fulfilledByDependencyNamed: "xBuilder", ofType: Instantiator<X>.self, onlyIfAvailable: true) let other: Instantiator<X>?
+				    @Received(fulfilledByDependencyNamed: "xBuilder", ofType: Instantiator<X>.self, onlyIfAvailable: true) let maybe: Instantiator<X>?
+				    @Instantiated let grand: Grand
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Grand: Instantiable {
+				    public init(maybe: Instantiator<X>?) { self.maybe = maybe }
+				    @Received let maybe: Instantiator<X>?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_xBuilder() -> X {
+			            let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
+			            return X(childBuilder: childBuilder)
+			        }
+			        let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+			        func __safeDI_childBuilder() -> Child {
+			            let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+			            let other: Instantiator<X>? = xBuilder
+			            #sourceLocation()
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 5)
+			            let maybe: Instantiator<X>? = xBuilder
+			            #sourceLocation()
+			            let grand = Grand(maybe: maybe)
+			            return Child(other: other, maybe: maybe, grand: grand)
+			        }
+			        let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
+			        self.init(xBuilder: xBuilder, childBuilder: childBuilder)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -6196,9 +6232,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasInsideItsInstantiatorFulfillingProperty_passesNil() async throws {
-		// Grand requires `maybeBuilder`, which Child declares as `nil`: Child is built inside `greeterBuilder`, the
-		// Instantiator it renames, which is still being built.
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasInsideItsInstantiatorFulfillingProperty_bindsAliasToRebinding() async throws {
+		// Grand requires `maybeBuilder`, Child's `onlyIfAvailable` rename of `greeterBuilder`, the instantiator Child is built
+		// inside: `greeterBuilder`'s function wraps itself again, and the rename reads that wrapper.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -6236,17 +6272,14 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		)
 
 		#expect(output.generatedFiles == [
-			"Root+SafeDI.swift": """
-			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-			// Any modifications made to this file will be overwritten on subsequent builds.
-			// Please refrain from editing this file directly.
-
+			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_greeterBuilder() -> DefaultGreeter {
+			            let greeterBuilder = Instantiator<DefaultGreeter>(__safeDI_greeterBuilder)
 			            func __safeDI_child() -> Child {
 			                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-			                let maybeBuilder: Instantiator<DefaultGreeter>? = nil
+			                let maybeBuilder: Instantiator<DefaultGreeter>? = greeterBuilder
 			                #sourceLocation()
 			                let grand = Grand(maybeBuilder: maybeBuilder)
 			                return Child(maybeBuilder: maybeBuilder, grand: grand)
@@ -6290,41 +6323,6 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public final class T: Instantiable, TProtocol {
 					    public init(tProtocol: TProtocol?) { self.tProtocol = tProtocol }
 					    @Received let tProtocol: TProtocol?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithRequiredReceiveOfRootsOnlyIfAvailableAliasInsideItsInstantiatorFulfillingProperty_throwsError() async {
-		// T requires `maybeBuilder`, which Root can create only once `tBuilder`, the Instantiator T is built by, exists.
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["T.swift"]):4:5: error: Dependency cycle: @Instantiated `tBuilder: Instantiator<T>` -> @Received `maybeBuilder: Instantiator<T>?` -> @Received `tBuilder: Instantiator<T>`. `tBuilder: Instantiator<T>` is received while it is still being instantiated. `maybeBuilder: Instantiator<T>?` renames `tBuilder: Instantiator<T>` only if available, so a type that receives `maybeBuilder` without `onlyIfAvailable` must be built after `tBuilder: Instantiator<T>`. Receive `maybeBuilder` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tBuilder: Instantiator<T>` cannot be built first.
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public final class Root: Instantiable {
-					    public init(maybeBuilder: Instantiator<T>?, tBuilder: Instantiator<T>) { self.maybeBuilder = maybeBuilder; self.tBuilder = tBuilder }
-					    @Received(fulfilledByDependencyNamed: "tBuilder", ofType: Instantiator<T>.self, onlyIfAvailable: true) let maybeBuilder: Instantiator<T>?
-					    @Instantiated let tBuilder: Instantiator<T>
-					}
-					""",
-					"""
-					@Instantiable
-					public final class T: Instantiable {
-					    public init(maybeBuilder: Instantiator<T>?) { self.maybeBuilder = maybeBuilder }
-					    @Received let maybeBuilder: Instantiator<T>?
 					}
 					""",
 				],

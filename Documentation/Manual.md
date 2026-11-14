@@ -480,7 +480,9 @@ An `Instantiator` also lets types create one another, which forms a dependency c
 
 Inside a cycle, a `@Received` property still takes the nearest declaration above it. Say `Screen` receives `session` and instantiates an `Instantiator<Step>`, and `Step` instantiates its own `session` and an `Instantiator<Screen>`. A `Screen` that `Step` builds receives `Step`’s `session`.
 
-A `@Received` property cannot close a cycle. If `Child` receives `parent`, and that `parent` is the `Parent` still being built above it, SafeDI reports an error. Declare `@Received(onlyIfAvailable: true) let parent: Parent?` instead, and `Child` gets `nil` for it, as [Conditionally receiving dependencies](#conditionally-receiving-dependencies) describes.
+A type can also receive an instantiator declared above it, of any of the four kinds, even when that instantiator builds the receiver or a type above it. So two screens can open each other without either instantiating the other: their parent declares `@Instantiated let profileBuilder: Instantiator<ProfileView>` and `@Instantiated let followersBuilder: Instantiator<FollowersView>`, and each view receives the other’s builder. A screen can receive the builder of a router that builds it, too. Each `instantiate()` builds in the scope that declares the instantiator, with that scope’s values. Each type that receives an instantiator this way is handed an instantiator of its own, so two receivers do not hold the same object; each builds the same thing. A `Sendable` twin can receive another `Sendable` twin this way, but not an instantiator that is not `Sendable`, as [`Sendable` wrappers](#sendable-wrappers) describes.
+
+A received property that is not an instantiator cannot close a cycle, a `LazilyInstantiated` one included. If `Child` receives `parent`, and that `parent` is the `Parent` still being built above it, SafeDI reports an error. So does a router built as a value that receives `screenBuilder`, when the `Screen` it builds receives that router. Receive an instantiator of the property instead, or declare `@Received(onlyIfAvailable: true) let parent: Parent?`, and `Child` gets `nil` for it, as [Conditionally receiving dependencies](#conditionally-receiving-dependencies) describes.
 
 In a generated mock, one dependency in each cycle has no `SafeDIOverrides` entry, and neither does anything built through it.
 
@@ -642,12 +644,14 @@ public struct Parent: Instantiable {
 }
 ```
 
-`Parent` builds `a` first, so a type under `B` that receives `a` gets `Parent`’s `a`. A receiver gets `nil` for `a` in two cases:
+`Parent` builds `a` first, so a type under `B` that receives `a` gets `Parent`’s `a`. Where `a` is not an instantiator, a receiver gets `nil` for it in two cases:
 
 - **`a` is still being built.** The receiver is `a` itself, or a type `a` builds: one it instantiates, or one it builds as an `Instantiator`.
 - **`a` and `b` receive each other.** One of them must be built first, and it gets `nil` for the other:
   - If `A` requires `b`, and `B` receives `a` only if available, SafeDI builds `b` first, and `b` gets `nil` for `a`.
   - If both receive each other only if available, SafeDI builds the property declared later, `b`, first, and `b` gets `nil` for `a`.
+
+An instantiator received only if available is `nil` only where no instantiator of that name is declared above the receiver, or where a property that is not an instantiator is waiting in the same circle. A type the instantiator builds, and an instantiator beside it that it receives and that receives it back, get the instantiator, as [Dependency cycles](#dependency-cycles) describes.
 
 A renamed dependency follows the same rules; see [Renaming and retyping dependencies](#renaming-and-retyping-dependencies).
 
@@ -1995,6 +1999,8 @@ final class AppFeedService: FeedService, Instantiable {
 ```
 
 [Calling a public mock from another module](#calling-a-public-mock-from-another-module) shows a test in another package calling `FeedScreen.mock()`.
+
+Features that open one another, such as screens in separate modules that push each other, need not instantiate one another. The root declares an `ErasedInstantiator` for each feature, and each feature receives the builders of the features it opens, as [Dependency cycles](#dependency-cycles) describes.
 
 A seam needs no root above it. Code that does not use SafeDI yet can call a seam’s generated initializer by hand, so a seam can mark how far adoption has reached. An app target can also call a seam instead of declaring a root: unlike a root, a seam can take `@Forwarded` properties, such as the target’s configuration. These calls need `#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)` in the seam’s module, here in `Feed`’s `SafeDIConfiguration.swift`. Remove it once SafeDI generates every call. [Generating a dependency tree per module](#generating-a-dependency-tree-per-module) says what the compiler checks in a hand-written call.
 
