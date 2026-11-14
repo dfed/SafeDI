@@ -835,10 +835,11 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		case let .metatype(type, isType):
 			return "\(type.asIdentifier)_\(isType ? "Type" : "Protocol")"
 		case let .attributed(type, specifiers, attributes):
-			let prefix = [
-				specifiers.isEmpty ? nil : specifiers.joined(separator: "_"),
-				attributes.isEmpty ? nil : attributes.map { $0.filter { $0.isLetter || $0.isNumber || $0 == "_" } }.joined(separator: "_"),
-			].compactMap(\.self).joined(separator: "_")
+			// A specifier or an attribute can spell parentheses, dots and commas (`nonisolated(nonsending)`,
+			// `isolated(any)`, `Space.Act`), so each keeps only the characters an identifier can hold.
+			let prefix = (specifiers + attributes)
+				.map { $0.filter { $0.isLetter || $0.isNumber || $0 == "_" } }
+				.joined(separator: "_")
 			return "\(prefix)_\(type.asIdentifier)"
 		case let .array(element):
 			return "Array_\(element.asIdentifier)"

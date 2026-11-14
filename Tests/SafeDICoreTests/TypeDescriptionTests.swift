@@ -2127,6 +2127,41 @@ struct TypeDescriptionTests {
 		#expect(TypeSyntax(stringLiteral: "(Int...) throws(Failure) -> Void").typeDescription.asIdentifier == "Int_Variadic_throws_Failure_to_Void")
 	}
 
+	@Test(arguments: [
+		("nonisolated(nonsending) () async -> Void", "nonisolatednonsending_Void_async_to_Void"),
+		("@Sendable nonisolated(nonsending) () async -> Void", "nonisolatednonsending_Sendable_Void_async_to_Void"),
+		("@MainActor () -> Void", "MainActor_Void_to_Void"),
+		("@isolated(any) () -> Void", "isolatedany_Void_to_Void"),
+		("@convention(c, cType: \"void (*)(void)\") () -> Void", "conventionccTypevoidvoid_Void_to_Void"),
+		("(inout Int) -> Void", "inout_Int_to_Void"),
+		("(borrowing Int) -> Void", "borrowing_Int_to_Void"),
+		("(consuming Int) -> Void", "consuming_Int_to_Void"),
+		("(sending Int) -> Void", "sending_Int_to_Void"),
+		("() -> sending Int", "Void_to_sending_Int"),
+		("any Service", "any_Service"),
+		("some Service", "some_Service"),
+	])
+	func asIdentifier_isOneIdentifier_whenTypeHasSpecifierOrAttribute(source: String, identifier: String) {
+		let typeDescription = TypeSyntax(stringLiteral: source).typeDescription
+		#expect(typeDescription.asIdentifier == identifier)
+		#expect(typeDescription.asIdentifier.isValidSwiftIdentifier(for: .variableName))
+	}
+
+	@Test(arguments: [
+		("() async -> Void", "nonisolated(nonsending) () async -> Void"),
+		("() -> Void", "@MainActor () -> Void"),
+		("() -> Void", "@isolated(any) () -> Void"),
+		("(Int) -> Void", "(inout Int) -> Void"),
+		("(Int) -> Void", "(borrowing Int) -> Void"),
+		("(Int) -> Void", "(consuming Int) -> Void"),
+		("(Int) -> Void", "(sending Int) -> Void"),
+		("() -> Int", "() -> sending Int"),
+		("Service", "some Service"),
+	])
+	func asIdentifier_differs_whenTypesDifferOnlyBySpecifierOrAttribute(lhs: String, rhs: String) {
+		#expect(TypeSyntax(stringLiteral: lhs).typeDescription.asIdentifier != TypeSyntax(stringLiteral: rhs).typeDescription.asIdentifier)
+	}
+
 	@Test
 	func namesType_findsThrownTypeAndVariadicArgument() {
 		func namesConfig(_ source: String) -> Bool {
