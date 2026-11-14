@@ -53,7 +53,8 @@ enum SourceRule: String, CaseIterable {
 	case apostrophe
 
 	/// Whether the rule applies to the file at `path`, relative to the repository root. SafeDI ships its sources and
-	/// plugins, so neither traps.
+	/// plugins, so neither traps; the Tuist plugin's build script prints SafeDI's errors too, so it spells their
+	/// apostrophes.
 	func applies(toFileAt path: String) -> Bool {
 		switch self {
 		case .forceUnwrap, .forceTry, .forceCast, .trap, .uniqueKeysWithValues:
@@ -65,7 +66,7 @@ enum SourceRule: String, CaseIterable {
 		case .backtick:
 			path.hasPrefix("Sources/") && path != "Sources/SafeDICore/Extensions/IdentifierSpellingExtensions.swift"
 		case .apostrophe:
-			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/")
+			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/") || path.hasPrefix("TuistPlugins/")
 		}
 	}
 }

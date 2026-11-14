@@ -34,6 +34,7 @@ struct SourceRuleTests {
 			"Sources/SafeDICore/Generators/ScopeGenerator.swift",
 			"Sources/SafeDIMacros/Macros/InstantiableMacro.swift",
 			"Sources/SafeDIToolLibrary/GenerateCommand.swift",
+			"TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift",
 		]))
 		#expect(try findings(of: [.forceUnwrap, .forceTry, .forceCast, .trap, .uniqueKeysWithValues]) == [])
 	}
@@ -530,10 +531,10 @@ struct SourceRuleTests {
 		SourceRuleCheck.findings(in: source, at: path).map(\.description)
 	}
 
-	/// The Swift files under `Sources` and `Plugins`, each with its findings, read and checked once for every test of
-	/// SafeDI's sources.
+	/// The Swift files under `Sources`, `Plugins` and `TuistPlugins`, each with its findings, read and checked once for
+	/// every test of SafeDI's sources.
 	private static let checkedFiles = Result {
-		try RepositorySwiftFile.files(under: ["Sources", "Plugins"]).map { file in
+		try RepositorySwiftFile.files(under: ["Sources", "Plugins", "TuistPlugins"]).map { file in
 			(file: file, findings: SourceRuleCheck.findings(in: file.source, at: file.path))
 		}
 	}

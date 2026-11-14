@@ -2,12 +2,13 @@
 # Scripts/sweep-apostrophes.py [--check] [--list]
 #
 # Spells every apostrophe in the text SafeDI emits as ’ (U+2019), never '. The text SafeDI emits (diagnostics, fix-its,
-# notes, remedies, help, and the comments of generated code) is written in string literals under Sources and Plugins,
-# and the tests compare it in full, so the script rewrites two places:
+# notes, remedies, help, and the comments of generated code) is written in string literals under Sources, Plugins and
+# TuistPlugins (whose build script prints SafeDI's errors), and the tests compare it in full, so the script rewrites
+# two places:
 #
-# 1. Each string literal under Sources and Plugins. Only the literal's text is read: comments and code are skipped, and
-#    so is each interpolation's code (though a string literal inside an interpolation is a literal of its own). Within
-#    that text, a ' is an apostrophe when
+# 1. Each string literal under Sources, Plugins and TuistPlugins. Only the literal's text is read: comments and code
+#    are skipped, and so is each interpolation's code (though a string literal inside an interpolation is a literal of
+#    its own). Within that text, a ' is an apostrophe when
 #    - a letter follows it, and a letter, a digit, a backtick or an interpolation precedes it (`type's`, `don't`,
 #      "`Feed`'s", "\(name)'s"), or
 #    - an `s` precedes it, no letter or digit follows it, and it does not close a quotation the literal opened with a '
@@ -18,25 +19,28 @@
 #    Documentation, which tests compare with generated code. Most of that text is a fixture's own source, which SafeDI
 #    reads and never rewrites, so the script changes a ' there only where its context is an apostrophe's context in
 #    Sources. An apostrophe's context is the text of its Sources literal around it, at most 40 characters each way,
-#    stopping at the literal's ends and after three interpolations, each of which matches any text on one line. A '
-#    in a test's literal or a code block becomes ’ when the text before it and after it match some context's. A
-#    context with fewer than 8 characters of text, such as "`\(type)`'s `\(label)`", could match a fixture's comment
-#    by chance, so it is not used: `--list` prints each, and a test that compares such a message is updated by hand.
+#    stopping at the literal's ends, at a line break (a multi-line literal's lines carry the source's indentation,
+#    which Swift strips and a test spells its own way) and after three interpolations, each of which matches any text
+#    on one line. A context that reaches its literal's start matches that first letter in either case, since a
+#    message may begin a sentence with the literal. A ' in a test's literal or a code block becomes ’ when the text
+#    before it and after it match some context's. A context with fewer than 8 characters of text, such as
+#    "`\(type)`'s `\(label)`", could match a fixture's comment by chance, so each of its interpolations matches only
+#    text without spaces, as a name or a code span spells it; `--list` prints each such context.
 #    `SourceRuleTests`, whose literals are SafeDI's own source, spelling a straight apostrophe on purpose, is skipped.
 #
-# Contexts come from the apostrophes Sources already spells ’ as well as those this run rewrites, so a run converges:
-# after a rebase brings a test that still expects ', running the script again rewrites it, and a second run in a row
-# changes nothing. Files are read and written in path order, so a run is deterministic.
+# Contexts come from the apostrophes Sources already spells ’ (between letters, or a plural possessive such as
+# `types’ declarations`) as well as those this run rewrites, so a run converges: after a rebase brings a test that
+# still expects ', running the script again rewrites it, and a second run in a row changes nothing. Files are read and written in path order, so a run is deterministic.
 #
-# --check changes nothing and exits 1 when a run would change a file. --list prints each Sources apostrophe it finds
-# and each context too short to use.
+# --check changes nothing and exits 1 when a run would change a file. --list prints each straight apostrophe the run
+# rewrites under Sources, Plugins and TuistPlugins, and each short context.
 
 import os
 import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOURCE_DIRECTORIES = ["Sources", "Plugins"]
+SOURCE_DIRECTORIES = ["Sources", "Plugins", "TuistPlugins"]
 EXPECTATION_DIRECTORIES = ["Tests"]
 DOCUMENTATION_DIRECTORIES = ["Documentation"]
 # The tests whose literals are SafeDI's own source, which spell a straight apostrophe on purpose.
@@ -180,8 +184,11 @@ def apostrophe_indices(text, segments):
 			followed_by_letter = following is not None and following.isalpha()
 			followed_by_word = (following is not None and is_word(following)) or (following is None and segment.before_interpolation)
 			if character == CURLY:
-				# A ’ is an apostrophe or a closing quotation mark; either way it closes no quotation a ' opened.
+				# A ’ is an apostrophe or a closing quotation mark; either way it closes no quotation a ' opened. After an
+				# `s` with no letter or digit following, it is a plural possessive unless the literal opened a ‘.
 				if preceded_by_word and followed_by_letter:
+					indices.append(index)
+				elif previous == "s" and not followed_by_word and "‘" not in text[segments[0].start:index]:
 					indices.append(index)
 			elif preceded_by_word and followed_by_letter:
 				indices.append(index)
@@ -237,7 +244,18 @@ def replace_at(text, indices):
 
 
 INTERPOLATION = None
+# Ends the text before an apostrophe that reaches its literal's start, whose first letter a message may capitalize.
+LITERAL_START = "literal start"
 MAXIMUM_INTERPOLATIONS = 3
+# A line break ends a context: a multi-line literal's lines carry the source's indentation, which Swift strips and a
+# test's literal spells its own way, and a test may spell a `\n` escape as a line break or the other way around.
+LINE_BREAKS = ("\n", "\\n")
+
+
+def cut_at_line_break(run):
+	"""The part of `run` before its first line break, and whether there was one."""
+	cut = min((run.find(line_break) for line_break in LINE_BREAKS if line_break in run), default=-1)
+	return (run, False) if cut == -1 else (run[:cut], True)
 
 
 def context(text, segments, index):
@@ -255,15 +273,26 @@ def context(text, segments, index):
 		while True:
 			segment = segments[position]
 			if step < 0:
-				run = text[max(segment.start, cursor - remaining):cursor][::-1]
+				run_start = max(segment.start, cursor - remaining)
+				# Reversed, so the line break nearest the apostrophe comes first; `\n` reads `n\` reversed.
+				run, broken = cut_at_line_break(text[run_start:cursor])
+				if broken:
+					run = text[run_start:cursor]
+					cut = max(run.rfind(line_break) + len(line_break) for line_break in LINE_BREAKS if line_break in run)
+					run = run[cut:]
+				run = run[::-1]
+				reaches_start = not broken and run_start == segment.start and position == 0
 				crosses = segment.after_interpolation and position > 0
 			else:
-				run = text[cursor + 1:min(segment.end, cursor + 1 + remaining)]
+				run, broken = cut_at_line_break(text[cursor + 1:min(segment.end, cursor + 1 + remaining)])
+				reaches_start = False
 				crosses = segment.before_interpolation and position + 1 < len(segments)
 			if run:
 				pieces.append(run.replace("'", CURLY))
 				remaining -= len(run)
-			if remaining <= 0 or not crosses or interpolations == MAXIMUM_INTERPOLATIONS:
+			if reaches_start:
+				pieces.append(LITERAL_START)
+			if broken or remaining <= 0 or not crosses or interpolations == MAXIMUM_INTERPOLATIONS:
 				return tuple(pieces)
 			pieces.append(INTERPOLATION)
 			interpolations += 1
@@ -274,12 +303,12 @@ def context(text, segments, index):
 
 
 def static_length(pieces):
-	return sum(len(piece) for piece in pieces if piece is not INTERPOLATION)
+	return sum(len(piece) for piece in pieces if piece is not INTERPOLATION and piece is not LITERAL_START)
 
 
 def spelled(context):
 	before, after = context
-	text = "".join("\\(…)" if piece is INTERPOLATION else piece[::-1] for piece in reversed(before))
+	text = "".join("\\(…)" if piece is INTERPOLATION else "" if piece is LITERAL_START else piece[::-1] for piece in reversed(before))
 	return text + CURLY + "".join("\\(…)" if piece is INTERPOLATION else piece for piece in after)
 
 
@@ -297,9 +326,9 @@ def sweep_sources(check, listing):
 			for index in apostrophe_indices(text, segments):
 				apostrophe_context = context(text, segments, index)
 				line = text.count("\n", 0, index) + 1
-				if static_length(apostrophe_context[0]) + static_length(apostrophe_context[1]) >= MINIMUM_CONTEXT_LENGTH:
-					contexts.add(apostrophe_context)
-				else:
+				short = static_length(apostrophe_context[0]) + static_length(apostrophe_context[1]) < MINIMUM_CONTEXT_LENGTH
+				contexts.add((*apostrophe_context, short))
+				if short:
 					short_contexts.append(f"{relative(path)}:{line}: {spelled(apostrophe_context)}")
 				if text[index] == "'":
 					straight.append(index)
@@ -312,7 +341,7 @@ def sweep_sources(check, listing):
 				write(path, replace_at(text, straight))
 	if listing:
 		for short_context in short_contexts:
-			print(f"short context, not used: {short_context}")
+			print(f"short context, each interpolation matching only text without spaces: {short_context}")
 	return contexts, rewritten, changed_paths
 
 
@@ -321,12 +350,27 @@ class ContextMatcher:
 
 	def __init__(self, contexts):
 		# Sorted, so the order of the checks never depends on the set's.
-		self.patterns = [(self.pattern(before), self.pattern(after)) for before, after in sorted(contexts, key=lambda context: repr(context))]
+		self.patterns = [(self.pattern(before, short), self.pattern(after, short)) for before, after, short in sorted(contexts, key=lambda context: repr(context))]
 
 	@staticmethod
-	def pattern(pieces):
-		# An interpolation matches any text on one line, the shortest that lets the rest match.
-		return re.compile("".join("[^\\n]*?" if piece is INTERPOLATION else re.escape(piece) for piece in pieces))
+	def pattern(pieces, short):
+		# An interpolation matches any text on one line, the shortest that lets the rest match; in a short context, which
+		# could match a fixture's own text by chance, it matches only text without spaces, as a name or a code span
+		# spells it (`Rack.Shelf`’s `mock(…)`). A literal's first
+		# letter, the last character of the reversed text before an apostrophe that reaches the literal's start, matches
+		# in either case, since a message may begin a sentence with the literal.
+		parts = []
+		for index, piece in enumerate(pieces):
+			if piece is INTERPOLATION:
+				parts.append("[^\\s]+?" if short else "[^\\n]*?")
+			elif piece is LITERAL_START:
+				continue
+			elif index + 1 < len(pieces) and pieces[index + 1] is LITERAL_START and piece[-1].isalpha():
+				first = piece[-1]
+				parts.append(re.escape(piece[:-1]) + "[" + re.escape(first.lower() + first.upper()) + "]")
+			else:
+				parts.append(re.escape(piece))
+		return re.compile("".join(parts))
 
 	def indices(self, text, start, end):
 		"""The indices of the ' in `text[start:end]` that are in a context."""
@@ -379,7 +423,7 @@ def main(arguments):
 	contexts, source_count, source_paths = sweep_sources(check, listing)
 	expectation_count, expectation_paths = sweep_expectations(contexts, check)
 	verb = "would rewrite" if check else "rewrote"
-	print(f"{verb} {source_count} apostrophes in {len(source_paths)} files under Sources and Plugins")
+	print(f"{verb} {source_count} apostrophes in {len(source_paths)} files under Sources, Plugins and TuistPlugins")
 	print(f"{verb} {expectation_count} apostrophes in {len(expectation_paths)} files under Tests and Documentation")
 	for path in source_paths + expectation_paths:
 		print(f"  {path}")

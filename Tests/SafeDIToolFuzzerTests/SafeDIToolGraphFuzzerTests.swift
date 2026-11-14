@@ -431,7 +431,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// The differential oracle counts a rejection as a seam's own only when every error is reported about the
 		// seam's generated initializer or a call of it.
 		let collision = "/F/Screen.swift:1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `x` as `x: X` on `A` and `x: Y?` on `B`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Rename one of the properties, or @Instantiated one of them inside the tree.\n/F/A.swift:7:5: note: `A` receives `x: X` here."
-		let missingModuleInfo = "/F/Screen.swift:1:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Screen` in module `Core`: that initializer takes what the type’s dependency tree needs from the declarations `Core` sees, which include module `Base`'s, and this run was not given `Base`'s SafeDI module info."
+		let missingModuleInfo = "/F/Screen.swift:1:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Screen` in module `Core`: that initializer takes what the type’s dependency tree needs from the declarations `Core` sees, which include module `Base`’s, and this run was not given `Base`’s SafeDI module info."
 		let unfulfillable = "/F/A.swift:7:5: error: @Received property `x: X` is not @Instantiated or @Forwarded in chain: Root -> Screen -> A."
 		#expect(GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: collision, seamTypeNames: ["Screen"]))
 		#expect(GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: missingModuleInfo, seamTypeNames: ["Screen"]))
@@ -1035,11 +1035,11 @@ struct SafeDIToolGraphFuzzerTests {
 		let typeAccess: [String: GraphFuzzerGenerator.AccessLevel] = ["S1_ProofTheme": .package, "S1_ProofSpace.S1_ProofCrate": .internal]
 
 		#expect(GraphFuzzerOracle.tiersWiderThanParameterTypes(in: ["S1_ProofSeam+SafeDI.swift": unsoundTier], typeAccess: typeAccess) == [
-			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`'s `public` initializer takes `proofTheme: S1_ProofTheme?`, but `S1_ProofTheme` is `package`.",
-			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`'s `package` initializer takes `proofCrate: S1_ProofSpace.S1_ProofCrate`, but `S1_ProofSpace.S1_ProofCrate` is `internal`.",
+			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`’s `public` initializer takes `proofTheme: S1_ProofTheme?`, but `S1_ProofTheme` is `package`.",
+			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`’s `package` initializer takes `proofCrate: S1_ProofSpace.S1_ProofCrate`, but `S1_ProofSpace.S1_ProofCrate` is `internal`.",
 		])
 		#expect(GraphFuzzerOracle.tiersWiderThanParameterTypes(in: ["S1_ProofSeam+SafeDI.swift": unsoundTier], typeAccess: ["S1_ProofTheme": .package, "S1_ProofSpace.S1_ProofCrate": .package]) == [
-			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`'s `public` initializer takes `proofTheme: S1_ProofTheme?`, but `S1_ProofTheme` is `package`.",
+			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`’s `public` initializer takes `proofTheme: S1_ProofTheme?`, but `S1_ProofTheme` is `package`.",
 		])
 	}
 
@@ -1260,7 +1260,7 @@ struct SafeDIToolGraphFuzzerTests {
 		let seamFileName = try #require(files.keys.first { $0.hasSuffix("/S227_CycleSeam+SafeDI.swift") })
 		let seamFile = try #require(files[seamFileName])
 		let siteArguments = "cycle0Service_Values(cycle6Tag: cycle6Tag, "
-		try #require(seamFile.components(separatedBy: siteArguments).count == 2, "Seed \(seed)'s seam no longer hands its one site `CycleB`'s `cycle6Tag`")
+		try #require(seamFile.components(separatedBy: siteArguments).count == 2, "Seed \(seed)’s seam no longer hands its one site `CycleB`’s `cycle6Tag`")
 		var perturbedFiles = files
 		perturbedFiles[seamFileName] = seamFile.replacingOccurrences(of: siteArguments, with: "cycle0Service_Values(cycle6Tag: cycle4Reader.cycle6Tag, ")
 		let perturbedRuns = GraphFuzzerToolRuns(fixture: runs.fixture, firstOutcome: .accepted(generatedFiles: perturbedFiles, warnings: warnings), secondOutcome: .accepted(generatedFiles: perturbedFiles, warnings: warnings), visibleOutcome: runs.visibleOutcome)

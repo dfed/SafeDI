@@ -164,7 +164,7 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 	esac
 
 	# `tuist install` unpacks SafeDITool into `Tuist/.build` beside
-	# `Tuist/Package.swift`, in the workspace's root. A project in a
+	# `Tuist/Package.swift`, in the workspace’s root. A project in a
 	# subdirectory (`Projects/Feature/Project.swift`) has that
 	# subdirectory as its `$SRCROOT`, so look in the nearest directory,
 	# from `$SRCROOT` up, that holds `Tuist/Package.swift`.
@@ -172,7 +172,7 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 	while [ ! -f "$tuist_root/Tuist/Package.swift" ]; do
 		parent_directory=$(dirname "$tuist_root")
 		if [ "$parent_directory" = "$tuist_root" ]; then
-			echo "error: SafeDI plugin: no Tuist/Package.swift found in $SRCROOT or any directory above it. Depend on SafeDI in the workspace's Tuist/Package.swift, and run \\`tuist install\\` to fetch SafeDITool." >&2
+			echo "error: SafeDI plugin: no Tuist/Package.swift found in $SRCROOT or any directory above it. Depend on SafeDI in the workspace’s Tuist/Package.swift, and run \\`tuist install\\` to fetch SafeDITool." >&2
 			exit 5
 		fi
 		tuist_root="$parent_directory"
@@ -188,7 +188,7 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 
 	module_dir="$SRCROOT/$module"
 	if [ ! -d "$module_dir" ]; then
-		echo "error: SafeDI plugin: module directory not found at $module_dir. The module argument of SafeDI.preCompileScript must name the directory under SRCROOT that holds the target's Swift sources." >&2
+		echo "error: SafeDI plugin: module directory not found at $module_dir. The module argument of SafeDI.preCompileScript must name the directory under SRCROOT that holds the target’s Swift sources." >&2
 		exit 4
 	fi
 
@@ -258,7 +258,7 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 
 	# SafeDITool releases before an option existed reject it, so a
 	# plugin newer than the pinned binary forwards an option only when
-	# the binary's help, read once here, advertises it.
+	# the binary’s help, read once here, advertises it.
 	generate_help=$("$safedi_tool" generate --help) || generate_help=""
 
 	# Report the conditions swiftc compiles this target with, so SafeDITool
@@ -287,8 +287,8 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 	esac
 
 	# Name the module this target compiles and its package, which
-	# SafeDITool records in this target's `.safedi` artifact, beside the
-	# modules the dependencies' `.safedi` artifacts record. The package
+	# SafeDITool records in this target’s `.safedi` artifact, beside the
+	# modules the dependencies’ `.safedi` artifacts record. The package
 	# is named only when the target sets `SWIFT_PACKAGE_NAME`, which
 	# Xcode passes the compiler as `-package-name`.
 	case "$generate_help" in
