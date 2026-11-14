@@ -151,9 +151,9 @@ public struct UnreadTypeComment: Sendable {
 	private static func comment(naming typeNames: [String]) -> String {
 		let names = typeNames.map { "`\($0)`" }
 		return if names.count == 1, let name = names.first {
-			"// SafeDI counts \(name) as `public`: no module it reads declares it narrower. If \(name) is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies."
+			"// SafeDI counts \(name) as `public`: no module it reads declares it narrower. If \(name) is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies."
 		} else {
-			"// SafeDI counts \(names.joinedAsList) as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies."
+			"// SafeDI counts \(names.joinedAsList) as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies."
 		}
 	}
 }

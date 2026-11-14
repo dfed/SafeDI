@@ -5870,7 +5870,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"""
 				\(Self.standardIndent)/// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-				\(Self.standardIndent)/// To call this type from code you write, set `\(SafeDIConfigurationVisitor.generatePlainDependencyTreeInitializersArgumentLabel): true` in this module's `#\(SafeDIConfigurationVisitor.macroName)`.
+				\(Self.standardIndent)/// To call this type from code you write, set `\(SafeDIConfigurationVisitor.generatePlainDependencyTreeInitializersArgumentLabel): true` in this module’s `#\(SafeDIConfigurationVisitor.macroName)`.
 				"""
 			}
 			let generatedOnlyInitializer = """

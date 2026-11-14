@@ -724,7 +724,7 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		// `Service` `public`, as it does for any type a public mock names.
 		let unreadTypeComment = switch integration {
 		case .moduleInfo:
-			"\n    // SafeDI counts `Service` as `public`: no module it reads declares it narrower. If `Service` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies."
+			"\n    // SafeDI counts `Service` as `public`: no module it reads declares it narrower. If `Service` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies."
 		case .swiftPackagePlugin:
 			""
 		}
@@ -823,7 +823,7 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		// info flow's call says how each integration that writes module info compiles App's generated code into App.
 		let seamCallComment = switch integration {
 		case .moduleInfo:
-			" // If this line does not compile, compile the code SafeDI generates for module App into App: under Bazel, add App's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
+			" // If this line does not compile, compile the code SafeDI generates for module App into App: under Bazel, add App’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
 		case .swiftPackagePlugin:
 			" // If this line does not compile, add the SafeDI plugin to the target that declares Consumer."
 		}
@@ -898,7 +898,7 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 	mutating func generate_throwsError_whenPublicMockReceivesPackageTypeWhoseMockIsInternalToAnotherModule() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Consumer.swift"]):3:29: error: SafeDI cannot generate the public mock of `Consumer`: its `public` tier, which `generateMock: .public` requires, cannot take `session: Session`, which the initializer of `Consumer` receives, and cannot pass `nil` for it, since it is required. `Session`'s own `@Instantiable` declaration is `package`. Declare `Session` `public`; receive it with `onlyIfAvailable: true` and an optional type; or use `generateMock: .internal`.
+			\(fixtures["App"]!["Consumer.swift"]):3:29: error: SafeDI cannot generate the public mock of `Consumer`: its `public` tier, which `generateMock: .public` requires, cannot take `session: Session`, which the initializer of `Consumer` receives, and cannot pass `nil` for it, since it is required. `Session`’s own `@Instantiable` declaration is `package`. Declare `Session` `public`; receive it with `onlyIfAvailable: true` and an optional type; or use `generateMock: .internal`.
 			\(fixtures["App"]!["Consumer.swift"]):6:5: note: `Consumer` receives `session: Session` here.
 			"""
 		}) {

@@ -52,7 +52,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			"List+SafeDI.swift": generatedFileHeader + """
 			extension List {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_onSelect: @autoclosure @escaping () -> () -> Void) {
 			        let onSelect = LazilyInstantiated<() -> Void>(__safeDI_onSelect)
 			        let row = Row(onSelect: onSelect.instance)
@@ -118,7 +118,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			"List+SafeDI.swift": generatedFileHeader + """
 			extension List {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_onTap: @autoclosure @escaping () -> (() -> Void)?) {
 			        let onTap = LazilyInstantiated<(() -> Void)?>(__safeDI_onTap)
 			        func __safeDI_row() -> Row {
@@ -193,7 +193,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			"List+SafeDI.swift": generatedFileHeader + """
 			extension List {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_onFailure: @autoclosure @escaping () -> (Error) -> Void) {
 			        let onFailure = LazilyInstantiated<(Error) -> Void>(__safeDI_onFailure)
 			        let row = Row(onFailure: onFailure.instance)
@@ -317,7 +317,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			"List+SafeDI.swift": generatedFileHeader + """
 			extension List {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_onSelect: @autoclosure @escaping () -> (@Sendable () -> Void)?) {
 			        let onSelect = LazilyInstantiated<(@Sendable () -> Void)?>(__safeDI_onSelect)
 			        let row = Row(onSelect: onSelect.instance)
@@ -429,7 +429,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			"List+SafeDI.swift": generatedFileHeader + """
 			extension List {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_rowBuilder rowBuilder: ErasedInstantiator<() -> Void, AnyRow>) {
 			        let panel = Panel(rowBuilder: rowBuilder)
 			        self.init(panel: panel)
@@ -626,9 +626,9 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					#endif
 
 					extension List {
-					    // SafeDI counts `Settings` as `public`: no module it reads declares it narrower. If `Settings` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
+					    // SafeDI counts `Settings` as `public`: no module it reads declares it narrower. If `Settings` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 					    public init(__safeDI_value: @autoclosure @escaping () -> Settings) {
 					        let value = LazilyInstantiated<Settings>(__safeDI_value)
 					        let row = Row(value: value.instance)
@@ -648,9 +648,9 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					#endif
 
 					extension List {
-					    // SafeDI counts `Settings` as `public`: no module it reads declares it narrower. If `Settings` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
+					    // SafeDI counts `Settings` as `public`: no module it reads declares it narrower. If `Settings` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 					    public init(__safeDI_value: @autoclosure @escaping () -> (Settings) -> Void) {
 					        let value = LazilyInstantiated<(Settings) -> Void>(__safeDI_value)
 					        let row = Row(value: value.instance)
@@ -670,9 +670,9 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					#endif
 
 					extension List {
-					    // SafeDI counts `Logging` as `public`: no module it reads declares it narrower. If `Logging` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
+					    // SafeDI counts `Logging` as `public`: no module it reads declares it narrower. If `Logging` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 					    public init(__safeDI_value: @autoclosure @escaping () -> any Logging) {
 					        let value = LazilyInstantiated<any Logging>(__safeDI_value)
 					        let row = Row(value: value.instance)
@@ -692,9 +692,9 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					#endif
 
 					extension List {
-					    // SafeDI counts `Catalog.Entry` as `public`: no module it reads declares it narrower. If `Catalog.Entry` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
+					    // SafeDI counts `Catalog.Entry` as `public`: no module it reads declares it narrower. If `Catalog.Entry` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 					    public init(__safeDI_value: @autoclosure @escaping () -> Catalog.Entry) {
 					        let value = LazilyInstantiated<Catalog.Entry>(__safeDI_value)
 					        let row = Row(value: value.instance)
@@ -717,7 +717,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 
 					extension List {
 					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 					    public init(__safeDI_value: @autoclosure @escaping () -> Settings) {
 					        let value = LazilyInstantiated<Settings>(__safeDI_value)
 					        let row = Row(value: value.instance)
@@ -738,7 +738,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 
 					extension List {
 					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 					    public init(__safeDI_value: @autoclosure @escaping () -> (Settings) -> Void) {
 					        let value = LazilyInstantiated<(Settings) -> Void>(__safeDI_value)
 					        let row = Row(value: value.instance)
@@ -759,7 +759,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 
 					extension List {
 					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 					    public init(__safeDI_value: @autoclosure @escaping () -> any Logging) {
 					        let value = LazilyInstantiated<any Logging>(__safeDI_value)
 					        let row = Row(value: value.instance)
@@ -780,7 +780,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 
 					extension List {
 					    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+					    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 					    public init(__safeDI_value: @autoclosure @escaping () -> Catalog.Entry) {
 					        let value = LazilyInstantiated<Catalog.Entry>(__safeDI_value)
 					        let row = Row(value: value.instance)
@@ -811,7 +811,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					    public init() {
 					        func __safeDI_screenBuilder(value: Settings) -> Screen {
 					            func __safeDI_list() -> List {
-					                _ = List.__safeDI_List_5DF9410E13DA7AA4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+					                _ = List.__safeDI_List_5DF9410E13DA7AA4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 					                return List(__safeDI_value: value)
 					            }
 					            let list: List = __safeDI_list()
@@ -838,7 +838,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					    public init() {
 					        func __safeDI_screenBuilder(value: @escaping (Settings) -> Void) -> Screen {
 					            func __safeDI_list() -> List {
-					                _ = List.__safeDI_List_1CF56C421D2B4D82.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+					                _ = List.__safeDI_List_1CF56C421D2B4D82.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 					                return List(__safeDI_value: value)
 					            }
 					            let list: List = __safeDI_list()
@@ -865,7 +865,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					    public init() {
 					        func __safeDI_screenBuilder(value: any Logging) -> Screen {
 					            func __safeDI_list() -> List {
-					                _ = List.__safeDI_List_053C98621D8F3B16.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+					                _ = List.__safeDI_List_053C98621D8F3B16.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 					                return List(__safeDI_value: value)
 					            }
 					            let list: List = __safeDI_list()
@@ -892,7 +892,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					    public init() {
 					        func __safeDI_screenBuilder(value: Catalog.Entry) -> Screen {
 					            func __safeDI_list() -> List {
-					                _ = List.__safeDI_List_4105B217AA7A4C2E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+					                _ = List.__safeDI_List_4105B217AA7A4C2E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 					                return List(__safeDI_value: value)
 					            }
 					            let list: List = __safeDI_list()

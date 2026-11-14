@@ -431,7 +431,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// The differential oracle counts a rejection as a seam's own only when every error is reported about the
 		// seam's generated initializer or a call of it.
 		let collision = "/F/Screen.swift:1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `x` as `x: X` on `A` and `x: Y?` on `B`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Rename one of the properties, or @Instantiated one of them inside the tree.\n/F/A.swift:7:5: note: `A` receives `x: X` here."
-		let missingModuleInfo = "/F/Screen.swift:1:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Screen` in module `Core`: that initializer takes what the type's dependency tree needs from the declarations `Core` sees, which include module `Base`'s, and this run was not given `Base`'s SafeDI module info."
+		let missingModuleInfo = "/F/Screen.swift:1:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Screen` in module `Core`: that initializer takes what the type’s dependency tree needs from the declarations `Core` sees, which include module `Base`’s, and this run was not given `Base`’s SafeDI module info."
 		let unfulfillable = "/F/A.swift:7:5: error: @Received property `x: X` is not @Instantiated or @Forwarded in chain: Root -> Screen -> A."
 		#expect(GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: collision, seamTypeNames: ["Screen"]))
 		#expect(GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: missingModuleInfo, seamTypeNames: ["Screen"]))
@@ -569,7 +569,7 @@ struct SafeDIToolGraphFuzzerTests {
 		let withUnreadTypeComment = Self.rootInitializer
 			.replacingOccurrences(
 				of: "    public convenience init() {",
-				with: "    // SafeDI counts `S31_Secret` as `public`: no module it reads declares it narrower. If `S31_Secret` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n    public convenience init() {",
+				with: "    // SafeDI counts `S31_Secret` as `public`: no module it reads declares it narrower. If `S31_Secret` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n    public convenience init() {",
 			)
 			.replacingOccurrences(of: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self", with: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self" + MultiModuleIntegration.moduleInfo.seamCallComment(type: "S31_Screen", declaringModule: "FuzzFeature"))
 		let withComments = Self.rootInitializer
@@ -837,8 +837,8 @@ struct SafeDIToolGraphFuzzerTests {
 			guard let names else { return "" }
 			let quotedNames = names.map { "`\($0)`" }
 			return quotedNames.count == 1
-				? "    // SafeDI counts \(quotedNames[0]) as `public`: no module it reads declares it narrower. If \(quotedNames[0]) is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
-				: "    // SafeDI counts \(quotedNames.joined(separator: " and ")) as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+				? "    // SafeDI counts \(quotedNames[0]) as `public`: no module it reads declares it narrower. If \(quotedNames[0]) is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n"
+				: "    // SafeDI counts \(quotedNames.joined(separator: " and ")) as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n"
 		}
 		return [
 			"FuzzFeature/\(prefix)UnreadSeam+SafeDI.swift": "extension \(prefix)UnreadSeam {\n\(comment(naming: featureCommentNames))    \(tier) convenience init(unreadValue: StaticString) {\n        self.init(unreadChild: \(prefix)UnreadChild(unreadValue: unreadValue))\n    }\n}\n",
@@ -886,7 +886,7 @@ struct SafeDIToolGraphFuzzerTests {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_\(builderLabel): @escaping (SafeDIScope_S8_Service) -> any S8_Service) {
 		        let service: any S8_Service = __safeDI_\(builderLabel)(.\(cases[0])(SafeDIScope_S8_Service.\(cases[0])_Values(analytics: S8_Analytics())))
 		        self.init(service: service)
@@ -1015,13 +1015,13 @@ struct SafeDIToolGraphFuzzerTests {
 		let unsoundTier = """
 		extension S1_ProofSeam {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_proofTheme proofTheme: S1_ProofTheme?) {
 		        self.init(__safeDI_proofTheme: proofTheme)
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    package convenience init(__safeDI_proofCrate proofCrate: S1_ProofSpace.S1_ProofCrate, __safeDI_proofTheme proofTheme: S1_ProofTheme?) {
 		        let proofBadge = S1_ProofBadge(proofTheme: proofTheme)
 		        self.init(proofBadge: proofBadge)
@@ -1035,11 +1035,11 @@ struct SafeDIToolGraphFuzzerTests {
 		let typeAccess: [String: GraphFuzzerGenerator.AccessLevel] = ["S1_ProofTheme": .package, "S1_ProofSpace.S1_ProofCrate": .internal]
 
 		#expect(GraphFuzzerOracle.tiersWiderThanParameterTypes(in: ["S1_ProofSeam+SafeDI.swift": unsoundTier], typeAccess: typeAccess) == [
-			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`'s `public` initializer takes `proofTheme: S1_ProofTheme?`, but `S1_ProofTheme` is `package`.",
-			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`'s `package` initializer takes `proofCrate: S1_ProofSpace.S1_ProofCrate`, but `S1_ProofSpace.S1_ProofCrate` is `internal`.",
+			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`’s `public` initializer takes `proofTheme: S1_ProofTheme?`, but `S1_ProofTheme` is `package`.",
+			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`’s `package` initializer takes `proofCrate: S1_ProofSpace.S1_ProofCrate`, but `S1_ProofSpace.S1_ProofCrate` is `internal`.",
 		])
 		#expect(GraphFuzzerOracle.tiersWiderThanParameterTypes(in: ["S1_ProofSeam+SafeDI.swift": unsoundTier], typeAccess: ["S1_ProofTheme": .package, "S1_ProofSpace.S1_ProofCrate": .package]) == [
-			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`'s `public` initializer takes `proofTheme: S1_ProofTheme?`, but `S1_ProofTheme` is `package`.",
+			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`’s `public` initializer takes `proofTheme: S1_ProofTheme?`, but `S1_ProofTheme` is `package`.",
 		])
 	}
 
@@ -1260,7 +1260,7 @@ struct SafeDIToolGraphFuzzerTests {
 		let seamFileName = try #require(files.keys.first { $0.hasSuffix("/S227_CycleSeam+SafeDI.swift") })
 		let seamFile = try #require(files[seamFileName])
 		let siteArguments = "cycle0Service_Values(cycle6Tag: cycle6Tag, "
-		try #require(seamFile.components(separatedBy: siteArguments).count == 2, "Seed \(seed)'s seam no longer hands its one site `CycleB`'s `cycle6Tag`")
+		try #require(seamFile.components(separatedBy: siteArguments).count == 2, "Seed \(seed)’s seam no longer hands its one site `CycleB`’s `cycle6Tag`")
 		var perturbedFiles = files
 		perturbedFiles[seamFileName] = seamFile.replacingOccurrences(of: siteArguments, with: "cycle0Service_Values(cycle6Tag: cycle4Reader.cycle6Tag, ")
 		let perturbedRuns = GraphFuzzerToolRuns(fixture: runs.fixture, firstOutcome: .accepted(generatedFiles: perturbedFiles, warnings: warnings), secondOutcome: .accepted(generatedFiles: perturbedFiles, warnings: warnings), visibleOutcome: runs.visibleOutcome)
@@ -3710,7 +3710,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	func difference_isNil_whenUnreadTypeCommentMovesToAnotherFileOfItsModule() {
-		let comment = "    // SafeDI counts `StaticString` as `public`: no module it reads declares it narrower. If `StaticString` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+		let comment = "    // SafeDI counts `StaticString` as `public`: no module it reads declares it narrower. If `StaticString` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n"
 		let commentAboveFirst = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S5_T0+SafeDIMock.swift": "extension S5_T0 {\n\(comment)    public static func mock() {}\n}\n", "FuzzFeature/S5_T1+SafeDIMock.swift": "extension S5_T1 {\n    public static func mock() {}\n}\n"], warnings: [])
 		let commentAboveSecond = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S5_T0+SafeDIMock.swift": "extension S5_T0 {\n    public static func mock() {}\n}\n", "FuzzFeature/S5_T1+SafeDIMock.swift": "extension S5_T1 {\n\(comment)    public static func mock() {}\n}\n"], warnings: [])
 
@@ -3719,7 +3719,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	func difference_namesUnreadTypeComments_whenOnlyOneOutcomeCarriesOne() {
-		let comment = "    // SafeDI counts `StaticString` as `public`: no module it reads declares it narrower. If `StaticString` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+		let comment = "    // SafeDI counts `StaticString` as `public`: no module it reads declares it narrower. If `StaticString` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n"
 		let withComment = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S5_T0+SafeDIMock.swift": "extension S5_T0 {\n\(comment)    public static func mock() {}\n}\n"], warnings: [])
 		let withoutComment = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S5_T0+SafeDIMock.swift": "extension S5_T0 {\n    public static func mock() {}\n}\n"], warnings: [])
 

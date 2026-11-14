@@ -144,7 +144,7 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module's `#SafeDIConfiguration`.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
 		        func __safeDI_tag() -> Tag {
 		            Tag()

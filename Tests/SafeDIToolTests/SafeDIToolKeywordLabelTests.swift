@@ -457,7 +457,7 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 			        self.safeDIBuilder = safeDIBuilder
 			    }
 
-			    /// `nil` keeps the default of `Session`'s `inout`.
+			    /// `nil` keeps the default of `Session`’s `inout`.
 			    public let `inout`: Int?
 			    /// Overrides how `Session` is constructed. Parameters match the type’s initializer or custom mock method.
 			    public let safeDIBuilder: ((Int) -> Session)?
@@ -474,7 +474,7 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 			"Service+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
-			    // These providers evaluate `Service`'s own defaults outside any actor, since SafeDI sees no isolation on it. If one
+			    // These providers evaluate `Service`’s own defaults outside any actor, since SafeDI sees no isolation on it. If one
 			    // reads the state of an actor `Service` takes from a conformance or a superclass and does not compile, give its
 			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
 			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_default() -> String? { "default" }
@@ -490,7 +490,7 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 			        }
 
 			        public let session: __safeDI_Session_MockConfiguration
-			        /// The default of `Service`'s `default` unless set; `.init(default: nil)` passes `nil`.
+			        /// The default of `Service`’s `default` unless set; `.init(default: nil)` passes `nil`.
 			        public let `default`: String?
 			    }
 
