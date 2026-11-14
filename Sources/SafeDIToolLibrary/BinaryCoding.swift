@@ -236,7 +236,16 @@ struct BinaryWriter {
 		let string: String
 
 		static func == (lhs: Self, rhs: Self) -> Bool {
-			lhs.string.utf8.elementsEqual(rhs.string.utf8)
+			// A lookup compares the key with every key its probe meets, most of another length, so the lengths are
+			// compared first, and the bytes in place rather than through the string's UTF-8 view.
+			var lhsString = lhs.string
+			var rhsString = rhs.string
+			return lhsString.utf8.count == rhsString.utf8.count
+				&& lhsString.withUTF8 { lhsBytes in
+					rhsString.withUTF8 { rhsBytes in
+						lhsBytes.elementsEqual(rhsBytes)
+					}
+				}
 		}
 
 		func hash(into hasher: inout Hasher) {

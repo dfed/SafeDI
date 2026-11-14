@@ -139,6 +139,36 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 		#expect(output.generateOutput.module.filesWithUnexpectedNodes == [output.fixtures["Broken.swift"]])
 	}
 
+	@Test
+	func typeDeclarationWords_findsNameAfterEachTypeKeyword_andNoneAfterOtherWordsOfItsLength() {
+		// Each keyword, then for each a word of its length that differs from it in one byte, first or last, and a word
+		// one byte longer or shorter that it begins.
+		let words = Self.typeDeclarationWords(of: """
+		enum A; struct B; class C; actor D; protocol E; typealias F = A
+		xnum G; enux G; enu G; enums G
+		xtruct H; structx H; struc H; structs H
+		xlass I; clasx I; clas I; classes I
+		xctor J; actox J; acto J; actors J
+		xrotocol K; protocox K; protoco K; protocols K
+		xypealias L; typealiax L; typealia L; typealiases L
+		""")
+
+		#expect(words.namesFollowingKeywords == ["A", "B", "C", "D", "E", "F"])
+		#expect(!words.mayDeclareTypeOtherModulesCanName)
+	}
+
+	@Test(arguments: [
+		(text: "package struct Token {}", findsPackage: true),
+		(text: "struct Token {} // package", findsPackage: true),
+		(text: "xackage struct Token {}", findsPackage: false),
+		(text: "packagx struct Token {}", findsPackage: false),
+		(text: "packag struct Token {}", findsPackage: false),
+		(text: "packages struct Token {}", findsPackage: false),
+	] as [(text: String, findsPackage: Bool)])
+	func typeDeclarationWords_findsPackageModifier_onlyWhenWordIsPackage(text: String, findsPackage: Bool) {
+		#expect(Self.typeDeclarationWords(of: text).mayDeclareTypeOtherModulesCanName == findsPackage)
+	}
+
 	@Test(arguments: [
 		// The name in backticks after whitespace, directly after the keyword, and on the keyword's next line.
 		(text: "package struct `Token` {}", names: ["Token"]),

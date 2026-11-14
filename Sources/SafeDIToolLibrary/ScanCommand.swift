@@ -73,8 +73,9 @@ public func performScan(
 	let inputFilePaths = try String(contentsOfFile: inputSourcesFile, encoding: .utf8)
 		.parsedPathListCSV()
 
-	// Each input's comparable path, which names it in the parse and in every comparison.
-	let allFilePaths = Set(inputFilePaths.map(projectFilePaths.projectFilePath(of:)))
+	// Each input's comparable path, which names it in the parse and in every comparison. Spelling a path goes through
+	// the file system, and a module has thousands of inputs, so the paths are spelled concurrently.
+	let allFilePaths = await Set(inputFilePaths.concurrentlyMapped { projectFilePaths.projectFilePath(of: $0) })
 	// safedi-source-rule: allow uniqueKeysWithValues — the keys are the paths of a set of `ProjectFilePath`s, which are equal exactly when their paths are.
 	let allFilePathsByName = Dictionary(uniqueKeysWithValues: allFilePaths.map { ($0.path, $0) })
 
@@ -82,15 +83,15 @@ public func performScan(
 	// while scan runs shows in `generate`'s comparison. Keyed by absolute path, so `generate`'s
 	// freshness check works regardless of its working directory.
 	var scannedInputStamps = [ProjectFilePath: FileModificationStamp]()
-	for filePath in allFilePaths {
-		scannedInputStamps[filePath] = FileModificationStamp(ofFileAtPath: filePath.path)
+	for (filePath, stamp) in await Array(allFilePaths).concurrentlyMapped({ ($0, FileModificationStamp(ofFileAtPath: $0.path)) }) {
+		scannedInputStamps[filePath] = stamp
 	}
 
 	// Determine which files are scoped for mock scanning.
 	let mockScopedFilePaths: Set<ProjectFilePath> = if mockScopedFiles.isEmpty {
 		allFilePaths
 	} else {
-		Set(mockScopedFiles.map(projectFilePaths.projectFilePath(of:)))
+		await Set(mockScopedFiles.concurrentlyMapped { projectFilePaths.projectFilePath(of: $0) })
 	}
 	/// Whether the input parsed under `name` is one of the module's own files.
 	func isMockScoped(_ name: String) -> Bool {
@@ -99,8 +100,9 @@ public func performScan(
 
 	// Parse all files once to find roots, mocks, and configurations. Only the
 	// mock-scoped files can declare this module's configuration, which decides
-	// how every file's `#if` blocks are evaluated, so they are searched for it first.
-	let (parsedModule, fileScans) = try await parseModule(
+	// how every file's `#if` blocks are evaluated, so they are searched for it first. The parse also returns the names
+	// of the types whose plain declarations the module keeps, which it computed to keep them.
+	let (parsedModule, fileScans, moduleKeptTypeNames) = try await parseModuleKeepingPlainTypeNames(
 		filePaths: Set(allFilePathsByName.keys),
 		configurationFilePaths: Set(allFilePathsByName.keys.filter(isMockScoped)),
 		activeCompilationConditions: activeCompilationConditions,
@@ -117,8 +119,6 @@ public func performScan(
 	// clause of every `#if` block: `generate` writes a file without code for one that is inactive.
 	// Only the module's own files decide its mocks and configuration.
 	let mockScopedFileScans = fileScans.filter { isMockScoped($0.path) }
-	// The names of the types whose plain declarations the module keeps, as `parseModule` kept them.
-	let moduleKeptTypeNames = keptPlainTypeNames(of: fileScans)
 	let moduleOutputFileDeclarations = mockScopedFileScans.reduce(into: OutputFileDeclarations()) { moduleOutputFileDeclarations, fileScan in
 		moduleOutputFileDeclarations.formUnion(fileScan.outputFileDeclarations)
 	}
@@ -165,9 +165,20 @@ public func performScan(
 		).map(\.fileScan)
 	}
 
+	// The manifest's name for each file the parse named, spelled once for the manifest and the cache, and concurrently:
+	// spelling a path goes through the file system, and a module parses hundreds of files.
+	var manifestPathsByScannedPath = [String: String]()
+	for (scannedPath, manifestPath) in await fileScans.map(\.path).concurrentlyMapped({ ($0, projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: $0))) }) {
+		manifestPathsByScannedPath[scannedPath] = manifestPath
+	}
+	/// The manifest's name for the file a scan names `scannedPath`.
+	func manifestPath(ofScannedPath scannedPath: String) -> String {
+		manifestPathsByScannedPath[scannedPath] ?? projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: scannedPath))
+	}
+
 	/// The manifest name of each file `fileScans` names, once each, sorted.
 	func sortedUniqueManifestPaths(_ fileScans: [FileScan]) -> [String] {
-		Set(fileScans.map { projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: $0.path)) }).sorted()
+		Set(fileScans.map { manifestPath(ofScannedPath: $0.path) }).sorted()
 	}
 
 	// Collect the files whose dependency trees get a file: those that declare a root, in any input, and those of the
@@ -252,7 +263,7 @@ public func performScan(
 	// manifest's `inputFilePath` (also project-relative) and what Generate
 	// would compute when parsing fresh from the same CSV.
 	func normalized(_ fileScan: FileScan) -> FileScan {
-		fileScan.relocated(to: projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: fileScan.path)))
+		fileScan.relocated(to: manifestPath(ofScannedPath: fileScan.path))
 	}
 	func cached(_ fileScan: FileScan) -> CachedFileScan {
 		CachedFileScan(scannedPath: fileScan.path, fileScan: normalized(fileScan))
