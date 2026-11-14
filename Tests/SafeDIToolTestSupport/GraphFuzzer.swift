@@ -1417,10 +1417,38 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `CycleSeam` or `CycleA` declared with `generateMock: true`.
 	case cycleParameterMocked
 
+	/// `addingForwardedLabelAcrossSeamCallShapes`' tree, item 2's shape: `FwdInner`, a seam that forwards a label, called
+	/// through an instantiator by `FwdOuter`, which forwards the same label.
+	case forwardedLabelAcrossSeamCall
+	/// `FwdInner` forwards `fwdId: Int`, `FwdOuter` `fwdId: String`.
+	case forwardedLabelAcrossSeamCallOtherTypes
+	/// `FwdInner` forwards `fwdUser: FwdUser?`, `FwdOuter` `fwdUser: FwdUser`.
+	case forwardedLabelAcrossSeamCallInnerOptional
+	/// Both forward `fwdId: Int`.
+	case forwardedLabelAcrossSeamCallSameValueType
+	/// Both forward `fwdUser: FwdUser`.
+	case forwardedLabelAcrossSeamCallSameClassType
+	/// `FwdOuter` forwards nothing, but builds `FwdReader`, which receives `fwdUser` from the root.
+	case forwardedLabelAcrossSeamCallOuterDefers
+	/// `FwdOuter` is no seam, but a type the seam `FwdHome` builds.
+	case forwardedLabelAcrossSeamCallCallerInsideSeam
+	/// The place of `FwdService` is beneath `FwdInner`, on `FwdPart`.
+	case forwardedLabelAcrossSeamCallPlaceBeneath
+	/// `FwdImpl`, the fill, receives the label.
+	case forwardedLabelAcrossSeamCallFillReadsLabel
+	/// `FwdOuter` calls `FwdInner` through a `SendableInstantiator`.
+	case forwardedLabelAcrossSeamCallSendable
+
 	/// Whether `addingCycleParameterShapes` draws this shape, whose count in accepted graphs the seam corpus pins too
 	/// (`acceptedDrawFeatureCounts`).
 	var isCycleParameterShape: Bool {
 		rawValue.hasPrefix("cycleParameter")
+	}
+
+	/// Whether `addingForwardedLabelAcrossSeamCallShapes` draws this shape, whose count in accepted graphs the seam corpus
+	/// pins too (`acceptedDrawFeatureCounts`), at least ten each.
+	var isForwardedLabelAcrossSeamCallShape: Bool {
+		rawValue.hasPrefix("forwardedLabelAcrossSeamCall")
 	}
 
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
@@ -2079,6 +2107,7 @@ enum GraphFuzzerGenerator {
 			mockOnlyBlockRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockOnlyBlockRandomSeedMask)
 			mockVocabularyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockVocabularyRandomSeedMask)
 			cycleParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.cycleParameterRandomSeedMask)
+			forwardedLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.forwardedLabelRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2166,6 +2195,8 @@ enum GraphFuzzerGenerator {
 				// Drawn only in a graph the passes before it split, and after the declarations that move beneath the seam's
 				// module have moved, so that every other graph, and every other draw of a graph it draws in, is drawn as before.
 				finalDeclarations = addingCycleParameterShapes(to: finalDeclarations)
+				// Drawn after it, from a stream of its own, so that every graph the pass before it draws is drawn as before.
+				finalDeclarations = addingForwardedLabelAcrossSeamCallShapes(to: finalDeclarations)
 				presentModules = Set(finalDeclarations.compactMap(\.module))
 			}
 			// Left out after every draw, so that the graph without its second place is drawn, and split, as the graph with it.
@@ -2460,6 +2491,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingCycleParameterShapes`' choices: whether a split graph gains `CycleSeam`'s tree, a lazy cycle that
 		/// closes through a cycle parameter with a hole beneath it, and every shape of that tree.
 		private var cycleParameterRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingForwardedLabelAcrossSeamCallShapes`' choices: whether a split graph gains `FwdOuter`'s tree, in
+		/// which a seam and the type that calls it forward one label, and every shape of that tree.
+		private var forwardedLabelRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -6479,6 +6513,135 @@ enum GraphFuzzerGenerator {
 
 		private static let cycleParameterRandomSeedMask: UInt64 = 0x637963506172616D
 
+		// MARK: A forwarded label across a seam call
+
+		/// How `addingForwardedLabelAcrossSeamCallShapes`' seam `FwdInner` and its caller `FwdOuter` declare their label.
+		private enum ForwardedLabelKind {
+			/// `FwdInner` forwards `fwdId: Int`, `FwdOuter` `fwdId: String`.
+			case otherTypes
+			/// `FwdInner` forwards `fwdUser: FwdUser?`, `FwdOuter` `fwdUser: FwdUser`.
+			case innerOptional
+			/// Both forward `fwdId: Int`.
+			case sameValueType
+			/// Both forward `fwdUser: FwdUser`, a class, so that two values differ by identity.
+			case sameClassType
+			/// `FwdInner` forwards `fwdUser: FwdUser`, and `FwdOuter` forwards nothing but builds `FwdReader`, which receives
+			/// `fwdUser` from the root, so that the seam takes it as a deferred parameter.
+			case outerDefers
+		}
+
+		/// With the `generateDependencyTree` feature on, three in four graphs already split across modules gain item 2's shape:
+		/// `FwdInner`, a seam of the seam's module, forwards a label and holds a place of `FwdService`, on itself or beneath it
+		/// on `FwdPart`, which `FwdImpl`, beside the roots, fills, now and then reading the label; and `FwdOuter`, which calls
+		/// it through an instantiator, forwards the same label – of another type, of the optional's wrapped type, or of the
+		/// same type – or builds `FwdReader`, which receives it from the root. `FwdOuter` is a seam of its own, or, three
+		/// draws in ten, a type `FwdHome`, a seam, builds. `FwdRoot`, a root of the roots' module, builds the outermost seam.
+		/// The function that builds `FwdInner` takes its forwarded label as a parameter, under the label `FwdOuter`'s level
+		/// binds too, so a seam that builds what it passes up there reads the inner seam's value.
+		///
+		/// `forwardedLabelRandom` draws only for this pass, which runs after every other pass and only in a graph another
+		/// pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as before.
+		private mutating func addingForwardedLabelAcrossSeamCallShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `build()` calls this pass only for a graph split across modules.
+			guard features.contains(.generateDependencyTree), forwardedLabelRandom.percentChance(75) else { return declarations }
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let kindRoll = forwardedLabelRandom.integer(in: 0...99)
+			let callerInsideSeam = forwardedLabelRandom.percentChance(30)
+			let placeBeneath = forwardedLabelRandom.percentChance(30)
+			let fillReadsLabel = forwardedLabelRandom.percentChance(50)
+			let sendableRoll = forwardedLabelRandom.percentChance(50)
+			let kind: ForwardedLabelKind = switch kindRoll {
+			case 0..<30: .otherTypes
+			case 30..<45: .innerOptional
+			case 45..<65: .sameValueType
+			case 65..<85: .sameClassType
+			default: .outerDefers
+			}
+			let isSendable = switch sendability {
+			case .nonSendable: false
+			case .sendable: true
+			case .mixed: sendableRoll
+			}
+			let instantiator = isSendable ? "SendableInstantiator" : "Instantiator"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let prefix = prefix
+			func instantiable(_ suffix: String, module: GraphFuzzerModule = .seamModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			let serviceName = "\(prefix)FwdService"
+			let userName = "\(prefix)FwdUser"
+			let label: String
+			let innerType: String
+			let outerType: String?
+			switch kind {
+			case .otherTypes:
+				(label, innerType, outerType) = ("fwdId", "Int", "String")
+			case .innerOptional:
+				(label, innerType, outerType) = ("fwdUser", userName + "?", userName)
+			case .sameValueType:
+				(label, innerType, outerType) = ("fwdId", "Int", "Int")
+			case .sameClassType:
+				(label, innerType, outerType) = ("fwdUser", userName, userName)
+			case .outerDefers:
+				(label, innerType, outerType) = ("fwdUser", userName, nil)
+			}
+			let place = PropertyDeclaration(attribute: "@Instantiated", label: "fwdService", type: "any \(serviceName)")
+
+			var inner = instantiable("FwdInner", properties: [PropertyDeclaration(attribute: "@Forwarded", label: label, type: innerType)])
+			inner.instantiableArguments = ["generateDependencyTree: true"]
+			inner.additionalDeclarations.append("public protocol \(serviceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+			var added = [TypeDeclaration]()
+			if placeBeneath {
+				let part = instantiable("FwdPart", properties: [place])
+				inner.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "fwdPart", type: part.name))
+				added.append(part)
+			} else {
+				inner.properties.append(place)
+			}
+			var outer = instantiable("FwdOuter")
+			if let outerType {
+				outer.properties.append(PropertyDeclaration(attribute: "@Forwarded", label: label, type: outerType))
+			} else {
+				let reader = instantiable("FwdReader", properties: [PropertyDeclaration(attribute: "@Received", label: label, type: userName)])
+				outer.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "fwdReader", type: reader.name))
+				added.append(reader)
+			}
+			outer.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "fwdInnerBuilder", type: "\(instantiator)<\(inner.name)>"))
+			let outerProperty = outerType == nil
+				? PropertyDeclaration(attribute: "@Instantiated", label: "fwdOuter", type: outer.name)
+				: PropertyDeclaration(attribute: "@Instantiated", label: "fwdOuterBuilder", type: "\(instantiator)<\(outer.name)>")
+			var root = instantiable("FwdRoot", module: .samePackageCaller)
+			root.instantiableArguments = ["isRoot: true"]
+			if kind == .outerDefers {
+				root.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: label, type: userName))
+			}
+			if callerInsideSeam {
+				var home = instantiable("FwdHome", properties: [outerProperty])
+				home.instantiableArguments = ["generateDependencyTree: true"]
+				root.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "fwdHome", type: home.name))
+				added.append(home)
+			} else {
+				outer.instantiableArguments = ["generateDependencyTree: true"]
+				root.properties.append(outerProperty)
+			}
+			if [.innerOptional, .sameClassType, .outerDefers].contains(kind) {
+				added.append(instantiable("FwdUser"))
+			}
+			var impl = instantiable("FwdImpl", module: .samePackageCaller)
+			impl.instantiableArguments = ["fulfillingAdditionalTypes: [\(serviceName).self]"]
+			impl.additionalConformances.append(serviceName)
+			impl.fillsHole = true
+			// The fill reads the inner seam's own value, which no optional of it carries required.
+			if fillReadsLabel, kind != .innerOptional {
+				impl.properties.append(PropertyDeclaration(attribute: "@Received", label: label, type: innerType))
+			}
+			return declarations + [inner, outer] + added + [impl, root]
+		}
+
+		private static let forwardedLabelRandomSeedMask: UInt64 = 0x66776453656D4C62
+
 		// MARK: Access proof extensions
 
 		/// With the `generateDependencyTree` feature on, extends `addingAccessProofShapes`' tree with the shapes that pass
@@ -7926,6 +8089,43 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 		}
 		return features.union(accessProofDrawFeatures(of: fixture)).union(holeDrawFeatures(of: fixture)).union(cycleParameterDrawFeatures(of: fixture))
+			.union(forwardedLabelAcrossSeamCallDrawFeatures(of: fixture))
+	}
+
+	/// The shapes `addingForwardedLabelAcrossSeamCallShapes` draws, read from the properties the fixture declares on the
+	/// `Fwd` types.
+	private static func forwardedLabelAcrossSeamCallDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
+		let prefix = fixture.typeNamePrefix
+		let (propertiesByType, _) = declaredProperties(of: fixture)
+		guard let innerProperties = propertiesByType[prefix + "FwdInner"], let outerProperties = propertiesByType[prefix + "FwdOuter"] else { return [] }
+		var features: Set<GraphFuzzerSeamDrawFeature> = [.forwardedLabelAcrossSeamCall]
+		let innerLabel = innerProperties.first { $0.attribute == "@Forwarded" }
+		let outerLabel = outerProperties.first { $0.attribute == "@Forwarded" }
+		switch (innerLabel?.type, outerLabel?.type) {
+		case let (innerType?, outerType?) where innerType == outerType:
+			features.insert(innerType == "Int" ? .forwardedLabelAcrossSeamCallSameValueType : .forwardedLabelAcrossSeamCallSameClassType)
+		case let (innerType?, outerType?) where innerType == outerType + "?":
+			features.insert(.forwardedLabelAcrossSeamCallInnerOptional)
+		case (_?, _?):
+			features.insert(.forwardedLabelAcrossSeamCallOtherTypes)
+		case (_, nil):
+			features.insert(.forwardedLabelAcrossSeamCallOuterDefers)
+		case (nil, _?):
+			break
+		}
+		if propertiesByType[prefix + "FwdHome"] != nil {
+			features.insert(.forwardedLabelAcrossSeamCallCallerInsideSeam)
+		}
+		if propertiesByType[prefix + "FwdPart"] != nil {
+			features.insert(.forwardedLabelAcrossSeamCallPlaceBeneath)
+		}
+		if let innerLabel, propertiesByType[prefix + "FwdImpl"]?.contains(where: { $0.label == innerLabel.label }) == true {
+			features.insert(.forwardedLabelAcrossSeamCallFillReadsLabel)
+		}
+		if outerProperties.contains(where: { $0.type.hasPrefix("SendableInstantiator<") }) {
+			features.insert(.forwardedLabelAcrossSeamCallSendable)
+		}
+		return features
 	}
 
 	/// Each type's properties, in declaration order, and the types declared with `generateMock: true`, by name, read from

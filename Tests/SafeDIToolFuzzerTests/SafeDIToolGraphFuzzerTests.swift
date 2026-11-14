@@ -403,6 +403,19 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachGatingDraw() {
+		// The gating draws – a seam and its caller forwarding one label, a public mock that builds itself again with a
+		// place beneath, and a place inside a public mock's fill – gate generator changes only while each of their shapes
+		// lands in at least ten graphs the tool accepts, which the corpus runs pin exactly.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isForwardedLabelAcrossSeamCallShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= 10, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+		for feature in GraphFuzzerPublicMockDrawFeature.allCases where feature.isCountedWhenAccepted {
+			#expect(Self.publicMockCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= 10, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
 	func fixtureWithoutSecondHolePlace_leavesOutAPlace_whenSeamCorpusGraphDrawsANestedBuildersShape() {
 		// The name-stability oracle compares a graph with and without its second place of a hole, so every graph that draws
 		// one of the nested builders' shapes – the cycle of two seams and the place inside a `@Sendable` fill among them –
@@ -4588,6 +4601,7 @@ struct SafeDIToolGraphFuzzerTests {
 		var publicMockOutputFeatureCounts = [GraphFuzzerPublicMockOutputFeature: Int]()
 		var errorGraphCounts = [String: Int]()
 		var acceptedDrawFeatureCounts = [GraphFuzzerSeamDrawFeature: Int]()
+		var acceptedPublicMockDrawFeatureCounts = [GraphFuzzerPublicMockDrawFeature: Int]()
 		var valueOracleCounts = GraphFuzzerValueOracleCounts()
 		// The remedies the remedy oracle applied, and those that left an error at their site, by kind, and the sites of a
 		// family it reads that it applied none to.
@@ -4672,6 +4686,11 @@ struct SafeDIToolGraphFuzzerTests {
 								if !corpus.drawFeaturesCountedWhenAccepted.isEmpty {
 									for feature in GraphFuzzerFeature.seamDrawFeatures(of: result.fixture).intersection(corpus.drawFeaturesCountedWhenAccepted) {
 										acceptedDrawFeatureCounts[feature, default: 0] += 1
+									}
+								}
+								if !corpus.publicMockDrawFeaturesCountedWhenAccepted.isEmpty {
+									for feature in GraphFuzzerPublicMockDraw.drawFeatures(of: result.fixture).intersection(corpus.publicMockDrawFeaturesCountedWhenAccepted) {
+										acceptedPublicMockDrawFeatureCounts[feature, default: 0] += 1
 									}
 								}
 								if result.failure == nil {
@@ -4774,8 +4793,10 @@ struct SafeDIToolGraphFuzzerTests {
 		// The accepted graphs that show each draw the corpus counts there, with the pinned counts, and the graphs each error
 		// the corpus pins rejects, with the pins, which ci.yml's combine job adds up and checks: a draw that stops landing
 		// in accepted graphs, or a change that rejects more of them, names the shape.
-		let drawFeatureCounts = corpus.drawFeaturesCountedWhenAccepted.sorted().map { "\($0.rawValue)=\(acceptedDrawFeatureCounts[$0, default: 0])" }.joined(separator: ",")
-		let drawFeaturePins = corpus.acceptedDrawFeatureCounts.sorted { $0.key < $1.key }.map { "\($0.key.rawValue)=\($0.value)" }.joined(separator: ",")
+		let drawFeatureCounts = (corpus.drawFeaturesCountedWhenAccepted.sorted().map { "\($0.rawValue)=\(acceptedDrawFeatureCounts[$0, default: 0])" }
+			+ corpus.publicMockDrawFeaturesCountedWhenAccepted.sorted().map { "\($0.rawValue)=\(acceptedPublicMockDrawFeatureCounts[$0, default: 0])" }).joined(separator: ",")
+		let drawFeaturePins = (corpus.acceptedDrawFeatureCounts.sorted { $0.key < $1.key }.map { "\($0.key.rawValue)=\($0.value)" }
+			+ corpus.acceptedPublicMockDrawFeatureCounts.sorted { $0.key < $1.key }.map { "\($0.key.rawValue)=\($0.value)" }).joined(separator: ",")
 		report.append("draws \(corpus.name) \(drawFeatureCounts) \(drawFeaturePins)")
 		let errorCounts = corpus.errorMarkers.map { errorGraphCounts[$0, default: 0] }
 		report.append("errors \(corpus.name) \(errorCounts.map(String.init).joined(separator: ",")) \(corpus.errorGraphCounts.map(String.init).joined(separator: ","))")
@@ -4845,6 +4866,12 @@ struct SafeDIToolGraphFuzzerTests {
 			let drawMismatches = corpus.drawFeaturesCountedWhenAccepted.union(corpus.acceptedDrawFeatureCounts.keys).sorted().compactMap { feature -> String? in
 				let count = acceptedDrawFeatureCounts[feature, default: 0]
 				guard let pinnedCount = corpus.acceptedDrawFeatureCounts[feature] else {
+					return "\(feature.rawValue) \(count) (no pin)"
+				}
+				return count == pinnedCount ? nil : "\(feature.rawValue) \(count) (pinned \(pinnedCount))"
+			} + corpus.publicMockDrawFeaturesCountedWhenAccepted.union(corpus.acceptedPublicMockDrawFeatureCounts.keys).sorted().compactMap { feature -> String? in
+				let count = acceptedPublicMockDrawFeatureCounts[feature, default: 0]
+				guard let pinnedCount = corpus.acceptedPublicMockDrawFeatureCounts[feature] else {
 					return "\(feature.rawValue) \(count) (no pin)"
 				}
 				return count == pinnedCount ? nil : "\(feature.rawValue) \(count) (pinned \(pinnedCount))"
@@ -5035,6 +5062,11 @@ struct SafeDIToolGraphFuzzerTests {
 		/// How many of the graphs the tool accepts show each draw of `drawFeaturesCountedWhenAccepted`, counted whether or
 		/// not the graph fails, as the accepted-seed pins are.
 		var acceptedDrawFeatureCounts = [GraphFuzzerSeamDrawFeature: Int]()
+		/// The public mock draws whose graphs the tool accepts the corpus counts, as `drawFeaturesCountedWhenAccepted` does
+		/// for the seam draws.
+		var publicMockDrawFeaturesCountedWhenAccepted = Set<GraphFuzzerPublicMockDrawFeature>()
+		/// How many of the graphs the tool accepts show each draw of `publicMockDrawFeaturesCountedWhenAccepted`.
+		var acceptedPublicMockDrawFeatureCounts = [GraphFuzzerPublicMockDrawFeature: Int]()
 		/// What the base corpus's value oracle compares and skips over the whole corpus, or `nil` for a corpus that has
 		/// no such oracle.
 		var valueOracleCounts: GraphFuzzerValueOracleCounts?
@@ -5148,14 +5180,14 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter(\.isCycleParameterShape)),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		seedsTraversingPastTheBatchBudget: seamCorpusSeedsTraversingPastTheBatchBudget,
 	)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0xC88F6DA800F46D1D
+	static let seamCorpusFixtureHash: UInt64 = 0x4E8B6D4A9640F165
 	static let seamCorpusAcceptedSeedCount = 289
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xF226EE7C76286253
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -5222,6 +5254,16 @@ struct SafeDIToolGraphFuzzerTests {
 		.cycleParameterTwoLevelsDeep: 31,
 		.cycleParameterUndeclaredAbove: 3,
 		.cycleParameterWithoutReader: 10,
+		.forwardedLabelAcrossSeamCall: 0,
+		.forwardedLabelAcrossSeamCallCallerInsideSeam: 0,
+		.forwardedLabelAcrossSeamCallFillReadsLabel: 0,
+		.forwardedLabelAcrossSeamCallInnerOptional: 0,
+		.forwardedLabelAcrossSeamCallOtherTypes: 0,
+		.forwardedLabelAcrossSeamCallOuterDefers: 0,
+		.forwardedLabelAcrossSeamCallPlaceBeneath: 0,
+		.forwardedLabelAcrossSeamCallSameClassType: 0,
+		.forwardedLabelAcrossSeamCallSameValueType: 0,
+		.forwardedLabelAcrossSeamCallSendable: 0,
 	]
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
 	/// with their read twin.
@@ -5265,14 +5307,14 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 78, 84, 92, 93, 151, 153, 180, 215, 227, 277, 304, 347, 605, 609, 705, 743, 1_010, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x14C4802E1FF8DE50
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x21F0F371A04E8EB4
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
 	/// `seamCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool`.
 	static let seamCorpusDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
 		.collidingFormsBeneathSeam: 67,
-		.innerSeam: 408,
+		.innerSeam: 582,
 		.instanceHeldByCaller: 393,
 		.instanceReceiveBeneathSeam: 242,
 		.otherKindWrapperReceiveBeneathSeam: 32,
@@ -5498,6 +5540,16 @@ struct SafeDIToolGraphFuzzerTests {
 		.cycleParameterNoteDeclaredAgain: 23,
 		.cycleParameterFillReadsNote: 103,
 		.cycleParameterMocked: 69,
+		.forwardedLabelAcrossSeamCall: 406,
+		.forwardedLabelAcrossSeamCallCallerInsideSeam: 131,
+		.forwardedLabelAcrossSeamCallFillReadsLabel: 180,
+		.forwardedLabelAcrossSeamCallInnerOptional: 58,
+		.forwardedLabelAcrossSeamCallOtherTypes: 105,
+		.forwardedLabelAcrossSeamCallOuterDefers: 62,
+		.forwardedLabelAcrossSeamCallPlaceBeneath: 122,
+		.forwardedLabelAcrossSeamCallSameClassType: 89,
+		.forwardedLabelAcrossSeamCallSameValueType: 92,
+		.forwardedLabelAcrossSeamCallSendable: 114,
 	]
 
 	/// Seeds in `0..<seamCorpusSeedCount` whose graphs fail today. The 1 000-seed run of this corpus found that each
@@ -5610,8 +5662,27 @@ struct SafeDIToolGraphFuzzerTests {
 		outputFeatureMinimumShares: publicMockCorpusOutputFeatureMinimumShares,
 		errorMarkers: GraphFuzzerOracle.publicMockOnlyErrorMarkers,
 		errorGraphCounts: publicMockCorpusErrorGraphCounts,
+		publicMockDrawFeaturesCountedWhenAccepted: Set(GraphFuzzerPublicMockDrawFeature.allCases.filter(\.isCountedWhenAccepted)),
+		acceptedPublicMockDrawFeatureCounts: publicMockCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: publicMockCorpusReadTwinGraphCount,
 	)
+
+	/// How many of the public mock corpus's accepted graphs show each gating draw (`isCountedWhenAccepted`), counted
+	/// whether or not the graph fails: at least ten each (`acceptedGatingDrawCounts_reachTheFloor`). Pins: derived on CI.
+	static let publicMockCorpusAcceptedDrawFeatureCounts: [GraphFuzzerPublicMockDrawFeature: Int] = [
+		.placeInsidePublicMockFill: 0,
+		.placeInsidePublicMockFillFilledByConsumer: 0,
+		.placeInsidePublicMockFillOnForwardingRoute: 0,
+		.placeInsidePublicMockFillPassedUp: 0,
+		.placeInsidePublicMockFillReadsForwardedValue: 0,
+		.placeInsidePublicMockFillReadsOuterValue: 0,
+		.selfBuildingPublicMock: 0,
+		.selfBuildingPublicMockFillReadsToken: 0,
+		.selfBuildingPublicMockPassedUp: 0,
+		.selfBuildingPublicMockPlaceBeneath: 0,
+		.selfBuildingPublicMockThroughSendableInstantiator: 0,
+		.selfBuildingPublicMockThroughStep: 0,
+	]
 
 	/// The least share of the public mock corpus's accepted graphs whose generated code shows each output feature, in
 	/// percent: the floor of the share the corpus run observed, for each feature the generated code shows today. The
@@ -5642,7 +5713,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0xAD9CDA020E94461F
+	static let publicMockCorpusFixtureHash: UInt64 = 0x59B7B3B0AAC6F4A4
 	static let publicMockCorpusAcceptedSeedCount = 863
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x0ACCA7FED6243E41
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -5680,7 +5751,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xEDD09AB314C7041D
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x35B2A2B27ED15600
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -5775,6 +5846,18 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeOnPublicMockType: 228,
 		.holeScopeHoldsPackageValue: 103,
 		.holeScopeHoldsPublicValue: 140,
+		.placeInsidePublicMockFill: 399,
+		.placeInsidePublicMockFillFilledByConsumer: 295,
+		.placeInsidePublicMockFillOnForwardingRoute: 169,
+		.placeInsidePublicMockFillPassedUp: 104,
+		.placeInsidePublicMockFillReadsForwardedValue: 79,
+		.placeInsidePublicMockFillReadsOuterValue: 85,
+		.selfBuildingPublicMock: 426,
+		.selfBuildingPublicMockFillReadsToken: 91,
+		.selfBuildingPublicMockPassedUp: 92,
+		.selfBuildingPublicMockPlaceBeneath: 140,
+		.selfBuildingPublicMockThroughSendableInstantiator: 39,
+		.selfBuildingPublicMockThroughStep: 114,
 		.instantiableParameterType: 235,
 		.internalInitializer: 520,
 		.lazilyInstantiatedOmittedValueProvider: 58,

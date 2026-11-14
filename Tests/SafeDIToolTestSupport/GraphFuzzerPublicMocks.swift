@@ -201,6 +201,35 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case consumerReachesHoleTypeThroughTwoPublicMocks
 	case holeFakeBesideFill
 	case holeFakeAlone
+	/// On a stream of its own (`publicMockSelfBuildRandomSeedMask`), C1's shape: `SelfNode`, a `.public` type with a place
+	/// of `SelfApi`, builds itself again through an instantiator of itself, through `SelfStep`, which it builds, or, in a
+	/// graph whose types are all `Sendable`, through a `SendableInstantiator`; its place is on it or beneath it on
+	/// `SelfPart`; it now and then binds `selfToken` before the place, which the fill reads; and `SelfScreen`, a mocked
+	/// consumer, calls its public mock, filling the place with `SelfLive` or passing it up.
+	case selfBuildingPublicMock
+	case selfBuildingPublicMockThroughStep
+	case selfBuildingPublicMockThroughSendableInstantiator
+	case selfBuildingPublicMockPlaceBeneath
+	case selfBuildingPublicMockFillReadsToken
+	case selfBuildingPublicMockPassedUp
+	/// On a stream of its own (`publicMockPlaceInFillRandomSeedMask`), a place inside a public mock's fill: `PfOuter`, a
+	/// `.public` type of the declaring module, builds `PfInner`, a `.public` type of the module beneath it whose place of
+	/// `PfService` the declaring module fills with `PfDefault`, which holds a place of `PfGadget` that only a consumer
+	/// module fills (`PfLive`) or passes up. Now and then `PfInner` also builds `PfInnerScreen` through an instantiator
+	/// that forwards `pfId`, with a place of its own, which the fill reads only if available, and `PfOuter` binds `pfTag`
+	/// before it, which the fill reads.
+	case placeInsidePublicMockFill
+	case placeInsidePublicMockFillFilledByConsumer
+	case placeInsidePublicMockFillPassedUp
+	case placeInsidePublicMockFillOnForwardingRoute
+	case placeInsidePublicMockFillReadsOuterValue
+	case placeInsidePublicMockFillReadsForwardedValue
+
+	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`) draws this shape, whose
+	/// count in accepted graphs the public mock corpus pins too (`acceptedDrawFeatureCounts`), at least ten each.
+	var isCountedWhenAccepted: Bool {
+		rawValue.hasPrefix("selfBuildingPublicMock") || rawValue.hasPrefix("placeInsidePublicMockFill")
+	}
 
 	static func < (lhs: GraphFuzzerPublicMockDrawFeature, rhs: GraphFuzzerPublicMockDrawFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -398,6 +427,12 @@ struct GraphFuzzerPublicMockDraw {
 				files[index].module = destination
 			}
 		}
+		// The gating draws, each on a stream of its own and after the files that move beneath the declaring module have moved,
+		// so that a graph without them is drawn, and moved, as before.
+		var selfBuildRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockSelfBuildRandomSeedMask)
+		drawSelfBuildingPublicMock(random: &selfBuildRandom)
+		var placeInFillRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockPlaceInFillRandomSeedMask)
+		drawPlaceInsidePublicMockFill(random: &placeInFillRandom)
 	}
 
 	/// The files of the graph, each beginning with its module's marker: as drawn, or, for the known-right path of the
@@ -432,6 +467,8 @@ struct GraphFuzzerPublicMockDraw {
 	/// `t6Second`, under which it reaches `T6` a second time (D530-1), or `nil`.
 	private(set) var secondHolePlace: String?
 	private let omitsSecondHolePlace: Bool
+	/// Whether every type of the graph is `Sendable`, which alone may build a type inside a `@Sendable` builder.
+	private var isSendableGraph = false
 
 	static let publicMockRandomSeedMask: UInt64 = 0x7075626C69636D6B
 	static let publicMockSpellingRandomSeedMask: UInt64 = 0x7075626D6B73706C
@@ -475,6 +512,12 @@ struct GraphFuzzerPublicMockDraw {
 	/// the same hole as `T6`'s, so that a consumer calls two public mocks of one hole type: a roll added after the rest of
 	/// the draw was pinned, so that its other shapes are drawn as before.
 	static let publicMockSecondCalledMockRandomSeedMask: UInt64 = 0x7075626D6B74776E
+	/// Draws only C1's shape, a `.public` type that builds itself again with a place beneath (`drawSelfBuildingPublicMock`):
+	/// rolls added after the rest of the draw was pinned, so that its other shapes are drawn as before.
+	static let publicMockSelfBuildRandomSeedMask: UInt64 = 0x7075626D6B73656C
+	/// Draws only a place inside a public mock's fill (`drawPlaceInsidePublicMockFill`): rolls added after the rest of the
+	/// draw was pinned, so that its other shapes are drawn as before.
+	static let publicMockPlaceInFillRandomSeedMask: UInt64 = 0x7075626D6B706966
 	/// What begins the comment in `T6`'s file that holds its hand-written caller's call, after the caller's module:
 	/// `// publicMockCaller in FuzzOther: S1_T6.mock(s1_HoleBuilder: …)`. `GraphFuzzerOracle.addingPublicMockCallers` reads it.
 	static let publicMockCallerMarker = "// publicMockCaller in "
@@ -685,6 +728,7 @@ struct GraphFuzzerPublicMockDraw {
 		let leafCount = random.integer(in: 1...3)
 		// Some graphs are `Sendable` throughout, which alone may build a leaf inside a `@Sendable` builder.
 		let isSendableGraph = random.percentChance(35)
+		self.isSendableGraph = isSendableGraph
 		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
 
 		var declaringFiles = [File]()
@@ -1481,6 +1525,160 @@ struct GraphFuzzerPublicMockDraw {
 				}
 			}
 		}
+	}
+
+	// MARK: Gating draws
+
+	/// The modules of the graph that call the declaring module, in dependency order.
+	private var consumerModules: [GraphFuzzerModule] {
+		GraphFuzzerModule.allCases.filter { module in module.isCaller && files.contains { $0.module == module } }
+	}
+
+	/// A protocol of the graph's, `Sendable` in a graph whose types all are, so that a type built inside a `@Sendable`
+	/// builder can hold one.
+	private func protocolDeclaration(_ protocolName: String) -> (Rendering) -> String {
+		let isSendableGraph = isSendableGraph
+		return { rendering in "\(rendering.modifier(.public))protocol \(protocolName)\(isSendableGraph ? ": Sendable" : "") {}" }
+	}
+
+	/// C1's shape, in two graphs in five: `SelfNode`, a `.public` type of the declaring module with a place of `SelfApi`,
+	/// which no declaration of its module fulfills, builds itself again – through `Instantiator<SelfNode>`, through
+	/// `SelfStep`, a type it builds that instantiates it, or, in a graph whose types are all `Sendable`, through a
+	/// `SendableInstantiator` – so that its public mock's case on the way back to it holds its own enum. Its place is on it,
+	/// or beneath it on `SelfPart`; now and then it binds `selfToken` before the place, which the fill reads. `SelfScreen`,
+	/// a mocked consumer in one consumer module, builds it, and `SelfLive` beside it fills the place, or, one draw in five,
+	/// nothing does and its mock takes the builder. Every roll is made before any is read.
+	private mutating func drawSelfBuildingPublicMock(random: inout GraphFuzzerRandomNumberGenerator) {
+		let drawsShape = random.percentChance(40)
+		let routeRoll = random.integer(in: 0...99)
+		let placeBeneath = random.percentChance(30)
+		let bindsToken = random.percentChance(40)
+		let fillReadsToken = random.percentChance(60)
+		let passesUp = random.percentChance(20)
+		let initializerRoll = random.integer(in: 0...7)
+		let consumerModuleRoll = random.integer(in: 0...1)
+		let consumerModules = consumerModules
+		guard drawsShape, !consumerModules.isEmpty else { return }
+		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
+		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
+		let apiName = name("SelfApi")
+		let nodeName = name("SelfNode")
+		let tokenName = name("SelfToken")
+		var declaringModuleDeclarations = [protocolDeclaration(apiName)]
+		var node = InstantiableClass(name: nodeName, conformances: conformances)
+		node.mockGeneration = ".public"
+		node.initializerAccess = initializerRoll < 4 ? .package : initializerRoll == 4 ? .internal : .public
+		if bindsToken {
+			node.properties.append(Property(attribute: "@Instantiated", label: "selfToken", type: tokenName))
+			declaringModuleDeclarations.append(Self.renderer(of: InstantiableClass(name: tokenName, conformances: conformances)))
+		}
+		let place = Property(attribute: "@Instantiated", label: "selfApi", type: "any \(apiName)")
+		if placeBeneath {
+			var part = InstantiableClass(name: name("SelfPart"), conformances: conformances)
+			part.properties = [place]
+			node.properties.append(Property(attribute: "@Instantiated", label: "selfPart", type: part.name))
+			declaringModuleDeclarations.append(Self.renderer(of: part))
+		} else {
+			node.properties.append(place)
+		}
+		switch routeRoll {
+		case 55..<80:
+			var step = InstantiableClass(name: name("SelfStep"), conformances: conformances)
+			step.properties = [Property(attribute: "@Instantiated", label: "selfNodeBuilder", type: "Instantiator<\(nodeName)>")]
+			node.properties.append(Property(attribute: "@Instantiated", label: "selfStep", type: step.name))
+			declaringModuleDeclarations.append(Self.renderer(of: step))
+		case 80... where isSendableGraph:
+			node.properties.append(Property(attribute: "@Instantiated", label: "selfNodeBuilder", type: "SendableInstantiator<\(nodeName)>"))
+		default:
+			node.properties.append(Property(attribute: "@Instantiated", label: "selfNodeBuilder", type: "Instantiator<\(nodeName)>"))
+		}
+		declaringModuleDeclarations.insert(Self.renderer(of: node), at: 1)
+		var screen = InstantiableClass(name: name("SelfScreen"), conformances: conformances)
+		screen.mockGeneration = "true"
+		screen.properties = [Property(attribute: "@Instantiated", label: "selfNode", type: nodeName)]
+		var consumerDeclarations = [Self.renderer(of: screen)]
+		if !passesUp {
+			var live = InstantiableClass(name: name("SelfLive"), conformances: [apiName] + conformances)
+			live.arguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
+			if bindsToken, fillReadsToken {
+				live.properties = [Property(attribute: "@Received", label: "selfToken", type: tokenName)]
+			}
+			consumerDeclarations.append(Self.renderer(of: live))
+		}
+		files.append(File(module: .seamModule, declarations: declaringModuleDeclarations))
+		files.append(File(module: consumerModule, declarations: consumerDeclarations))
+	}
+
+	/// A place inside a public mock's fill, in two graphs in five: `PfInner`, a `.public` type of the module beneath the
+	/// declaring module (`FuzzSession`), whose initializer is `internal` seven times in ten and otherwise `package`, holds a
+	/// place of `PfService`; `PfOuter`, a `.public` type of the declaring module with an `internal` initializer, builds it,
+	/// so that its public mock calls `PfInner`'s, or builds its tree inline, and fills the place with `PfDefault`, whose
+	/// place of `PfGadget` the declaring module cannot fill: the place inside the fill. `PfApp`, a mocked consumer, builds
+	/// `PfOuter`, and `PfLive` beside it fills that place, or, one draw in four, nothing does and its mock takes the builder.
+	/// Now and then `PfInner` also builds `PfInnerScreen` through an instantiator that forwards `pfId`, with a place of its
+	/// own, which the fill reads only if available, and `PfOuter` binds `pfTag` before `PfInner`, which the fill reads.
+	/// Every roll is made before any is read.
+	private mutating func drawPlaceInsidePublicMockFill(random: inout GraphFuzzerRandomNumberGenerator) {
+		let drawsShape = random.percentChance(40)
+		let drawsScreen = random.percentChance(40)
+		let bindsTag = random.percentChance(50)
+		let fillReadsTag = random.percentChance(60)
+		let fillReadsIdentifier = random.percentChance(60)
+		let fillsInConsumer = random.percentChance(75)
+		let innerInitializerRoll = random.integer(in: 0...9)
+		let consumerModuleRoll = random.integer(in: 0...1)
+		let consumerModules = consumerModules
+		guard drawsShape, !consumerModules.isEmpty else { return }
+		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
+		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
+		let serviceName = name("PfService")
+		let gadgetName = name("PfGadget")
+		let tagName = name("PfTag")
+		let place = Property(attribute: "@Instantiated", label: "pfService", type: "any \(serviceName)")
+		var inner = InstantiableClass(name: name("PfInner"), conformances: conformances)
+		inner.mockGeneration = ".public"
+		inner.initializerAccess = innerInitializerRoll < 7 ? .internal : .package
+		inner.properties = [place]
+		var innerDeclarations = [protocolDeclaration(serviceName)]
+		if drawsScreen {
+			var screen = InstantiableClass(name: name("PfInnerScreen"), conformances: conformances)
+			screen.properties = [Property(attribute: "@Forwarded", label: "pfId", type: "Int"), place]
+			inner.properties.append(Property(attribute: "@Instantiated", label: "pfInnerScreenBuilder", type: "Instantiator<\(screen.name)>"))
+			innerDeclarations.append(Self.renderer(of: screen))
+		}
+		innerDeclarations.insert(Self.renderer(of: inner), at: 1)
+		var fill = InstantiableClass(name: name("PfDefault"), conformances: [serviceName] + conformances)
+		fill.arguments = ["fulfillingAdditionalTypes: [\(serviceName).self]"]
+		fill.properties = [Property(attribute: "@Instantiated", label: "pfGadget", type: "any \(gadgetName)")]
+		var outer = InstantiableClass(name: name("PfOuter"), conformances: conformances)
+		outer.mockGeneration = ".public"
+		outer.initializerAccess = .internal
+		var declaringModuleDeclarations = [protocolDeclaration(gadgetName)]
+		if bindsTag {
+			outer.properties.append(Property(attribute: "@Instantiated", label: "pfTag", type: tagName))
+			declaringModuleDeclarations.append(Self.renderer(of: InstantiableClass(name: tagName, conformances: conformances)))
+		}
+		outer.properties.append(Property(attribute: "@Instantiated", label: "pfInner", type: inner.name))
+		declaringModuleDeclarations.insert(Self.renderer(of: outer), at: 1)
+		declaringModuleDeclarations.append(Self.renderer(of: fill))
+		var app = InstantiableClass(name: name("PfApp"), conformances: conformances)
+		app.mockGeneration = "true"
+		app.properties = [Property(attribute: "@Instantiated", label: "pfOuter", type: outer.name)]
+		var consumerDeclarations = [Self.renderer(of: app)]
+		if fillsInConsumer {
+			var live = InstantiableClass(name: name("PfLive"), conformances: [gadgetName] + conformances)
+			live.arguments = ["fulfillingAdditionalTypes: [\(gadgetName).self]"]
+			if bindsTag, fillReadsTag {
+				live.properties.append(Property(attribute: "@Received", label: "pfTag", type: tagName))
+			}
+			if drawsScreen, fillReadsIdentifier {
+				live.properties.append(Property(attribute: "@Received(onlyIfAvailable: true)", label: "pfId", type: "Int?"))
+			}
+			consumerDeclarations.append(Self.renderer(of: live))
+		}
+		files.append(File(module: .seamDependency, declarations: innerDeclarations))
+		files.append(File(module: .seamModule, declarations: declaringModuleDeclarations))
+		files.append(File(module: consumerModule, declarations: consumerDeclarations))
 	}
 
 	/// Declares `Logger`, its production type `ConsoleLogger`, which instantiates `Level`, and a fake: a class at `package`
@@ -2343,6 +2541,43 @@ extension GraphFuzzerPublicMockDraw {
 				} else {
 					features.insert(parameter.hasSuffix("= nil") ? .spelledOptionalDefault : .spelledNonOptionalDefault)
 				}
+			}
+		}
+		// The gating draws: C1's shape, and a place inside a public mock's fill.
+		if let node = types.declarations["\(prefix)SelfNode"] {
+			features.insert(.selfBuildingPublicMock)
+			if node.properties.contains(where: { $0.label == "selfStep" }) {
+				features.insert(.selfBuildingPublicMockThroughStep)
+			}
+			if node.properties.contains(where: { $0.type.hasPrefix("SendableInstantiator<") }) {
+				features.insert(.selfBuildingPublicMockThroughSendableInstantiator)
+			}
+			if node.properties.contains(where: { $0.label == "selfPart" }) {
+				features.insert(.selfBuildingPublicMockPlaceBeneath)
+			}
+			if let live = types.declarations["\(prefix)SelfLive"] {
+				if live.properties.contains(where: { $0.label == "selfToken" }) {
+					features.insert(.selfBuildingPublicMockFillReadsToken)
+				}
+			} else {
+				features.insert(.selfBuildingPublicMockPassedUp)
+			}
+		}
+		if let outer = types.declarations["\(prefix)PfOuter"] {
+			features.insert(.placeInsidePublicMockFill)
+			if let live = types.declarations["\(prefix)PfLive"] {
+				features.insert(.placeInsidePublicMockFillFilledByConsumer)
+				if live.properties.contains(where: { $0.label == "pfTag" }), outer.properties.contains(where: { $0.label == "pfTag" }) {
+					features.insert(.placeInsidePublicMockFillReadsOuterValue)
+				}
+				if live.properties.contains(where: { $0.label == "pfId" }) {
+					features.insert(.placeInsidePublicMockFillReadsForwardedValue)
+				}
+			} else {
+				features.insert(.placeInsidePublicMockFillPassedUp)
+			}
+			if types.declarations["\(prefix)PfInnerScreen"] != nil {
+				features.insert(.placeInsidePublicMockFillOnForwardingRoute)
 			}
 		}
 		return features
