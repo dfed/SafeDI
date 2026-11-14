@@ -144,9 +144,9 @@ func stripSwiftCommentsAndStrings(from source: String) -> String {
 					continue
 				}
 				if chars[index] == "\"" || chars[index] == "\n" {
-					if chars[index] == "\n" {
-						result.append("\n")
-					} else {
+					// A newline ends the string and stays for the loop above
+					// to keep, so the line structure is preserved.
+					if chars[index] == "\"" {
 						index += 1
 					}
 					break
