@@ -1431,10 +1431,6 @@ public actor DependencyTreeGenerator {
 		case publicMockTierOmitsProvidedValue([ScopeGenerator.PublicMockTierOmission])
 		/// A mock tree calls another module's public mock that is generated under another mock condition.
 		case publicMockUnderOtherMockCondition([ScopeGenerator.PublicMockCallUnderOtherMockCondition])
-		/// A call of another module's public mock whose dispatcher would pass a place up on a route though it is handed no way
-		/// to, every place it reaches being filled (see `ScopeGenerator.FillDispatcher.RoutePlan`). Reported plainly: nothing
-		/// in source is at fault.
-		case publicMockRouteWithoutPassUp(ScopeGenerator.PublicMockRouteWithoutPassUp)
 		/// Reported at the dependency of a tree this module generates that calls a seam of another module whose files
 		/// this run read under a mock condition that module does not guard its mock-only declarations with. See
 		/// `SeamModuleMockConditionDifference`.
@@ -1575,8 +1571,6 @@ public actor DependencyTreeGenerator {
 					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 			case let .publicMockCannotBeGenerated(findings):
 				SourceDiagnostic.joiningInSourceOrder(findings.map(\.sourceDiagnostics))
-			case let .publicMockRouteWithoutPassUp(route):
-				[route.sourceDiagnostic]
 			case let .publicMockUnderOtherMockCondition(calls):
 				// One diagnostic per dependency that leads to such a call, in source order.
 				calls
@@ -2128,7 +2122,7 @@ public actor DependencyTreeGenerator {
 					"\(emitter) another module of the same package, cannot \(inability) in the code SafeDI generates"
 				case .public:
 					// Across a named module SafeDI is told no package of, SafeDI cannot say the two are in different packages.
-					if ModuleIdentity.namesOfModulesWithoutPackage(emitter: emittingModule, declarer: declaringModule, requirement: requirement).isEmpty {
+					if ModuleIdentity.namesOfModulesWithoutPackage(emitter: emittingModule, declarer: declaringModule).isEmpty {
 						"\(emitter) in another package, cannot \(inability) in the code SafeDI generates"
 					} else {
 						"\(emitter) which SafeDI is not told is in the same package, cannot \(inability) in the code SafeDI generates"
@@ -2169,11 +2163,11 @@ public actor DependencyTreeGenerator {
 					// Across a named module SafeDI is told no package of, a `package` declaration needs `public` unless the
 					// module belongs in the other's package, which the declaration's level makes the likelier fix. A
 					// narrower declaration needs widening either way, so `public`, which its fix-it inserts, comes first.
-					if let packageNameRemedy = ModuleIdentity.packageNameRemedy(emitter: emittingModule, declarer: declaringModule, requirement: requirement, declaredLevel: accessNeed.level) {
+					if let packageNameRemedy = ModuleIdentity.packageNameRemedy(emitter: emittingModule, declarer: declaringModule, declaredLevel: accessNeed.level) {
 						"\(packageNameRemedy.prefix(1).uppercased())\(packageNameRemedy.dropFirst()), or make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix\(seamRemedyText)\(publicMockRemedy)."
-					} else if let packageNameAndAccessRemedy = ModuleIdentity.packageNameAndAccessRemedy(emitter: emittingModule, declarer: declaringModule, requirement: requirement, declaredLevel: accessNeed.level), seamRemedyClause == nil, publicMockRemedyClause == nil {
+					} else if let packageNameAndAccessRemedy = ModuleIdentity.packageNameAndAccessRemedy(emitter: emittingModule, declarer: declaringModule, declaredLevel: accessNeed.level), seamRemedyClause == nil, publicMockRemedyClause == nil {
 						"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix, or, \(packageNameAndAccessRemedy)."
-					} else if let packageNameAndAccessRemedy = ModuleIdentity.packageNameAndAccessRemedy(emitter: emittingModule, declarer: declaringModule, requirement: requirement, declaredLevel: accessNeed.level) {
+					} else if let packageNameAndAccessRemedy = ModuleIdentity.packageNameAndAccessRemedy(emitter: emittingModule, declarer: declaringModule, declaredLevel: accessNeed.level) {
 						// A remedy after the package-name remedy would read as part of its "if" clause, so three or more
 						// remedies are joined with semicolons.
 						SeamAccessExplanation.joined(["make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix", packageNameAndAccessRemedy] + [seamRemedyClause, publicMockRemedyClause].compactMap(\.self))

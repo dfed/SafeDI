@@ -33,29 +33,25 @@ public struct ModuleIdentity: Hashable, Sendable {
 	public let packageName: String?
 
 	/// The names, in order, of the modules among `emitter` and `declarer` SafeDITool was not told the package of, when
-	/// that is why the code `emitter` generates needs `public` access to `declarer`'s declarations: `requirement`, which
-	/// `AccessLevel.required(toConstructFrom:declaredIn:isOwnFile:)` gave for the two, is `public`, and one of them has
-	/// no package, so SafeDITool is not told the two are in one package. Empty otherwise, including for two modules in
-	/// different packages, which need `public` whatever SafeDITool is told.
-	static func namesOfModulesWithoutPackage(emitter: ModuleIdentity, declarer: ModuleIdentity, requirement: AccessRequirement) -> [String] {
-		switch requirement {
-		case .public:
-			[emitter, declarer].filter { $0.packageName == nil }.compactMap(\.moduleName).sorted()
-		case .internal, .package, .packageUnverified:
-			[]
-		}
+	/// that is why the code `emitter` generates needs `public` access to `declarer`'s declarations, which
+	/// `AccessLevel.required(toConstructFrom:declaredIn:isOwnFile:)` gave for the two: one of them has no package, so
+	/// SafeDITool is not told the two are in one package. Empty otherwise, for two modules in different packages, which
+	/// need `public` whatever SafeDITool is told. Asked only where the code needs `public` access: a `package`
+	/// declaration, which these remedies are for, satisfies every other requirement.
+	static func namesOfModulesWithoutPackage(emitter: ModuleIdentity, declarer: ModuleIdentity) -> [String] {
+		[emitter, declarer].filter { $0.packageName == nil }.compactMap(\.moduleName).sorted()
 	}
 
 	/// The remedy a diagnostic that asks for `public` access across `emitter` and `declarer` offers first when SafeDITool
-	/// was not told the package of one of them (`namesOfModulesWithoutPackage(emitter:declarer:requirement:)`) and the
-	/// declaration is `package`: giving the module, or both, the package name, should the two be in one package. It
-	/// comes first because a `package` declaration says its author meant the two modules to share a package, so a
-	/// module whose build names no package is the likelier cause. `nil` when the requirement is not for that reason, or
-	/// the declaration is not `package`.
-	public static func packageNameRemedy(emitter: ModuleIdentity, declarer: ModuleIdentity, requirement: AccessRequirement, declaredLevel: AccessLevel) -> String? {
+	/// was not told the package of one of them (`namesOfModulesWithoutPackage(emitter:declarer:)`) and the declaration is
+	/// `package`: giving the module, or both, the package name, should the two be in one package. It comes first because
+	/// a `package` declaration says its author meant the two modules to share a package, so a module whose build names no
+	/// package is the likelier cause. `nil` when the requirement is not for that reason, or the declaration is not
+	/// `package`.
+	public static func packageNameRemedy(emitter: ModuleIdentity, declarer: ModuleIdentity, declaredLevel: AccessLevel) -> String? {
 		switch declaredLevel {
 		case .package:
-			let moduleNames = namesOfModulesWithoutPackage(emitter: emitter, declarer: declarer, requirement: requirement)
+			let moduleNames = namesOfModulesWithoutPackage(emitter: emitter, declarer: declarer)
 			return packageNameGiving(to: moduleNames, emitter: emitter, declarer: declarer).map { giving in
 				giving + (moduleNames.count == 1 ? " if the two are in one package" : " if they are in one package")
 			}
@@ -65,15 +61,15 @@ public struct ModuleIdentity: Hashable, Sendable {
 	}
 
 	/// The remedy a diagnostic that asks for `public` access across `emitter` and `declarer` offers after widening to
-	/// `public` when SafeDITool was not told the package of one of them (`namesOfModulesWithoutPackage(emitter:declarer:requirement:)`)
+	/// `public` when SafeDITool was not told the package of one of them (`namesOfModulesWithoutPackage(emitter:declarer:)`)
 	/// and the declaration is narrower than `package`: should the two be in one package, giving the module, or both,
 	/// the package name and making the declaration, which the remedy calls "it", `package`. Widening comes first, since
 	/// its fix-it inserts `public`. `nil` when the requirement is not for that reason, or the declaration is `package`
 	/// or wider.
-	public static func packageNameAndAccessRemedy(emitter: ModuleIdentity, declarer: ModuleIdentity, requirement: AccessRequirement, declaredLevel: AccessLevel) -> String? {
+	public static func packageNameAndAccessRemedy(emitter: ModuleIdentity, declarer: ModuleIdentity, declaredLevel: AccessLevel) -> String? {
 		switch declaredLevel {
 		case .internal, .fileprivate, .private:
-			packageNameGiving(to: namesOfModulesWithoutPackage(emitter: emitter, declarer: declarer, requirement: requirement), emitter: emitter, declarer: declarer).map { giving in
+			packageNameGiving(to: namesOfModulesWithoutPackage(emitter: emitter, declarer: declarer), emitter: emitter, declarer: declarer).map { giving in
 				"if the two modules are in one package, \(giving) and make it `\(AccessLevel.package.spelling)`"
 			}
 		case .open, .public, .package:
