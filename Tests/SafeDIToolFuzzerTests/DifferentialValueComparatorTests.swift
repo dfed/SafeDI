@@ -993,6 +993,61 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func describe_callsInstantiatorWithForwardedPropertiesWithAFreshSampleShownWithoutWhatItHolds_whenTheGraphRegistersASample() async throws {
+		let description = try await DifferentialValueOracle.describe(
+			DifferentialValuePath(fixtureFiles: ["Fixture.swift": Self.forwardingFixture(childSession: "$0")]),
+			probes: [DifferentialValueProbe("Root.make()")],
+			samples: Self.sessionSamples,
+			filesToDelete: &filesToDelete,
+		)
+
+		// Each call takes a sample of its own, which the instance it builds and the child beneath it hold.
+		#expect(description == """
+		probe Root.make()
+		<1> Root
+		  fBuilder: <2> Instantiator<F>
+		    instantiate(sample): <3> F
+		      session: <4> Session (sample)
+		      child: <5> Child
+		        session: <4> Session (seen)
+		    instantiate(sample) again: <6> F
+		      session: <7> Session (sample)
+		      child: <8> Child
+		        session: <7> Session (seen)
+		  sendableFBuilder: <9> SendableInstantiator<F>
+		    instantiate(sample): <10> F
+		      session: <11> Session (sample)
+		      child: <12> Child
+		        session: <11> Session (seen)
+		    instantiate(sample) again: <13> F
+		      session: <14> Session (sample)
+		      child: <15> Child
+		        session: <14> Session (seen)
+
+		""")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_reportsAnotherInstanceBeneathInstantiatorWithForwardedProperties_whenFeatureHandsChildAnotherValueThanTheForwardedOne() async throws {
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: ["Fixture.swift": Self.forwardingFixture(childSession: "Session(name: \"other\")")]),
+			knownRight: DifferentialValuePath(fixtureFiles: ["Fixture.swift": Self.forwardingFixture(childSession: "$0")]),
+			probes: [DifferentialValueProbe("Root.make()")],
+			samples: Self.sessionSamples,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(comparison).differences == [
+			DifferentialValueDifference(probe: "Root.make()", path: ["<1> Root", "fBuilder", "instantiate(sample)", "child", "session"], feature: "session: <6> Session", knownRight: "session: <4> Session (seen, first at <1> Root > fBuilder > instantiate(sample) > session)"),
+			DifferentialValueDifference(probe: "Root.make()", path: ["<1> Root", "fBuilder", "instantiate(sample) again", "child", "session"], feature: "session: <10> Session", knownRight: "session: <7> Session (seen, first at <1> Root > fBuilder > instantiate(sample) again > session)"),
+			DifferentialValueDifference(probe: "Root.make()", path: ["<1> Root", "sendableFBuilder", "instantiate(sample)", "child", "session"], feature: "session: <15> Session", knownRight: "session: <11> Session (seen, first at <1> Root > sendableFBuilder > instantiate(sample) > session)"),
+			DifferentialValueDifference(probe: "Root.make()", path: ["<1> Root", "sendableFBuilder", "instantiate(sample) again", "child", "session"], feature: "session: <19> Session", knownRight: "session: <14> Session (seen, first at <1> Root > sendableFBuilder > instantiate(sample) again > session)"),
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func describe_marksTheInstanceAndNotItsWrapper_whenAStampedFixturesLazilyInstantiatedInstanceWasReadBeforeTheProbesValueWasBuilt() async throws {
 		let fixture = """
 		\(Self.stampCounter)
@@ -2742,6 +2797,53 @@ struct DifferentialValueComparatorTests: ~Copyable {
 	}
 
 	/// The counter a fixture with creation stamps declares, and the stamp each of its classes stores.
+	/// A root holding an instantiator and a `Sendable` instantiator of `F`, which forwards a `Session` and builds a child
+	/// with `childSession`: `$0`, the forwarded session, or another expression.
+	private static func forwardingFixture(childSession: String) -> String {
+		"""
+		public final class Root {
+		    public init(fBuilder: Instantiator<F>, sendableFBuilder: SendableInstantiator<F>) {
+		        self.fBuilder = fBuilder
+		        self.sendableFBuilder = sendableFBuilder
+		    }
+		    public let fBuilder: Instantiator<F>
+		    public let sendableFBuilder: SendableInstantiator<F>
+		}
+		public final class Session: Sendable {
+		    public init(name: String) {
+		        self.name = name
+		    }
+		    public let name: String
+		}
+		public final class F: Instantiable {
+		    public typealias ForwardedProperties = Session
+		    public init(session: Session, child: Child) {
+		        self.session = session
+		        self.child = child
+		    }
+		    public let session: Session
+		    public let child: Child
+		}
+		public final class Child {
+		    public init(session: Session) {
+		        self.session = session
+		    }
+		    public let session: Session
+		}
+		extension Root {
+		    static func make() -> Root {
+		        Root(
+		            fBuilder: Instantiator { F(session: $0, child: Child(session: \(childSession))) },
+		            sendableFBuilder: SendableInstantiator { F(session: $0, child: Child(session: \(childSession))) }
+		        )
+		    }
+		}
+		"""
+	}
+
+	/// The sample `forwardingFixture`'s `F` is called with: a `Session` whose name only the harness reads.
+	private static let sessionSamples = [DifferentialValueSample(type: "F.ForwardedProperties", expression: "differentialValueSample(Session(name: \"sample\"))")]
+
 	private static let stampCounter = DifferentialValueCreationStamp.counterDeclaration(named: "Stamp")
 	private static let stampProperty = DifferentialValueCreationStamp.property(counterNamed: "Stamp")
 

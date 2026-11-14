@@ -225,6 +225,47 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 	}
 
 	@Test
+	func mirror_forwardsMocksRequiredParametersAndIsBuiltByARootOfItsOwn_whenMockTakesRequiredParameters() throws {
+		// The mock takes the forwarded `session`, which the mirror forwards in turn, so that a root holding an
+		// instantiator of the mirror builds it with the sample the mock is handed.
+		#expect(try Self.mirrorSource(of: "S1_Screen", in: Self.forwardingFixture, forwarding: [GraphFuzzerMirrorProperty(label: "session", type: "S1_Session")]) == """
+		@Instantiable
+		public final class S1_ZMirror0: Instantiable {
+			public init(session: S1_Session, editor: S1_Editor) {
+				self.session = session
+				self.editor = editor
+				differentialMirrorValue = S1_Screen(session: session, editor: editor)
+			}
+
+			@Forwarded let session: S1_Session
+			@Instantiated let editor: S1_Editor
+			let differentialMirrorValue: S1_Screen
+		}
+
+		@Instantiable(isRoot: true)
+		public final class S1_ZMirror0Host: Instantiable {
+			public init(mirrorBuilder: Instantiator<S1_ZMirror0>) {
+				self.mirrorBuilder = mirrorBuilder
+			}
+
+			@Instantiated let mirrorBuilder: Instantiator<S1_ZMirror0>
+		}
+
+		""")
+	}
+
+	@Test
+	func mirror_skipsMockTakingRequiredParameter_whenTheMockedTypeInstantiatesAnInstanceTheMockCannotBuild() {
+		// The mock takes the unbuildable `token` its mocked type instantiates, which no forwarded declaration stands for.
+		let fixture = Self.fixture([
+			Self.type("S1_Screen", arguments: "generateMock: true", properties: ["@Instantiated let token: S1_Token"]),
+			"public final class S1_Token {}\n",
+		])
+
+		#expect(Self.mirrorResult(of: "S1_Screen", in: fixture, forwarding: [GraphFuzzerMirrorProperty(label: "token", type: "S1_Token")]) == .failure(.skipped(.requiredParameter)))
+	}
+
+	@Test
 	func mirror_skipsRequiredOptionalReceive_whenRequiredAliasInPromotedTreeNamesOptionalFormOfNonOptionalDeclaration() {
 		// The mock binds `value: S1_Value`, which a required receive promotes, and hands it to the alias of the optional
 		// form; production fulfills a required alias of `value: S1_Value?` with no non-optional declaration.
@@ -321,14 +362,155 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func plan_skipsMockTakingRequiredParameter_whenModelAgreesWithWhatItBuilds() async throws {
+	func plan_mirrorsMockTakingRequiredParameter_whenTheHarnessHasASampleOfIt() async throws {
 		// The forwarded `session` fulfills the promoted editor's `onlyIfAvailable` receive of it, so the mock takes no
-		// override for it, and the model agrees before the mock is skipped for its required parameter.
+		// override for it, and the model agrees; the mock and its mirror are each handed a sample session.
 		let generatedFiles = try await Self.generatedFiles(of: GraphFuzzerOracle.toolOutcome(of: Self.forwardingFixture))
 		let plan = GraphFuzzerValueOraclePlan(fixture: Self.forwardingFixture, generatedFiles: generatedFiles, storingFixture: Self.forwardingFixture)
 
 		#expect(plan.modelFailures == [])
+		#expect(plan.skips.isEmpty)
+		#expect(plan.probePairs == [DifferentialValueProbePair(
+			name: "S1_Screen.mock()",
+			featureExpression: "S1_Screen.mock(session: differentialValueSample(S1_Session()))",
+			knownRightExpression: "S1_ZMirror0Host().mirrorBuilder.instantiate(differentialValueSample(S1_Session())).differentialMirrorValue",
+		)])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func plan_skipsMockTakingRequiredParameter_whenTheHarnessHasNoSampleOfIt() async throws {
+		// No type of the graph fulfills the forwarded existential.
+		let fixture = Self.fixture([
+			Self.type("S1_Screen", arguments: "generateMock: true", properties: ["@Forwarded let session: any S1_SessionProtocol"]),
+			"public protocol S1_SessionProtocol {}\n",
+		])
+		let generatedFiles = try await Self.generatedFiles(of: GraphFuzzerOracle.toolOutcome(of: fixture))
+		let plan = GraphFuzzerValueOraclePlan(fixture: fixture, generatedFiles: generatedFiles, storingFixture: fixture)
+
+		#expect(plan.modelFailures == [])
 		#expect(plan.skips.map { "\($0.typeName): \($0.skip)" } == ["S1_Screen: requiredParameter"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func plan_registersSampleOfForwardedProperties_whenAnInstantiatedTypeForwardsValuesTheHarnessCanBuild() async throws {
+		let generatedFiles = try await Self.generatedFiles(of: GraphFuzzerOracle.toolOutcome(of: Self.rootOfForwardingScreenFixture))
+		let plan = GraphFuzzerValueOraclePlan(fixture: Self.rootOfForwardingScreenFixture, generatedFiles: generatedFiles, storingFixture: Self.rootOfForwardingScreenFixture)
+
+		#expect(plan.forwardedPropertiesSamples == [DifferentialValueSample(type: "S1_Screen.ForwardedProperties", expression: "differentialValueSample(S1_Session())")])
+	}
+
+	// MARK: Sample values
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sampleValues_buildGraphTypeThroughItsInitializerWithUnmarkedSampleOfEachProperty_whenEveryPropertyHasOne() {
+		let fixture = Self.fixture([
+			Self.type("S1_Session", properties: [
+				"@Instantiated let store: S1_Store",
+				"@Received(onlyIfAvailable: true) let cache: S1_Cache?",
+				"@Instantiated let editorBuilder: Instantiator<S1_Editor>",
+				"@Instantiated let lazyStore: LazilyInstantiated<S1_Store>",
+				"@Forwarded let count: Int",
+			]),
+			Self.type("S1_Store", properties: []),
+			Self.type("S1_Cache", properties: []),
+			Self.type("S1_Editor", properties: []),
+		])
+
+		#expect(Self.samples(of: fixture).expression(ofType: "S1_Session") == "differentialValueSample(S1_Session(store: S1_Store(), cache: nil, editorBuilder: Instantiator { differentialValueUnreachableSample() }, lazyStore: LazilyInstantiated { differentialValueUnreachableSample() }, count: 0))")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sampleValues_holdATupleOfMarkedValuesInLabelOrder_whenATypeForwardsSeveralValues() {
+		let fixture = Self.fixture([
+			Self.type("S1_Screen", properties: ["@Forwarded let session: S1_Session", "@Forwarded let count: Int", "@Forwarded let format: @Sendable (Int) -> String"]),
+			Self.type("S1_Session", properties: []),
+		])
+
+		#expect(Self.samples(of: fixture).forwardedPropertiesSamples == [
+			DifferentialValueSample(type: "S1_Screen.ForwardedProperties", expression: "(count: 0, format: { _ in \"\" }, session: differentialValueSample(S1_Session()))"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sampleValues_buildForwardedLazilyInstantiatedWhoseInstanceIsAMarkedSample_whenGeneratedCodeCanReadIt() {
+		let fixture = Self.fixture([Self.type("S1_Store", properties: [])])
+
+		#expect(Self.samples(of: fixture).expression(ofType: "SendableLazilyInstantiated<S1_Store>") == "differentialValueSample(SendableLazilyInstantiated { differentialValueSample(S1_Store()) })")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sampleValues_buildTheFulfillingType_whenAGraphTypeFulfillsTheSampledProtocol() {
+		let fixture = Self.fixture([Self.type("S1_Store", arguments: "fulfillingAdditionalTypes: [S1_StoreProtocol.self]", properties: [])])
+
+		#expect(Self.samples(of: fixture).expression(ofType: "S1_StoreProtocol") == "differentialValueSample(S1_Store())")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sampleValues_eraseASampleOfTheErasedType_whenTheTypeIsAnErasingType() {
+		let fixture = Self.fixture([
+			Self.type("S1_Store", properties: []),
+			"public final class S1_AnyStore {\n\tpublic init(_ value: S1_Store) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: S1_Store\n}\n",
+		])
+
+		#expect(Self.samples(of: fixture).expression(ofType: "S1_AnyStore") == "differentialValueSample(S1_AnyStore(S1_Store()))")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sampleValues_holdNothing_whenATypeTakesItselfByValueThroughItsProperties() {
+		let fixture = Self.fixture([
+			Self.type("S1_Session", properties: ["@Received let store: S1_Store"]),
+			Self.type("S1_Store", properties: ["@Received let session: S1_Session"]),
+		])
+
+		#expect(Self.samples(of: fixture).expression(ofType: "S1_Session") == nil)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sampleValues_holdNothing_whenTheTypesInitializerIsPackage() {
+		let fixture = Self.fixture([Self.type("S1_Store", properties: []).replacingOccurrences(of: "public init()", with: "package init()")])
+
+		#expect(Self.samples(of: fixture).expression(ofType: "S1_Store") == nil)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sampleValues_holdAValueOfEveryForwardedTupleElementButTheExistential_whenTheGraphDeclaresItsHelperTypes() {
+		let fixture = Self.fixture(GraphFuzzerForwardedTupleElement.allCases.compactMap { $0.helperDeclaration(prefix: "S1_", areSendable: true).map { $0 + "\n" } })
+		let samples = Self.samples(of: fixture)
+
+		let expressions = GraphFuzzerForwardedTupleElement.allCases.flatMap { element in
+			[false, true].map { isSendable in samples.expression(ofType: element.spelledType(prefix: "S1_", isSendable: isSendable)) ?? "none" }
+		}
+
+		#expect(expressions == [
+			"nil", "nil",
+			"S1_ForwardedTupleSpace.Configuration()", "S1_ForwardedTupleSpace.Configuration()",
+			"[]", "[]",
+			"S1_ForwardedTupleBox<Int>()", "S1_ForwardedTupleBox<Int>()",
+			"[]", "[]",
+			"[:]", "[:]",
+			"{ }", "{ }",
+			"{ _ in \"\" }", "{ _ in \"\" }",
+			"nil", "nil",
+			"none", "none",
+			"nil", "nil",
+			"(x: nil, y: \"\")", "(x: nil, y: \"\")",
+			"{ }", "{ }",
+			"{ _ in }", "{ _ in }",
+			"{ }", "{ }",
+			"{ }", "{ }",
+			"{ }", "{ }",
+			"{ }", "{ }",
+		])
 	}
 
 	@Test
@@ -520,7 +702,76 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 		])
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "The value oracle compiles generated code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueComparisons_reportNoFailure_whenRootAndMockTakingForwardedValueBuildWhatProductionBuilds() async throws {
+		// The root's instantiator of the forwarding screen is called with a sample, and the screen's mock, which takes the
+		// forwarded value, is compared with its forwarding mirror.
+		let fixture = Self.fixture([
+			Self.type("S1_Root", arguments: "isRoot: true", properties: ["@Instantiated let screenBuilder: Instantiator<S1_Screen>"]),
+			Self.type("S1_Screen", arguments: "generateMock: true", properties: ["@Forwarded let session: S1_Session", "@Instantiated let detail: S1_Detail"]),
+			Self.type("S1_Detail", properties: ["@Received let session: S1_Session"]),
+			Self.type("S1_Session", properties: []),
+		])
+		let runs = try await Self.valueOracleToolRuns(of: fixture)
+
+		#expect(runs.valueOracle?.plan.mirrors.map(\.mockedTypeName) == ["S1_Screen"])
+		#expect(try await GraphFuzzerOracle.valueComparisons(of: [runs]).failures.isEmpty)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "The value oracle compiles generated code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueComparisons_reportOtherValues_whenGeneratedMockHandsChildAnotherInstanceThanTheForwardedValue() async throws {
+		let fixture = Self.fixture([
+			Self.type("S1_Screen", arguments: "generateMock: true", properties: ["@Forwarded let session: S1_Session", "@Instantiated let detail: S1_Detail"]),
+			Self.type("S1_Detail", properties: ["@Received let session: S1_Session"]),
+			Self.type("S1_Session", properties: []),
+		])
+		let runs = try await Self.valueOracleRuns(of: fixture, editingMockOf: "S1_Screen", replacing: "S1_Detail(session: session)", with: "S1_Detail(session: S1_Session())")
+
+		let failure = try #require(try await GraphFuzzerOracle.valueComparisons(of: [runs]).failures[1])
+
+		#expect(failure.kind == .mockBuildsOtherValuesThanProduction)
+		#expect(failure.valueDifferences == [
+			"""
+			probe `S1_Screen.mock()` at <1> S1_Screen > detail > session:
+			  feature:     session: <4> S1_Session
+			  known right: session: <2> S1_Session (seen, first at <1> S1_Screen > session)
+			""",
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "The value oracle compiles generated code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueComparisons_reportOtherValues_whenRootsMockHandsChildBeneathForwardingInstantiatorAnotherInstanceThanTheForwardedValue() async throws {
+		let runs = try await Self.valueOracleToolRuns(of: Self.rootOfForwardingScreenFixture, editingValueOracleFile: "S1_Root+SafeDIMock.swift", replacing: "S1_Detail(session: session)", with: "S1_Detail(session: S1_Session())")
+
+		let failure = try #require(try await GraphFuzzerOracle.valueComparisons(of: [runs]).failures[1])
+
+		#expect(failure.kind == .mockBuildsOtherValuesThanProduction)
+		#expect(failure.valueDifferences == [
+			"""
+			probe `S1_Root.mock()` at <1> S1_Root > screenBuilder > instantiate(sample) > detail > session:
+			  feature:     session: <6> S1_Session
+			  known right: session: <4> S1_Session (seen, first at <1> S1_Root > screenBuilder > instantiate(sample) > session)
+			""",
+			"""
+			probe `S1_Root.mock()` at <1> S1_Root > screenBuilder > instantiate(sample) again > detail > session:
+			  feature:     session: <10> S1_Session
+			  known right: session: <7> S1_Session (seen, first at <1> S1_Root > screenBuilder > instantiate(sample) again > session)
+			""",
+		])
+	}
+
 	// MARK: Private
+
+	/// A root holding an instantiator of a type that forwards a session, which the type's child receives.
+	private static let rootOfForwardingScreenFixture = fixture([
+		type("S1_Root", arguments: "isRoot: true", properties: ["@Instantiated let screenBuilder: Instantiator<S1_Screen>"]),
+		type("S1_Screen", properties: ["@Forwarded let session: S1_Session", "@Instantiated let detail: S1_Detail"]),
+		type("S1_Detail", properties: ["@Received let session: S1_Session"]),
+		type("S1_Session", properties: []),
+	])
 
 	/// A mocked type whose child and grandchild both receive a dependency the mock builds beside it.
 	private static let sharedStoreFixture = fixture([
@@ -615,10 +866,15 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 		GraphFuzzerFixture(seed: 1, swiftFileContent: files)
 	}
 
-	private static func mirror(of typeName: String, in fixture: GraphFuzzerFixture) throws -> GraphFuzzerMockMirror {
+	private static func mirror(of typeName: String, in fixture: GraphFuzzerFixture, forwarding requiredParameters: [GraphFuzzerMirrorProperty] = []) throws -> GraphFuzzerMockMirror {
 		let model = GraphFuzzerMockMirrorModel(fixture: fixture)
 		var cache = GraphFuzzerMockMirrorModel.ReceivedPropertiesCache()
-		return try model.mirror(ofMockedTypeNamed: typeName, named: "\(fixture.typeNamePrefix)ZMirror0", cache: &cache).get()
+		return try model.mirror(ofMockedTypeNamed: typeName, named: "\(fixture.typeNamePrefix)ZMirror0", forwarding: requiredParameters, cache: &cache).get()
+	}
+
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func samples(of fixture: GraphFuzzerFixture) -> GraphFuzzerSampleValues {
+		GraphFuzzerSampleValues(fixture: fixture, model: GraphFuzzerMockMirrorModel(fixture: fixture))
 	}
 
 	private static func expectation(of typeName: String, in fixture: GraphFuzzerFixture) -> GraphFuzzerMockRootExpectation {
@@ -627,14 +883,14 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 		return model.expectation(of: model.mockRoot(ofTypeNamed: typeName, cache: &cache), mockedTypeName: typeName)
 	}
 
-	private static func mirrorResult(of typeName: String, in fixture: GraphFuzzerFixture) -> Result<GraphFuzzerMockMirror, GraphFuzzerMirrorFailure> {
+	private static func mirrorResult(of typeName: String, in fixture: GraphFuzzerFixture, forwarding requiredParameters: [GraphFuzzerMirrorProperty] = []) -> Result<GraphFuzzerMockMirror, GraphFuzzerMirrorFailure> {
 		let model = GraphFuzzerMockMirrorModel(fixture: fixture)
 		var cache = GraphFuzzerMockMirrorModel.ReceivedPropertiesCache()
-		return model.mirror(ofMockedTypeNamed: typeName, named: "\(fixture.typeNamePrefix)ZMirror0", cache: &cache)
+		return model.mirror(ofMockedTypeNamed: typeName, named: "\(fixture.typeNamePrefix)ZMirror0", forwarding: requiredParameters, cache: &cache)
 	}
 
-	private static func mirrorSource(of typeName: String, in fixture: GraphFuzzerFixture) throws -> String {
-		try mirror(of: typeName, in: fixture).source(conformance: "", stamp: nil)
+	private static func mirrorSource(of typeName: String, in fixture: GraphFuzzerFixture, forwarding requiredParameters: [GraphFuzzerMirrorProperty] = []) throws -> String {
+		try mirror(of: typeName, in: fixture, forwarding: requiredParameters).source(conformance: "", stamp: nil)
 	}
 
 	/// The runs of `fixture` with its value-oracle run, in both of which the generated mock of `mockedTypeName` is edited

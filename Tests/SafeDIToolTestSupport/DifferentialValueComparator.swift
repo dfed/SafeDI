@@ -212,6 +212,16 @@ struct DifferentialValueProbe: Equatable {
 	}
 }
 
+/// A value of `type` the describer calls an instantiator with when `type` is the instantiator's `ForwardedProperties`:
+/// `expression`, a Swift expression evaluated in the probe executable each time the describer calls such an
+/// instantiator, so that each call takes a value of its own. The expression wraps each class instance it builds in
+/// `differentialValueSample(_:)`, which the describer then describes as `<4> T (sample)`, without what it holds: a
+/// sample's contents are the harness's, not the generated code's, and a builder a sample holds is never called.
+struct DifferentialValueSample: Equatable {
+	let type: String
+	let expression: String
+}
+
 /// Two Swift expressions that build one value in one path, by two ways the path holds side by side, such as a type's
 /// generated `mock()` and the production build of the same tree: the feature's expression and the known-right one,
 /// described under one name, `name`. The two must build disjoint objects, so that no `(seen in probe …)` mark crosses
@@ -239,6 +249,7 @@ struct DifferentialValueGraph {
 		feature: DifferentialValuePath,
 		knownRight: DifferentialValuePath,
 		probes: [DifferentialValueProbe],
+		samples: [DifferentialValueSample] = [],
 		exemptions: [DifferentialValueDifference] = [],
 	) {
 		self.name = name
@@ -246,6 +257,7 @@ struct DifferentialValueGraph {
 		self.knownRight = knownRight
 		self.probes = probes
 		knownRightProbes = nil
+		self.samples = samples
 		self.exemptions = exemptions
 	}
 
@@ -254,6 +266,7 @@ struct DifferentialValueGraph {
 		name: String,
 		path: DifferentialValuePath,
 		probePairs: [DifferentialValueProbePair],
+		samples: [DifferentialValueSample] = [],
 		exemptions: [DifferentialValueDifference] = [],
 	) {
 		self.name = name
@@ -261,6 +274,7 @@ struct DifferentialValueGraph {
 		knownRight = path
 		probes = probePairs.map { DifferentialValueProbe(name: $0.name, expression: $0.featureExpression) }
 		knownRightProbes = probePairs.map { DifferentialValueProbe(name: $0.name, expression: $0.knownRightExpression) }
+		self.samples = samples
 		self.exemptions = exemptions
 	}
 
@@ -271,6 +285,8 @@ struct DifferentialValueGraph {
 	let probes: [DifferentialValueProbe]
 	/// The known-right expression of each of `probes`, in a graph of probe pairs, or `nil` in a graph of two paths.
 	let knownRightProbes: [DifferentialValueProbe]?
+	/// The sample values each path's describer calls an instantiator with forwarded properties with.
+	let samples: [DifferentialValueSample]
 	let exemptions: [DifferentialValueDifference]
 
 	/// Whether the graph holds probe pairs in one path.
@@ -413,8 +429,8 @@ struct DifferentialValueOracleError: Error, CustomStringConvertible {
 /// compared by kind and count only, since which of several alike instances is described first would follow hash
 /// order; an instance an earlier probe held is identified by that probe alone, so two such instances agree; another
 /// leaf whose debug description holds an address or a hash-ordered collection is not canonical; an
-/// `ErasedInstantiator`, a `SendableErasedInstantiator`, or an instantiator with forwarded properties is not
-/// traversed; how often an instance was built, and in what order, is not seen, so an instance built and discarded
+/// `ErasedInstantiator`, a `SendableErasedInstantiator`, or an instantiator with forwarded properties of which the
+/// graph registers no sample is not traversed, and a sample is shown without what it holds; how often an instance was built, and in what order, is not seen, so an instance built and discarded
 /// is invisible, as is a reordering; when an instance was built is judged only for a lazily built class instance
 /// itself, against the probe's value, as `DifferentialValueCreationStamp` states with what that leaves unseen; and in
 /// a fixture without creation stamps, an instance a `LazilyInstantiated` or `SendableLazilyInstantiated` closure
@@ -424,7 +440,11 @@ struct DifferentialValueOracleError: Error, CustomStringConvertible {
 /// SafeDI's wrappers are classes, numbered as such. An `Instantiator` or `SendableInstantiator` with no forwarded
 /// properties is called twice, and each instance it returns described beneath it (`instantiate()`, `instantiate()
 /// again`), so a builder that hands out one instance, or that captures one built outside it, differs from one that
-/// builds anew on each call; beneath a second call each instantiator is called once. The instance of a
+/// builds anew on each call; beneath a second call each instantiator is called once. One with forwarded properties is
+/// called so with a sample value of them that the graph registers (`DifferentialValueSample`), a fresh one each call
+/// (`instantiate(sample)`, `instantiate(sample) again`), whose class instances the describer shows as `<4> T (sample)`
+/// without what they hold, so that what each receiver beneath the call is handed, the sample or another instance, is
+/// compared. The instance of a
 /// `LazilyInstantiated` or `SendableLazilyInstantiated` is read after the rest of the probe's value (`<4>.instance:
 /// <8> C`), under the calls on the path where its wrapper was met. Where the probe's value stores a creation stamp,
 /// an instance read last that was built before that value, and that the value does not hold, says so (`<4>.instance:
@@ -459,12 +479,13 @@ enum DifferentialValueOracle {
 		feature: DifferentialValuePath,
 		knownRight: DifferentialValuePath,
 		probes: [DifferentialValueProbe],
+		samples: [DifferentialValueSample] = [],
 		exempting exemptions: [DifferentialValueDifference] = [],
 		limits: DifferentialValueLimits = DifferentialValueLimits(),
 		filesToDelete: inout [URL],
 	) async throws -> DifferentialValueComparison? {
 		guard compileVerificationIsEnabled else { return nil }
-		let graph = DifferentialValueGraph(name: "", feature: feature, knownRight: knownRight, probes: probes, exemptions: exemptions)
+		let graph = DifferentialValueGraph(name: "", feature: feature, knownRight: knownRight, probes: probes, samples: samples, exemptions: exemptions)
 		return try await results(of: [graph], limits: limits, filesToDelete: &filesToDelete)[0].get()
 	}
 
@@ -493,17 +514,25 @@ enum DifferentialValueOracle {
 
 	/// Describes `probes` in `path`, for a test that pins what one path builds.
 	/// - Returns: The description, or `nil` when compile verification is disabled.
+	/// - Parameter samples: The sample values the describer calls an instantiator with forwarded properties with.
 	static func describe(
 		_ path: DifferentialValuePath,
 		probes: [DifferentialValueProbe],
+		samples: [DifferentialValueSample] = [],
 		limits: DifferentialValueLimits = DifferentialValueLimits(),
 		filesToDelete: inout [URL],
 	) async throws -> String? {
 		guard compileVerificationIsEnabled else { return nil }
-		return try await describe(path, role: nil, probeGroups: [probes], limits: limits, filesToDelete: &filesToDelete)
+		return try await describe(path, role: nil, probeGroups: [ProbeGroup(probes: probes, samples: samples)], limits: limits, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: Private
+
+	/// One graph's probes, and the sample values its describer calls an instantiator with forwarded properties with.
+	private struct ProbeGroup {
+		let probes: [DifferentialValueProbe]
+		let samples: [DifferentialValueSample]
+	}
 
 	private struct Runtime {
 		/// The directory holding `SafeDI.swiftmodule`, `SafeDI.o`, and the describer's module and object file.
@@ -611,13 +640,13 @@ enum DifferentialValueOracle {
 				// One path, which describes each pair's feature expression and then its known-right expression. A failure to
 				// compile or run it is the feature path's, so that the batch falls back to each graph on its own.
 				let probeGroups = graphs.map { graph in
-					zip(graph.probes, graph.knownRightProbes ?? []).flatMap { [$0, $1] }
+					ProbeGroup(probes: zip(graph.probes, graph.knownRightProbes ?? []).flatMap { [$0, $1] }, samples: graph.samples)
 				}
 				let pairedProbes = try await describedProbes(of: merging(graphs.map(\.feature)), role: .feature, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
 				featureProbes = pairedProbes.enumerated().filter { $0.offset.isMultiple(of: 2) }.map(\.element)
 				knownRightProbes = pairedProbes.enumerated().filter { !$0.offset.isMultiple(of: 2) }.map(\.element)
 			} else {
-				let probeGroups = graphs.map(\.probes)
+				let probeGroups = graphs.map { ProbeGroup(probes: $0.probes, samples: $0.samples) }
 				featureProbes = try await describedProbes(of: merging(graphs.map(\.feature)), role: .feature, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
 				knownRightProbes = try await describedProbes(of: merging(graphs.map(\.knownRight)), role: .knownRight, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
 			}
@@ -707,11 +736,11 @@ enum DifferentialValueOracle {
 	private static func describedProbes(
 		of path: DifferentialValuePath,
 		role: DifferentialValuePathRole,
-		probeGroups: [[DifferentialValueProbe]],
+		probeGroups: [ProbeGroup],
 		limits: DifferentialValueLimits,
 		filesToDelete: inout [URL],
 	) async throws -> [DescribedProbe] {
-		let probes = probeGroups.flatMap(\.self)
+		let probes = probeGroups.flatMap(\.probes)
 		let description = try await describe(path, role: role, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
 		let sections = DescribedProbe.sections(of: description)
 		guard sections.count == probes.count else {
@@ -731,7 +760,7 @@ enum DifferentialValueOracle {
 	private static func describe(
 		_ path: DifferentialValuePath,
 		role: DifferentialValuePathRole?,
-		probeGroups: [[DifferentialValueProbe]],
+		probeGroups: [ProbeGroup],
 		limits: DifferentialValueLimits,
 		filesToDelete: inout [URL],
 	) async throws -> String {
@@ -748,7 +777,7 @@ enum DifferentialValueOracle {
 			// The describer sets an alarm for each probe, so a probe that runs past its time limit ends the process with
 			// `SIGALRM`, after the heading of the probe that was running.
 			let headingCount = run.stdout.split(separator: "\n").count { $0.hasPrefix("probe ") }
-			let runningProbe = probeGroups.flatMap(\.self).prefix(headingCount).last.map(\.name) ?? ""
+			let runningProbe = probeGroups.flatMap(\.probes).prefix(headingCount).last.map(\.name) ?? ""
 			let failure = run.exitCode == SIGALRM
 				? "probe `\(runningProbe)` did not finish within its time limit, \(limits.probeTimeLimitInSeconds) s"
 				: "probes did not run to completion (exit status \(run.exitCode))"
@@ -875,12 +904,14 @@ enum DifferentialValueOracle {
 	}
 
 	/// The `main.swift` of a path's probe executable: a call describing each probe, with the expression the path in
-	/// `role` evaluates, each graph's probes after a call that begins the graph.
-	private static func probesSource(moduleNames: [String], role: DifferentialValuePathRole?, probeGroups: [[DifferentialValueProbe]], limits: DifferentialValueLimits) -> String {
+	/// `role` evaluates, each graph's probes after a call that begins the graph and registers its sample values.
+	private static func probesSource(moduleNames: [String], role: DifferentialValuePathRole?, probeGroups: [ProbeGroup], limits: DifferentialValueLimits) -> String {
 		let imports = moduleNames.map { "@testable import \($0)" }.joined(separator: "\n")
 		let moduleNameLiterals = moduleNames.map(swiftStringLiteral(of:)).joined(separator: ", ")
-		let probeCalls = probeGroups.map { probes in
-			(["describer.beginGraph()"] + probes.map { probe in
+		let probeCalls = probeGroups.map { group in
+			(["describer.beginGraph()"] + group.samples.map { sample in
+				"describer.registerSample(of: (\(sample.type)).self) { \(sample.expression) }"
+			} + group.probes.map { probe in
 				"describer.describe(probe: \(swiftStringLiteral(of: probe.name))) { (\(probe.expression(in: role))) as Any }"
 			}).joined(separator: "\n")
 		}.joined(separator: "\n")
@@ -918,47 +949,86 @@ enum DifferentialValueOracle {
 	import Darwin
 	#endif
 
+	/// The class instances the probes' sample values are, each kept alive so that no later object takes its identifier.
+	/// Only the probe executable's main thread reads or writes it.
+	nonisolated(unsafe) private var sampleObjects = [ObjectIdentifier: AnyObject]()
+
+	/// `value`, marked as a sample value when it is a class instance, so that the describer shows it without what it
+	/// holds: `<4> T (sample)`.
+	public func differentialValueSample<V>(_ value: V) -> V {
+		if Mirror(reflecting: value).displayStyle == .class {
+			let object = value as AnyObject
+			sampleObjects[ObjectIdentifier(object)] = object
+		}
+		return value
+	}
+
+	/// A value a sample holds in a builder the describer never calls and generated code never reaches, since the
+	/// describer shows a sample without what it holds.
+	public func differentialValueUnreachableSample<V>() -> V {
+		fatalError("A sample value's builder was called.")
+	}
+
 	/// How the describer traverses a SafeDI wrapper it meets.
 	enum WrapperTraversal {
-		case instantiate(() -> Any)
+		/// Calls the builder, with a sample value when `takesSample`.
+		case instantiate(() -> Any, takesSample: Bool)
 		/// Reads the wrapper's instance after the rest of the probe's value. `isInstantiated` is whether the instance
 		/// was read before the describer met the wrapper.
 		case readInstanceLast(() -> Any, isInstantiated: Bool)
 		case notTraversed(String?)
 	}
 
+	/// The builder of the registered sample value of a type, by the type's identifier.
+	typealias SampleBuilders = [ObjectIdentifier: () -> Any]
+
 	protocol DescribedWrapper: AnyObject {
-		var wrapperTraversal: WrapperTraversal { get }
+		func wrapperTraversal(samples: SampleBuilders) -> WrapperTraversal
+	}
+
+	/// How an instantiator whose `ForwardedProperties` are `ForwardedProperties` is traversed: called with nothing, or
+	/// with a sample value of its forwarded properties when the graph registered one.
+	private func instantiatorTraversal<ForwardedProperties>(
+		of _: ForwardedProperties.Type,
+		samples: SampleBuilders,
+		instantiate: @escaping (ForwardedProperties) -> Any,
+	) -> WrapperTraversal {
+		if let noForwardedProperties = () as? ForwardedProperties {
+			.instantiate({ instantiate(noForwardedProperties) }, takesSample: false)
+		} else if let sample = samples[ObjectIdentifier(ForwardedProperties.self)] {
+			// `registerSample(of:_:)` keys each builder by the type it builds, so the cast succeeds.
+			.instantiate({ (sample() as? ForwardedProperties).map(instantiate) as Any }, takesSample: true)
+		} else {
+			.notTraversed("forwarded arguments")
+		}
 	}
 
 	extension Instantiator: DescribedWrapper {
-		var wrapperTraversal: WrapperTraversal {
-			guard let noForwardedProperties = () as? T.ForwardedProperties else { return .notTraversed("forwarded arguments") }
-			return .instantiate { self.instantiate(noForwardedProperties) }
+		func wrapperTraversal(samples: SampleBuilders) -> WrapperTraversal {
+			instantiatorTraversal(of: T.ForwardedProperties.self, samples: samples) { self.instantiate($0) }
 		}
 	}
 
 	extension SendableInstantiator: DescribedWrapper {
-		var wrapperTraversal: WrapperTraversal {
-			guard let noForwardedProperties = () as? T.ForwardedProperties else { return .notTraversed("forwarded arguments") }
-			return .instantiate { self.instantiate(noForwardedProperties) }
+		func wrapperTraversal(samples: SampleBuilders) -> WrapperTraversal {
+			instantiatorTraversal(of: T.ForwardedProperties.self, samples: samples) { self.instantiate($0) }
 		}
 	}
 
 	extension ErasedInstantiator: DescribedWrapper {
-		var wrapperTraversal: WrapperTraversal {
+		func wrapperTraversal(samples _: SampleBuilders) -> WrapperTraversal {
 			.notTraversed(nil)
 		}
 	}
 
 	extension SendableErasedInstantiator: DescribedWrapper {
-		var wrapperTraversal: WrapperTraversal {
+		func wrapperTraversal(samples _: SampleBuilders) -> WrapperTraversal {
 			.notTraversed(nil)
 		}
 	}
 
 	extension LazilyInstantiated: DescribedWrapper {
-		var wrapperTraversal: WrapperTraversal {
+		func wrapperTraversal(samples _: SampleBuilders) -> WrapperTraversal {
 			// `Mirror` shows the wrapper's private `state`, whose case is `instantiated` once the instance was read.
 			let state = Mirror(reflecting: self).descendant("state")
 			let isInstantiated = state.map { Mirror(reflecting: $0).children.first?.label == "instantiated" } ?? false
@@ -967,7 +1037,7 @@ enum DifferentialValueOracle {
 	}
 
 	extension SendableLazilyInstantiated: DescribedWrapper {
-		var wrapperTraversal: WrapperTraversal {
+		func wrapperTraversal(samples _: SampleBuilders) -> WrapperTraversal {
 			// The wrapper keeps its state in a `Mutex`, which `Mirror` cannot see into.
 			.readInstanceLast({ self.instance }, isInstantiated: false)
 		}
@@ -1008,9 +1078,17 @@ enum DifferentialValueOracle {
 			writesToStandardOutput = false
 		}
 
-		/// Begins a graph's probes: no instance an earlier graph's probe held is marked as seen in its probes.
+		/// Begins a graph's probes: no instance an earlier graph's probe held is marked as seen in its probes, and no
+		/// sample value an earlier graph registered is used.
 		public func beginGraph() {
 			probeByIdentity.removeAll()
+			samples.removeAll()
+		}
+
+		/// Registers `make`, which builds a value of `type`, as the sample value to call an instantiator whose
+		/// `ForwardedProperties` are `type` with, each call with a value of its own.
+		public func registerSample<V>(of type: V.Type, _ make: @escaping () -> V) {
+			samples[ObjectIdentifier(type)] = { make() }
 		}
 
 		public func describe(probe name: String, value: () -> Any) {
@@ -1057,6 +1135,8 @@ enum DifferentialValueOracle {
 		/// The probe of the current graph whose value each object was first met in.
 		private var probeByIdentity = [ObjectIdentifier: String]()
 		private var deferredInstances = [DeferredInstance]()
+		/// The current graph's sample values, by the type each builds.
+		private var samples = SampleBuilders()
 		/// The wrappers being traversed, each as `<owner type>.<label>`.
 		private var callsOnPath = [String]()
 		/// Whether an instantiator's second call is being described, beneath which each instantiator is called once.
@@ -1093,18 +1173,23 @@ enum DifferentialValueOracle {
 				emit("\(prefix)<\(number)> \(typeName) (seen)")
 				return
 			}
-			switch wrapper.wrapperTraversal {
-			case let .instantiate(instantiate):
+			guard !Self.isSample(wrapper) else {
+				emit("\(prefix)<\(number)> \(typeName)\(annotation) (sample)")
+				return
+			}
+			switch wrapper.wrapperTraversal(samples: samples) {
+			case let .instantiate(instantiate, takesSample):
 				if let reason = reasonNotToTraverse(call, verb: "called") {
 					emit("\(prefix)<\(number)> \(typeName)\(annotation) (not called: \(reason))")
 				} else {
 					emit("\(prefix)<\(number)> \(typeName)\(annotation)")
 					traversalsLeft -= 1
 					callsOnPath.append(call)
-					describe(instantiate(), label: "instantiate()", owner: typeName, indent: indent + 1)
+					let callLabel = takesSample ? "instantiate(sample)" : "instantiate()"
+					describe(instantiate(), label: callLabel, owner: typeName, indent: indent + 1)
 					if !isInsideSecondCall {
 						isInsideSecondCall = true
-						describe(instantiate(), label: "instantiate() again", owner: typeName, indent: indent + 1)
+						describe(instantiate(), label: "\(callLabel) again", owner: typeName, indent: indent + 1)
 						isInsideSecondCall = false
 					}
 					callsOnPath.removeLast()
@@ -1153,7 +1238,9 @@ enum DifferentialValueOracle {
 			switch mirror.displayStyle {
 			case .class, .foreignReference:
 				let (number, isFirstVisit, annotation) = identity(of: value as AnyObject)
-				if isFirstVisit {
+				if isFirstVisit, Self.isSample(value as AnyObject) {
+					emit("\(prefix)<\(number)> \(typeName)\(annotation)\(note) (sample)")
+				} else if isFirstVisit {
 					emit("\(prefix)<\(number)> \(typeName)\(annotation)\(note)")
 					describe(children: storedProperties(of: mirror), owner: typeName, indent: indent + 1)
 				} else {
@@ -1207,6 +1294,11 @@ enum DifferentialValueOracle {
 				mirrors.append(superclassMirror)
 			}
 			return mirrors
+		}
+
+		/// Whether `object` is a sample value `differentialValueSample(_:)` marked.
+		private static func isSample(_ object: AnyObject) -> Bool {
+			sampleObjects[ObjectIdentifier(object)] != nil
 		}
 
 		/// The class instance `value` is, or holds as an optional.

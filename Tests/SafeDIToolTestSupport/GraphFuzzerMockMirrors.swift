@@ -738,8 +738,10 @@ struct GraphFuzzerMockMirrorModel {
 /// Why the value oracle compares no mirror for a type of an accepted base corpus graph whose `mock()` the tool
 /// generated, each pinned by count (`SafeDIToolGraphFuzzerTests.corpusValueOracleSkipCounts`).
 enum GraphFuzzerMirrorSkip: String, CaseIterable, Comparable {
-	/// The mock takes a parameter without a default value, for which the comparator has no value: the mocked type
-	/// forwards a value, its tree needs a dependency the mock cannot build, or an erased type is ambiguous.
+	/// The mock takes a parameter without a default value that the mirror cannot forward as the mock binds it – one
+	/// that is neither a value the mocked type forwards nor a dependency its tree receives by that label and type, such
+	/// as an instance of an unbuildable type the mocked type instantiates – or of a type the harness has no sample of
+	/// (`GraphFuzzerSampleValues`).
 	case requiredParameter
 	/// The mock root's scope holds two forms of one label, which the mock names apart (`x_X`, `x_Instantiator__X`),
 	/// and one production scope cannot declare.
@@ -821,25 +823,55 @@ struct GraphFuzzerMockMirror: Equatable {
 	/// The expression building the mocked type from the declarations.
 	let construction: String
 	let shapes: Set<GraphFuzzerValueOracleShape>
+	/// The arguments of the mock's required parameters, each a sample value, in the mock's order: empty for a mock that
+	/// takes none.
+	var mockArguments = [String]()
+	/// The sample of the mirror's `ForwardedProperties`, the same values the mock is handed, or `nil` for a mirror that
+	/// forwards nothing.
+	var forwardedPropertiesSample: String?
 
-	/// The probe expression of the known-right side of the mirror's pair.
+	/// Whether the mirror forwards the mock's required parameters, so that a root of its own builds it.
+	var isForwarding: Bool {
+		declarations.contains { $0.attribute == "@Forwarded" }
+	}
+
+	/// The probe expression of the feature side of the mirror's pair.
+	var featureExpression: String {
+		"\(mockedTypeName).mock(\(mockArguments.joined(separator: ", ")))"
+	}
+
+	/// The probe expression of the known-right side of the mirror's pair: the mirror's value, built by a root of its own
+	/// with the sample values the mock takes when the mirror forwards them.
 	var knownRightExpression: String {
-		"\(name)().\(Self.valueLabel)"
+		if let forwardedPropertiesSample {
+			"\(hostName)().\(Self.builderLabel).instantiate(\(forwardedPropertiesSample)).\(Self.valueLabel)"
+		} else {
+			"\(name)().\(Self.valueLabel)"
+		}
+	}
+
+	/// The root that builds a forwarding mirror through an instantiator.
+	var hostName: String {
+		"\(name)Host"
 	}
 
 	/// The label of the stored property that holds the mocked type the mirror builds.
 	static let valueLabel = "differentialMirrorValue"
 
-	/// The mirror's file.
+	/// The label of the forwarding mirror's instantiator its root holds.
+	static let builderLabel = "mirrorBuilder"
+
+	/// The mirror's file: a root, or, when the mirror forwards the mock's required parameters, the mirror and a root of
+	/// its own that holds an instantiator of it.
 	/// - Parameters:
 	///   - conformance: What the mirror conforms to beyond `Instantiable`, as the graph's roots and types do.
 	///   - stamp: The creation stamp's stored property, in a fixture that stamps every class.
 	func source(conformance: String, stamp: String?) -> String {
-		var lines = ["@Instantiable(isRoot: true)", "public final class \(name): Instantiable\(conformance) {"]
+		var lines = [isForwarding ? "@Instantiable" : "@Instantiable(isRoot: true)", "public final class \(name): Instantiable\(conformance) {"]
 		if let stamp {
 			lines += ["\t\(stamp)", ""]
 		}
-		lines.append("\tpublic init(\(declarations.map { "\($0.property.label): \($0.property.type)" }.joined(separator: ", "))) {")
+		lines.append("\tpublic init(\(declarations.map { "\($0.property.label): \(GraphFuzzerSpelling.escapingType(of: $0.property.type))" }.joined(separator: ", "))) {")
 		lines += declarations.map { "\t\tself.\($0.property.label) = \($0.property.label)" }
 		lines.append("\t\t\(Self.valueLabel) = \(construction)")
 		lines.append("\t}")
@@ -847,6 +879,22 @@ struct GraphFuzzerMockMirror: Equatable {
 		lines += declarations.map { "\t\($0.attribute) let \($0.property.label): \($0.property.type)" }
 		lines.append("\tlet \(Self.valueLabel): \(mockedTypeName)")
 		lines.append("}")
+		if isForwarding {
+			// A `Sendable` root stores only `Sendable` wrappers.
+			let builderType = "\(conformance == ", Sendable" ? "SendableInstantiator" : "Instantiator")<\(name)>"
+			lines += ["", "@Instantiable(isRoot: true)", "public final class \(hostName): Instantiable\(conformance) {"]
+			if let stamp {
+				lines += ["\t\(stamp)", ""]
+			}
+			lines += [
+				"\tpublic init(\(Self.builderLabel): \(builderType)) {",
+				"\t\tself.\(Self.builderLabel) = \(Self.builderLabel)",
+				"\t}",
+				"",
+				"\t@Instantiated let \(Self.builderLabel): \(builderType)",
+				"}",
+			]
+		}
 		return lines.joined(separator: "\n") + "\n"
 	}
 }
@@ -878,14 +926,27 @@ extension GraphFuzzerMockMirrorModel {
 
 	/// The mirror of the mocked type `typeName`, named `name`, or why none is compared.
 	/// - Parameter cache: Shared by the mocked types of one graph in type order, as the tool shares it across mock roots.
-	func mirror(ofMockedTypeNamed typeName: String, named name: String, cache: inout ReceivedPropertiesCache) -> Result<GraphFuzzerMockMirror, GraphFuzzerMirrorFailure> {
-		mirror(of: mockRoot(ofTypeNamed: typeName, cache: &cache), mockedTypeName: typeName, named: name)
+	func mirror(ofMockedTypeNamed typeName: String, named name: String, forwarding requiredParameters: [GraphFuzzerMirrorProperty] = [], cache: inout ReceivedPropertiesCache) -> Result<GraphFuzzerMockMirror, GraphFuzzerMirrorFailure> {
+		mirror(of: mockRoot(ofTypeNamed: typeName, cache: &cache), mockedTypeName: typeName, named: name, forwarding: requiredParameters)
 	}
 
 	/// The mirror of the mocked type `typeName`, whose mock root is `mockRoot`, named `name`, or why none is compared.
-	func mirror(of mockRoot: MockRoot, mockedTypeName typeName: String, named name: String) -> Result<GraphFuzzerMockMirror, GraphFuzzerMirrorFailure> {
+	/// - Parameter requiredParameters: The mock's parameters without a default value, which the mirror forwards: values
+	///   the mocked type forwards, and dependencies its tree receives that the mock cannot build.
+	func mirror(of mockRoot: MockRoot, mockedTypeName typeName: String, named name: String, forwarding requiredParameters: [GraphFuzzerMirrorProperty] = []) -> Result<GraphFuzzerMockMirror, GraphFuzzerMirrorFailure> {
 		guard let mockedType = types[typeName] else {
 			return .failure(.modelDisagrees("The model holds no declaration of `\(typeName)`."))
+		}
+		// A required parameter the mirror forwards as the mock binds it: a value the mocked type forwards, or a dependency
+		// its tree receives by that label and type that the mocked type does not instantiate itself. The mock takes others
+		// – an instance it cannot build that the mocked type or its tree instantiates, the instance of a lazily instantiated
+		// receive, a parameter it names apart from another of its label – which no forwarded declaration stands for.
+		for parameter in requiredParameters {
+			let isForwardedByMockedType = mockedType.dependencies.contains { $0.source == .forwarded && $0.property == parameter }
+			let isReceivedByTree = mockRoot.received.contains(parameter) && !mockedType.dependencies.contains { $0.property.label == parameter.label && $0.attribute.hasPrefix("@Instantiated") }
+			guard isForwardedByMockedType || isReceivedByTree else {
+				return .failure(.skipped(.requiredParameter))
+			}
 		}
 		var declaredProperties = Set<GraphFuzzerMirrorProperty>()
 		for child in mockRoot.children {
@@ -929,7 +990,8 @@ extension GraphFuzzerMockMirrorModel {
 		for case let .instantiated(property, _, _) in mockRoot.promotedChildren {
 			promotedDeclaredProperties.formUnion([property.unwrapped] + [property.unwrapped.lazilyInstantiatedInstance].compactMap(\.self))
 		}
-		var declarations = [GraphFuzzerMockMirror.Declaration]()
+		// The mock's required parameters, which the mirror forwards, then what the mock builds beside the mocked type.
+		var declarations = requiredParameters.map { GraphFuzzerMockMirror.Declaration(attribute: "@Forwarded", property: $0) }
 		for child in mockRoot.children {
 			switch child {
 			case let .instantiated(property, scopeTypeName, isErased):
@@ -988,7 +1050,7 @@ extension GraphFuzzerMockMirrorModel {
 			case let .received(onlyIfAvailable):
 				Self.argument(for: dependency.property, isRequired: !onlyIfAvailable, from: declarations)
 			case .forwarded:
-				nil
+				Self.argument(for: dependency.property, isRequired: true, from: declarations)
 			}
 			guard let argument else {
 				return .failure(.modelDisagrees("The mirror declares nothing it can pass `\(typeName)` for `\(dependency.property)`, which the mock passes without a required parameter."))
@@ -1300,6 +1362,7 @@ struct GraphFuzzerValueOraclePlan {
 		var skips = [(typeName: String, skip: GraphFuzzerMirrorSkip)]()
 		var modelFailures = [String]()
 		var cache = GraphFuzzerMockMirrorModel.ReceivedPropertiesCache()
+		let samples = GraphFuzzerSampleValues(fixture: fixture, model: model)
 		// The tool creates mock roots in type order, sharing what it collects of each scope's received properties.
 		for typeName in model.typeOrder.sorted() where model.types[typeName]?.generatesMock == true && model.types[typeName]?.isRoot == false {
 			guard let mockFile = generatedFiles[typeName + mockFileSuffix] else {
@@ -1312,12 +1375,17 @@ struct GraphFuzzerValueOraclePlan {
 				modelFailures.append(disagreement)
 				continue
 			}
-			guard GraphFuzzerMockOverrides.takesNoRequiredParameter(mockFile) else {
+			// The mock's required parameters are handed sample values, which the mirror forwards.
+			let requiredParameters = GraphFuzzerMockOverrides.requiredParameters(mockFile)
+			let mockArguments = requiredParameters.map { parameter in samples.expression(ofType: parameter.type).map { "\(parameter.label): \($0)" } }
+			guard mockArguments.allSatisfy({ $0 != nil }) else {
 				skips.append((typeName, .requiredParameter))
 				continue
 			}
-			switch model.mirror(of: mockRoot, mockedTypeName: typeName, named: "\(fixture.typeNamePrefix)ZMirror\(mirrors.count)") {
-			case let .success(mirror):
+			switch model.mirror(of: mockRoot, mockedTypeName: typeName, named: "\(fixture.typeNamePrefix)ZMirror\(mirrors.count)", forwarding: requiredParameters) {
+			case var .success(mirror):
+				mirror.mockArguments = mockArguments.compactMap(\.self)
+				mirror.forwardedPropertiesSample = requiredParameters.isEmpty ? nil : samples.forwardedPropertiesExpression(of: requiredParameters)
 				mirrors.append(mirror)
 			case let .failure(.skipped(skip)):
 				skips.append((typeName, skip))
@@ -1326,6 +1394,7 @@ struct GraphFuzzerValueOraclePlan {
 			}
 		}
 		self.mirrors = mirrors
+		forwardedPropertiesSamples = samples.forwardedPropertiesSamples
 		self.skips = skips
 		self.modelFailures = modelFailures
 		drawnMockFiles = generatedFiles.filter { $0.key.hasSuffix(mockFileSuffix) }
@@ -1343,6 +1412,9 @@ struct GraphFuzzerValueOraclePlan {
 	let drawnMockFiles: [String: String]
 	/// The mirror of each compared mocked type, in type order.
 	let mirrors: [GraphFuzzerMockMirror]
+	/// The sample value of each type's `ForwardedProperties` that has one, which the describer calls an instantiator of
+	/// the type with.
+	let forwardedPropertiesSamples: [DifferentialValueSample]
 	/// Each mocked type of the graph the oracle compares no mirror for, and why.
 	let skips: [(typeName: String, skip: GraphFuzzerMirrorSkip)]
 	/// Where the mirror model disagrees with a generated mock (`mirrorModelDisagreesWithMock`): a model left behind by a
@@ -1375,7 +1447,7 @@ struct GraphFuzzerValueOraclePlan {
 	/// mirror's value. Never a mirror itself, which builds the mocked type's dependencies the mocked type does not hold.
 	var probePairs: [DifferentialValueProbePair] {
 		rootTypeNames.map { DifferentialValueProbePair(name: "\($0).mock()", featureExpression: "\($0).mock()", knownRightExpression: "\($0)()") }
-			+ mirrors.map { DifferentialValueProbePair(name: "\($0.mockedTypeName).mock()", featureExpression: "\($0.mockedTypeName).mock()", knownRightExpression: $0.knownRightExpression) }
+			+ mirrors.map { DifferentialValueProbePair(name: "\($0.mockedTypeName).mock()", featureExpression: $0.featureExpression, knownRightExpression: $0.knownRightExpression) }
 	}
 
 	/// The shapes the compared pairs show, each with the number of pairs that show it.
@@ -1485,6 +1557,20 @@ enum GraphFuzzerMockOverrides {
 		mockParameters(contents).allSatisfy { $0.contains(" = ") }
 	}
 
+	/// The parameters of the generated `mock()` in `contents` without a default value, in the mock's order, each as the
+	/// property it takes: its label, and its type without `@escaping`.
+	static func requiredParameters(_ contents: String) -> [GraphFuzzerMirrorProperty] {
+		mockParameters(contents).filter { !$0.contains(" = ") }.compactMap { parameter in
+			let declaration = parameter.hasSuffix(",") ? parameter.dropLast() : Substring(parameter)
+			guard let colon = declaration.firstIndex(of: ":") else { return nil }
+			let type = declaration[declaration.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+			return GraphFuzzerMirrorProperty(
+				label: String(declaration[..<colon]),
+				type: type.replacingOccurrences(of: "@escaping ", with: ""),
+			)
+		}
+	}
+
 	/// The parameters of the generated `mock()` in `contents`, one per line as declared.
 	static func mockParameters(_ contents: String) -> [String] {
 		let lines = contents.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
@@ -1564,6 +1650,7 @@ struct GraphFuzzerValueOracleRun {
 			name: "seed \(plan.fixture.seed), value oracle",
 			path: DifferentialValuePath(fixture: plan.valueOracleFixture(storingEveryParameter: true), generatedFiles: generatedFiles),
 			probePairs: plan.probePairs,
+			samples: plan.forwardedPropertiesSamples,
 		)
 	}
 
@@ -1614,8 +1701,10 @@ extension GraphFuzzerMockOverrides {
 /// What the base corpus's value oracle compared and skipped, which the long run reports per shard and pins over the
 /// whole corpus: the compared root pairs and mirrored pairs, each as a count and as a set sum over `<seed>:<type>`, so
 /// that a pair that drops out while another drops in still moves a pin; each mocked type compared with no mirror, by
-/// reason; the compared pairs that show each shape; and the drawn mock files that R6 finds alike only once its
-/// allowance normalizes them (`GraphFuzzerValueOracleRun.drawnMockFileNamesMatchingOnlyAfterNormalization`).
+/// reason; the compared pairs that show each shape; the drawn mock files that R6 finds alike only once its allowance
+/// normalizes them (`GraphFuzzerValueOracleRun.drawnMockFileNamesMatchingOnlyAfterNormalization`); and, of the
+/// compared graphs, the mirrored pairs whose mock takes sample values and the types whose `ForwardedProperties` have a
+/// sample the describer calls their instantiators with.
 struct GraphFuzzerValueOracleCounts: Equatable {
 	var rootPairCount = 0
 	var rootPairsSum = GraphFuzzerSeedSetSum()
@@ -1624,6 +1713,8 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 	var skipCounts = [GraphFuzzerMirrorSkip: Int]()
 	var shapeCounts = [GraphFuzzerValueOracleShape: Int]()
 	var drawnMocksMatchingOnlyAfterNormalizationCount = 0
+	var mirroredPairsTakingSamplesCount = 0
+	var forwardedPropertiesSampleCount = 0
 
 	/// Counts the skips and the drawn mock files R6 normalizes of a graph the value oracle inspected and, when its
 	/// value-oracle graph was compared, its pairs and their shapes.
@@ -1641,7 +1732,11 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 		for mirror in plan.mirrors {
 			mirroredPairCount += 1
 			mirroredPairsSum.add(member: "\(plan.fixture.seed):\(mirror.mockedTypeName)")
+			if !mirror.mockArguments.isEmpty {
+				mirroredPairsTakingSamplesCount += 1
+			}
 		}
+		forwardedPropertiesSampleCount += plan.forwardedPropertiesSamples.count
 		for (shape, count) in plan.shapeCounts {
 			shapeCounts[shape, default: 0] += count
 		}
@@ -1659,6 +1754,8 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 		fields += GraphFuzzerMirrorSkip.allCases.map { "skip.\($0.rawValue)=\(skipCounts[$0, default: 0])" }
 		fields += GraphFuzzerValueOracleShape.allCases.map { "shape.\($0.rawValue)=\(shapeCounts[$0, default: 0])" }
 		fields.append("drawnMocksMatchingOnlyAfterNormalization=\(drawnMocksMatchingOnlyAfterNormalizationCount)")
+		fields.append("mirroredPairsTakingSamples=\(mirroredPairsTakingSamplesCount)")
+		fields.append("forwardedPropertiesSamples=\(forwardedPropertiesSampleCount)")
 		return fields.joined(separator: ",")
 	}
 
