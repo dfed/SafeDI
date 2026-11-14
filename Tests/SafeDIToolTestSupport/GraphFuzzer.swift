@@ -9473,7 +9473,7 @@ struct GraphFuzzerFailure: Equatable {
 	let seed: UInt64
 	let kind: Kind
 	let details: String
-	/// For `seamBuildsOtherValuesThanInline`, each difference's description: a known issue of that kind documents
+	/// For `seamBuildsOtherValuesThanInline` and the other value differences, each difference's description: a known issue of that kind documents
 	/// the failure only when every one of them matches one of its signatures.
 	var valueDifferences: [String] = []
 	/// For `valueOracleFixtureRejected`, each line of the tool's diagnostics that reports an error: a known issue of that
@@ -9630,6 +9630,9 @@ struct GraphFuzzerKnownIssue: Equatable {
 		/// The seam build constructs other values than the inline build, with a difference whose description
 		/// contains this text.
 		case seamBuildsOtherValuesThanInline(containing: String)
+		/// The build that fills a hole constructs other values than its visible build, with a difference whose description
+		/// contains this text.
+		case holeBuildsOtherValuesThanVisibleBuild(containing: String)
 		/// The value comparator could not describe the graph, with details containing this text, such as the error of
 		/// an inline build that does not compile.
 		case valueComparatorCouldNotDescribeGraph(containing: String)
@@ -9672,7 +9675,7 @@ struct GraphFuzzerKnownIssue: Equatable {
 			switch signature {
 			case .mockBuildsOtherValuesThanProduction, .valueOracleFixtureDoesNotCompile, .valueOracleFixtureRejected, .remedyLeavesErrorAtSite:
 				true
-			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight, .holeNamesChangeWithSecondPlace:
+			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight, .holeNamesChangeWithSecondPlace:
 				false
 			}
 		}
@@ -9710,6 +9713,17 @@ struct GraphFuzzerKnownIssue: Equatable {
 				failure.kind == .seamBuildsOtherValuesThanInline && !failure.valueDifferences.isEmpty && failure.valueDifferences.allSatisfy { difference in
 					signatures.contains { signature in
 						if case let .seamBuildsOtherValuesThanInline(text) = signature {
+							difference.contains(text)
+						} else {
+							false
+						}
+					}
+				}
+			case .holeBuildsOtherValuesThanVisibleBuild:
+				// As for the seam's value signatures, every difference must match one.
+				failure.kind == .holeBuildsOtherValuesThanVisibleBuild && !failure.valueDifferences.isEmpty && failure.valueDifferences.allSatisfy { difference in
+					signatures.contains { signature in
+						if case let .holeBuildsOtherValuesThanVisibleBuild(text) = signature {
 							difference.contains(text)
 						} else {
 							false
@@ -9834,7 +9848,7 @@ enum GraphFuzzerFinding: Equatable {
 		case let (nil, knownIssue?):
 			self = .staleKnownIssue(knownIssue)
 		case let (failure?, knownIssue?) where knownIssue.matches(failure):
-			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .publicMockBuildsOtherValuesThanKnownRight, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile].contains(failure.kind)
+			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile].contains(failure.kind)
 			if let unmasked = laterFailures.first(where: { (masksNoLaterFailure || $0.kind == .renamedGraphDiffers) && !knownIssue.matches($0) }) {
 				self = .failure(unmasked)
 			} else {

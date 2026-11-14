@@ -5307,7 +5307,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x9CFE00D496A0FBB4
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x6E09DF4F607AAABE
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -5583,7 +5583,24 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeCode)],
-			seeds: [83, 108, 298, 308, 326, 391, 407, 556, 701, 930, 945],
+			seeds: [83, 108, 298, 308, 326, 391, 407, 556, 701, 930],
+		),
+		// A fill that re-enters its own seam: the place the re-entered seam builds is handed the root dispatcher, not the
+		// fill's values, so `HoleImpl`'s only-if-available `holeNestId` is `nil` where the visible build passes it.
+		GraphFuzzerKnownIssue(
+			reason: fillReenteringItsSeamLosesValueReason,
+			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference)],
+			seeds: [600],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(fillReenteringItsSeamLosesValueReason); and \(seamBuilderOrderReason)",
+			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeCode)],
+			seeds: [945],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "The error that a fill receives a value its caller builds where it calls the seam, while passing the builder on from its own caller, names one of the builder's places by file order, so reversing file names changes which place it names; fixed in a later PR",
+			signatures: [.renamedGraphDiffers(.diagnostics)],
+			seeds: [590],
 		),
 		// The design's output stability, section 8: a second hole type whose stem collides with another's renames both;
 		// and the two colliding hole types' builders, enums and payload bindings are ordered by their names, which the move
@@ -5606,6 +5623,10 @@ struct SafeDIToolGraphFuzzerTests {
 			seeds: [383],
 		),
 	]
+
+	private static let fillReenteringItsSeamLosesValueReason = "A fill that re-enters its own seam hands the re-entered seam the root dispatcher, not its own values, so a fill there reads `nil` for an only-if-available value its visible build passes; fixed in a later PR"
+
+	private static let fillReenteringItsSeamLosesValueDifference = "> holeService > holeNestId:\n  feature:     holeNestId: nil\n  known right: holeNestId: Int 7"
 
 	private static let seamBuilderOrderReason = "A seam's builders are ordered by label, which its hole type's name begins, so moving type names across wrapper names reorders the builders of a seam with two hole types, its generated initializers and the calls of them"
 
