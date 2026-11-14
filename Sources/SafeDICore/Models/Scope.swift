@@ -267,6 +267,12 @@ final class Scope: Hashable {
 	/// The labels of `declaredProperties`.
 	fileprivate lazy var declaredLabels = Set(declaredProperties.map(\.label))
 
+	/// `declaredProperties` in `Property` order, each with the forms it provides (`CycleParameter.forms(providedBy:)`),
+	/// which every tree that builds this scope declares beneath it.
+	fileprivate lazy var sortedDeclaredPropertyForms: [(property: Property, forms: Set<Property>)] = declaredProperties
+		.sorted()
+		.map { (property: $0, forms: CycleParameter.forms(providedBy: $0)) }
+
 	/// The by-value properties with which the scopes this scope builds receive the instance of a lazily
 	/// instantiated property this scope declares. A mock root can declare a property itself and also be given
 	/// a promoted lazily instantiated property with the same label. Types that receive the property by value
@@ -383,7 +389,7 @@ final class Scope: Hashable {
 	/// and then only the last pass's, since nothing reads the code of a pass that is not the last.
 	func createScopeGenerator(
 		for property: Property?,
-		nearestDeclarations: NearestDeclarations = [:],
+		nearestDeclarations: NearestDeclarations = NearestDeclarations(),
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		seamRoot: ScopeGenerator.SeamRoot? = nil,
 		mockBuilders: DependencyTreeGenerator.ShapedBuilders? = nil,
@@ -396,6 +402,8 @@ final class Scope: Hashable {
 		var previousPassGenerator: ScopeGenerator?
 		var scopeGenerator: ScopeGenerator
 		var generatorsToStart: [ScopeGenerator]?
+		// Every scope of the tree is enclosed by these, so they are held in storage each scope's copy shares.
+		let nearestDeclarations = nearestDeclarations.sharingDeclarations()
 		repeat {
 			if previousPassGenerator != nil {
 				generatorsToStart = []
@@ -677,16 +685,17 @@ private struct ScopeGeneratorUnderConstruction {
 		// `NearestDeclarations.join(_:providing:)`) – so its declarations join those.
 		var childNearestDeclarations = nearestDeclarations
 		if !isPropertyCycle {
-			let declaredProperties = scope.declaredProperties.sorted()
+			let declaredPropertyForms = scope.sortedDeclaredPropertyForms
 			if property == nil {
-				for declaredProperty in declaredProperties {
-					childNearestDeclarations.join(declaredProperty, providing: CycleParameter.forms(providedBy: declaredProperty))
+				for (declaredProperty, forms) in declaredPropertyForms {
+					childNearestDeclarations.join(declaredProperty, providing: forms)
 				}
 			} else {
-				childNearestDeclarations.replaceLabels(of: declaredProperties)
+				childNearestDeclarations.replaceLabels(of: declaredPropertyForms)
 			}
 		}
-		self.childNearestDeclarations = childNearestDeclarations
+		// Each scope beneath shares these, rather than copying them.
+		self.childNearestDeclarations = childNearestDeclarations.sharingDeclarations()
 		// The functions enclosing the scopes this scope builds that lazy cycles close on, by the property each builds:
 		// this scope's own, and those enclosing this scope. Nearly every scope is beneath no such function.
 		var childCycleParameterContexts = isPropertyCycle ? [:] : cycleParameterContexts
@@ -1450,9 +1459,76 @@ struct NearestDeclaration: Sendable {
 
 /// The nearest declaration of each label on the path from a tree's root to a scope. A label absent here is declared
 /// nowhere on the path.
-typealias NearestDeclarations = [String: NearestDeclaration]
+///
+/// Every scope of a tree holds its own, which differs from its parent's only in the labels the scope declares or builds.
+/// So that no scope copies the declarations of the scopes above it, those are kept in a chain of layers every scope
+/// beneath shares (`sharingDeclarations()`): a scope's own changes, then the layer of each scope enclosing it, nearest
+/// first, then the declarations that enclose the whole tree – a mock root binds every property its tree receives.
+struct NearestDeclarations: Sendable {
+	init() {}
 
-extension [String: NearestDeclaration] {
+	/// The nearest declaration of `label`.
+	subscript(label: String) -> NearestDeclaration? {
+		if let changedDeclaration = changedDeclarations[label] {
+			return changedDeclaration
+		}
+		var layer = enclosingLayer
+		while let currentLayer = layer {
+			if let declaration = currentLayer.declarations[label] {
+				return declaration
+			}
+			layer = currentLayer.enclosingLayer
+		}
+		return nil
+	}
+
+	/// These declarations, with every change held in a layer the copies of the result share.
+	func sharingDeclarations() -> Self {
+		guard !changedDeclarations.isEmpty else { return self }
+		var sharing = Self()
+		sharing.enclosingLayer = Layer(declarations: changedDeclarations, enclosingLayer: enclosingLayer)
+		return sharing
+	}
+
+	/// The declarations a scope changed, which hide those of their labels in the layers it is enclosed by. A chain of
+	/// layers can be as long as a tree is deep, which can be as deep as the module has types, so each layer releases
+	/// the one it is enclosed by after the release that freed it returns, rather than within it.
+	private final class Layer: Sendable {
+		init(declarations: [String: NearestDeclaration], enclosingLayer: Layer?) {
+			self.declarations = declarations
+			enclosingLayers = enclosingLayer.map { [$0] } ?? []
+		}
+
+		deinit {
+			var enclosingLayers = [Layer]()
+			swap(&enclosingLayers, &self.enclosingLayers)
+			DeferredRelease.release(consume enclosingLayers)
+		}
+
+		let declarations: [String: NearestDeclaration]
+
+		/// The layer this one is enclosed by, if any.
+		var enclosingLayer: Layer? {
+			enclosingLayers.first
+		}
+
+		/// `enclosingLayer`, held in an array `deinit` hands to `DeferredRelease`. Mutated only by `deinit`, which has the
+		/// only access.
+		nonisolated(unsafe) private var enclosingLayers: [Layer]
+	}
+
+	/// The declarations shared with the scopes above, nearest first.
+	private var enclosingLayer: Layer?
+	/// The declarations changed since `enclosingLayer`, which hide those of their labels there.
+	private var changedDeclarations = [String: NearestDeclaration]()
+
+	/// Makes `nearestDeclaration` the nearest declaration of `label`.
+	private mutating func set(_ nearestDeclaration: NearestDeclaration, for label: String) {
+		changedDeclarations[label] = nearestDeclaration
+	}
+}
+
+extension NearestDeclarations {
 	/// The declarations a mock root's tree is enclosed by: each of `boundProperties`, the received properties the mock
 	/// binds, in `Property` order, each form bound to the first property that provides it. The mock binds each form once
 	/// and names every binding apart, so no binding hides another.
@@ -1461,7 +1537,7 @@ extension [String: NearestDeclaration] {
 		for boundProperty in boundProperties.sorted() {
 			nearestDeclarations.join(boundProperty, providing: CycleParameter.forms(providedBy: boundProperty))
 		}
-		return nearestDeclarations
+		return nearestDeclarations.sharingDeclarations()
 	}
 
 	/// The binding a receive of `property` only if available reads, or `nil` when the property is unavailable: the
@@ -1485,17 +1561,18 @@ extension [String: NearestDeclaration] {
 		for form in forms {
 			nearestDeclaration.bindings[form] = property
 		}
-		self[property.label] = nearestDeclaration
+		set(nearestDeclaration, for: property.label)
 	}
 
-	/// Makes `properties`, the declarations of one scope that is no root, the nearest declarations of their labels, each
-	/// hiding every declaration of its label above the scope. Their labels are distinct: they are the dependencies of the
-	/// scope's type, which `DependencyTreeGenerator.validateDependencyLabelsAreDistinct` rejects before a tree that builds
-	/// it is created when two share a label. A root's declarations, among which a mock root's forms of one label repeat
-	/// it, join the bindings the tree is given instead (`join(_:providing:)`).
-	mutating func replaceLabels(of properties: [Property]) {
-		for property in properties {
-			replace(property, providing: CycleParameter.forms(providedBy: property))
+	/// Makes `properties`, the declarations of one scope that is no root, each with the forms it provides, the nearest
+	/// declarations of their labels, each hiding every declaration of its label above the scope. Their labels are
+	/// distinct: they are the dependencies of the scope's type, which
+	/// `DependencyTreeGenerator.validateDependencyLabelsAreDistinct` rejects before a tree that builds it is created when
+	/// two share a label. A root's declarations, among which a mock root's forms of one label repeat it, join the
+	/// bindings the tree is given instead (`join(_:providing:)`).
+	mutating func replaceLabels(of properties: [(property: Property, forms: Set<Property>)]) {
+		for (property, forms) in properties {
+			replace(property, providing: forms)
 		}
 	}
 
@@ -1505,13 +1582,15 @@ extension [String: NearestDeclaration] {
 		for form in forms where nearestDeclaration.bindings[form] == nil {
 			nearestDeclaration.bindings[form] = property
 		}
-		self[property.label] = nearestDeclaration
+		set(nearestDeclaration, for: property.label)
 	}
 
 	/// Records that `property` is being built: every form it provides is unavailable until a nearer declaration of its
 	/// label hides it.
 	mutating func build(_ property: Property) {
-		self[property.label, default: NearestDeclaration()].formsBeingBuilt.formUnion(CycleParameter.forms(providedBy: property))
+		var nearestDeclaration = self[property.label] ?? NearestDeclaration()
+		nearestDeclaration.formsBeingBuilt.formUnion(CycleParameter.forms(providedBy: property))
+		set(nearestDeclaration, for: property.label)
 	}
 }
 

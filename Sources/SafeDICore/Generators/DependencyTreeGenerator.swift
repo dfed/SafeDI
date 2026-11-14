@@ -321,6 +321,7 @@ public actor DependencyTreeGenerator {
 		var seen = Set<TypeDescription>()
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
+		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
 		var mockRootErrors = [DependencyTreeGeneratorError]()
 		for instantiable in typeDescriptionToFulfillingInstantiableMap.values
@@ -360,6 +361,7 @@ public actor DependencyTreeGenerator {
 					receivedPropertiesCache: &receivedPropertiesCache,
 					childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 					promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
+					scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
 				)
 				if instantiable.generateMock == .public, let publicMockContext {
 					var findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, mockDefaults: flatParameterMockDefaults)
@@ -713,6 +715,7 @@ public actor DependencyTreeGenerator {
 		let instantiable = mockRootInstantiable(for: scope.instantiable, scope: scope)
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
+		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
 		let mockRoot = try await createMockRoot(
 			for: instantiable,
 			scope: scope,
@@ -726,6 +729,7 @@ public actor DependencyTreeGenerator {
 			receivedPropertiesCache: &receivedPropertiesCache,
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
+			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
 		)
 		// Whether a public mock can be generated is decided for one root and needs no emitting module, as
 		// `generateMockCode` decides it, so the query reports it too.
@@ -1117,6 +1121,7 @@ public actor DependencyTreeGenerator {
 	///     the one check of a single mock root that the two callers do not share; the access that decides which flat
 	///     parameters default is asked of `mockScopes` instead, by both.
 	///   - promotedScopesValidatedForHiddenReceives: See `createMockRootScopeGenerator`.
+	///   - scopesWithValidatedDeclarations: See `createMockRootScopeGenerator`.
 	private func createMockRoot(
 		for instantiable: Instantiable,
 		scope: Scope,
@@ -1126,6 +1131,7 @@ public actor DependencyTreeGenerator {
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
+		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
 	) async throws -> ScopeGenerator {
 		// A hand-written method also named `mock` can be confused with the
 		// generated `mock()`: identical signatures redeclare, overlapping ones
@@ -1178,6 +1184,7 @@ public actor DependencyTreeGenerator {
 			receivedPropertiesCache: &receivedPropertiesCache,
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
+			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
 		)
 	}
 
@@ -3817,6 +3824,7 @@ public actor DependencyTreeGenerator {
 		let instantiable = mockRootInstantiable(for: declaredInstantiable, scope: scope)
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
+		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
 		let mockRoot = try await createMockRoot(
 			for: instantiable,
 			scope: scope,
@@ -3827,6 +3835,7 @@ public actor DependencyTreeGenerator {
 			receivedPropertiesCache: &receivedPropertiesCache,
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
+			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
 		)
 		let context = publicMockContext
 		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults)
@@ -5782,6 +5791,9 @@ public actor DependencyTreeGenerator {
 	/// - Parameter promotedScopesValidatedForHiddenReceives: The scopes of `typeDescriptionToScopeMap` whose trees are
 	///   already known to hide no received dependency, shared across mock roots: a scope's tree is validated the same
 	///   way whichever mock root promotes it.
+	/// - Parameter scopesWithValidatedDeclarations: The scopes of `typeDescriptionToScopeMap` whose trees' declarations are
+	///   already known to repeat no dependency label and to declare no rename the macro rejects, shared across mock roots:
+	///   a scope's tree is the same whichever mock root builds it, so a tree validated once is not walked again.
 	/// - Parameter emittingModule: The module the mock's code compiles in, whose access to each type the mock constructs
 	///   is checked, or `nil` to check none.
 	private func createMockRootScopeGenerator(
@@ -5794,6 +5806,7 @@ public actor DependencyTreeGenerator {
 		receivedPropertiesCache cache: inout ReceivedPropertiesCache,
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
+		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
 	) async throws -> ScopeGenerator {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
@@ -6011,7 +6024,10 @@ public actor DependencyTreeGenerator {
 		var visitedScopesInMockTree = Set<ObjectIdentifier>()
 		var scopesInMockTreeToVisit = [mockRootScope]
 		while let scopeToVisit = scopesInMockTreeToVisit.popLast() {
-			guard visitedScopesInMockTree.insert(ObjectIdentifier(scopeToVisit)).inserted else { continue }
+			// A tree an earlier mock root's walk validated is not walked again.
+			guard !scopesWithValidatedDeclarations.contains(ObjectIdentifier(scopeToVisit)),
+			      visitedScopesInMockTree.insert(ObjectIdentifier(scopeToVisit)).inserted
+			else { continue }
 			instantiablesInMockTree.append(scopeToVisit.instantiable)
 			for case let .instantiated(_, childScope, _) in scopeToVisit.propertiesToGenerate {
 				scopesInMockTreeToVisit.append(childScope)
@@ -6019,6 +6035,10 @@ public actor DependencyTreeGenerator {
 		}
 		try Self.validateDependencyLabelsAreDistinct(in: instantiablesInMockTree)
 		try Self.validateRenamesAreSpelledAsTheMacroAccepts(in: instantiablesInMockTree)
+		// Only a walk that completed is kept, as every memo shared across roots keeps them. The mock root's own scope is
+		// made for this root alone, and once released its identifier can name another scope, so it is never kept.
+		visitedScopesInMockTree.remove(ObjectIdentifier(mockRootScope))
+		scopesWithValidatedDeclarations.formUnion(visitedScopesInMockTree)
 
 		// Validate the promoted mock scope for cycles before generating code.
 		// This catches cycles that only become visible after @Received dependencies
@@ -10264,9 +10284,21 @@ public actor DependencyTreeGenerator {
 		      dependencies.contains(where: \.property.propertyType.isSendable)
 		else { return }
 		// Two paths can reach one receiver through the same chain of types, so identical captures are reported once.
-		var captures = Set<ScopeGenerator.NonSendableWrapperCapture>()
-		for root in roots {
-			await captures.formUnion(root.scopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt: root.instantiable))
+		// The trees are walked in parallel: the captures are a set, which the error sorts into source order.
+		let captures = await withTaskGroup(
+			of: [ScopeGenerator.NonSendableWrapperCapture].self,
+			returning: Set<ScopeGenerator.NonSendableWrapperCapture>.self,
+		) { taskGroup in
+			for root in roots {
+				taskGroup.addTask {
+					await root.scopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt: root.instantiable)
+				}
+			}
+			var captures = Set<ScopeGenerator.NonSendableWrapperCapture>()
+			for await rootCaptures in taskGroup {
+				captures.formUnion(rootCaptures)
+			}
+			return captures
 		}
 		if !captures.isEmpty {
 			throw DependencyTreeGeneratorError.nonSendableWrapperCapturedBySendableBuilder(Array(captures))
