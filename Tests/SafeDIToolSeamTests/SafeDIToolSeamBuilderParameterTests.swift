@@ -5658,20 +5658,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 	/// The path the comparator builds from `output`, the run of `modules`: each module's files as the harness wrote
 	/// them, and the files the tool generated for it.
 	static func differentialValuePath(of output: MultiModuleTestOutput, modules: [ModuleFixture]) throws -> DifferentialValuePath {
-		try DifferentialValuePath(modules: modules.map { module in
-			let sourceDirectory = output.fixtureRoot.appendingPathComponent(module.packageName).appendingPathComponent("Sources").appendingPathComponent(module.name)
-			var fixtureFiles = [String: String]()
-			for fileName in try FileManager.default.contentsOfDirectory(atPath: sourceDirectory.path) where fileName.hasSuffix(".swift") {
-				fixtureFiles[fileName] = try String(contentsOf: sourceDirectory.appendingPathComponent(fileName), encoding: .utf8)
-			}
-			return DifferentialValueModule(
-				name: module.name,
-				packageName: module.packageName,
-				dependencyModuleNames: module.dependencies,
-				fixtureFiles: fixtureFiles,
-				generatedFiles: output.modules[module.name]?.generatedFiles ?? [:],
-			)
-		})
+		try DifferentialValuePath(output: output, modules: modules)
 	}
 
 	/// Expects `generatedFiles` to equal `expected`, recording the files generated when they do not, so a failure shows
