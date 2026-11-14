@@ -481,11 +481,6 @@ private final class SignatureTypeNameVisitor: SyntaxVisitor {
 		return .visitChildren
 	}
 
-	override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
-		record(node.initializer.value, modifiers: node.modifiers, attributes: node.attributes)
-		return .skipChildren
-	}
-
 	private func record(_ signature: some SyntaxProtocol, modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax) {
 		let isUsableFromInline = attributes.contains { attribute in
 			attribute.as(AttributeSyntax.self)?.attributeName.trimmedDescription == "usableFromInline"

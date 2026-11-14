@@ -138,16 +138,15 @@ extension DependencyTreeGenerator {
 		// the start order (`SeamDeclarationGraph`).
 		// A call's fill is entered where it is the fill whose code is generated and builds a place or a call that passes one
 		// up: an edge from the call's declaration to the type the fill builds.
+		// The graph reads only a child with a property (`SeamDeclarationGraph.placeHolding`), which a fill has none of.
 		let placeHolding = SeamDeclarationGraph.placeHolding(inTreeRootedAt: generator, edges: { parent, child in
-			if child.fillHole != nil {
-				return []
-			} else if let site = child.holeSite {
+			if let site = child.holeSite {
 				guard let owner = parent.builtInstantiable?.concreteInstantiable,
 				      holeTypeByOwnedProperty[SeamDeclarationGraph.TypeAndProperty(type: owner, property: site.property)] == holeType
 				else { return [] }
 				return [site.property.propertyType.isSendable ? .sendablePlace : .plainPlace]
 			} else if !child.passedUpHoles.isEmpty, innerKey(handedUpBy: child, isSendable: false) != nil || innerKey(handedUpBy: child, isSendable: true) != nil {
-				var edges = [SeamDeclarationGraph.PlaceEdge]()
+				var edges = [SeamDeclarationGraph.ChildEdge]()
 				if innerKey(handedUpBy: child, isSendable: false) != nil {
 					edges.append(child.buildsInSendableFunction ? .sendablePlace : .plainPlace)
 				}

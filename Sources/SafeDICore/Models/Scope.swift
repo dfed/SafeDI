@@ -1114,15 +1114,16 @@ private struct ScopeGeneratorUnderConstruction {
 		}
 		for field in fill.fields where fill.callerReadLabels.contains(field.property.label) && fill.boundLabels.contains(field.property.label) {
 			let label = field.property.label
-			// A site inside the fill that carries the field reads it as the field's own form.
-			let isCarriedBySites = child.fieldsCarriedBySites.contains(field.property)
-			var forms = Set(child.receivedProperties.filter { $0.label == label })
-			if isCarriedBySites {
-				forms.insert(field.property)
-			}
+			// No site inside the fill carries the field: a site carries the values of the levels inside the fill
+			// (`ScopeGenerator.fieldsCarried(by:)`), and each level leaves out of what its sites carry the labels it declares,
+			// which leaves only a label a level carries without declaring it: a member of a loop of builders its function wraps
+			// again, which the scope that builds the loop declares, a scope inside the fill, since a fill's own generator finds
+			// no loops; or a parameter a lazy cycle closes on, whose declaration is inside the fill, since a cycle a fill closes
+			// on a declaration of the seam's tree is an error (`FillFinding.Kind.closesCycleInSeamTree`).
+			let forms = Set(child.receivedProperties.filter { $0.label == label })
 			guard !forms.isEmpty else { continue }
 			func isRequired(_ form: Property) -> Bool {
-				child.requiredReceivedProperties.contains(form) || (isCarriedBySites && form == field.property)
+				child.requiredReceivedProperties.contains(form)
 			}
 			let parameter = forms.contains(where: isRequired) || field.property.typeDescription.isOptional
 				? field

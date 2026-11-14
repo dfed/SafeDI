@@ -1295,12 +1295,14 @@ extension DependencyTreeGenerator {
 				findings.append(.init(hole: firstPlace, kind: .fieldFormsDifferBetweenPlaces(label: label, fields: fields, seamModule: firstPlace.scopeSeamModule)))
 			}
 			// The fill takes the scope value the inner seam handed it (`Scope.Fill.innerScopeParameter`), which the dispatchers
-			// that lead to the case pass on: a dispatcher both root enums reach could pass only one root enum's value.
+			// that lead to the case pass on: a dispatcher both root enums reach could pass only one root enum's value. It takes
+			// that value only where its tree builds a place or a call that passes one up, which the walk finds.
 			if let emittingFill = emittingFillByCaseKey[caseKey],
-			   !emittingFill.fillCallerReads.innerScopeParameters.isEmpty,
-			   Set(places.map { SeamSignature.ScopeEnum.rootKey(of: $0).isSendable }).count > 1
+			   Set(places.map { SeamSignature.ScopeEnum.rootKey(of: $0).isSendable }).count > 1,
+			   let place = firstPlaceBuilt(inTreeRootedAt: child),
+			   !emittingFill.fillCallerReads.innerScopeParameters.isEmpty
 			{
-				findings.append(.init(hole: firstPlace, kind: .placeInsideFillOfCaseOfBothRootEnums(place: firstPlaceBuilt(inTreeRootedAt: child), callerModule: callerModule, seamModule: firstPlace.scopeSeamModule)))
+				findings.append(.init(hole: firstPlace, kind: .placeInsideFillOfCaseOfBothRootEnums(place: place, callerModule: callerModule, seamModule: firstPlace.scopeSeamModule)))
 			}
 		}
 		return findings
@@ -1575,7 +1577,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			/// The places of the hole's case, nested by type, are reached from both the inner seam's plain root enum and its
 			/// `@Sendable` one, and the one fill of the case builds `place`, a place `callerModule` cannot fill, or passes one up,
 			/// whose case would carry the scope value of either root enum.
-			case placeInsideFillOfCaseOfBothRootEnums(place: PlaceInsideFill?, callerModule: ModuleIdentity, seamModule: ModuleIdentity)
+			case placeInsideFillOfCaseOfBothRootEnums(place: PlaceInsideFill, callerModule: ModuleIdentity, seamModule: ModuleIdentity)
 		}
 
 		/// A place a fill's tree builds: the type that declares it, and the property.
@@ -1680,7 +1682,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			case let .fieldNotReadable(reader, field, callerModule, seamModule, requirement):
 				let level = "`\(field.access.spelledOnGeneratedDeclaration)`"
 				// A caller SafeDI is told no package of may be in the seam's package all the same.
-				let packageNameRemedy = ModuleIdentity.packageNameRemedy(emitter: callerModule, declarer: seamModule, requirement: requirement, declaredLevel: field.access)
+				let packageNameRemedy = ModuleIdentity.packageNameRemedy(emitter: callerModule, declarer: seamModule, declaredLevel: field.access)
 				let reach = if field.access == .package, let packageName = seamModule.packageName {
 					callerModule.packageName == nil
 						? "\(module(callerModule)) is not told it is in package `\(packageName)`"
@@ -1862,11 +1864,12 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					SourceDiagnostic(severity: .note, location: field.declarationLocation, message: "`\(field.declaringType.asSource)` declares `\(field.property.asSource)` here.")
 				}
 			case let .placeInsideFillOfCaseOfBothRootEnums(place, callerModule, seamModule):
-				let placeDescription = place.map { "`\($0.ownerType.asSource)`’s `\($0.property.asSource)`" } ?? "a place"
-				let placeRemedy = place.map { "\(SeamAccessExplanation.fulfillRemedy(fulfilling: $0.instantiatedType, seamModuleName: callerModule.moduleName, effect: nil)), " } ?? ""
+				let placeDescription = "`\(place.ownerType.asSource)`’s `\(place.property.asSource)`"
+				let placeRemedy = SeamAccessExplanation.fulfillRemedy(fulfilling: place.instantiatedType, seamModuleName: callerModule.moduleName, effect: nil)
 				return [
-					SourceDiagnostic(severity: .error, location: place?.declarationLocation ?? hole.declarationLocation, message: "SafeDI fills every place of \(builderDescription(of: hole, apostrophe: "’")) with one function, whose tree builds \(placeDescription), which no type that \(module(callerModule)) can see fulfills. \(seamName) builds `\(hole.ownerType.asSource)` both inside and outside a `@Sendable` function, so that function is handed a scope of either of \(seamName)’s two root enums, and the case of \(placeDescription) can carry only one. To fill it, \(placeRemedy)or \(fulfillRemedy(seamModule))."),
-				] + (place == nil ? [] : [SourceDiagnostic(severity: .note, location: hole.declarationLocation, message: "`\(hole.ownerType.asSource)` instantiates `\(hole.property.asSource)` here.")])
+					SourceDiagnostic(severity: .error, location: place.declarationLocation ?? hole.declarationLocation, message: "SafeDI fills every place of \(builderDescription(of: hole, apostrophe: "’")) with one function, whose tree builds \(placeDescription), which no type that \(module(callerModule)) can see fulfills. \(seamName) builds `\(hole.ownerType.asSource)` both inside and outside a `@Sendable` function, so that function is handed a scope of either of \(seamName)’s two root enums, and the case of \(placeDescription) can carry only one. To fill it, \(placeRemedy), or \(fulfillRemedy(seamModule))."),
+					SourceDiagnostic(severity: .note, location: hole.declarationLocation, message: "`\(hole.ownerType.asSource)` instantiates `\(hole.property.asSource)` here."),
+				]
 			}
 		}
 	}
