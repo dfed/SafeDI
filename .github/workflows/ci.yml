@@ -389,11 +389,10 @@ jobs:
     # so when a Markdown-only change skips "xcodebuild", that job reports
     # one check under its unexpanded name and none of the five names
     # branch protection requires. This job reports those five, from the
-    # same name and matrix (the anchors above), on the pull requests
-    # "Codecov Status for Markdown-only Changes" covers. Otherwise it is
-    # skipped and reports only its unexpanded name, which nothing
-    # requires. It builds nothing, so it runs on Linux, without the test
-    # jobs' container.
+    # same name and matrix (the anchors above), on Markdown-only pull
+    # requests. Otherwise it is skipped and reports only its unexpanded
+    # name, which nothing requires. It builds nothing, so it runs on
+    # Linux, without the test jobs' container.
     if: ${{ needs.changes.outputs.source == 'false' && github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     strategy:
@@ -1573,29 +1572,6 @@ jobs:
       # Kept out of the retry wrapper: a missing logger is deterministic, not a flake.
       - name: Verify opt mode wired the `#elseif NDEBUG` logger
         run: grep -q "DisabledEventLogger()" Examples/ExampleBazelIntegration/bazel-bin/ExampleBazelIntegration/ExampleBazelIntegration_safedi.swift
-
-  codecov-empty-upload:
-    name: Codecov Status for Markdown-only Changes
-    needs: changes
-    # With the test jobs skipped, no coverage report reaches Codecov and
-    # its required `codecov/project` status would never be posted.
-    # `empty-upload` tells Codecov the commit changed nothing it
-    # measures, and Codecov posts passing statuses instead. Pull
-    # requests only: on main the coverage jobs run regardless.
-    if: ${{ needs.changes.outputs.source == 'false' && github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v7
-      - name: Send Empty Upload
-        uses: codecov/codecov-action@v7
-        with:
-          run_command: empty-upload
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
-          verbose: true
 
   readme-validation:
     name: Check Markdown links
