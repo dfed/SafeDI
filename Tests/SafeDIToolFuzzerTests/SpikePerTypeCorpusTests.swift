@@ -114,7 +114,7 @@ struct SpikePerTypeCorpusTests {
 					continue
 				}
 				let differing = Set(emittedFiles.keys).union(generatedFiles.keys).sorted().filter { emittedFiles[$0] != generatedFiles[$0] }
-				let disagreeing = differing.filter { emittedFiles[$0] != generatedFiles[$0].map(PerTypeEmission.transformGeneratedFile) }
+				let disagreeing = Set(emittedFiles.keys).union(generatedFiles.keys).sorted().filter { emittedFiles[$0] != generatedFiles[$0].map(PerTypeEmission.transformGeneratedFile) }
 				report("emitted \(seed) filesChanged=\(differing.count) disagreeWithPass=\(disagreeing.joined(separator: ","))")
 				if !disagreeing.isEmpty {
 					Issue.record("Seed \(seed): the emitter changed \(disagreeing) other than its pass does")

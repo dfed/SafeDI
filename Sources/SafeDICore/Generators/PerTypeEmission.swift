@@ -73,6 +73,8 @@ public enum PerTypeEmission {
 	/// compares the two emitters on output generated once, per path. A seam's initializers take parameters, so no seam
 	/// body is touched.
 	public static func transformGeneratedFile(_ file: String) -> String {
+		// A seam's file declares its guard enum; its initializers are not a root's, even one that takes no argument.
+		guard !file.contains("    public enum __safeDI_") else { return file }
 		var lines = file.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 		var index = 0
 		while index < lines.count {
