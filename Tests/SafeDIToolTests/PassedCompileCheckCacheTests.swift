@@ -160,6 +160,34 @@ struct PassedCompileCheckCacheTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func verifyModulesCompile_compilesTheCheck_whenTheCacheHoldsItWithOtherGeneratedCode() async throws {
+		// CI keeps the cache across changes to the generators (`.github/scripts/compile-check-identity.sh` hashes none
+		// of them), so a check whose generated code a generator changed must compile, and fail when that code does not.
+		var filesToDelete = [URL]()
+		defer { deleteAll(filesToDelete) }
+		let cacheFile = directory.appendingPathComponent("passed.txt")
+		let module = try compilingModule(generatedCode: "extension Fixture { func generated() -> Int { 1 } }\n")
+		let moduleAfterGeneratorChange = ModuleCompileSources(
+			moduleName: module.moduleName,
+			packageName: module.packageName,
+			dependencyModuleNames: module.dependencyModuleNames,
+			inputSwiftFiles: module.inputSwiftFiles,
+			generatedFiles: ["Fixture+SafeDI.swift": "extension Fixture { func generated() -> Int { undeclared } }\n"],
+			activeCompilationConditions: [],
+			mockConditionalCompilation: nil,
+		)
+		_ = try await verifyModulesCompile([module], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
+
+		// `withKnownIssue` fails when the call records no issue, as it would if the cache skipped the check.
+		await withKnownIssue("Generated code that does not compile records an issue") {
+			_ = try await verifyModulesCompile([moduleAfterGeneratorChange], recordsIssues: true, passedCheckCache: PassedCompileCheckCache(file: cacheFile), filesToDelete: &filesToDelete)
+		}
+
+		#expect(try String(contentsOf: cacheFile, encoding: .utf8).split(separator: "\n").count == 1)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func verifyModulesCompile_recordsNothingInTheCache_whenGeneratedCodeFailsToCompile() async throws {
 		var filesToDelete = [URL]()
 		defer { deleteAll(filesToDelete) }
