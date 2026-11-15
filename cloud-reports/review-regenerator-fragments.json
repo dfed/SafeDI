@@ -1,0 +1,72 @@
+[
+ {
+  "claim": "Fix (2) covers only a sibling record with a unique tiling whose head is refused; a sibling whose tiling is ambiguous (or that tiles nothing) is dropped, so a shared literal is rewritten from the other test against an output that contradicts it, with exit 0.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Reproduced at d655c69a with the reviewer's probes p3b and p3 (copied to /Users/dfed/Library/Caches/SafeDIScratch/review-regen-2/adj/probe.py, runs under adj/runs). Both give `status 0 rewritten 1 manual 0 unexplained 0`, and `shared` becomes NewShared(). The p3b report lists second() only under \"Base records no literal matched: literals tile the output as fragments in more than one way\". The code agrees: at lines 1310-1314 a record whose tiling is None is skipped, and the refused-record check at 1372-1389 never sees it. I lowered the severity from should-fix for three reasons. The rewritten literal makes second() fail on the next test run, so it is not a meaning change that still passes. The ambiguous case needs two literals of the same value in one call, plus a shared constant, plus two tests whose outputs for that constant diverge. The untiled variant (p3) is the limitation the whole-literal path already has for constants. It remains a rewrite that should have been a manual item, reported as fully explained.",
+  "fix": "When a base record is dropped as ambiguous or untiled, and an in-scope literal that is about to be rewritten appears in its content while its head (unchanged or changed) does not contain the literal's new value at that place, make the literal a manual item. At the least, for FRAGMENTS_AMBIGUOUS, treat the literals at the same position in every tiling as the refused records are treated. Add a self-test shaped like p3b."
+ },
+ {
+  "claim": "head_fragments compares only the text of top-level opening and closing lines, so a declaration whose top-level lines are the same as its neighbours' can move across a fragment boundary and be written into the wrong literal, contrary to the docstring.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Reproduced with probe p6: `status 1 rewritten 2 unexplained 2`. A's second block now holds `let b = 1` and B holds `let moved = 1`, while the join equals the head. Lines 890-891 compare only `line[2]` (the line text), so identical `#if DEBUG / extension Root { / } / #endif` lines pass the check. The record alone cannot tell which split is right, so the tool cannot know. Both literals are reported as unexplained and the exit status is 1, so a reader is pointed at them. Real seam fixtures have distinct opening lines per fragment. The docstring and SKILL.md line 19 overstate the guarantee.",
+  "fix": "Narrow the docstring and SKILL.md to say that the check catches a declaration whose top-level lines differ from its neighbours'. Optionally refuse when the bodies of both the last declaration of one fragment and the first declaration of the next change and their top-level lines are equal."
+ },
+ {
+  "claim": "The single-fragment path gives everything after the imports to the one literal with only a brace-balance check, so a whole declaration the change adds for another type is written into the literal keyed by a different root. The multi-fragment path would refuse the same addition.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Reproduced with probes p7 and p5: `status 1 rewritten 1 unexplained 1`. In p7 the \"Root\" literal gains `extension Service { \u2026 }`. In p5 Zed's declaration lands in Root's literal beside `\"Zed\": \"\"`. Lines 873-877 return `head[head_start:head_end]` after braces_balance only. The cited `.moduleInfo` tests exist at SafeDIToolSeamBuilderParameterTests.swift lines 361, 442 and 807, each with a single \"Root\" fragment. For a `.moduleInfo`-only test the key is only a label on the joined text, so the compared value is still right. The rewrite is reported as unexplained and the exit status is 1. The whole-literal path does the same thing by design.",
+  "fix": "For a single fragment, compare the head's top-level boundary lines with the base's. When they differ, either refuse with FRAGMENT_DECLARATIONS_CHANGED or keep the rewrite and add a distinct note that a declaration may belong to a key the helper call lacks."
+ },
+ {
+  "claim": "The d655c69a fix for case (1) is incomplete: a declaration that moves from the end of one fragment to the start of the next with a changed body, keeping its first and last lines, is written into the wrong literal with exit 0 (head_fragments :861-898; self-test fragments-changed-declaration).",
+  "real": true,
+  "severity": "nit",
+  "reason": "The behaviour reproduces: python3 -I /Users/dfed/Library/Caches/SafeDIScratch/review-regen-2/probes/p1b.py prints exit 0, explained 1, and the Root literal takes the Guard_2 declaration. It is not a should-fix, for three reasons. (1) A combined record cannot tell this from an in-place change of the last declaration, which is far the likelier reading and which the self-test deliberately pins as status 0. (2) Under .moduleInfo, SafeDIToolSeamBuilderParameterTests.generatedFiles joins rootFiles' values sorted by key, so the test never observes which key holds a declaration. A pure move without a body change changes no record and leaves the same stale attribution with no tool involved, so the rewrite changes nothing a test checks. Tests that run both integrations are protected by the per-file record, as the reviewer says. (3) The proposed fix refuses any change to a fragment's first or last declaration. A one-declaration fragment has only that declaration, so every multi-fragment .moduleInfo-only record would become manual, which defeats the fragment mapping. I did not count how many of the 53 sites pass several rootFiles.",
+  "fix": "Do not refuse. State the limit in head_fragments' docstring and SKILL.md: a combined record gives a changed edge declaration to the fragment that held it. Optionally add a report note, without changing status, when a changed last top-level declaration of one fragment has the same opening line as the first declaration of the next fragment, so a person reads that item. Keep fragments-changed-declaration at status 0."
+ },
+ {
+  "claim": "The FRAGMENTS_AMBIGUOUS and FRAGMENTS_TOO_MANY refusals end with exit 0 rather than manual items and skip the reassembly cross-check, so a shared literal is still rewritten from one record while an ambiguous record contradicts it (:819, :823, :1453, :1477; self-test fragments-ambiguous).",
+  "real": true,
+  "severity": "should-fix",
+  "reason": "The ambiguous half reproduces: probes/p2.py gives exit 0, explained 1, manual 0, changedWithoutLiteral 1, and the shared constant is rewritten to NewShared while second()'s head needs OtherShared. In the code, a tiling that returns (None, reason) only sets fragment_reasons and continues. It never enters refused_fragment_records, so the refused_literals check that d655c69a added does not see it. This is the same class as blocking case (2), a shared literal rewritten against a record that contradicts it, reached through another refusal path. It is not silent: second() still fails and the report lists it under 'Changed outputs no literal matched', and the --help text documents exit 0 for unmatched outputs. That keeps it at should-fix, not blocking. The too-many half is only the ordinary unmapped path: probes/p3.py with 1200 fragments rewrites nothing, and the shape is unrealistic. I would not change the exit status for it.",
+  "fix": "For an ambiguous record whose head changed, keep the first tiling that tile_fragments already computes and return it with the reason. Append the record to refused_fragment_records with FRAGMENTS_AMBIGUOUS, so its literals become manual items (exit 1) unless other records' values reassemble its head. Add a self-test with a constant shared by a tiled record and an ambiguous record that contradict each other, expecting status 1 and an unchanged source. Leave FRAGMENTS_TOO_MANY as an unmapped reason."
+ },
+ {
+  "claim": "A refused fragment record whose literals other records rewrite to values that reassemble its head exactly is still listed under 'Changed outputs no literal matched: a test that compares one still fails, so update it by hand', while the run exits 0 (:1453-1457).",
+  "real": true,
+  "severity": "nit",
+  "reason": "Reproduced with probes/p7.py: exit 0, explained 1, changedWithoutLiteral 1, and the report names test() as still failing although the rewritten fixture equals the combined head. The changed_without_literal filter excludes only WRITTEN_FOR_THE_NEW_OUTPUT; a record that passes the reassembly check keeps its fragment reason and stays in the list. The report text is wrong for that record, but no rewrite is.",
+  "fix": "Record the keys of refused records that pass the reassembly check (the `continue` in the refused_fragment_records loop) and leave them out of changed_without_literal, or list them under their own heading such as 'reassembled from other records'. Add the p7 shape to the self-test, expecting changedWithoutLiteral == 0."
+ },
+ {
+  "claim": "The one-line stdout summary leaves out the changed-without-literal count, so a run that leaves unmatched changed records prints 'manual 0' and exits 0 (:2214).",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed by reading: the print at :2214 has rewritten, explained, unexplained and manual only. The base script a5a8e1eae has the same line (base-script.py:1791), so this is not new in this branch. The report's top block does show the count, and SKILL.md step 5 says to read that list, so the information is not lost.",
+  "fix": "Add `changed without literal {summary['changedWithoutLiteral']}` to the printed line."
+ },
+ {
+  "claim": "The self-test does not exercise FRAGMENTS_TOO_MANY (:819), both FRAGMENT_UNBALANCED returns (:876, :890), the trailing FRAGMENT_BOUNDARY_CHANGED (:898), the fragment scope taken from testFileID, and four older refusals (already failing on the base, literal does not evaluate to the recorded expected value, call site outside every test function, WRITTEN_FOR_THE_NEW_OUTPUT).",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed in /Users/dfed/Library/Caches/SafeDIScratch/review-regen-2/trace/regenerate-expectations.cover: each of those lines is marked `>>>>>>`, including the two lines that add the testFileID scope for fragments (cover lines 1303-1304). probes/p8.py shows that both FRAGMENT_UNBALANCED branches refuse correctly with exit 1, so this is a coverage gap, not a behaviour defect. The self-test on the branch passes (exit 0). The testFileID fragment scope is the one that matters most: it is new matching logic for helper-routed calls with no test.",
+  "fix": "Add self-test cases for the fragment reasons that assert manualReasons or the report reason by name (p8.py's two shapes are ready inputs), and one fragment case whose record carries testFileID and testLine for a call made through a helper. The four older reasons can follow in the same change or later."
+ },
+ {
+  "claim": "The WRITTEN_FOR_THE_NEW_OUTPUT scan (:1338-1345) calls test_function_of_offset on every literal of the file for each unmapped changed record, costing O(unmapped records x literals x functions); it, not the fragment code, bounds performance.",
+  "real": true,
+  "severity": "nit",
+  "reason": "The loop is as described, and probes/p5.py 10 300 300 200 took 12.1 s here for 6000 records, 3000 of them changed and unmapped. That workload is synthetic. A real run has few unmapped changed records per file, so the cost is seconds at worst and affects no result. The loop predates this branch.",
+  "fix": "Optional: reuse the per-file function-to-literals map that literals_in already builds, scanning only literals_in(path, function) + literals_in(path, None) in this loop."
+ },
+ {
+  "claim": "IMPORT_BLOCKS (:752) says to keep in step with SafeDIToolSeamBuilderParameterTests.generatedFiles, but that helper's doc comment does not point back to the script.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed at d655c69a: the helper's doc comment in Tests/SafeDIToolSeamTests/SafeDIToolSeamBuilderParameterTests.swift names neither the skill nor IMPORT_BLOCKS, and grep for regenerate-expectations or IMPORT_BLOCKS under Tests finds only ExpectationRecording.swift and ExpectationRecordingTests.swift. A change to the helper's import format would make tile_fragments stop matching. That fails safe: records go unmapped and are reported, and nothing is rewritten wrongly.",
+  "fix": "Add one sentence to generatedFiles' doc comment: its header, import blocks and blank-line joining are what IMPORT_BLOCKS in .claude/skills/regenerate-expectations/regenerate-expectations.py matches, so change both together."
+ }
+]
