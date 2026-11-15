@@ -34,10 +34,11 @@ import sys
 # SafeDIToolGraphFuzzerTests.corpusSeedCount.
 CORPUS_SEED_COUNT = 5000
 # The graphs both releases accept and compile cleanly, which the values compare.
-# Pins: derive on CI. Set from the first dispatched run's compared count, with a
-# margin as the other corpora's floors have; until then 1300, below the 1669 a
-# full local run against 2.2.0 compared.
-COMPARED_GRAPH_FLOOR = 1300
+# Set from dispatched run 43739187246, which compared 1669 graphs against 2.2.0
+# (shards 398, 413, 438 and 420), as a full local run did: about a tenth below
+# it, so a runner that stops comparing a whole shard's worth fails, while the
+# count may move a little with a change that rejects or accepts a few graphs.
+COMPARED_GRAPH_FLOOR = 1500
 
 reports_directory = sys.argv[1]
 expected_shard_count = int(sys.argv[2])

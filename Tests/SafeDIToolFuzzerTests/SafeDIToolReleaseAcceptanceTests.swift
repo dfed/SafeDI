@@ -43,11 +43,36 @@ struct SafeDIToolReleaseAcceptanceTests {
 	/// where 2.2.0 passed `nil`, and each receiver holds a wrapper of its own.
 	static let releaseNotedLoopOfInstantiatorsReason = "#649, a release-noted behavior change"
 
+	/// #649's second commit: an instantiator received only if available inside a `@Sendable` builder's loop, which
+	/// 2.2.0 passed `nil` and the same receive outside a loop was already an error.
+	static let releaseNotedSendableLoopReceiveReason = "#649, a release-noted rejection"
+
+	/// #593 and #597: a label received in two forms along one branch of a mock's tree, either required, which no
+	/// production tree builds or where production always passes `nil` and 2.2.0's mock passed a built value.
+	static let releaseNotedHiddenReceiveInMockTreeReason = "#593/#597, a release-noted rejection of a mock production cannot build"
+
+	/// #718: seeds whose 2.2.0 mock compiled with production's `nil` defaults plus an override, which this tree rejects
+	/// as a receive hidden in the mock's tree: kept in 2.3.0 by the maintainer's ruling, to be fixed in 2.3.1.
+	static let mockAlwaysNilReceiveRejectionReason = "#718, kept in 2.3.0 by ruling; fixed in 2.3.1"
+
+	/// #533: a type a lazy cycle builds again receives each property from the nearest declaration above it, where 2.2.0
+	/// passed the declaration above the cycle, or `nil`.
+	static let nearestDeclarationInLazyCycleReason = "#533, a 2.2.0 defect fixed and release-noted"
+
+	/// #571: a type built inside a dependency it receives, beneath a type forwarding that dependency, is passed the
+	/// forwarded value, where 2.2.0 passed `nil` to a receive only if available.
+	static let forwardedValueInCycleReason = "#571, a 2.2.0 defect fixed and release-noted"
+
+	/// #572: a receive only if available of an instantiator its builder's own scope declares is passed that instantiator
+	/// at every depth of the cycle, where 2.2.0 passed `nil` below the first.
+	static let instantiatorAtEveryDepthReason = "#572, a 2.2.0 defect fixed and release-noted"
+
 	/// The seeds of the base corpus whose break from each older release is expected, by the release's name. A seed of
 	/// another class, or one that no longer breaks, fails the run as stale. Each is attributed, never listed to make a
 	/// run pass. 2.2.0's #649 seeds are the graphs whose values differ and whose generated code shows a loop through
 	/// received instantiators (`GraphFuzzerFeature.buildersReceivingEachOther` and its siblings, read from this tree's
-	/// output), where 2.2.0 passed `nil` or shared one wrapper among the loop's receivers.
+	/// output), where 2.2.0 passed `nil` or shared one wrapper among the loop's receivers. Each other 2.2.0 seed was
+	/// reduced and bisected to the pull request its reason names, whose change was ruled a fix of 2.2.0's behavior.
 	static let listedSeedsByRelease: [String: [ListedSeed]] = [
 		"2.2.0": [
 			ListedSeed(seed: 1, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
@@ -61,51 +86,68 @@ struct SafeDIToolReleaseAcceptanceTests {
 			ListedSeed(seed: 604, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 626, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 653, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 662, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
 			ListedSeed(seed: 672, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 710, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 715, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 760, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 774, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 824, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 871, kind: .knownBreak, verdictClass: .currentRejects, reason: mockAlwaysNilReceiveRejectionReason),
 			ListedSeed(seed: 892, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 897, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 957, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 963, kind: .knownBreak, verdictClass: .currentRejects, reason: releaseNotedHiddenReceiveInMockTreeReason),
 			ListedSeed(seed: 1_005, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_015, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_021, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_025, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_042, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_056, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 1_095, kind: .knownBreak, verdictClass: .currentRejects, reason: mockAlwaysNilReceiveRejectionReason),
 			ListedSeed(seed: 1_117, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 1_138, kind: .knownBreak, verdictClass: .currentRejects, reason: mockAlwaysNilReceiveRejectionReason),
 			ListedSeed(seed: 1_142, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 1_178, kind: .knownBreak, verdictClass: .currentRejects, reason: releaseNotedSendableLoopReceiveReason),
+			ListedSeed(seed: 1_225, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
 			ListedSeed(seed: 1_328, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_379, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_393, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_406, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_473, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_477, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 1_525, kind: .knownBreak, verdictClass: .currentRejects, reason: mockAlwaysNilReceiveRejectionReason),
 			ListedSeed(seed: 1_545, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_548, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_553, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_571, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_717, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 1_738, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
+			ListedSeed(seed: 1_742, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
 			ListedSeed(seed: 1_812, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_837, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_853, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_902, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 1_943, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 1_995, kind: .knownBreak, verdictClass: .currentRejects, reason: releaseNotedHiddenReceiveInMockTreeReason),
 			ListedSeed(seed: 2_129, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 2_155, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 2_229, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 2_258, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 2_325, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 2_348, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
 			ListedSeed(seed: 2_444, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 2_467, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 2_475, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 2_483, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 2_514, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
 			ListedSeed(seed: 2_590, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 2_598, kind: .knownBreak, verdictClass: .currentRejects, reason: mockAlwaysNilReceiveRejectionReason),
 			ListedSeed(seed: 2_655, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 2_739, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 2_754, kind: .knownBreak, verdictClass: .currentRejects, reason: mockAlwaysNilReceiveRejectionReason),
+			ListedSeed(seed: 2_773, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
+			ListedSeed(seed: 2_775, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
 			ListedSeed(seed: 2_783, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 2_794, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 2_937, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
@@ -116,10 +158,12 @@ struct SafeDIToolReleaseAcceptanceTests {
 			ListedSeed(seed: 3_142, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 3_239, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 3_267, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 3_487, kind: .knownBreak, verdictClass: .valuesDiffer, reason: forwardedValueInCycleReason),
 			ListedSeed(seed: 3_563, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 3_599, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 3_641, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 3_687, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 3_719, kind: .knownBreak, verdictClass: .currentRejects, reason: releaseNotedHiddenReceiveInMockTreeReason),
 			ListedSeed(seed: 3_843, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 3_868, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 3_907, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
@@ -132,13 +176,18 @@ struct SafeDIToolReleaseAcceptanceTests {
 			ListedSeed(seed: 4_257, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 4_279, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 4_297, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 4_311, kind: .knownBreak, verdictClass: .currentRejects, reason: mockAlwaysNilReceiveRejectionReason),
+			ListedSeed(seed: 4_424, kind: .knownBreak, verdictClass: .currentRejects, reason: releaseNotedHiddenReceiveInMockTreeReason),
 			ListedSeed(seed: 4_515, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 4_530, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 4_538, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 4_550, kind: .knownBreak, verdictClass: .currentRejects, reason: releaseNotedHiddenReceiveInMockTreeReason),
 			ListedSeed(seed: 4_628, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 4_662, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
 			ListedSeed(seed: 4_692, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 4_749, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
 			ListedSeed(seed: 4_803, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+			ListedSeed(seed: 4_990, kind: .knownBreak, verdictClass: .valuesDiffer, reason: instantiatorAtEveryDepthReason),
 		],
 	]
 

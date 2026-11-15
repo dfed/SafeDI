@@ -575,11 +575,10 @@ jobs:
           tar -xzf release-acceptance-test-bundle.tar.gz
           tar -xzf older-release.tar.gz
           mkdir -p release-acceptance
-      # Measured on a 4-core cloud machine: all 5000 seeds in 924 s, so about
-      # 4 min per shard of 1250 (a cloud-machine figure; 30 min until a CI run
-      # measures a shard, then twice that run's longest shard).
+      # Measured on CI (run 43739187246): the four shards of 1250 seeds took
+      # 3 min 28 s to 5 min 24 s each, so about twice the longest.
       - name: Compare with the Older Release
-        timeout-minutes: 30
+        timeout-minutes: 11
         env:
           SAFEDI_RELEASE_ACCEPTANCE_RELEASE: '2.2.0'
           SAFEDI_RELEASE_ACCEPTANCE_TOOL: ${{ github.workspace }}/older-release-package/SafeDITool
