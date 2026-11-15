@@ -28,7 +28,7 @@ import Testing
 
 /// The shape a calling-mock draw gives its graph: a calling mock is a generated `mock()` whose tree calls another
 /// module's public mock, and each shape puts a place of that public mock's hole where production fills it from a value of
-/// the calling tree, or, for the controls, where nothing can fill it.
+/// the calling tree or from a parameter, or, for the control, where its module sees no type that fills it.
 enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 	/// The fill of an inner seam's hole receives a value the outer seam builds: production rejects it.
 	case outerSeamValue
@@ -135,6 +135,8 @@ struct GraphFuzzerCallingMockDraw {
 			callerIsPublic: cell.callerIsPublic,
 			flatParameterLabels: flatParameterLabels,
 			implementationIsVisible: implementationIsVisible,
+			expectedTwinInitializerLabels: expectedTwinInitializerLabels,
+			expectedPassUpLabels: expectedPassUpLabels,
 			expectedTwinErrorSite: expectedTwinErrorSite,
 		)
 	}
@@ -145,7 +147,8 @@ struct GraphFuzzerCallingMockDraw {
 	typealias Form = GraphFuzzerCallingMockGraph.Form
 
 	/// The parameters of the calling mock's `mock()` that are values rather than builders: none of the draw's callers
-	/// forwards a value, and the only received value a caller's tree cannot build is the second control's.
+	/// forwards a value, and the only received value a caller's tree cannot build is the one the fill of the
+	/// nothing-builds shape receives.
 	var flatParameterLabels: Set<String> {
 		switch cell.shape {
 		case .implementationReceivesWhatNothingProvides:
@@ -158,6 +161,37 @@ struct GraphFuzzerCallingMockDraw {
 	/// Whether a type that fulfills the hole is visible from the calling mock's module.
 	var implementationIsVisible: Bool {
 		cell.shape != .noVisibleImplementation
+	}
+
+	/// The builder of the hole's place, as the twin's seam initializer and the calling mock's `mock()` name it.
+	var holeBuilderLabel: String {
+		switch cell.place {
+		case .plain:
+			"\(names.hole.lowercasedFirst)Builder"
+		case .deferred:
+			"\(names.fill.lowercasedFirst)Builder"
+		}
+	}
+
+	/// What the twin's seam initializer takes where production accepts the graph: nothing where its tree fills the place,
+	/// the value the fill receives where nothing in the tree builds it, and the place's builder where no type that fulfills
+	/// the place is visible.
+	var expectedTwinInitializerLabels: [String]? {
+		switch cell.shape {
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder:
+			nil
+		case .callersOwnValue:
+			[]
+		case .implementationReceivesWhatNothingProvides:
+			[names.token.lowercasedFirst]
+		case .noVisibleImplementation:
+			[holeBuilderLabel]
+		}
+	}
+
+	/// The places the calling mock may pass up: the hole's builder where its module sees no type that fulfills the hole.
+	var expectedPassUpLabels: [String] {
+		implementationIsVisible ? [] : [holeBuilderLabel]
 	}
 
 	/// Where production reports the shape's own error: the module and file, and the declaration the error is at.
@@ -242,8 +276,8 @@ struct GraphFuzzerCallingMockDraw {
 		let repeated: String
 		let between: String
 
-		let innerModuleName = "In"
-		let outerModuleName = "Feat"
+		let innerModuleName = "InnerModule"
+		let outerModuleName = "FeatureModule"
 		let callerModuleName = "Tests"
 	}
 
@@ -616,6 +650,13 @@ struct GraphFuzzerCallingMockGraph {
 	let flatParameterLabels: Set<String>
 	/// Whether a type that fulfills the hole is visible from the calling mock's module.
 	let implementationIsVisible: Bool
+	/// The parameters of the twin's seam initializers, without the `__safeDI_` prefix of the one only generated code
+	/// calls, in order, or `nil` when the graph does not state them: what production takes where it is accepted, which the
+	/// check reads to see that production fills what the graph is drawn for it to fill.
+	let expectedTwinInitializerLabels: [String]?
+	/// The places the calling mock may pass up because its module sees no type that fulfills the place's type: the only
+	/// labels the check classifies.
+	let expectedPassUpLabels: [String]
 	/// Where production reports the graph's shape error, as the module's file and the declaration's line, or `nil` when
 	/// production accepts the graph.
 	let expectedTwinErrorSite: (file: String, declaration: String)?
@@ -661,6 +702,8 @@ struct GraphFuzzerCallingMockGraph {
 		callerIsPublic: Bool,
 		flatParameterLabels: Set<String> = [],
 		implementationIsVisible: Bool = true,
+		expectedTwinInitializerLabels: [String]? = nil,
+		expectedPassUpLabels: [String] = [],
 		expectedTwinErrorSite: (file: String, declaration: String)?,
 	) {
 		let twinFiles = mockFiles.enumerated().map { index, file in
@@ -681,6 +724,8 @@ struct GraphFuzzerCallingMockGraph {
 			callerIsPublic: callerIsPublic,
 			flatParameterLabels: flatParameterLabels,
 			implementationIsVisible: implementationIsVisible,
+			expectedTwinInitializerLabels: expectedTwinInitializerLabels,
+			expectedPassUpLabels: expectedPassUpLabels,
 			expectedTwinErrorSite: expectedTwinErrorSite,
 		)
 	}
@@ -693,6 +738,8 @@ struct GraphFuzzerCallingMockGraph {
 		callerIsPublic: Bool,
 		flatParameterLabels: Set<String>,
 		implementationIsVisible: Bool,
+		expectedTwinInitializerLabels: [String]?,
+		expectedPassUpLabels: [String],
 		expectedTwinErrorSite: (file: String, declaration: String)?,
 	) {
 		self.name = name
@@ -702,6 +749,8 @@ struct GraphFuzzerCallingMockGraph {
 		self.callerIsPublic = callerIsPublic
 		self.flatParameterLabels = flatParameterLabels
 		self.implementationIsVisible = implementationIsVisible
+		self.expectedTwinInitializerLabels = expectedTwinInitializerLabels
+		self.expectedPassUpLabels = expectedPassUpLabels
 		self.expectedTwinErrorSite = expectedTwinErrorSite
 	}
 }
@@ -769,6 +818,8 @@ struct GraphFuzzerCallingMockResult {
 	let mockSites: [GraphFuzzerDiagnosticSite]?
 	/// The twin's diagnostics as the tool printed them, for a report.
 	let twinDiagnostics: String?
+	/// The parameters of the twin's seam initializers, without the `__safeDI_` prefix, or `nil` when the twin is rejected.
+	let twinInitializerLabels: [String]?
 	/// Each place the accepted calling mock passes up, by its parameter's label, with its reason or `nil` when no reason
 	/// explains it.
 	let passUps: [(label: String, reason: GraphFuzzerCallingMockPassUpReason?)]
@@ -795,7 +846,12 @@ enum GraphFuzzerCallingMockCheck {
 		let mock = try await toolRun(of: graph, .mock)
 		let twinSites = twin.diagnostics.map { GraphFuzzerDiagnosticSite.sites(inDiagnostics: $0, contentByRelativePath: graph.contentByRelativePath(.twin)) }
 		let mockSites = mock.diagnostics.map { GraphFuzzerDiagnosticSite.sites(inDiagnostics: $0, contentByRelativePath: graph.contentByRelativePath(.mock)) }
-		let drawingDefect: String? = if let expected = graph.expectedTwinErrorSite {
+		let twinInitializerLabels = twin.generatedCallerFile.map { initializerParameterLabels(ofType: graph.callerTypeName, inGeneratedFile: $0) }
+		let drawingDefect: String? = if graph.files(.twin).map(\.content) == graph.files(.mock).map(\.content) {
+			"the twin of \(graph.name) is its calling mock: no line declares the caller `@Instantiable(generateMock: …)`"
+		} else if let failingModule = twin.failingModule, failingModule != graph.callerModule {
+			"the twin of \(graph.name) is rejected while module \(failingModule) generates, not the caller's module \(graph.callerModule): \(twin.diagnostics ?? "")"
+		} else if let expected = graph.expectedTwinErrorSite {
 			if let first = twinSites?.first, first.severity == "error", first.file == expected.file, first.declaration == expected.declaration {
 				nil
 			} else {
@@ -803,6 +859,8 @@ enum GraphFuzzerCallingMockCheck {
 			}
 		} else if let diagnostics = twin.diagnostics {
 			"the twin of \(graph.name) is rejected where the graph is drawn for production to accept it: \(diagnostics)"
+		} else if let expected = graph.expectedTwinInitializerLabels, twinInitializerLabels != expected {
+			"the twin of \(graph.name) takes \(twinInitializerLabels ?? []) where the graph is drawn for it to take \(expected)"
 		} else {
 			nil
 		}
@@ -840,6 +898,7 @@ enum GraphFuzzerCallingMockCheck {
 			twinSites: twinSites,
 			mockSites: mockSites,
 			twinDiagnostics: twin.diagnostics,
+			twinInitializerLabels: twinInitializerLabels,
 			passUps: passUps,
 			drawingDefect: drawingDefect,
 			failure: failure,
@@ -847,39 +906,62 @@ enum GraphFuzzerCallingMockCheck {
 	}
 
 	/// Each parameter of the caller's `mock()` that is neither `safeDIOverrides` nor one of the graph's flat parameters: a
-	/// place the mock passes up, classified by the graph's facts. Each graph has one hole type, so every pass-up is a place
-	/// of it.
+	/// place the mock passes up. It is classified only when the graph lists it among the places its module sees no type
+	/// that fulfills; every other pass-up is unclassified.
 	static func passUpsOf(_ graph: GraphFuzzerCallingMockGraph, inGeneratedFile generatedFile: String) -> [(label: String, reason: GraphFuzzerCallingMockPassUpReason?)] {
-		let labels = mockParameterLabels(ofType: graph.callerTypeName, inGeneratedFile: generatedFile)
-		let reason: GraphFuzzerCallingMockPassUpReason? = graph.implementationIsVisible ? nil : .noVisibleImplementation
-		return labels
+		mockParameterLabels(ofType: graph.callerTypeName, inGeneratedFile: generatedFile)
 			.filter { $0 != "safeDIOverrides" && !graph.flatParameterLabels.contains($0) }
-			.map { ($0, reason) }
+			.map { label in
+				(label, !graph.implementationIsVisible && graph.expectedPassUpLabels.contains(label) ? .noVisibleImplementation : nil)
+			}
 	}
 
 	/// The labels of the parameters of every `mock(…)` an extension of `typeName` declares in `generatedFile`, each once, in
 	/// order.
 	static func mockParameterLabels(ofType typeName: String, inGeneratedFile generatedFile: String) -> [String] {
-		let visitor = MockParameterLabelVisitor(typeName: typeName)
+		parameterLabels(of: .mockFunction, ofType: typeName, inGeneratedFile: generatedFile)
+	}
+
+	/// The labels of the parameters of every initializer an extension of `typeName` declares in `generatedFile`, without
+	/// the `__safeDI_` prefix of the initializer only generated code calls, each once, in order.
+	static func initializerParameterLabels(ofType typeName: String, inGeneratedFile generatedFile: String) -> [String] {
+		parameterLabels(of: .initializer, ofType: typeName, inGeneratedFile: generatedFile)
+	}
+
+	private static func parameterLabels(of declarationKind: ParameterLabelVisitor.DeclarationKind, ofType typeName: String, inGeneratedFile generatedFile: String) -> [String] {
+		let visitor = ParameterLabelVisitor(declarationKind: declarationKind, typeName: typeName)
 		visitor.walk(Parser.parse(source: generatedFile))
 		var labels = [String]()
-		for label in visitor.labels where !labels.contains(label) {
+		for label in visitor.labels.map({ $0.hasPrefix("__safeDI_") ? String($0.dropFirst("__safeDI_".count)) : $0 }) where !labels.contains(label) {
 			labels.append(label)
 		}
 		return labels
 	}
 
-	private final class MockParameterLabelVisitor: SyntaxVisitor {
-		init(typeName: String) {
+	private final class ParameterLabelVisitor: SyntaxVisitor {
+		enum DeclarationKind {
+			case mockFunction
+			case initializer
+		}
+
+		init(declarationKind: DeclarationKind, typeName: String) {
+			self.declarationKind = declarationKind
 			self.typeName = typeName
 			super.init(viewMode: .sourceAccurate)
 		}
 
+		let declarationKind: DeclarationKind
 		let typeName: String
 		var labels = [String]()
 
 		override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-			guard node.name.text == "mock", isInExtensionOfType(node) else { return .skipChildren }
+			guard declarationKind == .mockFunction, node.name.text == "mock", isInExtensionOfType(node) else { return .skipChildren }
+			labels += node.signature.parameterClause.parameters.map(\.firstName.text)
+			return .skipChildren
+		}
+
+		override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+			guard declarationKind == .initializer, isInExtensionOfType(node) else { return .skipChildren }
 			labels += node.signature.parameterClause.parameters.map(\.firstName.text)
 			return .skipChildren
 		}
@@ -889,16 +971,24 @@ enum GraphFuzzerCallingMockCheck {
 			while let ancestor = parent {
 				if let extensionDeclaration = ancestor.as(ExtensionDeclSyntax.self) {
 					return extensionDeclaration.extendedType.trimmedDescription == typeName
+				} else {
+					parent = ancestor.parent
 				}
-				parent = ancestor.parent
 			}
 			return false
 		}
 	}
 
-	/// One form's run: the tool's diagnostics when it rejects the graph, else the calling mock's module's generated file.
+	/// A run the check cannot judge: a module the tool accepted generated no file for the caller's module.
+	struct HarnessError: Error, CustomStringConvertible {
+		let description: String
+	}
+
+	/// One form's run: the tool's diagnostics and the module whose `generate` reported them when it rejects the graph, else
+	/// the calling mock's module's generated file.
 	private struct ToolRun {
 		let diagnostics: String?
+		let failingModule: String?
 		let generatedCallerFile: String?
 	}
 
@@ -917,9 +1007,12 @@ enum GraphFuzzerCallingMockCheck {
 				compileVerification: .skipped,
 				filesToDelete: &filesToDelete,
 			)
-			return ToolRun(diagnostics: nil, generatedCallerFile: output.modules[graph.callerModule]?.generatedFiles["\(graph.callerModule).swift"])
+			guard let generatedCallerFile = output.modules[graph.callerModule]?.generatedFiles["\(graph.callerModule).swift"] else {
+				throw HarnessError(description: "The \(form) of \(graph.name) is accepted, and module \(graph.callerModule) generated no \(graph.callerModule).swift")
+			}
+			return ToolRun(diagnostics: nil, failingModule: nil, generatedCallerFile: generatedCallerFile)
 		} catch let error as SafeDIToolMultiModuleTestError {
-			return ToolRun(diagnostics: "\(error.underlyingError)", generatedCallerFile: nil)
+			return ToolRun(diagnostics: "\(error.underlyingError)", failingModule: error.moduleName, generatedCallerFile: nil)
 		}
 	}
 }
@@ -928,7 +1021,8 @@ enum GraphFuzzerCallingMockCheck {
 
 /// What the production twins of the public mock corpus's calling mocks report: each mocked consumer of a graph the tool
 /// accepts (`FuzzApp`'s and `FuzzOther`'s types with a generated mock), run as its twin, one at a time. Only reports: the
-/// rule for mirrored rejections is applied to its count by hand before the mock work lands.
+/// rule for mirrored rejections is applied to its count by hand before the change that makes a calling mock mirror its
+/// production tree lands, which lands before 2.3.0.
 enum GraphFuzzerCallingMockTwinReport {
 	/// The text by which each shape's own error is recognized in a graph drawn without the shape's facts.
 	static let shapeErrorMarkers: [(shape: GraphFuzzerCallingMockShape, marker: String)] = [

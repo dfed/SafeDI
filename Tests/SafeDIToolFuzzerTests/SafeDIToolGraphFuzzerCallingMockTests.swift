@@ -27,8 +27,8 @@ import Testing
 /// production's error wherever production reports one, and passes a place up only for a permanent reason. The production
 /// twin is the same sources with the caller declared `@Instantiable(generateDependencyTree: true)`.
 /// `GraphFuzzerCallingMockCheck` judges a graph; `GraphFuzzerCallingMockDraw` draws ten graphs of each cell (a shape, an
-/// internal or `.public` caller, a plain or deferred place). Main fails every shape cell, each a known issue the mock work
-/// empties.
+/// internal or `.public` caller, a plain or deferred place). Main fails every shape cell, each a known issue the change that
+/// makes a calling mock mirror its production tree, which lands before 2.3.0, empties.
 struct SafeDIToolGraphFuzzerCallingMockTests {
 	// MARK: Hand-written shapes
 
@@ -37,19 +37,19 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	func callingMock_fillsPlaceFromCallersOwnValue_whenItsTwinFillsIt() async throws {
 		let graph = Self.innerSeamGraph(named: "the caller's own value", tests: """
 		import SafeDI
-		import In
-		import Feat
+		import InnerModule
+		import FeatureModule
 
 		@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
 		final class Fake: Api, Instantiable {
-		    init(db: Db) { self.db = db }
-		    @Received let db: Db
+		    init(database: Database) { self.database = database }
+		    @Received let database: Database
 		}
 
 		@Instantiable(generateMock: true)
 		final class Host: Instantiable {
-		    init(db: Db, inner: Inner) { self.db = db; self.inner = inner }
-		    @Instantiated let db: Db
+		    init(database: Database, inner: Inner) { self.database = database; self.inner = inner }
+		    @Instantiated let database: Database
 		    @Instantiated let inner: Inner
 		}
 		""", expectedTwinErrorSite: nil)
@@ -57,7 +57,54 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
 
 		#expect(result.twinHasIntendedOutcome)
+		#expect(result.twinInitializerLabels == [])
 		withKnownIssue("\(Self.callersOwnValueReason)") {
+			#expect(result.failure == nil)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_fillsPlaceFromValueItTakes_whenItsTwinTakesThatValueAndFillsIt() async throws {
+		let graph = GraphFuzzerCallingMockGraph(
+			handWrittenNamed: "a fill receiving what nothing builds",
+			mockFiles: [
+				.init(module: "InnerModule", dependencies: [], content: Self.innerModule),
+				.init(module: "FeatureModule", dependencies: ["InnerModule"], content: Self.featureModule),
+				.init(module: "Tests", dependencies: ["InnerModule", "FeatureModule"], content: """
+				import SafeDI
+				import InnerModule
+				import FeatureModule
+
+				public struct Token {}
+
+				@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+				final class Fake: Api, Instantiable {
+				    init(token: Token) { self.token = token }
+				    @Received let token: Token
+				}
+
+				@Instantiable(generateMock: true)
+				final class Host: Instantiable {
+				    init(database: Database, inner: Inner) { self.database = database; self.inner = inner }
+				    @Instantiated let database: Database
+				    @Instantiated let inner: Inner
+				}
+				"""),
+			],
+			callerTypeName: "Host",
+			callerIsPublic: false,
+			flatParameterLabels: ["token"],
+			expectedTwinInitializerLabels: ["token"],
+			expectedTwinErrorSite: nil,
+		)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
+
+		#expect(result.twinHasIntendedOutcome)
+		#expect(result.twinInitializerLabels == ["token"])
+		withKnownIssue("\(Self.passesUpPlaceItsTwinFillsFromParameterReason)") {
+			#expect(result.passUps.isEmpty)
 			#expect(result.failure == nil)
 		}
 	}
@@ -67,8 +114,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	func callingMock_fillsPlace_whenFillReadsNothingBesideCallersOwnValue() async throws {
 		let graph = Self.innerSeamGraph(named: "a fill reading nothing beside the caller's own value", tests: """
 		import SafeDI
-		import In
-		import Feat
+		import InnerModule
+		import FeatureModule
 
 		@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
 		final class Fake: Api, Instantiable {
@@ -77,8 +124,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 		@Instantiable(generateMock: true)
 		final class Host: Instantiable {
-		    init(db: Db, inner: Inner) { self.db = db; self.inner = inner }
-		    @Instantiated let db: Db
+		    init(database: Database, inner: Inner) { self.database = database; self.inner = inner }
+		    @Instantiated let database: Database
 		    @Instantiated let inner: Inner
 		}
 		""", expectedTwinErrorSite: nil)
@@ -95,8 +142,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	func callingMock_fillsPlace_whenFillReadsNothingThroughOuterSeam() async throws {
 		let graph = Self.innerSeamGraph(named: "a fill reading nothing through the outer seam", tests: """
 		import SafeDI
-		import In
-		import Feat
+		import InnerModule
+		import FeatureModule
 
 		@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
 		final class Fake: Api, Instantiable {
@@ -105,8 +152,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 		@Instantiable(generateMock: true)
 		final class Host: Instantiable {
-		    init(f: Feature) { self.f = f }
-		    @Instantiated let f: Feature
+		    init(feature: Feature) { self.feature = feature }
+		    @Instantiated let feature: Feature
 		}
 		""", expectedTwinErrorSite: nil)
 
@@ -122,27 +169,27 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	func callingMock_reportsTwinsError_whenFillReceivesValueOfOuterSeam() async throws {
 		let graph = Self.innerSeamGraph(named: "a fill receiving the outer seam's value", tests: """
 		import SafeDI
-		import In
-		import Feat
+		import InnerModule
+		import FeatureModule
 
 		@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
 		final class Fake: Api, Instantiable {
-		    init(db: Db) { self.db = db }
-		    @Received let db: Db
+		    init(database: Database) { self.database = database }
+		    @Received let database: Database
 		}
 
 		@Instantiable(generateMock: true)
 		final class Host: Instantiable {
-		    init(f: Feature) { self.f = f }
-		    @Instantiated let f: Feature
+		    init(feature: Feature) { self.feature = feature }
+		    @Instantiated let feature: Feature
 		}
-		""", expectedTwinErrorSite: ("Tests/TestsTypes.swift", "@Received let db: Db"))
+		""", expectedTwinErrorSite: ("Tests/TestsTypes.swift", "@Received let database: Database"))
 
 		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
 
 		#expect(result.twinSites == [
-			GraphFuzzerDiagnosticSite(severity: "error", file: "Tests/TestsTypes.swift", line: 8, declaration: "@Received let db: Db"),
-			GraphFuzzerDiagnosticSite(severity: "note", file: "Feat/FeatTypes.swift", line: 12, declaration: "@Instantiated public let db: Db"),
+			GraphFuzzerDiagnosticSite(severity: "error", file: "Tests/TestsTypes.swift", line: 8, declaration: "@Received let database: Database"),
+			GraphFuzzerDiagnosticSite(severity: "note", file: "FeatureModule/FeatureModuleTypes.swift", line: 12, declaration: "@Instantiated public let database: Database"),
 		])
 		withKnownIssue("\(Self.outerSeamValueReason)") {
 			#expect(result.failure == nil)
@@ -323,51 +370,51 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		let graph = GraphFuzzerCallingMockGraph(
 			handWrittenNamed: "a loop through the inner seam's builder",
 			mockFiles: [
-				.init(module: "In", dependencies: [], content: Self.innerModule),
-				.init(module: "Feat", dependencies: ["In"], content: """
+				.init(module: "InnerModule", dependencies: [], content: Self.innerModule),
+				.init(module: "FeatureModule", dependencies: ["InnerModule"], content: """
 				import SafeDI
-				import In
+				import InnerModule
 
 				@Instantiable(generateDependencyTree: true, generateMock: .public)
 				public final class Feature: Instantiable {
-				    init(innerBuilder: Instantiator<Inner>, s: S) { self.innerBuilder = innerBuilder; self.s = s }
+				    init(innerBuilder: Instantiator<Inner>, sibling: Sibling) { self.innerBuilder = innerBuilder; self.sibling = sibling }
 				    @Instantiated public let innerBuilder: Instantiator<Inner>
-				    @Instantiated public let s: S
+				    @Instantiated public let sibling: Sibling
 				}
 
 				@Instantiable
-				public final class S: Instantiable {
+				public final class Sibling: Instantiable {
 				    init(innerBuilder: Instantiator<Inner>) { self.innerBuilder = innerBuilder }
 				    @Received let innerBuilder: Instantiator<Inner>
 				}
 				"""),
-				.init(module: "Tests", dependencies: ["In", "Feat"], content: """
+				.init(module: "Tests", dependencies: ["InnerModule", "FeatureModule"], content: """
 				import SafeDI
-				import In
-				import Feat
+				import InnerModule
+				import FeatureModule
 
 				@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
 				final class Fake: Api, Instantiable {
-				    init(s: S) { self.s = s }
-				    @Received let s: S
+				    init(sibling: Sibling) { self.sibling = sibling }
+				    @Received let sibling: Sibling
 				}
 
 				@Instantiable(generateMock: true)
 				final class Host: Instantiable {
-				    init(f: Feature) { self.f = f }
-				    @Instantiated let f: Feature
+				    init(feature: Feature) { self.feature = feature }
+				    @Instantiated let feature: Feature
 				}
 				"""),
 			],
 			callerTypeName: "Host",
 			callerIsPublic: false,
-			expectedTwinErrorSite: ("Feat/FeatTypes.swift", "@Received let innerBuilder: Instantiator<Inner>"),
+			expectedTwinErrorSite: ("FeatureModule/FeatureModuleTypes.swift", "@Received let innerBuilder: Instantiator<Inner>"),
 		)
 
 		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
 
 		#expect(result.twinSites == [
-			GraphFuzzerDiagnosticSite(severity: "error", file: "Feat/FeatTypes.swift", line: 14, declaration: "@Received let innerBuilder: Instantiator<Inner>"),
+			GraphFuzzerDiagnosticSite(severity: "error", file: "FeatureModule/FeatureModuleTypes.swift", line: 14, declaration: "@Received let innerBuilder: Instantiator<Inner>"),
 		])
 		withKnownIssue("\(Self.loopThroughInnerSeamBuilderReason)") {
 			#expect(result.failure == nil)
@@ -409,18 +456,99 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	}
 
 	@Test
-	func diagnosticSites_ignoreMessageText_andTellLinesAndDeclarationsApart() {
-		let content = ["Tests/TestsTypes.swift": "import SafeDI\n\nfinal class Fake {\n    @Received let db: Db\n    @Received let id: Int\n}"]
-		func sites(_ diagnostics: String) -> [GraphFuzzerDiagnosticSite] {
-			GraphFuzzerDiagnosticSite.sites(inDiagnostics: diagnostics, contentByRelativePath: content)
-		}
+	func diagnosticSites_match_whenOnlyMessageTextAndDirectoryDiffer() {
+		#expect(Self.sites("/a/Sources/Tests/TestsTypes.swift:4:5: error: one remedy") == Self.sites("/b/Sources/Tests/TestsTypes.swift:4:5: error: another remedy"))
+	}
 
-		#expect(sites("/a/Sources/Tests/TestsTypes.swift:4:5: error: one remedy") == sites("/b/Sources/Tests/TestsTypes.swift:4:5: error: another remedy"))
-		#expect(sites("/a/Sources/Tests/TestsTypes.swift:4:5: error: one remedy") != sites("/a/Sources/Tests/TestsTypes.swift:5:5: error: one remedy"))
-		#expect(sites("/a/Sources/Tests/TestsTypes.swift:4:5: error: one remedy") != sites("/a/Sources/Tests/TestsTypes.swift:4:5: error: one remedy\n/a/Sources/Tests/TestsTypes.swift:5:5: note: here"))
-		#expect(sites("/a/Sources/Tests/TestsTypes.swift:4:5: error: one remedy") == [
-			GraphFuzzerDiagnosticSite(severity: "error", file: "Tests/TestsTypes.swift", line: 4, declaration: "@Received let db: Db"),
+	@Test
+	func diagnosticSites_differ_whenErrorIsOnAnotherLine() {
+		#expect(Self.sites("/a/Sources/Tests/TestsTypes.swift:4:5: error: one remedy") != Self.sites("/a/Sources/Tests/TestsTypes.swift:5:5: error: one remedy"))
+	}
+
+	@Test
+	func diagnosticSites_differ_whenOneRunAddsNote() {
+		#expect(Self.sites("/a/Sources/Tests/TestsTypes.swift:4:5: error: one remedy") != Self.sites("/a/Sources/Tests/TestsTypes.swift:4:5: error: one remedy\n/a/Sources/Tests/TestsTypes.swift:5:5: note: here"))
+	}
+
+	@Test
+	func diagnosticSites_nameModuleFileLineAndDeclaration_whenPathEndsInFixtureFile() {
+		#expect(Self.sites("/a/Sources/Tests/TestsTypes.swift:4:5: error: one remedy") == [
+			GraphFuzzerDiagnosticSite(severity: "error", file: "Tests/TestsTypes.swift", line: 4, declaration: "@Received let database: Database"),
 		])
+	}
+
+	private static func sites(_ diagnostics: String) -> [GraphFuzzerDiagnosticSite] {
+		GraphFuzzerDiagnosticSite.sites(
+			inDiagnostics: diagnostics,
+			contentByRelativePath: ["Tests/TestsTypes.swift": "import SafeDI\n\nfinal class Fake {\n    @Received let database: Database\n    @Received let id: Int\n}"],
+		)
+	}
+
+	// MARK: The check's failures
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func check_reportsOtherError_whenMockReportsTwinsErrorOnAnotherLine() async throws {
+		let twinFiles = Self.seamBuiltAgainGraph.twinFiles
+		let mockFiles = twinFiles.enumerated().map { index, file in
+			guard index == twinFiles.count - 1 else { return file }
+			return GraphFuzzerCallingMockGraph.File(
+				module: file.module,
+				dependencies: file.dependencies,
+				content: file.content.replacingOccurrences(of: "    @Received let logger: Logger", with: "    // A line that moves the error.\n    @Received let logger: Logger"),
+			)
+		}
+		let graph = GraphFuzzerCallingMockGraph(
+			name: "a mock rejected one line below its twin",
+			mockFiles: mockFiles,
+			twinFiles: twinFiles,
+			callerTypeName: "Host",
+			callerIsPublic: false,
+			flatParameterLabels: [],
+			implementationIsVisible: true,
+			expectedTwinInitializerLabels: nil,
+			expectedPassUpLabels: [],
+			expectedTwinErrorSite: ("App/AppTypes.swift", "@Received let logger: Logger"),
+		)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
+
+		#expect(result.twinHasIntendedOutcome)
+		#expect(result.failure?.kind == .callingMockReportsOtherErrorThanTwin)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func check_reportsRejection_whenMockIsRejectedWhereTwinIsAccepted() async throws {
+		let rejectedFiles = Self.seamBuiltAgainGraph.twinFiles
+		let acceptedFiles = rejectedFiles.map { file in
+			GraphFuzzerCallingMockGraph.File(
+				module: file.module,
+				dependencies: file.dependencies,
+				content: file.content.replacingOccurrences(
+					of: "    init(logger: Logger) { self.logger = logger }\n    @Received let logger: Logger",
+					with: "    init() {}",
+				),
+			)
+		}
+		let graph = GraphFuzzerCallingMockGraph(
+			name: "a mock rejected where its twin is accepted",
+			mockFiles: rejectedFiles,
+			twinFiles: acceptedFiles,
+			callerTypeName: "Host",
+			callerIsPublic: false,
+			flatParameterLabels: [],
+			implementationIsVisible: true,
+			expectedTwinInitializerLabels: nil,
+			expectedPassUpLabels: [],
+			expectedTwinErrorSite: nil,
+		)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
+
+		#expect(acceptedFiles.map(\.content) != rejectedFiles.map(\.content))
+		#expect(result.twinHasIntendedOutcome)
+		#expect(result.failure?.kind == .callingMockRejectsWhereTwinAccepts)
 	}
 
 	// MARK: The cells
@@ -462,6 +590,9 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			for passUp in result.passUps {
 				passUpCountsByReason[passUp.reason?.rawValue ?? "unclassified", default: 0] += 1
 			}
+			if draw.cell.shape.isControl {
+				#expect(result.passUps.map(\.label) == draw.expectedPassUpLabels, "seed \(seed) (\(draw.cell))")
+			}
 			let knownIssue = Self.callingMockKnownIssues.first { $0.seeds.contains(seed) }
 			switch (result.failure, knownIssue) {
 			case (nil, nil):
@@ -486,7 +617,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	}
 
 	@Test
-	func callingMockCells_areAllCells() {
+	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
 		#expect(GraphFuzzerCallingMockCell.all.count == 28)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
@@ -539,29 +670,29 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	private static let featureModule = """
 	import SafeDI
-	import In
+	import InnerModule
 
 	@Instantiable
-	public final class Db: Instantiable {
+	public final class Database: Instantiable {
 	    public init() {}
 	}
 
 	@Instantiable(generateDependencyTree: true, generateMock: .public)
 	public final class Feature: Instantiable {
-	    init(db: Db, inner: Inner) { self.db = db; self.inner = inner }
-	    @Instantiated public let db: Db
+	    init(database: Database, inner: Inner) { self.database = database; self.inner = inner }
+	    @Instantiated public let database: Database
 	    @Instantiated public let inner: Inner
 	}
 	"""
 
-	/// `Inner`'s hole in module `In`, `Feature` calling it in module `Feat`, and `tests` in module `Tests`.
+	/// `Inner`'s hole in module `InnerModule`, `Feature` calling it in module `FeatureModule`, and `tests` in module `Tests`.
 	private static func innerSeamGraph(named name: String, tests: String, expectedTwinErrorSite: (file: String, declaration: String)?) -> GraphFuzzerCallingMockGraph {
 		GraphFuzzerCallingMockGraph(
 			handWrittenNamed: name,
 			mockFiles: [
-				.init(module: "In", dependencies: [], content: innerModule),
-				.init(module: "Feat", dependencies: ["In"], content: featureModule),
-				.init(module: "Tests", dependencies: ["In", "Feat"], content: tests),
+				.init(module: "InnerModule", dependencies: [], content: innerModule),
+				.init(module: "FeatureModule", dependencies: ["InnerModule"], content: featureModule),
+				.init(module: "Tests", dependencies: ["InnerModule", "FeatureModule"], content: tests),
 			],
 			callerTypeName: "Host",
 			callerIsPublic: false,
@@ -628,12 +759,12 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	/// Ten graphs per drawn cell: seed `s` draws `GraphFuzzerCallingMockCell.drawnCells[s % 28]`.
 	static let callingMockCorpusSeedCount = 280
 
-	static let outerSeamValueReason = "A calling mock fills, or passes up as a required builder, a place whose fill receives a value an outer seam builds, where its production twin reports that the outer seam passes the builder on from its own caller; the mock work makes the mock report the same error"
-	static let appOnlyScreenInLoopReason = "A calling mock passes up the place of an app-only screen in a loop of the seam's screens, where its production twin reports the loop (the seam's tree builds the screen's received builder only after it calls the screen's builder, or, for a screen built by value, a constant cycle); the mock work makes the mock report the same error"
-	static let seamBuiltAgainReason = "A calling mock fills or passes up a place of a seam its tree builds again, whose fill reads a value of the level in between, where its production twin reports that the second build passes the builder on unchanged; main's internal mock fills it from the caller's own value and does not compile; the mock work makes the mock report the same error"
-	static let loopThroughInnerSeamBuilderReason = "A calling mock passes up a place whose fill receives a sibling that receives the inner seam's builder, where its production twin reports the loop as a dependency cycle; the mock work makes the mock report the same error"
-	static let callersOwnValueReason = "A calling mock passes up as a required builder a place whose fill receives a value the caller itself builds, where its production twin fills the place from that value; the mock work makes the mock fill it"
-	static let passesUpPlaceItsTwinFillsFromParameterReason = "A calling mock passes up a place whose fill receives a value nothing in its tree builds, where its production twin takes that value as a parameter and fills the place from it; no permanent reason explains it; the mock work makes the mock fill it"
+	static let outerSeamValueReason = "A calling mock fills, or passes up as a required builder, a place whose fill receives a value an outer seam builds, where its production twin reports that the outer seam passes the builder on from its own caller; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
+	static let appOnlyScreenInLoopReason = "A calling mock passes up the place of an app-only screen in a loop of the seam's screens, where its production twin reports the loop (the seam's tree builds the screen's received builder only after it calls the screen's builder, or, for a screen built by value, a constant cycle); the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
+	static let seamBuiltAgainReason = "A calling mock fills or passes up a place of a seam its tree builds again, whose fill reads a value of the level in between, where its production twin reports that the second build passes the builder on unchanged; main's internal mock fills it from the caller's own value and does not compile; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
+	static let loopThroughInnerSeamBuilderReason = "A calling mock passes up a place whose fill receives a sibling that receives the inner seam's builder, where its production twin reports the loop as a dependency cycle; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
+	static let callersOwnValueReason = "A calling mock passes up as a required builder a place whose fill receives a value the caller itself builds, where its production twin fills the place from that value; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock fill it"
+	static let passesUpPlaceItsTwinFillsFromParameterReason = "A calling mock passes up a place whose fill receives a value nothing in its tree builds, where its production twin takes that value as a parameter and fills the place from it; no permanent reason explains it; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock fill it"
 
 	/// One entry per cell that fails on main, with the cell's ten seeds.
 	static let callingMockKnownIssues: [GraphFuzzerKnownIssue] = [
