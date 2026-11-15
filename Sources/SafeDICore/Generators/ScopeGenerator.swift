@@ -6165,7 +6165,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Every initializer carries the isolation of the one it forwards to, which it spells (`Initializer.spelledIsolation`):
 		// declared in an extension of an isolated type, it would take the type's isolation, and a caller the seam's own
 		// initializer lets in, outside that isolation, could not call it.
-		let isolationPrefix: String = switch instantiable.initializer?.spelledIsolation {
+		let isolationPrefix = switch instantiable.initializer?.spelledIsolation {
 		case let isolation? where attributesPrefix.split(separator: " ").contains(Substring(isolation)):
 			""
 		case let isolation?:

@@ -91,8 +91,7 @@ struct GraphFuzzerFixture: Equatable {
 		var result = contents
 		for module in moduleOrder {
 			let indices = indicesByModule[module] ?? []
-			guard let seamIndex = indices.first(where: { contents[$0].contains("generateDependencyTree: true") }) else { continue }
-			guard !indices.contains(where: { contents[$0].contains("generatePlainDependencyTreeInitializers: true") }) else { continue }
+			guard let seamIndex = indices.first(where: { contents[$0].contains("generateDependencyTree: true") }), !indices.contains(where: { contents[$0].contains("generatePlainDependencyTreeInitializers: true") }) else { continue }
 			if let configurationIndex = indices.first(where: { contents[$0].contains("#SafeDIConfiguration(") }) {
 				var lines = result[configurationIndex].components(separatedBy: "\n")
 				for lineIndex in lines.indices where lines[lineIndex].contains("#SafeDIConfiguration(") {
