@@ -356,8 +356,8 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_service() -> Service {
-		                _ = Service.__safeDI_Service_183830738FCBBECA.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                func __safeDI_routerBuilder_Service(_ scope: Service.SafeDIScope_Router) -> AnyRouting {
+		                _ = Service.__safeDI_Service_4E9683DED113F73F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                func __safeDI_router_AnyRoutingBuilder_Service(_ scope: Service.SafeDIScope_Router_AnyRouting) -> AnyRouting {
 		                    switch scope {
 		                    case .routerBuilder:
 		                        func __safeDI_routerBuilder() -> Router {
@@ -370,7 +370,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		                        return AnyRouting(__safeDI_routerBuilder())
 		                    }
 		                }
-		                return Service(__safeDI_routerBuilder: __safeDI_routerBuilder_Service)
+		                return Service(__safeDI_router_AnyRoutingBuilder: __safeDI_router_AnyRoutingBuilder_Service)
 		            }
 		            let service: Service = __safeDI_service()
 		            func __safeDI_midBuilder() -> Mid {
@@ -475,8 +475,8 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        let renamed = X(renamed: nil)
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_service() -> Service {
-		                _ = Service.__safeDI_Service_183830738FCBBECA.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                func __safeDI_routerBuilder_Service(_ scope: Service.SafeDIScope_Router) -> AnyRouting {
+		                _ = Service.__safeDI_Service_4E9683DED113F73F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                func __safeDI_router_AnyRoutingBuilder_Service(_ scope: Service.SafeDIScope_Router_AnyRouting) -> AnyRouting {
 		                    switch scope {
 		                    case .routerBuilder:
 		                        func __safeDI_routerBuilder() -> Router {
@@ -486,7 +486,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		                        return AnyRouting(__safeDI_routerBuilder())
 		                    }
 		                }
-		                return Service(__safeDI_routerBuilder: __safeDI_routerBuilder_Service)
+		                return Service(__safeDI_router_AnyRoutingBuilder: __safeDI_router_AnyRoutingBuilder_Service)
 		            }
 		            let service: Service = __safeDI_service()
 		            func __safeDI_midBuilder() -> Mid {
@@ -947,8 +947,8 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    public convenience init() {
 		        let analytics = Analytics()
 		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_EDC1214D105CA32C.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_routerBuilder_Service(_ scope: Service.SafeDIScope_Router) -> AnyRouting {
+		            _ = Service.__safeDI_Service_28CCA8C0385D94C9.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_router_AnyRoutingBuilder_Service(_ scope: Service.SafeDIScope_Router_AnyRouting) -> AnyRouting {
 		                switch scope {
 		                case let .routerBuilder(scope):
 		                    let analytics = scope.analytics
@@ -966,7 +966,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		                    return AnyRouting(__safeDI_routerBuilder(analytics: analytics))
 		                }
 		            }
-		            return Service(__safeDI_analytics: analytics, __safeDI_routerBuilder: __safeDI_routerBuilder_Service)
+		            return Service(__safeDI_analytics: analytics, __safeDI_router_AnyRoutingBuilder: __safeDI_router_AnyRoutingBuilder_Service)
 		        }
 		        let service: Service = __safeDI_service()
 		        self.init(analytics: analytics, service: service)
