@@ -104,8 +104,9 @@ public enum ReservedName: Hashable, Sendable {
 	/// one stored function per member, each called where the seam binds that level.
 	static let builderStructTypeName = "\(builderFunctionNamePrefix)Builder"
 
-	/// The name of a builder struct's generic parameter: the type its builder returns.
-	static let builderStructGenericParameterName = "Built"
+	/// The name of a builder struct's generic parameter: the type its builder returns, prefixed so that no type a struct's
+	/// member spells can be hidden by it.
+	static let builderStructGenericParameterName = "\(builderFunctionNamePrefix)Built"
 
 	/// The argument label of the initializer of a level's builder struct that wraps a builder that takes nothing, which a
 	/// seam's readable initializer passes the builder a person wrote to.
