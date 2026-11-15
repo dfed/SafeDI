@@ -1694,14 +1694,14 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 				        }
 
 				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<Built> {
-				            public let api: (api_Values) -> Built
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let api: (api_Values) -> __safeDI_Built
 
-				            public init(api: @escaping (api_Values) -> Built) {
+				            public init(api: @escaping (api_Values) -> __safeDI_Built) {
 				                self.api = api
 				            }
 
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				                self.api = { _ in __safeDI_builder() }
 				            }
 				        }
@@ -1755,14 +1755,14 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 				        }
 
 				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<Built> {
-				            public let api: (api_Values) -> Built
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let api: (api_Values) -> __safeDI_Built
 
-				            public init(api: @escaping (api_Values) -> Built) {
+				            public init(api: @escaping (api_Values) -> __safeDI_Built) {
 				                self.api = api
 				            }
 
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				                self.api = { _ in __safeDI_builder() }
 				            }
 				        }
@@ -1816,14 +1816,14 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 				        }
 
 				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<Built> {
-				            public let api: (api_Values) -> Built
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let api: (api_Values) -> __safeDI_Built
 
-				            public init(api: @escaping (api_Values) -> Built) {
+				            public init(api: @escaping (api_Values) -> __safeDI_Built) {
 				                self.api = api
 				            }
 
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				                self.api = { _ in __safeDI_builder() }
 				            }
 				        }
@@ -1877,14 +1877,14 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 				        }
 
 				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<Built> {
-				            public let api: (api_Values) -> Built
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let api: (api_Values) -> __safeDI_Built
 
-				            public init(api: @escaping (api_Values) -> Built) {
+				            public init(api: @escaping (api_Values) -> __safeDI_Built) {
 				                self.api = api
 				            }
 
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				                self.api = { _ in __safeDI_builder() }
 				            }
 				        }
@@ -1939,14 +1939,14 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 				        }
 
 				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<Built> {
-				            public let api: (api_Values) -> Built
+				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+				            public let api: (api_Values) -> __safeDI_Built
 
-				            public init(api: @escaping (api_Values) -> Built) {
+				            public init(api: @escaping (api_Values) -> __safeDI_Built) {
 				                self.api = api
 				            }
 
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 				                self.api = { _ in __safeDI_builder() }
 				            }
 				        }
