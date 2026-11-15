@@ -10023,13 +10023,15 @@ struct GraphFuzzerResult {
 		retentionCounts.judged > 0
 	}
 
-	/// Whether the graph passes every oracle but the retention oracle, whose failure `knownIssue` documents: the retention
-	/// oracle judges last, so every other oracle judged the graph first, and counts of what passing graphs show (the
-	/// spellings the long run counts, the shapes of the seam smoke batch) count it as passing while the leak it documents
-	/// awaits its fix.
+	/// Whether the graph passes every oracle but the builder surface (`passesBesidesBuilderSurface`) and the retention
+	/// oracle, whose failure `knownIssue` documents: counts of what passing graphs show (the spellings the long run
+	/// counts, the shapes of the seam smoke batch) count it as passing while the builder structs and the leak fix it awaits
+	/// are not built.
 	func passes(butForRetentionDocumentedBy knownIssue: GraphFuzzerKnownIssue?) -> Bool {
-		guard let failure else { return true }
-		return [.seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees].contains(failure.kind) && laterFailures.isEmpty && knownIssue?.matches(failure) == true
+		([failure] + laterFailures).compactMap(\.self).allSatisfy { failure in
+			Self.builderSurfaceFailureKinds.contains(failure.kind)
+				|| [.seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees].contains(failure.kind) && knownIssue?.matches(failure) == true
+		}
 	}
 
 	/// A base corpus graph's value-oracle run, whose pairs and skips the long run counts.

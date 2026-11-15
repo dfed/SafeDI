@@ -753,3 +753,17 @@ extension GraphFuzzerToolRuns {
 			+ builderSurfaceJudgments.filter(\.judgment.isJudged).map(\.kind)
 	}
 }
+
+extension GraphFuzzerResult {
+	/// The kinds of failure the builder surface reports.
+	static let builderSurfaceFailureKinds: Set<GraphFuzzerFailure.Kind> = [
+		.builderSurfaceNamesGeneratedType, .sameSupplyCallStopsCompiling, .addedBuilderChangesExistingBuilder, .placesForwardingOtherValuesAccepted, .callingMockChangesBuilder,
+	]
+
+	/// Whether the graph fails no oracle but the builder surface's. Until the planned builder structs, every graph with a
+	/// hole fails the builder surface, so what the smoke batches and the long run read from graphs that pass – the output
+	/// features they show, the spellings they draw, the cross-process sample – reads these graphs too.
+	var passesBesidesBuilderSurface: Bool {
+		([failure] + laterFailures).compactMap(\.self).allSatisfy { Self.builderSurfaceFailureKinds.contains($0.kind) }
+	}
+}

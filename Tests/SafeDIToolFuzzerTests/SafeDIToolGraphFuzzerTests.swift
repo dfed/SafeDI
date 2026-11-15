@@ -288,7 +288,8 @@ struct SafeDIToolGraphFuzzerTests {
 		// tool accepts whose generated code, read from what the oracle compiled, between them shows every
 		// `GraphFuzzerSeamOutputFeature`, and one graph it rejects.
 		let results = try await seamSmokeResults.value
-		// A graph the retention oracle alone fails, as a known issue lists, passed every other oracle, which judge it first.
+		// A graph that fails only the builder surface, or the retention oracle as a known issue lists, passed every other
+		// oracle.
 		let acceptedResults = results.filter { $0.isAccepted && $0.passes(butForRetentionDocumentedBy: Self.seamSmokeKnownIssuesBySeed[$0.fixture.seed]) }
 
 		#expect(acceptedResults.allSatisfy { GraphFuzzerFeature.features(of: $0.fixture).contains(.generateDependencyTree) })
@@ -4855,7 +4856,7 @@ struct SafeDIToolGraphFuzzerTests {
 						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueGraphsOf: corpus.isolatedValueGraphSeeds) { seed in
 							report.append("seed \(seed)")
 						}
-						for index in results.indices where results[index].failure == nil
+						for index in results.indices where results[index].passesBesidesBuilderSurface
 							&& results[index].fixture.seed % Self.crossProcessSampleInterval == 0
 						{
 							let fixture = results[index].fixture
@@ -4865,8 +4866,8 @@ struct SafeDIToolGraphFuzzerTests {
 							results[index] = GraphFuzzerResult(
 								fixture: results[index].fixture,
 								outcome: results[index].outcome,
-								failure: crossProcessFailure,
-								laterFailures: results[index].laterFailures,
+								failure: crossProcessFailure ?? results[index].failure,
+								laterFailures: crossProcessFailure == nil ? results[index].laterFailures : [results[index].failure].compactMap(\.self) + results[index].laterFailures,
 								renamedGraphFailures: results[index].renamedGraphFailures,
 								multiModuleRuns: results[index].multiModuleRuns,
 								isInspectedByValueOracle: results[index].isInspectedByValueOracle,
@@ -4876,6 +4877,7 @@ struct SafeDIToolGraphFuzzerTests {
 								retentionCounts: results[index].retentionCounts,
 								valueOracle: results[index].valueOracle,
 								remedyRuns: results[index].remedyRuns,
+								builderSurfaceFloorKinds: results[index].builderSurfaceFloorKinds,
 							)
 						}
 						for result in results {
