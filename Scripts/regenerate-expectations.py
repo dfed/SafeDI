@@ -801,6 +801,15 @@ class Rules:
                     raise ApplyError(f"{list_name} rule {name} does not compile: {error}")
                 if expression.search("") is not None:
                     raise ApplyError(f"{list_name} rule {name} can match the empty string")
+                # Expand the replacement against an empty match with the pattern's groups, so a reference to a group
+                # the pattern lacks is rejected now rather than on the rule's first hit.
+                group_names = {index: group_name for group_name, index in expression.groupindex.items()}
+                groups = "".join(f"(?P<{group_names[index]}>)" if index in group_names else "()" for index in range(1, expression.groups + 1))
+                try:
+                    re.compile(groups).fullmatch("").expand(replacement)
+                except (re.error, IndexError) as error:
+                    # An unknown group name raises `IndexError`, an unknown group number `re.error`.
+                    raise ApplyError(f"{list_name} rule {name} has an invalid replacement: {error}")
                 destination.append((name, expression, replacement))
         self.names = names
 
@@ -823,7 +832,10 @@ class Rules:
             if match.end() == match.start():
                 raise ApplyError(f"rule {name} matched the empty string")
             hits += 1
-            return match.expand(replacement)
+            try:
+                return match.expand(replacement)
+            except (re.error, IndexError) as error:
+                raise ApplyError(f"rule {name} has an invalid replacement: {error}")
 
         return expression.sub(replace, text), hits
 
@@ -1603,7 +1615,7 @@ def self_test(root):
     test.records([generation_record("k", 4, "Old")], [generation_record("k", 4, "New")], {"rewrite": [{"name": "anything", "pattern": "x*", "replacement": "y"}]})
     status, summary = test.run()
     expect(status == 2 and "empty string" in summary.get("error", "") and test.source() == original, f"empty-matching rule: {status} {summary}")
-    for rules, message in (({"rename": [{"name": "r", "table": {"": "x"}}]}, "empty key"), ({"rename": [{"name": "r", "table": {"a": "b"}}], "normalize": [{"name": "r", "pattern": "a", "replacement": "b"}]}, "two rules are named")):
+    for rules, message in (({"rename": [{"name": "r", "table": {"": "x"}}]}, "empty key"), ({"rename": [{"name": "r", "table": {"a": "b"}}], "normalize": [{"name": "r", "pattern": "a", "replacement": "b"}]}, "two rules are named"), ({"rewrite": [{"name": "r", "pattern": "Absent", "replacement": "\\2"}]}, "invalid replacement"), ({"normalize": [{"name": "r", "pattern": "(?P<word>Absent)", "replacement": "\\g<other>"}]}, "invalid replacement")):
         write_file(test.rules, json.dumps(rules))
         status, summary = test.run()
         expect(status == 2 and message in summary.get("error", ""), f"rejected rules {message}: {status} {summary}")
