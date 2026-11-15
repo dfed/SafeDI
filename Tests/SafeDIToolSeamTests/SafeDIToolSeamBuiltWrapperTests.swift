@@ -542,20 +542,33 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_DefaultGadget_Gadget {
+		    @frozen nonisolated public enum SafeDIScope_DefaultGadget_Gadget {
 		        case part(part_Values)
 
-		        public struct part_Values {
+		        nonisolated public struct part_Values {
 		            public let analytics: Analytics
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<Built> {
+		            public let part: (part_Values) -> Built
+
+		            public init(part: @escaping (part_Values) -> Built) {
+		                self.part = part
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                self.part = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_defaultGadget_GadgetBuilder: @escaping (SafeDIScope_DefaultGadget_Gadget) -> any Gadget) {
+		    public init(__safeDI_defaultGadget_GadgetBuilder: SafeDIScope_DefaultGadget_Gadget.__safeDI_Builder<any Gadget>) {
 		        let analytics = Analytics()
 		        func __safeDI_part() -> any Gadget {
-		            __safeDI_defaultGadget_GadgetBuilder(.part(SafeDIScope_DefaultGadget_Gadget.part_Values(analytics: analytics)))
+		            __safeDI_defaultGadget_GadgetBuilder.part(SafeDIScope_DefaultGadget_Gadget.part_Values(analytics: analytics))
 		        }
 		        let part = ErasedInstantiator<\(spelling), any Gadget>(__safeDI_part)
 		        self.init(analytics: analytics, part: part)
@@ -563,7 +576,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_65C4D564EA60E99F {}
+		    public enum __safeDI_Host_8897BFE4AFEC13D7 {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, SafeDIToolSeamBuilderParameterTests.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
@@ -1349,24 +1362,50 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_Gadget {
+		    @frozen nonisolated public enum SafeDIScope_Gadget {
 		        case again(again_Values, SafeDIScope_Gadget.Middle_Scope)
 
-		        public struct again_Values {}
+		        nonisolated public struct again_Values {}
 
-		        @frozen public enum Middle_Scope {
+		        @frozen nonisolated public enum Middle_Scope {
 		            case again(again_Values)
 
-		            public struct again_Values {
+		            nonisolated public struct again_Values {
 		                public let beneath: Beneath
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<Built> {
+		                public let again: (again_Values) -> Built
+
+		                public init(again: @escaping (again_Values) -> Built) {
+		                    self.again = again
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                    self.again = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<Built> {
+		            public let again: (again_Values) -> SafeDIScope_Gadget.Middle_Scope.__safeDI_Builder<Built>
+
+		            public init(again: @escaping (again_Values) -> SafeDIScope_Gadget.Middle_Scope.__safeDI_Builder<Built>) {
+		                self.again = again
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                self.again = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
-		        let __safeDI_gadgetValues_again = SafeDIScope_Gadget.again_Values()
+		    public init(__safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
+		        let __safeDI_gadgetBuilder_again = __safeDI_gadgetBuilder.again(SafeDIScope_Gadget.again_Values())
 		        func __safeDI_again() -> Middle {
 		            func __safeDI_beneath() -> Beneath {
 		                let again = Instantiator<Middle>(__safeDI_again)
@@ -1374,7 +1413,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            }
 		            let beneath: Beneath = __safeDI_beneath()
 		            func __safeDI_again_Gadget() -> any Gadget {
-		                __safeDI_gadgetBuilder(.again(__safeDI_gadgetValues_again, .again(SafeDIScope_Gadget.Middle_Scope.again_Values(beneath: beneath))))
+		                __safeDI_gadgetBuilder_again.again(SafeDIScope_Gadget.Middle_Scope.again_Values(beneath: beneath))
 		            }
 		            let again = LazilyInstantiated<any Gadget>(__safeDI_again_Gadget)
 		            return Middle(again: again, beneath: beneath)
@@ -1385,7 +1424,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_1ECC73081BC3B233 {}
+		    public enum __safeDI_Host_83A32350075A5A67 {}
 		}
 		"""])
 	}
