@@ -1,16 +1,16 @@
 Feat/Feat.swift:89: Fatal error: rejected in 2.3.0
 
-*** Signal 4: Backtracing from 0x7f63054e2a58... done ***
+*** Signal 4: Backtracing from 0x7f48cc8e2a58... done ***
 
-*** Program crashed: Illegal instruction at 0x00007f63054e2a58 ***
+*** Program crashed: Illegal instruction at 0x00007f48cc8e2a58 ***
 
 Platform: x86_64 Linux (Ubuntu 24.04.5 LTS)
 
 Thread 0 "main" crashed:
 
-  0      0x00007f63054e2a58 _assertionFailure(_:_:file:line:flags:) + 264 in libswiftCore.so
-  1 [ra] 0x00005563e2c14784 rootMock() + 67 in main
-  2 [ra] 0x00007f6304c2a28b __libc_start_main@GLIBC_2.2.5 + 138 in libc.so.6
+  0      0x00007f48cc8e2a58 _assertionFailure(_:_:file:line:flags:) + 264 in libswiftCore.so
+  1 [ra] 0x0000564281ad8784 rootMock() + 67 in main
+  2 [ra] 0x00007f48cc02a28b __libc_start_main@GLIBC_2.2.5 + 138 in libc.so.6
 ...
 
 
@@ -19,20 +19,20 @@ Registers:
 rax 0x0000000000000000  0
 rdx 0x0000000000000002  2
 rcx 0x0000000000000001  1
-rbx 0x00000005563ff321  22921868065
-rsi 0x80005563e2c1e410  9223465924349256720
-rdi 0x00005563ff321e40  2e 30 0a 00 00 00 00 00 31 00 00 00 00 00 00 00  .0······1·······
-rbp 0x00007fff5e90a0c0  00 a2 90 5e ff 7f 00 00 84 47 c1 e2 63 55 00 00  ·¢·^ÿ····GÁâcU··
-rsp 0x00007fff5e90a050  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ················
- r8 0x00005563ff30f010  01 00 01 00 01 00 01 00 00 00 00 00 00 00 00 00  ················
+rbx 0x000000056428c809  23155230729
+rsi 0x8000564281ae2410  9223466880498279440
+rdi 0x000056428c809e40  2e 30 0a 00 00 00 00 00 31 00 00 00 00 00 00 00  .0······1·······
+rbp 0x00007ffda5169810  50 99 16 a5 fd 7f 00 00 84 87 ad 81 42 56 00 00  P··¥ý·····­·BV··
+rsp 0x00007ffda51697a0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ················
+ r8 0x000056428c7f7010  01 00 01 00 01 00 01 00 00 00 00 00 00 00 00 00  ················
  r9 0x0000000000000007  7
-r10 0x00005563ff321e50  21 f3 3f 56 05 00 00 00 b4 3a d7 2a 5f 78 6d 62  !ó?V····´:×*_xmb
-r11 0x626d785f2ad73ab4  7092457338314373812
+r10 0x000056428c809e50  09 c8 28 64 05 00 00 00 a7 f9 0b 60 22 ba 6a a2  ·È(d····§ù·`"ºj¢
+r11 0xa26aba22600bf9a7  11703371238478707111
 r12 0x0000000000000001  1
 r13 0x0000000000000000  0
-r14 0x00005563e2c1d3b8  b0 ef 7f 05 63 7f 00 00 98 04 80 05 63 7f 00 00  °ï··c·······c···
-r15 0x00007f63059ae000  e0 f2 9a 05 63 7f 00 00 11 00 00 00 00 00 00 00  àò··c···········
-rip 0x00007f63054e2a58  0f 0b 48 8d 35 7f 0c fb ff 48 8d 55 a0 45 31 e4  ··H·5··ûÿH·U E1ä
+r14 0x0000564281ae13b8  b0 ef bf cc 48 7f 00 00 98 04 c0 cc 48 7f 00 00  °ï¿ÌH·····ÀÌH···
+r15 0x00007f48ccd9e000  e0 f2 d9 cc 48 7f 00 00 11 00 00 00 00 00 00 00  àòÙÌH···········
+rip 0x00007f48cc8e2a58  0f 0b 48 8d 35 7f 0c fb ff 48 8d 55 a0 45 31 e4  ··H·5··ûÿH·U E1ä
 
 rflags 0x0000000000010206  PF
 
@@ -41,9 +41,9 @@ cs 0x0033  fs 0x0000  gs 0x0000
 
 Images (13 omitted):
 
-0x00005563e2c0b000–0x00005563e2c1c078 ac7e2be8245d7f252c60b667bf3caf15ce53a2db main            /root/.cache/per-type-seam-spike/F3/stale/c/out-O/main
-0x00007f6304c00000–0x00007f6304db0039 a4a7992a8e66555c8141ab2a08a8465ff6e0ea65 libc.so.6       /usr/lib/x86_64-linux-gnu/libc.so.6
-0x00007f6305200000–0x00007f63057b23a0 558d88bb27dd3a5fa8ef79eb481d2942416f4535 libswiftCore.so /opt/swift/swift-6.2.4-RELEASE-ubuntu24.04/usr/lib/swift/linux/libswiftCore.so
+0x0000564281acf000–0x0000564281ae0078 6831df8e0cb542551c1a862b05202f7cb3eb3fab main            /root/.cache/per-type-seam-spike/F3/stale/c/out-O/main
+0x00007f48cc000000–0x00007f48cc1b0039 a4a7992a8e66555c8141ab2a08a8465ff6e0ea65 libc.so.6       /usr/lib/x86_64-linux-gnu/libc.so.6
+0x00007f48cc600000–0x00007f48ccbb23a0 558d88bb27dd3a5fa8ef79eb481d2942416f4535 libswiftCore.so /opt/swift/swift-6.2.4-RELEASE-ubuntu24.04/usr/lib/swift/linux/libswiftCore.so
 
 Backtrace took 0.01s
 
