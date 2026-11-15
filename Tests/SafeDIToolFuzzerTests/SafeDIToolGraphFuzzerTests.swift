@@ -281,7 +281,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// tool accepts whose generated code, read from what the oracle compiled, between them shows every
 		// `GraphFuzzerSeamOutputFeature`, and one graph it rejects.
 		let results = try await seamSmokeResults.value
-		let acceptedResults = results.filter { $0.isAccepted && $0.failure == nil }
+		let acceptedResults = results.filter { $0.isAccepted && $0.passesBesidesBuilderSurface }
 
 		#expect(acceptedResults.allSatisfy { GraphFuzzerFeature.features(of: $0.fixture).contains(.generateDependencyTree) })
 		#expect(acceptedResults.count >= 2, "Accepted \(acceptedResults.count) of \(Self.seamSmokeSeeds.count) graphs")
@@ -4693,7 +4693,7 @@ struct SafeDIToolGraphFuzzerTests {
 						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueGraphsOf: corpus.isolatedValueGraphSeeds) { seed in
 							report.append("seed \(seed)")
 						}
-						for index in results.indices where results[index].failure == nil
+						for index in results.indices where results[index].passesBesidesBuilderSurface
 							&& results[index].fixture.seed % Self.crossProcessSampleInterval == 0
 						{
 							let fixture = results[index].fixture
@@ -4703,8 +4703,8 @@ struct SafeDIToolGraphFuzzerTests {
 							results[index] = GraphFuzzerResult(
 								fixture: results[index].fixture,
 								outcome: results[index].outcome,
-								failure: crossProcessFailure,
-								laterFailures: results[index].laterFailures,
+								failure: crossProcessFailure ?? results[index].failure,
+								laterFailures: crossProcessFailure == nil ? results[index].laterFailures : [results[index].failure].compactMap(\.self) + results[index].laterFailures,
 								renamedGraphFailures: results[index].renamedGraphFailures,
 								multiModuleRuns: results[index].multiModuleRuns,
 								isInspectedByValueOracle: results[index].isInspectedByValueOracle,
@@ -4713,6 +4713,7 @@ struct SafeDIToolGraphFuzzerTests {
 								isComparedWithReadTwin: results[index].isComparedWithReadTwin,
 								valueOracle: results[index].valueOracle,
 								remedyRuns: results[index].remedyRuns,
+								builderSurfaceFloorKinds: results[index].builderSurfaceFloorKinds,
 							)
 						}
 						for result in results {
@@ -4752,7 +4753,7 @@ struct SafeDIToolGraphFuzzerTests {
 										acceptedDrawFeatureCounts[feature, default: 0] += 1
 									}
 								}
-								if result.failure == nil {
+								if result.passesBesidesBuilderSurface {
 									acceptedSpellingDrawFeatures.formUnion(GraphFuzzerFeature.seamDrawFeatures(of: result.fixture).intersection(corpus.spellingDrawFeatures))
 								}
 							}

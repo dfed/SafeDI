@@ -56,7 +56,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		// code the oracle compiled and compared by value, with both consumer modules between them; and it holds a graph
 		// the tool rejects today.
 		let results = try await publicMockSmokeResults.value
-		let passingResults = results.filter { $0.isAccepted && $0.failure == nil }
+		let passingResults = results.filter { $0.isAccepted && $0.passesBesidesBuilderSurface }
 		#expect(passingResults.allSatisfy(\.isComparedByValueOracle) || !compileVerificationIsEnabled)
 		// Every graph is split across modules, with every package name given, so the SwiftPM plugin flow agreed on each with
 		// the module-info flow.
