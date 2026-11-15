@@ -13,6 +13,7 @@ that ci.yml splits each corpus into. Each shard's long run ends its report with
     spellings <corpus> <spellings to draw, comma-separated> <spellings drawn in accepted graphs>
     draws <corpus> <draw>=<accepted graphs showing it>,… <draw>=<pinned count>,…
     errors <corpus> <graphs each pinned error rejects>,… <pinned counts>,…
+    builder-surface <corpus> <kind>=<graphs the builder surface judged as it>,… <floored kind>,…
     outputs <corpus> <feature>=<accepted graphs showing it>,… <feature>=<pinned minimum percent>,…
     value-oracle <corpus> <key>=<value>,… <key>=<pinned value>,…
     cpu <corpus> <wall seconds> <test process CPU seconds> <child processes' CPU seconds> <phase>=<busy seconds>:<child CPU seconds>:<child processes>,…
@@ -27,10 +28,11 @@ pins, every spelling the corpus draws must be
 drawn in some accepted graph of some shard, each output feature with a pinned minimum must show in at least that
 percentage of the corpus's accepted graphs (the public mock corpus reports `outputs`), the accepted graphs that show
 each draw a corpus counts must add up to its pinned count (`draws`), the graphs each error a corpus pins rejects must
-add up to their pins (`errors`: a public mock's own errors, or a cycle's in a seam's tree), what the base corpus's value oracle compares and
+add up to their pins (`errors`: a public mock's own errors, or a cycle's in a seam's tree), the graphs the builder
+surface judges as each kind a corpus floors must add up to at least ten (`builder-surface`), what the base corpus's value oracle compares and
 skips must add up to its pins (`value-oracle`: counts, and set sums whose keys end in `Sum`, which add up wrapping
 like the accepted seed-set sum), and no shard may report a failure,
-a stale known issue, a misfiled seed, or a problem. Every long run writes `features`, `inspected`, `read-twins`, `draws` and `errors` for its corpus, and
+a stale known issue, a misfiled seed, or a problem. Every long run writes `features`, `inspected`, `read-twins`, `draws`, `errors` and `builder-surface` for its corpus, and
 `value-oracle` for the base corpus, so a complete report that names a corpus without one of them is a problem: a
 run that stopped writing the line would otherwise skip that line's check silently. The `cpu` lines check nothing:
 the summary adds them up per corpus into a table of what each phase of the oracle cost, a phase's busy seconds being
@@ -54,6 +56,10 @@ compared_by_corpus = {}
 read_twins_by_corpus = {}
 read_twins_pins_by_corpus = {}
 omitted_values_by_corpus = {}
+# The graphs the builder surface judged per kind, added up across shards, and the kinds each corpus floors.
+builder_surface_counts_by_corpus = {}
+builder_surface_floored_by_corpus = {}
+BUILDER_SURFACE_FLOOR = 10
 omitted_values_pins_by_corpus = {}
 required_spellings_by_corpus = {}
 accepted_spellings_by_corpus = {}
@@ -89,6 +95,7 @@ for path in report_paths:
     featured_corpora = set()
     inspected_corpora = set()
     read_twin_corpora = set()
+    builder_surface_corpora = set()
     drawn_corpora = set()
     error_corpora = set()
     value_oracle_corpora = set()
@@ -114,6 +121,14 @@ for path in report_paths:
                 read_twin_corpora.add(fields[3])
                 read_twins_by_corpus[fields[3]] = read_twins_by_corpus.get(fields[3], 0) + int(fields[1])
                 read_twins_pins_by_corpus.setdefault(fields[3], set()).add(int(fields[2]))
+            elif fields[0] == "builder-surface" and len(fields) >= 3:
+                builder_surface_corpora.add(fields[1])
+                counts = builder_surface_counts_by_corpus.setdefault(fields[1], {})
+                for item in filter(None, fields[2].split(",")):
+                    kind, count = item.split("=")
+                    counts[kind] = counts.get(kind, 0) + int(count)
+                # An empty list is an absent field, so a corpus that floors no kind reports three fields.
+                builder_surface_floored_by_corpus.setdefault(fields[1], set()).add(fields[3] if len(fields) > 3 else "")
             elif fields[0] == "omitted-values" and len(fields) == 4:
                 omitted_values_by_corpus[fields[3]] = omitted_values_by_corpus.get(fields[3], 0) + int(fields[1])
                 omitted_values_pins_by_corpus.setdefault(fields[3], set()).add(int(fields[2]))
@@ -182,6 +197,8 @@ for path in report_paths:
             problems.append(f"The {corpus} corpus reported no count of the graphs the value oracle inspected in {path}.")
         for corpus in sorted(reported_corpora - read_twin_corpora):
             problems.append(f"The {corpus} corpus reported no count of the graphs compared with their read twin in {path}.")
+        for corpus in sorted(reported_corpora - builder_surface_corpora):
+            problems.append(f"The {corpus} corpus reported no counts of the graphs the builder surface judged in {path}.")
         for corpus in sorted(reported_corpora - drawn_corpora):
             problems.append(f"The {corpus} corpus reported no counts of the draws it counts in accepted graphs in {path}.")
         for corpus in sorted(reported_corpora - error_corpora):
@@ -225,6 +242,17 @@ if not problems:
                 f"The value oracle inspected {inspected_by_corpus.get(corpus, 0)} graphs of the {corpus} corpus, but "
                 f"{next(iter(inspected_pins))} are pinned."
             )
+        builder_surface_floored = builder_surface_floored_by_corpus.get(corpus, set())
+        if len(builder_surface_floored) > 1:
+            problems.append(f"The shards of the {corpus} corpus disagree about which builder surface kinds are floored: {sorted(builder_surface_floored)}.")
+        elif builder_surface_floored:
+            builder_surface_counts = builder_surface_counts_by_corpus.get(corpus, {})
+            for kind in filter(None, next(iter(builder_surface_floored)).split(",")):
+                if builder_surface_counts.get(kind, 0) < BUILDER_SURFACE_FLOOR:
+                    problems.append(
+                        f"The builder surface judged {builder_surface_counts.get(kind, 0)} graphs of the {corpus} corpus as {kind}, "
+                        f"below its floor of {BUILDER_SURFACE_FLOOR}."
+                    )
         read_twins_pins = read_twins_pins_by_corpus.get(corpus, set())
         if len(read_twins_pins) > 1:
             problems.append(f"The shards of the {corpus} corpus disagree about how many graphs run as a read twin: {sorted(read_twins_pins)}.")

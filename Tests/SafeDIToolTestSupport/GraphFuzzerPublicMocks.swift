@@ -368,9 +368,12 @@ enum GraphFuzzerPublicMockSpelling: CaseIterable {
 /// `AnyT<index>` of a leaf a consumer reaches through an erasure, held under `anyT<index>`; the helper types keep their
 /// names.
 struct GraphFuzzerPublicMockDraw {
-	/// - Parameter omitsSecondHolePlace: Whether the draw leaves out `secondHolePlace`, drawing the rest as with it.
-	init(seed: UInt64, omitsSecondHolePlace: Bool = false) {
+	/// - Parameters:
+	///   - omitsSecondHolePlace: Whether the draw leaves out `secondHolePlace`, drawing the rest as with it.
+	///   - builderSurfaceEdit: The edit the hole draw makes to `T6`'s hole after every roll, for the builder surface's checks.
+	init(seed: UInt64, omitsSecondHolePlace: Bool = false, builderSurfaceEdit: GraphFuzzerBuilderSurfaceEdit? = nil) {
 		self.omitsSecondHolePlace = omitsSecondHolePlace
+		self.builderSurfaceEdit = builderSurfaceEdit
 		prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 		var random = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockRandomSeedMask)
 		var spellingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockSpellingRandomSeedMask)
@@ -444,6 +447,9 @@ struct GraphFuzzerPublicMockDraw {
 	/// `t6Second`, under which it reaches `T6` a second time (D530-1), or `nil`.
 	private(set) var secondHolePlace: String?
 	private let omitsSecondHolePlace: Bool
+	private let builderSurfaceEdit: GraphFuzzerBuilderSurfaceEdit?
+	/// Whether the draw made `builderSurfaceEdit`: the graph has the hole spelling the edit changes.
+	private(set) var appliesBuilderSurfaceEdit = false
 
 	static let publicMockRandomSeedMask: UInt64 = 0x7075626C69636D6B
 	static let publicMockSpellingRandomSeedMask: UInt64 = 0x7075626D6B73706C
@@ -1170,6 +1176,13 @@ struct GraphFuzzerPublicMockDraw {
 			if holeRandom.percentChance(40) {
 				declaration.add(Property(attribute: "@Instantiated", label: "holeContext", type: instantiable("HoleContext")))
 			}
+			// The builder surface's edit (`GraphFuzzerBuilderSurfaceEdit`), which draws nothing, so the graph is drawn as without it.
+			var holeProperties = [Property(attribute: attribute, label: holeLabel, type: holeType)]
+			if let builderSurfaceEdit, let edited = Self.holeProperties(editedBy: builderSurfaceEdit, attribute: attribute, label: holeLabel, type: holeType, spelling: spelling, holeName: holeName, erasedName: erasedName, protocolName: protocolName, isSendableGraph: isSendableGraph) {
+				holeProperties = edited.properties
+				plainDeclarations += edited.declarations
+				appliesBuilderSurfaceEdit = true
+			}
 			switch rootLevelShape {
 			case .none:
 				break
@@ -1184,11 +1197,11 @@ struct GraphFuzzerPublicMockDraw {
 			}
 			switch position {
 			case .direct:
-				declaration.add(Property(attribute: attribute, label: holeLabel, type: holeType))
+				holeProperties.forEach { declaration.add($0) }
 			case .instantiator, .lazilyInstantiated, .sendableInstantiator, .sendableLazilyInstantiated:
 				let hostAccess: AccessLevel = holeRandom.percentChance(50) ? .public : .package
 				var host = instantiableClass("HoleHost", access: hostAccess)
-				host.properties = [Property(attribute: attribute, label: holeLabel, type: holeType)]
+				host.properties = holeProperties
 				if rootLevelShape == .labelInTwoForms {
 					host.properties.insert(Property(attribute: "@Received", label: "holeSession", type: sessionName), at: 0)
 				}
@@ -1685,6 +1698,41 @@ struct GraphFuzzerPublicMockDraw {
 
 	/// The label of the plain builder a public mock takes for the holes of the type named `typeName`: the name with its
 	/// leading capitals lowered, keeping the last when a lowercase letter follows it, then `Builder`.
+	/// The properties `T6`'s hole is declared with once `edit` is made, and the declarations the edit adds, or `nil` when
+	/// the edit does not apply to the hole's spelling.
+	private static func holeProperties(editedBy edit: GraphFuzzerBuilderSurfaceEdit, attribute: String, label: String, type: String, spelling: HoleSpelling, holeName: String, erasedName: String, protocolName: String, isSendableGraph: Bool) -> (properties: [Property], declarations: [(Rendering) -> String])? {
+		let place = Property(attribute: attribute, label: label, type: type)
+		switch (edit, spelling) {
+		case (.placeBehindLazilyInstantiated, .plain), (.placeBehindLazilyInstantiated, .existential):
+			// A `LazilyInstantiated` is not `Sendable`, and a `SendableLazilyInstantiated` place is another family.
+			return isSendableGraph ? nil : ([Property(attribute: attribute, label: label, type: "LazilyInstantiated<\(type)>")], [])
+		case (.instantiatorPlaceMovedToPlainPlace, .instantiator):
+			return ([Property(attribute: attribute, label: label, type: holeName)], [])
+		case (.instantiatorChangedToErasedInstantiator, .instantiator):
+			return ([Property(attribute: "@Instantiated(fulfilledByType: \"\(holeName)\")", label: label, type: "ErasedInstantiator<\(holeName).ForwardedProperties, \(holeName)>")], [])
+		case (.placeOfNewBuilderOfExistingFillingType, .erasedConstant), (.placeOfNewBuilderOfExistingFillingType, .erasedInstantiator):
+			// A second erasure of the fill, to a second eraser: a builder of the same filling type returning another type.
+			let otherErasedName = erasedName + "Other"
+			let otherType = spelling == .erasedConstant ? otherErasedName : "ErasedInstantiator<(), \(otherErasedName)>"
+			return ([place, Property(attribute: attribute, label: label + "Other", type: otherType)], [{ rendering in
+				[
+					"\(rendering.modifier(.public))struct \(otherErasedName): \(protocolName) {",
+					"\t\(rendering.modifier(.public))init(_ value: any \(protocolName)) {",
+					"\t\tself.value = value",
+					"\t}",
+					"",
+					"\t\(rendering.modifier(.public))let value: any \(protocolName)",
+					"}",
+				].joined(separator: "\n")
+			}])
+		case (.placeForwardingOtherValues, .plain), (.placeForwardingOtherValuesRemedied, .plain):
+			let forwarded = edit == .placeForwardingOtherValues ? "Int" : "()"
+			return ([place, Property(attribute: "@Instantiated(fulfilledByType: \"\(holeName)\")", label: label + "Forwarding", type: "ErasedInstantiator<\(forwarded), \(holeName)>")], [])
+		case (.secondPlaceInAnotherType, _), (.placeBehindLazilyInstantiated, _), (.instantiatorPlaceMovedToPlainPlace, _), (.instantiatorChangedToErasedInstantiator, _), (.placeOfNewBuilderOfExistingFillingType, _), (.placeForwardingOtherValues, _), (.placeForwardingOtherValuesRemedied, _):
+			return nil
+		}
+	}
+
 	static func builderLabel(ofTypeNamed typeName: String) -> String {
 		let characters = Array(typeName)
 		let capitalCount = characters.prefix { $0.isUppercase }.count
