@@ -2363,19 +2363,18 @@ extension GraphFuzzerFixture {
 	static let handWrittenBuilderProbeNameSuffix = " built through a hand-written builder"
 
 	/// A probe building `RetainHome`, the seam of `GraphFuzzerGenerator`'s retention draw, through a builder written by
-	/// hand that reads nothing, `{ _ in RetainLive() }`, beside the inline build of the same tree, `RetainRoot().retainHome`,
-	/// so that the retention oracle judges what a hand-written builder keeps alive; `nil` when the graph has no such seam,
-	/// when its fill reads a value, which a builder that reads nothing cannot hand it, or when no generated initializer of
-	/// the seam takes the builder.
+	/// hand that reads nothing, beside the inline build of the same tree, `RetainRoot().retainHome`, so that the retention
+	/// oracle judges what a hand-written builder keeps alive; `nil` when the graph has no such seam, when its fill reads a
+	/// value, which a builder that reads nothing cannot hand it, or when no readable initializer of the seam takes the
+	/// builder.
 	///
-	/// The probe calls the initializer only generated code calls, since no module of the corpus sets
-	/// `generatePlainDependencyTreeInitializers`, and hands it the builder as the readable initializer does: unchanged, since
-	/// the readable initializer takes the same builder type and forwards it as it is (`generateSeamRootCode`), so that what
-	/// the builder keeps alive through either is the same. Should the generated-only initializer come to take a builder of
-	/// another type, the probe does not compile and every graph that has it fails as
-	/// `valueComparatorCouldNotDescribeGraph`, rather than the probe dropping out: the probe must then call the readable
-	/// initializer, and the corpus must generate it. The long run pins how many graphs the probe judged
-	/// (`GraphFuzzerRetentionCounts.judgedThroughHandWrittenBuilder`).
+	/// The probe calls the readable initializer, which every seam module of the corpus generates, as a person does, and
+	/// writes the builder as its type takes it: `{ RetainLive() }` where the type is a closure that takes nothing, `() -> T`
+	/// or `@Sendable () -> T` (the builder takes a builder struct, which the readable initializer makes from it), and
+	/// `{ _ in RetainLive() }` where it takes the scope (the builder keeps its closure over the enum, as when `RetainHome`
+	/// holds another seam's scope). A readable initializer of another form leaves the probe uncompiled, and every graph that
+	/// has it fails as `valueComparatorCouldNotDescribeGraph`, rather than the probe dropping out. The long run pins how many
+	/// graphs the probe judged (`GraphFuzzerRetentionCounts.judgedThroughHandWrittenBuilder`).
 	private func handWrittenRetentionProbe(generatedFiles: [String: String]) -> DifferentialValueProbe? {
 		let homeName = typeNamePrefix + "RetainHome"
 		let liveName = typeNamePrefix + "RetainLive"
@@ -2395,17 +2394,19 @@ extension GraphFuzzerFixture {
 				}
 			}
 		}
-		let initializerPrefix = "public convenience init(__safeDI_"
+		let initializerPrefix = "public convenience init("
 		guard declaresHome, !liveReadsValue,
 		      let homeFile = generatedFiles.first(where: { $0.key.hasSuffix("/\(homeName)+SafeDI.swift") })?.value,
-		      let initializerLine = homeFile.split(separator: "\n").lazy.map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { $0.hasPrefix(initializerPrefix) }),
+		      let initializerLine = homeFile.split(separator: "\n").lazy.map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { $0.hasPrefix(initializerPrefix) && !$0.hasPrefix(initializerPrefix + "__safeDI_") }),
 		      // A label equal to another parameter's ends with `_`.
 		      let separator = initializerLine.range(of: "Builder_*: ", options: .regularExpression)
 		else { return nil }
-		let label = initializerLine[initializerLine.index(initializerLine.startIndex, offsetBy: "public convenience init(".count)..<initializerLine.index(separator.upperBound, offsetBy: -2)]
+		let label = initializerLine[initializerLine.index(initializerLine.startIndex, offsetBy: initializerPrefix.count)..<initializerLine.index(separator.upperBound, offsetBy: -2)]
+		let parameterType = initializerLine[separator.upperBound...]
+		let takesNothing = parameterType.hasPrefix("@escaping () -> ") || parameterType.hasPrefix("@escaping @Sendable () -> ")
 		return DifferentialValueProbe(
 			name: homeName + Self.handWrittenBuilderProbeNameSuffix,
-			expression: "\(homeName)(\(label): { _ in \(liveName)() })",
+			expression: "\(homeName)(\(label): { \(takesNothing ? "" : "_ in ")\(liveName)() })",
 			knownRightExpression: "\(typeNamePrefix)RetainRoot().retainHome",
 		)
 	}

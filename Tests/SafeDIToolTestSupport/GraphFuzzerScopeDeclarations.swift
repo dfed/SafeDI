@@ -394,6 +394,18 @@ private final class ScopeEnumCollector: SyntaxVisitor {
 		return .skipChildren
 	}
 
+	/// Whether `structDeclaration`, declared in `enumDeclaration`, is the payload struct of one of its cases: not the level's
+	/// builder struct (`__safeDI_Builder`), and not the empty struct a member of a `@Sendable` enum's case takes, which no
+	/// case carries.
+	private static func isValuesStruct(_ structDeclaration: StructDeclSyntax, of enumDeclaration: EnumDeclSyntax) -> Bool {
+		let name = structDeclaration.name.text
+		return enumDeclaration.memberBlock.members.contains { member in
+			member.decl.as(EnumCaseDeclSyntax.self)?.elements.contains { element in
+				element.parameterClause?.parameters.contains { $0.type.trimmedDescription.split(separator: ".").last.map(String.init) == name } ?? false
+			} ?? false
+		}
+	}
+
 	private func collect(_ enumDeclaration: EnumDeclSyntax, extendedType: String, enclosingPath: [String]) {
 		let path = enclosingPath + [enumDeclaration.name.text]
 		// Each enum before the enums nested in it, so that enums are listed in the order a reader meets them.
@@ -411,7 +423,7 @@ private final class ScopeEnumCollector: SyntaxVisitor {
 				}
 			} else if let nestedEnum = member.decl.as(EnumDeclSyntax.self) {
 				nestedEnums.append(nestedEnum)
-			} else if let structDeclaration = member.decl.as(StructDeclSyntax.self) {
+			} else if let structDeclaration = member.decl.as(StructDeclSyntax.self), Self.isValuesStruct(structDeclaration, of: enumDeclaration) {
 				var fields = [String]()
 				for structMember in structDeclaration.memberBlock.members {
 					guard let variable = structMember.decl.as(VariableDeclSyntax.self) else { continue }
