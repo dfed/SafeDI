@@ -47,5 +47,5 @@ def write_module(directory, imports, types, extra=""):
     import os
 
     os.makedirs(directory, exist_ok=True)
-    with open(os.path.join(directory, "Types.swift"), "w") as file:
+    with open(os.path.join(directory, "Types.swift.txt"), "w") as file:
         file.write("".join(f"import {module}\n" for module in imports) + "\n" + extra + "\n".join(types))

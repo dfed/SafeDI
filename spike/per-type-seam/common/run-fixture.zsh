@@ -6,18 +6,21 @@
 set -uo pipefail
 fixture=${1:A}; shift
 common=${0:A:h}
-mkdir -p "$fixture/results"; rm -f "$fixture/results"/*.txt(N)
+spike=${common:h}
+output_root=${SPIKE_OUTPUT:-$HOME/.cache/per-type-seam-spike}
+mkdir -p "$fixture/results"
+for variant in "$@"; do rm -f "$fixture/results/$variant"-*(N); done
 reference=""
 for variant in "$@"; do
 	for optimization in Onone O; do
 		result="$fixture/results/$variant-$optimization"
 		if "$common/build.zsh" "$fixture/$variant" $optimization >"$result.build.log" 2>&1; then
-			"$fixture/$variant/.out-$optimization/main" >"$result.txt" 2>&1 || echo "exit $?" >>"$result.txt"
+			"$output_root/${fixture#$spike/}/$variant/out-$optimization/main" >"$result.txt" 2>&1 || echo "exit $?" >>"$result.txt"
 			[[ -z "$reference" ]] && reference="$result.txt"
 			if cmp -s "$reference" "$result.txt"; then echo "$variant -$optimization: trace equals ${reference:t}"; else echo "$variant -$optimization: trace DIFFERS from ${reference:t}"; fi
 			rm -f "$result.build.log"
 		else
-			grep -E "error:" "$result.build.log" | sed "s|$fixture/||g" | sort -u >"$result.error.txt"
+			grep -E "error:" "$result.build.log" | sed -e "s|$output_root/${fixture#$spike/}/||g" -e "s|$fixture/||g" | sort -u >"$result.error.txt"
 			echo "$variant -$optimization: does not compile ($(wc -l <"$result.error.txt") distinct errors)"
 			rm -f "$result.build.log"
 		fi

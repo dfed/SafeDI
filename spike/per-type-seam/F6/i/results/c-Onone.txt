@@ -1,0 +1,10 @@
+trace:
+  LiveApi#1()
+  T#1(api: LiveApi#1)
+  Hub#1(t: T#1, tBuilder: builder)
+  Root#1(hub: Hub#1)
+  LiveApi#2()
+  T#2(api: LiveApi#2)
+  LiveApi#3()
+  T#3(api: LiveApi#3)
+alive after dropping everything: none

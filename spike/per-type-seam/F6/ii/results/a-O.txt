@@ -1,0 +1,10 @@
+trace:
+  Home#1(screenBuilder: builder)
+  Root#1(home: Home#1)
+  LiveApi#1()
+  Screen#1(api: LiveApi#1, again: builder)
+  LiveApi#2()
+  Screen#2(api: LiveApi#2, again: builder)
+  LiveApi#3()
+  Screen#3(api: LiveApi#3, again: builder)
+alive after dropping everything: none

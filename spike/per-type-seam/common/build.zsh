@@ -6,7 +6,8 @@
 # mode `hand`: the module's hand-written generated code is VARIANT/<Module>/Generated/*.swift (or *.swift.txt);
 # mode `plain`: no generated code. The last module is the executable, whose Sources hold main.swift.
 # Sources are VARIANT/<Module>/Sources/*.swift(.txt) plus ../shared/<Module>/*.swift(.txt) when VARIANT/<Module>/shared names a folder.
-# OPTIMIZATION is Onone or O. Output: VARIANT/.out-OPTIMIZATION/, the executable `main`.
+# OPTIMIZATION is Onone or O. Output, outside the checkout so SwiftFormat never reads it:
+# ${SPIKE_OUTPUT:-~/.cache/per-type-seam-spike}/<variant path>/out-OPTIMIZATION/, the executable `main`.
 set -euo pipefail
 variant=${1:A}; optimization=$2; shift 2
 extra=("$@")
@@ -16,7 +17,8 @@ bin=$(cd "$repository" && swift build --traits sourceBuild --show-bin-path)
 tool="$bin/SafeDITool"
 macros="$bin/SafeDIMacros-tool"
 module_search_path="$bin/Modules"; [[ -e "$module_search_path/SafeDI.swiftmodule" ]] || module_search_path="$bin"
-output="$variant/.out-$optimization"; rm -rf "$output"; mkdir -p "$output/src"
+output_root=${SPIKE_OUTPUT:-$HOME/.cache/per-type-seam-spike}
+output="$output_root/${variant#$spike/}/out-$optimization"; rm -rf "$output"; mkdir -p "$output/src"
 safedi_objects=("$bin"/SafeDI.build/*.o)
 if (( ${extra[(I)-enable-library-evolution]} )); then
 	# Library evolution: SafeDI itself is compiled with it too, from the checkout's sources, so no warning (an error under
