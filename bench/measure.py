@@ -238,8 +238,12 @@ def csv_mode(arguments, variants):
         raise SystemExit("--safedi names a checkout for the SafeDI library when every variant is a binary")
     work = os.path.abspath(arguments.workdir)
     package = os.path.join(work, "driver")
-    shutil.rmtree(package, ignore_errors=True)
-    os.makedirs(package)
+    # Keep the driver's `.build`, so the SafeDI library and macros build once per workdir, not once per graph.
+    os.makedirs(package, exist_ok=True)
+    for entry in os.listdir(package):
+        if entry != ".build":
+            path = os.path.join(package, entry)
+            shutil.rmtree(path) if os.path.isdir(path) else os.remove(path)
     report = {"mode": "csv", "input": files_csv, "machine": machine(), "variants": {}}
     for name, path in variants:
         binary = tool_binary(path)
