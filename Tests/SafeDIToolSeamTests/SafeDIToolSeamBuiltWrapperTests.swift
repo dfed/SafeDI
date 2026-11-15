@@ -583,18 +583,18 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_65C4D564EA60E99F.self\(seamCallComment(seam: "Host"))
-		            func __safeDI_defaultGadget_GadgetBuilder_Host(_ scope: Host.SafeDIScope_DefaultGadget_Gadget) -> any Gadget {
-		                switch scope {
-		                case let .part(scope):
-		                    let analytics = scope.analytics
-		                    func __safeDI_part() -> DefaultGadget {
-		                        DefaultGadget(analytics: analytics)
-		                    }
-		                    return __safeDI_part()
+		            _ = Host.__safeDI_Host_8897BFE4AFEC13D7.self\(seamCallComment(seam: "Host"))
+		            func __safeDI_defaultGadget_GadgetBuilder_Host_part(_ scope: Host.SafeDIScope_DefaultGadget_Gadget.part_Values) -> any Gadget {
+		                let analytics = scope.analytics
+		                func __safeDI_part() -> DefaultGadget {
+		                    DefaultGadget(analytics: analytics)
 		                }
+		                return __safeDI_part()
 		            }
-		            return Host(__safeDI_defaultGadget_GadgetBuilder: __safeDI_defaultGadget_GadgetBuilder_Host)
+		            func __safeDI_defaultGadget_GadgetBuilder_Host() -> Host.SafeDIScope_DefaultGadget_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(part: { scope in __safeDI_defaultGadget_GadgetBuilder_Host_part(scope) })
+		            }
+		            return Host(__safeDI_defaultGadget_GadgetBuilder: __safeDI_defaultGadget_GadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)
@@ -1115,18 +1115,18 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_gadgetSendableBuilder: @escaping @Sendable (SafeDISendableScope_Gadget) -> any Gadget) {
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_6C2AA56F3C357B96.self\(seamCallComment(seam: "Inner"))
-		            @Sendable func __safeDI_widgetSendableBuilder_Inner(_ scope: Inner.SafeDISendableScope_Widget) -> any Widget {
-		                switch scope {
-		                case .widget:
-		                    @Sendable func __safeDI_widget() -> DefaultWidget {
-		                        let gadget: any Gadget = __safeDI_gadgetSendableBuilder(.inner_widgetSendableBuilder(.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())))
-		                        return DefaultWidget(gadget: gadget)
-		                    }
-		                    return __safeDI_widget()
+		            _ = Inner.__safeDI_Inner_C965CB17F84BDA80.self\(seamCallComment(seam: "Inner"))
+		            @Sendable func __safeDI_widgetSendableBuilder_Inner_widget() -> any Widget {
+		                @Sendable func __safeDI_widget() -> DefaultWidget {
+		                    let gadget: any Gadget = __safeDI_gadgetSendableBuilder(.inner_widgetSendableBuilder(.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())))
+		                    return DefaultWidget(gadget: gadget)
 		                }
+		                return __safeDI_widget()
 		            }
-		            return Inner(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Inner)
+		            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner() -> Inner.SafeDISendableScope_Widget.__safeDI_Builder<any Widget> {
+		                .init(widget: { _ in __safeDI_widgetSendableBuilder_Inner_widget() })
+		            }
+		            return Inner(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Inner())
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(inner: inner)
@@ -2203,18 +2203,18 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_608C4A7ED2050B31.self\(seamCallComment(seam: "Host"))
-		            func __safeDI_gadgetBuilder_Host(_ scope: Host.SafeDIScope_Gadget) -> any Gadget {
-		                switch scope {
-		                case .part:
-		                    func __safeDI_part() -> DefaultGadget {
-		                        let kid = Kid(part: nil)
-		                        return DefaultGadget(kid: kid)
-		                    }
-		                    return __safeDI_part()
+		            _ = Host.__safeDI_Host_9924CE87A9E113ED.self\(seamCallComment(seam: "Host"))
+		            func __safeDI_gadgetBuilder_Host_part(_ scope: Host.SafeDIScope_Gadget.part_Values) -> any Gadget {
+		                func __safeDI_part() -> DefaultGadget {
+		                    let kid = Kid(part: nil)
+		                    return DefaultGadget(kid: kid)
 		                }
+		                return __safeDI_part()
 		            }
-		            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host)
+		            func __safeDI_gadgetBuilder_Host() -> Host.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(part: { scope in __safeDI_gadgetBuilder_Host_part(scope) })
+		            }
+		            return Host(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host())
 		        }
 		        let host: Host = __safeDI_host()
 		        self.init(host: host)

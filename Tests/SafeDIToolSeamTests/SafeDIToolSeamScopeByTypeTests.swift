@@ -57,7 +57,7 @@ struct SafeDIToolSeamScopeByTypeTests: ~Copyable {
 		let featureFile = try #require(output.modules["Feature"]?.generatedFiles["Feature.swift"])
 		let enumDeclaration = try #require(featureFile.components(separatedBy: "    /// Only code SafeDI generates calls this initializer").first)
 		let caseCount = enumDeclaration.components(separatedBy: "\n").filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("case ") }.count
-		let enumCount = enumDeclaration.components(separatedBy: "@frozen public enum ").count - 1
+		let enumCount = enumDeclaration.components(separatedBy: "@frozen nonisolated public enum ").count - 1
 		#expect(caseCount == 72)
 		#expect(enumCount == 29)
 		// One dispatcher per enum, one-level switches: the caller compiled above.

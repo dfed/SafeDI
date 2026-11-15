@@ -3524,30 +3524,43 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.feedModules(), integration: integration, filesToDelete: &filesToDelete)
 		let feedFile = generatedFileHeader + Self.importLines("SharedModule") + """
 		extension FeedScreen {
-		    @frozen public enum SafeDIScope_FeedService {
+		    @frozen nonisolated public enum SafeDIScope_FeedService {
 		        case service(service_Values)
 
-		        public struct service_Values {
+		        nonisolated public struct service_Values {
 		            package let shared: SharedThing
 		            internal let store: FeedStore
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<Built> {
+		            public let service: (service_Values) -> Built
+
+		            public init(service: @escaping (service_Values) -> Built) {
+		                self.service = service
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                self.service = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    package convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: @escaping (SafeDIScope_FeedService) -> FeedService) {
+		    package convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: SafeDIScope_FeedService.__safeDI_Builder<FeedService>) {
 		        func __safeDI_store() -> FeedStore {
 		            let formatter = FeedFormatter()
 		            return FeedStore(shared: shared, formatter: formatter)
 		        }
 		        let store: FeedStore = __safeDI_store()
-		        let service: FeedService = __safeDI_feedServiceBuilder(.service(SafeDIScope_FeedService.service_Values(shared: shared, store: store)))
+		        let service: FeedService = __safeDI_feedServiceBuilder.service(SafeDIScope_FeedService.service_Values(shared: shared, store: store))
 		        self.init(shared: shared, store: store, service: service)
 		    }
 		}
 
 		extension FeedScreen {
-		    public enum __safeDI_FeedScreen_20605C185CC47251 {}
+		    public enum __safeDI_FeedScreen_5EDDB5C26FC4A689 {}
 		}
 		"""
 		let pluginComment = integration.seamCallComment(type: "FeedScreen", declaringModule: "FeedModule")
@@ -3556,16 +3569,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		    public convenience init() {
 		        let shared = SharedThing()
 		        func __safeDI_feed() -> FeedScreen {
-		            _ = FeedScreen.__safeDI_FeedScreen_20605C185CC47251.self\(pluginComment)
-		            func __safeDI_feedServiceBuilder_FeedScreen(_ scope: FeedScreen.SafeDIScope_FeedService) -> FeedService {
-		                switch scope {
-		                case let .service(scope):
+		            _ = FeedScreen.__safeDI_FeedScreen_5EDDB5C26FC4A689.self\(pluginComment)
+		            func __safeDI_feedServiceBuilder_FeedScreen() -> FeedScreen.SafeDIScope_FeedService.__safeDI_Builder<FeedService> {
+		                .init(service: { scope in
 		                    let shared = scope.shared
 		                    let service: FeedService = AppFeedService(shared: shared)
 		                    return service
-		                }
+		                })
 		            }
-		            return FeedScreen(__safeDI_shared: shared, __safeDI_feedServiceBuilder: __safeDI_feedServiceBuilder_FeedScreen)
+		            return FeedScreen(__safeDI_shared: shared, __safeDI_feedServiceBuilder: __safeDI_feedServiceBuilder_FeedScreen())
 		        }
 		        let feed: FeedScreen = __safeDI_feed()
 		        self.init(shared: shared, feed: feed)

@@ -1230,20 +1230,17 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        }
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_DA263E0F696E2E8F.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
-			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-			                switch scope {
-			                case let .profileBuilder(_, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope)
-			                }
+			            _ = Service.__safeDI_Service_9AADC159198E5E15.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
+			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                .init(profileBuilder: { _ in __safeDI_userServiceBuilder_Service_Profile_Scope() })
 			            }
-			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope) -> any UserService {
-			                switch scope {
-			                case .userService:
+			            func __safeDI_userServiceBuilder_Service_Profile_Scope() -> Service.SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<any UserService> {
+			                .init(userService: { _ in
 			                    let userService: any UserService = DefaultUserService(token: token.instance)
 			                    return userService
-			                }
+			                })
 			            }
-			            return Service(__safeDI_token: token.instance, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			            return Service(__safeDI_token: token.instance, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			        }
 			        let service: Service = __safeDI_service()
 			        self.init(token: token, service: service)
