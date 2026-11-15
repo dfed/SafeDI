@@ -6492,12 +6492,13 @@ struct SafeDIToolGraphFuzzerTests {
 	static let seamCombinationCorpusAcceptedDrawFeatureCounts = GraphFuzzerSeamDrawFeature.allCases.filter(\.isCombinationShape).reduce(into: [GraphFuzzerSeamDrawFeature: Int]()) { counts, feature in
 		counts[feature] = 15
 	}
+
 	/// The seam combination corpus's seeds that fail today, grouped by shape: every graph draws a hole, so every graph
 	/// fails the builder surface's base check until the planned builder structs, and two cells find defects of their own.
 	static let seamCombinationKnownIssues = addingBuilderSurfaceShapes(
 		seeds: BuilderSurfaceSeeds(
 			// Every seed of the corpus: each graph's cell holds a hole the tool accepts, so the base check judges and fails each.
-			base: Array(0 ..< UInt64(seamCombinationCorpusSeedCount)),
+			base: Array(0..<UInt64(seamCombinationCorpusSeedCount)),
 			labels: [],
 			sameSupply: [],
 			sameSupplyReason: seamMockTakesHoleValueReason,
@@ -6599,13 +6600,14 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCombinationCorpusAcceptedDrawFeatureCounts = GraphFuzzerPublicMockDrawFeature.allCases.filter(\.isCombinationShape).reduce(into: [GraphFuzzerPublicMockDrawFeature: Int]()) { counts, feature in
 		counts[feature] = 15
 	}
+
 	/// The public mock combination corpus's seeds that fail today, grouped by shape: every graph draws a hole, so every
 	/// graph fails the builder surface's base check until the planned builder structs.
 	static let publicMockCombinationKnownIssues = addingBuilderSurfaceShapes(
 		seeds: BuilderSurfaceSeeds(
 			// Every seed of the corpus: each graph's `ComboHome` holds a place its module cannot fill, so the base check judges
 			// and fails each.
-			base: Array(0 ..< UInt64(publicMockCombinationCorpusSeedCount)),
+			base: Array(0..<UInt64(publicMockCombinationCorpusSeedCount)),
 			labels: [],
 			sameSupply: [],
 			sameSupplyReason: callingMockTakesHoleValueReason,

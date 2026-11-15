@@ -193,7 +193,7 @@ struct GraphFuzzerCombinationDraw {
 	/// The seed's public mock cell, drawn as `seamDeclarations()` draws a seam cell, or its known-right path: every
 	/// initializer `public` and every `.public` mock `true`, so that the consumer's mock builds the type inline.
 	mutating func publicMockDeclarations(isKnownRight: Bool) -> [TypeDeclaration] {
-		var declarations = self.declarations(of: Self.publicMockCell(forSeed: seed))
+		var declarations = declarations(of: Self.publicMockCell(forSeed: seed))
 		guard isKnownRight else { return declarations }
 		for index in declarations.indices {
 			declarations[index].initializerAccess = nil
@@ -426,7 +426,7 @@ struct GraphFuzzerCombinationDraw {
 			if column == .publicMock, position == .insideFill, let homeIndex = declarations.firstIndex(where: { $0.name == name("ComboHome") }) {
 				declarations[homeIndex].properties.append(PropertyDeclaration(attribute: "@Received", label: "comboLazy", type: "\(lazilyInstantiated)<\(lazy.name)>"))
 			}
-			let receive: PropertyDeclaration = switch variantRoll {
+			let receive = switch variantRoll {
 			case 0..<40: PropertyDeclaration(attribute: "@Received", label: "comboLazy", type: "\(lazilyInstantiated)<\(lazy.name)>")
 			case 40..<70: PropertyDeclaration(attribute: "@Received", label: "comboLazy", type: lazy.name)
 			default: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "comboLazy", type: "\(lazilyInstantiated)<\(lazy.name)>?")
