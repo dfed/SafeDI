@@ -102,6 +102,24 @@ struct SpikePerTypeCorpusTests {
 				report("rejected \(seed)")
 				continue
 			}
+			if textOnly {
+				// The emitter itself, run with per-type emission on: every file but a root's `init()` body must be the
+				// per-path text, and a root's must be the pass's.
+				unsetenv("SAFEDI_PER_PATH_EMISSION")
+				let emitted = try await GraphFuzzerOracle.toolOutcome(of: fixture)
+				setenv("SAFEDI_PER_PATH_EMISSION", "1", 1)
+				guard case let .accepted(emittedFiles, _) = emitted else {
+					report("emitterRejects \(seed)")
+					Issue.record("Seed \(seed): the per-type emitter rejects a graph the per-path emitter accepts")
+					continue
+				}
+				let differing = Set(emittedFiles.keys).union(generatedFiles.keys).sorted().filter { emittedFiles[$0] != generatedFiles[$0] }
+				let disagreeing = differing.filter { emittedFiles[$0] != generatedFiles[$0].map(PerTypeEmission.transformGeneratedFile) }
+				report("emitted \(seed) filesChanged=\(differing.count) disagreeWithPass=\(disagreeing.joined(separator: ","))")
+				if !disagreeing.isEmpty {
+					Issue.record("Seed \(seed): the emitter changed \(disagreeing) other than its pass does")
+				}
+			}
 			let perTypeFiles = generatedFiles.mapValues(PerTypeEmission.transformGeneratedFile)
 			let again = perTypeFiles.mapValues(PerTypeEmission.transformGeneratedFile)
 			if again != perTypeFiles {

@@ -63,6 +63,10 @@ public enum PerTypeEmission {
 		/// brief's key (which leaves out whether a declaration exists) would share and this pass's text key does not.
 		var typesSplitOnlyByNil = 0
 		var placesSplitOnlyByNil = 0
+		/// Sets of groups that call one another around a cycle, shared at once, with their groups and places.
+		var cyclicComponents = 0
+		var cyclicGroups = 0
+		var cyclicPlaces = 0
 	}
 
 	/// A generated file with the body of every root's `init()` shared per type, as the emitter shares it: for a test that
@@ -115,7 +119,16 @@ public enum PerTypeEmission {
 				statistics.typesWithTwoOrMoreFunctionsBefore = pass.typesWithTwoOrMoreFunctions
 				first = false
 			}
-			guard let next = pass.shareInnermostGroups(statistics: &statistics) else {
+			// Failures count only once nothing more is shared: a cycle's component can clear them.
+			var passStatistics = statistics
+			let next: String
+			if let shared = pass.shareInnermostGroups(statistics: &passStatistics) {
+				statistics = passStatistics
+				next = shared
+			} else if let shared = pass.shareCyclicComponent(statistics: &statistics) {
+				next = shared
+			} else {
+				statistics = passStatistics
 				statistics.typesWithTwoOrMoreFunctionsAfter = pass.typesWithTwoOrMoreFunctions
 				pass.countSplitOnlyByNil(statistics: &statistics)
 				break
@@ -184,6 +197,15 @@ public enum PerTypeEmission {
 		let callHasArguments: Bool
 		/// For a reference passed as an argument: the called expression's text.
 		let argumentOfCallee: String?
+		/// For a reference that is a labeled argument's whole expression: the label.
+		let argumentLabel: String?
+	}
+
+	/// A `label: nil` argument.
+	private struct NilArgument {
+		let label: String
+		let offset: Int
+		let scope: Int
 	}
 
 	private struct Function {
@@ -219,6 +241,7 @@ public enum PerTypeEmission {
 		var functionIndexBySyntax = [SyntaxIdentifier: Int]()
 		var allIdentifiers = Set<String>()
 		var unsupportedScopes = Set<Int>()
+		var nilArguments = [NilArgument]()
 		lazy var referencesByDeclaration: [Int: [Int]] = {
 			var result = [Int: [Int]]()
 			for (index, reference) in references.enumerated() {
@@ -396,6 +419,9 @@ public enum PerTypeEmission {
 				}
 				return
 			}
+			if let argument = node.as(LabeledExprSyntax.self), argument.expression.is(NilLiteralExprSyntax.self), let label = argument.label {
+				nilArguments.append(NilArgument(label: label.text, offset: argument.expression.positionAfterSkippingLeadingTrivia.utf8Offset, scope: scope))
+			}
 			if node.is(SwitchExprSyntax.self) || node.is(IfExprSyntax.self) || node.is(GuardStmtSyntax.self) || node.is(ForStmtSyntax.self) {
 				unsupportedScopes.insert(scope)
 			}
@@ -411,6 +437,7 @@ public enum PerTypeEmission {
 				} else if let call = reference.parent?.parent?.parent?.as(FunctionCallExprSyntax.self) {
 					argumentOfCallee = call.calledExpression.trimmedDescription
 				}
+				let labeledArgument = reference.parent?.as(LabeledExprSyntax.self)
 				references.append(Reference(
 					name: name,
 					offset: reference.positionAfterSkippingLeadingTrivia.utf8Offset,
@@ -420,6 +447,7 @@ public enum PerTypeEmission {
 					callRightParen: callRightParen,
 					callHasArguments: callHasArguments,
 					argumentOfCallee: argumentOfCallee,
+					argumentLabel: labeledArgument?.expression.id == reference.id ? labeledArgument?.label?.text : nil,
 				))
 				return
 			}
@@ -790,6 +818,367 @@ public enum PerTypeEmission {
 			))
 		}
 
+		/// Shares the functions of a cycle, which `shareInnermostGroups` cannot share one group at a time: a closer calls
+		/// the function of the declaration it repeats, which encloses it, so each copy holds or calls the others, and the
+		/// copies' texts differ by where the cycle closes. Functions are classed by bisimulation – their text without the
+		/// candidate functions they declare, then the classes of the functions each reference names, refined until stable –
+		/// and every class reached from one of two or more members moves, as one function, to one block, where local
+		/// functions can call one another. `nil` when there is nothing to share.
+		/// The first member's parameters, each made optional where any member takes it optionally.
+		func unifiedParametersText(of members: [Int]) -> String {
+			let parameterLists = members.map { Array(functions[$0].syntax.signature.parameterClause.parameters) }
+			guard let first = parameterLists.first else { return "" }
+			var parts = [String]()
+			for (index, parameter) in first.enumerated() {
+				let optional = parameterLists.contains { index < $0.count && $0[index].type.is(OptionalTypeSyntax.self) }
+				let type = parameter.type.is(OptionalTypeSyntax.self) || !optional ? parameter.type.trimmedDescription : "\(parameter.type.trimmedDescription)?"
+				let names = [parameter.firstName.text] + (parameter.secondName.map { [$0.text] } ?? [])
+				parts.append("\(names.joined(separator: " ")): \(type)")
+			}
+			return parts.joined(separator: ", ")
+		}
+
+		func shareCyclicComponent(statistics: inout Statistics) -> String? {
+			let candidates = candidateFunctions
+			let candidateSet = Set(candidates)
+			// The candidate functions declared inside each candidate, directly or deeper.
+			var nestedByFunction = [Int: [Int]]()
+			for function in candidates {
+				nestedByFunction[function] = candidates.filter { $0 != function && functions[function].lineRange.contains(functions[$0].lineRange.lowerBound) }
+			}
+			func isInsideNested(_ offset: Int, of function: Int) -> Bool {
+				nestedByFunction[function, default: []].contains { functions[$0].lineRange.contains(offset) }
+			}
+			// The references in a function's own text (outside the candidates it declares), in order.
+			var ownReferencesByFunction = [Int: [Reference]]()
+			for function in candidates {
+				let range = functions[function].lineRange
+				ownReferencesByFunction[function] = references.filter { range.contains($0.offset) && !isInsideNested($0.offset, of: function) }
+			}
+			var ownNilArgumentsByFunction = [Int: [NilArgument]]()
+			for function in candidates {
+				let range = functions[function].lineRange
+				ownNilArgumentsByFunction[function] = nilArguments.filter { range.contains($0.offset) && !isInsideNested($0.offset, of: function) }
+			}
+			func targetFunction(of reference: Reference) -> Int? {
+				guard let declaration = reference.declaration, let function = declarations[declaration].function, candidateSet.contains(function) else { return nil }
+				return function
+			}
+			// The initial key: the text without nested candidates, every candidate reference's name abstracted.
+			func strippedKey(of function: Int) -> String {
+				let declaration = functions[function]
+				var edits = nestedByFunction[function, default: []].map { Edit.replace(functions[$0].lineRange, "") }
+				for reference in ownReferencesByFunction[function, default: []] {
+					if targetFunction(of: reference) != nil {
+						edits.append(.replace(reference.offset..<(reference.offset + reference.length), "@F@"))
+					} else if reference.argumentLabel == reference.name {
+						// Whether a declaration exists is not in the key: `x: x` and `x: nil` key alike.
+						edits.append(.replace(reference.offset..<(reference.offset + reference.length), "@V@"))
+					}
+				}
+				for argument in ownNilArgumentsByFunction[function, default: []] {
+					edits.append(.replace(argument.offset..<(argument.offset + 3), "@V@"))
+				}
+				edits.append(.replace(declaration.nameRange, "@F@"))
+				// Whether a parameter is optional is not in the key: a member that takes `x: X?` runs the same text as one
+				// that takes `x: X`, so the shared function takes `X?` (`unifiedParametersText`).
+				for parameter in declaration.syntax.signature.parameterClause.parameters {
+					guard let optional = parameter.type.as(OptionalTypeSyntax.self) else { continue }
+					let start = optional.positionAfterSkippingLeadingTrivia.utf8Offset
+					edits.append(.replace(start..<optional.endPositionBeforeTrailingTrivia.utf8Offset, optional.wrappedType.trimmedDescription))
+				}
+				var text = render(declaration.lineRange, edits: edits)
+				text = text.split(separator: "\n", omittingEmptySubsequences: false).map { line in
+					line.hasPrefix(declaration.indentation) ? String(line.dropFirst(declaration.indentation.count)) : String(line)
+				}.joined(separator: "\n")
+				return text
+			}
+			var classOf = [Int: Int]()
+			var classKeys = [String: Int]()
+			for function in candidates {
+				let key = strippedKey(of: function)
+				if classKeys[key] == nil { classKeys[key] = classKeys.count }
+				classOf[function] = classKeys[key]
+			}
+			// Refine by the classes each function's references name, until no class splits.
+			while true {
+				var refinedKeys = [String: Int]()
+				var refined = [Int: Int]()
+				for function in candidates {
+					let targets = ownReferencesByFunction[function, default: []].compactMap(targetFunction).map { String(classOf[$0] ?? -1) }
+					let key = "\(classOf[function] ?? -1)|" + targets.joined(separator: ",")
+					if refinedKeys[key] == nil { refinedKeys[key] = refinedKeys.count }
+					refined[function] = refinedKeys[key]
+				}
+				let stable = refinedKeys.count == Set(classOf.values).count
+				classOf = refined
+				if stable { break }
+			}
+			var membersByClass = [Int: [Int]]()
+			for function in candidates {
+				membersByClass[classOf[function] ?? -1, default: []].append(function)
+			}
+			guard membersByClass.values.contains(where: { $0.count > 1 }) else { return nil }
+			func fail(_ reason: String) -> String? {
+				statistics.notSharedByReason["cycle: " + reason, default: 0] += 1
+				return nil
+			}
+			// Each member's value reads from outside it.
+			// Each member's value reads from outside it, in order; a `label: nil` argument reads `label` as `nilRead`.
+			let nilRead = -1
+			func valueReads(of function: Int) -> [(name: String, declaration: Int)] {
+				let range = functions[function].lineRange
+				var reads = ownReferencesByFunction[function, default: []].compactMap { reference -> (name: String, declaration: Int, offset: Int)? in
+					guard let declaration = reference.declaration, targetFunction(of: reference) == nil,
+					      !range.contains(declarations[declaration].offset)
+					else { return nil }
+					return (reference.name, declaration, reference.offset)
+				}
+				reads += ownNilArgumentsByFunction[function, default: []].map { ($0.label, nilRead, $0.offset) }
+				return reads.sorted { $0.offset < $1.offset }.map { ($0.name, $0.declaration) }
+			}
+			func isModeled(_ member: Int) -> Bool {
+				let bodyScope = functions[member].bodyScope
+				return !unsupportedScopes.contains(where: { isAncestorOrSelf(bodyScope, of: $0) })
+					&& !functions[member].parameterNames.contains(where: { $0.hasPrefix("scope") || $0.hasPrefix("__safeDI_") })
+					&& !text(functions[member].lineRange).contains("_ = ")
+					&& !functions[member].isSendable
+			}
+			// A class is valid when its members are modeled and read the same labels, each from a declaration with a spelled
+			// type, and every class it names or declares is valid. A label read from more than one declaration is passed.
+			var valid = Set(membersByClass.keys.filter { key in
+				let members = membersByClass[key, default: []]
+				guard members.allSatisfy(isModeled) else { return false }
+				var labels: Set<String>?
+				for member in members {
+					let reads = valueReads(of: member)
+					if let labels, labels != Set(reads.map(\.name)) { return false }
+					labels = Set(reads.map(\.name))
+					if reads.contains(where: { $0.declaration != nilRead && declarations[$0.declaration].typeText == nil }) { return false }
+					// One declaration, or `nil`, per label within a member.
+					var declarationByLabel = [String: Int]()
+					for read in reads {
+						if let known = declarationByLabel[read.name], known != read.declaration { return false }
+						declarationByLabel[read.name] = read.declaration
+					}
+				}
+				return true
+			})
+			func requiredClasses(of key: Int) -> Set<Int> {
+				var result = Set<Int>()
+				for member in membersByClass[key, default: []] {
+					for reference in ownReferencesByFunction[member, default: []] {
+						if let target = targetFunction(of: reference), let targetClass = classOf[target] { result.insert(targetClass) }
+					}
+					for nested in nestedByFunction[member, default: []] {
+						if let nestedClass = classOf[nested] { result.insert(nestedClass) }
+					}
+				}
+				result.remove(key)
+				return result
+			}
+			var changed = true
+			while changed {
+				changed = false
+				for key in valid.sorted() where !requiredClasses(of: key).isSubset(of: valid) {
+					valid.remove(key)
+					changed = true
+				}
+			}
+			// The component: every valid class of two or more members, and every class those name or declare.
+			var kept = Set(valid.filter { membersByClass[$0, default: []].count > 1 })
+			guard !kept.isEmpty else { return fail("no valid class") }
+			var worklist = Array(kept)
+			while let key = worklist.popLast() {
+				for required in requiredClasses(of: key) where !kept.contains(required) {
+					kept.insert(required)
+					worklist.append(required)
+				}
+			}
+			let keptClasses = kept.sorted { (membersByClass[$0]?.first ?? 0) < (membersByClass[$1]?.first ?? 0) }
+			let members = keptClasses.flatMap { membersByClass[$0, default: []] }
+			let memberSet = Set(members)
+			let memberDeclarations = Set(members.map { functions[$0].declaration })
+			// Names: the members' own where they share one no other kept class has, else made unique.
+			var nameByClass = [Int: String]()
+			var usedNames = Set<String>()
+			// Every member is deleted, so a name only members declare is free again.
+			let memberRanges = members.map { functions[$0].lineRange }
+			var namesDeclaredOnlyInsideMembers = Set(declarations.filter { declaration in memberRanges.contains { $0.contains(declaration.offset) } }.map(\.name))
+			for declaration in declarations where !memberRanges.contains(where: { $0.contains(declaration.offset) }) {
+				namesDeclaredOnlyInsideMembers.remove(declaration.name)
+			}
+			let takenNames = allIdentifiers.subtracting(namesDeclaredOnlyInsideMembers)
+			for key in keptClasses {
+				let classMembers = membersByClass[key, default: []]
+				var name = functions[classMembers[0]].name
+				while name.hasSuffix("_") {
+					name.removeLast()
+				}
+				while takenNames.contains(name) || usedNames.contains(name) {
+					name += "_"
+				}
+				usedNames.insert(name)
+				allIdentifiers.insert(name)
+				nameByClass[key] = name
+			}
+			// Sites: references to members from outside every member.
+			let sites = references.filter { reference in
+				guard let declaration = reference.declaration, memberDeclarations.contains(declaration) else { return false }
+				return !members.contains { functions[$0].lineRange.contains(reference.offset) }
+			}
+			guard !sites.isEmpty else { return fail("no call from outside") }
+			let siteChains = sites.map { chain(of: $0.scope) }
+			var placement = siteChains[0]
+			for siteChain in siteChains.dropFirst() {
+				placement = Array(zip(placement, siteChain).prefix(while: { $0 == $1 }).map(\.0))
+			}
+			guard var placementScope = placement.last else { return fail("no common scope") }
+			while scopes[placementScope].function == nil, let parent = scopes[placementScope].parent {
+				placementScope = parent
+			}
+			for member in members where isAncestorOrSelf(functions[member].bodyScope, of: placementScope) {
+				return fail("placement inside a member")
+			}
+			for site in sites {
+				guard let declaration = site.declaration, let function = declarations[declaration].function, let key = classOf[function], let name = nameByClass[key] else {
+					return fail("a site names no member")
+				}
+				// Nothing else of the name between the site and the placement.
+				for scope in chain(of: site.scope).drop(while: { $0 != placementScope }) {
+					if let other = scopes[scope].names[name], !memberDeclarations.contains(other) {
+						return fail("a site would resolve to another declaration")
+					}
+				}
+				if let callee = site.argumentOfCallee, PerTypeEmission.isSendableWrapper(callee) {
+					return fail("@Sendable")
+				}
+				if chain(of: site.scope).drop(while: { $0 != placementScope }).dropFirst().contains(where: { scopes[$0].isSendableBoundary }) {
+					return fail("@Sendable")
+				}
+			}
+			guard let lineStarts = statementLineStartsByScope[placementScope], let ranges = statementRangesByScope[placementScope] else {
+				return fail("placement has no statements")
+			}
+			let firstSiteOffset = sites.map(\.offset).min() ?? 0
+			guard var anchor = ranges.firstIndex(where: { $0.contains(firstSiteOffset) || $0.lowerBound > firstSiteOffset }) else {
+				return fail("no anchor")
+			}
+			while anchor < lineStarts.count, members.contains(where: { functions[$0].lineRange.lowerBound == lineStarts[anchor] }) {
+				anchor += 1
+			}
+			guard anchor < lineStarts.count else { return fail("no anchor") }
+			let anchorLineStart = lineStarts[anchor]
+			// A label is captured when every member reads one declaration visible at the placement and declared before the
+			// functions; otherwise each class passes it, in the order its first member first reads it.
+			func isCapturable(_ declarationIndex: Int, label: String) -> Bool {
+				guard declarationIndex != nilRead else { return true }
+				let declaration = declarations[declarationIndex]
+				return isAncestorOrSelf(declaration.scope, of: placementScope) && declaration.offset < anchorLineStart
+					&& !chain(of: placementScope).drop(while: { $0 != declaration.scope }).dropFirst().contains(where: { scopes[$0].names[label] != nil })
+			}
+			var parametersByClass = [Int: [(name: String, type: String)]]()
+			for key in keptClasses {
+				let classMembers = membersByClass[key, default: []]
+				let readsByMember = classMembers.map(valueReads)
+				var labels = [String]()
+				for read in readsByMember[0] where !labels.contains(read.name) {
+					labels.append(read.name)
+				}
+				var parameters = [(name: String, type: String)]()
+				for label in labels {
+					let resolved = readsByMember.compactMap { reads in reads.first(where: { $0.name == label })?.declaration }
+					if Set(resolved).count == 1, isCapturable(resolved[0], label: label) { continue }
+					let types = Set(resolved.filter { $0 != nilRead }.compactMap { declarations[$0].typeText })
+					let unwrapped = Set(types.map { $0.hasSuffix("?") ? String($0.dropLast()) : $0 })
+					guard unwrapped.count == 1, let base = unwrapped.first else { return fail("a passed label has different types") }
+					var type = types.count == 1 && !resolved.contains(nilRead) ? base + (types.first?.hasSuffix("?") == true ? "?" : "") : base + "?"
+					if type.contains("->"), !type.hasSuffix("?"), !type.contains("@escaping") { type = "@escaping " + type }
+					parameters.append((label, type))
+				}
+				parametersByClass[key] = parameters
+			}
+			// Every reference to a member that passes labels resolves each where the member it names read it.
+			func readDeclaration(of function: Int, label: String) -> Int? {
+				valueReads(of: function).first(where: { $0.name == label })?.declaration
+			}
+			// Every member of a class passes `nil` exactly where its first member does.
+			for key in keptClasses {
+				let signatures = membersByClass[key, default: []].map { member in
+					ownReferencesByFunction[member, default: []].compactMap { reference -> String? in
+						guard let target = targetFunction(of: reference), let targetClass = classOf[target] else { return nil }
+						let nils = parametersByClass[targetClass, default: []].map { readDeclaration(of: target, label: $0.name) == nilRead ? "nil" : "value" }
+						return "\(targetClass):" + nils.joined(separator: ",")
+					}
+				}
+				guard Set(signatures).count == 1 else { return fail("members pass nil at different calls") }
+			}
+			let referencesToMembers = members.flatMap { ownReferencesByFunction[$0, default: []] }.filter { targetFunction(of: $0).map(memberSet.contains) == true } + sites
+			for reference in referencesToMembers {
+				guard let target = targetFunction(of: reference), let key = classOf[target] else { continue }
+				for parameter in parametersByClass[key, default: []] {
+					let read = readDeclaration(of: target, label: parameter.name)
+					guard read == nilRead || resolve(parameter.name, from: reference.scope) == read else {
+						return fail("a passed label resolves elsewhere at a call")
+					}
+				}
+				if !parametersByClass[key, default: []].isEmpty, reference.callRightParen == nil, reference.argumentOfCallee == nil {
+					return fail("a member that takes labels is referred to other than by a call or a wrapper")
+				}
+			}
+			var indentationEnd = anchorLineStart
+			while indentationEnd < source.count, source[indentationEnd] == UInt8(ascii: " ") {
+				indentationEnd += 1
+			}
+			let anchorIndentation = text(anchorLineStart..<indentationEnd)
+			func renames(in references: [Reference]) -> [Edit] {
+				references.flatMap { reference -> [Edit] in
+					guard let target = targetFunction(of: reference), memberSet.contains(target), let key = classOf[target], let name = nameByClass[key] else { return [] }
+					let parameters = parametersByClass[key, default: []]
+					let nameRange = reference.offset..<(reference.offset + reference.length)
+					let arguments = parameters.map { "\($0.name): \(readDeclaration(of: target, label: $0.name) == nilRead ? "nil" : $0.name)" }.joined(separator: ", ")
+					if parameters.isEmpty {
+						return name == reference.name ? [] : [.replace(nameRange, name)]
+					}
+					if let rightParen = reference.callRightParen {
+						return (name == reference.name ? [] : [.replace(nameRange, name)]) + [.insert(rightParen, order: 0, (reference.callHasArguments ? ", " : "") + arguments)]
+					}
+					return [.replace(nameRange, "{ \(name)(\(arguments)) }")]
+				}
+			}
+			// Each class's function: its first member's own text, renamed.
+			var inserted = ""
+			for key in keptClasses {
+				guard let representative = membersByClass[key]?.first, let name = nameByClass[key] else { continue }
+				let function = functions[representative]
+				var edits = nestedByFunction[representative, default: []].map { Edit.replace(functions[$0].lineRange, "") }
+				edits += renames(in: ownReferencesByFunction[representative, default: []])
+				let parameterNames = Set(parametersByClass[key, default: []].map(\.name))
+				for argument in ownNilArgumentsByFunction[representative, default: []] where parameterNames.contains(argument.label) {
+					edits.append(.replace(argument.offset..<(argument.offset + 3), argument.label))
+				}
+				let parameters = parametersByClass[key, default: []]
+				if !parameters.isEmpty {
+					let parameterList = ([function.parametersText].filter { !$0.isEmpty } + parameters.map { "\($0.name): \($0.type)" }).joined(separator: ", ")
+					edits.append(.replace(function.headerRange, "func \(name)(\(parameterList))\(function.returnType.isEmpty ? "" : " -> \(function.returnType)") "))
+				} else if name != function.name {
+					edits.append(.replace(function.nameRange, name))
+				}
+				let rendered = render(function.lineRange, edits: edits)
+				inserted += rendered.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
+					guard !line.isEmpty else { return String(line) }
+					return anchorIndentation + (line.hasPrefix(function.indentation) ? String(line.dropFirst(function.indentation.count)) : String(line))
+				}.joined(separator: "\n")
+			}
+			var edits = members.map { Edit.replace(functions[$0].lineRange, "") }
+			edits += renames(in: sites)
+			edits.append(.insert(anchorLineStart, order: 0, inserted))
+			statistics.cyclicComponents += 1
+			statistics.cyclicGroups += keptClasses.count
+			statistics.cyclicPlaces += members.count
+			return render(bodyStart..<bodyEnd, edits: edits)
+		}
+
 		// MARK: Writing
 
 		private enum Edit {
@@ -844,7 +1233,7 @@ public enum PerTypeEmission {
 				}
 				_ = representativeDeclaration
 				// The header.
-				let parameterList = ([representative.parametersText].filter { !$0.isEmpty } + plan.parameters.map { "\($0.name): \($0.type)" }).joined(separator: ", ")
+				let parameterList = ([unifiedParametersText(of: plan.members)].filter { !$0.isEmpty } + plan.parameters.map { "\($0.name): \($0.type)" }).joined(separator: ", ")
 				let header = "\(plan.isSendable ? "@Sendable " : "")func \(plan.newName)(\(parameterList))\(representative.returnType.isEmpty ? "" : " -> \(representative.returnType)") "
 				representativeEdits.append(.replace(representative.headerRange, header))
 				let rendered = render(representative.lineRange, edits: representativeEdits)
