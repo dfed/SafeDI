@@ -203,6 +203,47 @@ struct GraphFuzzerFixture: Equatable {
 		return [DifferentialValueSample(type: "\(screenName).ForwardedProperties", expression: "7")]
 	}
 
+	/// The sample values the comparator calls the instantiators `addingForwardedLabelAcrossSeamCallShapes` draws with:
+	/// `ForwardedOuter`'s and `ForwardedInner`'s, each forwarding one label – an `Int`, a `String`, or `ForwardedUser`,
+	/// required or optional – so that it builds the inner seam and `ForwardedImpl`, its fill, the label's value
+	/// among what it compares. Empty for a graph without them.
+	var forwardedLabelAcrossSeamCallSamples: [DifferentialValueSample] {
+		let forwardingTypeNames: Set = [typeNamePrefix + "ForwardedInner", typeNamePrefix + "ForwardedOuter"]
+		var samples = [DifferentialValueSample]()
+		for content in swiftFileContent {
+			var typeName = ""
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				switch line {
+				case let .typeDeclaration(name):
+					typeName = name
+				case let .property(attribute, _, type) where attribute == "@Forwarded" && forwardingTypeNames.contains(typeName):
+					let expression = switch type {
+					case "Int":
+						"7"
+					case "String":
+						"\"7\""
+					default:
+						// `ForwardedUser` or its optional, a class of the graph whose initializer takes nothing.
+						"\(type.hasSuffix("?") ? String(type.dropLast()) : type)()"
+					}
+					samples.append(DifferentialValueSample(type: "\(typeName).ForwardedProperties", expression: expression))
+				case .instantiableAttribute, .instantiateMethod, .property, .other:
+					break
+				}
+			}
+		}
+		return samples
+	}
+
+	/// The sample value the comparator calls `PlaceInFillInnerScreen`'s instantiator with, which the public mock draw of a
+	/// place inside a fill (`drawPlaceInsidePublicMockFill`) declares now and then and which forwards `placeInFillId`, an
+	/// `Int`, so that it builds the screen, its place and the fill that reads the value. Empty for a graph without it.
+	var placeInFillInnerScreenSamples: [DifferentialValueSample] {
+		let screenName = typeNamePrefix + "PlaceInFillInnerScreen"
+		guard swiftFileContent.contains(where: { content in GraphFuzzerSourceLine.lines(of: content).contains { $0.declaredTypeName == screenName } }) else { return [] }
+		return [DifferentialValueSample(type: "\(screenName).ForwardedProperties", expression: "7")]
+	}
+
 	/// The visible build of a graph with a hole: every file whose first line says it fills a hole declared in the seam's
 	/// module instead, which can then see the fulfilling type and builds it inline, so the seam takes no builder.
 	var withoutHoles: GraphFuzzerFixture {
@@ -1461,10 +1502,57 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `CycleSeam` or `CycleA` declared with `generateMock: true`.
 	case cycleParameterMocked
 
+	/// `addingForwardedLabelAcrossSeamCallShapes`' tree, the shape #703 fixed: `ForwardedInner`, a seam that forwards a
+	/// label, called through an instantiator by `ForwardedOuter`, which forwards the same label.
+	case forwardedLabelAcrossSeamCall
+	/// `ForwardedInner` forwards `forwardedId: Int`, `ForwardedOuter` `forwardedId: String`.
+	case forwardedLabelAcrossSeamCallOtherTypes
+	/// `ForwardedInner` forwards `forwardedUser: ForwardedUser?`, `ForwardedOuter` `forwardedUser: ForwardedUser`.
+	case forwardedLabelAcrossSeamCallInnerOptional
+	/// Both forward `forwardedId: Int`.
+	case forwardedLabelAcrossSeamCallSameValueType
+	/// Both forward `forwardedUser: ForwardedUser`.
+	case forwardedLabelAcrossSeamCallSameClassType
+	/// `ForwardedOuter` forwards nothing, but builds `ForwardedReader`, which receives `forwardedUser` from the root.
+	case forwardedLabelAcrossSeamCallOuterDefers
+	/// `ForwardedOuter` is no seam, but a type the seam `ForwardedHome` builds.
+	case forwardedLabelAcrossSeamCallCallerInsideSeam
+	/// The place of `ForwardedService` is beneath `ForwardedInner`, on `ForwardedPart`.
+	case forwardedLabelAcrossSeamCallPlaceBeneath
+	/// `ForwardedImpl`, the fill, receives the label.
+	case forwardedLabelAcrossSeamCallFillReadsLabel
+	/// `ForwardedOuter` calls `ForwardedInner` through a `SendableInstantiator`.
+	case forwardedLabelAcrossSeamCallSendable
+	/// `addingRetentionShapes`' tree, the shape the retention oracle must fail on while a seam's builder functions
+	/// capture its levels' values: `RetainHome`, a seam, binds `retainNavigator` and then builds a type through an
+	/// instantiator, beneath which a place of `RetainApi` no reader of `retainNavigator` is on the way to.
+	case retentionSeamValueBeforeBuilder
+	/// The type `RetainHome` builds through its instantiator is `RetainInnerDetail`, a seam that passes its place up:
+	/// the shape #703 fixed, across seams.
+	case retentionSeamValueBeforeBuilderInnerSeam
+	/// `RetainLeaf`, which holds the place, is built through an instantiator rather than by value.
+	case retentionSeamValueBeforeBuilderLeafThroughInstantiator
+	/// `RetainLive`, the fill, reads `retainNavigator`, which the inline build then keeps alive too.
+	case retentionSeamValueBeforeBuilderFillReadsValue
+	/// The instantiators are `SendableInstantiator`s, so the place is in the `@Sendable` family.
+	case retentionSeamValueBeforeBuilderSendable
+
 	/// Whether `addingCycleParameterShapes` draws this shape, whose count in accepted graphs the seam corpus pins too
 	/// (`acceptedDrawFeatureCounts`).
 	var isCycleParameterShape: Bool {
 		rawValue.hasPrefix("cycleParameter")
+	}
+
+	/// Whether `addingForwardedLabelAcrossSeamCallShapes` draws this shape, whose count in accepted graphs the seam corpus
+	/// pins too (`acceptedDrawFeatureCounts`), at least ten each.
+	var isForwardedLabelAcrossSeamCallShape: Bool {
+		rawValue.hasPrefix("forwardedLabelAcrossSeamCall")
+	}
+
+	/// Whether `addingRetentionShapes` draws this shape, whose count in accepted graphs the seam corpus pins too
+	/// (`acceptedDrawFeatureCounts`), at least ten each.
+	var isRetentionShape: Bool {
+		rawValue.hasPrefix("retentionSeamValueBeforeBuilder")
 	}
 
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
@@ -2123,6 +2211,8 @@ enum GraphFuzzerGenerator {
 			mockOnlyBlockRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockOnlyBlockRandomSeedMask)
 			mockVocabularyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockVocabularyRandomSeedMask)
 			cycleParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.cycleParameterRandomSeedMask)
+			forwardedLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.forwardedLabelRandomSeedMask)
+			retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2210,6 +2300,10 @@ enum GraphFuzzerGenerator {
 				// Drawn only in a graph the passes before it split, and after the declarations that move beneath the seam's
 				// module have moved, so that every other graph, and every other draw of a graph it draws in, is drawn as before.
 				finalDeclarations = addingCycleParameterShapes(to: finalDeclarations)
+				// Drawn after it, from a stream of its own, so that every graph the pass before it draws is drawn as before.
+				finalDeclarations = addingForwardedLabelAcrossSeamCallShapes(to: finalDeclarations)
+				// Drawn after it, from a stream of its own, so that every graph the passes before it draw is drawn as before.
+				finalDeclarations = addingRetentionShapes(to: finalDeclarations)
 				presentModules = Set(finalDeclarations.compactMap(\.module))
 			}
 			// Left out after every draw, so that the graph without its second place is drawn, and split, as the graph with it.
@@ -2504,6 +2598,13 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingCycleParameterShapes`' choices: whether a split graph gains `CycleSeam`'s tree, a lazy cycle that
 		/// closes through a cycle parameter with a hole beneath it, and every shape of that tree.
 		private var cycleParameterRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingForwardedLabelAcrossSeamCallShapes`' choices: whether a split graph gains
+		/// `ForwardedOuter`'s tree, in which a seam and the type that calls it forward one label, and every shape of
+		/// that tree.
+		private var forwardedLabelRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingRetentionShapes`' choices: whether a split graph gains `RetainHome`'s tree, whose seam binds a
+		/// value nothing beneath its instantiator reads, and every shape of that tree.
+		private var retentionRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -6681,6 +6782,209 @@ enum GraphFuzzerGenerator {
 
 		private static let cycleParameterRandomSeedMask: UInt64 = 0x637963506172616D
 
+		// MARK: A forwarded label across a seam call
+
+		/// How `addingForwardedLabelAcrossSeamCallShapes`' seam `ForwardedInner` and its caller `ForwardedOuter`
+		/// declare their label.
+		private enum ForwardedLabelKind {
+			/// `ForwardedInner` forwards `forwardedId: Int`, `ForwardedOuter` `forwardedId: String`.
+			case otherTypes
+			/// `ForwardedInner` forwards `forwardedUser: ForwardedUser?`, `ForwardedOuter` `forwardedUser: ForwardedUser`.
+			case innerOptional
+			/// Both forward `forwardedId: Int`.
+			case sameValueType
+			/// Both forward `forwardedUser: ForwardedUser`, a class, so that two values differ by identity.
+			case sameClassType
+			/// `ForwardedInner` forwards `forwardedUser: ForwardedUser`, and `ForwardedOuter` forwards nothing but
+			/// builds `ForwardedReader`, which receives `forwardedUser` from the root, so that the seam takes it as a
+			/// deferred parameter.
+			case outerDefers
+		}
+
+		/// With the `generateDependencyTree` feature on, three in four graphs already split across modules gain the shape #703
+		/// fixed: `ForwardedInner`, a seam of the seam's module, forwards a label and holds a place of `ForwardedService`, on
+		/// itself or beneath it on `ForwardedPart`, which `ForwardedImpl`, beside the roots, fills, now and then reading the
+		/// label; and `ForwardedOuter`, which calls it through an instantiator, forwards the same label – of another type, of
+		/// the optional's wrapped type, or of the same type – or builds `ForwardedReader`, which receives it from the root.
+		/// `ForwardedOuter` is a seam of its own, or, three draws in ten, a type `ForwardedHome`, a seam, builds.
+		/// `ForwardedRoot`, a root of the roots' module, builds the outermost seam. The function that builds `ForwardedInner`
+		/// takes its forwarded label as a parameter, under the label `ForwardedOuter`'s level binds too, so a seam that builds
+		/// what it passes up there reads the inner seam's value.
+		///
+		/// `forwardedLabelRandom` draws only for this pass, which runs after every other pass and only in a graph another
+		/// pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as before.
+		private mutating func addingForwardedLabelAcrossSeamCallShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `build()` calls this pass only for a graph split across modules.
+			guard features.contains(.generateDependencyTree), forwardedLabelRandom.percentChance(75) else { return declarations }
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let kindRoll = forwardedLabelRandom.integer(in: 0...99)
+			let callerInsideSeam = forwardedLabelRandom.percentChance(30)
+			let placeBeneath = forwardedLabelRandom.percentChance(30)
+			let fillReadsLabel = forwardedLabelRandom.percentChance(50)
+			let sendableRoll = forwardedLabelRandom.percentChance(50)
+			let kind: ForwardedLabelKind = switch kindRoll {
+			case 0..<30: .otherTypes
+			case 30..<45: .innerOptional
+			case 45..<65: .sameValueType
+			case 65..<85: .sameClassType
+			default: .outerDefers
+			}
+			let isSendable = switch sendability {
+			case .nonSendable: false
+			case .sendable: true
+			case .mixed: sendableRoll
+			}
+			let instantiator = isSendable ? "SendableInstantiator" : "Instantiator"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let prefix = prefix
+			func instantiable(_ suffix: String, module: GraphFuzzerModule = .seamModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			let serviceName = "\(prefix)ForwardedService"
+			let userName = "\(prefix)ForwardedUser"
+			let label: String
+			let innerType: String
+			let outerType: String?
+			switch kind {
+			case .otherTypes:
+				(label, innerType, outerType) = ("forwardedId", "Int", "String")
+			case .innerOptional:
+				(label, innerType, outerType) = ("forwardedUser", userName + "?", userName)
+			case .sameValueType:
+				(label, innerType, outerType) = ("forwardedId", "Int", "Int")
+			case .sameClassType:
+				(label, innerType, outerType) = ("forwardedUser", userName, userName)
+			case .outerDefers:
+				(label, innerType, outerType) = ("forwardedUser", userName, nil)
+			}
+			let place = PropertyDeclaration(attribute: "@Instantiated", label: "forwardedService", type: "any \(serviceName)")
+
+			var inner = instantiable("ForwardedInner", properties: [PropertyDeclaration(attribute: "@Forwarded", label: label, type: innerType)])
+			inner.instantiableArguments = ["generateDependencyTree: true"]
+			inner.additionalDeclarations.append("public protocol \(serviceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+			var added = [TypeDeclaration]()
+			if placeBeneath {
+				let part = instantiable("ForwardedPart", properties: [place])
+				inner.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "forwardedPart", type: part.name))
+				added.append(part)
+			} else {
+				inner.properties.append(place)
+			}
+			var outer = instantiable("ForwardedOuter")
+			if let outerType {
+				outer.properties.append(PropertyDeclaration(attribute: "@Forwarded", label: label, type: outerType))
+			} else {
+				let reader = instantiable("ForwardedReader", properties: [PropertyDeclaration(attribute: "@Received", label: label, type: userName)])
+				outer.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "forwardedReader", type: reader.name))
+				added.append(reader)
+			}
+			outer.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "forwardedInnerBuilder", type: "\(instantiator)<\(inner.name)>"))
+			let outerProperty = outerType == nil
+				? PropertyDeclaration(attribute: "@Instantiated", label: "forwardedOuter", type: outer.name)
+				: PropertyDeclaration(attribute: "@Instantiated", label: "forwardedOuterBuilder", type: "\(instantiator)<\(outer.name)>")
+			var root = instantiable("ForwardedRoot", module: .samePackageCaller)
+			root.instantiableArguments = ["isRoot: true"]
+			if kind == .outerDefers {
+				root.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: label, type: userName))
+			}
+			if callerInsideSeam {
+				var home = instantiable("ForwardedHome", properties: [outerProperty])
+				home.instantiableArguments = ["generateDependencyTree: true"]
+				root.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "forwardedHome", type: home.name))
+				added.append(home)
+			} else {
+				outer.instantiableArguments = ["generateDependencyTree: true"]
+				root.properties.append(outerProperty)
+			}
+			if [.innerOptional, .sameClassType, .outerDefers].contains(kind) {
+				added.append(instantiable("ForwardedUser"))
+			}
+			var implementation = instantiable("ForwardedImpl", module: .samePackageCaller)
+			implementation.instantiableArguments = ["fulfillingAdditionalTypes: [\(serviceName).self]"]
+			implementation.additionalConformances.append(serviceName)
+			implementation.fillsHole = true
+			// The fill reads the inner seam's own value, which no optional of it carries required.
+			if fillReadsLabel, kind != .innerOptional {
+				implementation.properties.append(PropertyDeclaration(attribute: "@Received", label: label, type: innerType))
+			}
+			return declarations + [inner, outer] + added + [implementation, root]
+		}
+
+		private static let forwardedLabelRandomSeedMask: UInt64 = 0x66776453656D4C62
+
+		// MARK: Retention
+
+		/// With the `generateDependencyTree` feature on, three in four graphs already split across modules gain the shapes the
+		/// retention oracle judges (rule 3 of the seam contract: nothing is retained that inline frees). `RetainHome`, a seam
+		/// of the seam's module that `RetainRoot`, a root of the roots' module, builds, binds `retainNavigator` and then
+		/// builds `RetainDetail` through an instantiator; beneath it `RetainLeaf`, built by value or through an instantiator,
+		/// holds a place of `RetainApi`, which `RetainLive`, beside the roots, fills. Nothing beneath `RetainDetail` reads
+		/// `retainNavigator`, so once the root is released the inline build keeps none alive, whatever holds the builder of
+		/// `RetainDetail`: the adopter's Navigator and Detail, which a seam whose levels' values its builder functions capture
+		/// keeps alive. 35 in 100 draws make it `RetainInnerDetail`, a seam of its own that passes its place up, the shape
+		/// #703 fixed, across seams; 35 in 100 make `RetainLive` read `retainNavigator`, which the inline build then
+		/// keeps alive too. The instantiators are `Sendable` as the graph's sendability allows, and then the place is in the
+		/// `@Sendable` family, whose cases carry no values, so the fill reads nothing.
+		///
+		/// `retentionRandom` draws only for this pass, which runs after every other pass and only in a graph another pass
+		/// split, so that every graph in one module, and every other draw of a graph it draws in, draws as before.
+		private mutating func addingRetentionShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `build()` calls this pass only for a graph split across modules.
+			guard features.contains(.generateDependencyTree), retentionRandom.percentChance(75) else { return declarations }
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let detailIsSeam = retentionRandom.percentChance(35)
+			let leafThroughInstantiator = retentionRandom.percentChance(50)
+			let fillReadsNavigator = retentionRandom.percentChance(35)
+			let sendableRoll = retentionRandom.percentChance(50)
+			let isSendable = switch sendability {
+			case .nonSendable: false
+			case .sendable: true
+			case .mixed: sendableRoll
+			}
+			let instantiator = isSendable ? "SendableInstantiator" : "Instantiator"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let prefix = prefix
+			func instantiable(_ suffix: String, module: GraphFuzzerModule = .seamModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			let apiName = "\(prefix)RetainApi"
+			let navigator = instantiable("RetainNavigator")
+			let leaf = instantiable("RetainLeaf", properties: [PropertyDeclaration(attribute: "@Instantiated", label: "retainApi", type: "any \(apiName)")])
+			var detail = instantiable(detailIsSeam ? "RetainInnerDetail" : "RetainDetail", properties: [
+				leafThroughInstantiator
+					? PropertyDeclaration(attribute: "@Instantiated", label: "retainLeafBuilder", type: "\(instantiator)<\(leaf.name)>")
+					: PropertyDeclaration(attribute: "@Instantiated", label: "retainLeaf", type: leaf.name),
+			])
+			if detailIsSeam {
+				detail.instantiableArguments = ["generateDependencyTree: true"]
+			}
+			var home = instantiable("RetainHome", properties: [
+				PropertyDeclaration(attribute: "@Instantiated", label: "retainNavigator", type: navigator.name),
+				PropertyDeclaration(attribute: "@Instantiated", label: detailIsSeam ? "retainInnerDetailBuilder" : "retainDetailBuilder", type: "\(instantiator)<\(detail.name)>"),
+			])
+			home.instantiableArguments = ["generateDependencyTree: true"]
+			home.additionalDeclarations.append("public protocol \(apiName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+			var live = instantiable("RetainLive", module: .samePackageCaller)
+			live.instantiableArguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
+			live.additionalConformances.append(apiName)
+			live.fillsHole = true
+			// A fill of a place another seam passes up reads its caller's scope, which holds no navigator; nor does a place in
+			// the `@Sendable` family, whose cases carry no values, so there the tool would reject the read, and with it every
+			// other shape of the graph.
+			if fillReadsNavigator, !detailIsSeam, !isSendable {
+				live.properties.append(PropertyDeclaration(attribute: "@Received", label: "retainNavigator", type: navigator.name))
+			}
+			var root = instantiable("RetainRoot", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "retainHome", type: home.name)])
+			root.instantiableArguments = ["isRoot: true"]
+			return declarations + [navigator, leaf, detail, home, live, root]
+		}
+
+		private static let retentionRandomSeedMask: UInt64 = 0x726574656E74696F
+
 		// MARK: Access proof extensions
 
 		/// With the `generateDependencyTree` feature on, extends `addingAccessProofShapes`' tree with the shapes that pass
@@ -8128,6 +8432,65 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 		}
 		return features.union(accessProofDrawFeatures(of: fixture)).union(holeDrawFeatures(of: fixture)).union(cycleParameterDrawFeatures(of: fixture))
+			.union(forwardedLabelAcrossSeamCallDrawFeatures(of: fixture)).union(retentionDrawFeatures(of: fixture))
+	}
+
+	/// The shapes `addingRetentionShapes` draws, read from the properties the fixture declares on the `Retain` types.
+	private static func retentionDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
+		let prefix = fixture.typeNamePrefix
+		let (propertiesByType, _) = declaredProperties(of: fixture)
+		guard let homeProperties = propertiesByType[prefix + "RetainHome"] else { return [] }
+		var features: Set<GraphFuzzerSeamDrawFeature> = [.retentionSeamValueBeforeBuilder]
+		if propertiesByType[prefix + "RetainInnerDetail"] != nil {
+			features.insert(.retentionSeamValueBeforeBuilderInnerSeam)
+		}
+		let detailProperties = propertiesByType[prefix + "RetainDetail"] ?? propertiesByType[prefix + "RetainInnerDetail"] ?? []
+		if detailProperties.contains(where: { $0.label == "retainLeafBuilder" }) {
+			features.insert(.retentionSeamValueBeforeBuilderLeafThroughInstantiator)
+		}
+		if propertiesByType[prefix + "RetainLive"]?.contains(where: { $0.label == "retainNavigator" }) == true {
+			features.insert(.retentionSeamValueBeforeBuilderFillReadsValue)
+		}
+		if homeProperties.contains(where: { $0.type.hasPrefix("SendableInstantiator<") }) {
+			features.insert(.retentionSeamValueBeforeBuilderSendable)
+		}
+		return features
+	}
+
+	/// The shapes `addingForwardedLabelAcrossSeamCallShapes` draws, read from the properties the fixture declares on the
+	/// `Forwarded` types.
+	private static func forwardedLabelAcrossSeamCallDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
+		let prefix = fixture.typeNamePrefix
+		let (propertiesByType, _) = declaredProperties(of: fixture)
+		guard let innerProperties = propertiesByType[prefix + "ForwardedInner"], let outerProperties = propertiesByType[prefix + "ForwardedOuter"] else { return [] }
+		var features: Set<GraphFuzzerSeamDrawFeature> = [.forwardedLabelAcrossSeamCall]
+		let innerLabel = innerProperties.first { $0.attribute == "@Forwarded" }
+		let outerLabel = outerProperties.first { $0.attribute == "@Forwarded" }
+		switch (innerLabel?.type, outerLabel?.type) {
+		case let (innerType?, outerType?) where innerType == outerType:
+			features.insert(innerType == "Int" ? .forwardedLabelAcrossSeamCallSameValueType : .forwardedLabelAcrossSeamCallSameClassType)
+		case let (innerType?, outerType?) where innerType == outerType + "?":
+			features.insert(.forwardedLabelAcrossSeamCallInnerOptional)
+		case (_?, _?):
+			features.insert(.forwardedLabelAcrossSeamCallOtherTypes)
+		case (_, nil):
+			features.insert(.forwardedLabelAcrossSeamCallOuterDefers)
+		case (nil, _?):
+			break
+		}
+		if propertiesByType[prefix + "ForwardedHome"] != nil {
+			features.insert(.forwardedLabelAcrossSeamCallCallerInsideSeam)
+		}
+		if propertiesByType[prefix + "ForwardedPart"] != nil {
+			features.insert(.forwardedLabelAcrossSeamCallPlaceBeneath)
+		}
+		if let innerLabel, propertiesByType[prefix + "ForwardedImpl"]?.contains(where: { $0.label == innerLabel.label }) == true {
+			features.insert(.forwardedLabelAcrossSeamCallFillReadsLabel)
+		}
+		if outerProperties.contains(where: { $0.type.hasPrefix("SendableInstantiator<") }) {
+			features.insert(.forwardedLabelAcrossSeamCallSendable)
+		}
+		return features
 	}
 
 	/// Each type's properties, in declaration order, and the types declared with `generateMock: true`, by name, read from
@@ -9423,6 +9786,14 @@ struct GraphFuzzerFailure: Equatable {
 		/// The differential value comparator describes other values for a probe of a `generateMockPublic` graph than for
 		/// the same probe of its known-right path, beyond the stated divergences.
 		case publicMockBuildsOtherValuesThanKnownRight = "the graph builds other values than its known-right path"
+		/// The retention oracle (rule 3 of the seam contract: nothing is retained that inline frees): a probe of a graph with
+		/// a hole, built with its seam, keeps more instances of a type alive than the same probe of its inline build, once the
+		/// probe's value is released while one wrapper it held, and what one call of that wrapper builds, are held
+		/// (`DifferentialValueRetentionDifference`).
+		case seamRetainsWhatInlineFrees = "the seam build keeps alive what the inline build frees"
+		/// The retention oracle on a `generateMockPublic` graph with a hole: a probe keeps more instances of a type alive than
+		/// the same probe of its known-right path, once the probe's value is released while one wrapper it held is held.
+		case publicMockRetainsWhatKnownRightFrees = "the graph keeps alive what its known-right path frees"
 		/// A base corpus graph's generated `mock()` – a root's, or a mocked type's beside its mirror – builds other values
 		/// than the production build of the same tree (`GraphFuzzerValueOraclePlan`).
 		case mockBuildsOtherValuesThanProduction = "a generated mock builds other values than the production build of the same tree"
@@ -9476,8 +9847,8 @@ struct GraphFuzzerFailure: Equatable {
 	let seed: UInt64
 	let kind: Kind
 	let details: String
-	/// For `seamBuildsOtherValuesThanInline` and the other value differences, each difference's description: a known
-	/// issue of that kind documents the failure only when every one of them matches one of its signatures.
+	/// For `seamBuildsOtherValuesThanInline` and the other value and retention kinds, each difference's description: a
+	/// known issue of that kind documents the failure only when every one of them matches one of its signatures.
 	var valueDifferences: [String] = []
 	/// For `valueOracleFixtureRejected`, each line of the tool's diagnostics that reports an error: a known issue of that
 	/// kind documents the failure only when every one of them contains the text of one of its rejection signatures.
@@ -9505,6 +9876,40 @@ struct GraphFuzzerFailure: Equatable {
 	}
 }
 
+/// What the retention oracle judged, of one graph or added up over a corpus, which each corpus pins (`retention` in the
+/// long run's report): a change that judges fewer graphs, or pairs fewer experiments, fails the pin.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+struct GraphFuzzerRetentionCounts: Equatable {
+	/// The graphs with a hole whose retention the oracle judged: both paths ran an experiment holding a wrapper of one of
+	/// its probes' values.
+	var judged = 0
+	/// The judged graphs that draw the retention oracle's own shape (`addingRetentionShapes`, `drawRetentionPublicMock`).
+	var judgedDrawingRetentionShape = 0
+	/// The judged graphs whose probe through a hand-written builder (`handWrittenRetentionProbe`) the oracle judged.
+	var judgedThroughHandWrittenBuilder = 0
+	/// The retention experiments only one path ran, over every probe of every judged graph: each a wrapper one path's value
+	/// holds where the other's holds none, which judges nothing.
+	var unpairedExperiments = 0
+
+	/// The counts as the long run's report and `combine-graph-fuzzer-reports.py` write them.
+	var reportField: String {
+		"judged=\(judged),drawJudged=\(judgedDrawingRetentionShape),handWrittenJudged=\(judgedThroughHandWrittenBuilder),unpairedExperiments=\(unpairedExperiments)"
+	}
+
+	mutating func add(_ other: GraphFuzzerRetentionCounts) {
+		judged += other.judged
+		judgedDrawingRetentionShape += other.judgedDrawingRetentionShape
+		judgedThroughHandWrittenBuilder += other.judgedThroughHandWrittenBuilder
+		unpairedExperiments += other.unpairedExperiments
+	}
+
+	/// Whether `fixture` draws the retention oracle's own shape, in the seam corpus or the public mock corpus.
+	static func drawsRetentionShape(_ fixture: GraphFuzzerFixture) -> Bool {
+		GraphFuzzerFeature.seamDrawFeatures(of: fixture).contains(where: \.isRetentionShape)
+			|| GraphFuzzerPublicMockDraw.drawFeatures(of: fixture).contains(.retentionPublicMockValueBeforeBuilder)
+	}
+}
+
 /// The oracle's verdict on one graph.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct GraphFuzzerResult {
@@ -9521,9 +9926,11 @@ struct GraphFuzzerResult {
 		isComparedWithReadTwin: Bool = false,
 		isComparedWithoutSecondHolePlace: Bool = false,
 		isComparedWithoutSecondPath: Bool = false,
+		retentionCounts: GraphFuzzerRetentionCounts = GraphFuzzerRetentionCounts(),
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
 		remedyRuns: [GraphFuzzerRemedyRun] = [],
 	) {
+		self.retentionCounts = retentionCounts
 		self.isComparedWithoutSecondHolePlace = isComparedWithoutSecondHolePlace
 		self.isComparedWithoutSecondPath = isComparedWithoutSecondPath
 		self.remedyRuns = remedyRuns
@@ -9578,6 +9985,26 @@ struct GraphFuzzerResult {
 	/// the graph with those of the graph without its second path to a type that holds a place
 	/// (`GraphFuzzerToolRuns.secondPathFailure`): the tool accepts both.
 	let isComparedWithoutSecondPath: Bool
+	/// What the retention oracle judged of the graph (`GraphFuzzerOracle.ValueComparisons.retentionCounts`), each count
+	/// 0 or 1 but the unpaired experiments'.
+	let retentionCounts: GraphFuzzerRetentionCounts
+
+	/// Whether the retention oracle judged what the graph's probes keep alive against its inline build's, or its
+	/// known-right path's (`GraphFuzzerOracle.ValueComparisons.retentionFailures`): the graph has a hole, the comparator
+	/// compared its two builds, and both ran an experiment holding a wrapper.
+	var isJudgedForRetention: Bool {
+		retentionCounts.judged > 0
+	}
+
+	/// Whether the graph passes every oracle but the retention oracle, whose failure `knownIssue` documents: the retention
+	/// oracle judges last, so every other oracle judged the graph first, and counts of what passing graphs show (the
+	/// spellings the long run counts, the shapes of the seam smoke batch) count it as passing while the leak it documents
+	/// awaits its fix.
+	func passes(butForRetentionDocumentedBy knownIssue: GraphFuzzerKnownIssue?) -> Bool {
+		guard let failure else { return true }
+		return [.seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees].contains(failure.kind) && laterFailures.isEmpty && knownIssue?.matches(failure) == true
+	}
+
 	/// A base corpus graph's value-oracle run, whose pairs and skips the long run counts.
 	let valueOracle: GraphFuzzerValueOracleRun?
 	/// The remedies the errors of a rejected base corpus graph state, applied, which the long run counts by kind.
@@ -9645,6 +10072,13 @@ struct GraphFuzzerKnownIssue: Equatable {
 		/// A `generateMockPublic` graph builds other values than its known-right path, with a difference whose
 		/// description contains this text.
 		case publicMockBuildsOtherValuesThanKnownRight(containing: String)
+		/// The seam build keeps alive what the inline build frees, with a retention difference whose description contains
+		/// this text, such as the labels of the wrapper held (`holding <labels>`) or a probe's name. As for the value
+		/// signatures, every difference must match one of the shape's retention signatures.
+		case seamRetainsWhatInlineFrees(containing: String)
+		/// A `generateMockPublic` graph keeps alive what its known-right path frees, with a retention difference whose
+		/// description contains this text. Every difference must match one of the shape's retention signatures.
+		case publicMockRetainsWhatKnownRightFrees(containing: String)
 		/// A base corpus graph's generated mock builds other values than the production build of the same tree, with a
 		/// difference whose description contains this text.
 		case mockBuildsOtherValuesThanProduction(containing: String)
@@ -9678,7 +10112,34 @@ struct GraphFuzzerKnownIssue: Equatable {
 			switch signature {
 			case .mockBuildsOtherValuesThanProduction, .valueOracleFixtureDoesNotCompile, .valueOracleFixtureRejected, .remedyLeavesErrorAtSite:
 				true
-			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight, .holeNamesChangeWithSecondPlace:
+			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .holeNamesChangeWithSecondPlace:
+				false
+			}
+		}
+	}
+
+	/// Whether every shape of the issue is a value or retention difference, which documents only the differences its
+	/// signatures match and masks no later failure of the oracle's chain (`GraphFuzzerFinding`): a graph listed under such
+	/// an issue still reports a new failure of any oracle, so the gating draws count it as judged.
+	/// Whether every signature documents what the retention oracle finds, which only a run that compiles and runs the
+	/// graph's code judges: a run that does not judge the graph's retention cannot call such an issue stale.
+	var documentsOnlyRetention: Bool {
+		signatures.allSatisfy { signature in
+			switch signature {
+			case .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees:
+				true
+			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite:
+				false
+			}
+		}
+	}
+
+	var masksNoLaterFailure: Bool {
+		signatures.allSatisfy { signature in
+			switch signature {
+			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile:
+				true
+			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite:
 				false
 			}
 		}
@@ -9740,6 +10201,29 @@ struct GraphFuzzerKnownIssue: Equatable {
 				failure.kind == .publicMockBuildsOtherValuesThanKnownRight && !failure.valueDifferences.isEmpty && failure.valueDifferences.allSatisfy { difference in
 					signatures.contains { signature in
 						if case let .publicMockBuildsOtherValuesThanKnownRight(text) = signature {
+							difference.contains(text)
+						} else {
+							false
+						}
+					}
+				}
+			case .seamRetainsWhatInlineFrees:
+				// As for the value signatures, every retention difference must match one: a documented retention beside an
+				// undocumented one is a new failure.
+				failure.kind == .seamRetainsWhatInlineFrees && !failure.valueDifferences.isEmpty && failure.valueDifferences.allSatisfy { difference in
+					signatures.contains { signature in
+						if case let .seamRetainsWhatInlineFrees(text) = signature {
+							difference.contains(text)
+						} else {
+							false
+						}
+					}
+				}
+			case .publicMockRetainsWhatKnownRightFrees:
+				// As for the seam's retention signatures, every difference must match one.
+				failure.kind == .publicMockRetainsWhatKnownRightFrees && !failure.valueDifferences.isEmpty && failure.valueDifferences.allSatisfy { difference in
+					signatures.contains { signature in
+						if case let .publicMockRetainsWhatKnownRightFrees(text) = signature {
 							difference.contains(text)
 						} else {
 							false
@@ -9843,16 +10327,21 @@ enum GraphFuzzerFinding: Equatable {
 	///   rejection of a base corpus graph's value-oracle fixture, or a known failure of it to compile, of each of which
 	///   every later failure is independent: the value comparison does not run, and the wrapper, multi-module and
 	///   rename oracles judge the drawn graph. No known failure masks a renamed graph's difference, which judges only
-	///   what the tool generates.
-	init(failure: GraphFuzzerFailure?, laterFailures: [GraphFuzzerFailure] = [], knownIssue: GraphFuzzerKnownIssue?) {
+	///   what the tool generates, nor what the retention oracle finds, since what a graph keeps alive does not depend on
+	///   how else it fails, so a known failure never hides a leak.
+	/// - Parameter retentionIsJudged: Whether the retention oracle judged the graph, which it does only where the run
+	///   compiles and runs its code. A graph it did not judge that fails nothing else passes, rather than making stale a
+	///   known issue every signature of which documents a leak (`documentsOnlyRetention`); a known issue that lists
+	///   anything else is stale, since what else it lists was judged.
+	init(failure: GraphFuzzerFailure?, laterFailures: [GraphFuzzerFailure] = [], knownIssue: GraphFuzzerKnownIssue?, retentionIsJudged: Bool = true) {
 		switch (failure, knownIssue) {
 		case (nil, nil):
 			self = .passed
 		case let (nil, knownIssue?):
-			self = .staleKnownIssue(knownIssue)
+			self = retentionIsJudged || !knownIssue.documentsOnlyRetention ? .staleKnownIssue(knownIssue) : .passed
 		case let (failure?, knownIssue?) where knownIssue.matches(failure):
-			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile].contains(failure.kind)
-			if let unmasked = laterFailures.first(where: { (masksNoLaterFailure || $0.kind == .renamedGraphDiffers) && !knownIssue.matches($0) }) {
+			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile].contains(failure.kind)
+			if let unmasked = laterFailures.first(where: { (masksNoLaterFailure || $0.kind == .renamedGraphDiffers || $0.kind == .seamRetainsWhatInlineFrees || $0.kind == .publicMockRetainsWhatKnownRightFrees) && !knownIssue.matches($0) }) {
 				self = .failure(unmasked)
 			} else {
 				self = .knownIssue(knownIssue, failure)
@@ -9866,8 +10355,8 @@ enum GraphFuzzerFinding: Equatable {
 	/// graph that the known issue does not document, as a finding of its own, so that a graph's every undocumented
 	/// difference is reported at once, and, when the graph fails at all, each difference of a renamed graph its known
 	/// issue lists and it does not show.
-	static func findings(failure: GraphFuzzerFailure?, laterFailures: [GraphFuzzerFailure] = [], knownIssue: GraphFuzzerKnownIssue?) -> [GraphFuzzerFinding] {
-		let finding = GraphFuzzerFinding(failure: failure, laterFailures: laterFailures, knownIssue: knownIssue)
+	static func findings(failure: GraphFuzzerFailure?, laterFailures: [GraphFuzzerFailure] = [], knownIssue: GraphFuzzerKnownIssue?, retentionIsJudged: Bool = true) -> [GraphFuzzerFinding] {
+		let finding = GraphFuzzerFinding(failure: failure, laterFailures: laterFailures, knownIssue: knownIssue, retentionIsJudged: retentionIsJudged)
 		var reportedFailure: GraphFuzzerFailure?
 		if case let .failure(failure) = finding {
 			reportedFailure = failure
@@ -10715,6 +11204,9 @@ enum GraphFuzzerOracle {
 			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			failures.append(contentsOf: renamedGraphFailures)
+			// The retention oracle judges last. No known failure masks what it finds, as none masks a renamed graph's
+			// difference (`GraphFuzzerFinding`).
+			failures.append(contentsOf: [valueComparisons.retentionFailures[runs.fixture.seed]].compactMap(\.self))
 			// A base corpus graph is compared once its value-oracle graph is.
 			let isValueOracleGraphCompared = runs.valueOracle == nil || valueComparisons.comparedValueOracleSeeds.contains(runs.fixture.seed)
 			return GraphFuzzerResult(
@@ -10730,6 +11222,7 @@ enum GraphFuzzerOracle {
 				isComparedWithReadTwin: runs.readTwinOutcome != nil,
 				isComparedWithoutSecondHolePlace: runs.isComparedWithoutSecondHolePlace,
 				isComparedWithoutSecondPath: runs.isComparedWithoutSecondPath,
+				retentionCounts: valueComparisons.retentionCounts[runs.fixture.seed] ?? GraphFuzzerRetentionCounts(),
 				valueOracle: runs.valueOracle,
 				remedyRuns: runs.remedyRuns,
 			)
@@ -10751,6 +11244,31 @@ enum GraphFuzzerOracle {
 		try await valueComparisons(of: toolRuns).failures
 	}
 
+	/// What `valueComparisons(of:isolatingValueGraphsOf:)` finds.
+	struct ValueComparisons {
+		/// Each graph’s value failures, keyed by seed.
+		var failures = [UInt64: [GraphFuzzerFailure]]()
+		/// The base corpus seeds whose value-oracle graph the comparator compared, failing or not.
+		var comparedValueOracleSeeds = Set<UInt64>()
+		/// Each graph with a hole whose seam build, or public mock, keeps alive what its inline build, or known-right path,
+		/// frees (`seamRetainsWhatInlineFrees`, `publicMockRetainsWhatKnownRightFrees`), keyed by seed: a failure after the
+		/// value failure in the oracle's chain, which a known value failure does not mask.
+		var retentionFailures = [UInt64: GraphFuzzerFailure]()
+		/// What the retention oracle judged of each graph with a hole whose two builds the comparator compared, failing or
+		/// not, keyed by seed.
+		var retentionCounts = [UInt64: GraphFuzzerRetentionCounts]()
+	}
+
+	/// Whether the graph of `fixture` holds a hole, judged by the retention oracle: it draws a type that fills a seam's hole
+	/// (`GraphFuzzerFixture.drawsHole`), or `generatedFiles` take a builder for a hole, over an enum of its places – a
+	/// seam's a `SafeDIScope_` or `SafeDISendableScope_` enum, a public mock's a `MockScope_` one. A rename of those enums
+	/// that drops graphs from the oracle changes the judged graphs each corpus pins (`retentionCounts`).
+	static func holdsHole(fixture: GraphFuzzerFixture, generatedFiles: [String: String]) -> Bool {
+		fixture.drawsHole || generatedFiles.values.contains { contents in
+			contents.contains("Scope_") && (contents.contains("SafeDIScope_") || contents.contains("SafeDISendableScope_") || contents.contains("MockScope_"))
+		}
+	}
+
 	/// `valueFailures(of:)`, with the base corpus seeds whose value-oracle graph the comparator compared, failing or
 	/// not. A base corpus graph is compared by its value-oracle graph (`GraphFuzzerValueOracleRun.valueGraph`): each
 	/// root's mock and each mirrored mock with its production build, in one path, with no exemption. The graphs of a seed
@@ -10760,7 +11278,7 @@ enum GraphFuzzerOracle {
 	static func valueComparisons(
 		of toolRuns: [GraphFuzzerToolRuns],
 		isolatingValueGraphsOf isolatedSeeds: Set<UInt64> = [],
-	) async throws -> (failures: [UInt64: [GraphFuzzerFailure]], comparedValueOracleSeeds: Set<UInt64>) {
+	) async throws -> ValueComparisons {
 		let inspectedRuns = toolRuns.filter(\.isInspectedByValueOracle)
 		// A graph with a hole is compared with its visible build too, in which the seam builds the fulfilling type.
 		let visibleRuns = toolRuns.filter { runs in
@@ -10772,7 +11290,7 @@ enum GraphFuzzerOracle {
 			guard runs.valueOracleFixtureFailure == nil, let graph = runs.valueOracle?.valueGraph else { return nil }
 			return (runs, graph)
 		}
-		guard !inspectedRuns.isEmpty || !visibleRuns.isEmpty, compileVerificationIsEnabled else { return ([:], []) }
+		guard !inspectedRuns.isEmpty || !visibleRuns.isEmpty, compileVerificationIsEnabled else { return ValueComparisons() }
 		var filesToDelete = [URL]()
 		defer {
 			for fileToDelete in filesToDelete {
@@ -10781,8 +11299,10 @@ enum GraphFuzzerOracle {
 		}
 		// Each graph beside the runs it judges: a public mock graph's against its known-right path
 		// (`publicMockValueGraph(of:)`), a seam graph's against its inline build.
+		// A graph with a hole also judges retention: what each probe keeps alive, holding one wrapper of its value, once the
+		// value is released (rule 3 of the seam contract).
 		let graphs = inspectedRuns.compactMap { runs -> (runs: GraphFuzzerToolRuns, graph: DifferentialValueGraph)? in
-			if let graph = publicMockValueGraph(of: runs) {
+			if let graph = publicMockValueGraph(of: runs, judgesRetention: holdsHole(fixture: runs.fixture, generatedFiles: runs.generatedFiles)) {
 				return (runs, graph)
 			}
 			guard case let .accepted(seamFiles, _) = runs.firstOutcome, case let .accepted(inlineFiles, _) = runs.inlineOutcome else { return nil }
@@ -10792,8 +11312,9 @@ enum GraphFuzzerOracle {
 				feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: seamFiles),
 				knownRight: DifferentialValuePath(fixture: storingFixture.withoutSeams, generatedFiles: inlineFiles),
 				probes: storingFixture.differentialValueProbes(generatedFiles: seamFiles),
-				samples: storingFixture.holeDrawForwardedPropertiesSamples,
+				samples: storingFixture.holeDrawForwardedPropertiesSamples + storingFixture.forwardedLabelAcrossSeamCallSamples,
 				exemptions: [],
+				judgesRetention: holdsHole(fixture: runs.fixture, generatedFiles: seamFiles),
 			))
 		}
 		let visibleGraphs = visibleRuns.compactMap { runs -> (runs: GraphFuzzerToolRuns, graph: DifferentialValueGraph)? in
@@ -10804,13 +11325,15 @@ enum GraphFuzzerOracle {
 				feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: holeFiles),
 				knownRight: DifferentialValuePath(fixture: storingFixture.withoutHoles, generatedFiles: visibleFiles),
 				probes: storingFixture.differentialValueProbes(generatedFiles: holeFiles),
-				samples: storingFixture.holeDrawForwardedPropertiesSamples,
+				samples: storingFixture.holeDrawForwardedPropertiesSamples + storingFixture.forwardedLabelAcrossSeamCallSamples,
 			))
 		}
-		guard let comparisons = try await compare(graphs + visibleGraphs + valueOracleGraphs, isolating: isolatedSeeds, filesToDelete: &filesToDelete) else { return ([:], []) }
+		guard let comparisons = try await compare(graphs + visibleGraphs + valueOracleGraphs, isolating: isolatedSeeds, filesToDelete: &filesToDelete) else { return ValueComparisons() }
 		let valueOracleComparisons = zip(valueOracleGraphs.map(\.runs), comparisons.suffix(valueOracleGraphs.count))
 		var failures = [UInt64: [GraphFuzzerFailure]]()
 		var comparedValueOracleSeeds = Set<UInt64>()
+		var retentionFailures = [UInt64: GraphFuzzerFailure]()
+		var retentionCounts = [UInt64: GraphFuzzerRetentionCounts]()
 		for (runs, comparison) in valueOracleComparisons {
 			let builds = "The value-oracle fixture:\n\(runs.valueOracle?.plan.valueOracleFixture(storingEveryParameter: true).description ?? "")\nWhat the tool generated for it:\n\(runs.valueOracle?.outcome?.description ?? "")"
 			switch comparison.result {
@@ -10851,6 +11374,29 @@ enum GraphFuzzerOracle {
 				))
 			}
 		}
+		// What the graph keeps alive is judged whatever its values, as a later failure of the oracle's chain.
+		for ((runs, graph), comparison) in zip(graphs, comparisons) where graph.judgesRetention {
+			guard case let .success(valueComparison) = comparison.result else { continue }
+			let judgedProbes = valueComparison.retentionJudgedProbes
+			retentionCounts[runs.fixture.seed] = GraphFuzzerRetentionCounts(
+				judged: judgedProbes.isEmpty ? 0 : 1,
+				judgedDrawingRetentionShape: !judgedProbes.isEmpty && GraphFuzzerRetentionCounts.drawsRetentionShape(runs.fixture) ? 1 : 0,
+				judgedThroughHandWrittenBuilder: judgedProbes.contains { $0.hasSuffix(GraphFuzzerFixture.handWrittenBuilderProbeNameSuffix) } ? 1 : 0,
+				unpairedExperiments: valueComparison.unpairedRetentionExperimentCount,
+			)
+			let differences = valueComparison.retentionDifferences
+			guard !differences.isEmpty else { continue }
+			let isPublicMockGraph = runs.knownRightOutcome != nil
+			let builds = isPublicMockGraph
+				? "As drawn:\n\(runs.firstOutcome.description)\nKnown right:\n\(runs.knownRightOutcome?.description ?? "")"
+				: "With the seam:\n\(runs.firstOutcome.description)\nWithout it:\n\(runs.inlineOutcome?.description ?? "")"
+			retentionFailures[runs.fixture.seed] = GraphFuzzerFailure(
+				seed: runs.fixture.seed,
+				kind: isPublicMockGraph ? .publicMockRetainsWhatKnownRightFrees : .seamRetainsWhatInlineFrees,
+				details: "\(differences.map(\.description).joined(separator: "\n"))\n\(valueComparison.report)\(builds)",
+				valueDifferences: differences.map(\.description),
+			)
+		}
 		// A difference from the visible build is reported before one from the inline build, which follows it as a failure of
 		// its own: a known issue that documents the first masks no difference of the second it does not document.
 		for ((runs, _), comparison) in zip(graphs, comparisons) {
@@ -10878,7 +11424,7 @@ enum GraphFuzzerOracle {
 				))
 			}
 		}
-		return (failures, comparedValueOracleSeeds)
+		return ValueComparisons(failures: failures, comparedValueOracleSeeds: comparedValueOracleSeeds, retentionFailures: retentionFailures, retentionCounts: retentionCounts)
 	}
 
 	/// Compares each of `graphs`, beside the runs it judges: the graphs of seeds outside `isolatedSeeds` in one batch,

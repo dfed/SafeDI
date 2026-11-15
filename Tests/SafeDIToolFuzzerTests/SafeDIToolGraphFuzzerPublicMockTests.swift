@@ -34,7 +34,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		// of each shape it shows, which must fail exactly as listed, and graphs that must pass.
 		let knownIssuesBySeed = Dictionary(uniqueKeysWithValues: SafeDIToolGraphFuzzerTests.publicMockKnownIssues.flatMap { knownIssue in knownIssue.seeds.map { ($0, knownIssue) } })
 		for result in try await publicMockSmokeResults.value {
-			for finding in GraphFuzzerFinding.findings(failure: result.failure, laterFailures: result.laterFailures, knownIssue: knownIssuesBySeed[result.fixture.seed]) {
+			for finding in GraphFuzzerFinding.findings(failure: result.failure, laterFailures: result.laterFailures, knownIssue: knownIssuesBySeed[result.fixture.seed], retentionIsJudged: result.isJudgedForRetention) {
 				switch finding {
 				case .passed, .knownIssue:
 					break
@@ -58,6 +58,8 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		let results = try await publicMockSmokeResults.value
 		let passingResults = results.filter { $0.isAccepted && $0.failure == nil }
 		#expect(passingResults.allSatisfy(\.isComparedByValueOracle) || !compileVerificationIsEnabled)
+		// A graph with a hole whose retention the retention oracle judged.
+		#expect(results.contains(where: \.isJudgedForRetention) || !compileVerificationIsEnabled)
 		// Every graph is split across modules, with every package name given, so the SwiftPM plugin flow agreed on each with
 		// the module-info flow.
 		#expect(passingResults.filter { !$0.isComparedAcrossIntegrations }.map(\.fixture.seed) == [])
