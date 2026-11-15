@@ -1418,7 +1418,8 @@ jobs:
   # jobs run, so a Markdown-only pull request skips it, and a skipped job
   # that is not a matrix job reports success under its own name, so it
   # needs no stand-in. It only reads reports with Python, as "Check Graph
-  # Fuzzer Corpus on Linux" does, so it runs on Linux with no container.
+  # Fuzzer Corpus on Linux" does, so it runs on Linux with no container. It
+  # also runs the expectation regenerator's fixture self-test, last.
   line-coverage:
     name: Check Line Coverage on Linux
     needs: [changes, spm, linux]
@@ -1434,13 +1435,6 @@ jobs:
       # symbolic links and refuses missing data before it reads the reports.
       - name: Check the Script Against Its Fixtures
         run: python3 -I Scripts/unexecuted-lines.py --self-test "$RUNNER_TEMP/unexecuted-lines-self-test"
-      # Scripts/regenerate-expectations.py rewrites test expectations from
-      # what the test helpers record, so its fixtures prove it rewrites only
-      # literals that equalled a recorded output and refuses records made over
-      # other test sources. It reads no report, so it runs here only because
-      # this job already runs Python self-tests; it adds no job.
-      - name: Check the Expectation Regenerator Against Its Fixtures
-        run: python3 -I Scripts/regenerate-expectations.py --self-test "$RUNNER_TEMP/regenerate-expectations-self-test"
       # A test job that failed, was cancelled or could not export uploads no
       # report, and the next step names the report that is missing, so a
       # download that finds nothing is not this step's failure.
@@ -1452,6 +1446,16 @@ jobs:
           path: ${{ runner.temp }}/line-coverage
       - name: Find Lines No Test Executes
         run: python3 -I Scripts/unexecuted-lines.py --summary "$GITHUB_STEP_SUMMARY" --commit "$GITHUB_SHA" linux="$RUNNER_TEMP/line-coverage/line-coverage-linux" macos="$RUNNER_TEMP/line-coverage/line-coverage-macos"
+      # Scripts/regenerate-expectations.py rewrites test expectations from
+      # what the test helpers record, so its fixtures prove it rewrites only
+      # literals that equalled a recorded output and refuses records made over
+      # other test sources. It reads no report and runs here only because this
+      # job already runs Python self-tests, so it adds no job. It runs last and
+      # whatever the coverage steps concluded, so a failure here never hides
+      # which lines no test executes, and still fails the job.
+      - name: Check the Expectation Regenerator Against Its Fixtures
+        if: ${{ !cancelled() }}
+        run: python3 -I Scripts/regenerate-expectations.py --self-test "$RUNNER_TEMP/regenerate-expectations-self-test"
 
   # Lists the generator lines the change adds or modifies that no graph of the
   # fuzzer's corpora executed, from the shards' coverage profiles, split by
