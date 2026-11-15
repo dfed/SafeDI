@@ -1,0 +1,1328 @@
+import Harness
+import SafeDI
+
+public protocol Api: AnyObject {}
+
+public protocol Bpi: AnyObject {}
+
+@Instantiable
+public final class Hub: Instantiable {
+    public init(t39: T39) {
+        self.t39 = t39
+        #if SPIKE_TRACE
+        Registry.created(self, ["t39": t39])
+        #endif
+    }
+
+    @Instantiated public let t39: T39
+    #if SPIKE_TRACE
+    public let tracker = Tracker("Hub")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension Hub: Traced {}
+#endif
+
+@Instantiable
+public final class T1: Instantiable {
+    public init(t33Builder: Instantiator<T33>, t41Builder: Instantiator<T41>) {
+        self.t33Builder = t33Builder
+        self.t41Builder = t41Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33Builder": t33Builder, "t41Builder": t41Builder])
+        #endif
+    }
+
+    @Instantiated public let t33Builder: Instantiator<T33>
+    @Instantiated public let t41Builder: Instantiator<T41>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T1")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T1: Traced {}
+#endif
+
+@Instantiable
+public final class T2: Instantiable {
+    public init(api: any Api) {
+        self.api = api
+        #if SPIKE_TRACE
+        Registry.created(self, ["api": api])
+        #endif
+    }
+
+    @Instantiated public let api: any Api
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T2")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T2: Traced {}
+#endif
+
+@Instantiable
+public final class T3: Instantiable {
+    public init(t11: T11) {
+        self.t11 = t11
+        #if SPIKE_TRACE
+        Registry.created(self, ["t11": t11])
+        #endif
+    }
+
+    @Instantiated public let t11: T11
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T3")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T3: Traced {}
+#endif
+
+@Instantiable
+public final class T4: Instantiable {
+    public init(t33Builder: Instantiator<T33>) {
+        self.t33Builder = t33Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33Builder": t33Builder])
+        #endif
+    }
+
+    @Instantiated public let t33Builder: Instantiator<T33>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T4")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T4: Traced {}
+#endif
+
+@Instantiable
+public final class T5: Instantiable {
+    public init(t20: T20, t25Builder: Instantiator<T25>, t14: T14) {
+        self.t20 = t20
+        self.t25Builder = t25Builder
+        self.t14 = t14
+        #if SPIKE_TRACE
+        Registry.created(self, ["t20": t20, "t25Builder": t25Builder, "t14": t14])
+        #endif
+    }
+
+    @Instantiated public let t20: T20
+    @Instantiated public let t25Builder: Instantiator<T25>
+    @Instantiated public let t14: T14
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T5")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T5: Traced {}
+#endif
+
+@Instantiable
+public final class T6: Instantiable {
+    public init(t33: T33, t8: T8, bpi: any Bpi) {
+        self.t33 = t33
+        self.t8 = t8
+        self.bpi = bpi
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33": t33, "t8": t8, "bpi": bpi])
+        #endif
+    }
+
+    @Instantiated public let t33: T33
+    @Instantiated public let t8: T8
+    @Instantiated public let bpi: any Bpi
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T6")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T6: Traced {}
+#endif
+
+@Instantiable
+public final class T7: Instantiable {
+    public init() {
+        #if SPIKE_TRACE
+        Registry.created(self, [:])
+        #endif
+    }
+
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T7")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T7: Traced {}
+#endif
+
+@Instantiable
+public final class T8: Instantiable {
+    public init() {
+        #if SPIKE_TRACE
+        Registry.created(self, [:])
+        #endif
+    }
+
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T8")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T8: Traced {}
+#endif
+
+@Instantiable
+public final class T9: Instantiable {
+    public init(t33Builder: Instantiator<T33>, t13Builder: Instantiator<T13>) {
+        self.t33Builder = t33Builder
+        self.t13Builder = t13Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33Builder": t33Builder, "t13Builder": t13Builder])
+        #endif
+    }
+
+    @Instantiated public let t33Builder: Instantiator<T33>
+    @Instantiated public let t13Builder: Instantiator<T13>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T9")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T9: Traced {}
+#endif
+
+@Instantiable
+public final class T10: Instantiable {
+    public init(t2Builder: Instantiator<T2>, t5: T5, t28Builder: Instantiator<T28>, t43Builder: Instantiator<T43>) {
+        self.t2Builder = t2Builder
+        self.t5 = t5
+        self.t28Builder = t28Builder
+        self.t43Builder = t43Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t2Builder": t2Builder, "t5": t5, "t28Builder": t28Builder, "t43Builder": t43Builder])
+        #endif
+    }
+
+    @Instantiated public let t2Builder: Instantiator<T2>
+    @Instantiated public let t5: T5
+    @Instantiated public let t28Builder: Instantiator<T28>
+    @Instantiated public let t43Builder: Instantiator<T43>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T10")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T10: Traced {}
+#endif
+
+@Instantiable
+public final class T11: Instantiable {
+    public init() {
+        #if SPIKE_TRACE
+        Registry.created(self, [:])
+        #endif
+    }
+
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T11")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T11: Traced {}
+#endif
+
+@Instantiable
+public final class T12: Instantiable {
+    public init() {
+        #if SPIKE_TRACE
+        Registry.created(self, [:])
+        #endif
+    }
+
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T12")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T12: Traced {}
+#endif
+
+@Instantiable
+public final class T13: Instantiable {
+    public init(t33Builder: Instantiator<T33>) {
+        self.t33Builder = t33Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33Builder": t33Builder])
+        #endif
+    }
+
+    @Instantiated public let t33Builder: Instantiator<T33>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T13")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T13: Traced {}
+#endif
+
+@Instantiable
+public final class T14: Instantiable {
+    public init(t33: T33) {
+        self.t33 = t33
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33": t33])
+        #endif
+    }
+
+    @Instantiated public let t33: T33
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T14")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T14: Traced {}
+#endif
+
+@Instantiable
+public final class T15: Instantiable {
+    public init(t21: T21, t23Builder: Instantiator<T23>, t27: T27, t29Builder: Instantiator<T29>, t31Builder: Instantiator<T31>, t38: T38, t45Builder: Instantiator<T45>, t47Builder: Instantiator<T47>, t59: T59) {
+        self.t21 = t21
+        self.t23Builder = t23Builder
+        self.t27 = t27
+        self.t29Builder = t29Builder
+        self.t31Builder = t31Builder
+        self.t38 = t38
+        self.t45Builder = t45Builder
+        self.t47Builder = t47Builder
+        self.t59 = t59
+        #if SPIKE_TRACE
+        Registry.created(self, ["t21": t21, "t23Builder": t23Builder, "t27": t27, "t29Builder": t29Builder, "t31Builder": t31Builder, "t38": t38, "t45Builder": t45Builder, "t47Builder": t47Builder, "t59": t59])
+        #endif
+    }
+
+    @Instantiated public let t21: T21
+    @Instantiated public let t23Builder: Instantiator<T23>
+    @Instantiated public let t27: T27
+    @Instantiated public let t29Builder: Instantiator<T29>
+    @Instantiated public let t31Builder: Instantiator<T31>
+    @Instantiated public let t38: T38
+    @Instantiated public let t45Builder: Instantiator<T45>
+    @Instantiated public let t47Builder: Instantiator<T47>
+    @Instantiated public let t59: T59
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T15")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T15: Traced {}
+#endif
+
+@Instantiable
+public final class T16: Instantiable {
+    public init(t30: T30, t33: T33) {
+        self.t30 = t30
+        self.t33 = t33
+        #if SPIKE_TRACE
+        Registry.created(self, ["t30": t30, "t33": t33])
+        #endif
+    }
+
+    @Instantiated public let t30: T30
+    @Instantiated public let t33: T33
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T16")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T16: Traced {}
+#endif
+
+@Instantiable
+public final class T17: Instantiable {
+    public init(t33: T33) {
+        self.t33 = t33
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33": t33])
+        #endif
+    }
+
+    @Instantiated public let t33: T33
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T17")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T17: Traced {}
+#endif
+
+@Instantiable
+public final class T18: Instantiable {
+    public init(t33Builder: Instantiator<T33>, t14: T14) {
+        self.t33Builder = t33Builder
+        self.t14 = t14
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33Builder": t33Builder, "t14": t14])
+        #endif
+    }
+
+    @Instantiated public let t33Builder: Instantiator<T33>
+    @Instantiated public let t14: T14
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T18")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T18: Traced {}
+#endif
+
+@Instantiable
+public final class T19: Instantiable {
+    public init() {
+        #if SPIKE_TRACE
+        Registry.created(self, [:])
+        #endif
+    }
+
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T19")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T19: Traced {}
+#endif
+
+@Instantiable
+public final class T20: Instantiable {
+    public init(t33: T33) {
+        self.t33 = t33
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33": t33])
+        #endif
+    }
+
+    @Instantiated public let t33: T33
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T20")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T20: Traced {}
+#endif
+
+@Instantiable
+public final class T21: Instantiable {
+    public init() {
+        #if SPIKE_TRACE
+        Registry.created(self, [:])
+        #endif
+    }
+
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T21")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T21: Traced {}
+#endif
+
+@Instantiable
+public final class T22: Instantiable {
+    public init() {
+        #if SPIKE_TRACE
+        Registry.created(self, [:])
+        #endif
+    }
+
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T22")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T22: Traced {}
+#endif
+
+@Instantiable
+public final class T23: Instantiable {
+    public init(t36: T36, t40: T40) {
+        self.t36 = t36
+        self.t40 = t40
+        #if SPIKE_TRACE
+        Registry.created(self, ["t36": t36, "t40": t40])
+        #endif
+    }
+
+    @Instantiated public let t36: T36
+    @Instantiated public let t40: T40
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T23")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T23: Traced {}
+#endif
+
+@Instantiable
+public final class T24: Instantiable {
+    public init(t33: T33, api: any Api, t40: T40, t31: T31) {
+        self.t33 = t33
+        self.api = api
+        self.t40 = t40
+        self.t31 = t31
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33": t33, "api": api, "t40": t40, "t31": t31])
+        #endif
+    }
+
+    @Instantiated public let t33: T33
+    @Instantiated public let api: any Api
+    @Instantiated public let t40: T40
+    @Instantiated public let t31: T31
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T24")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T24: Traced {}
+#endif
+
+@Instantiable
+public final class T25: Instantiable {
+    public init(t33Builder: Instantiator<T33>) {
+        self.t33Builder = t33Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33Builder": t33Builder])
+        #endif
+    }
+
+    @Instantiated public let t33Builder: Instantiator<T33>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T25")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T25: Traced {}
+#endif
+
+@Instantiable
+public final class T26: Instantiable {
+    public init(api: any Api, t54: T54, t33Builder: Instantiator<T33>, t12: T12) {
+        self.api = api
+        self.t54 = t54
+        self.t33Builder = t33Builder
+        self.t12 = t12
+        #if SPIKE_TRACE
+        Registry.created(self, ["api": api, "t54": t54, "t33Builder": t33Builder, "t12": t12])
+        #endif
+    }
+
+    @Instantiated public let api: any Api
+    @Instantiated public let t54: T54
+    @Instantiated public let t33Builder: Instantiator<T33>
+    @Instantiated public let t12: T12
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T26")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T26: Traced {}
+#endif
+
+@Instantiable
+public final class T27: Instantiable {
+    public init(t40Builder: Instantiator<T40>) {
+        self.t40Builder = t40Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t40Builder": t40Builder])
+        #endif
+    }
+
+    @Instantiated public let t40Builder: Instantiator<T40>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T27")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T27: Traced {}
+#endif
+
+@Instantiable
+public final class T28: Instantiable {
+    public init() {
+        #if SPIKE_TRACE
+        Registry.created(self, [:])
+        #endif
+    }
+
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T28")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T28: Traced {}
+#endif
+
+@Instantiable
+public final class T29: Instantiable {
+    public init(t48: T48, t33Builder: Instantiator<T33>) {
+        self.t48 = t48
+        self.t33Builder = t33Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t48": t48, "t33Builder": t33Builder])
+        #endif
+    }
+
+    @Instantiated public let t48: T48
+    @Instantiated public let t33Builder: Instantiator<T33>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T29")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T29: Traced {}
+#endif
+
+@Instantiable
+public final class T30: Instantiable {
+    public init(t50Builder: Instantiator<T50>, t33Builder: Instantiator<T33>, t48Builder: Instantiator<T48>) {
+        self.t50Builder = t50Builder
+        self.t33Builder = t33Builder
+        self.t48Builder = t48Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t50Builder": t50Builder, "t33Builder": t33Builder, "t48Builder": t48Builder])
+        #endif
+    }
+
+    @Instantiated public let t50Builder: Instantiator<T50>
+    @Instantiated public let t33Builder: Instantiator<T33>
+    @Instantiated public let t48Builder: Instantiator<T48>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T30")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T30: Traced {}
+#endif
+
+@Instantiable
+public final class T31: Instantiable {
+    public init(t33Builder: Instantiator<T33>) {
+        self.t33Builder = t33Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33Builder": t33Builder])
+        #endif
+    }
+
+    @Instantiated public let t33Builder: Instantiator<T33>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T31")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T31: Traced {}
+#endif
+
+@Instantiable
+public final class T32: Instantiable {
+    public init(t33: T33, bpi: any Bpi) {
+        self.t33 = t33
+        self.bpi = bpi
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33": t33, "bpi": bpi])
+        #endif
+    }
+
+    @Instantiated public let t33: T33
+    @Instantiated public let bpi: any Bpi
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T32")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T32: Traced {}
+#endif
+
+@Instantiable
+public final class T33: Instantiable {
+    public init(api: any Api, bpi: any Bpi) {
+        self.api = api
+        self.bpi = bpi
+        #if SPIKE_TRACE
+        Registry.created(self, ["api": api, "bpi": bpi])
+        #endif
+    }
+
+    @Instantiated public let api: any Api
+    @Instantiated public let bpi: any Bpi
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T33")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T33: Traced {}
+#endif
+
+@Instantiable
+public final class T34: Instantiable {
+    public init(t33: T33) {
+        self.t33 = t33
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33": t33])
+        #endif
+    }
+
+    @Instantiated public let t33: T33
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T34")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T34: Traced {}
+#endif
+
+@Instantiable
+public final class T35: Instantiable {
+    public init(t33: T33, bpi: any Bpi, t59: T59) {
+        self.t33 = t33
+        self.bpi = bpi
+        self.t59 = t59
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33": t33, "bpi": bpi, "t59": t59])
+        #endif
+    }
+
+    @Instantiated public let t33: T33
+    @Instantiated public let bpi: any Bpi
+    @Instantiated public let t59: T59
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T35")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T35: Traced {}
+#endif
+
+@Instantiable
+public final class T36: Instantiable {
+    public init(t6: T6) {
+        self.t6 = t6
+        #if SPIKE_TRACE
+        Registry.created(self, ["t6": t6])
+        #endif
+    }
+
+    @Instantiated public let t6: T6
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T36")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T36: Traced {}
+#endif
+
+@Instantiable
+public final class T37: Instantiable {
+    public init(t14Builder: Instantiator<T14>) {
+        self.t14Builder = t14Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t14Builder": t14Builder])
+        #endif
+    }
+
+    @Instantiated public let t14Builder: Instantiator<T14>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T37")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T37: Traced {}
+#endif
+
+@Instantiable
+public final class T38: Instantiable {
+    public init(t33: T33, t48Builder: Instantiator<T48>) {
+        self.t33 = t33
+        self.t48Builder = t48Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33": t33, "t48Builder": t48Builder])
+        #endif
+    }
+
+    @Instantiated public let t33: T33
+    @Instantiated public let t48Builder: Instantiator<T48>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T38")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T38: Traced {}
+#endif
+
+@Instantiable
+public final class T39: Instantiable {
+    public init(t7Builder: Instantiator<T7>, t10: T10, t55Builder: Instantiator<T55>, t58Builder: Instantiator<T58>) {
+        self.t7Builder = t7Builder
+        self.t10 = t10
+        self.t55Builder = t55Builder
+        self.t58Builder = t58Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t7Builder": t7Builder, "t10": t10, "t55Builder": t55Builder, "t58Builder": t58Builder])
+        #endif
+    }
+
+    @Instantiated public let t7Builder: Instantiator<T7>
+    @Instantiated public let t10: T10
+    @Instantiated public let t55Builder: Instantiator<T55>
+    @Instantiated public let t58Builder: Instantiator<T58>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T39")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T39: Traced {}
+#endif
+
+@Instantiable
+public final class T40: Instantiable {
+    public init(bpi: any Bpi, t33: T33) {
+        self.bpi = bpi
+        self.t33 = t33
+        #if SPIKE_TRACE
+        Registry.created(self, ["bpi": bpi, "t33": t33])
+        #endif
+    }
+
+    @Instantiated public let bpi: any Bpi
+    @Instantiated public let t33: T33
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T40")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T40: Traced {}
+#endif
+
+@Instantiable
+public final class T41: Instantiable {
+    public init(t9: T9, t11Builder: Instantiator<T11>, t22: T22, t34Builder: Instantiator<T34>, api: any Api, t44Builder: Instantiator<T44>, t52Builder: Instantiator<T52>, t53Builder: Instantiator<T53>) {
+        self.t9 = t9
+        self.t11Builder = t11Builder
+        self.t22 = t22
+        self.t34Builder = t34Builder
+        self.api = api
+        self.t44Builder = t44Builder
+        self.t52Builder = t52Builder
+        self.t53Builder = t53Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t9": t9, "t11Builder": t11Builder, "t22": t22, "t34Builder": t34Builder, "api": api, "t44Builder": t44Builder, "t52Builder": t52Builder, "t53Builder": t53Builder])
+        #endif
+    }
+
+    @Instantiated public let t9: T9
+    @Instantiated public let t11Builder: Instantiator<T11>
+    @Instantiated public let t22: T22
+    @Instantiated public let t34Builder: Instantiator<T34>
+    @Instantiated public let api: any Api
+    @Instantiated public let t44Builder: Instantiator<T44>
+    @Instantiated public let t52Builder: Instantiator<T52>
+    @Instantiated public let t53Builder: Instantiator<T53>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T41")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T41: Traced {}
+#endif
+
+@Instantiable
+public final class T42: Instantiable {
+    public init(t4Builder: Instantiator<T4>, t13Builder: Instantiator<T13>, t18Builder: Instantiator<T18>, t19Builder: Instantiator<T19>, t46: T46, t51Builder: Instantiator<T51>) {
+        self.t4Builder = t4Builder
+        self.t13Builder = t13Builder
+        self.t18Builder = t18Builder
+        self.t19Builder = t19Builder
+        self.t46 = t46
+        self.t51Builder = t51Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t4Builder": t4Builder, "t13Builder": t13Builder, "t18Builder": t18Builder, "t19Builder": t19Builder, "t46": t46, "t51Builder": t51Builder])
+        #endif
+    }
+
+    @Instantiated public let t4Builder: Instantiator<T4>
+    @Instantiated public let t13Builder: Instantiator<T13>
+    @Instantiated public let t18Builder: Instantiator<T18>
+    @Instantiated public let t19Builder: Instantiator<T19>
+    @Instantiated public let t46: T46
+    @Instantiated public let t51Builder: Instantiator<T51>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T42")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T42: Traced {}
+#endif
+
+@Instantiable
+public final class T43: Instantiable {
+    public init(t26: T26) {
+        self.t26 = t26
+        #if SPIKE_TRACE
+        Registry.created(self, ["t26": t26])
+        #endif
+    }
+
+    @Instantiated public let t26: T26
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T43")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T43: Traced {}
+#endif
+
+@Instantiable
+public final class T44: Instantiable {
+    public init(t31Builder: Instantiator<T31>) {
+        self.t31Builder = t31Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t31Builder": t31Builder])
+        #endif
+    }
+
+    @Instantiated public let t31Builder: Instantiator<T31>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T44")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T44: Traced {}
+#endif
+
+@Instantiable
+public final class T45: Instantiable {
+    public init(t33: T33, t40Builder: Instantiator<T40>, t31Builder: Instantiator<T31>) {
+        self.t33 = t33
+        self.t40Builder = t40Builder
+        self.t31Builder = t31Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33": t33, "t40Builder": t40Builder, "t31Builder": t31Builder])
+        #endif
+    }
+
+    @Instantiated public let t33: T33
+    @Instantiated public let t40Builder: Instantiator<T40>
+    @Instantiated public let t31Builder: Instantiator<T31>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T45")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T45: Traced {}
+#endif
+
+@Instantiable
+public final class T46: Instantiable {
+    public init(t16Builder: Instantiator<T16>, t35: T35, t57: T57, t33Builder: Instantiator<T33>) {
+        self.t16Builder = t16Builder
+        self.t35 = t35
+        self.t57 = t57
+        self.t33Builder = t33Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t16Builder": t16Builder, "t35": t35, "t57": t57, "t33Builder": t33Builder])
+        #endif
+    }
+
+    @Instantiated public let t16Builder: Instantiator<T16>
+    @Instantiated public let t35: T35
+    @Instantiated public let t57: T57
+    @Instantiated public let t33Builder: Instantiator<T33>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T46")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T46: Traced {}
+#endif
+
+@Instantiable
+public final class T47: Instantiable {
+    public init() {
+        #if SPIKE_TRACE
+        Registry.created(self, [:])
+        #endif
+    }
+
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T47")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T47: Traced {}
+#endif
+
+@Instantiable
+public final class T48: Instantiable {
+    public init(t3Builder: Instantiator<T3>, t33: T33, t34Builder: Instantiator<T34>) {
+        self.t3Builder = t3Builder
+        self.t33 = t33
+        self.t34Builder = t34Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t3Builder": t3Builder, "t33": t33, "t34Builder": t34Builder])
+        #endif
+    }
+
+    @Instantiated public let t3Builder: Instantiator<T3>
+    @Instantiated public let t33: T33
+    @Instantiated public let t34Builder: Instantiator<T34>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T48")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T48: Traced {}
+#endif
+
+@Instantiable
+public final class T49: Instantiable {
+    public init(t32Builder: Instantiator<T32>, t31: T31) {
+        self.t32Builder = t32Builder
+        self.t31 = t31
+        #if SPIKE_TRACE
+        Registry.created(self, ["t32Builder": t32Builder, "t31": t31])
+        #endif
+    }
+
+    @Instantiated public let t32Builder: Instantiator<T32>
+    @Instantiated public let t31: T31
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T49")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T49: Traced {}
+#endif
+
+@Instantiable
+public final class T50: Instantiable {
+    public init(t6: T6, t33Builder: Instantiator<T33>, t11: T11) {
+        self.t6 = t6
+        self.t33Builder = t33Builder
+        self.t11 = t11
+        #if SPIKE_TRACE
+        Registry.created(self, ["t6": t6, "t33Builder": t33Builder, "t11": t11])
+        #endif
+    }
+
+    @Instantiated public let t6: T6
+    @Instantiated public let t33Builder: Instantiator<T33>
+    @Instantiated public let t11: T11
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T50")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T50: Traced {}
+#endif
+
+@Instantiable
+public final class T51: Instantiable {
+    public init(t8Builder: Instantiator<T8>, t15: T15, t49: T49, t33: T33) {
+        self.t8Builder = t8Builder
+        self.t15 = t15
+        self.t49 = t49
+        self.t33 = t33
+        #if SPIKE_TRACE
+        Registry.created(self, ["t8Builder": t8Builder, "t15": t15, "t49": t49, "t33": t33])
+        #endif
+    }
+
+    @Instantiated public let t8Builder: Instantiator<T8>
+    @Instantiated public let t15: T15
+    @Instantiated public let t49: T49
+    @Instantiated public let t33: T33
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T51")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T51: Traced {}
+#endif
+
+@Instantiable
+public final class T52: Instantiable {
+    public init(t33Builder: Instantiator<T33>) {
+        self.t33Builder = t33Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33Builder": t33Builder])
+        #endif
+    }
+
+    @Instantiated public let t33Builder: Instantiator<T33>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T52")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T52: Traced {}
+#endif
+
+@Instantiable
+public final class T53: Instantiable {
+    public init(t33Builder: Instantiator<T33>, api: any Api) {
+        self.t33Builder = t33Builder
+        self.api = api
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33Builder": t33Builder, "api": api])
+        #endif
+    }
+
+    @Instantiated public let t33Builder: Instantiator<T33>
+    @Instantiated public let api: any Api
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T53")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T53: Traced {}
+#endif
+
+@Instantiable
+public final class T54: Instantiable {
+    public init(t1: T1, t17Builder: Instantiator<T17>, t24: T24, t33: T33, bpi: any Bpi) {
+        self.t1 = t1
+        self.t17Builder = t17Builder
+        self.t24 = t24
+        self.t33 = t33
+        self.bpi = bpi
+        #if SPIKE_TRACE
+        Registry.created(self, ["t1": t1, "t17Builder": t17Builder, "t24": t24, "t33": t33, "bpi": bpi])
+        #endif
+    }
+
+    @Instantiated public let t1: T1
+    @Instantiated public let t17Builder: Instantiator<T17>
+    @Instantiated public let t24: T24
+    @Instantiated public let t33: T33
+    @Instantiated public let bpi: any Bpi
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T54")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T54: Traced {}
+#endif
+
+@Instantiable
+public final class T55: Instantiable {
+    public init(t56Builder: Instantiator<T56>) {
+        self.t56Builder = t56Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t56Builder": t56Builder])
+        #endif
+    }
+
+    @Instantiated public let t56Builder: Instantiator<T56>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T55")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T55: Traced {}
+#endif
+
+@Instantiable
+public final class T56: Instantiable {
+    public init(t14Builder: Instantiator<T14>) {
+        self.t14Builder = t14Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t14Builder": t14Builder])
+        #endif
+    }
+
+    @Instantiated public let t14Builder: Instantiator<T14>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T56")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T56: Traced {}
+#endif
+
+@Instantiable
+public final class T57: Instantiable {
+    public init(t33Builder: Instantiator<T33>, t13: T13) {
+        self.t33Builder = t33Builder
+        self.t13 = t13
+        #if SPIKE_TRACE
+        Registry.created(self, ["t33Builder": t33Builder, "t13": t13])
+        #endif
+    }
+
+    @Instantiated public let t33Builder: Instantiator<T33>
+    @Instantiated public let t13: T13
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T57")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T57: Traced {}
+#endif
+
+@Instantiable
+public final class T58: Instantiable {
+    public init(t12Builder: Instantiator<T12>, t37: T37, t42Builder: Instantiator<T42>) {
+        self.t12Builder = t12Builder
+        self.t37 = t37
+        self.t42Builder = t42Builder
+        #if SPIKE_TRACE
+        Registry.created(self, ["t12Builder": t12Builder, "t37": t37, "t42Builder": t42Builder])
+        #endif
+    }
+
+    @Instantiated public let t12Builder: Instantiator<T12>
+    @Instantiated public let t37: T37
+    @Instantiated public let t42Builder: Instantiator<T42>
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T58")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T58: Traced {}
+#endif
+
+@Instantiable
+public final class T59: Instantiable {
+    public init(t40Builder: Instantiator<T40>, t41: T41, t33: T33) {
+        self.t40Builder = t40Builder
+        self.t41 = t41
+        self.t33 = t33
+        #if SPIKE_TRACE
+        Registry.created(self, ["t40Builder": t40Builder, "t41": t41, "t33": t33])
+        #endif
+    }
+
+    @Instantiated public let t40Builder: Instantiator<T40>
+    @Instantiated public let t41: T41
+    @Instantiated public let t33: T33
+    #if SPIKE_TRACE
+    public let tracker = Tracker("T59")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension T59: Traced {}
+#endif
+
+@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+public final class LiveApi: Instantiable, Api {
+    public init() {
+        #if SPIKE_TRACE
+        Registry.created(self, [:])
+        #endif
+    }
+
+    #if SPIKE_TRACE
+    public let tracker = Tracker("LiveApi")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension LiveApi: Traced {}
+#endif
+
+@Instantiable(fulfillingAdditionalTypes: [(any Bpi).self])
+public final class LiveBpi: Instantiable, Bpi {
+    public init() {
+        #if SPIKE_TRACE
+        Registry.created(self, [:])
+        #endif
+    }
+
+    #if SPIKE_TRACE
+    public let tracker = Tracker("LiveBpi")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension LiveBpi: Traced {}
+#endif
+
+@Instantiable(isRoot: true)
+public final class Root: Instantiable {
+    public init(hub: Hub) {
+        self.hub = hub
+        #if SPIKE_TRACE
+        Registry.created(self, ["hub": hub])
+        #endif
+    }
+
+    @Instantiated public let hub: Hub
+    #if SPIKE_TRACE
+    public let tracker = Tracker("Root")
+    #endif
+}
+
+#if SPIKE_TRACE
+extension Root: Traced {}
+#endif
+

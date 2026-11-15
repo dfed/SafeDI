@@ -1,0 +1,4 @@
+=== E24: lines
+b: seam file 17126 lines (sha256 17ef1b3089780d4a), seam initializer 16512 lines, App file 220 lines (sha256 91bfc18a6fe1b8c7)
+c: seam file 17490 lines (sha256 9eebffac025dd3a2), seam initializer 16512 lines, App file 205 lines (sha256 3aba71d56fec5e21)
+d: seam file 1226 lines (sha256 8e25c438d6647ef2), seam initializer 248 lines, App file 205 lines (sha256 3aba71d56fec5e21)

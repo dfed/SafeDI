@@ -1,6 +1,6 @@
 # Spike: one function per type in a seam's body, under the builder-struct interface
 
-Status: **checkpoint 2** (Stage 1 complete: F1–F6). Stage 2 follows in a later push of this file.
+Status: **final** (Stage 1: F1–F6; Stage 2: shapes E and L). Stage 3 (optional) was not run.
 
 **Ruling received (tech lead, 2026-11-15):** candidate B. `F2/mark` is the case that rules candidate A out: A gives `nil` where inline gives a value, and seam and inline builds must behave the same. From F5 on, the spike writes candidate B only; A stays only as the failing contrast in `F2/mark`.
 
@@ -131,26 +131,185 @@ Today's text is reproduced by the tool (`F1/b/stored/Feature.swift.txt`; the fix
 
 The calling module's level functions are the same for (c) and (d) everywhere; F4's fix and B's extra member change them, and those changes are the leak fix's, not per-type's.
 
+## Stage 2: scaled measurements
+
+### Method
+
+- **Shapes.** Shape E is the brief's growth shape at 8, 16, 24 and 32 screens (`stage2/spec_e.py N`). Shape L is drawn by `stage2/spec_l.py T` at 60 and 240 types from the brief's invented proportions (details below). Each spec is JSON. `stage2/emit.py SPEC DIR` writes the fixture types, a walker (`main`) and the variants. (a) inline and (b) today come from `SafeDITool generate`. (c) leak fix (per-path body over the builder struct, candidate B) and (d) per-type (one local function per type over the same struct, candidate B) come from the emitter. (c) and (d) share the calling module's level functions, so App is the same file in both (same sha256 in every `lines.txt`). In both bodies, a type with no properties and nothing forwarded is built in place, not through a function.
+- **Values.** `measure.zsh` builds each variant at `-Onone -D SPIKE_TRACE`. It walks every path from `Root()` (every `Instantiator` called, every forwarded value given), prints every instance with what it received, drops everything and prints what is still alive. Each trace is compared byte for byte with (a)'s. Stage 2 traces are checked at `-Onone` only, and frees only after dropping everything (Stage 1 holds single values).
+- **Runtime.** `-O` builds, no tracing. `main bench` repeats `Root()` plus the walk until a round lasts at least 100 ms and prints µs per walk. There are 8 rounds interleaved across (a)–(d); round 0 is dropped and the median of 7 is reported with its min–max. `uptime` is logged before every round (`results/<shape>/runtime.txt`).
+- **Compiles.** Every module is compiled `-wmo` (as `build.zsh` and the repro do) under `timeout 20m /usr/bin/time -v`. `-Onone` uses 3 measured rounds after a dropped warm-up, interleaved (E32: 1 round). `-O` (`-O -wmo`) uses one round, taken from the runtime build. "Feature" is the seam's module: all the feature types plus the seam's generated code. "App" is the calling module. In (a) it holds every type and the whole inline tree, so its figure is the inline build's.
+- **Lines.** These are the seam's generated file, the seam's initializer (from its signature to its closing brace) and App's generated file.
+- **Command.** `cd spike/per-type-seam/stage2 && ./run-e.sh` (E; it runs `ROUNDS=3 ./measure.zsh E8 E16 E24 E32`). E32 was rerun alone with `ROUNDS=1 ./measure.zsh E32`. L uses `python3 -I spec_l.py 60 >spec-L60.json && python3 -I emit.py spec-L60.json L60` (and 240), then `ROUNDS=3 ./measure.zsh L60 L240`. Raw figures are in `stage2/results/<shape>/summary.txt`. Nothing else ran on the machine during measurement. The one-minute load average before each runtime round was 0.71–1.01 (`runtime.txt`); compile rounds log no `uptime`.
+- **Limits.** No compile hit the 20-minute timeout or ran out of memory. The largest was (b) Feature at E32 `-O`: 411 s, 2.25 GB peak.
+- **Not committed** (above 16 screens or 60 types): `E24/`, `E32/`, `L240/`. Their commands, line counts and full sha256 are in `stage2/results/uncommitted-sha256.txt`. `spec_l.py` reproduces `spec-L240.json` byte for byte.
+
+### Values
+
+(c) and (d) equal (a) byte for byte at every size of E and L.
+
+(b) today equals (a) at every size of E. For L, (b) builds the same instances, but the order of the lines differs: it constructs some siblings in a different order from inline.
+- L60: the sorted traces are identical.
+- L240: the sorted traces differ only in the numbering of two `T175` instances, which swap between `T35` and `T88`.
+
+My reading is that this is the same graph built in a different order, not a value difference. I did not chase it further, since (b) is the tool's own output.
+
+### Shape E (synthetic growth shape)
+
+Runtime, `-O`, µs per `Root()` plus walk of every path, median (min–max) of 7 rounds:
+
+| Screens | Values per walk | (a) inline | (b) today | (c) leak fix | (d) per-type |
+|---|---|---|---|---|---|
+| 8 | 33 | 3.03 (2.81–3.26) | 8.69 (8.34–11.67) | 7.87 (7.40–13.14) | 7.90 (7.44–11.67) |
+| 16 | 321 | 30.69 (28.60–38.74) | 151.70 (143.89–230.30) | 90.77 (82.00–129.89) | 85.26 (71.77–100.99) |
+| 24 | 2,913 | 290.97 (259.85–329.78) | 1,957.65 (1,820.00–2,615.58) | 821.98 (799.30–888.78) | 648.94 (610.71–863.03) |
+| 32 | 26,241 | 3,277.67 (2,770.65–4,066.85) | 27,507.92 (24,550.44–30,570.02) | 10,503.50 (8,274.77–11,186.12) | 8,832.76 (6,983.97–11,957.25) |
+
+`-Onone` compile of the seam's module (Feature), wall s (min–max) / user s / peak GB:
+
+| Screens | (b) today | (c) leak fix | (d) per-type |
+|---|---|---|---|
+| 8 | 0.91 (0.89–0.96) / 0.79 / 0.12 | 1.01 (0.97–1.02) / 0.91 / 0.12 | 0.97 (0.95–1.07) / 0.88 / 0.12 |
+| 16 | 3.02 (2.89–3.09) / 2.84 / 0.14 | 2.68 (2.45–2.75) / 2.45 / 0.13 | 1.89 (1.72–2.03) / 1.76 / 0.12 |
+| 24 | 16.32 (15.70–16.71) / 15.83 / 0.39 | 10.46 (9.75–10.55) / 10.07 / 0.23 | 2.97 (2.75–3.05) / 2.76 / 0.13 |
+| 32 (1 round) | 180.58 / 174.07 / 2.88 | 75.25 / 73.27 / 1.09 | 3.38 / 3.21 / 0.14 |
+
+The calling module (App) compiles at `-Onone` in 0.24–0.45 s in (b), (c) and (d) at every size. The (c) and (d) App is one file. For comparison, (a)'s App holds the inline tree and takes 0.83, 1.84, 5.90 and 42.05 s.
+
+Lines (seam file / seam initializer / App file):
+
+| Screens | (b) today | (c) leak fix | (d) per-type |
+|---|---|---|---|
+| 8 | 422 / 192 / 108 | 562 / 192 / 93 | 458 / 88 / 93 |
+| 16 | 2,246 / 1,824 / 164 | 2,498 / 1,824 / 149 | 842 / 168 / 149 |
+| 24 | 17,126 / 16,512 / 220 | 17,490 / 16,512 / 205 | 1,226 / 248 / 205 |
+| 32 | 149,510 / 148,704 / 276 | 149,986 / 148,704 / 261 | 1,610 / 328 / 261 |
+
+`-O -wmo` compile of Feature, wall s (one round):
+
+| Screens | (b) today | (c) leak fix | (d) per-type |
+|---|---|---|---|
+| 8 | 0.95 | 1.15 | 1.09 |
+| 16 | 4.17 | 3.97 | 2.52 |
+| 24 | 33.98 | 19.85 | 3.27 |
+| 32 | 411.39 (2.25 GB) | 212.50 (1.13 GB) | 5.04 (0.15 GB) |
+
+### Shape L (synthetic, invented low-sharing proportions)
+
+**What the draws reached** (`results/L60-shape.json`, `results/L240-shape.json`). The draws use seed 2026 (draw k uses `random.Random(2026 * 1000 + k)`). The first draw is kept whose nodes per type are within 2.0–3.0 and whose share of types at one place is within 64–96%, with no node deeper than 10.
+
+| Measure | Invented target | L60 (draw 6) | L240 (draw 12) |
+|---|---|---|---|
+| Types, nodes | about 60, about 240 | 60 types, 173 nodes | 240 types, 634 nodes |
+| Nodes per type | about 2.5 | 2.88 | 2.64 |
+| Places: one / two / three / four to six / 30 or more | 80% / 10% / 5% / 5% / one type | 78.0% / 10.2% / 5.1% / 5.1% / one type (1.7%) | 79.5% / 10.0% / 5.0% / 5.0% / one type (0.4%) |
+| Children per node: none / one / two / three to five / more | 50 / 30 / 10 / 8 / 2% | 49.1 / 30.1 / 8.1 / 9.8 / 2.9% | 49.2 / 30.8 / 10.1 / 7.6 / 2.4% |
+| Deepest node | at most 10 | 10 | 10 |
+
+At L60, "two", "three to five" and "more" children fall outside 20% of their targets: 8.1% against 10, 9.8% against 8, and 2.9% against 2. The tuning rule held only sharing and nodes per type to 20%, as the brief asks.
+
+**Holes (invented):** two hole types, `Api` and `Bpi`. Each is owned by about one type in ten (6 and 6 at L60, 24 and 24 at L240). Their fills receive nothing. Wrappers are half `Instantiator` and half constant.
+
+Runtime, `-O`, µs per walk, median (min–max) of 7:
+
+| Types | Values per walk | (a) inline | (b) today | (c) leak fix | (d) per-type |
+|---|---|---|---|---|---|
+| 60 | 173 | 22.58 (21.55–24.09) | 191.08 (182.50–276.15) | 61.64 (55.04–78.75) | 47.79 (41.88–62.02) |
+| 240 | 634 | 91.75 (86.79–101.16) | 349.59 (306.14–352.87) | 146.50 (124.07–191.21) | 126.59 (116.60–137.41) |
+
+`-Onone` compile of Feature, wall s (min–max) / user s / peak GB, 3 rounds:
+
+| Types | (b) today | (c) leak fix | (d) per-type |
+|---|---|---|---|
+| 60 | 3.46 (3.40–3.93) / 3.30 / 0.16 | 3.71 (3.48–3.89) / 3.52 / 0.16 | 3.45 (3.20–3.51) / 3.26 / 0.15 |
+| 240 | 9.09 (8.64–9.40) / 8.57 / 0.20 | 9.07 (8.52–9.36) / 8.65 / 0.19 | 8.28 (7.94–9.41) / 7.81 / 0.19 |
+
+App at `-Onone`: 0.42–0.50 s in (b), (c) and (d). (a)'s inline App takes 1.95 and 6.39 s.
+
+Lines (seam file / seam initializer / App file):
+
+| Types | (b) today | (c) leak fix | (d) per-type |
+|---|---|---|---|
+| 60 | 2,485 / 1,103 / 650 | 3,606 / 1,076 / 622 | 3,002 / 472 / 622 |
+| 240 | 4,680 / 2,511 / 895 | 5,367 / 2,016 / 795 | 4,416 / 1,065 / 795 |
+
+`-O -wmo` compile of Feature, wall s (one round): L60 7.74 / 6.04 / 5.76; L240 16.14 / 14.02 / 12.82 for (b) / (c) / (d).
+
+### Cost of per-type's extra struct call and closure
+
+Each value built under the seam is one level. The figure is ((d) − (c)) µs per walk ÷ values per walk, in ns per value, from the medians above:
+
+| Shape | (d) − (c), ns per value | (d) ÷ (c) | for scale: (c) − (a), ns per value | (b) − (a), ns per value |
+|---|---|---|---|---|
+| E8 | +0.9 | 1.00 | 146.7 | 171.5 |
+| E16 | −17.2 | 0.94 | 187.2 | 377.0 |
+| E24 | −59.4 | 0.79 | 182.3 | 572.2 |
+| E32 | −63.7 | 0.84 | 275.4 | 923.4 |
+| L60 | −80.1 | 0.78 | 225.8 | 974.0 |
+| L240 | −31.4 | 0.86 | 86.4 | 406.7 |
+
+Per-type's extra struct call and closure cost nothing measurable. At E8 the difference (+0.9 ns per value) is inside both spreads. At every other size, (d) is faster than (c), both on the growth shape and on the invented low-sharing shape. Against today, (c) is 2.4–3.1× faster on L and 1.1–2.6× on E, and (d) 2.8–4.0× on L and 1.1–3.1× on E. Both are slower than inline by the ns per value in the table. Whether that gap from inline is acceptable is the go/no-go figure (question 6).
+
+### Emitter defect found and fixed during Stage 2
+
+The first L run failed to compile (c) and (d). The emitter called a hole's member with empty values (`.init()`) where the hole was not its type's first property, and the leak fix's `_Values` struct carries the earlier siblings there. I fixed `emit.py` to pass the values the struct declares. In E the hole's own values struct is always empty; re-emitting E8 and E16 with the fixed emitter gives byte-identical files. The L figures above are from the rerun.
+
 ## What worked and what broke
 
 - Worked: everything a person writes stays as the leak fix leaves it while the body becomes one function per type, in every fixture so far.
 - Broke: candidate A, as soon as a value bound between the root and a reopened level is read below it (`F2/mark`).
+- Worked at scale: (d) equals inline at every Stage 2 size. Its seam initializer grows with types, not paths. Its extra struct call and closure cost nothing measurable against (c). Its compile at E32 is 3.4 s at `-Onone` where (c) takes 75 s and today 181 s.
+- Broke at scale: nothing in (d). Today and (c) both grow with paths. At E32 the per-path seam initializer is 148,704 lines, and today's `-O` compile of the seam's module takes 411 s and 2.25 GB.
 - Not shareable without a new parameter: a mock type whose places read different override configurations (F3's `Screen`).
 - Found on main: two retentions that inline frees, in shapes main accepts (F5 `next`; F3 `accepted`), both from a nested function capturing a level's payload. The builder struct removes both.
 - The brief's word "reopening property" is not defined for `next`, where inline closes the cycle at `Screen.stepBuilder`, not at `next`; I read it as the property whose type is already on the path (`Step.next` reopens `Screen`), which is how the brief's F2 sketch uses it.
 
-## Rules needed so far
+## Rules needed
 
 - **Key**: the concrete type (F1's `Avatar` at two places, F6's `T` and `Screen` at a plain and a `@Sendable` place).
+- **Leaves**: a type with no properties that forwards nothing is built in place (Stage 2).
 - **Placement**: before the first statement that reaches it, in the initializer's body; a function a loop reaches is declared before the functions that call it, and Swift's local functions allow the mutual recursion (F2).
 - **Parameters**: the type's level struct, always first; a forwarded value (`cart` in F4); a declaration the same at every call is captured (the root struct in F2 (d) A).
 - **Which struct**: the type's own level struct in its family; for a type built in both families with a member that reopens it, also the `@Sendable` family's struct of the type (F6 (ii)).
 - **Loop re-entry**: the call at the reopening property hands the reopened type's function the struct its own member returns (candidate B). Under A it can only take the root member's, which loses values (F2 `mark`).
 
+## Recommended design for 2.3.1's seam body
+
+This recommendation is mine and rests on the evidence above. Each open point is listed under "Open questions", and the ones that are not mine to settle are under "Questions".
+
+1. **Keep everything a person sees exactly as the leak fix leaves it.** That covers the builder struct (candidate B: one member per property that leads to a place of the hole), every `_Values` field, the readable initializer and every caller. In every fixture and in Stage 2, (c) and (d) compile the same calling-module files, and per-type needed no struct member, no `_Values` field and no label of its own.
+2. **Generate one local function per (concrete type, family) that the seam's tree builds through a function, inside the seam's generated initializer.** Each function is declared before the first statement that reaches it. Functions a loop reaches are declared before their callers; Swift's local functions allow the mutual recursion (F2, F5).
+3. **Parameters, in this order:**
+   1. the type's level struct for each hole family whose places it leads to;
+   2. the values its place forwards;
+   3. each value it receives that is not the same declaration at every call.
+
+   A value bound once above every place (the root's pass-through, F2 (d)'s root struct) is captured, not passed. In Stage 2's body, E's `Model<i>` takes the screen's forwarded `id` as a parameter and captures the root's `service`. (The fixed point `need()` in `emit.py` is on the calling module's side. It gives each level function only the fields its fill's subtree reads.)
+4. **Build a type in place, without a function,** when it has no properties and forwards nothing (Stage 2's leaves). A function there would only forward its arguments.
+5. **Loop re-entry follows candidate B.** The reopening property's call hands the reopened type's function the struct that its own member returns (F2 `mark` rules A out).
+6. **`@Sendable`:** one function per family when a type is built in both families (d2). (d1), one `@Sendable nonisolated` function used by both, also passed F6. Which family a builder is in, and rule 8's sentence, stay the maintainer's (question 3). (d2) mirrors the struct's families one to one, so I recommend it.
+7. **D1 is not part of the body change.** F4 gives inline's values and frees with either body once the calling module's root level function takes `cart: Cart?`. Choosing that mechanism is question 2.
+8. **Public mocks keep the per-path body in 2.3.1** unless the mock-overrides storage change lands first. A type whose places read different override configurations (F3's first `Screen` reads `safeDIOverrides.screen`, a reopened one reads none) can share one function only if the configuration becomes a parameter (question 4).
+
+Why: in Stage 2, (d)'s seam initializer grows with the number of types (E: 88 → 328 lines from 8 to 32 screens), where (c)'s grows with the number of paths (192 → 148,704). Its Feature compile stays at 3–5 s where (c) reaches 75 s at `-Onone` and 212 s at `-O`. On the invented low-sharing shape it is no worse than (c) on any measure: lines 3,002 vs 3,606 and 4,416 vs 5,367, compile within the spread, runtime 22% and 14% faster.
+
+### Open questions in the design (not settled by this spike)
+
+- **Names.** Every function name here is mine (question 5). The brief's rule that members and `_Values` never take a name from a type also seems worth applying to these local functions, since per-type keys them by type. A name derived from the type would need the nested-type and reserved-name spelling rules (`.claude/rules/reserved-names-and-spelling.md`); a counter-based name would not. I did not try either.
+- **Determinism of the function order.** I declared functions in first-reach order, which is deterministic from the tree. Whether the generator should use that order or another fixed order is open.
+- **Key collisions across families and modules.** Every fixture keys by concrete type within one seam. Two types with the same name from different modules under one seam were not tried (out of scope here; see `.claude/rules/types-a-module-cannot-name.md`).
+- **Shape L exercises struct parameters only.** Its draws forward and receive nothing. Forwarded and received parameters ran in E (`id`) and in F1–F5.
+- **Stage 3 was not run.** The number of functions and keys per seam over the fuzzer's seam corpus is unmeasured.
+
 ## Questions (not mine to decide)
 
 1. ~~Candidate A or B~~: **settled, candidate B** (tech lead, 2026-11-15), with `F2/mark` as the case that rules A out.
 2. **D1's mechanism**: F4 shows the dispatcher fixed point's output (the root level function takes `cart: Cart?`) gives inline's values and frees with today's per-path body. Dispatcher fixed point or lift step?
-3. **F6's family sentence**: no builder moved in (i) or (ii); per-type marks a function `@Sendable` when any place needs it, and the plain place calling it changed no family. The wording of rule 8's sentence stays the maintainer's.
+3. **F6's family sentence**: no builder moved between families in (i) or (ii), under either (d1) (one `@Sendable nonisolated` function, used by the plain place too) or (d2) (one function per family). The design above recommends (d2). The wording of rule 8's sentence stays the maintainer's.
 4. **F3's mock half**: does it belong in 2.3.1? Its `Screen` needs the override configuration as a parameter to share one function across the first and reopened builds (the deferred mock-overrides storage change).
-5. **Invented names** (flagged): `__safeDI_<type>` for a per-type function (`__safeDI_avatar`, `__safeDI_step`, `__safeDI_screen`), `__safeDI_<type>_Sendable` in (d2), `__safeDI_rootBuilder` in (d) A, and `__safeDI_live`, `__safeDI_payments(cart:)` for the hoisted fill functions in the calling module.
+5. **Invented names** (flagged): `__safeDI_<type>` for a per-type function (`__safeDI_avatar`, `__safeDI_step`, `__safeDI_screen`), `__safeDI_<type>_Sendable` in (d2), `__safeDI_rootBuilder` in (d) A, and `__safeDI_live`, `__safeDI_payments(cart:)` for the hoisted fill functions in the calling module. In Stage 2's emitter: `__safeDI_<Type>` for a per-type function (`__safeDI_T33`, `__safeDI_Screen5`), `__safeDI_<label>` for a per-path function in (c), and `__safeDI_<hole>Builder_<label>` for a local holding a member's returned struct.
+6. **The go/no-go figure** is the maintainer's. The evidence is the Stage 2 tables: (d) against (c) is −80 to +1 ns per value; (d) against inline is +55 to +212 ns per value; (c) against inline is +86 to +275.
+7. **The two known observable changes**:
+   - *Release order among one closure's last-owned objects.* Not observed and not measurable here: the harness records creation order and what survives, not the order of releases.
+   - *A lazy value at a cycle's closing call created at its first read.* No fixture has a lazy value at a cycle's closing call, so neither change appears in this spike's traces. Seen in passing: in L, today (b) creates some siblings in a different order from inline (a). (c) and (d) follow inline's order exactly.
+8. **`SafeDIOverrides.init` order**: untouched. F3's hand-written `SafeDIOverrides` (shared by (c) and (d)) has the same single field, `screen`, as main's output for the seam's module (`F3/stale/b/stored/Feat.swift.txt`). F3 has only one field, so it does not test the order.

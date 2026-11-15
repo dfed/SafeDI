@@ -1,0 +1,5 @@
+=== E24: values
+a: 3889 lines, sha256 61c6868e43571d92, trace equals (a)
+b: 3889 lines, sha256 61c6868e43571d92, trace equals (a)
+c: 3889 lines, sha256 61c6868e43571d92, trace equals (a)
+d: 3889 lines, sha256 61c6868e43571d92, trace equals (a)

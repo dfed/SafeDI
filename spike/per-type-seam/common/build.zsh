@@ -67,7 +67,7 @@ for module in "${module_list[@]}"; do
 			print -rn -- "${(j:,:)dependency_paths}" >"$output/$module-dependencies.csv"
 			arguments+=(--dependent-module-info-file-path "$output/$module-dependencies.csv")
 		fi
-		"$tool" generate "${arguments[@]}"
+			[[ -n "${SKIP_GENERATE:-}" && -f "$variant/stored/$module.swift.txt" ]] && { cp "$variant/stored/$module.swift.txt" "$output/src/$module/__Generated.swift"; } || "$tool" generate "${arguments[@]}"
 		mkdir -p "$variant/stored"; cp "$output/src/$module/__Generated.swift" "$variant/stored/$module.swift.txt"
 		;;
 	hand)
@@ -77,7 +77,11 @@ for module in "${module_list[@]}"; do
 	esac
 	sources=("$output/src/$module"/*.swift)
 	if [[ "$module" == "${module_list[-1]}" ]]; then library=(); flags=(); else library=(-parse-as-library); flags=("${extra[@]}"); fi
-	swiftc -emit-object -whole-module-optimization "${library[@]}" -$optimization \
+	# TIME_LOG names a folder: each module's compile then runs under `timeout 20m /usr/bin/time -v`, which writes
+	# <TIME_LOG>/<Module>.time.
+	timing=()
+	[[ -n "${TIME_LOG:-}" ]] && { mkdir -p "$TIME_LOG"; timing=(timeout 20m /usr/bin/time -v -o "$TIME_LOG/$module.time"); }
+	"${timing[@]}" swiftc -emit-object -whole-module-optimization "${library[@]}" -$optimization \
 		-o "$output/$module.o" -module-name "$module" -package-name "$(package_of $module)" \
 		-emit-module -emit-module-path "$output/$module.swiftmodule" \
 		-I "$module_search_path" -I "$output" \

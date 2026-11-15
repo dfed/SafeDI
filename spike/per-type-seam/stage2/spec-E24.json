@@ -1,0 +1,899 @@
+{
+ "seam": "Home",
+ "types": {
+  "Home": {
+   "properties": [
+    [
+     "screen0Builder",
+     "inst",
+     "Screen0"
+    ],
+    [
+     "screen1Builder",
+     "inst",
+     "Screen1"
+    ],
+    [
+     "screen2Builder",
+     "inst",
+     "Screen2"
+    ],
+    [
+     "screen3Builder",
+     "inst",
+     "Screen3"
+    ]
+   ]
+  },
+  "Screen0": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model0",
+     "const",
+     "Model0"
+    ],
+    [
+     "screen5Builder",
+     "inst",
+     "Screen5"
+    ],
+    [
+     "screen6Builder",
+     "inst",
+     "Screen6"
+    ],
+    [
+     "screen7Builder",
+     "inst",
+     "Screen7"
+    ]
+   ]
+  },
+  "Model0": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen1": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model1",
+     "const",
+     "Model1"
+    ],
+    [
+     "screen4Builder",
+     "inst",
+     "Screen4"
+    ],
+    [
+     "screen6Builder",
+     "inst",
+     "Screen6"
+    ],
+    [
+     "screen7Builder",
+     "inst",
+     "Screen7"
+    ]
+   ]
+  },
+  "Model1": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen2": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model2",
+     "const",
+     "Model2"
+    ],
+    [
+     "screen4Builder",
+     "inst",
+     "Screen4"
+    ],
+    [
+     "screen5Builder",
+     "inst",
+     "Screen5"
+    ],
+    [
+     "screen7Builder",
+     "inst",
+     "Screen7"
+    ]
+   ]
+  },
+  "Model2": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen3": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model3",
+     "const",
+     "Model3"
+    ],
+    [
+     "screen4Builder",
+     "inst",
+     "Screen4"
+    ],
+    [
+     "screen5Builder",
+     "inst",
+     "Screen5"
+    ],
+    [
+     "screen6Builder",
+     "inst",
+     "Screen6"
+    ]
+   ]
+  },
+  "Model3": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen4": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model4",
+     "const",
+     "Model4"
+    ],
+    [
+     "screen9Builder",
+     "inst",
+     "Screen9"
+    ],
+    [
+     "screen10Builder",
+     "inst",
+     "Screen10"
+    ],
+    [
+     "screen11Builder",
+     "inst",
+     "Screen11"
+    ]
+   ]
+  },
+  "Model4": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen5": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model5",
+     "const",
+     "Model5"
+    ],
+    [
+     "screen8Builder",
+     "inst",
+     "Screen8"
+    ],
+    [
+     "screen10Builder",
+     "inst",
+     "Screen10"
+    ],
+    [
+     "screen11Builder",
+     "inst",
+     "Screen11"
+    ]
+   ]
+  },
+  "Model5": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen6": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model6",
+     "const",
+     "Model6"
+    ],
+    [
+     "screen8Builder",
+     "inst",
+     "Screen8"
+    ],
+    [
+     "screen9Builder",
+     "inst",
+     "Screen9"
+    ],
+    [
+     "screen11Builder",
+     "inst",
+     "Screen11"
+    ]
+   ]
+  },
+  "Model6": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen7": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model7",
+     "const",
+     "Model7"
+    ],
+    [
+     "screen8Builder",
+     "inst",
+     "Screen8"
+    ],
+    [
+     "screen9Builder",
+     "inst",
+     "Screen9"
+    ],
+    [
+     "screen10Builder",
+     "inst",
+     "Screen10"
+    ]
+   ]
+  },
+  "Model7": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen8": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model8",
+     "const",
+     "Model8"
+    ],
+    [
+     "screen13Builder",
+     "inst",
+     "Screen13"
+    ],
+    [
+     "screen14Builder",
+     "inst",
+     "Screen14"
+    ],
+    [
+     "screen15Builder",
+     "inst",
+     "Screen15"
+    ]
+   ]
+  },
+  "Model8": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen9": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model9",
+     "const",
+     "Model9"
+    ],
+    [
+     "screen12Builder",
+     "inst",
+     "Screen12"
+    ],
+    [
+     "screen14Builder",
+     "inst",
+     "Screen14"
+    ],
+    [
+     "screen15Builder",
+     "inst",
+     "Screen15"
+    ]
+   ]
+  },
+  "Model9": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen10": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model10",
+     "const",
+     "Model10"
+    ],
+    [
+     "screen12Builder",
+     "inst",
+     "Screen12"
+    ],
+    [
+     "screen13Builder",
+     "inst",
+     "Screen13"
+    ],
+    [
+     "screen15Builder",
+     "inst",
+     "Screen15"
+    ]
+   ]
+  },
+  "Model10": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen11": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model11",
+     "const",
+     "Model11"
+    ],
+    [
+     "screen12Builder",
+     "inst",
+     "Screen12"
+    ],
+    [
+     "screen13Builder",
+     "inst",
+     "Screen13"
+    ],
+    [
+     "screen14Builder",
+     "inst",
+     "Screen14"
+    ]
+   ]
+  },
+  "Model11": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen12": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model12",
+     "const",
+     "Model12"
+    ],
+    [
+     "screen17Builder",
+     "inst",
+     "Screen17"
+    ],
+    [
+     "screen18Builder",
+     "inst",
+     "Screen18"
+    ],
+    [
+     "screen19Builder",
+     "inst",
+     "Screen19"
+    ]
+   ]
+  },
+  "Model12": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen13": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model13",
+     "const",
+     "Model13"
+    ],
+    [
+     "screen16Builder",
+     "inst",
+     "Screen16"
+    ],
+    [
+     "screen18Builder",
+     "inst",
+     "Screen18"
+    ],
+    [
+     "screen19Builder",
+     "inst",
+     "Screen19"
+    ]
+   ]
+  },
+  "Model13": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen14": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model14",
+     "const",
+     "Model14"
+    ],
+    [
+     "screen16Builder",
+     "inst",
+     "Screen16"
+    ],
+    [
+     "screen17Builder",
+     "inst",
+     "Screen17"
+    ],
+    [
+     "screen19Builder",
+     "inst",
+     "Screen19"
+    ]
+   ]
+  },
+  "Model14": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen15": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model15",
+     "const",
+     "Model15"
+    ],
+    [
+     "screen16Builder",
+     "inst",
+     "Screen16"
+    ],
+    [
+     "screen17Builder",
+     "inst",
+     "Screen17"
+    ],
+    [
+     "screen18Builder",
+     "inst",
+     "Screen18"
+    ]
+   ]
+  },
+  "Model15": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen16": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model16",
+     "const",
+     "Model16"
+    ],
+    [
+     "screen21Builder",
+     "inst",
+     "Screen21"
+    ],
+    [
+     "screen22Builder",
+     "inst",
+     "Screen22"
+    ],
+    [
+     "screen23Builder",
+     "inst",
+     "Screen23"
+    ]
+   ]
+  },
+  "Model16": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen17": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model17",
+     "const",
+     "Model17"
+    ],
+    [
+     "screen20Builder",
+     "inst",
+     "Screen20"
+    ],
+    [
+     "screen22Builder",
+     "inst",
+     "Screen22"
+    ],
+    [
+     "screen23Builder",
+     "inst",
+     "Screen23"
+    ]
+   ]
+  },
+  "Model17": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen18": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model18",
+     "const",
+     "Model18"
+    ],
+    [
+     "screen20Builder",
+     "inst",
+     "Screen20"
+    ],
+    [
+     "screen21Builder",
+     "inst",
+     "Screen21"
+    ],
+    [
+     "screen23Builder",
+     "inst",
+     "Screen23"
+    ]
+   ]
+  },
+  "Model18": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen19": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model19",
+     "const",
+     "Model19"
+    ],
+    [
+     "screen20Builder",
+     "inst",
+     "Screen20"
+    ],
+    [
+     "screen21Builder",
+     "inst",
+     "Screen21"
+    ],
+    [
+     "screen22Builder",
+     "inst",
+     "Screen22"
+    ]
+   ]
+  },
+  "Model19": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": []
+  },
+  "Screen20": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model20",
+     "const",
+     "Model20"
+    ]
+   ]
+  },
+  "Model20": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": [
+    [
+     "api",
+     "hole",
+     "Api"
+    ]
+   ]
+  },
+  "Screen21": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model21",
+     "const",
+     "Model21"
+    ]
+   ]
+  },
+  "Model21": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": [
+    [
+     "api",
+     "hole",
+     "Api"
+    ]
+   ]
+  },
+  "Screen22": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model22",
+     "const",
+     "Model22"
+    ]
+   ]
+  },
+  "Model22": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": [
+    [
+     "api",
+     "hole",
+     "Api"
+    ]
+   ]
+  },
+  "Screen23": {
+   "forwarded": [
+    "id"
+   ],
+   "receives": [
+    "service"
+   ],
+   "properties": [
+    [
+     "model23",
+     "const",
+     "Model23"
+    ]
+   ]
+  },
+  "Model23": {
+   "receives": [
+    "id",
+    "service"
+   ],
+   "properties": [
+    [
+     "api",
+     "hole",
+     "Api"
+    ]
+   ]
+  }
+ },
+ "holes": {
+  "Api": "LiveApi"
+ },
+ "fill_receives": {
+  "LiveApi": [
+   "id",
+   "service"
+  ]
+ },
+ "pass_through": [
+  "service"
+ ],
+ "root_declares": [
+  [
+   "service",
+   "Service"
+  ]
+ ]
+}

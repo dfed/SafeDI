@@ -1,0 +1,5 @@
+=== L60: values
+a: 324 lines, sha256 18704dad6c77c72a, trace equals (a)
+b: 324 lines, sha256 c66e1d0a5c8eefe0, trace DIFFERS from (a)
+c: 324 lines, sha256 18704dad6c77c72a, trace equals (a)
+d: 324 lines, sha256 18704dad6c77c72a, trace equals (a)

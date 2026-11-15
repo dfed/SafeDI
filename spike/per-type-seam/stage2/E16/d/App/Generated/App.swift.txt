@@ -1,0 +1,149 @@
+import Feature
+import Harness
+import SafeDI
+
+extension Root {
+    public convenience init() {
+        let service = Service()
+        func __safeDI_home() -> Home {
+            func __safeDI_liveApi(id: Int) -> any Api {
+                LiveApi(id: id, service: service)
+            }
+            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
+                .init(
+                    screen0Builder: { _ in __safeDI_apiBuilder_Home_Screen0_Scope() },
+                    screen1Builder: { _ in __safeDI_apiBuilder_Home_Screen1_Scope() },
+                    screen2Builder: { _ in __safeDI_apiBuilder_Home_Screen2_Scope() },
+                    screen3Builder: { _ in __safeDI_apiBuilder_Home_Screen3_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen0_Scope() -> Home.SafeDIScope_Api.Screen0_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    screen5Builder: { _ in __safeDI_apiBuilder_Home_Screen5_Scope() },
+                    screen6Builder: { _ in __safeDI_apiBuilder_Home_Screen6_Scope() },
+                    screen7Builder: { _ in __safeDI_apiBuilder_Home_Screen7_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen1_Scope() -> Home.SafeDIScope_Api.Screen1_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    screen4Builder: { _ in __safeDI_apiBuilder_Home_Screen4_Scope() },
+                    screen6Builder: { _ in __safeDI_apiBuilder_Home_Screen6_Scope() },
+                    screen7Builder: { _ in __safeDI_apiBuilder_Home_Screen7_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen2_Scope() -> Home.SafeDIScope_Api.Screen2_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    screen4Builder: { _ in __safeDI_apiBuilder_Home_Screen4_Scope() },
+                    screen5Builder: { _ in __safeDI_apiBuilder_Home_Screen5_Scope() },
+                    screen7Builder: { _ in __safeDI_apiBuilder_Home_Screen7_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen3_Scope() -> Home.SafeDIScope_Api.Screen3_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    screen4Builder: { _ in __safeDI_apiBuilder_Home_Screen4_Scope() },
+                    screen5Builder: { _ in __safeDI_apiBuilder_Home_Screen5_Scope() },
+                    screen6Builder: { _ in __safeDI_apiBuilder_Home_Screen6_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen5_Scope() -> Home.SafeDIScope_Api.Screen5_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    screen8Builder: { _ in __safeDI_apiBuilder_Home_Screen8_Scope() },
+                    screen10Builder: { _ in __safeDI_apiBuilder_Home_Screen10_Scope() },
+                    screen11Builder: { _ in __safeDI_apiBuilder_Home_Screen11_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen6_Scope() -> Home.SafeDIScope_Api.Screen6_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    screen8Builder: { _ in __safeDI_apiBuilder_Home_Screen8_Scope() },
+                    screen9Builder: { _ in __safeDI_apiBuilder_Home_Screen9_Scope() },
+                    screen11Builder: { _ in __safeDI_apiBuilder_Home_Screen11_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen7_Scope() -> Home.SafeDIScope_Api.Screen7_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    screen8Builder: { _ in __safeDI_apiBuilder_Home_Screen8_Scope() },
+                    screen9Builder: { _ in __safeDI_apiBuilder_Home_Screen9_Scope() },
+                    screen10Builder: { _ in __safeDI_apiBuilder_Home_Screen10_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen4_Scope() -> Home.SafeDIScope_Api.Screen4_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    screen9Builder: { _ in __safeDI_apiBuilder_Home_Screen9_Scope() },
+                    screen10Builder: { _ in __safeDI_apiBuilder_Home_Screen10_Scope() },
+                    screen11Builder: { _ in __safeDI_apiBuilder_Home_Screen11_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen8_Scope() -> Home.SafeDIScope_Api.Screen8_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    screen13Builder: { _ in __safeDI_apiBuilder_Home_Screen13_Scope() },
+                    screen14Builder: { _ in __safeDI_apiBuilder_Home_Screen14_Scope() },
+                    screen15Builder: { _ in __safeDI_apiBuilder_Home_Screen15_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen10_Scope() -> Home.SafeDIScope_Api.Screen10_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    screen12Builder: { _ in __safeDI_apiBuilder_Home_Screen12_Scope() },
+                    screen13Builder: { _ in __safeDI_apiBuilder_Home_Screen13_Scope() },
+                    screen15Builder: { _ in __safeDI_apiBuilder_Home_Screen15_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen11_Scope() -> Home.SafeDIScope_Api.Screen11_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    screen12Builder: { _ in __safeDI_apiBuilder_Home_Screen12_Scope() },
+                    screen13Builder: { _ in __safeDI_apiBuilder_Home_Screen13_Scope() },
+                    screen14Builder: { _ in __safeDI_apiBuilder_Home_Screen14_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen9_Scope() -> Home.SafeDIScope_Api.Screen9_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    screen12Builder: { _ in __safeDI_apiBuilder_Home_Screen12_Scope() },
+                    screen14Builder: { _ in __safeDI_apiBuilder_Home_Screen14_Scope() },
+                    screen15Builder: { _ in __safeDI_apiBuilder_Home_Screen15_Scope() }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen13_Scope() -> Home.SafeDIScope_Api.Screen13_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    model13: { values in __safeDI_apiBuilder_Home_Model13_Scope(id: values.id) }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen14_Scope() -> Home.SafeDIScope_Api.Screen14_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    model14: { values in __safeDI_apiBuilder_Home_Model14_Scope(id: values.id) }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen15_Scope() -> Home.SafeDIScope_Api.Screen15_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    model15: { values in __safeDI_apiBuilder_Home_Model15_Scope(id: values.id) }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Screen12_Scope() -> Home.SafeDIScope_Api.Screen12_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    model12: { values in __safeDI_apiBuilder_Home_Model12_Scope(id: values.id) }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Model13_Scope(id: Int) -> Home.SafeDIScope_Api.Model13_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    api: { _ in __safeDI_liveApi(id: id) }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Model14_Scope(id: Int) -> Home.SafeDIScope_Api.Model14_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    api: { _ in __safeDI_liveApi(id: id) }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Model15_Scope(id: Int) -> Home.SafeDIScope_Api.Model15_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    api: { _ in __safeDI_liveApi(id: id) }
+                )
+            }
+            func __safeDI_apiBuilder_Home_Model12_Scope(id: Int) -> Home.SafeDIScope_Api.Model12_Scope.__safeDI_Builder<any Api> {
+                .init(
+                    api: { _ in __safeDI_liveApi(id: id) }
+                )
+            }
+            return Home(__safeDI_service: service, __safeDI_apiBuilder: __safeDI_apiBuilder_Home())
+        }
+        let home: Home = __safeDI_home()
+        self.init(service: service, home: home)
+    }
+}
