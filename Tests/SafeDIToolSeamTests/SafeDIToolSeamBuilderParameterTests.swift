@@ -1909,36 +1909,36 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			                }
 			                let c: C = __safeDI_c()
 			                func __safeDI_service() -> Service {
-			                    _ = Service.__safeDI_Service_47FCCD49F0077492.self\(Self.pluginComment(integration, seam: "Service"))
-			                    func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-			                        switch scope {
-			                        case .userService:
-			                            func __safeDI_userService() -> DefaultUserService {
-			                                func __safeDI_c() -> C {
-			                                    func __safeDI_p1Builder() -> P1 {
-			                                        func __safeDI_a() -> A {
-			                                            let c: C = __safeDI_c()
-			                                            func __safeDI_service() -> Service {
-			                                                _ = Service.__safeDI_Service_47FCCD49F0077492.self\(Self.pluginComment(integration, seam: "Service"))
-			                                                return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
-			                                            }
-			                                            let service: Service = __safeDI_service()
-			                                            return A(c: c, service: service)
+			                    _ = Service.__safeDI_Service_DE15AB8B7FF442DE.self\(Self.pluginComment(integration, seam: "Service"))
+			                    func __safeDI_userServiceBuilder_Service_userService(_ scope: Service.SafeDIScope_UserService.userService_Values) -> any UserService {
+			                        func __safeDI_userService() -> DefaultUserService {
+			                            func __safeDI_c() -> C {
+			                                func __safeDI_p1Builder() -> P1 {
+			                                    func __safeDI_a() -> A {
+			                                        let c: C = __safeDI_c()
+			                                        func __safeDI_service() -> Service {
+			                                            _ = Service.__safeDI_Service_DE15AB8B7FF442DE.self\(Self.pluginComment(integration, seam: "Service"))
+			                                            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			                                        }
-			                                        let a: A = __safeDI_a()
-			                                        return P1(a: a)
+			                                        let service: Service = __safeDI_service()
+			                                        return A(c: c, service: service)
 			                                    }
-			                                    let p1Builder = Instantiator<P1>(__safeDI_p1Builder)
-			                                    return C(p1Builder: p1Builder)
+			                                    let a: A = __safeDI_a()
+			                                    return P1(a: a)
 			                                }
-			                                let c: C = __safeDI_c()
-			                                return DefaultUserService(c: c)
+			                                let p1Builder = Instantiator<P1>(__safeDI_p1Builder)
+			                                return C(p1Builder: p1Builder)
 			                            }
-			                            let userService: any UserService = __safeDI_userService()
-			                            return userService
+			                            let c: C = __safeDI_c()
+			                            return DefaultUserService(c: c)
 			                        }
+			                        let userService: any UserService = __safeDI_userService()
+			                        return userService
 			                    }
-			                    return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			                    func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+			                        .init(userService: { scope in __safeDI_userServiceBuilder_Service_userService(scope) })
+			                    }
+			                    return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 			                }
 			                let service: Service = __safeDI_service()
 			                return A(c: c, service: service)
