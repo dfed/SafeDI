@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 import Foundation
+import SafeDIToolLibrary
 import Testing
 @testable import SafeDIToolTestSupport
 
@@ -86,6 +87,36 @@ struct ExpectationRecordingTests: ~Copyable {
 		#expect(expectedContentByOutputName.values.contains { $0.contains("$FIXTURE_ROOT/App/Sources/App/Consumer.swift") })
 		#expect(records.generation.allSatisfy { $0.fileID == #fileID && $0.line == callLine && $0.integration == "\(integration)" && $0.module == "App" && $0.skipsCompileVerification })
 		#expect(records.assertion.isEmpty)
+	}
+
+	@Test(arguments: [nil, PluginInvocation.scanDuringGenerate(reportsFixtureDirectoryThroughSymbolicLink: false)])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func executeSafeDIToolTest_writesTheSameKeysOnEveryCall_whenGivenATargetGraph(pluginInvocation: PluginInvocation?) async throws {
+		// The target graph spells the fixture files, whose directory a UUID names afresh in every call, so its paths must
+		// be replaced by placeholders before they reach the key.
+		var keysByCall = [Set<String>]()
+		for _ in 0..<2 {
+			let callRecordDirectory = TestTemporaryDirectory.uniquePath(prefix: "expectation-records-")
+			filesToDelete.append(callRecordDirectory)
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: Self.aliasedReceiveFixture,
+				pluginInvocation: pluginInvocation,
+				buildCombinedOutput: pluginInvocation == nil,
+				filesToDelete: &filesToDelete,
+				skipCompileVerification: true,
+				pluginTargetGraph: { inputSwiftFilePaths in
+					PluginTargetGraph(
+						target: PluginTargetGraph.Target(moduleName: "App", packageID: "application", sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: []),
+						dependencyTargets: [],
+					)
+				},
+				recordDirectory: callRecordDirectory,
+			)
+			keysByCall.append(try Set(Self.records(in: callRecordDirectory).generation.map(\.key)))
+		}
+
+		#expect(!keysByCall[0].isEmpty)
+		#expect(keysByCall[0] == keysByCall[1])
 	}
 
 	@Test
