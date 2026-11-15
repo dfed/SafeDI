@@ -55,32 +55,71 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
 			"Service": Self.canonicalServiceCode,
 		]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"Root": """
-			extension Root {
-			    public init() {
-			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self\(Self.pluginComment(integration, seam: "Service"))
-			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-			                switch scope {
-			                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
-			                }
-			            }
-			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
-			                switch scope {
-			                case .userService:
-			                    let userService: any UserService = DefaultUserService(analytics: analytics)
-			                    return userService
-			                }
-			            }
-			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
-			        }
-			        let service: Service = __safeDI_service()
-			        self.init(service: service)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        func __safeDI_service() -> Service {
+				            _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self\(Self.pluginComment(integration, seam: "Service"))
+				            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+				                switch scope {
+				                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
+				                }
+				            }
+				            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
+				                switch scope {
+				                case .userService:
+				                    let userService: any UserService = DefaultUserService(analytics: analytics)
+				                    return userService
+				                }
+				            }
+				            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+				        }
+				        let service: Service = __safeDI_service()
+				        self.init(service: service)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        func __safeDI_service() -> Service {
+				            _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self\(Self.pluginComment(integration, seam: "Service"))
+				            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+				                switch scope {
+				                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
+				                }
+				            }
+				            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
+				                switch scope {
+				                case .userService:
+				                    let userService: any UserService = DefaultUserService(analytics: analytics)
+				                    return userService
+				                }
+				            }
+				            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+				        }
+				        let service: Service = __safeDI_service()
+				        self.init(service: service)
+				    }
+				}
+				""",
+			]
+		}
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, expectedFiles)
 		// The Manual's seam section shows this example's generated code under the plugin, read here so it cannot drift.
 		guard integration == .swiftPackagePlugin else { return }
 		let manual = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Documentation/Manual.md"), encoding: .utf8)
@@ -358,40 +397,52 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature", "Mid", "Outer"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_top() -> Top {
-		            _ = Top.__safeDI_Top_106545345A603E01.self // If this line does not compile, compile the code SafeDI generates for module Outer into Outer: under Bazel, add Outer’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Top(_ scope: Top.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .shell(scope): return __safeDI_userServiceBuilder_Shell(scope)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Shell(_ scope: Shell.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .service(scope): return __safeDI_userServiceBuilder_Service(scope)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    let userService: any UserService = DefaultUserService(analytics: analytics)
-		                    return userService
-		                }
-		            }
-		            return Top(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Top)
-		        }
-		        let top: Top = __safeDI_top()
-		        self.init(top: top)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(Mid)
+			import Mid
+			#endif
+			#if canImport(Outer)
+			import Outer
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_top() -> Top {
+			            _ = Top.__safeDI_Top_106545345A603E01.self // If this line does not compile, compile the code SafeDI generates for module Outer into Outer: under Bazel, add Outer’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_Top(_ scope: Top.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .shell(scope): return __safeDI_userServiceBuilder_Shell(scope)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Shell(_ scope: Shell.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .service(scope): return __safeDI_userServiceBuilder_Service(scope)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    let userService: any UserService = DefaultUserService(analytics: analytics)
+			                    return userService
+			                }
+			            }
+			            return Top(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Top)
+			        }
+			        let top: Top = __safeDI_top()
+			        self.init(top: top)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -439,40 +490,55 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Deep", "Feature", "Mid", "Outer"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_top() -> Top {
-		            _ = Top.__safeDI_Top_BD64869D04684142.self // If this line does not compile, compile the code SafeDI generates for module Outer into Outer: under Bazel, add Outer’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Top(_ scope: Top.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .shell(scope): return __safeDI_userServiceBuilder_Shell(scope)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Shell(_ scope: Shell.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .service(scope): return __safeDI_userServiceBuilder_Service(scope)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profile(_, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    let userService: any UserService = DefaultUserService()
-		                    return userService
-		                }
-		            }
-		            return Top(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Top)
-		        }
-		        let top: Top = __safeDI_top()
-		        self.init(top: top)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Deep)
+			import Deep
+			#endif
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(Mid)
+			import Mid
+			#endif
+			#if canImport(Outer)
+			import Outer
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_top() -> Top {
+			            _ = Top.__safeDI_Top_BD64869D04684142.self // If this line does not compile, compile the code SafeDI generates for module Outer into Outer: under Bazel, add Outer’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_Top(_ scope: Top.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .shell(scope): return __safeDI_userServiceBuilder_Shell(scope)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Shell(_ scope: Shell.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .service(scope): return __safeDI_userServiceBuilder_Service(scope)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profile(_, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    let userService: any UserService = DefaultUserService()
+			                    return userService
+			                }
+			            }
+			            return Top(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Top)
+			        }
+			        let top: Top = __safeDI_top()
+			        self.init(top: top)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -804,71 +870,77 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// function in a `@Sendable` fill; the values equal the build with every fulfilling declaration in `Feature`.
 		let modules = Self.modules(feature: Self.wrapperFeature, app: Self.wrapperFulfillers + [Self.wrapperRoot])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_serviceI() -> ServiceI {
-		            _ = ServiceI.__safeDI_ServiceI_66F5310FDE473DDF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_ServiceI(_ scope: ServiceI.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profileBuilder(values, scope): return __safeDI_userServiceBuilder_ServiceI_ProfileI_Scope(scope, analytics: values.analytics)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_ServiceI_ProfileI_Scope(_ scope: ServiceI.SafeDIScope_UserService.ProfileI_Scope, analytics: Analytics) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    let userService: any UserService = DefaultUserService(analytics: analytics)
-		                    return userService
-		                }
-		            }
-		            return ServiceI(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_ServiceI)
-		        }
-		        let serviceI: ServiceI = __safeDI_serviceI()
-		        func __safeDI_serviceS() -> ServiceS {
-		            _ = ServiceS.__safeDI_ServiceS_CF0DFD007F26CD06.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable func __safeDI_userServiceSendableBuilder_ServiceS(_ scope: ServiceS.SafeDISendableScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profileBuilder(scope): return __safeDI_userServiceBuilder_ServiceS_ProfileS_Scope(scope)
-		                }
-		            }
-		            @Sendable func __safeDI_userServiceBuilder_ServiceS_ProfileS_Scope(_ scope: ServiceS.SafeDIScope_UserService.ProfileS_Scope) -> any UserService {
-		                switch scope {
-		                case let .userService(scope):
-		                    let analytics = scope.analytics
-		                    let userService: any UserService = DefaultUserService(analytics: analytics)
-		                    return userService
-		                }
-		            }
-		            return ServiceS(__safeDI_userServiceSendableBuilder: __safeDI_userServiceSendableBuilder_ServiceS)
-		        }
-		        let serviceS: ServiceS = __safeDI_serviceS()
-		        func __safeDI_serviceN() -> ServiceN {
-		            _ = ServiceN.__safeDI_ServiceN_F90D6E1B71FC1E9C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable func __safeDI_userServiceSendableBuilder_ServiceN(_ scope: ServiceN.SafeDISendableScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .screenBuilder_Sendable(scope): return __safeDI_userServiceSendableBuilder_ServiceN_Screen_Scope(scope)
-		                }
-		            }
-		            @Sendable func __safeDI_userServiceSendableBuilder_ServiceN_Screen_Scope(_ scope: ServiceN.SafeDISendableScope_UserService.Screen_Scope) -> any UserService {
-		                switch scope {
-		                case let .profileBuilder(scope): return __safeDI_userServiceBuilder_ServiceN_ProfileN_Scope(scope)
-		                }
-		            }
-		            @Sendable func __safeDI_userServiceBuilder_ServiceN_ProfileN_Scope(_ scope: ServiceN.SafeDIScope_UserService.ProfileN_Scope) -> any UserService {
-		                switch scope {
-		                case let .userService(scope):
-		                    let analytics = scope.analytics
-		                    let userService: any UserService = DefaultUserService(analytics: analytics)
-		                    return userService
-		                }
-		            }
-		            return ServiceN(__safeDI_userServiceSendableBuilder: __safeDI_userServiceSendableBuilder_ServiceN)
-		        }
-		        let serviceN: ServiceN = __safeDI_serviceN()
-		        self.init(serviceI: serviceI, serviceS: serviceS, serviceN: serviceN)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_serviceI() -> ServiceI {
+			            _ = ServiceI.__safeDI_ServiceI_66F5310FDE473DDF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_ServiceI(_ scope: ServiceI.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profileBuilder(values, scope): return __safeDI_userServiceBuilder_ServiceI_ProfileI_Scope(scope, analytics: values.analytics)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_ServiceI_ProfileI_Scope(_ scope: ServiceI.SafeDIScope_UserService.ProfileI_Scope, analytics: Analytics) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    let userService: any UserService = DefaultUserService(analytics: analytics)
+			                    return userService
+			                }
+			            }
+			            return ServiceI(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_ServiceI)
+			        }
+			        let serviceI: ServiceI = __safeDI_serviceI()
+			        func __safeDI_serviceS() -> ServiceS {
+			            _ = ServiceS.__safeDI_ServiceS_CF0DFD007F26CD06.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            @Sendable func __safeDI_userServiceSendableBuilder_ServiceS(_ scope: ServiceS.SafeDISendableScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profileBuilder(scope): return __safeDI_userServiceBuilder_ServiceS_ProfileS_Scope(scope)
+			                }
+			            }
+			            @Sendable func __safeDI_userServiceBuilder_ServiceS_ProfileS_Scope(_ scope: ServiceS.SafeDIScope_UserService.ProfileS_Scope) -> any UserService {
+			                switch scope {
+			                case let .userService(scope):
+			                    let analytics = scope.analytics
+			                    let userService: any UserService = DefaultUserService(analytics: analytics)
+			                    return userService
+			                }
+			            }
+			            return ServiceS(__safeDI_userServiceSendableBuilder: __safeDI_userServiceSendableBuilder_ServiceS)
+			        }
+			        let serviceS: ServiceS = __safeDI_serviceS()
+			        func __safeDI_serviceN() -> ServiceN {
+			            _ = ServiceN.__safeDI_ServiceN_F90D6E1B71FC1E9C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            @Sendable func __safeDI_userServiceSendableBuilder_ServiceN(_ scope: ServiceN.SafeDISendableScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .screenBuilder_Sendable(scope): return __safeDI_userServiceSendableBuilder_ServiceN_Screen_Scope(scope)
+			                }
+			            }
+			            @Sendable func __safeDI_userServiceSendableBuilder_ServiceN_Screen_Scope(_ scope: ServiceN.SafeDISendableScope_UserService.Screen_Scope) -> any UserService {
+			                switch scope {
+			                case let .profileBuilder(scope): return __safeDI_userServiceBuilder_ServiceN_ProfileN_Scope(scope)
+			                }
+			            }
+			            @Sendable func __safeDI_userServiceBuilder_ServiceN_ProfileN_Scope(_ scope: ServiceN.SafeDIScope_UserService.ProfileN_Scope) -> any UserService {
+			                switch scope {
+			                case let .userService(scope):
+			                    let analytics = scope.analytics
+			                    let userService: any UserService = DefaultUserService(analytics: analytics)
+			                    return userService
+			                }
+			            }
+			            return ServiceN(__safeDI_userServiceSendableBuilder: __safeDI_userServiceSendableBuilder_ServiceN)
+			        }
+			        let serviceN: ServiceN = __safeDI_serviceN()
+			        self.init(serviceI: serviceI, serviceS: serviceS, serviceN: serviceN)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: Self.wrapperFeature + Self.wrapperFulfillers, app: [Self.wrapperRoot]))
 	}
 
@@ -958,57 +1030,63 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    public enum __safeDI_ServiceW_B74D48128E34846B {}
 		}
 		"""])
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        let analytics = Analytics()
-		        func __safeDI_serviceW() -> ServiceW {
-		            _ = ServiceW.__safeDI_ServiceW_B74D48128E34846B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_namedUserServiceBuilder_ServiceW(_ scope: ServiceW.SafeDIScope_NamedUserService) -> AnyUserService {
-		                switch scope {
-		                case let .erasedUserServiceBuilder(scope, __safeDI_forwarded):
-		                    let analytics = scope.analytics
-		                    func __safeDI_erasedUserServiceBuilder(name: String) -> NamedUserService {
-		                        NamedUserService(name: name, analytics: analytics)
-		                    }
-		                    return AnyUserService(__safeDI_erasedUserServiceBuilder(name: __safeDI_forwarded))
-		                }
-		            }
-		            @Sendable func __safeDI_namedUserServiceSendableBuilder_ServiceW(_ scope: ServiceW.SafeDISendableScope_NamedUserService) -> AnyUserService {
-		                switch scope {
-		                case let .sendableErasedUserServiceBuilder(__safeDI_forwarded):
-		                    @Sendable func __safeDI_sendableErasedUserServiceBuilder(name: String) -> NamedUserService {
-		                        NamedUserService(name: name, analytics: analytics)
-		                    }
-		                    return AnyUserService(__safeDI_sendableErasedUserServiceBuilder(name: __safeDI_forwarded))
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_ServiceW(_ scope: ServiceW.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .lazyUserService(scope):
-		                    let analytics = scope.analytics
-		                    func __safeDI_lazyUserService() -> DefaultUserService {
-		                        DefaultUserService(analytics: analytics)
-		                    }
-		                    return __safeDI_lazyUserService()
-		                }
-		            }
-		            @Sendable func __safeDI_userServiceSendableBuilder_ServiceW(_ scope: ServiceW.SafeDISendableScope_UserService) -> any UserService {
-		                switch scope {
-		                case .sendableLazyUserService:
-		                    @Sendable func __safeDI_sendableLazyUserService() -> DefaultUserService {
-		                        DefaultUserService(analytics: analytics)
-		                    }
-		                    return __safeDI_sendableLazyUserService()
-		                }
-		            }
-		            return ServiceW(__safeDI_analytics: analytics, __safeDI_namedUserServiceBuilder: __safeDI_namedUserServiceBuilder_ServiceW, __safeDI_namedUserServiceSendableBuilder: __safeDI_namedUserServiceSendableBuilder_ServiceW, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_ServiceW, __safeDI_userServiceSendableBuilder: __safeDI_userServiceSendableBuilder_ServiceW)
-		        }
-		        let serviceW: ServiceW = __safeDI_serviceW()
-		        self.init(analytics: analytics, serviceW: serviceW)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let analytics = Analytics()
+			        func __safeDI_serviceW() -> ServiceW {
+			            _ = ServiceW.__safeDI_ServiceW_B74D48128E34846B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_namedUserServiceBuilder_ServiceW(_ scope: ServiceW.SafeDIScope_NamedUserService) -> AnyUserService {
+			                switch scope {
+			                case let .erasedUserServiceBuilder(scope, __safeDI_forwarded):
+			                    let analytics = scope.analytics
+			                    func __safeDI_erasedUserServiceBuilder(name: String) -> NamedUserService {
+			                        NamedUserService(name: name, analytics: analytics)
+			                    }
+			                    return AnyUserService(__safeDI_erasedUserServiceBuilder(name: __safeDI_forwarded))
+			                }
+			            }
+			            @Sendable func __safeDI_namedUserServiceSendableBuilder_ServiceW(_ scope: ServiceW.SafeDISendableScope_NamedUserService) -> AnyUserService {
+			                switch scope {
+			                case let .sendableErasedUserServiceBuilder(__safeDI_forwarded):
+			                    @Sendable func __safeDI_sendableErasedUserServiceBuilder(name: String) -> NamedUserService {
+			                        NamedUserService(name: name, analytics: analytics)
+			                    }
+			                    return AnyUserService(__safeDI_sendableErasedUserServiceBuilder(name: __safeDI_forwarded))
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_ServiceW(_ scope: ServiceW.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .lazyUserService(scope):
+			                    let analytics = scope.analytics
+			                    func __safeDI_lazyUserService() -> DefaultUserService {
+			                        DefaultUserService(analytics: analytics)
+			                    }
+			                    return __safeDI_lazyUserService()
+			                }
+			            }
+			            @Sendable func __safeDI_userServiceSendableBuilder_ServiceW(_ scope: ServiceW.SafeDISendableScope_UserService) -> any UserService {
+			                switch scope {
+			                case .sendableLazyUserService:
+			                    @Sendable func __safeDI_sendableLazyUserService() -> DefaultUserService {
+			                        DefaultUserService(analytics: analytics)
+			                    }
+			                    return __safeDI_sendableLazyUserService()
+			                }
+			            }
+			            return ServiceW(__safeDI_analytics: analytics, __safeDI_namedUserServiceBuilder: __safeDI_namedUserServiceBuilder_ServiceW, __safeDI_namedUserServiceSendableBuilder: __safeDI_namedUserServiceSendableBuilder_ServiceW, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_ServiceW, __safeDI_userServiceSendableBuilder: __safeDI_userServiceSendableBuilder_ServiceW)
+			        }
+			        let serviceW: ServiceW = __safeDI_serviceW()
+			        self.init(analytics: analytics, serviceW: serviceW)
+			    }
+			}
+			""",
+		])
 		// The comparator does not call an erased instantiator, so the probes call each one.
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
@@ -1114,42 +1192,48 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    public enum __safeDI_Service_1A94721340032BA5 {}
 		}
 		"""])
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        let session = Session()
-		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_1A94721340032BA5.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .home(values, scope): return __safeDI_userServiceBuilder_Service_Home_Scope(scope, analytics: values.analytics)
-		                case let .settings(values, scope): return __safeDI_userServiceBuilder_Service_Settings_Scope(scope, analytics: values.analytics, session: session)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service_Home_Scope(_ scope: Service.SafeDIScope_UserService.Home_Scope, analytics: Analytics) -> any UserService {
-		                switch scope {
-		                case let .avatar(values, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, analytics: analytics, session: values.session)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service_Avatar_Scope(_ scope: Service.SafeDIScope_UserService.Avatar_Scope, analytics: Analytics, session: Session?) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    let userService: any UserService = DefaultUserService(analytics: analytics, session: session)
-		                    return userService
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service_Settings_Scope(_ scope: Service.SafeDIScope_UserService.Settings_Scope, analytics: Analytics, session: Session?) -> any UserService {
-		                switch scope {
-		                case let .avatar(_, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, analytics: analytics, session: session)
-		                }
-		            }
-		            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
-		        }
-		        let service: Service = __safeDI_service()
-		        self.init(session: session, service: service)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let session = Session()
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_1A94721340032BA5.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .home(values, scope): return __safeDI_userServiceBuilder_Service_Home_Scope(scope, analytics: values.analytics)
+			                case let .settings(values, scope): return __safeDI_userServiceBuilder_Service_Settings_Scope(scope, analytics: values.analytics, session: session)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Home_Scope(_ scope: Service.SafeDIScope_UserService.Home_Scope, analytics: Analytics) -> any UserService {
+			                switch scope {
+			                case let .avatar(values, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, analytics: analytics, session: values.session)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Avatar_Scope(_ scope: Service.SafeDIScope_UserService.Avatar_Scope, analytics: Analytics, session: Session?) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    let userService: any UserService = DefaultUserService(analytics: analytics, session: session)
+			                    return userService
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Settings_Scope(_ scope: Service.SafeDIScope_UserService.Settings_Scope, analytics: Analytics, session: Session?) -> any UserService {
+			                switch scope {
+			                case let .avatar(_, scope): return __safeDI_userServiceBuilder_Service_Avatar_Scope(scope, analytics: analytics, session: session)
+			                }
+			            }
+			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(session: session, service: service)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -1214,32 +1298,38 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    public enum __safeDI_Service_66BD69946A08889B {}
 		}
 		"""])
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        let logger = Logger()
-		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_66BD69946A08889B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, theme: values.theme)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, theme: Theme) -> any UserService {
-		                switch scope {
-		                case let .userService(scope):
-		                    let cache = scope.cache
-		                    let userService: any UserService = DefaultUserService(cache: cache, logger: logger, theme: theme)
-		                    return userService
-		                }
-		            }
-		            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
-		        }
-		        let service: Service = __safeDI_service()
-		        self.init(service: service, logger: logger)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let logger = Logger()
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_66BD69946A08889B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, theme: values.theme)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, theme: Theme) -> any UserService {
+			                switch scope {
+			                case let .userService(scope):
+			                    let cache = scope.cache
+			                    let userService: any UserService = DefaultUserService(cache: cache, logger: logger, theme: theme)
+			                    return userService
+			                }
+			            }
+			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(service: service, logger: logger)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -1259,31 +1349,37 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + Self.canonicalServiceCode])
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    let userService: any UserService = DefaultUserService(analytics: analytics, filter: nil)
-		                    return userService
-		                }
-		            }
-		            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
-		        }
-		        let service: Service = __safeDI_service()
-		        let filter: any FilterProtocol = AppFilter(service: service)
-		        self.init(service: service, filter: filter)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    let userService: any UserService = DefaultUserService(analytics: analytics, filter: nil)
+			                    return userService
+			                }
+			            }
+			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			        }
+			        let service: Service = __safeDI_service()
+			        let filter: any FilterProtocol = AppFilter(service: service)
+			        self.init(service: service, filter: filter)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -1302,38 +1398,44 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_8401CCF78D832F75.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_routerBuilder_Flow(_ scope: Flow.SafeDIScope_Router) -> any Router {
-		                switch scope {
-		                case let .profileBuilder(values, scope): return __safeDI_routerBuilder_Flow_Profile_Scope(scope, analytics: values.analytics)
-		                }
-		            }
-		            func __safeDI_routerBuilder_Flow_Profile_Scope(_ scope: Flow.SafeDIScope_Router.Profile_Scope, analytics: Analytics) -> any Router {
-		                switch scope {
-		                case .router:
-		                    func __safeDI_router() -> DefaultRouter {
-		                        func __safeDI_flowBuilder() -> Flow {
-		                            _ = Flow.__safeDI_Flow_8401CCF78D832F75.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                            return Flow(__safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
-		                        }
-		                        let flowBuilder = Instantiator<Flow>(__safeDI_flowBuilder)
-		                        return DefaultRouter(flowBuilder: flowBuilder, analytics: analytics)
-		                    }
-		                    let router: any Router = __safeDI_router()
-		                    return router
-		                }
-		            }
-		            return Flow(__safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        self.init(flow: flow)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_flow() -> Flow {
+			            _ = Flow.__safeDI_Flow_8401CCF78D832F75.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_routerBuilder_Flow(_ scope: Flow.SafeDIScope_Router) -> any Router {
+			                switch scope {
+			                case let .profileBuilder(values, scope): return __safeDI_routerBuilder_Flow_Profile_Scope(scope, analytics: values.analytics)
+			                }
+			            }
+			            func __safeDI_routerBuilder_Flow_Profile_Scope(_ scope: Flow.SafeDIScope_Router.Profile_Scope, analytics: Analytics) -> any Router {
+			                switch scope {
+			                case .router:
+			                    func __safeDI_router() -> DefaultRouter {
+			                        func __safeDI_flowBuilder() -> Flow {
+			                            _ = Flow.__safeDI_Flow_8401CCF78D832F75.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                            return Flow(__safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
+			                        }
+			                        let flowBuilder = Instantiator<Flow>(__safeDI_flowBuilder)
+			                        return DefaultRouter(flowBuilder: flowBuilder, analytics: analytics)
+			                    }
+			                    let router: any Router = __safeDI_router()
+			                    return router
+			                }
+			            }
+			            return Flow(__safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(flow: flow)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -1347,39 +1449,45 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			Self.fulfillingType(named: "DefaultRouter", fulfilling: "Router", declarations: ["@Received let logger: Logger", "@Instantiated let flowBuilder: Instantiator<Flow>"]),
 		])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public convenience init() {
-		        let logger = Logger()
-		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_C7439A5FFA022AA8.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_routerBuilder_Flow(_ scope: Flow.SafeDIScope_Router) -> any Router {
-		                switch scope {
-		                case let .profileBuilder(_, scope): return __safeDI_routerBuilder_Flow_Profile_Scope(scope)
-		                }
-		            }
-		            func __safeDI_routerBuilder_Flow_Profile_Scope(_ scope: Flow.SafeDIScope_Router.Profile_Scope) -> any Router {
-		                switch scope {
-		                case .router:
-		                    func __safeDI_router() -> DefaultRouter {
-		                        func __safeDI_flowBuilder() -> Flow {
-		                            _ = Flow.__safeDI_Flow_C7439A5FFA022AA8.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                            return Flow(__safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
-		                        }
-		                        let flowBuilder = Instantiator<Flow>(__safeDI_flowBuilder)
-		                        return DefaultRouter(logger: logger, flowBuilder: flowBuilder)
-		                    }
-		                    let router: any Router = __safeDI_router()
-		                    return router
-		                }
-		            }
-		            return Flow(__safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        self.init(logger: logger, flow: flow)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let logger = Logger()
+			        func __safeDI_flow() -> Flow {
+			            _ = Flow.__safeDI_Flow_C7439A5FFA022AA8.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_routerBuilder_Flow(_ scope: Flow.SafeDIScope_Router) -> any Router {
+			                switch scope {
+			                case let .profileBuilder(_, scope): return __safeDI_routerBuilder_Flow_Profile_Scope(scope)
+			                }
+			            }
+			            func __safeDI_routerBuilder_Flow_Profile_Scope(_ scope: Flow.SafeDIScope_Router.Profile_Scope) -> any Router {
+			                switch scope {
+			                case .router:
+			                    func __safeDI_router() -> DefaultRouter {
+			                        func __safeDI_flowBuilder() -> Flow {
+			                            _ = Flow.__safeDI_Flow_C7439A5FFA022AA8.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                            return Flow(__safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
+			                        }
+			                        let flowBuilder = Instantiator<Flow>(__safeDI_flowBuilder)
+			                        return DefaultRouter(logger: logger, flowBuilder: flowBuilder)
+			                    }
+			                    let router: any Router = __safeDI_router()
+			                    return router
+			                }
+			            }
+			            return Flow(__safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(logger: logger, flow: flow)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
 	}
 
@@ -1434,44 +1542,50 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 		}
 		"""])
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public convenience init() {
-		        let logger = Logger()
-		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_F8FECDA524F2B568.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_routerBuilder_Flow(_ scope: Flow.SafeDIScope_Router) -> any Router {
-		                switch scope {
-		                case let .profileBuilder(values, scope): return __safeDI_routerBuilder_Flow_Profile_Scope(scope, logger: values.logger)
-		                }
-		            }
-		            func __safeDI_routerBuilder_Flow_Profile_Scope(_ scope: Flow.SafeDIScope_Router.Profile_Scope, logger: Logger) -> any Router {
-		                switch scope {
-		                case .router:
-		                    func __safeDI_router() -> DefaultRouter {
-		                        func __safeDI_middle() -> Middle {
-		                            let logger = Logger()
-		                            func __safeDI_flowBuilder() -> Flow {
-		                                _ = Flow.__safeDI_Flow_F8FECDA524F2B568.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                                return Flow(__safeDI_logger: logger, __safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
-		                            }
-		                            let flowBuilder = Instantiator<Flow>(__safeDI_flowBuilder)
-		                            return Middle(logger: logger, flowBuilder: flowBuilder)
-		                        }
-		                        let middle: Middle = __safeDI_middle()
-		                        return DefaultRouter(logger: logger, middle: middle)
-		                    }
-		                    let router: any Router = __safeDI_router()
-		                    return router
-		                }
-		            }
-		            return Flow(__safeDI_logger: logger, __safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        self.init(logger: logger, flow: flow)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let logger = Logger()
+			        func __safeDI_flow() -> Flow {
+			            _ = Flow.__safeDI_Flow_F8FECDA524F2B568.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_routerBuilder_Flow(_ scope: Flow.SafeDIScope_Router) -> any Router {
+			                switch scope {
+			                case let .profileBuilder(values, scope): return __safeDI_routerBuilder_Flow_Profile_Scope(scope, logger: values.logger)
+			                }
+			            }
+			            func __safeDI_routerBuilder_Flow_Profile_Scope(_ scope: Flow.SafeDIScope_Router.Profile_Scope, logger: Logger) -> any Router {
+			                switch scope {
+			                case .router:
+			                    func __safeDI_router() -> DefaultRouter {
+			                        func __safeDI_middle() -> Middle {
+			                            let logger = Logger()
+			                            func __safeDI_flowBuilder() -> Flow {
+			                                _ = Flow.__safeDI_Flow_F8FECDA524F2B568.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                                return Flow(__safeDI_logger: logger, __safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
+			                            }
+			                            let flowBuilder = Instantiator<Flow>(__safeDI_flowBuilder)
+			                            return Middle(logger: logger, flowBuilder: flowBuilder)
+			                        }
+			                        let middle: Middle = __safeDI_middle()
+			                        return DefaultRouter(logger: logger, middle: middle)
+			                    }
+			                    let router: any Router = __safeDI_router()
+			                    return router
+			                }
+			            }
+			            return Flow(__safeDI_logger: logger, __safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(logger: logger, flow: flow)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
 	}
 
@@ -1534,36 +1648,42 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let fulfillers = [seamFixtureType(named: "LoopingUserService", declarations: ["@Received let cache: Cache", #"@Instantiated(fulfilledByType: "LoopingUserService", erasedToConcreteExistential: true) let userServiceBuilder: ErasedInstantiator<(), AnyUserService>"#], conformances: ", UserService")]
 		let modules = Self.modules(feature: feature, app: fulfillers + [Self.canonicalRoot])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_66143C2D33DCF1AF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_loopingUserServiceBuilder_Service(_ scope: Service.SafeDIScope_LoopingUserService) -> AnyUserService {
-		                switch scope {
-		                case let .aBuilder(_, scope): return __safeDI_loopingUserServiceBuilder_Service_A_Scope(scope)
-		                }
-		            }
-		            func __safeDI_loopingUserServiceBuilder_Service_A_Scope(_ scope: Service.SafeDIScope_LoopingUserService.A_Scope) -> AnyUserService {
-		                switch scope {
-		                case let .userServiceBuilder(scope):
-		                    let cache = scope.cache
-		                    func __safeDI_userServiceBuilder() -> LoopingUserService {
-		                        let userServiceBuilder = ErasedInstantiator<(), AnyUserService> {
-		                            AnyUserService(__safeDI_userServiceBuilder())
-		                        }
-		                        return LoopingUserService(cache: cache, userServiceBuilder: userServiceBuilder)
-		                    }
-		                    return AnyUserService(__safeDI_userServiceBuilder())
-		                }
-		            }
-		            return Service(__safeDI_loopingUserServiceBuilder: __safeDI_loopingUserServiceBuilder_Service)
-		        }
-		        let service: Service = __safeDI_service()
-		        self.init(service: service)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_66143C2D33DCF1AF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_loopingUserServiceBuilder_Service(_ scope: Service.SafeDIScope_LoopingUserService) -> AnyUserService {
+			                switch scope {
+			                case let .aBuilder(_, scope): return __safeDI_loopingUserServiceBuilder_Service_A_Scope(scope)
+			                }
+			            }
+			            func __safeDI_loopingUserServiceBuilder_Service_A_Scope(_ scope: Service.SafeDIScope_LoopingUserService.A_Scope) -> AnyUserService {
+			                switch scope {
+			                case let .userServiceBuilder(scope):
+			                    let cache = scope.cache
+			                    func __safeDI_userServiceBuilder() -> LoopingUserService {
+			                        let userServiceBuilder = ErasedInstantiator<(), AnyUserService> {
+			                            AnyUserService(__safeDI_userServiceBuilder())
+			                        }
+			                        return LoopingUserService(cache: cache, userServiceBuilder: userServiceBuilder)
+			                    }
+			                    return AnyUserService(__safeDI_userServiceBuilder())
+			                }
+			            }
+			            return Service(__safeDI_loopingUserServiceBuilder: __safeDI_loopingUserServiceBuilder_Service)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+		])
 		// The comparator does not call an erased instantiator, so the probe calls the fill's twice down.
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [Self.canonicalRoot]), probes: [
 			DifferentialValueProbe("Root()"),
@@ -1586,39 +1706,45 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_15611856F0DB86CA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable func __safeDI_routerSendableBuilder_Flow(_ scope: Flow.SafeDISendableScope_Router) -> any Router {
-		                switch scope {
-		                case let .profileBuilder(scope): return __safeDI_routerBuilder_Flow_Profile_Scope(scope)
-		                }
-		            }
-		            @Sendable func __safeDI_routerBuilder_Flow_Profile_Scope(_ scope: Flow.SafeDIScope_Router.Profile_Scope) -> any Router {
-		                switch scope {
-		                case let .router(scope):
-		                    let analytics = scope.analytics
-		                    func __safeDI_router() -> DefaultRouter {
-		                        @Sendable func __safeDI_flowBuilder() -> Flow {
-		                            _ = Flow.__safeDI_Flow_15611856F0DB86CA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                            return Flow(__safeDI_routerSendableBuilder: __safeDI_routerSendableBuilder_Flow)
-		                        }
-		                        let flowBuilder = SendableInstantiator<Flow>(__safeDI_flowBuilder)
-		                        return DefaultRouter(flowBuilder: flowBuilder, analytics: analytics)
-		                    }
-		                    let router: any Router = __safeDI_router()
-		                    return router
-		                }
-		            }
-		            return Flow(__safeDI_routerSendableBuilder: __safeDI_routerSendableBuilder_Flow)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        self.init(flow: flow)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_flow() -> Flow {
+			            _ = Flow.__safeDI_Flow_15611856F0DB86CA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            @Sendable func __safeDI_routerSendableBuilder_Flow(_ scope: Flow.SafeDISendableScope_Router) -> any Router {
+			                switch scope {
+			                case let .profileBuilder(scope): return __safeDI_routerBuilder_Flow_Profile_Scope(scope)
+			                }
+			            }
+			            @Sendable func __safeDI_routerBuilder_Flow_Profile_Scope(_ scope: Flow.SafeDIScope_Router.Profile_Scope) -> any Router {
+			                switch scope {
+			                case let .router(scope):
+			                    let analytics = scope.analytics
+			                    func __safeDI_router() -> DefaultRouter {
+			                        @Sendable func __safeDI_flowBuilder() -> Flow {
+			                            _ = Flow.__safeDI_Flow_15611856F0DB86CA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                            return Flow(__safeDI_routerSendableBuilder: __safeDI_routerSendableBuilder_Flow)
+			                        }
+			                        let flowBuilder = SendableInstantiator<Flow>(__safeDI_flowBuilder)
+			                        return DefaultRouter(flowBuilder: flowBuilder, analytics: analytics)
+			                    }
+			                    let router: any Router = __safeDI_router()
+			                    return router
+			                }
+			            }
+			            return Flow(__safeDI_routerSendableBuilder: __safeDI_routerSendableBuilder_Flow)
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(flow: flow)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -1639,43 +1765,49 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let inner: Inner"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_0AE08C46F5886BD0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable func __safeDI_userServiceBuilder_Inner(_ scope: Inner.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profileBuilder(_, scope): return __safeDI_userServiceBuilder_Inner_Profile_Scope(scope)
-		                }
-		            }
-		            @Sendable func __safeDI_userServiceBuilder_Inner_Profile_Scope(_ scope: Inner.SafeDIScope_UserService.Profile_Scope) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    func __safeDI_userService() -> DefaultUserService {
-		                        func __safeDI_shellBuilder() -> Shell {
-		                            _ = Shell.__safeDI_Shell_C0B585A7276DE086.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                            @Sendable func __safeDI_userServiceSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_UserService) -> any UserService {
-		                                switch scope {
-		                                case let .innerBuilder(scope): return __safeDI_userServiceBuilder_Inner(scope)
-		                                }
-		                            }
-		                            return Shell(__safeDI_userServiceSendableBuilder: __safeDI_userServiceSendableBuilder_Shell)
-		                        }
-		                        let shellBuilder = Instantiator<Shell>(__safeDI_shellBuilder)
-		                        return DefaultUserService(shellBuilder: shellBuilder)
-		                    }
-		                    let userService: any UserService = __safeDI_userService()
-		                    return userService
-		                }
-		            }
-		            return Inner(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Inner)
-		        }
-		        let inner: Inner = __safeDI_inner()
-		        self.init(inner: inner)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_inner() -> Inner {
+			            _ = Inner.__safeDI_Inner_0AE08C46F5886BD0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            @Sendable func __safeDI_userServiceBuilder_Inner(_ scope: Inner.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profileBuilder(_, scope): return __safeDI_userServiceBuilder_Inner_Profile_Scope(scope)
+			                }
+			            }
+			            @Sendable func __safeDI_userServiceBuilder_Inner_Profile_Scope(_ scope: Inner.SafeDIScope_UserService.Profile_Scope) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    func __safeDI_userService() -> DefaultUserService {
+			                        func __safeDI_shellBuilder() -> Shell {
+			                            _ = Shell.__safeDI_Shell_C0B585A7276DE086.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                            @Sendable func __safeDI_userServiceSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_UserService) -> any UserService {
+			                                switch scope {
+			                                case let .innerBuilder(scope): return __safeDI_userServiceBuilder_Inner(scope)
+			                                }
+			                            }
+			                            return Shell(__safeDI_userServiceSendableBuilder: __safeDI_userServiceSendableBuilder_Shell)
+			                        }
+			                        let shellBuilder = Instantiator<Shell>(__safeDI_shellBuilder)
+			                        return DefaultUserService(shellBuilder: shellBuilder)
+			                    }
+			                    let userService: any UserService = __safeDI_userService()
+			                    return userService
+			                }
+			            }
+			            return Inner(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Inner)
+			        }
+			        let inner: Inner = __safeDI_inner()
+			        self.init(inner: inner)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -1823,58 +1955,73 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// builder, of `Service`'s struct, and passes it on; `App` fills `Shell`'s builder.
 		let modules = Self.passUpModules(appFulfillers: [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let analytics: Analytics"])])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Mid"]?.generatedFiles, Self.generatedFiles(module: "Mid", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Shell": """
-		extension Shell {
-		    @frozen public enum SafeDIScope_UserService {
-		        case service(Service.SafeDIScope_UserService)
-		    }
+		expectGeneratedFiles(output.modules["Mid"]?.generatedFiles, [
+			"Mid.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
 
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
-		        let theme = Theme()
-		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Service(__safeDI_userServiceBuilder: { __safeDI_userServiceBuilder(.service($0)) })
-		        }
-		        let service: Service = __safeDI_service()
-		        self.init(theme: theme, service: service)
-		    }
-		}
+			extension Shell {
+			    @frozen public enum SafeDIScope_UserService {
+			        case service(Service.SafeDIScope_UserService)
+			    }
 
-		extension Shell {
-		    public enum __safeDI_Shell_C9A5B0AF0966CDF9 {}
-		}
-		"""]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature", "Mid"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_C9A5B0AF0966CDF9.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Shell(_ scope: Shell.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .service(scope): return __safeDI_userServiceBuilder_Service(scope)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    let userService: any UserService = DefaultUserService(analytics: analytics)
-		                    return userService
-		                }
-		            }
-		            return Shell(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Shell)
-		        }
-		        let shell: Shell = __safeDI_shell()
-		        self.init(shell: shell)
-		    }
-		}
-		"""]))
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
+			        let theme = Theme()
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Service(__safeDI_userServiceBuilder: { __safeDI_userServiceBuilder(.service($0)) })
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(theme: theme, service: service)
+			    }
+			}
+
+			extension Shell {
+			    public enum __safeDI_Shell_C9A5B0AF0966CDF9 {}
+			}
+			""",
+		])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(Mid)
+			import Mid
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_shell() -> Shell {
+			            _ = Shell.__safeDI_Shell_C9A5B0AF0966CDF9.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_Shell(_ scope: Shell.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .service(scope): return __safeDI_userServiceBuilder_Service(scope)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    let userService: any UserService = DefaultUserService(analytics: analytics)
+			                    return userService
+			                }
+			            }
+			            return Shell(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Shell)
+			        }
+			        let shell: Shell = __safeDI_shell()
+			        self.init(shell: shell)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -1887,37 +2034,46 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"])
 		let modules = Self.threeModules(feature: Self.canonicalFeature, mid: mid, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature", "Mid"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_shellBuilder(name: String) -> Shell {
-		            _ = Shell.__safeDI_Shell_EF68784790433416.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Shell(_ scope: Shell.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .service(scope): return __safeDI_userServiceBuilder_Service(scope)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profile(_, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    let userService: any UserService = DefaultUserService(name: name)
-		                    return userService
-		                }
-		            }
-		            return Shell(__safeDI_name: name, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Shell)
-		        }
-		        let shellBuilder = Instantiator<Shell> {
-		            __safeDI_shellBuilder(name: $0)
-		        }
-		        self.init(shellBuilder: shellBuilder)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(Mid)
+			import Mid
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_shellBuilder(name: String) -> Shell {
+			            _ = Shell.__safeDI_Shell_EF68784790433416.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_Shell(_ scope: Shell.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .service(scope): return __safeDI_userServiceBuilder_Service(scope)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profile(_, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    let userService: any UserService = DefaultUserService(name: name)
+			                    return userService
+			                }
+			            }
+			            return Shell(__safeDI_name: name, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Shell)
+			        }
+			        let shellBuilder = Instantiator<Shell> {
+			            __safeDI_shellBuilder(name: $0)
+			        }
+			        self.init(shellBuilder: shellBuilder)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(
 			output,
 			modules: modules,
@@ -1974,86 +2130,101 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 		let holeModules = modules(feature: feature, mid: mid, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: holeModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Mid"]?.generatedFiles, Self.generatedFiles(module: "Mid", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Shell": """
-		extension Shell {
-		    @frozen public enum SafeDIScope_Logger {
-		        case service_userServiceBuilder(service_userServiceBuilder_Values, Service.SafeDIScope_UserService, SafeDIScope_Logger.DefaultUserService_Scope)
+		expectGeneratedFiles(output.modules["Mid"]?.generatedFiles, [
+			"Mid.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
 
-		        public struct service_userServiceBuilder_Values {
-		            public let theme: Theme
-		        }
+			extension Shell {
+			    @frozen public enum SafeDIScope_Logger {
+			        case service_userServiceBuilder(service_userServiceBuilder_Values, Service.SafeDIScope_UserService, SafeDIScope_Logger.DefaultUserService_Scope)
 
-		        @frozen public enum DefaultUserService_Scope {
-		            case logger(logger_Values)
+			        public struct service_userServiceBuilder_Values {
+			            public let theme: Theme
+			        }
 
-		            public struct logger_Values {}
-		        }
-		    }
+			        @frozen public enum DefaultUserService_Scope {
+			            case logger(logger_Values)
 
-		    // SafeDI counts `Logger` as `public`: no module it reads declares it narrower. If `Logger` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_loggerBuilder: @escaping (SafeDIScope_Logger) -> any Logger) {
-		        let theme = Theme()
-		        let __safeDI_loggerValues_service_userServiceBuilder = SafeDIScope_Logger.service_userServiceBuilder_Values(theme: theme)
-		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Service(_ __safeDI_service_userServiceBuilder: Service.SafeDIScope_UserService) -> any UserService {
-		                switch __safeDI_service_userServiceBuilder {
-		                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, __safeDI_service_userServiceBuilder: __safeDI_service_userServiceBuilder, analytics: values.analytics)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, __safeDI_service_userServiceBuilder: Service.SafeDIScope_UserService, analytics: Analytics) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    func __safeDI_userService() -> DefaultUserService {
-		                        let logger: any Logger = __safeDI_loggerBuilder(.service_userServiceBuilder(__safeDI_loggerValues_service_userServiceBuilder, __safeDI_service_userServiceBuilder, .logger(SafeDIScope_Logger.DefaultUserService_Scope.logger_Values())))
-		                        return DefaultUserService(analytics: analytics, logger: logger)
-		                    }
-		                    let userService: any UserService = __safeDI_userService()
-		                    return userService
-		                }
-		            }
-		            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
-		        }
-		        let service: Service = __safeDI_service()
-		        self.init(service: service, theme: theme)
-		    }
-		}
+			            public struct logger_Values {}
+			        }
+			    }
 
-		extension Shell {
-		    public enum __safeDI_Shell_DAF792BC2BCEC191 {}
-		}
-		"""]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature", "Mid"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_DAF792BC2BCEC191.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_loggerBuilder_Shell(_ scope: Shell.SafeDIScope_Logger) -> any Logger {
-		                switch scope {
-		                case let .service_userServiceBuilder(values, innerScope, scope): return __safeDI_loggerBuilder_Shell_DefaultUserService_Scope(scope, analytics: __safeDI_analytics_Service_SafeDIScope_UserService(innerScope), theme: values.theme)
-		                }
-		            }
-		            func __safeDI_loggerBuilder_Shell_DefaultUserService_Scope(_ scope: Shell.SafeDIScope_Logger.DefaultUserService_Scope, analytics: Analytics, theme: Theme) -> any Logger {
-		                switch scope {
-		                case .logger:
-		                    let logger: any Logger = DefaultLogger(analytics: analytics, theme: theme)
-		                    return logger
-		                }
-		            }
-		            func __safeDI_analytics_Service_SafeDIScope_UserService(_ scope: Service.SafeDIScope_UserService) -> Analytics {
-		                switch scope {
-		                case let .profile(values, _): return values.analytics
-		                }
-		            }
-		            return Shell(__safeDI_loggerBuilder: __safeDI_loggerBuilder_Shell)
-		        }
-		        let shell: Shell = __safeDI_shell()
-		        self.init(shell: shell)
-		    }
-		}
-		"""]))
+			    // SafeDI counts `Logger` as `public`: no module it reads declares it narrower. If `Logger` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_loggerBuilder: @escaping (SafeDIScope_Logger) -> any Logger) {
+			        let theme = Theme()
+			        let __safeDI_loggerValues_service_userServiceBuilder = SafeDIScope_Logger.service_userServiceBuilder_Values(theme: theme)
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_Service(_ __safeDI_service_userServiceBuilder: Service.SafeDIScope_UserService) -> any UserService {
+			                switch __safeDI_service_userServiceBuilder {
+			                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, __safeDI_service_userServiceBuilder: __safeDI_service_userServiceBuilder, analytics: values.analytics)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, __safeDI_service_userServiceBuilder: Service.SafeDIScope_UserService, analytics: Analytics) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    func __safeDI_userService() -> DefaultUserService {
+			                        let logger: any Logger = __safeDI_loggerBuilder(.service_userServiceBuilder(__safeDI_loggerValues_service_userServiceBuilder, __safeDI_service_userServiceBuilder, .logger(SafeDIScope_Logger.DefaultUserService_Scope.logger_Values())))
+			                        return DefaultUserService(analytics: analytics, logger: logger)
+			                    }
+			                    let userService: any UserService = __safeDI_userService()
+			                    return userService
+			                }
+			            }
+			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(service: service, theme: theme)
+			    }
+			}
+
+			extension Shell {
+			    public enum __safeDI_Shell_DAF792BC2BCEC191 {}
+			}
+			""",
+		])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(Mid)
+			import Mid
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_shell() -> Shell {
+			            _ = Shell.__safeDI_Shell_DAF792BC2BCEC191.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_loggerBuilder_Shell(_ scope: Shell.SafeDIScope_Logger) -> any Logger {
+			                switch scope {
+			                case let .service_userServiceBuilder(values, innerScope, scope): return __safeDI_loggerBuilder_Shell_DefaultUserService_Scope(scope, analytics: __safeDI_analytics_Service_SafeDIScope_UserService(innerScope), theme: values.theme)
+			                }
+			            }
+			            func __safeDI_loggerBuilder_Shell_DefaultUserService_Scope(_ scope: Shell.SafeDIScope_Logger.DefaultUserService_Scope, analytics: Analytics, theme: Theme) -> any Logger {
+			                switch scope {
+			                case .logger:
+			                    let logger: any Logger = DefaultLogger(analytics: analytics, theme: theme)
+			                    return logger
+			                }
+			            }
+			            func __safeDI_analytics_Service_SafeDIScope_UserService(_ scope: Service.SafeDIScope_UserService) -> Analytics {
+			                switch scope {
+			                case let .profile(values, _): return values.analytics
+			                }
+			            }
+			            return Shell(__safeDI_loggerBuilder: __safeDI_loggerBuilder_Shell)
+			        }
+			        let shell: Shell = __safeDI_shell()
+			        self.init(shell: shell)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: holeModules, visibleModules: modules(feature: feature + mid + fulfillers, mid: [], app: [root]))
 	}
 
@@ -2067,88 +2238,103 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			rootDeclarations: ["@Instantiated let shell: Shell"],
 		)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Mid"]?.generatedFiles, Self.generatedFiles(module: "Mid", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Shell": """
-		extension Shell {
-		    @frozen public enum SafeDIScope_UserService {
-		        case xBuilder(xBuilder_Values, SafeDIScope_UserService.X_Scope)
+		expectGeneratedFiles(output.modules["Mid"]?.generatedFiles, [
+			"Mid.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
 
-		        public struct xBuilder_Values {
-		            public let analytics: Analytics
-		        }
+			extension Shell {
+			    @frozen public enum SafeDIScope_UserService {
+			        case xBuilder(xBuilder_Values, SafeDIScope_UserService.X_Scope)
 
-		        @frozen public enum X_Scope {
-		            case service(Service.SafeDIScope_UserService)
-		        }
-		    }
+			        public struct xBuilder_Values {
+			            public let analytics: Analytics
+			        }
 
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
-		        let analytics = Analytics()
-		        let __safeDI_userServiceValues_xBuilder = SafeDIScope_UserService.xBuilder_Values(analytics: analytics)
-		        func __safeDI_xBuilder() -> X {
-		            func __safeDI_service() -> Service {
-		                _ = Service.__safeDI_Service_55F0113D32820144.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                return Service(__safeDI_userServiceBuilder: { __safeDI_userServiceBuilder(.xBuilder(__safeDI_userServiceValues_xBuilder, .service($0))) })
-		            }
-		            let service: Service = __safeDI_service()
-		            return X(analytics: analytics, service: service)
-		        }
-		        let xBuilder = Instantiator<X>(__safeDI_xBuilder)
-		        self.init(analytics: analytics, xBuilder: xBuilder)
-		    }
-		}
+			        @frozen public enum X_Scope {
+			            case service(Service.SafeDIScope_UserService)
+			        }
+			    }
 
-		extension Shell {
-		    public enum __safeDI_Shell_94918F91E002A904 {}
-		}
-		"""]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature", "Mid"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_shell() -> Shell {
-		            _ = Shell.__safeDI_Shell_94918F91E002A904.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Shell(_ scope: Shell.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .xBuilder(_, scope): return __safeDI_userServiceBuilder_Shell_X_Scope(scope)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Shell_X_Scope(_ scope: Shell.SafeDIScope_UserService.X_Scope) -> any UserService {
-		                switch scope {
-		                case let .service(scope): return __safeDI_userServiceBuilder_Service(scope)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profileBuilder(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    func __safeDI_userService() -> DefaultUserService {
-		                        func __safeDI_xBuilder() -> X {
-		                            func __safeDI_service() -> Service {
-		                                _ = Service.__safeDI_Service_55F0113D32820144.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                                return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
-		                            }
-		                            let service: Service = __safeDI_service()
-		                            return X(analytics: analytics, service: service)
-		                        }
-		                        let xBuilder = Instantiator<X>(__safeDI_xBuilder)
-		                        return DefaultUserService(xBuilder: xBuilder)
-		                    }
-		                    let userService: any UserService = __safeDI_userService()
-		                    return userService
-		                }
-		            }
-		            return Shell(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Shell)
-		        }
-		        let shell: Shell = __safeDI_shell()
-		        self.init(shell: shell)
-		    }
-		}
-		"""]))
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
+			        let analytics = Analytics()
+			        let __safeDI_userServiceValues_xBuilder = SafeDIScope_UserService.xBuilder_Values(analytics: analytics)
+			        func __safeDI_xBuilder() -> X {
+			            func __safeDI_service() -> Service {
+			                _ = Service.__safeDI_Service_55F0113D32820144.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                return Service(__safeDI_userServiceBuilder: { __safeDI_userServiceBuilder(.xBuilder(__safeDI_userServiceValues_xBuilder, .service($0))) })
+			            }
+			            let service: Service = __safeDI_service()
+			            return X(analytics: analytics, service: service)
+			        }
+			        let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+			        self.init(analytics: analytics, xBuilder: xBuilder)
+			    }
+			}
+
+			extension Shell {
+			    public enum __safeDI_Shell_94918F91E002A904 {}
+			}
+			""",
+		])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(Mid)
+			import Mid
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_shell() -> Shell {
+			            _ = Shell.__safeDI_Shell_94918F91E002A904.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_Shell(_ scope: Shell.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .xBuilder(_, scope): return __safeDI_userServiceBuilder_Shell_X_Scope(scope)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Shell_X_Scope(_ scope: Shell.SafeDIScope_UserService.X_Scope) -> any UserService {
+			                switch scope {
+			                case let .service(scope): return __safeDI_userServiceBuilder_Service(scope)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profileBuilder(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    func __safeDI_userService() -> DefaultUserService {
+			                        func __safeDI_xBuilder() -> X {
+			                            func __safeDI_service() -> Service {
+			                                _ = Service.__safeDI_Service_55F0113D32820144.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                                return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			                            }
+			                            let service: Service = __safeDI_service()
+			                            return X(analytics: analytics, service: service)
+			                        }
+			                        let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+			                        return DefaultUserService(xBuilder: xBuilder)
+			                    }
+			                    let userService: any UserService = __safeDI_userService()
+			                    return userService
+			                }
+			            }
+			            return Shell(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Shell)
+			        }
+			        let shell: Shell = __safeDI_shell()
+			        self.init(shell: shell)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
 	}
 
@@ -2765,45 +2951,51 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    func __safeDI_userService() -> DefaultUserService {
-		                        func __safeDI_other() -> Other {
-		                            _ = Other.__safeDI_Other_5A82A9BAB16F52C1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                            func __safeDI_loggerBuilder_Other(_ scope: Other.SafeDIScope_Logger) -> any Logger {
-		                                switch scope {
-		                                case .logger:
-		                                    let logger: any Logger = DefaultLogger(analytics: analytics)
-		                                    return logger
-		                                }
-		                            }
-		                            return Other(__safeDI_loggerBuilder: __safeDI_loggerBuilder_Other)
-		                        }
-		                        let other: Other = __safeDI_other()
-		                        return DefaultUserService(analytics: analytics, other: other)
-		                    }
-		                    let userService: any UserService = __safeDI_userService()
-		                    return userService
-		                }
-		            }
-		            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
-		        }
-		        let service: Service = __safeDI_service()
-		        self.init(service: service)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    func __safeDI_userService() -> DefaultUserService {
+			                        func __safeDI_other() -> Other {
+			                            _ = Other.__safeDI_Other_5A82A9BAB16F52C1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                            func __safeDI_loggerBuilder_Other(_ scope: Other.SafeDIScope_Logger) -> any Logger {
+			                                switch scope {
+			                                case .logger:
+			                                    let logger: any Logger = DefaultLogger(analytics: analytics)
+			                                    return logger
+			                                }
+			                            }
+			                            return Other(__safeDI_loggerBuilder: __safeDI_loggerBuilder_Other)
+			                        }
+			                        let other: Other = __safeDI_other()
+			                        return DefaultUserService(analytics: analytics, other: other)
+			                    }
+			                    let userService: any UserService = __safeDI_userService()
+			                    return userService
+			                }
+			            }
+			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -3123,41 +3315,47 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    public enum __safeDI_Shell_AFA12F37A4E5E519 {}
 		}
 		"""])
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_A9DD45571D3945CB.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable func __safeDI_userServiceBuilder_Inner(_ scope: Inner.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profileBuilder(_, scope): return __safeDI_userServiceBuilder_Inner_Profile_Scope(scope)
-		                }
-		            }
-		            @Sendable func __safeDI_userServiceBuilder_Inner_Profile_Scope(_ scope: Inner.SafeDIScope_UserService.Profile_Scope) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    let userService: any UserService = DefaultUserService()
-		                    return userService
-		                }
-		            }
-		            @Sendable func __safeDI_userServiceSendableBuilder_Inner(_ scope: Inner.SafeDISendableScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .shellBuilder_Sendable(scope): return __safeDI_userServiceSendableBuilder_Shell(scope)
-		                }
-		            }
-		            @Sendable func __safeDI_userServiceSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .innerBuilder(scope): return __safeDI_userServiceBuilder_Inner(scope)
-		                case let .innerBuilder_Sendable(scope): return __safeDI_userServiceSendableBuilder_Inner(scope)
-		                }
-		            }
-		            return Inner(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Inner, __safeDI_userServiceSendableBuilder: __safeDI_userServiceSendableBuilder_Inner)
-		        }
-		        let inner: Inner = __safeDI_inner()
-		        self.init(inner: inner)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_inner() -> Inner {
+			            _ = Inner.__safeDI_Inner_A9DD45571D3945CB.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            @Sendable func __safeDI_userServiceBuilder_Inner(_ scope: Inner.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profileBuilder(_, scope): return __safeDI_userServiceBuilder_Inner_Profile_Scope(scope)
+			                }
+			            }
+			            @Sendable func __safeDI_userServiceBuilder_Inner_Profile_Scope(_ scope: Inner.SafeDIScope_UserService.Profile_Scope) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    let userService: any UserService = DefaultUserService()
+			                    return userService
+			                }
+			            }
+			            @Sendable func __safeDI_userServiceSendableBuilder_Inner(_ scope: Inner.SafeDISendableScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .shellBuilder_Sendable(scope): return __safeDI_userServiceSendableBuilder_Shell(scope)
+			                }
+			            }
+			            @Sendable func __safeDI_userServiceSendableBuilder_Shell(_ scope: Shell.SafeDISendableScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .innerBuilder(scope): return __safeDI_userServiceBuilder_Inner(scope)
+			                case let .innerBuilder_Sendable(scope): return __safeDI_userServiceSendableBuilder_Inner(scope)
+			                }
+			            }
+			            return Inner(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Inner, __safeDI_userServiceSendableBuilder: __safeDI_userServiceSendableBuilder_Inner)
+			        }
+			        let inner: Inner = __safeDI_inner()
+			        self.init(inner: inner)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -3549,50 +3747,56 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    public enum __safeDI_Service_83CB44A7A248B61B {}
 		}
 		"""])
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_83CB44A7A248B61B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .a(scope): return __safeDI_userServiceBuilder_A(scope)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_A(_ scope: A.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .inner(scope): return __safeDI_userServiceBuilder_Inner(scope)
-		                }
-		            }
-		            @Sendable func __safeDI_userServiceBuilder_Inner(_ scope: Inner.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profile(_, scope): return __safeDI_userServiceBuilder_Inner_Profile_Scope(scope)
-		                }
-		            }
-		            @Sendable func __safeDI_userServiceBuilder_Inner_Profile_Scope(_ scope: Inner.SafeDIScope_UserService.Profile_Scope) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    let userService: any UserService = DefaultUserService()
-		                    return userService
-		                }
-		            }
-		            @Sendable func __safeDI_userServiceSendableBuilder_Service(_ scope: Service.SafeDISendableScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .b_Sendable(scope): return __safeDI_userServiceSendableBuilder_B(scope)
-		                }
-		            }
-		            @Sendable func __safeDI_userServiceSendableBuilder_B(_ scope: B.SafeDISendableScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .innerBuilder(scope): return __safeDI_userServiceBuilder_Inner(scope)
-		                }
-		            }
-		            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service, __safeDI_userServiceSendableBuilder: __safeDI_userServiceSendableBuilder_Service)
-		        }
-		        let service: Service = __safeDI_service()
-		        self.init(service: service)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_83CB44A7A248B61B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .a(scope): return __safeDI_userServiceBuilder_A(scope)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_A(_ scope: A.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .inner(scope): return __safeDI_userServiceBuilder_Inner(scope)
+			                }
+			            }
+			            @Sendable func __safeDI_userServiceBuilder_Inner(_ scope: Inner.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profile(_, scope): return __safeDI_userServiceBuilder_Inner_Profile_Scope(scope)
+			                }
+			            }
+			            @Sendable func __safeDI_userServiceBuilder_Inner_Profile_Scope(_ scope: Inner.SafeDIScope_UserService.Profile_Scope) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    let userService: any UserService = DefaultUserService()
+			                    return userService
+			                }
+			            }
+			            @Sendable func __safeDI_userServiceSendableBuilder_Service(_ scope: Service.SafeDISendableScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .b_Sendable(scope): return __safeDI_userServiceSendableBuilder_B(scope)
+			                }
+			            }
+			            @Sendable func __safeDI_userServiceSendableBuilder_B(_ scope: B.SafeDISendableScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .innerBuilder(scope): return __safeDI_userServiceBuilder_Inner(scope)
+			                }
+			            }
+			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service, __safeDI_userServiceSendableBuilder: __safeDI_userServiceSendableBuilder_Service)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [Self.canonicalRoot]))
 	}
 
@@ -4735,42 +4939,57 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			return
 		}
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: .moduleInfo, imports: ["Core"], rootFiles: ["DefaultUserService": """
-		extension DefaultUserService {
-		    /// Code you write and code SafeDI generates can both call this initializer.
-		    public convenience init() {
-		        let helper = Helper()
-		        self.init(helper: helper)
-		    }
-		}
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
+			"Feature.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
 
-		extension DefaultUserService {
-		    public enum __safeDI_DefaultUserService_CBF29CE484222325 {}
-		}
-		"""]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Core", "Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public convenience init() {
-		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_65E53210FA860472.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_defaultUserServiceBuilder_Service(_ scope: Service.SafeDIScope_DefaultUserService) -> AnyUserService {
-		                switch scope {
-		                case .userService:
-		                    func __safeDI_userService() -> DefaultUserService {
-		                        _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                        return DefaultUserService()
-		                    }
-		                    let userService = AnyUserService(__safeDI_userService())
-		                    return userService
-		                }
-		            }
-		            return Service(__safeDI_defaultUserServiceBuilder: __safeDI_defaultUserServiceBuilder_Service)
-		        }
-		        let service: Service = __safeDI_service()
-		        self.init(service: service)
-		    }
-		}
-		"""]))
+			extension DefaultUserService {
+			    /// Code you write and code SafeDI generates can both call this initializer.
+			    public convenience init() {
+			        let helper = Helper()
+			        self.init(helper: helper)
+			    }
+			}
+
+			extension DefaultUserService {
+			    public enum __safeDI_DefaultUserService_CBF29CE484222325 {}
+			}
+			""",
+		])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_65E53210FA860472.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_defaultUserServiceBuilder_Service(_ scope: Service.SafeDIScope_DefaultUserService) -> AnyUserService {
+			                switch scope {
+			                case .userService:
+			                    func __safeDI_userService() -> DefaultUserService {
+			                        _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                        return DefaultUserService()
+			                    }
+			                    let userService = AnyUserService(__safeDI_userService())
+			                    return userService
+			                }
+			            }
+			            return Service(__safeDI_defaultUserServiceBuilder: __safeDI_defaultUserServiceBuilder_Service)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -4790,42 +5009,48 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_8401CCF78D832F75.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_routerBuilder_Flow(_ scope: Flow.SafeDIScope_Router) -> any Router {
-		                switch scope {
-		                case let .profileBuilder(values, scope): return __safeDI_routerBuilder_Flow_Profile_Scope(scope, analytics: values.analytics)
-		                }
-		            }
-		            func __safeDI_routerBuilder_Flow_Profile_Scope(_ scope: Flow.SafeDIScope_Router.Profile_Scope, analytics: Analytics) -> any Router {
-		                switch scope {
-		                case .router:
-		                    func __safeDI_router() -> DefaultRouter {
-		                        func __safeDI_routerBuilder() -> Gadget {
-		                            Gadget()
-		                        }
-		                        let routerBuilder = Instantiator<Gadget>(__safeDI_routerBuilder)
-		                        func __safeDI_flowBuilder() -> Flow {
-		                            _ = Flow.__safeDI_Flow_8401CCF78D832F75.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                            return Flow(__safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
-		                        }
-		                        let flowBuilder = Instantiator<Flow>(__safeDI_flowBuilder)
-		                        return DefaultRouter(routerBuilder: routerBuilder, flowBuilder: flowBuilder, analytics: analytics)
-		                    }
-		                    let router: any Router = __safeDI_router()
-		                    return router
-		                }
-		            }
-		            return Flow(__safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        self.init(flow: flow)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_flow() -> Flow {
+			            _ = Flow.__safeDI_Flow_8401CCF78D832F75.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_routerBuilder_Flow(_ scope: Flow.SafeDIScope_Router) -> any Router {
+			                switch scope {
+			                case let .profileBuilder(values, scope): return __safeDI_routerBuilder_Flow_Profile_Scope(scope, analytics: values.analytics)
+			                }
+			            }
+			            func __safeDI_routerBuilder_Flow_Profile_Scope(_ scope: Flow.SafeDIScope_Router.Profile_Scope, analytics: Analytics) -> any Router {
+			                switch scope {
+			                case .router:
+			                    func __safeDI_router() -> DefaultRouter {
+			                        func __safeDI_routerBuilder() -> Gadget {
+			                            Gadget()
+			                        }
+			                        let routerBuilder = Instantiator<Gadget>(__safeDI_routerBuilder)
+			                        func __safeDI_flowBuilder() -> Flow {
+			                            _ = Flow.__safeDI_Flow_8401CCF78D832F75.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                            return Flow(__safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
+			                        }
+			                        let flowBuilder = Instantiator<Flow>(__safeDI_flowBuilder)
+			                        return DefaultRouter(routerBuilder: routerBuilder, flowBuilder: flowBuilder, analytics: analytics)
+			                    }
+			                    let router: any Router = __safeDI_router()
+			                    return router
+			                }
+			            }
+			            return Flow(__safeDI_routerBuilder: __safeDI_routerBuilder_Flow)
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(flow: flow)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -4847,58 +5072,64 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		]
 		let modules = Self.modules(feature: feature, app: fulfillers + [Self.canonicalRoot])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_F88A7C8ABB77D41F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profileBuilder(_, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    func __safeDI_userService() -> DefaultUserService {
-		                        func __safeDI_inner2() -> Inner2 {
-		                            _ = Inner2.__safeDI_Inner2_F8CFCBA0F7FA5766.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                            func __safeDI_trackerBuilder_Inner2(_ scope: Inner2.SafeDIScope_Tracker) -> any Tracker {
-		                                switch scope {
-		                                case let .badgeBuilder(_, scope): return __safeDI_trackerBuilder_Inner2_Badge_Scope(scope)
-		                                }
-		                            }
-		                            func __safeDI_trackerBuilder_Inner2_Badge_Scope(_ scope: Inner2.SafeDIScope_Tracker.Badge_Scope) -> any Tracker {
-		                                switch scope {
-		                                case .userService:
-		                                    func __safeDI_userService() -> DefaultTracker {
-		                                        func __safeDI_serviceBuilder() -> Service {
-		                                            _ = Service.__safeDI_Service_F88A7C8ABB77D41F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                                            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
-		                                        }
-		                                        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
-		                                        return DefaultTracker(serviceBuilder: serviceBuilder)
-		                                    }
-		                                    let userService: any Tracker = __safeDI_userService()
-		                                    return userService
-		                                }
-		                            }
-		                            return Inner2(__safeDI_trackerBuilder: __safeDI_trackerBuilder_Inner2)
-		                        }
-		                        let inner2: Inner2 = __safeDI_inner2()
-		                        return DefaultUserService(inner2: inner2)
-		                    }
-		                    let userService: any UserService = __safeDI_userService()
-		                    return userService
-		                }
-		            }
-		            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
-		        }
-		        let service: Service = __safeDI_service()
-		        self.init(service: service)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_F88A7C8ABB77D41F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profileBuilder(_, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    func __safeDI_userService() -> DefaultUserService {
+			                        func __safeDI_inner2() -> Inner2 {
+			                            _ = Inner2.__safeDI_Inner2_F8CFCBA0F7FA5766.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                            func __safeDI_trackerBuilder_Inner2(_ scope: Inner2.SafeDIScope_Tracker) -> any Tracker {
+			                                switch scope {
+			                                case let .badgeBuilder(_, scope): return __safeDI_trackerBuilder_Inner2_Badge_Scope(scope)
+			                                }
+			                            }
+			                            func __safeDI_trackerBuilder_Inner2_Badge_Scope(_ scope: Inner2.SafeDIScope_Tracker.Badge_Scope) -> any Tracker {
+			                                switch scope {
+			                                case .userService:
+			                                    func __safeDI_userService() -> DefaultTracker {
+			                                        func __safeDI_serviceBuilder() -> Service {
+			                                            _ = Service.__safeDI_Service_F88A7C8ABB77D41F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                                            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			                                        }
+			                                        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
+			                                        return DefaultTracker(serviceBuilder: serviceBuilder)
+			                                    }
+			                                    let userService: any Tracker = __safeDI_userService()
+			                                    return userService
+			                                }
+			                            }
+			                            return Inner2(__safeDI_trackerBuilder: __safeDI_trackerBuilder_Inner2)
+			                        }
+			                        let inner2: Inner2 = __safeDI_inner2()
+			                        return DefaultUserService(inner2: inner2)
+			                    }
+			                    let userService: any UserService = __safeDI_userService()
+			                    return userService
+			                }
+			            }
+			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [Self.canonicalRoot]))
 	}
 
@@ -4925,55 +5156,61 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [userService, root].map { "import Feature\nimport Mid\n\n" + $0 }, dependencies: ["Feature", "Mid"]),
 		]
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["Mid"]?.generatedFiles, Self.generatedFiles(module: "Mid", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Shell": """
-		extension Shell {
-		    @frozen public enum SafeDIScope_UserService {
-		        case inner_trackerBuilder(inner_trackerBuilder_Values, Inner.SafeDIScope_Tracker, SafeDIScope_UserService.DefaultTracker_Scope)
+		expectGeneratedFiles(output.modules["Mid"]?.generatedFiles, [
+			"Mid.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
 
-		        public struct inner_trackerBuilder_Values {}
+			extension Shell {
+			    @frozen public enum SafeDIScope_UserService {
+			        case inner_trackerBuilder(inner_trackerBuilder_Values, Inner.SafeDIScope_Tracker, SafeDIScope_UserService.DefaultTracker_Scope)
 
-		        @frozen public enum DefaultTracker_Scope {
-		            case serviceBuilder(Service.SafeDIScope_UserService)
-		        }
-		    }
+			        public struct inner_trackerBuilder_Values {}
 
-		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
-		        let __safeDI_userServiceValues_inner_trackerBuilder = SafeDIScope_UserService.inner_trackerBuilder_Values()
-		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_E0B7229E32F61E76.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_trackerBuilder_Inner(_ __safeDI_inner_trackerBuilder: Inner.SafeDIScope_Tracker) -> any Tracker {
-		                switch __safeDI_inner_trackerBuilder {
-		                case let .badgeBuilder(_, scope): return __safeDI_trackerBuilder_Inner_Badge_Scope(scope, __safeDI_inner_trackerBuilder: __safeDI_inner_trackerBuilder)
-		                }
-		            }
-		            func __safeDI_trackerBuilder_Inner_Badge_Scope(_ scope: Inner.SafeDIScope_Tracker.Badge_Scope, __safeDI_inner_trackerBuilder: Inner.SafeDIScope_Tracker) -> any Tracker {
-		                switch scope {
-		                case .userService:
-		                    func __safeDI_userService() -> DefaultTracker {
-		                        func __safeDI_serviceBuilder() -> Service {
-		                            _ = Service.__safeDI_Service_F88A7C8ABB77D41F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                            return Service(__safeDI_userServiceBuilder: { __safeDI_userServiceBuilder(.inner_trackerBuilder(__safeDI_userServiceValues_inner_trackerBuilder, __safeDI_inner_trackerBuilder, .serviceBuilder($0))) })
-		                        }
-		                        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
-		                        return DefaultTracker(serviceBuilder: serviceBuilder)
-		                    }
-		                    let userService: any Tracker = __safeDI_userService()
-		                    return userService
-		                }
-		            }
-		            return Inner(__safeDI_trackerBuilder: __safeDI_trackerBuilder_Inner)
-		        }
-		        let inner: Inner = __safeDI_inner()
-		        self.init(inner: inner)
-		    }
-		}
+			        @frozen public enum DefaultTracker_Scope {
+			            case serviceBuilder(Service.SafeDIScope_UserService)
+			        }
+			    }
 
-		extension Shell {
-		    public enum __safeDI_Shell_DCC06A1C9E2CFCA7 {}
-		}
-		"""]))
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
+			        let __safeDI_userServiceValues_inner_trackerBuilder = SafeDIScope_UserService.inner_trackerBuilder_Values()
+			        func __safeDI_inner() -> Inner {
+			            _ = Inner.__safeDI_Inner_E0B7229E32F61E76.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_trackerBuilder_Inner(_ __safeDI_inner_trackerBuilder: Inner.SafeDIScope_Tracker) -> any Tracker {
+			                switch __safeDI_inner_trackerBuilder {
+			                case let .badgeBuilder(_, scope): return __safeDI_trackerBuilder_Inner_Badge_Scope(scope, __safeDI_inner_trackerBuilder: __safeDI_inner_trackerBuilder)
+			                }
+			            }
+			            func __safeDI_trackerBuilder_Inner_Badge_Scope(_ scope: Inner.SafeDIScope_Tracker.Badge_Scope, __safeDI_inner_trackerBuilder: Inner.SafeDIScope_Tracker) -> any Tracker {
+			                switch scope {
+			                case .userService:
+			                    func __safeDI_userService() -> DefaultTracker {
+			                        func __safeDI_serviceBuilder() -> Service {
+			                            _ = Service.__safeDI_Service_F88A7C8ABB77D41F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                            return Service(__safeDI_userServiceBuilder: { __safeDI_userServiceBuilder(.inner_trackerBuilder(__safeDI_userServiceValues_inner_trackerBuilder, __safeDI_inner_trackerBuilder, .serviceBuilder($0))) })
+			                        }
+			                        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
+			                        return DefaultTracker(serviceBuilder: serviceBuilder)
+			                    }
+			                    let userService: any Tracker = __safeDI_userService()
+			                    return userService
+			                }
+			            }
+			            return Inner(__safeDI_trackerBuilder: __safeDI_trackerBuilder_Inner)
+			        }
+			        let inner: Inner = __safeDI_inner()
+			        self.init(inner: inner)
+			    }
+			}
+
+			extension Shell {
+			    public enum __safeDI_Shell_DCC06A1C9E2CFCA7 {}
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: [
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature + [tracker, userService]),
 			ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: ["import Feature\n\n" + shell], dependencies: ["Feature"]),
@@ -5150,34 +5387,40 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let session: LazilyInstantiated<Session>", "@Instantiated let service: Service"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_session() -> Session {
-		            Session()
-		        }
-		        let session = LazilyInstantiated<Session>(__safeDI_session)
-		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_48F2EB3FC4E9B04F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, session: values.session)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, session: LazilyInstantiated<Session>) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    let userService: any UserService = DefaultUserService(session: session.instance)
-		                    return userService
-		                }
-		            }
-		            return Service(__safeDI_session: session, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
-		        }
-		        let service: Service = __safeDI_service()
-		        self.init(session: session, service: service)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_session() -> Session {
+			            Session()
+			        }
+			        let session = LazilyInstantiated<Session>(__safeDI_session)
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_48F2EB3FC4E9B04F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, session: values.session)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, session: LazilyInstantiated<Session>) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    let userService: any UserService = DefaultUserService(session: session.instance)
+			                    return userService
+			                }
+			            }
+			            return Service(__safeDI_session: session, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(session: session, service: service)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
 	}
 
@@ -5189,36 +5432,42 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let modules = Self.modules(feature: Self.canonicalFeature, app: fulfillers + [Self.canonicalRoot])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		let fulfillerPath = try #require(output.modules["App"]).fixtures["DefaultUserService.swift"]
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
-		                }
-		            }
-		            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    func __safeDI_userService() -> DefaultUserService {
-		                        #sourceLocation(file: "\(fulfillerPath)", line: 9)
-		                        let renamedAnalytics: Analytics = analytics
-		                        #sourceLocation()
-		                        return DefaultUserService(renamedAnalytics: renamedAnalytics)
-		                    }
-		                    let userService: any UserService = __safeDI_userService()
-		                    return userService
-		                }
-		            }
-		            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
-		        }
-		        let service: Service = __safeDI_service()
-		        self.init(service: service)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+			                switch scope {
+			                case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
+			                }
+			            }
+			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
+			                switch scope {
+			                case .userService:
+			                    func __safeDI_userService() -> DefaultUserService {
+			                        #sourceLocation(file: "\(fulfillerPath)", line: 9)
+			                        let renamedAnalytics: Analytics = analytics
+			                        #sourceLocation()
+			                        return DefaultUserService(renamedAnalytics: renamedAnalytics)
+			                    }
+			                    let userService: any UserService = __safeDI_userService()
+			                    return userService
+			                }
+			            }
+			            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: Self.canonicalFeature + fulfillers, app: [Self.canonicalRoot]))
 	}
 

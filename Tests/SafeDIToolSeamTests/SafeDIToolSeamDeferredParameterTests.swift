@@ -1151,36 +1151,79 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			}
 			""",
 		]))
-		#expect(output.modules["App"]?.generatedFiles == SafeDIToolSeamBuilderParameterTests.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"Root": """
-			extension Root {
-			    public init() {
-			        func __safeDI_token() -> Token {
-			            Token()
-			        }
-			        let token = LazilyInstantiated<Token>(__safeDI_token)
-			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_DA263E0F696E2E8F.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
-			            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-			                switch scope {
-			                case let .profileBuilder(_, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope)
-			                }
-			            }
-			            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope) -> any UserService {
-			                switch scope {
-			                case .userService:
-			                    let userService: any UserService = DefaultUserService(token: token.instance)
-			                    return userService
-			                }
-			            }
-			            return Service(__safeDI_token: token.instance, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
-			        }
-			        let service: Service = __safeDI_service()
-			        self.init(token: token, service: service)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        func __safeDI_token() -> Token {
+				            Token()
+				        }
+				        let token = LazilyInstantiated<Token>(__safeDI_token)
+				        func __safeDI_service() -> Service {
+				            _ = Service.__safeDI_Service_DA263E0F696E2E8F.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
+				            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+				                switch scope {
+				                case let .profileBuilder(_, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope)
+				                }
+				            }
+				            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope) -> any UserService {
+				                switch scope {
+				                case .userService:
+				                    let userService: any UserService = DefaultUserService(token: token.instance)
+				                    return userService
+				                }
+				            }
+				            return Service(__safeDI_token: token.instance, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+				        }
+				        let service: Service = __safeDI_service()
+				        self.init(token: token, service: service)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        func __safeDI_token() -> Token {
+				            Token()
+				        }
+				        let token = LazilyInstantiated<Token>(__safeDI_token)
+				        func __safeDI_service() -> Service {
+				            _ = Service.__safeDI_Service_DA263E0F696E2E8F.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
+				            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
+				                switch scope {
+				                case let .profileBuilder(_, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope)
+				                }
+				            }
+				            func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope) -> any UserService {
+				                switch scope {
+				                case .userService:
+				                    let userService: any UserService = DefaultUserService(token: token.instance)
+				                    return userService
+				                }
+				            }
+				            return Service(__safeDI_token: token.instance, __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+				        }
+				        let service: Service = __safeDI_service()
+				        self.init(token: token, service: service)
+				    }
+				}
+				""",
+			]
+		}
+		#expect(output.modules["App"]?.generatedFiles == expectedFiles)
 	}
 
 	// MARK: A lazy cycle that re-enters the seam
@@ -1311,46 +1354,112 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			}
 			""",
 		]))
-		#expect(output.modules["Mid"]?.generatedFiles == SafeDIToolSeamBuilderParameterTests.generatedFiles(module: "Mid", integration: integration, imports: ["Feature"], rootFiles: [
-			"MidRoot": """
-			extension MidRoot {
-			    public init() {
-			        func __safeDI_theme() -> Theme {
-			            Theme()
-			        }
-			        let theme = LazilyInstantiated<Theme>(__safeDI_theme)
-			        func __safeDI_title() -> Title {
-			            Title()
-			        }
-			        let title = LazilyInstantiated<Title>(__safeDI_title)
-			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_9BAF4200A1BAA28B.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
-			            return Service(__safeDI_theme: theme.instance, __safeDI_title: title.instance)
-			        }
-			        let service: Service = __safeDI_service()
-			        self.init(theme: theme, title: title, service: service)
-			    }
-			}
-			""",
-		]))
-		#expect(output.modules["App"]?.generatedFiles == SafeDIToolSeamBuilderParameterTests.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"AppRoot": """
-			extension AppRoot {
-			    public init() {
-			        func __safeDI_title() -> Title {
-			            Title()
-			        }
-			        let title = LazilyInstantiated<Title>(__safeDI_title)
-			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_9BAF4200A1BAA28B.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
-			            return Service(__safeDI_title: title.instance)
-			        }
-			        let service: Service = __safeDI_service()
-			        self.init(title: title, service: service)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"Mid.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension MidRoot {
+				    public init() {
+				        func __safeDI_theme() -> Theme {
+				            Theme()
+				        }
+				        let theme = LazilyInstantiated<Theme>(__safeDI_theme)
+				        func __safeDI_title() -> Title {
+				            Title()
+				        }
+				        let title = LazilyInstantiated<Title>(__safeDI_title)
+				        func __safeDI_service() -> Service {
+				            _ = Service.__safeDI_Service_9BAF4200A1BAA28B.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
+				            return Service(__safeDI_theme: theme.instance, __safeDI_title: title.instance)
+				        }
+				        let service: Service = __safeDI_service()
+				        self.init(theme: theme, title: title, service: service)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"MidRoot+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension MidRoot {
+				    public init() {
+				        func __safeDI_theme() -> Theme {
+				            Theme()
+				        }
+				        let theme = LazilyInstantiated<Theme>(__safeDI_theme)
+				        func __safeDI_title() -> Title {
+				            Title()
+				        }
+				        let title = LazilyInstantiated<Title>(__safeDI_title)
+				        func __safeDI_service() -> Service {
+				            _ = Service.__safeDI_Service_9BAF4200A1BAA28B.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
+				            return Service(__safeDI_theme: theme.instance, __safeDI_title: title.instance)
+				        }
+				        let service: Service = __safeDI_service()
+				        self.init(theme: theme, title: title, service: service)
+				    }
+				}
+				""",
+			]
+		}
+		#expect(output.modules["Mid"]?.generatedFiles == expectedFiles)
+		let expectedFiles2: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension AppRoot {
+				    public init() {
+				        func __safeDI_title() -> Title {
+				            Title()
+				        }
+				        let title = LazilyInstantiated<Title>(__safeDI_title)
+				        func __safeDI_service() -> Service {
+				            _ = Service.__safeDI_Service_9BAF4200A1BAA28B.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
+				            return Service(__safeDI_title: title.instance)
+				        }
+				        let service: Service = __safeDI_service()
+				        self.init(title: title, service: service)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"AppRoot+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension AppRoot {
+				    public init() {
+				        func __safeDI_title() -> Title {
+				            Title()
+				        }
+				        let title = LazilyInstantiated<Title>(__safeDI_title)
+				        func __safeDI_service() -> Service {
+				            _ = Service.__safeDI_Service_9BAF4200A1BAA28B.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
+				            return Service(__safeDI_title: title.instance)
+				        }
+				        let service: Service = __safeDI_service()
+				        self.init(title: title, service: service)
+				    }
+				}
+				""",
+			]
+		}
+		#expect(output.modules["App"]?.generatedFiles == expectedFiles2)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases, [false, true])
@@ -1395,25 +1504,57 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			}
 			""",
 		]))
-		#expect(output.modules["App"]?.generatedFiles == SafeDIToolSeamBuilderParameterTests.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"Root": """
-			extension Root {
-			    public init() {
-			        let user = User()
-			        \(sendableAttribute)func __safeDI_database() -> Database {
-			            Database()
-			        }
-			        let database = \(sendablePrefix)LazilyInstantiated<Database>(__safeDI_database)
-			        func __safeDI_screen() -> Screen {
-			            _ = Screen.\(guardName).self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Screen"))
-			            return Screen(__safeDI_user: user, __safeDI_database: database.instance, __safeDI_logger: nil)
-			        }
-			        let screen: Screen = __safeDI_screen()
-			        self.init(user: user, database: database, screen: screen)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        let user = User()
+				        \(sendableAttribute)func __safeDI_database() -> Database {
+				            Database()
+				        }
+				        let database = \(sendablePrefix)LazilyInstantiated<Database>(__safeDI_database)
+				        func __safeDI_screen() -> Screen {
+				            _ = Screen.\(guardName).self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Screen"))
+				            return Screen(__safeDI_user: user, __safeDI_database: database.instance, __safeDI_logger: nil)
+				        }
+				        let screen: Screen = __safeDI_screen()
+				        self.init(user: user, database: database, screen: screen)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public init() {
+				        let user = User()
+				        \(sendableAttribute)func __safeDI_database() -> Database {
+				            Database()
+				        }
+				        let database = \(sendablePrefix)LazilyInstantiated<Database>(__safeDI_database)
+				        func __safeDI_screen() -> Screen {
+				            _ = Screen.\(guardName).self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Screen"))
+				            return Screen(__safeDI_user: user, __safeDI_database: database.instance, __safeDI_logger: nil)
+				        }
+				        let screen: Screen = __safeDI_screen()
+				        self.init(user: user, database: database, screen: screen)
+				    }
+				}
+				""",
+			]
+		}
+		#expect(output.modules["App"]?.generatedFiles == expectedFiles)
 	}
 
 	// MARK: The seam's own aliases of a pass-through

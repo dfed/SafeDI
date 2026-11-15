@@ -2553,7 +2553,14 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feature") + "\n\n" + """
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+
 		extension Root {
 		    public init() {
 		        let banner = Banner()

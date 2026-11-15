@@ -776,7 +776,8 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 		])
 		// The `B` built again receives the `session` of the `C` that builds it.
 		try await expectValuesAgree(of: fixture, output: output, knownRight: [
@@ -1057,7 +1058,41 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			}
 			#endif
 			""",
-			"SafeDIMockConfiguration.swift": generatedFileHeader + Self.mockConfigurationsOfCAndB + "\n",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			extension C {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            _ safeDIBuilder: ((A) -> C)? = nil
+			        ) {
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((A) -> C)?
+			    }
+			}
+
+			extension B {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            cBuilder: C.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((Instantiator<C>) -> B)? = nil
+			        ) {
+			            self.cBuilder = cBuilder
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let cBuilder: C.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Instantiator<C>) -> B)?
+			    }
+			}
+			#endif
+
+			""",
 		])
 		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": Self.handBuiltFamily + """
@@ -1177,7 +1212,8 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 		])
 		try await expectValuesAgree(of: fixture, output: output, knownRight: [
 			"Root+SafeDI.swift": Self.handBuiltFamily + """
@@ -1296,7 +1332,8 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 		])
 	}
 
@@ -1437,7 +1474,8 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 		])
 	}
 

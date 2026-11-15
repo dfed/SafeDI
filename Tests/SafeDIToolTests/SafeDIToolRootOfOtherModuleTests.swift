@@ -89,7 +89,11 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 			integration: .swiftPackagePlugin,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles["FeatureRoot+SafeDI.swift"] == generatedFileHeader + Self.importBlock("Feature") + "\n\n" + """
+		#expect(output.modules["App"]?.generatedFiles["FeatureRoot+SafeDI.swift"] == generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
 		// SafeDI generates FeatureRoot’s init() only in Feature, the module that declares FeatureRoot. If FeatureRoot() does not compile, add the SafeDI plugin to the target that declares FeatureRoot.
 		""")
 	}
@@ -108,7 +112,11 @@ struct SafeDIToolRootOfOtherModuleTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generatedFiles == [
-			"FeatureRoot+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n" + """
+			"FeatureRoot+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
 			// SafeDI generates FeatureRoot’s init() only in Feature, the module that declares FeatureRoot. If FeatureRoot() does not compile, add the SafeDI plugin to the target that declares FeatureRoot.
 			""",
 			"Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n",

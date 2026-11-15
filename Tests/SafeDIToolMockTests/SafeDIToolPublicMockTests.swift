@@ -1191,7 +1191,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 			"Service+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
@@ -1354,7 +1355,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 		])
 	}
 
@@ -1647,7 +1649,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 			"Service+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
@@ -1940,7 +1943,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 			@usableFromInline nonisolated func __safeDI_Feed_ViewModel__mockDefault_title() -> String? { Feed_ViewModel.__safeDI_mockDefault_title() }
 			#endif
-			""" + "\n",
+
+			""",
 		])
 	}
 
@@ -2060,7 +2064,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 		])
 	}
 
@@ -2395,7 +2400,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 		])
 	}
 
@@ -10298,7 +10304,14 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		"""
 		#expect(output.modules["App"]?.generatedFiles == [
-			"Screen+SafeDIMock.swift": header + """
+			"Screen+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
 			#if DEBUG
 			extension Screen {
 			    /// Overrides for the mock dependency tree.

@@ -652,7 +652,18 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 
 		let app = try #require(output.modules["App"])
 		#expect(app.generatedFiles == [
-			"Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Shared") + "\n\n" + Self.rootInstantiatingEngineCode,
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Shared)
+			import Shared
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let engine = Engine()
+			        self.init(engine: engine)
+			    }
+			}
+			""",
 		])
 		// A found file outside the package is listed by its normalized path.
 		let engineFile = output.fixtureRoot.appendingPathComponent("checkouts/Toolkit/Sources/Shared/Engine.swift")

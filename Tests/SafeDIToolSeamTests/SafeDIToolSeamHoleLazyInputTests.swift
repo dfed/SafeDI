@@ -94,38 +94,83 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"Root": """
-			extension Root {
-			    public convenience init() {
-			        func __safeDI_exportService() -> ExportService {
-			            ExportService()
-			        }
-			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
-			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
-			                switch scope {
-			                case .uploader:
-			                    func __safeDI_uploader() -> DefaultUploader {
-			                        func __safeDI_jobBuilder() -> UploadJob {
-			                            UploadJob(exportService: exportService.instance)
-			                        }
-			                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
-			                        return DefaultUploader(jobBuilder: jobBuilder)
-			                    }
-			                    let uploader: any Uploader = __safeDI_uploader()
-			                    return uploader
-			                }
-			            }
-			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
-			        }
-			        let exportFeature: ExportFeature = __safeDI_exportFeature()
-			        self.init(exportService: exportService, exportFeature: exportFeature)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		}
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, expectedFiles)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -137,31 +182,69 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		let feature = Self.feature()
 		let app = Self.app(declarations: [], handWrittenFill: "{ _ in DefaultUploader() }")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app, featureConfiguration: plainDependencyTreeInitializersConfiguration), integration: integration, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"Root": """
-			extension Root {
-			    public convenience init() {
-			        func __safeDI_exportService() -> ExportService {
-			            ExportService()
-			        }
-			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
-			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
-			                switch scope {
-			                case .uploader:
-			                    let uploader: any Uploader = DefaultUploader()
-			                    return uploader
-			                }
-			            }
-			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
-			        }
-			        let exportFeature: ExportFeature = __safeDI_exportFeature()
-			        self.init(exportService: exportService, exportFeature: exportFeature)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    let uploader: any Uploader = DefaultUploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    let uploader: any Uploader = DefaultUploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		}
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, expectedFiles)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -213,43 +296,93 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"Root": """
-			extension Root {
-			    public convenience init() {
-			        @Sendable func __safeDI_exportService() -> ExportService {
-			            ExportService()
-			        }
-			        let exportService = SendableLazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_6AFA0E82E1FFBD43.self\(Self.pluginComment(integration))
-			            @Sendable func __safeDI_uploaderSendableBuilder_ExportFeature(_ scope: ExportFeature.SafeDISendableScope_Uploader) -> any Uploader {
-			                switch scope {
-			                case let .panelBuilder(scope): return __safeDI_uploaderBuilder_ExportFeature_Panel_Scope(scope)
-			                }
-			            }
-			            @Sendable func __safeDI_uploaderBuilder_ExportFeature_Panel_Scope(_ scope: ExportFeature.SafeDIScope_Uploader.Panel_Scope) -> any Uploader {
-			                switch scope {
-			                case .uploader:
-			                    func __safeDI_uploader() -> DefaultUploader {
-			                        func __safeDI_jobBuilder() -> UploadJob {
-			                            UploadJob(exportService: exportService.instance)
-			                        }
-			                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
-			                        return DefaultUploader(jobBuilder: jobBuilder)
-			                    }
-			                    let uploader: any Uploader = __safeDI_uploader()
-			                    return uploader
-			                }
-			            }
-			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderSendableBuilder: __safeDI_uploaderSendableBuilder_ExportFeature)
-			        }
-			        let exportFeature: ExportFeature = __safeDI_exportFeature()
-			        self.init(exportService: exportService, exportFeature: exportFeature)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        @Sendable func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = SendableLazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_6AFA0E82E1FFBD43.self\(Self.pluginComment(integration))
+				            @Sendable func __safeDI_uploaderSendableBuilder_ExportFeature(_ scope: ExportFeature.SafeDISendableScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case let .panelBuilder(scope): return __safeDI_uploaderBuilder_ExportFeature_Panel_Scope(scope)
+				                }
+				            }
+				            @Sendable func __safeDI_uploaderBuilder_ExportFeature_Panel_Scope(_ scope: ExportFeature.SafeDIScope_Uploader.Panel_Scope) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderSendableBuilder: __safeDI_uploaderSendableBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        @Sendable func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = SendableLazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_6AFA0E82E1FFBD43.self\(Self.pluginComment(integration))
+				            @Sendable func __safeDI_uploaderSendableBuilder_ExportFeature(_ scope: ExportFeature.SafeDISendableScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case let .panelBuilder(scope): return __safeDI_uploaderBuilder_ExportFeature_Panel_Scope(scope)
+				                }
+				            }
+				            @Sendable func __safeDI_uploaderBuilder_ExportFeature_Panel_Scope(_ scope: ExportFeature.SafeDIScope_Uploader.Panel_Scope) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderSendableBuilder: __safeDI_uploaderSendableBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		}
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, expectedFiles)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -283,38 +416,83 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		let feature = Self.feature(exportServiceConformances: ", Sendable")
 		let app = Self.app(declarations: ["@Instantiated let jobBuilder: SendableInstantiator<UploadJob>"], rootDeclarations: ["@Instantiated let exportService: SendableLazilyInstantiated<ExportService>"], handWrittenFill: nil)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app), integration: integration, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"Root": """
-			extension Root {
-			    public convenience init() {
-			        @Sendable func __safeDI_exportService() -> ExportService {
-			            ExportService()
-			        }
-			        let exportService = SendableLazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
-			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
-			                switch scope {
-			                case .uploader:
-			                    func __safeDI_uploader() -> DefaultUploader {
-			                        @Sendable func __safeDI_jobBuilder() -> UploadJob {
-			                            UploadJob(exportService: exportService.instance)
-			                        }
-			                        let jobBuilder = SendableInstantiator<UploadJob>(__safeDI_jobBuilder)
-			                        return DefaultUploader(jobBuilder: jobBuilder)
-			                    }
-			                    let uploader: any Uploader = __safeDI_uploader()
-			                    return uploader
-			                }
-			            }
-			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
-			        }
-			        let exportFeature: ExportFeature = __safeDI_exportFeature()
-			        self.init(exportService: exportService, exportFeature: exportFeature)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        @Sendable func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = SendableLazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        @Sendable func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance)
+				                        }
+				                        let jobBuilder = SendableInstantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        @Sendable func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = SendableLazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        @Sendable func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance)
+				                        }
+				                        let jobBuilder = SendableInstantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		}
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, expectedFiles)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -402,43 +580,93 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"Root": """
-			extension Root {
-			    public convenience init() {
-			        func __safeDI_exportService() -> ExportService {
-			            ExportService()
-			        }
-			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_logger() -> Logger {
-			            Logger()
-			        }
-			        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
-			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_00B6A325709B1B40.self\(Self.pluginComment(integration))
-			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
-			                switch scope {
-			                case let .uploader(scope):
-			                    let analytics = scope.analytics
-			                    func __safeDI_uploader() -> DefaultUploader {
-			                        func __safeDI_jobBuilder() -> UploadJob {
-			                            UploadJob(exportService: exportService.instance, logger: logger.instance, analytics: analytics)
-			                        }
-			                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
-			                        return DefaultUploader(jobBuilder: jobBuilder)
-			                    }
-			                    let uploader: any Uploader = __safeDI_uploader()
-			                    return uploader
-			                }
-			            }
-			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: logger.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
-			        }
-			        let exportFeature: ExportFeature = __safeDI_exportFeature()
-			        self.init(exportService: exportService, logger: logger, exportFeature: exportFeature)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_logger() -> Logger {
+				            Logger()
+				        }
+				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_00B6A325709B1B40.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case let .uploader(scope):
+				                    let analytics = scope.analytics
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance, logger: logger.instance, analytics: analytics)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: logger.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, logger: logger, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_logger() -> Logger {
+				            Logger()
+				        }
+				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_00B6A325709B1B40.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case let .uploader(scope):
+				                    let analytics = scope.analytics
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance, logger: logger.instance, analytics: analytics)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: logger.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, logger: logger, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		}
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, expectedFiles)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -498,72 +726,154 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"OtherRoot": """
-			extension OtherRoot {
-			    public convenience init() {
-			        func __safeDI_exportService() -> ExportService {
-			            ExportService()
-			        }
-			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_E1C7C999BA863935.self\(Self.pluginComment(integration))
-			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
-			                switch scope {
-			                case .uploader:
-			                    func __safeDI_uploader() -> DefaultUploader {
-			                        func __safeDI_jobBuilder() -> UploadJob {
-			                            UploadJob(exportService: exportService.instance, logger: nil)
-			                        }
-			                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
-			                        return DefaultUploader(jobBuilder: jobBuilder)
-			                    }
-			                    let uploader: any Uploader = __safeDI_uploader()
-			                    return uploader
-			                }
-			            }
-			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: nil, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
-			        }
-			        let exportFeature: ExportFeature = __safeDI_exportFeature()
-			        self.init(exportService: exportService, exportFeature: exportFeature)
-			    }
-			}
-			""",
-			"Root": """
-			extension Root {
-			    public convenience init() {
-			        func __safeDI_exportService() -> ExportService {
-			            ExportService()
-			        }
-			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_logger() -> Logger {
-			            Logger()
-			        }
-			        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
-			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_E1C7C999BA863935.self\(Self.pluginComment(integration))
-			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
-			                switch scope {
-			                case .uploader:
-			                    func __safeDI_uploader() -> DefaultUploader {
-			                        func __safeDI_jobBuilder() -> UploadJob {
-			                            UploadJob(exportService: exportService.instance, logger: logger.instance)
-			                        }
-			                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
-			                        return DefaultUploader(jobBuilder: jobBuilder)
-			                    }
-			                    let uploader: any Uploader = __safeDI_uploader()
-			                    return uploader
-			                }
-			            }
-			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: logger.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
-			        }
-			        let exportFeature: ExportFeature = __safeDI_exportFeature()
-			        self.init(exportService: exportService, logger: logger, exportFeature: exportFeature)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension OtherRoot {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_E1C7C999BA863935.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance, logger: nil)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: nil, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_logger() -> Logger {
+				            Logger()
+				        }
+				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_E1C7C999BA863935.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance, logger: logger.instance)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: logger.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, logger: logger, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"OtherRoot+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension OtherRoot {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_E1C7C999BA863935.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance, logger: nil)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: nil, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+				""",
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_logger() -> Logger {
+				            Logger()
+				        }
+				        let logger = LazilyInstantiated<Logger>(__safeDI_logger)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_E1C7C999BA863935.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance, logger: logger.instance)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: logger.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, logger: logger, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		}
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, expectedFiles)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app, probes: ["Root()", "OtherRoot()"])
 	}
 
@@ -628,42 +938,91 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"Root": """
-			extension Root {
-			    public convenience init() {
-			        func __safeDI_exportService() -> ExportService {
-			            ExportService()
-			        }
-			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        let currentLogger = Logger()
-			        #sourceLocation(file: "\(rootPath)", line: 16)
-			        let logger: Logger! = currentLogger
-			        #sourceLocation()
-			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_1C2D437F31039D13.self\(Self.pluginComment(integration))
-			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
-			                switch scope {
-			                case .uploader:
-			                    func __safeDI_uploader() -> DefaultUploader {
-			                        func __safeDI_jobBuilder() -> UploadJob {
-			                            UploadJob(exportService: exportService.instance, logger: logger)
-			                        }
-			                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
-			                        return DefaultUploader(jobBuilder: jobBuilder)
-			                    }
-			                    let uploader: any Uploader = __safeDI_uploader()
-			                    return uploader
-			                }
-			            }
-			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: logger, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
-			        }
-			        let exportFeature: ExportFeature = __safeDI_exportFeature()
-			        self.init(exportService: exportService, currentLogger: currentLogger, logger: logger, exportFeature: exportFeature)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        let currentLogger = Logger()
+				        #sourceLocation(file: "\(rootPath)", line: 16)
+				        let logger: Logger! = currentLogger
+				        #sourceLocation()
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_1C2D437F31039D13.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance, logger: logger)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: logger, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, currentLogger: currentLogger, logger: logger, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        let currentLogger = Logger()
+				        #sourceLocation(file: "\(rootPath)", line: 16)
+				        let logger: Logger! = currentLogger
+				        #sourceLocation()
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_1C2D437F31039D13.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance, logger: logger)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_logger: logger, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, currentLogger: currentLogger, logger: logger, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		}
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, expectedFiles)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -721,43 +1080,93 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"Root": """
-			extension Root {
-			    public convenience init() {
-			        func __safeDI_exportService() -> ExportService {
-			            ExportService()
-			        }
-			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_reportBuilder() -> Report {
-			            Report()
-			        }
-			        let reportBuilder = Instantiator<Report>(__safeDI_reportBuilder)
-			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_0ADF41BAF7CFEFF7.self\(Self.pluginComment(integration))
-			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
-			                switch scope {
-			                case let .uploader(scope):
-			                    let reportBuilder = scope.reportBuilder
-			                    func __safeDI_uploader() -> DefaultUploader {
-			                        func __safeDI_jobBuilder() -> UploadJob {
-			                            UploadJob(exportService: exportService.instance, reportBuilder: reportBuilder)
-			                        }
-			                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
-			                        return DefaultUploader(jobBuilder: jobBuilder)
-			                    }
-			                    let uploader: any Uploader = __safeDI_uploader()
-			                    return uploader
-			                }
-			            }
-			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_reportBuilder: reportBuilder, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
-			        }
-			        let exportFeature: ExportFeature = __safeDI_exportFeature()
-			        self.init(exportService: exportService, reportBuilder: reportBuilder, exportFeature: exportFeature)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_reportBuilder() -> Report {
+				            Report()
+				        }
+				        let reportBuilder = Instantiator<Report>(__safeDI_reportBuilder)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_0ADF41BAF7CFEFF7.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case let .uploader(scope):
+				                    let reportBuilder = scope.reportBuilder
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance, reportBuilder: reportBuilder)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_reportBuilder: reportBuilder, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, reportBuilder: reportBuilder, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_reportBuilder() -> Report {
+				            Report()
+				        }
+				        let reportBuilder = Instantiator<Report>(__safeDI_reportBuilder)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_0ADF41BAF7CFEFF7.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case let .uploader(scope):
+				                    let reportBuilder = scope.reportBuilder
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance, reportBuilder: reportBuilder)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_reportBuilder: reportBuilder, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, reportBuilder: reportBuilder, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		}
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, expectedFiles)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -810,38 +1219,83 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"Root": """
-			extension Root {
-			    public convenience init() {
-			        func __safeDI_exportService() -> ExportService {
-			            ExportService()
-			        }
-			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
-			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
-			                switch scope {
-			                case .uploader:
-			                    func __safeDI_uploader() -> DefaultUploader {
-			                        func __safeDI_jobBuilder() -> UploadJob {
-			                            UploadJob(exportService: exportService)
-			                        }
-			                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
-			                        return DefaultUploader(jobBuilder: jobBuilder)
-			                    }
-			                    let uploader: any Uploader = __safeDI_uploader()
-			                    return uploader
-			                }
-			            }
-			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
-			        }
-			        let exportFeature: ExportFeature = __safeDI_exportFeature()
-			        self.init(exportService: exportService, exportFeature: exportFeature)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		}
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, expectedFiles)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -891,39 +1345,85 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"Root": """
-			extension Root {
-			    public convenience init() {
-			        func __safeDI_exportService() -> ExportService {
-			            ExportService()
-			        }
-			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_6600585188E01684.self\(Self.pluginComment(integration))
-			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
-			                switch scope {
-			                case let .uploader(scope):
-			                    let exportService = scope.exportService
-			                    func __safeDI_uploader() -> DefaultUploader {
-			                        func __safeDI_jobBuilder() -> UploadJob {
-			                            UploadJob(exportService: exportService)
-			                        }
-			                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
-			                        return DefaultUploader(jobBuilder: jobBuilder)
-			                    }
-			                    let uploader: any Uploader = __safeDI_uploader()
-			                    return uploader
-			                }
-			            }
-			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
-			        }
-			        let exportFeature: ExportFeature = __safeDI_exportFeature()
-			        self.init(exportService: exportService, exportFeature: exportFeature)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_6600585188E01684.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case let .uploader(scope):
+				                    let exportService = scope.exportService
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_6600585188E01684.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case let .uploader(scope):
+				                    let exportService = scope.exportService
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		}
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, expectedFiles)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -1003,43 +1503,93 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 			""",
 		]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"Root": """
-			extension Root {
-			    public convenience init() {
-			        func __safeDI_exportService() -> ExportService {
-			            ExportService()
-			        }
-			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
-			        func __safeDI_shell() -> Shell {
-			            _ = Shell.__safeDI_Shell_1B82E3FE3A44A36E.self\(Self.pluginComment(integration, seam: "Shell"))
-			            func __safeDI_uploaderBuilder_Shell(_ scope: Shell.SafeDIScope_Uploader) -> any Uploader {
-			                switch scope {
-			                case let .exportFeature(scope): return __safeDI_uploaderBuilder_ExportFeature(scope)
-			                }
-			            }
-			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
-			                switch scope {
-			                case .uploader:
-			                    func __safeDI_uploader() -> DefaultUploader {
-			                        func __safeDI_jobBuilder() -> UploadJob {
-			                            UploadJob(exportService: exportService.instance)
-			                        }
-			                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
-			                        return DefaultUploader(jobBuilder: jobBuilder)
-			                    }
-			                    let uploader: any Uploader = __safeDI_uploader()
-			                    return uploader
-			                }
-			            }
-			            return Shell(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_Shell)
-			        }
-			        let shell: Shell = __safeDI_shell()
-			        self.init(exportService: exportService, shell: shell)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_shell() -> Shell {
+				            _ = Shell.__safeDI_Shell_1B82E3FE3A44A36E.self\(Self.pluginComment(integration, seam: "Shell"))
+				            func __safeDI_uploaderBuilder_Shell(_ scope: Shell.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case let .exportFeature(scope): return __safeDI_uploaderBuilder_ExportFeature(scope)
+				                }
+				            }
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return Shell(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_Shell)
+				        }
+				        let shell: Shell = __safeDI_shell()
+				        self.init(exportService: exportService, shell: shell)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_exportService() -> ExportService {
+				            ExportService()
+				        }
+				        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
+				        func __safeDI_shell() -> Shell {
+				            _ = Shell.__safeDI_Shell_1B82E3FE3A44A36E.self\(Self.pluginComment(integration, seam: "Shell"))
+				            func __safeDI_uploaderBuilder_Shell(_ scope: Shell.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case let .exportFeature(scope): return __safeDI_uploaderBuilder_ExportFeature(scope)
+				                }
+				            }
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case .uploader:
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService.instance)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        return DefaultUploader(jobBuilder: jobBuilder)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return Shell(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_Shell)
+				        }
+				        let shell: Shell = __safeDI_shell()
+				        self.init(exportService: exportService, shell: shell)
+				    }
+				}
+				""",
+			]
+		}
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, expectedFiles)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 
@@ -1159,46 +1709,99 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			handWrittenFill: nil,
 		) + [seamFixtureType(named: "Reentry", isFinalClass: true, declarations: ["@Instantiated let exportService: ExportService", "@Instantiated let featureBuilder: Instantiator<ExportFeature>"])]
 		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app), integration: integration, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
-			"Root": """
-			extension Root {
-			    public convenience init() {
-			        let exportService = ExportService()
-			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
-			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
-			                switch scope {
-			                case let .uploader(scope):
-			                    let exportService = scope.exportService
-			                    func __safeDI_uploader() -> DefaultUploader {
-			                        func __safeDI_jobBuilder() -> UploadJob {
-			                            UploadJob(exportService: exportService)
-			                        }
-			                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
-			                        func __safeDI_reentry() -> Reentry {
-			                            let exportService = ExportService()
-			                            func __safeDI_featureBuilder() -> ExportFeature {
-			                                _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
-			                                return ExportFeature(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
-			                            }
-			                            let featureBuilder = Instantiator<ExportFeature>(__safeDI_featureBuilder)
-			                            return Reentry(exportService: exportService, featureBuilder: featureBuilder)
-			                        }
-			                        let reentry: Reentry = __safeDI_reentry()
-			                        return DefaultUploader(jobBuilder: jobBuilder, reentry: reentry)
-			                    }
-			                    let uploader: any Uploader = __safeDI_uploader()
-			                    return uploader
-			                }
-			            }
-			            return ExportFeature(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
-			        }
-			        let exportFeature: ExportFeature = __safeDI_exportFeature()
-			        self.init(exportService: exportService, exportFeature: exportFeature)
-			    }
-			}
-			""",
-		]))
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        let exportService = ExportService()
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case let .uploader(scope):
+				                    let exportService = scope.exportService
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        func __safeDI_reentry() -> Reentry {
+				                            let exportService = ExportService()
+				                            func __safeDI_featureBuilder() -> ExportFeature {
+				                                _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
+				                                return ExportFeature(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				                            }
+				                            let featureBuilder = Instantiator<ExportFeature>(__safeDI_featureBuilder)
+				                            return Reentry(exportService: exportService, featureBuilder: featureBuilder)
+				                        }
+				                        let reentry: Reentry = __safeDI_reentry()
+				                        return DefaultUploader(jobBuilder: jobBuilder, reentry: reentry)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        let exportService = ExportService()
+				        func __safeDI_exportFeature() -> ExportFeature {
+				            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
+				            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
+				                switch scope {
+				                case let .uploader(scope):
+				                    let exportService = scope.exportService
+				                    func __safeDI_uploader() -> DefaultUploader {
+				                        func __safeDI_jobBuilder() -> UploadJob {
+				                            UploadJob(exportService: exportService)
+				                        }
+				                        let jobBuilder = Instantiator<UploadJob>(__safeDI_jobBuilder)
+				                        func __safeDI_reentry() -> Reentry {
+				                            let exportService = ExportService()
+				                            func __safeDI_featureBuilder() -> ExportFeature {
+				                                _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self\(Self.pluginComment(integration))
+				                                return ExportFeature(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				                            }
+				                            let featureBuilder = Instantiator<ExportFeature>(__safeDI_featureBuilder)
+				                            return Reentry(exportService: exportService, featureBuilder: featureBuilder)
+				                        }
+				                        let reentry: Reentry = __safeDI_reentry()
+				                        return DefaultUploader(jobBuilder: jobBuilder, reentry: reentry)
+				                    }
+				                    let uploader: any Uploader = __safeDI_uploader()
+				                    return uploader
+				                }
+				            }
+				            return ExportFeature(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder_ExportFeature)
+				        }
+				        let exportFeature: ExportFeature = __safeDI_exportFeature()
+				        self.init(exportService: exportService, exportFeature: exportFeature)
+				    }
+				}
+				""",
+			]
+		}
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, expectedFiles)
 		try await expectValuesEqualVisibleBuild(output, feature: feature, app: app)
 	}
 

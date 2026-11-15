@@ -62,14 +62,39 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(try #require(output.modules["App"]).generatedFiles == Self.appGeneratedFiles(under: integration, code: """
-		extension Root {
-		    public convenience init() {
-		        let service = Service()
-		        self.init(service: service)
-		    }
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        let service = Service()
+				        self.init(service: service)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        let service = Service()
+				        self.init(service: service)
+				    }
+				}
+				""",
+			]
 		}
-		"""))
+		#expect(try #require(output.modules["App"]).generatedFiles == expectedFiles)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -144,14 +169,20 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(try #require(output.modules["App"]).generatedFiles == Self.appGeneratedFiles(under: .swiftPackagePlugin, code: """
-		extension Root {
-		    public convenience init() {
-		        let service = Service()
-		        self.init(service: service)
-		    }
-		}
-		"""))
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let service = Service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -245,7 +276,14 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		// hand-written mock; and the construction of a listed mock's root. No line says so.
 		let header = generatedFileHeader + Self.importBlock("Feature") + "\n" + Self.importBlock("TestSupport") + "\n\n"
 		#expect(try #require(output.modules["App"]).generatedFiles == [
-			"Root+SafeDI.swift": header + """
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(TestSupport)
+			import TestSupport
+			#endif
+
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_engine() -> Engine {
@@ -265,7 +303,14 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			    }
 			}
 			""",
-			"Screen+SafeDIMock.swift": header + """
+			"Screen+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(TestSupport)
+			import TestSupport
+			#endif
+
 			#if DEBUG
 			extension Screen {
 			    /// Overrides for the mock dependency tree.
@@ -292,7 +337,14 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			}
 			#endif
 			""",
-			"Engine+SafeDIMock.swift": header + """
+			"Engine+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(TestSupport)
+			import TestSupport
+			#endif
+
 			#if DEBUG
 			extension Engine {
 			    /// Overrides for the mock dependency tree.
@@ -365,7 +417,11 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 		let header = generatedFileHeader + Self.importBlock("Feature") + "\n\n"
 		#expect(try #require(output.modules["App"]).generatedFiles == [
-			"Profile+SafeDIMock.swift": header + """
+			"Profile+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
 			#if DEBUG
 			extension Profile {
 			    static func mock(
@@ -452,14 +508,39 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(try #require(output.modules["App"]).generatedFiles == Self.appGeneratedFiles(under: integration, code: """
-		extension Root {
-		    public convenience init() {
-		        let service: Service = Service.instantiate()
-		        self.init(service: service)
-		    }
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        let service: Service = Service.instantiate()
+				        self.init(service: service)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        let service: Service = Service.instantiate()
+				        self.init(service: service)
+				    }
+				}
+				""",
+			]
 		}
-		"""))
+		#expect(try #require(output.modules["App"]).generatedFiles == expectedFiles)
 	}
 
 	// MARK: Tests – Constructions that do not compile
@@ -2209,7 +2290,11 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		)
 
 		#expect(try #require(output.modules["Feature"]).generatedFiles == [
-			"FeatureView+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + """
+			"FeatureView+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+
 			extension FeatureView {
 			    /// Code you write and code SafeDI generates can both call this initializer.
 			    package init() {
@@ -2225,7 +2310,14 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			""",
 		])
 		#expect(try #require(output.modules["App"]).generatedFiles == [
-			"Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feature") + "\n\n" + """
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+			#if canImport(Feature)
+			import Feature
+			#endif
+
 			extension Root {
 			    public init() {
 			        func __safeDI_featureView() -> FeatureView {
@@ -2309,7 +2401,11 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		// The seam's construction says it is built inline; neither construction says that it relies on `package` access.
 		let header = generatedFileHeader + Self.importBlock("Feature") + "\n\n"
 		#expect(try #require(output.modules["App"]).generatedFiles == [
-			"Root+SafeDI.swift": header + """
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
 			extension Root {
 			    public init() {
 			        let session = Session()
@@ -2696,14 +2792,20 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(try #require(output.modules["App"]).generatedFiles == Self.appGeneratedFiles(under: .moduleInfo, code: """
-		extension Root {
-		    public convenience init() {
-		        let service = Service()
-		        self.init(service: service)
-		    }
-		}
-		"""))
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let service = Service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -2776,14 +2878,20 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(try #require(output.modules["App"]).generatedFiles == Self.appGeneratedFiles(under: .moduleInfo, code: """
-		extension Root {
-		    public convenience init() {
-		        let service = Service()
-		        self.init(service: service)
-		    }
-		}
-		"""))
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let service = Service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+		])
 	}
 
 	// MARK: Tests – Mocks
@@ -3164,7 +3272,11 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		)
 
 		#expect(try #require(output.modules["App"]).generatedFiles == [
-			"App.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n" + """
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
 			#if DEBUG
 			extension Profile {
 			    static func mock(
@@ -3348,18 +3460,47 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(try #require(output.modules["App"]).generatedFiles == Self.appGeneratedFiles(under: integration, code: """
-		extension Root {
-		    public convenience init() {
-		        func __safeDI_service() -> Screen {
-		            let shelf: any Shelving = Space.Shelf()
-		            return Screen(shelf: shelf)
-		        }
-		        let service: Screen = __safeDI_service()
-		        self.init(service: service)
-		    }
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_service() -> Screen {
+				            let shelf: any Shelving = Space.Shelf()
+				            return Screen(shelf: shelf)
+				        }
+				        let service: Screen = __safeDI_service()
+				        self.init(service: service)
+				    }
+				}
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Root+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_service() -> Screen {
+				            let shelf: any Shelving = Space.Shelf()
+				            return Screen(shelf: shelf)
+				        }
+				        let service: Screen = __safeDI_service()
+				        self.init(service: service)
+				    }
+				}
+				""",
+			]
 		}
-		"""))
+		#expect(try #require(output.modules["App"]).generatedFiles == expectedFiles)
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)

@@ -470,7 +470,8 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 			    }
 			}
 			#endif
-			""" + "\n",
+
+			""",
 			"Service+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {

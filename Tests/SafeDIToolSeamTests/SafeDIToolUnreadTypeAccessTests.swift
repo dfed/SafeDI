@@ -1729,7 +1729,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(window: window, cache: cache)
 		    }
 		""", guardHash: "564C5E6539CF6AA0"))
-		#expect(output.modules["Shell"]?.generatedFiles == ["Shell.swift": generatedFileHeader + Self.importLines(["Feature", "Kit"]) + """
+		#expect(output.modules["Shell"]?.generatedFiles == ["Shell.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Kit)
+		import Kit
+		#endif
+
 		extension Frame {
 		    \(Self.comment(["Window"]))
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1768,7 +1775,11 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.importLines(["Kit"]) + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Kit)
+		import Kit
+		#endif
+
 		#if DEBUG
 		extension Screen {
 		    \(Self.comment(["Image", "Window", "Window.Scene"]))
@@ -1805,7 +1816,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.importLines(["Kit", "SafeDI"]) + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Kit)
+		import Kit
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
 		#if DEBUG
 		extension Screen {
 		    \(Self.comment(["Brush", "Image"]))
@@ -1877,7 +1895,11 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.importLines(["Kit"]) + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Kit)
+		import Kit
+		#endif
+
 		#if DEBUG
 		extension Screen {
 		    \(Self.comment(["Window"]))
@@ -1917,7 +1939,11 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.importLines(["Kit"]) + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Kit)
+		import Kit
+		#endif
+
 		#if DEBUG
 		extension Screen {
 		    \(Self.comment(["Palette", "Window"]))
@@ -1951,7 +1977,11 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.importLines(["Kit"]) + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Kit)
+		import Kit
+		#endif
+
 		#if DEBUG
 		extension Screen {
 		    \(Self.comment(["Palette", "Window"]))
@@ -1990,7 +2020,11 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.importLines(["Kit"]) + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Kit)
+		import Kit
+		#endif
+
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
@@ -2660,7 +2694,11 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.importLines(["Kit"]) + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Kit)
+		import Kit
+		#endif
+
 		#if DEBUG
 		extension Screen {
 		    public static func mock() -> Screen {
@@ -3808,7 +3846,11 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.importLines(["SafeDI"]) + """
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
 		#if DEBUG
 		extension Screen {
 		    public static func mock(

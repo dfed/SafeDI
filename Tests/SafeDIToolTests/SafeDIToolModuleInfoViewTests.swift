@@ -396,7 +396,14 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		)
 		let fileName = integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"
 		let pluginComment = integration.seamCallComment(type: "FeedScreen", declaringModule: "Feed")
-		#expect(output.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n\n" + """
+		#expect(output.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feed)
+		import Feed
+		#endif
+
 		extension Root {
 		    public init() {
 		        func __safeDI_feedScreen() -> FeedScreen {
@@ -451,7 +458,17 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		#expect(output.modules["App"]?.generatedFiles == directOutput.modules["App"]?.generatedFiles)
 		let fileName = integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"
 		let pluginComment = integration.seamCallComment(type: "Service", declaringModule: "Feed")
-		#expect(output.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n" + Self.importBlock("SafeDI") + "\n\n" + """
+		#expect(output.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feed)
+		import Feed
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
 		extension Root {
 		    public init() {
 		        func __safeDI_screenBuilder(theme: [3 of Int]) -> Screen {
@@ -731,7 +748,14 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		switch integration {
 		case .moduleInfo:
 			let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: integration, filesToDelete: &filesToDelete)
-			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.importBlock("Feed") + "\n" + Self.importBlock("Session") + "\n\n" + """
+			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+			#if canImport(Feed)
+			import Feed
+			#endif
+			#if canImport(Session)
+			import Session
+			#endif
+
 			extension Root {
 			    public init() {
 			        func __safeDI_feedScreen() -> FeedScreen {

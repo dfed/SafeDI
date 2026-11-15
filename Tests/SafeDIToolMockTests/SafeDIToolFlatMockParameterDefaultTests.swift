@@ -564,17 +564,61 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		)
 
 		let generatedFiles = try #require(output.modules["App"]).generatedFiles
-		#expect(generatedFiles == Self.appMockFiles(under: integration, imports: ["Feature", "TestSupport"], code: """
-		#if DEBUG
-		extension Screen {
-		    static func mock(
-		        service: Service = FakeService.mock()
-		    ) -> Screen {
-		        return Screen(service: service)
-		    }
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
+
+				#if DEBUG
+				extension Screen {
+				    static func mock(
+				        service: Service = FakeService.mock()
+				    ) -> Screen {
+				        return Screen(service: service)
+				    }
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
+
+
+				""",
+				"Screen+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
+
+				#if DEBUG
+				extension Screen {
+				    static func mock(
+				        service: Service = FakeService.mock()
+				    ) -> Screen {
+				        return Screen(service: service)
+				    }
+				}
+				#endif
+				""",
+			]
 		}
-		#endif
-		"""), "Unexpected output \(generatedFiles)")
+		#expect(generatedFiles == expectedFiles, "Unexpected output \(generatedFiles)")
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -587,17 +631,61 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		)
 
 		let generatedFiles = try #require(output.modules["App"]).generatedFiles
-		#expect(generatedFiles == Self.appMockFiles(under: integration, imports: ["Feature", "TestSupport"], code: """
-		#if DEBUG
-		extension Screen {
-		    static func mock(
-		        service: Service = FakeService.mock()
-		    ) -> Screen {
-		        return Screen(service: service)
-		    }
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
+
+				#if DEBUG
+				extension Screen {
+				    static func mock(
+				        service: Service = FakeService.mock()
+				    ) -> Screen {
+				        return Screen(service: service)
+				    }
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
+
+
+				""",
+				"Screen+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
+
+				#if DEBUG
+				extension Screen {
+				    static func mock(
+				        service: Service = FakeService.mock()
+				    ) -> Screen {
+				        return Screen(service: service)
+				    }
+				}
+				#endif
+				""",
+			]
 		}
-		#endif
-		"""), "Unexpected output \(generatedFiles)")
+		#expect(generatedFiles == expectedFiles, "Unexpected output \(generatedFiles)")
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -611,17 +699,61 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		)
 
 		let generatedFiles = try #require(output.modules["App"]).generatedFiles
-		#expect(generatedFiles == Self.appMockFiles(under: integration, imports: ["Feature", "TestSupport"], code: """
-		#if DEBUG
-		extension Screen {
-		    static func mock(
-		        service: Service
-		    ) -> Screen {
-		        return Screen(service: service)
-		    }
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
+
+				#if DEBUG
+				extension Screen {
+				    static func mock(
+				        service: Service
+				    ) -> Screen {
+				        return Screen(service: service)
+				    }
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
+
+
+				""",
+				"Screen+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
+
+				#if DEBUG
+				extension Screen {
+				    static func mock(
+				        service: Service
+				    ) -> Screen {
+				        return Screen(service: service)
+				    }
+				}
+				#endif
+				""",
+			]
 		}
-		#endif
-		"""), "Unexpected output \(generatedFiles)")
+		#expect(generatedFiles == expectedFiles, "Unexpected output \(generatedFiles)")
 	}
 
 	@Test
@@ -648,17 +780,30 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		)
 
 		let generatedFiles = try #require(output.modules["App"]).generatedFiles
-		#expect(generatedFiles == Self.appMockFiles(under: .swiftPackagePlugin, imports: ["Models"], mockedTypeName: "Consumer", code: """
-		#if DEBUG
-		extension Consumer {
-		    static func mock(
-		        session: Session = Session.preview()
-		    ) -> Consumer {
-		        return Consumer(session: session)
-		    }
-		}
-		#endif
-		"""), "Unexpected output \(generatedFiles)")
+		#expect(generatedFiles == [
+			"Consumer+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(Models)
+			import Models
+			#endif
+
+			#if DEBUG
+			extension Consumer {
+			    static func mock(
+			        session: Session = Session.preview()
+			    ) -> Consumer {
+			        return Consumer(session: session)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if canImport(Models)
+			import Models
+			#endif
+
+
+			""",
+		], "Unexpected output \(generatedFiles)")
 	}
 
 	@Test
@@ -695,17 +840,23 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		)
 
 		let generatedFiles = try #require(output.modules["App"]).generatedFiles
-		#expect(generatedFiles == Self.appMockFiles(under: .moduleInfo, imports: ["Core"], code: """
-		#if DEBUG
-		extension Screen {
-		    static func mock(
-		        widget: Widget
-		    ) -> Screen {
-		        return Screen(widget: widget)
-		    }
-		}
-		#endif
-		"""), "Unexpected output \(generatedFiles)")
+		#expect(generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Core)
+			import Core
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    static func mock(
+			        widget: Widget
+			    ) -> Screen {
+			        return Screen(widget: widget)
+			    }
+			}
+			#endif
+			""",
+		], "Unexpected output \(generatedFiles)")
 	}
 
 	// MARK: Tests – Public mocks
@@ -729,22 +880,71 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 			""
 		}
 		let generatedFiles = try #require(output.modules["App"]).generatedFiles
-		#expect(generatedFiles == Self.appMockFiles(under: integration, imports: ["Feature", "TestSupport"], code: """
-		#if DEBUG
-		extension Screen {\(unreadTypeComment)
-		    public static func mock(
-		        service: Service? = nil
-		    ) -> Screen {
-		        let service = service ?? (FakeService.mock())
-		        return Screen(service: service)
-		    }
-		}
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
 
-		extension Screen {
-		    public enum __safeDI_Screen_mock_01EE4AB7CC54DCE0 {}
+				#if DEBUG
+				extension Screen {\(unreadTypeComment)
+				    public static func mock(
+				        service: Service? = nil
+				    ) -> Screen {
+				        let service = service ?? (FakeService.mock())
+				        return Screen(service: service)
+				    }
+				}
+
+				extension Screen {
+				    public enum __safeDI_Screen_mock_01EE4AB7CC54DCE0 {}
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
+
+
+				""",
+				"Screen+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Feature)
+				import Feature
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
+
+				#if DEBUG
+				extension Screen {\(unreadTypeComment)
+				    public static func mock(
+				        service: Service? = nil
+				    ) -> Screen {
+				        let service = service ?? (FakeService.mock())
+				        return Screen(service: service)
+				    }
+				}
+
+				extension Screen {
+				    public enum __safeDI_Screen_mock_01EE4AB7CC54DCE0 {}
+				}
+				#endif
+				""",
+			]
 		}
-		#endif
-		"""), "Unexpected output \(generatedFiles)")
+		#expect(generatedFiles == expectedFiles, "Unexpected output \(generatedFiles)")
 	}
 
 	@Test
@@ -776,22 +976,71 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		)
 
 		let generatedFiles = try #require(output.modules["App"]).generatedFiles
-		#expect(generatedFiles == Self.appMockFiles(under: integration, imports: ["Models", "TestSupport"], mockedTypeName: "Consumer", code: """
-		#if DEBUG
-		extension Consumer {
-		    public static func mock(
-		        session: Session? = nil
-		    ) -> Consumer {
-		        let session = session ?? (Session.preview())
-		        return Consumer(session: session)
-		    }
-		}
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Models)
+				import Models
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
 
-		extension Consumer {
-		    public enum __safeDI_Consumer_mock_D4A974D59A93702C {}
+				#if DEBUG
+				extension Consumer {
+				    public static func mock(
+				        session: Session? = nil
+				    ) -> Consumer {
+				        let session = session ?? (Session.preview())
+				        return Consumer(session: session)
+				    }
+				}
+
+				extension Consumer {
+				    public enum __safeDI_Consumer_mock_D4A974D59A93702C {}
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Consumer+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Models)
+				import Models
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
+
+				#if DEBUG
+				extension Consumer {
+				    public static func mock(
+				        session: Session? = nil
+				    ) -> Consumer {
+				        let session = session ?? (Session.preview())
+				        return Consumer(session: session)
+				    }
+				}
+
+				extension Consumer {
+				    public enum __safeDI_Consumer_mock_D4A974D59A93702C {}
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Models)
+				import Models
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
+
+
+				""",
+			]
 		}
-		#endif
-		"""), "Unexpected output \(generatedFiles)")
+		#expect(generatedFiles == expectedFiles, "Unexpected output \(generatedFiles)")
 	}
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -871,26 +1120,79 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		)
 
 		let generatedFiles = try #require(output.modules["App"]).generatedFiles
-		#expect(generatedFiles == Self.appMockFiles(under: integration, imports: ["Models", "TestSupport"], mockedTypeName: "Consumer", code: """
-		#if DEBUG
-		extension Consumer {
-		    public static func mock() -> Consumer {
-		        Consumer.mock(session: nil)
-		    }
+		let expectedFiles: [String: String] = switch integration {
+		case .moduleInfo:
+			[
+				"App.swift": generatedFileHeader + """
+				#if canImport(Models)
+				import Models
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
 
-		    package static func mock(
-		        session: Session? = nil
-		    ) -> Consumer {
-		        let session = session ?? (Session.preview())
-		        return Consumer(session: session)
-		    }
-		}
+				#if DEBUG
+				extension Consumer {
+				    public static func mock() -> Consumer {
+				        Consumer.mock(session: nil)
+				    }
 
-		extension Consumer {
-		    public enum __safeDI_Consumer_mock_E091DB4BE7BC7703 {}
+				    package static func mock(
+				        session: Session? = nil
+				    ) -> Consumer {
+				        let session = session ?? (Session.preview())
+				        return Consumer(session: session)
+				    }
+				}
+
+				extension Consumer {
+				    public enum __safeDI_Consumer_mock_E091DB4BE7BC7703 {}
+				}
+				#endif
+				""",
+			]
+		case .swiftPackagePlugin:
+			[
+				"Consumer+SafeDIMock.swift": generatedFileHeader + """
+				#if canImport(Models)
+				import Models
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
+
+				#if DEBUG
+				extension Consumer {
+				    public static func mock() -> Consumer {
+				        Consumer.mock(session: nil)
+				    }
+
+				    package static func mock(
+				        session: Session? = nil
+				    ) -> Consumer {
+				        let session = session ?? (Session.preview())
+				        return Consumer(session: session)
+				    }
+				}
+
+				extension Consumer {
+				    public enum __safeDI_Consumer_mock_E091DB4BE7BC7703 {}
+				}
+				#endif
+				""",
+				"SafeDIMockConfiguration.swift": generatedFileHeader + """
+				#if canImport(Models)
+				import Models
+				#endif
+				#if canImport(TestSupport)
+				import TestSupport
+				#endif
+
+
+				""",
+			]
 		}
-		#endif
-		"""), "Unexpected output \(generatedFiles)")
+		#expect(generatedFiles == expectedFiles, "Unexpected output \(generatedFiles)")
 	}
 
 	@Test

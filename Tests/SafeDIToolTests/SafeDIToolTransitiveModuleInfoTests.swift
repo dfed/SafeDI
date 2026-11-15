@@ -69,7 +69,20 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			modulesBeneath: { $0 },
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.generatedFile(importing: ["LevelFour", "LevelOne", "LevelThree", "LevelTwo"], """
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(LevelFour)
+		import LevelFour
+		#endif
+		#if canImport(LevelOne)
+		import LevelOne
+		#endif
+		#if canImport(LevelThree)
+		import LevelThree
+		#endif
+		#if canImport(LevelTwo)
+		import LevelTwo
+		#endif
+
 		extension Root {
 		    public init() {
 		        func __safeDI_one() -> One {
@@ -88,7 +101,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		        self.init(one: one)
 		    }
 		}
-		""")])
+		"""])
 	}
 
 	@Test(arguments: [
@@ -109,7 +122,17 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			modulesBeneath: order.arranged,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.generatedFile(importing: ["Base", "Left", "Right"], """
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Base)
+		import Base
+		#endif
+		#if canImport(Left)
+		import Left
+		#endif
+		#if canImport(Right)
+		import Right
+		#endif
+
 		extension Root {
 		    public init() {
 		        func __safeDI_leftScreen() -> LeftScreen {
@@ -125,7 +148,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		        self.init(leftScreen: leftScreen, rightScreen: rightScreen)
 		    }
 		}
-		""")])
+		"""])
 		#expect(output.modules["App"]?.generateOutput?.dependentModules.map(\.moduleName) == ["Base", "Left", "Right"])
 	}
 
@@ -157,7 +180,29 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.generateOutput?.dependentModules.map(\.moduleName) == ["Alpha", "Bravo", "Charlie", "Middle", "Xray", "Yankee", "Zulu"])
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.generatedFile(importing: ["Alpha", "Bravo", "Charlie", "Middle", "Xray", "Yankee", "Zulu"], """
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Alpha)
+		import Alpha
+		#endif
+		#if canImport(Bravo)
+		import Bravo
+		#endif
+		#if canImport(Charlie)
+		import Charlie
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+		#if canImport(Xray)
+		import Xray
+		#endif
+		#if canImport(Yankee)
+		import Yankee
+		#endif
+		#if canImport(Zulu)
+		import Zulu
+		#endif
+
 		extension Root {
 		    public init() {
 		        func __safeDI_hub() -> Hub {
@@ -173,7 +218,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		        self.init(hub: hub)
 		    }
 		}
-		""")])
+		"""])
 	}
 
 	@Test
@@ -193,7 +238,14 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			modulesBeneath: { $0 },
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.generatedFile(importing: ["Deep", "Middle"], """
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Deep)
+		import Deep
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
 		extension Root {
 		    public init() {
 		        func __safeDI_feedScreen() -> FeedScreen {
@@ -208,7 +260,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		        self.init(feedScreen: feedScreen)
 		    }
 		}
-		""")])
+		"""])
 	}
 
 	// MARK: Tests – A complete hand-written list
@@ -250,7 +302,14 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			modulesBeneath: passesSet ? { $0 } : nil,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.generatedFile(importing: ["Deep", "Middle"], """
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Deep)
+		import Deep
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
 		#if DEBUG
 		extension Screen {
 		    /// Overrides for the mock dependency tree.
@@ -273,7 +332,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		    }
 		}
 		#endif
-		""")])
+		"""])
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Middle"])
 		#expect(output.modules["App"]?.generateOutput?.dependentModules.map(\.moduleName) == ["Middle"])
 	}
@@ -358,7 +417,17 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			modulesBeneath: { $0 },
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.generatedFile(importing: ["Deep", "Middle", "SafeDI"], """
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Deep)
+		import Deep
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
 		extension Root {
 		    public init() {
 		        func __safeDI_feedScreen() -> FeedScreen {
@@ -377,7 +446,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		    }
 		}
 		#endif
-		""")])
+		"""])
 	}
 
 	// MARK: Tests – Seams and public mocks of a middle module
@@ -405,7 +474,14 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		#expect(Self.withoutFixtureRoot(output, module: "Middle") == Self.withoutFixtureRoot(reference, module: "Middle"))
 		// `App`'s tree stops at the seam, so a short list leaves nothing open, and its run reads `Middle` alone.
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == (listsComplete ? ["Deep", "Inner", "Middle"] : ["Middle"]))
-		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": Self.generatedFile(importing: ["Deep", "Inner"], """
+		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
+		#if canImport(Deep)
+		import Deep
+		#endif
+		#if canImport(Inner)
+		import Inner
+		#endif
+
 		extension FeedScreen {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
@@ -421,7 +497,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		extension FeedScreen {
 		    public enum __safeDI_FeedScreen_CBF29CE484222325 {}
 		}
-		""")])
+		"""])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.generatedFile(importing: ["Deep", "Inner", "Middle"], """
 		extension Root {
 		    public init() {
@@ -467,7 +543,14 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Middle"]?.moduleInfoFile?.dependencyModuleNames == ["Inner"])
-		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": Self.generatedFile(importing: ["Deep", "Inner"], """
+		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
+		#if canImport(Deep)
+		import Deep
+		#endif
+		#if canImport(Inner)
+		import Inner
+		#endif
+
 		#if DEBUG
 		extension FeedScreen {
 		    @frozen public enum SafeDIMockScope_Clock {
@@ -512,10 +595,20 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		    public enum __safeDI_FeedScreen_mock_64F86A264DA8A439 {}
 		}
 		#endif
-		""")])
+		"""])
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
 		#expect(Self.withoutFixtureRoot(output, module: "App") == Self.withoutFixtureRoot(reference, module: "App"))
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.generatedFile(importing: ["Deep", "Inner", "Middle"], """
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Deep)
+		import Deep
+		#endif
+		#if canImport(Inner)
+		import Inner
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
 		extension Root {
 		    public init() {
 		        func __safeDI_screen() -> Screen {
@@ -600,7 +693,8 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		    }
 		}
 		#endif
-		""") + "\n"])
+
+		"""])
 	}
 
 	// MARK: Tests – One name through both sets
@@ -630,14 +724,18 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			modulesBeneath: { $0 },
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.generatedFile(importing: ["Left"], """
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Left)
+		import Left
+		#endif
+
 		extension Root {
 		    public init() {
 		        let clock = Clock()
 		        self.init(clock: clock)
 		    }
 		}
-		""")])
+		"""])
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Left", "Right"])
 	}
 
@@ -681,14 +779,18 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			modulesBeneath: { $0 },
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.generatedFile(importing: ["Deep"], """
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Deep)
+		import Deep
+		#endif
+
 		extension Root {
 		    public init() {
 		        let logger = Logger()
 		        self.init(logger: logger)
 		    }
 		}
-		""")])
+		"""])
 	}
 
 	@Test
@@ -775,7 +877,14 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			modulesBeneath: { $0 },
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.generatedFile(importing: ["Deep", "Middle"], """
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Deep)
+		import Deep
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
 		extension Root {
 		    public init() {
 		        func __safeDI_featureBuilder(token: Token) -> Feature {
@@ -787,7 +896,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		        self.init(featureBuilder: featureBuilder)
 		    }
 		}
-		""")])
+		"""])
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Middle"])
 	}
 
@@ -1192,9 +1301,16 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		// The module's run validated `Root`, which it does not generate, with `Deep`'s declarations.
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.generatedFile(importing: ["Deep", "Middle"], """
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Deep)
+		import Deep
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
 		// SafeDI generates Root’s init() only in the module that declares Root. If Root() does not compile, add the SafeDI plugin to the target that declares Root.
-		""")])
+		"""])
 	}
 
 	@Test
@@ -1215,14 +1331,18 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			skipCompileVerification: true,
 			moduleMembershipArguments: ["--transitive-module-info-file-path", modulesBeneathCSV.path],
 		)
-		#expect(output.generatedFiles == ["Root+SafeDI.swift": Self.generatedFile(importing: ["Deep"], """
+		#expect(output.generatedFiles == ["Root+SafeDI.swift": generatedFileHeader + """
+		#if canImport(Deep)
+		import Deep
+		#endif
+
 		extension Root {
 		    public init() {
 		        let clock = Clock()
 		        self.init(clock: clock)
 		    }
 		}
-		""")])
+		"""])
 	}
 
 	// MARK: Tests – Only trees ask, and nothing declines
@@ -1503,7 +1623,20 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			compileVerification: .skipped,
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.generatedFile(importing: ["Contracts", "Impl", "Sub", "Top"], """
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Contracts)
+		import Contracts
+		#endif
+		#if canImport(Impl)
+		import Impl
+		#endif
+		#if canImport(Sub)
+		import Sub
+		#endif
+		#if canImport(Top)
+		import Top
+		#endif
+
 		extension Root {
 		    public init() {
 		        let thing = AnyThing(DefaultThing())
@@ -1511,7 +1644,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		        self.init(thing: thing, topThing: topThing)
 		    }
 		}
-		""")])
+		"""])
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Contracts", "Impl", "Top"])
 	}
@@ -1575,16 +1708,30 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			moduleMembershipArguments: ["--transitive-module-info-file-path", modulesBeneathCSV.path],
 		)
 		#expect(output.generatedFiles == [
-			"Root+SafeDI.swift": Self.generatedFile(importing: ["Contracts", "Impl"], """
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Contracts)
+			import Contracts
+			#endif
+			#if canImport(Impl)
+			import Impl
+			#endif
+
 			extension Root {
 			    public init() {
 			        let thing = AnyThing(DefaultThing())
 			        self.init(thing: thing)
 			    }
 			}
-			"""),
+			""",
 			"SafeDIMockConfiguration.swift": Self.generatedFile(importing: ["Contracts", "Impl"], ""),
-			"Screen+SafeDIMock.swift": Self.generatedFile(importing: ["Contracts", "Impl"], """
+			"Screen+SafeDIMock.swift": generatedFileHeader + """
+			#if canImport(Contracts)
+			import Contracts
+			#endif
+			#if canImport(Impl)
+			import Impl
+			#endif
+
 			#if DEBUG
 			extension Screen {
 			    /// Overrides for the mock dependency tree.
@@ -1606,7 +1753,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			    }
 			}
 			#endif
-			"""),
+			""",
 		])
 	}
 
@@ -1683,14 +1830,21 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			moduleMembershipArguments: ["--transitive-module-info-file-path", modulesBeneathCSV.path],
 		)
 		#expect(output.generatedFiles == [
-			"Root+SafeDI.swift": Self.generatedFile(importing: ["Contracts", "Impl"], """
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Contracts)
+			import Contracts
+			#endif
+			#if canImport(Impl)
+			import Impl
+			#endif
+
 			extension Root {
 			    public init() {
 			        let thing = AnyThing(DefaultThing())
 			        self.init(thing: thing)
 			    }
 			}
-			"""),
+			""",
 		])
 	}
 

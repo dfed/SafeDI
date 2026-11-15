@@ -58,24 +58,30 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screenABuilder: Instantiator<ScreenA>", "@Instantiated let screenBBuilder: Instantiator<ScreenB>"])
 		let modules = Self.modules(feature: feature, app: [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_screenABuilder() -> ScreenA {
-		            let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
-		            _ = ScreenA.__safeDI_ScreenA_965B4443E5BE6EBC.self\(Self.callComment(module: "Feature"))
-		            return ScreenA(__safeDI_screenBBuilder: screenBBuilder)
-		        }
-		        let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
-		        func __safeDI_screenBBuilder() -> ScreenB {
-		            let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
-		            return ScreenB(screenABuilder: screenABuilder)
-		        }
-		        let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
-		        self.init(screenABuilder: screenABuilder, screenBBuilder: screenBBuilder)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_screenABuilder() -> ScreenA {
+			            let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
+			            _ = ScreenA.__safeDI_ScreenA_965B4443E5BE6EBC.self\(Self.callComment(module: "Feature"))
+			            return ScreenA(__safeDI_screenBBuilder: screenBBuilder)
+			        }
+			        let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
+			        func __safeDI_screenBBuilder() -> ScreenB {
+			            let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
+			            return ScreenB(screenABuilder: screenABuilder)
+			        }
+			        let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
+			        self.init(screenABuilder: screenABuilder, screenBBuilder: screenBBuilder)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().screenABuilder.instantiate().detail.screenBBuilder?.instantiate()"),
@@ -97,31 +103,37 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screenABuilder: Instantiator<ScreenA>", "@Instantiated let screenBBuilder: Instantiator<ScreenB>"])
 		let modules = Self.modules(feature: feature, app: fulfillers + [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_screenABuilder() -> ScreenA {
-		            let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
-		            _ = ScreenA.__safeDI_ScreenA_A0792761FA8A7C8E.self\(Self.callComment(module: "Feature"))
-		            func __safeDI_widgetBuilder_ScreenA(_ scope: ScreenA.SafeDIScope_Widget) -> any Widget {
-		                switch scope {
-		                case .widget:
-		                    let widget: any Widget = DefaultWidget(screenBBuilder: screenBBuilder)
-		                    return widget
-		                }
-		            }
-		            return ScreenA(__safeDI_widgetBuilder: __safeDI_widgetBuilder_ScreenA)
-		        }
-		        let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
-		        func __safeDI_screenBBuilder() -> ScreenB {
-		            let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
-		            return ScreenB(screenABuilder: screenABuilder)
-		        }
-		        let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
-		        self.init(screenABuilder: screenABuilder, screenBBuilder: screenBBuilder)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_screenABuilder() -> ScreenA {
+			            let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
+			            _ = ScreenA.__safeDI_ScreenA_A0792761FA8A7C8E.self\(Self.callComment(module: "Feature"))
+			            func __safeDI_widgetBuilder_ScreenA(_ scope: ScreenA.SafeDIScope_Widget) -> any Widget {
+			                switch scope {
+			                case .widget:
+			                    let widget: any Widget = DefaultWidget(screenBBuilder: screenBBuilder)
+			                    return widget
+			                }
+			            }
+			            return ScreenA(__safeDI_widgetBuilder: __safeDI_widgetBuilder_ScreenA)
+			        }
+			        let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
+			        func __safeDI_screenBBuilder() -> ScreenB {
+			            let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
+			            return ScreenB(screenABuilder: screenABuilder)
+			        }
+			        let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
+			        self.init(screenABuilder: screenABuilder, screenBBuilder: screenBBuilder)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature + fulfillers), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().screenABuilder.instantiate().widget"),
@@ -224,19 +236,25 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    public enum __safeDI_Flow_F559CB2F60F73CA3 {}
 		}
 		"""]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        let screenBuilder_received = Thing()
-		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_F559CB2F60F73CA3.self\(Self.callComment(module: "Feature"))
-		            return Flow(__safeDI_screenBuilder_received: screenBuilder_received)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        self.init(screenBuilder_received: screenBuilder_received, flow: flow)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let screenBuilder_received = Thing()
+			        func __safeDI_flow() -> Flow {
+			            _ = Flow.__safeDI_Flow_F559CB2F60F73CA3.self\(Self.callComment(module: "Feature"))
+			            return Flow(__safeDI_screenBuilder_received: screenBuilder_received)
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(screenBuilder_received: screenBuilder_received, flow: flow)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().flow.screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate()"),
@@ -298,31 +316,37 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    public enum __safeDI_Flow_9367E336398C16B0 {}
 		}
 		"""]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_9367E336398C16B0.self\(Self.callComment(module: "Feature"))
-		            func __safeDI_widgetBuilder_Flow(_ scope: Flow.SafeDIScope_Widget) -> any Widget {
-		                switch scope {
-		                case let .aBuilder(_, scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
-		                }
-		            }
-		            func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
-		                switch scope {
-		                case let .widget(scope):
-		                    let bBuilder = scope.bBuilder
-		                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
-		                    return widget
-		                }
-		            }
-		            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        self.init(flow: flow)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_flow() -> Flow {
+			            _ = Flow.__safeDI_Flow_9367E336398C16B0.self\(Self.callComment(module: "Feature"))
+			            func __safeDI_widgetBuilder_Flow(_ scope: Flow.SafeDIScope_Widget) -> any Widget {
+			                switch scope {
+			                case let .aBuilder(_, scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
+			                }
+			            }
+			            func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
+			                switch scope {
+			                case let .widget(scope):
+			                    let bBuilder = scope.bBuilder
+			                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
+			                    return widget
+			                }
+			            }
+			            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow)
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(flow: flow)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature + fulfillers), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().flow.aBuilder.instantiate().widget"),
@@ -382,31 +406,37 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    public enum __safeDI_Flow_05DBCEB3CE79CFA6 {}
 		}
 		"""]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_05DBCEB3CE79CFA6.self\(Self.callComment(module: "Feature"))
-		            @Sendable func __safeDI_widgetSendableBuilder_Flow(_ scope: Flow.SafeDISendableScope_Widget) -> any Widget {
-		                switch scope {
-		                case let .aBuilder(scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
-		                }
-		            }
-		            @Sendable func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
-		                switch scope {
-		                case let .widget(scope):
-		                    let bBuilder = scope.bBuilder
-		                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
-		                    return widget
-		                }
-		            }
-		            return Flow(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Flow)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        self.init(flow: flow)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_flow() -> Flow {
+			            _ = Flow.__safeDI_Flow_05DBCEB3CE79CFA6.self\(Self.callComment(module: "Feature"))
+			            @Sendable func __safeDI_widgetSendableBuilder_Flow(_ scope: Flow.SafeDISendableScope_Widget) -> any Widget {
+			                switch scope {
+			                case let .aBuilder(scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
+			                }
+			            }
+			            @Sendable func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
+			                switch scope {
+			                case let .widget(scope):
+			                    let bBuilder = scope.bBuilder
+			                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
+			                    return widget
+			                }
+			            }
+			            return Flow(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Flow)
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(flow: flow)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature + fulfillers), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().flow.aBuilder.instantiate().widget"),
@@ -495,41 +525,47 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    public enum __safeDI_Flow_3E3E253138724B42 {}
 		}
 		"""]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_3E3E253138724B42.self\(Self.callComment(module: "Feature"))
-		            func __safeDI_widgetBuilder_Flow(_ scope: Flow.SafeDIScope_Widget) -> any Widget {
-		                switch scope {
-		                case let .xBuilder(_, scope): return __safeDI_widgetBuilder_Flow_X_Scope(scope)
-		                }
-		            }
-		            func __safeDI_widgetBuilder_Flow_X_Scope(_ scope: Flow.SafeDIScope_Widget.X_Scope) -> any Widget {
-		                switch scope {
-		                case let .p(_, scope): return __safeDI_widgetBuilder_Flow_P_Scope(scope)
-		                }
-		            }
-		            func __safeDI_widgetBuilder_Flow_P_Scope(_ scope: Flow.SafeDIScope_Widget.P_Scope) -> any Widget {
-		                switch scope {
-		                case let .aBuilder(_, scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
-		                }
-		            }
-		            func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
-		                switch scope {
-		                case let .widget(scope):
-		                    let bBuilder = scope.bBuilder
-		                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
-		                    return widget
-		                }
-		            }
-		            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        self.init(flow: flow)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_flow() -> Flow {
+			            _ = Flow.__safeDI_Flow_3E3E253138724B42.self\(Self.callComment(module: "Feature"))
+			            func __safeDI_widgetBuilder_Flow(_ scope: Flow.SafeDIScope_Widget) -> any Widget {
+			                switch scope {
+			                case let .xBuilder(_, scope): return __safeDI_widgetBuilder_Flow_X_Scope(scope)
+			                }
+			            }
+			            func __safeDI_widgetBuilder_Flow_X_Scope(_ scope: Flow.SafeDIScope_Widget.X_Scope) -> any Widget {
+			                switch scope {
+			                case let .p(_, scope): return __safeDI_widgetBuilder_Flow_P_Scope(scope)
+			                }
+			            }
+			            func __safeDI_widgetBuilder_Flow_P_Scope(_ scope: Flow.SafeDIScope_Widget.P_Scope) -> any Widget {
+			                switch scope {
+			                case let .aBuilder(_, scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
+			                }
+			            }
+			            func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
+			                switch scope {
+			                case let .widget(scope):
+			                    let bBuilder = scope.bBuilder
+			                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
+			                    return widget
+			                }
+			            }
+			            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow)
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(flow: flow)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature + fulfillers), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().flow.xBuilder.instantiate().p.aBuilder.instantiate().widget"),
@@ -612,40 +648,46 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    public enum __safeDI_Flow_F6CC9DA5320C1EA1 {}
 		}
 		"""]))
-		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", imports: ["Feature"], rootFiles: ["Root": """
-		extension Root {
-		    public init() {
-		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_F6CC9DA5320C1EA1.self\(Self.callComment(module: "Feature"))
-		            func __safeDI_widgetBuilder_Flow(_ scope: Flow.SafeDIScope_Widget) -> any Widget {
-		                switch scope {
-		                case let .aBuilder(_, scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
-		                case let .bBuilder(_, scope): return __safeDI_widgetBuilder_Flow_B_Scope(scope)
-		                }
-		            }
-		            func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
-		                switch scope {
-		                case let .widget(scope):
-		                    let mark = scope.mark
-		                    let widget: any Widget = DefaultWidget(mark: mark)
-		                    return widget
-		                }
-		            }
-		            func __safeDI_widgetBuilder_Flow_B_Scope(_ scope: Flow.SafeDIScope_Widget.B_Scope) -> any Widget {
-		                switch scope {
-		                case let .widget(scope):
-		                    let mark = scope.mark
-		                    let widget: any Widget = DefaultWidget(mark: mark)
-		                    return widget
-		                }
-		            }
-		            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow)
-		        }
-		        let flow: Flow = __safeDI_flow()
-		        self.init(flow: flow)
-		    }
-		}
-		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_flow() -> Flow {
+			            _ = Flow.__safeDI_Flow_F6CC9DA5320C1EA1.self\(Self.callComment(module: "Feature"))
+			            func __safeDI_widgetBuilder_Flow(_ scope: Flow.SafeDIScope_Widget) -> any Widget {
+			                switch scope {
+			                case let .aBuilder(_, scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
+			                case let .bBuilder(_, scope): return __safeDI_widgetBuilder_Flow_B_Scope(scope)
+			                }
+			            }
+			            func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
+			                switch scope {
+			                case let .widget(scope):
+			                    let mark = scope.mark
+			                    let widget: any Widget = DefaultWidget(mark: mark)
+			                    return widget
+			                }
+			            }
+			            func __safeDI_widgetBuilder_Flow_B_Scope(_ scope: Flow.SafeDIScope_Widget.B_Scope) -> any Widget {
+			                switch scope {
+			                case let .widget(scope):
+			                    let mark = scope.mark
+			                    let widget: any Widget = DefaultWidget(mark: mark)
+			                    return widget
+			                }
+			            }
+			            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow)
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(flow: flow)
+			    }
+			}
+			""",
+		])
 		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: inlineFixture(feature + fulfillers), app: [root]), probes: [
 			DifferentialValueProbe("Root()"),
 			DifferentialValueProbe("Root().flow.aBuilder.instantiate()"),
