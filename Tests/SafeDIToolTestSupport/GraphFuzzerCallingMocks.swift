@@ -19,10 +19,10 @@
 // SOFTWARE.
 
 import Foundation
-@testable import SafeDIToolLibrary
 import SwiftParser
 import SwiftSyntax
 import Testing
+@testable import SafeDIToolLibrary
 
 // MARK: - Cells
 
@@ -392,8 +392,8 @@ struct GraphFuzzerCallingMockDraw {
 		\(properties.map { "    \($0)" }.joined(separator: "\n"))
 		}
 		"""
-			// An initializer with no properties leaves a blank line, which changes nothing the tool reads.
-			.replacingOccurrences(of: "\n\n}", with: "\n}")
+		// An initializer with no properties leaves a blank line, which changes nothing the tool reads.
+		.replacingOccurrences(of: "\n\n}", with: "\n}")
 	}
 
 	/// The caller's declaration: its properties, each `@Instantiated`, with the ticker where the draw puts it.

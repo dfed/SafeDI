@@ -332,7 +332,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		var sitesByShape = [GraphFuzzerCallingMockShape: [[GraphFuzzerDiagnosticSite]?]]()
 		for seed in UInt64(0)..<UInt64(GraphFuzzerCallingMockCell.drawnCells.count) where GraphFuzzerCallingMockDraw(seed: seed).cell.shape.twinRejects {
 			let shape = GraphFuzzerCallingMockDraw(seed: seed).cell.shape
-			sitesByShape[shape, default: []].append(try await GraphFuzzerCallingMockCheck.run(GraphFuzzerCallingMockDraw(seed: seed).graph, seed: seed).twinSites)
+			await sitesByShape[shape, default: []].append(try GraphFuzzerCallingMockCheck.run(GraphFuzzerCallingMockDraw(seed: seed).graph, seed: seed).twinSites)
 		}
 
 		#expect(sitesByShape.keys.sorted() == [.outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder])
@@ -371,12 +371,12 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			var seeds = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).makeIterator()
 			for _ in 0..<8 {
 				guard let seed = seeds.next() else { break }
-				group.addTask { (seed, try await GraphFuzzerCallingMockCheck.run(GraphFuzzerCallingMockDraw(seed: seed).graph, seed: seed)) }
+				group.addTask { await (seed, try GraphFuzzerCallingMockCheck.run(GraphFuzzerCallingMockDraw(seed: seed).graph, seed: seed)) }
 			}
 			while let (seed, result) = try await group.next() {
 				results[seed] = result
 				if let next = seeds.next() {
-					group.addTask { (next, try await GraphFuzzerCallingMockCheck.run(GraphFuzzerCallingMockDraw(seed: next).graph, seed: next)) }
+					group.addTask { await (next, try GraphFuzzerCallingMockCheck.run(GraphFuzzerCallingMockDraw(seed: next).graph, seed: next)) }
 				}
 			}
 			return results
@@ -600,12 +600,12 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	]
 }
 
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension SafeDIToolGraphFuzzerCallingMockTests {
 	/// Report only: over the public mock corpus's seeds, the mocked consumers whose production twin reports one of the four
 	/// shape errors while the tool accepts the graph, for the rule for mirrored rejections. Set
 	/// `SAFEDI_GRAPH_FUZZER_CALLING_MOCK_TWIN_REPORT` to run it; it prints its count and seeds and fails nothing.
 	@Test(.enabled(if: ProcessInfo.processInfo.environment["SAFEDI_GRAPH_FUZZER_CALLING_MOCK_TWIN_REPORT"] != nil))
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func publicMockCorpusCallingMocks_reportTwinsShapeErrors() async throws {
 		var findings = [GraphFuzzerCallingMockTwinReport.Finding]()
 		for seed in UInt64(0)..<UInt64(SafeDIToolGraphFuzzerTests.publicMockCorpusSeedCount) {
