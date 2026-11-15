@@ -1,0 +1,4 @@
+D2 401e334: swift test --traits sourceBuild --filter 'SafeDIToolMockTests|SafeDIToolSeamTests' (compile checks on)
+✘ Test run with 2123 tests in 78 suites failed after 562.552 seconds with 609 issues (including 5 known issues).
+unexpected 'Generated code failed to compile': 0; known issues recording it: 3
+failing test functions identical to B4-enumbox-churn.txt: yes

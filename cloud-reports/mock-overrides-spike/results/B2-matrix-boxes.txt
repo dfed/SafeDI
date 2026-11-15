@@ -1,0 +1,12 @@
+SafeDITool-enumbox-228b875 probe plain: ok
+SafeDITool-enumbox-228b875 shapeD-8 plain: ok
+SafeDITool-enumbox-228b875 probe mainactor: ok
+SafeDITool-enumbox-228b875 shapeD-8 mainactor: FAIL error: stored property 'service' of 'Sendable'-conforming class 'Screen7' has non-Sendable type 'Service'
+SafeDITool-enumbox-228b875 probe evolution: ok
+SafeDITool-enumbox-228b875 shapeD-8 evolution: ok
+SafeDITool-classbox-c5f79fa probe plain: ok
+SafeDITool-classbox-c5f79fa shapeD-8 plain: ok
+SafeDITool-classbox-c5f79fa probe mainactor: ok
+SafeDITool-classbox-c5f79fa shapeD-8 mainactor: FAIL error: stored property 'service' of 'Sendable'-conforming class 'Screen7' has non-Sendable type 'Service'
+SafeDITool-classbox-c5f79fa probe evolution: ok
+SafeDITool-classbox-c5f79fa shapeD-8 evolution: ok

@@ -91,7 +91,8 @@ if r["status"] != 0:
 result["app_object_bytes"] = os.path.getsize(f"{out}/App.o")
 if a.repeats:
     jobs = subprocess.run(command("App") + ["-###"], capture_output=True, text=True, check=True).stdout.strip().splitlines()
-    frontend = [shlex.split(j) for j in jobs if "-frontend" in j]
+    # The driver plans the object compile (`-frontend -c`) and a separate module emission job; the timing is the first.
+    frontend = [shlex.split(j) for j in jobs if "-frontend -c " in j]
     assert len(frontend) == 1, jobs
     result["frontend_command"] = shlex.join(frontend[0])
     samples = []

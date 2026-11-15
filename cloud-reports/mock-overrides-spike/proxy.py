@@ -17,6 +17,7 @@ p.add_argument("--tool", required=True); p.add_argument("--bin", required=True)
 p.add_argument("--opt", default="Onone"); p.add_argument("--repeats", type=int, default=0)
 p.add_argument("--calls", type=int, default=0); p.add_argument("--stats")
 p.add_argument("--nonisolated", action="store_true"); p.add_argument("--work")
+p.add_argument("--flat", action="store_true", help="features instantiate no children, so no configuration nests another (B5 b)")
 a = p.parse_args()
 out = a.work or os.path.expanduser(f"~/work/proxy-{os.path.basename(a.tool)}")
 os.makedirs(out, exist_ok=True)
@@ -34,21 +35,21 @@ counter = 0
 def feature(depth):
     global counter
     me = counter; counter += 1
-    kids = [feature(depth + 1) for _ in range(3)] if depth < 2 else []
+    kids = [feature(depth + 1) for _ in range(3)] if depth < 2 and not a.flat else []
     services = sorted(rng.sample(range(S), 6))
     params = [f"service{s}: Service{s}" for s in services] + [f"feature{c}: Feature{c}" for c in kids] + [f"retries: Int = {me % 7}"]
     assigns = [f"self.service{s} = service{s}" for s in services] + [f"self.feature{c} = feature{c}" for c in kids] + ["self.retries = retries"]
     props = [f"    @Received let service{s}: Service{s}" for s in services] + [f"    @Instantiated let feature{c}: Feature{c}" for c in kids] + ["    let retries: Int"]
     features.append(f"@Instantiable(generateMock: true) final class Feature{me}: Instantiable {{\n    init({', '.join(params)}) {{ {'; '.join(assigns)} }}\n" + "\n".join(props) + "\n}")
     return me
-for _ in range(15):
+for _ in range(195 if a.flat else 15):
     trees.append(feature(0))
 src += features
 root_params = [f"service{k}: Service{k}" for k in range(S)] + [f"feature{t}: Feature{t}" for t in trees]
 src.append("@Instantiable(isRoot: true, generateMock: true) final class Root: Instantiable {\n"
            f"    init({', '.join(root_params)}) {{ {'; '.join(f'self.{x.split(':')[0]} = {x.split(':')[0]}' for x in root_params)} }}\n"
            + "\n".join(f"    @Instantiated let {x.split(':')[0]}: {x.split(': ')[1]}" for x in root_params) + "\n}")
-deep = trees[-1] + 1  # the first child of the last tree: depth 1, with three children of its own
+deep = trees[-1] if a.flat else trees[-1] + 1  # the first child of the last tree: depth 1, with three children of its own
 open(f"{out}/Proxy.swift", "w").write("\n".join(src) + "\n")
 open(f"{out}/Proxy.csv", "w").write(f"{out}/Proxy.swift")
 subprocess.run([a.tool, "generate", f"{out}/Proxy.csv", "--combined-output", f"{out}/Proxy.gen.swift", "--module-name", "Proxy",
@@ -78,7 +79,7 @@ def rusage(cmd):
     after = resource.getrusage(resource.RUSAGE_CHILDREN)
     if r.returncode: sys.exit(r.stdout + r.stderr)
     return {"wall": time.time() - t, "user": after.ru_utime - before.ru_utime}
-result = {"tool": a.tool, "opt": a.opt, "nonisolated": a.nonisolated, "gen_lines": open(f"{out}/Proxy.gen.swift").read().count("\n"), "deep_feature": deep}
+result = {"tool": a.tool, "flat": a.flat, "opt": a.opt, "nonisolated": a.nonisolated, "gen_lines": open(f"{out}/Proxy.gen.swift").read().count("\n"), "deep_feature": deep}
 rusage(command())
 result["object_bytes"] = os.path.getsize(f"{out}/Proxy.o")
 jobs = subprocess.run(command() + ["-###"], capture_output=True, text=True, check=True).stdout.strip().splitlines()
