@@ -541,7 +541,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 				modules: Self.threeModules(
 					feature: [
 						Self.userServiceProtocol,
-						"public protocol /Users/dfed/Libradget {}",
+						"public protocol Gadget {}",
 						seamFixtureType(named: "Holder", declarations: ["@Instantiated let gadget: any Gadget"]),
 						seamFixtureType(named: "Inner1", isSeam: true, declarations: ["@Instantiated let holder: Holder"]),
 						seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
