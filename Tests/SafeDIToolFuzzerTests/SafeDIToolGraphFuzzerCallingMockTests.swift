@@ -632,6 +632,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.passUps.isEmpty)
 		#expect(result.comparedValues)
 		#expect(result.failure?.kind == .callingMockDoesNotCompile)
+		#expect(result.failure?.details.contains("cannot convert value of type 'String' to specified type 'Int'") == true)
 	}
 
 	// MARK: The comparator
