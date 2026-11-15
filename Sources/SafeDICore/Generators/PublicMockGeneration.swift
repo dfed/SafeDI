@@ -113,6 +113,8 @@ struct PublicStructMember {
 	let isUnlabeled: Bool
 	/// The member's documentation comment, when it has one.
 	let documentation: String?
+	/// Whether the member is a configuration nested in this one, which the struct stores behind one reference.
+	var isNestedConfiguration = false
 }
 
 extension ScopeGenerator {
@@ -128,6 +130,17 @@ extension ScopeGenerator {
 	static func publicStructBody(members: [PublicStructMember], indent: String) -> [String] {
 		let memberIndent = "\(indent)\(standardIndent)"
 		var lines = [String]()
+		let nestedStorage = nestedConfigurationStorage(
+			of: members.filter(\.isNestedConfiguration).map { member in
+				NestedConfigurationMember(
+					label: member.name,
+					typeSource: member.typeSource,
+					accessPrefix: member.access == .internal ? "" : "\(member.access.spelledOnGeneratedDeclaration) ",
+				)
+			},
+			indent: indent,
+			sendable: false,
+		)
 		for level in publicInitializerLevels(of: members) {
 			let takenMembers = members.filter { $0.access >= level }
 			let levelPrefix = level == .internal ? "" : "\(level.spelledOnGeneratedDeclaration) "
@@ -140,20 +153,26 @@ extension ScopeGenerator {
 				}.joined(separator: ",\n"))
 				lines.append("\(indent)) {")
 			}
-			for member in members {
+			// Every nested configuration is `public`, so every initializer takes it.
+			if let assignment = nestedStorage.assignment {
+				lines.append("\(memberIndent)\(assignment)")
+			}
+			for member in members where !member.isNestedConfiguration {
 				let value = member.access >= level ? member.name : member.omittedValue
 				lines.append("\(memberIndent)self.\(member.name) = \(value)")
 			}
 			lines.append("\(indent)}")
 			lines.append("")
 		}
-		for member in members {
+		lines.append(contentsOf: nestedStorage.accessors)
+		for member in members where !member.isNestedConfiguration {
 			if let documentation = member.documentation {
 				lines.append("\(indent)/// \(documentation)")
 			}
 			let accessPrefix = member.access == .internal ? "" : "\(member.access.spelledOnGeneratedDeclaration) "
 			lines.append("\(indent)\(accessPrefix)let \(member.name): \(member.typeSource)")
 		}
+		lines.append(contentsOf: nestedStorage.declarations)
 		return lines
 	}
 
@@ -294,6 +313,7 @@ extension ScopeGenerator {
 				omittedValue: publicMockOverridesMember.defaultValue,
 				isUnlabeled: false,
 				documentation: nil,
+				isNestedConfiguration: true,
 			)
 		} else if child.needsConfigurationStruct, let configurationTypeName = context.configurationTypeNameByType[child.concreteType] {
 			return PublicStructMember(
@@ -305,6 +325,7 @@ extension ScopeGenerator {
 				omittedValue: ".init()",
 				isUnlabeled: false,
 				documentation: nil,
+				isNestedConfiguration: true,
 			)
 		} else {
 			let childSendable = (requiresSendable || child.requiresSendable) ? "@Sendable " : ""

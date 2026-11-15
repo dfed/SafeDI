@@ -8872,8 +8872,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
+		var nestedMembers = [NestedConfigurationMember]()
+		var nestedLabels = Set<String>()
 		for child in rootChildren {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
+			if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: child.requiresSendable) {
+				nestedMembers.append(NestedConfigurationMember(label: label, typeSource: publicMockOverridesMember.type, accessPrefix: ""))
+				nestedLabels.insert(label)
+			} else if child.needsConfigurationStruct {
+				nestedMembers.append(NestedConfigurationMember(label: label, typeSource: child.configurationTypeName, accessPrefix: ""))
+				nestedLabels.insert(label)
+			}
+		}
+		let nestedStorage = nestedConfigurationStorage(of: nestedMembers, indent: innerIndent, sendable: false)
+		if let assignment = nestedStorage.assignment {
+			lines.append("\(memberIndent)\(assignment)")
+		}
+		for child in rootChildren {
+			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
+			guard !nestedLabels.contains(label) else { continue }
 			lines.append("\(memberIndent)self.\(label) = \(label)")
 		}
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
@@ -8883,12 +8900,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Generate stored properties.
 		lines.append("")
+		lines.append(contentsOf: nestedStorage.accessors)
 		for child in rootChildren {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: child.requiresSendable) {
-				lines.append("\(innerIndent)let \(label): \(publicMockOverridesMember.type)")
-			} else if child.needsConfigurationStruct {
-				lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
+			if nestedLabels.contains(label) {
+				continue
 			} else {
 				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
 				lines.append("\(innerIndent)let \(label): (\(sendableAnnotation)\(child.builderClosureType))?")
@@ -8897,6 +8913,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
 			lines.append("\(innerIndent)let \(onlyIfAvailableOverride.name): \(onlyIfAvailableOverride.typeDescription.asSource)")
 		}
+		lines.append(contentsOf: nestedStorage.declarations)
 
 		lines.append("\(indent)}")
 		return lines.joined(separator: "\n")
@@ -8948,14 +8965,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			))
 		}
 		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
+		var nestedMembers = [NestedConfigurationMember]()
 		for child in nonCycleChildren {
 			let label = disambiguatedLabel(for: child, labelMap: childLabelMap)
 			if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: requiresSendable || child.requiresSendable) {
 				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(publicMockOverridesMember.type) = \(publicMockOverridesMember.defaultValue)")
-				storedProperties.append("\(innerIndent)let \(label): \(publicMockOverridesMember.type)")
+				nestedMembers.append(NestedConfigurationMember(label: label, typeSource: publicMockOverridesMember.type, accessPrefix: ""))
+				continue
 			} else if child.needsConfigurationStruct {
 				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.configurationTypeName) = .init()")
-				storedProperties.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
+				nestedMembers.append(NestedConfigurationMember(label: label, typeSource: child.configurationTypeName, accessPrefix: ""))
+				continue
 			} else {
 				// A leaf child field also needs `@Sendable` when the child itself
 				// is reached sendably — e.g. a `SendableInstantiator` dependency on
@@ -9011,10 +9031,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		storedProperties.append("\(innerIndent)/// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.")
 		storedProperties.append("\(innerIndent)let \(ReservedName.configurationBuilderPropertyName): (\(sendableAnnotation)\(closureType))?")
 
+		let nestedStorage = nestedConfigurationStorage(of: nestedMembers, indent: innerIndent, sendable: requiresSendable)
+
 		// Emit init.
 		lines.append("\(innerIndent)init(")
 		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
+		if let assignment = nestedStorage.assignment {
+			lines.append("\(innerIndent)\(standardIndent)\(assignment)")
+		}
 		lines.append(contentsOf: assignments)
 		lines.append("\(innerIndent)}")
 
@@ -9022,10 +9047,69 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// them one by one but costs Debug builds of mocks; the Manual asks users to build a configuration through its
 		// initializers instead (see "Configuration fields are `let`" in `.claude/rules/mock-generation.md`).
 		lines.append("")
+		lines.append(contentsOf: nestedStorage.accessors)
 		lines.append(contentsOf: storedProperties)
+		lines.append(contentsOf: nestedStorage.declarations)
 
 		lines.append("\(indent)}")
 		return lines.joined(separator: "\n")
+	}
+
+	/// How a configuration stores the configurations nested in it (spike: one form per commit).
+	enum NestedConfigurationStorageForm {
+		/// A private `indirect enum` with one case holding a private struct of the nested configurations.
+		case enumBox
+		/// A private final class holding the nested configurations.
+		case classBox
+	}
+
+	static let nestedConfigurationStorageForm = NestedConfigurationStorageForm.enumBox
+
+	/// A configuration nested in a generated configuration, read through a get-only computed property.
+	struct NestedConfigurationMember {
+		let label: String
+		let typeSource: String
+		/// `public ` or empty.
+		let accessPrefix: String
+	}
+
+	/// The storage of `members` behind one reference: the assignment the initializer makes, a get-only computed property
+	/// per member (same name, type and access as the `let` it replaces), and the private declarations that hold them.
+	/// No members, no storage: the configuration is byte-identical to one with `let` fields.
+	static func nestedConfigurationStorage(
+		of members: [NestedConfigurationMember],
+		indent: String,
+		sendable: Bool,
+	) -> (assignment: String?, accessors: [String], declarations: [String]) {
+		guard !members.isEmpty else { return (nil, [], []) }
+		let nestedType = "__safeDI_Nested"
+		let referenceType = "__safeDI_Reference"
+		let storedName = "__safeDI_nested"
+		let arguments = members.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" }.joined(separator: ", ")
+		var accessors = [String]()
+		var declarations = [String]()
+		switch nestedConfigurationStorageForm {
+		case .enumBox:
+			for member in members {
+				accessors.append("\(indent)\(member.accessPrefix)var \(member.label): \(member.typeSource) { switch \(storedName) { case let .to(nested): nested.\(member.label) } }")
+			}
+			declarations.append("\(indent)private nonisolated struct \(nestedType) { \(members.map { "let \($0.label): \($0.typeSource)" }.joined(separator: "; ")) }")
+			declarations.append("\(indent)private nonisolated indirect enum \(referenceType) { case to(\(nestedType)) }")
+			declarations.append("\(indent)private let \(storedName): \(referenceType)")
+			return ("self.\(storedName) = .to(\(nestedType)(\(arguments)))", accessors, declarations)
+		case .classBox:
+			for member in members {
+				accessors.append("\(indent)\(member.accessPrefix)var \(member.label): \(member.typeSource) { \(storedName).\(member.label) }")
+			}
+			// A class is never inferred `Sendable`: it says so where every value it holds is `Sendable`, which SafeDI knows only of
+			// a configuration whose closures are all `@Sendable`.
+			let conformance = sendable ? ": Sendable" : ""
+			let parameters = members.map { "\($0.label): \($0.typeSource)" }.joined(separator: ", ")
+			let assignments = members.map { "self.\($0.label) = \($0.label)" }.joined(separator: "; ")
+			declarations.append("\(indent)private nonisolated final class \(nestedType)\(conformance) { \(members.map { "let \($0.label): \($0.typeSource)" }.joined(separator: "; ")); init(\(parameters)) { \(assignments) } }")
+			declarations.append("\(indent)private let \(storedName): \(nestedType)")
+			return ("self.\(storedName) = \(nestedType)(\(arguments))", accessors, declarations)
+		}
 	}
 
 	/// `expression` as the default of an `@autoclosure` parameter: parenthesized when it is a closure literal, which
