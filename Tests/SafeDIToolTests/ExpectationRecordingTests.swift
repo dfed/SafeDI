@@ -216,7 +216,7 @@ struct ExpectationRecordingTests: ~Copyable {
 	}
 
 	@Test
-	mutating func assertThrowsError_writesNothing_whenTheDescriptionsAreEqual() async throws {
+	mutating func assertThrowsError_writesNothing_whenTheDescriptionsAreEqual() async {
 		await assertThrowsError("Actual description.", recordDirectory: recordDirectory) {
 			throw DescribedError(description: "Actual description.")
 		}
@@ -244,7 +244,7 @@ struct ExpectationRecordingTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func assertThrowsErrorDiagnostics_writesNothing_whenTheDiagnosticsAreEqual() async throws {
+	mutating func assertThrowsErrorDiagnostics_writesNothing_whenTheDiagnosticsAreEqual() async {
 		var filesToDelete = [URL]()
 		await assertThrowsError(diagnostics: { fixtures in "\(fixtures["Child.swift"]):4:5: error: \(Self.receivedSessionWithForwardedPropertyError)" }, recordDirectory: recordDirectory) {
 			try await executeSafeDIToolTest(swiftFileContent: Self.receivedSessionWithForwardedPropertyFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
@@ -280,7 +280,7 @@ struct ExpectationRecordingTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func assertThrowsMultiModuleError_writesNothing_whenTheDiagnosticsAreEqual() async throws {
+	mutating func assertThrowsMultiModuleError_writesNothing_whenTheDiagnosticsAreEqual() async {
 		var filesToDelete = [URL]()
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in "\(fixtures["App"]!["Child.swift"]):4:5: error: \(Self.receivedSessionWithForwardedPropertyError)" }, recordDirectory: recordDirectory) {
 			try await executeSafeDIToolMultiModuleTest(
