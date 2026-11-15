@@ -2362,7 +2362,7 @@ public actor DependencyTreeGenerator {
 				/// A tier of the generated initializer is wider than `hole`'s builder, which every tier takes, as far as the
 				/// proof of the builder's type (`Hole.accessCause`) goes. Not a `ParameterKind`: a builder is no member of
 				/// `SeamSignature.parameters`, whose labels are what `parameterLabels(namedBy:about:)` names.
-				case tierOmitsBuilder(hole: SeamSignature.Hole, builder: SeamSignature.Builder?, tier: AccessLevel)
+				case tierOmitsBuilder(hole: SeamSignature.Hole, builder: SeamSignature.Builder, tier: AccessLevel)
 				/// A builder narrower than a tier only because of an inner seam whose enum it holds.
 				case tierOmitsBuilderHoldingInnerSeam(builder: SeamSignature.Builder, innerSeam: TypeDescription, tier: AccessLevel)
 				/// `place` and `reference`, places of one builder, forward different values, so no one builder a person writes
@@ -2504,12 +2504,12 @@ public actor DependencyTreeGenerator {
 						neededLevel: tier,
 						parameterLevel: hole.tierAccess,
 						seam: seam.concreteInstantiable,
-						parameter: Property(label: builder?.label(inTierAt: tier) ?? hole.builderLabel(inTierAt: tier), typeDescription: builder?.readableParameterType ?? hole.builtType),
+						parameter: Property(label: builder.label(inTierAt: tier), typeDescription: builder.readableParameterType),
 						receivers: [],
 						parameterKind: .builder(fulfilledType: hole.instantiatedType, seamModuleName: seam.moduleName, isPassedUp: hole.innerSeamType != nil),
 						seamAccessIsRequiredByPublicMock: isRequiredByPublicMock,
 					)
-					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder?.label(inTierAt: tier) ?? hole.builderLabel(inTierAt: tier)): \((builder?.readableParameterType ?? hole.builtType).asSource)`, the builder for `\(hole.ownerType.asSource)`’s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(publicMockRequirement)\(causeText) \(remedies)"
+					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder.label(inTierAt: tier)): \(builder.readableParameterType.asSource)`, the builder for `\(hole.ownerType.asSource)`’s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(publicMockRequirement)\(causeText) \(remedies)"
 					declarationNotes = SeamAccessExplanation.declarationNotes(for: hole.accessCause, neededLevel: tier)
 				case let .placesForwardOtherValues(place, reference, isSendable):
 					receivers = []
@@ -5565,11 +5565,11 @@ public actor DependencyTreeGenerator {
 		// Every tier takes every builder, since a hole is required: a hole narrower than a tier is reported once per
 		// declaration of its property, however many sites the tree builds it at, at the widest tier that omits it.
 		var reportedHoleDeclarations = Set<OwnedHoleDeclaration>()
-		for hole in holes {
+		for (hole, builder) in shapedBuilders.holesWithBuilders {
 			guard let tier = tiers.first(where: { $0 > hole.tierAccess }),
 			      reportedHoleDeclarations.insert(OwnedHoleDeclaration(owner: hole.ownerType, property: hole.property)).inserted
 			else { continue }
-			errors.append(.seam(.init(seam: seam, kind: .tierOmitsBuilder(hole: hole, builder: shapedBuilders.builderBySite[hole.site], tier: tier))))
+			errors.append(.seam(.init(seam: seam, kind: .tierOmitsBuilder(hole: hole, builder: builder, tier: tier))))
 		}
 		// The places of one builder must forward one value, since the builder a person writes takes it: each place that forwards
 		// another value than the first by location is reported, wherever the builder's places are, an inner seam's included.
