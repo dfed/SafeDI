@@ -1345,7 +1345,7 @@ jobs:
           path: ${{ runner.temp }}/line-coverage
       - name: Find Lines No Test Executes
         run: python3 -I Scripts/unexecuted-lines.py --summary "$GITHUB_STEP_SUMMARY" --commit "$GITHUB_SHA" linux="$RUNNER_TEMP/line-coverage/line-coverage-linux" macos="$RUNNER_TEMP/line-coverage/line-coverage-macos"
-      # Scripts/regenerate-expectations.py rewrites test expectations from
+      # .claude/skills/regenerate-expectations/regenerate-expectations.py rewrites test expectations from
       # what the test helpers record, so its fixtures prove it rewrites only
       # literals that equalled a recorded output and refuses records made over
       # other test sources. It reads no report and runs here only because this
@@ -1354,7 +1354,7 @@ jobs:
       # which lines no test executes, and still fails the job.
       - name: Check the Expectation Regenerator Against Its Fixtures
         if: ${{ !cancelled() }}
-        run: python3 -I Scripts/regenerate-expectations.py --self-test "$RUNNER_TEMP/regenerate-expectations-self-test"
+        run: python3 -I .claude/skills/regenerate-expectations/regenerate-expectations.py --self-test "$RUNNER_TEMP/regenerate-expectations-self-test"
 
   # Lists the generator lines the change adds or modifies that no graph of the
   # fuzzer's corpora executed, from the shards' coverage profiles, split by

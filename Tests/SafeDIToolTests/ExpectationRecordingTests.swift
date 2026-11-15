@@ -23,7 +23,7 @@ import SafeDIToolLibrary
 import Testing
 @testable import SafeDIToolTestSupport
 
-/// What the generation and assertion helpers record for `Scripts/regenerate-expectations.py` when they are given a
+/// What the generation and assertion helpers record for `.claude/skills/regenerate-expectations/regenerate-expectations.py` when they are given a
 /// record directory, and that they record nothing without one.
 struct ExpectationRecordingTests: ~Copyable {
 	// MARK: Initialization

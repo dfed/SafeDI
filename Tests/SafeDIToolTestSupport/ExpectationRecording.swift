@@ -24,7 +24,7 @@ import Testing
 	import Glibc
 #endif
 
-/// What the generation and assertion helpers write for `Scripts/regenerate-expectations.py`, which rewrites the expected
+/// What the generation and assertion helpers write for `.claude/skills/regenerate-expectations/regenerate-expectations.py`, which rewrites the expected
 /// literals of tests whose generated code or diagnostics a change alters.
 ///
 /// A helper records only when it is given a record directory, which by default is the one the
@@ -128,7 +128,7 @@ enum ExpectationRecording {
 	/// Replaces each run-specific path in a text with a fixed placeholder: first the call's own directories, then the
 	/// directories every call shares, each in every spelling the harness knows, longest first; then any remaining path
 	/// that names a UUID-named entry of a run-specific directory, such as a path of an earlier call that a test
-	/// interpolates, becomes `$RUN_DIRECTORY`. `RUN_PATH_PLACEHOLDER` in `Scripts/regenerate-expectations.py` lists every
+	/// interpolates, becomes `$RUN_DIRECTORY`. `RUN_PATH_PLACEHOLDER` in `.claude/skills/regenerate-expectations/regenerate-expectations.py` lists every
 	/// placeholder this and the helpers' `RunDirectory` values write; keep the two in step.
 	struct PathNormalization {
 		init(runDirectories: [RunDirectory]) {
