@@ -342,8 +342,10 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	}
 
 	/// Main's calling mock fills the place a seam built again passes up with `LiveGadget(logger: logger)` from the caller's
-	/// own `logger`, one level away from the builder function it builds in, and its generated code does not compile.
-	@Test
+	/// own `logger`, one level away from the builder function it builds in, and its generated code does not compile. Where
+	/// compile verification is off (`SAFEDI_SKIP_COMPILE_CHECK`), `.returningOutcomeOnly` compiles nothing, so the test
+	/// does not run there rather than pass for a compile that never ran.
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func callingMock_compiles_whenFillReadsValueOfLevelBetweenBuildsOfSeam() async throws {
 		var filesToDelete = [URL]()
@@ -359,8 +361,9 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			filesToDelete: &filesToDelete,
 		)
 
+		let compilation = try #require(output.compilation)
 		withKnownIssue("\(Self.seamBuiltAgainReason)") {
-			#expect(output.compilation?.failure == nil)
+			#expect(compilation.failure == nil)
 		}
 	}
 
