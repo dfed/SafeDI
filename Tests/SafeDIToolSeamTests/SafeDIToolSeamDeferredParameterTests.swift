@@ -1081,11 +1081,11 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_handsHolesStructMemo_whenGeneratedAndHandWrittenFillsReadIt(integration: MultiModuleIntegration) async throws {
+	mutating func generate_handsHolesStructMemo_whenGeneratedFillReadsIt(integration: MultiModuleIntegration) async throws {
 		// Cells 16 and 17: `Service` defers `token`, and hands the hole's struct the memo, whose field reads its instance.
-		// `Root`'s generated fill reads `Root`'s own `token`, as inline, and `makeService(token:)`'s hand-written fill reads
-		// the struct's field, which compiles as it did when the field held the value. `SafeDIToolSeamHoleLazyInputTests`
-		// compares the values with the inline build's.
+		// `Root`'s generated fill reads `Root`'s own `token`, as inline, and `makeService(token:)`'s hand-written fill, which
+		// takes nothing, reads the caller's own. `SafeDIToolSeamHoleLazyInputTests` compares the values with the inline
+		// build's.
 		let modules = SafeDIToolSeamBuilderParameterTests.modules(
 			feature: [
 				"public protocol UserService {}",
@@ -1098,7 +1098,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: LazilyInstantiated<Token>", "@Instantiated let service: Service"]),
 				"""
 				public func makeService(token: Token) -> Service {
-				    Service(token: token, userServiceBuilder: { scope in switch scope { case let .profileBuilder(values, .userService): DefaultUserService(token: values.token) } })
+				    Service(token: token, userServiceBuilder: { DefaultUserService(token: token) })
 				}
 				""",
 			],
