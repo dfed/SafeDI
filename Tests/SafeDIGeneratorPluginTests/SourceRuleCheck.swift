@@ -336,6 +336,7 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 		}
 		return names
 	}
+
 	/// The argument labels of the `Dictionary` initializers that trap on a duplicate key, each with its message.
 	private static let duplicateKeyTrappingLabels = [
 		"uniqueKeysWithValues": "`Dictionary(uniqueKeysWithValues:)` traps on a duplicate key",
