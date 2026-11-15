@@ -288,15 +288,29 @@ struct SourceRuleTests {
 		(#""\(indentation)assertionFailure()""#, "assertionFailure"),
 		(##"#"Swift.fatalError()"#"##, "fatalError"),
 		(#""calls fatalError when it is reached""#, "fatalError"),
+		(#""let value = try! load()""#, "try!"),
+		(#""(\(name) as! Service)""#, "as!"),
+		(#""\(name).unsafelyUnwrapped""#, "unsafelyUnwrapped"),
 	])
-	func sourceRuleCheck_findsGeneratedTrap_whenAGeneratorsLiteralNamesATrappingFunction(literal: String, function: String) {
+	func sourceRuleCheck_findsGeneratedTrap_whenAGeneratorsLiteralSpellsATrap(literal: String, trap: String) {
 		#expect(findings(in: "_ = \(literal)", at: "Sources/SafeDICore/Generators/Fixture.swift") == [
-			"Sources/SafeDICore/Generators/Fixture.swift:1: generatedTrap: a generator’s literal names `\(function)`, so generated code could trap",
+			"Sources/SafeDICore/Generators/Fixture.swift:1: generatedTrap: a literal in `Sources` spells `\(trap)`, so the code it generates could trap",
+		])
+	}
+
+	@Test(arguments: [
+		"Sources/SafeDICore/Models/Fixture.swift",
+		"Sources/SafeDIToolLibrary/Fixture.swift",
+		"Sources/SafeDIMacros/Fixture.swift",
+	])
+	func sourceRuleCheck_findsGeneratedTrap_whenALiteralOutsideGeneratorsSpellsATrap(path: String) {
+		#expect(findings(in: #"_ = "fatalError()""#, at: path) == [
+			"\(path):1: generatedTrap: a literal in `Sources` spells `fatalError`, so the code it generates could trap",
 		])
 	}
 
 	@Test
-	func sourceRuleCheck_findsGeneratedTrap_whenAGeneratorsMultilineLiteralNamesATrappingFunction() {
+	func sourceRuleCheck_findsGeneratedTrap_whenAGeneratorsMultilineLiteralSpellsATrap() {
 		#expect(findings(in: #"""
 		_ = """
 		    guard let value else {
@@ -304,20 +318,27 @@ struct SourceRuleTests {
 		    }
 		"""
 		"""#, at: "Sources/SafeDICore/Generators/Fixture.swift") == [
-			"Sources/SafeDICore/Generators/Fixture.swift:3: generatedTrap: a generator’s literal names `fatalError`, so generated code could trap",
+			"Sources/SafeDICore/Generators/Fixture.swift:3: generatedTrap: a literal in `Sources` spells `fatalError`, so the code it generates could trap",
 		])
 	}
 
 	@Test
-	func sourceRuleCheck_findsNoGeneratedTrap_whenALiteralNamesATrappingFunctionOnlyInsideAWordOrOutsideGenerators() {
+	func sourceRuleCheck_findsNoGeneratedTrap_whenALiteralSpellsATrapOnlyInsideAWord() {
 		#expect(findings(in: #"""
 		_ = "the assertion holds"
 		_ = "preconditions_met"
 		_ = "assertFailure"
 		_ = "my_fatalError()"
+		_ = "it has! no trap"
+		_ = "entry! as well"
+		_ = "isUnsafelyUnwrapped"
 		// fatalError()
 		"""#, at: "Sources/SafeDICore/Generators/Fixture.swift") == [])
-		#expect(findings(in: #"_ = "fatalError()""#, at: "Sources/SafeDIToolLibrary/Fixture.swift") == [])
+	}
+
+	@Test
+	func sourceRuleCheck_findsNoGeneratedTrap_whenALiteralOutsideSourcesSpellsATrap() {
+		#expect(findings(in: #"_ = "fatalError()""#, at: "Plugins/SafeDIGenerator/Fixture.swift") == [])
 	}
 
 	@Test
