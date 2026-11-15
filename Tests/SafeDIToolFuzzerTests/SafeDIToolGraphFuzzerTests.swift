@@ -4948,6 +4948,7 @@ struct SafeDIToolGraphFuzzerTests {
 							retentionCounts.add(result.retentionCounts)
 							for draw in corpus.gatingDrawsJudged(by: result, knownIssue: knownIssuesBySeed[seed]) {
 								gatingDrawJudgedCounts[draw, default: 0] += 1
+							}
 							for kind in result.builderSurfaceFloorKinds {
 								builderSurfaceCounts[kind, default: 0] += 1
 							}
@@ -5107,6 +5108,7 @@ struct SafeDIToolGraphFuzzerTests {
 			let thinGatingDraws = corpus.flooredGatingDrawNames.filter { gatingDrawJudgedCounts[$0, default: 0] < Self.gatingDrawJudgedGraphFloor }
 			if !thinGatingDraws.isEmpty {
 				reportProblem("The oracles judged fewer than \(Self.gatingDrawJudgedGraphFloor) graphs of the \(corpus.name) corpus that draw \(thinGatingDraws.map { "\($0) (\(gatingDrawJudgedCounts[$0, default: 0]))" }.joined(separator: ", ")): such a draw gates nothing.")
+			}
 			for kind in corpus.builderSurfaceFlooredKinds where builderSurfaceCounts[kind, default: 0] < Self.builderSurfaceFloor {
 				reportProblem("The builder surface judged \(builderSurfaceCounts[kind, default: 0]) graphs of the \(corpus.name) corpus as \(kind), below its floor of \(Self.builderSurfaceFloor).")
 			}
@@ -5645,7 +5647,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// hole type, for a hole read only if available. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xB5E719C74E5AD4EE
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x24983D40A3AC06F2
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -5774,6 +5776,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeNestedSameLabelFill: 18,
 		.holeSecondHoleType: 49,
 		.holeSecondHoleTypeCollidingStem: 32,
+		.holeForwardingPlace: 126,
 		.holeInnerSeamPlainAndSendableRoutes: 36,
 		.holeInnerSeamWithBothEnums: 17,
 		.holeTwoSeamCycleWithSendableEdge: 26,
@@ -6110,13 +6113,13 @@ struct SafeDIToolGraphFuzzerTests {
 	/// planned builder structs empty them, each slice the seeds it fixes.
 	static let seamBuilderSurfaceSeeds = BuilderSurfaceSeeds(
 		base: [
-			15, 18, 19, 24, 30, 59, 68, 69, 78, 83, 88, 93, 94, 98, 108, 116, 121, 135, 144, 151,
-			153, 162, 163, 164, 209, 215, 227, 240, 241, 252, 273, 277, 281, 283, 298, 300, 304, 308, 309, 311,
-			321, 326, 330, 334, 338, 347, 348, 362, 365, 383, 391, 403, 407, 418, 430, 448, 454, 468, 471, 478,
-			481, 494, 500, 527, 532, 548, 556, 567, 568, 594, 595, 600, 605, 609, 617, 618, 623, 627, 663, 669,
-			670, 699, 701, 705, 709, 732, 743, 750, 751, 760, 787, 788, 794, 797, 809, 832, 834, 836, 850, 851,
-			854, 858, 866, 867, 876, 883, 886, 892, 905, 923, 929, 930, 931, 934, 940, 942, 945, 947, 948, 950,
-			969, 990,
+			15, 18, 19, 24, 30, 59, 68, 69, 78, 83, 84, 88, 93, 94, 98, 108, 116, 121, 135, 144,
+			151, 153, 162, 163, 164, 209, 215, 227, 240, 241, 252, 273, 277, 281, 283, 298, 300, 304, 308, 309,
+			311, 321, 326, 330, 334, 338, 347, 348, 362, 365, 383, 391, 403, 407, 418, 430, 448, 454, 468, 471,
+			478, 481, 494, 500, 527, 532, 548, 556, 567, 568, 594, 595, 600, 605, 609, 617, 618, 623, 627, 663,
+			669, 670, 699, 701, 705, 709, 732, 743, 750, 751, 760, 787, 788, 794, 797, 809, 832, 834, 836, 850,
+			851, 854, 858, 866, 867, 876, 883, 886, 892, 905, 923, 929, 930, 931, 934, 940, 942, 945, 947, 948,
+			950, 969, 990,
 		],
 		labels: [
 			19, 59, 68, 93, 98, 121, 163, 281, 283, 348, 383, 391, 468, 481, 548, 567, 568, 605, 670, 750,
@@ -6184,6 +6187,7 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleAnalytics alive holding holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleAnalytics alive holding holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleAnalytics alive holding holeSeam.holeTangleTValue.holeTangleService.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleAnalytics alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleAnalytics alive holding holeTop.holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleDeep> alive holding holeTop.holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleGadgetImpl alive holding holeSeam.holeRingABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6256,6 +6260,7 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleOwner> alive holding holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleOwner> alive holding holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleOwner> alive holding holeSeam.holeTangleTValue.holeTangleService.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleOwner> alive holding holeSeam.holeTicketBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleOwner> alive holding holeTop.holeOuter.holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HolePing> alive holding holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HolePing> alive holding holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6297,6 +6302,8 @@ struct SafeDIToolGraphFuzzerTests {
 		"_HoleTangleT> alive holding holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTangleT> alive holding holeSeam.holeTangleTValue.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTangleT> alive holding holeSeam.holeTangleTValue.holeTangleService.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeSeam.holeTangleC once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_HoleTicketService> alive holding holeSeam.holeTangleT once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTrackerImpl alive holding holeOuter.holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTrackerImpl alive holding holeSeam.holeNest.holeNestScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 		"_HoleTrackerImpl alive holding holeSeam.holeNestBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
@@ -6500,7 +6507,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x695C10371F6EC9D9
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x4C3314BF90A932DD
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -6682,54 +6689,54 @@ struct SafeDIToolGraphFuzzerTests {
 	/// mocks (iv). The planned builder structs empty them, each slice the seeds it fixes.
 	static let publicMockBuilderSurfaceSeeds = BuilderSurfaceSeeds(
 		base: [
-			2, 3, 10, 12, 18, 19, 20, 21, 22, 28, 33, 34, 37, 43, 47, 50, 55, 56, 59, 60,
-			62, 63, 64, 65, 67, 70, 73, 79, 84, 85, 87, 88, 89, 90, 92, 93, 96, 97, 101, 103,
-			106, 107, 108, 111, 117, 119, 122, 128, 130, 136, 137, 143, 145, 150, 151, 156, 157, 161, 162, 165,
-			166, 167, 168, 171, 176, 180, 181, 186, 197, 199, 207, 210, 211, 213, 216, 219, 221, 222, 225, 228,
-			229, 230, 238, 242, 243, 247, 248, 251, 259, 262, 264, 265, 266, 269, 273, 281, 283, 284, 289, 295,
-			296, 297, 299, 301, 302, 307, 310, 311, 313, 314, 316, 318, 319, 326, 327, 328, 330, 331, 332, 333,
-			336, 337, 339, 341, 344, 348, 350, 351, 352, 356, 361, 370, 372, 380, 381, 386, 389, 392, 397, 402,
-			406, 407, 409, 411, 415, 417, 423, 424, 425, 427, 429, 433, 434, 435, 436, 448, 449, 450, 453, 455,
-			456, 459, 463, 465, 468, 469, 474, 477, 486, 489, 490, 497, 499, 500, 508, 510, 528, 537, 539, 542,
-			543, 546, 549, 551, 554, 555, 558, 559, 561, 562, 563, 564, 565, 577, 580, 581, 584, 587, 591, 592,
-			595, 597, 598, 601, 606, 609, 611, 614, 615, 621, 623, 627, 629, 631, 635, 636, 644, 646, 647, 648,
-			652, 653, 658, 663, 664, 666, 668, 670, 673, 677, 679, 680, 681, 685, 688, 692, 695, 697, 699, 707,
-			708, 715, 716, 718, 720, 723, 724, 725, 726, 728, 730, 737, 740, 741, 743, 748, 751, 765, 766, 775,
-			779, 781, 782, 786, 790, 795, 797, 798, 799, 804, 812, 814, 821, 823, 824, 827, 830, 832, 833, 834,
-			836, 844, 845, 846, 847, 848, 850, 851, 853, 854, 863, 866, 875, 876, 880, 881, 885, 886, 887, 888,
-			892, 895, 897, 902, 904, 906, 909, 910, 911, 912, 917, 919, 923, 926, 927, 931, 936, 940, 942, 943,
-			946, 947, 953, 958, 959, 960, 961, 962, 967, 970, 974, 977, 978, 979, 983, 990, 991, 995, 996, 998,
+			2, 3, 10, 12, 18, 19, 20, 21, 22, 28, 33, 34, 37, 43, 47, 55, 56, 59, 60, 62,
+			63, 64, 65, 67, 70, 73, 79, 84, 87, 88, 89, 90, 92, 93, 96, 97, 98, 101, 103, 106,
+			107, 108, 111, 117, 119, 122, 128, 130, 136, 137, 143, 145, 150, 151, 156, 157, 161, 162, 165, 166,
+			167, 168, 171, 176, 180, 181, 186, 197, 199, 207, 210, 211, 213, 216, 219, 221, 222, 225, 228, 229,
+			230, 238, 242, 243, 247, 248, 251, 259, 262, 264, 265, 266, 269, 273, 281, 283, 284, 289, 295, 296,
+			297, 299, 301, 302, 307, 310, 311, 313, 314, 316, 318, 319, 326, 327, 328, 330, 331, 332, 333, 336,
+			337, 339, 341, 344, 348, 350, 351, 352, 356, 361, 370, 372, 380, 381, 386, 389, 392, 397, 402, 406,
+			407, 409, 411, 415, 417, 423, 424, 425, 427, 429, 433, 434, 435, 436, 448, 449, 453, 455, 456, 459,
+			463, 465, 468, 469, 474, 477, 486, 489, 490, 497, 499, 500, 508, 510, 528, 537, 539, 542, 543, 546,
+			549, 551, 554, 558, 559, 561, 562, 563, 564, 565, 577, 580, 581, 584, 587, 591, 592, 595, 597, 598,
+			601, 606, 611, 614, 615, 621, 623, 627, 629, 631, 635, 636, 644, 646, 647, 648, 652, 653, 658, 663,
+			664, 666, 668, 670, 673, 677, 679, 680, 681, 685, 692, 695, 697, 699, 707, 708, 715, 716, 718, 720,
+			723, 724, 725, 726, 728, 730, 737, 740, 741, 743, 748, 751, 765, 766, 775, 779, 781, 782, 786, 790,
+			795, 797, 798, 799, 804, 812, 814, 821, 823, 824, 827, 830, 832, 833, 834, 836, 844, 845, 846, 847,
+			848, 850, 851, 853, 854, 863, 866, 875, 876, 880, 881, 885, 886, 887, 888, 892, 895, 897, 902, 904,
+			906, 909, 910, 911, 912, 917, 919, 923, 926, 927, 931, 936, 940, 942, 943, 946, 947, 953, 958, 959,
+			960, 961, 962, 970, 974, 977, 978, 979, 983, 990, 991, 995, 996, 998,
 		],
 		labels: [
 			2, 19, 20, 21, 33, 34, 37, 43, 47, 55, 56, 64, 84, 89, 90, 93, 96, 103, 108, 119,
 			151, 162, 166, 167, 168, 176, 180, 181, 186, 197, 207, 210, 211, 213, 229, 230, 243, 247, 248, 283,
 			289, 295, 299, 301, 302, 307, 311, 319, 330, 333, 339, 341, 348, 356, 372, 380, 381, 389, 406, 407,
-			415, 429, 433, 434, 436, 450, 456, 465, 468, 469, 486, 490, 499, 500, 508, 510, 554, 555, 558, 561,
-			581, 584, 592, 597, 601, 611, 614, 615, 621, 623, 627, 631, 636, 653, 658, 673, 685, 688, 692, 695,
-			697, 707, 715, 718, 720, 728, 730, 737, 743, 748, 751, 766, 781, 782, 795, 798, 799, 804, 824, 830,
-			832, 844, 845, 846, 847, 848, 850, 851, 866, 875, 886, 895, 897, 902, 910, 923, 931, 942, 943, 946,
-			960, 962, 978, 979, 991, 996, 998,
+			415, 429, 433, 434, 436, 456, 465, 468, 469, 486, 490, 499, 500, 508, 510, 554, 558, 561, 581, 584,
+			592, 597, 601, 611, 614, 615, 621, 623, 627, 631, 636, 653, 658, 673, 685, 692, 695, 697, 707, 715,
+			718, 720, 728, 730, 737, 743, 748, 751, 766, 781, 782, 795, 798, 799, 804, 824, 830, 832, 844, 845,
+			846, 847, 848, 850, 851, 866, 875, 886, 895, 897, 902, 910, 923, 931, 942, 943, 946, 960, 962, 978,
+			979, 991, 996, 998,
 		],
 		sameSupply: [
-			50, 122, 128, 136, 145, 266, 332, 352, 411, 427, 580, 681, 740, 786, 814, 823, 827, 853, 977,
+			122, 128, 136, 145, 266, 332, 352, 411, 427, 580, 681, 740, 786, 814, 823, 827, 853, 977,
 		],
 		sameSupplyRejectedLegitimately: [333],
 		addedSupply: [
 			2, 19, 20, 21, 33, 34, 37, 43, 47, 55, 56, 84, 89, 90, 93, 96, 103, 108, 151, 162,
 			167, 168, 176, 180, 181, 186, 197, 207, 210, 213, 229, 243, 247, 248, 283, 295, 301, 302, 311, 319,
-			330, 339, 341, 348, 356, 372, 380, 381, 389, 407, 415, 429, 433, 434, 436, 450, 465, 468, 469, 486,
-			490, 499, 500, 508, 554, 555, 558, 561, 581, 584, 592, 597, 601, 611, 614, 615, 621, 623, 627, 631,
-			636, 653, 673, 685, 688, 695, 697, 707, 715, 718, 720, 728, 730, 737, 751, 766, 781, 782, 795, 798,
-			799, 804, 824, 830, 832, 844, 845, 846, 847, 848, 850, 851, 866, 875, 886, 895, 897, 902, 910, 923,
-			931, 942, 943, 946, 960, 962, 978, 979, 991, 996, 998,
+			330, 339, 341, 348, 356, 372, 380, 381, 389, 407, 415, 429, 433, 434, 436, 465, 468, 469, 486, 490,
+			499, 500, 508, 554, 558, 561, 581, 584, 592, 597, 601, 611, 614, 615, 621, 623, 627, 631, 636, 653,
+			673, 685, 695, 697, 707, 715, 718, 720, 728, 730, 737, 751, 766, 781, 782, 795, 798, 799, 804, 824,
+			830, 832, 844, 845, 846, 847, 848, 850, 851, 866, 875, 886, 895, 897, 902, 910, 923, 931, 942, 943,
+			946, 960, 962, 978, 979, 991, 996, 998,
 		],
 		forwardingOtherValues: [
-			3, 12, 22, 28, 59, 60, 64, 65, 79, 87, 88, 97, 106, 107, 117, 119, 128, 130, 136, 156, 166, 199,
-			221, 230, 238, 242, 251, 259, 262, 264, 269, 273, 284, 296, 314, 327, 328, 332, 344, 351, 370, 386,
-			397, 402, 406, 423, 425, 435, 449, 455, 456, 459, 463, 474, 477, 489, 497, 510, 537, 539, 543, 549,
-			551, 559, 562, 587, 606, 609, 629, 635, 647, 648, 658, 668, 679, 692, 699, 716, 723, 724, 725, 743,
-			779, 786, 790, 797, 821, 833, 834, 836, 876, 892, 904, 906, 909, 911, 912, 919, 936, 947, 958, 959,
-			967, 977, 983, 995,
+			3, 12, 22, 28, 59, 60, 64, 65, 79, 87, 88, 97, 106, 107, 117, 119, 128, 130, 136, 156,
+			166, 199, 221, 230, 238, 242, 251, 259, 262, 264, 269, 273, 284, 296, 314, 327, 328, 332, 344, 351,
+			370, 386, 397, 402, 406, 423, 425, 435, 449, 455, 456, 459, 463, 474, 477, 489, 497, 510, 537, 539,
+			543, 549, 551, 559, 562, 587, 606, 629, 635, 647, 648, 658, 668, 679, 692, 699, 716, 723, 724, 725,
+			743, 779, 786, 790, 797, 821, 833, 834, 836, 876, 892, 904, 906, 909, 911, 912, 919, 936, 947, 958,
+			959, 977, 983, 995,
 		],
 		callingMocks: [
 			19, 211, 230, 299, 307, 333, 406, 456, 486, 510, 597, 658, 692, 743, 748, 845, 960,
@@ -6818,6 +6825,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeFillReceivesFormBoundAgain: 28,
 		.holeFillReceivesRootLevelValue: 38,
 		.holeFillReceivesRootLevelWrapper: 15,
+		.holeForwardsValue: 43,
 		.holeInsideLoop: 131,
 		.holeLoopDeclaresContextAgain: 74,
 		.holeOnPublicMockType: 228,

@@ -10083,7 +10083,7 @@ struct GraphFuzzerResult {
 	/// are not built.
 	func passes(butForRetentionDocumentedBy knownIssue: GraphFuzzerKnownIssue?) -> Bool {
 		([failure] + laterFailures).compactMap(\.self).allSatisfy { failure in
-			Self.builderSurfaceFailureKinds.contains(failure.kind)
+			GraphFuzzerFailure.knownBuilderSurfaceKinds.contains(failure.kind)
 				|| [.seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees].contains(failure.kind) && knownIssue?.matches(failure) == true
 		}
 	}
@@ -10178,7 +10178,7 @@ struct GraphFuzzerKnownIssue: Equatable {
 		/// A builder label, scope type or case name of the graph without its second place of a hole changes when the place is
 		/// added, with details containing this text, such as the second place's label.
 		case holeNamesChangeWithSecondPlace(containing: String)
-		/// A failure of the builder surface of this kind (`GraphFuzzerResult.knownBuilderSurfaceFailureKinds`): what a person
+		/// A failure of the builder surface of this kind (`GraphFuzzerFailure.knownBuilderSurfaceKinds`): what a person
 		/// writes names a generated type, breaks the label rule, or stops compiling when the supply is kept or added to. A
 		/// rejected remedy has no signature, so no listed seed hides it.
 		case builderSurface(GraphFuzzerFailure.Kind)
@@ -10340,7 +10340,7 @@ struct GraphFuzzerKnownIssue: Equatable {
 			case let .holeNamesChangeWithSecondPlace(text):
 				failure.kind == .holeNamesChangeWithSecondPlace && failure.details.prefix { $0 != "\n" }.contains(text)
 			case let .builderSurface(kind):
-				GraphFuzzerResult.knownBuilderSurfaceFailureKinds.contains(kind) && failure.kind == kind
+				GraphFuzzerFailure.knownBuilderSurfaceKinds.contains(kind) && failure.kind == kind
 			case .remedyLeavesErrorAtSite:
 				// As for the value signatures, every remedy that leaves an error must match one.
 				failure.kind == .remedyLeavesErrorAtSite && !failure.remedyFailures.isEmpty && failure.remedyFailures.allSatisfy { remedyFailure in
@@ -10442,7 +10442,7 @@ enum GraphFuzzerFinding: Equatable {
 			self = retentionIsJudged || !knownIssue.documentsOnlyRetention ? .staleKnownIssue(knownIssue) : .passed
 		case let (failure?, knownIssue?) where knownIssue.matches(failure):
 			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile].contains(failure.kind)
-				|| GraphFuzzerResult.knownBuilderSurfaceFailureKinds.contains(failure.kind)
+				|| GraphFuzzerFailure.knownBuilderSurfaceKinds.contains(failure.kind)
 			if let unmasked = laterFailures.first(where: { (masksNoLaterFailure || $0.kind == .renamedGraphDiffers || $0.kind == .seamRetainsWhatInlineFrees || $0.kind == .publicMockRetainsWhatKnownRightFrees) && !knownIssue.matches($0) }) {
 				self = .failure(unmasked)
 			} else {

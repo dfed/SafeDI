@@ -1182,10 +1182,10 @@ extension GraphFuzzerToolRuns {
 	}
 }
 
-extension GraphFuzzerResult {
+extension GraphFuzzerFailure {
 	/// The kinds of failure of the builder surface a known issue may list (`GraphFuzzerKnownIssue.Signature.builderSurface`).
 	/// The rejection of a remedy is not among them: no seed hides it.
-	static let knownBuilderSurfaceFailureKinds: Set<GraphFuzzerFailure.Kind> = [
+	static let knownBuilderSurfaceKinds: Set<Kind> = [
 		.builderSurfaceNamesGeneratedType,
 		.builderLabelBreaksContract,
 		.sameSupplyCallStopsCompiling,
@@ -1194,11 +1194,14 @@ extension GraphFuzzerResult {
 		.placesForwardingOtherValuesAccepted,
 		.callingMockChangesBuilder,
 	]
+}
 
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+extension GraphFuzzerResult {
 	/// Whether the graph fails no oracle but the builder surface's known kinds. Until the planned builder structs, every
 	/// graph with a hole fails the builder surface, so what the smoke batches and the long run read from graphs that pass –
 	/// the output features they show, the spellings they draw, the cross-process sample – reads these graphs too.
 	var passesBesidesBuilderSurface: Bool {
-		([failure] + laterFailures).compactMap(\.self).allSatisfy { Self.knownBuilderSurfaceFailureKinds.contains($0.kind) }
+		([failure] + laterFailures).compactMap(\.self).allSatisfy { GraphFuzzerFailure.knownBuilderSurfaceKinds.contains($0.kind) }
 	}
 }
