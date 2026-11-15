@@ -140,6 +140,7 @@ struct GraphFuzzerCallingMockDraw {
 			expectedTwinInitializerLabels: expectedTwinInitializerLabels,
 			expectedPassUpLabels: expectedPassUpLabels,
 			expectedTwinErrorSite: expectedTwinErrorSite,
+			valueProbes: valueProbes,
 		)
 	}
 
@@ -194,6 +195,34 @@ struct GraphFuzzerCallingMockDraw {
 	/// The places the calling mock may pass up: the hole's builder where its module sees no type that fulfills the hole.
 	var expectedPassUpLabels: [String] {
 		implementationIsVisible ? [] : [holeBuilderLabel]
+	}
+
+	/// What the calling mock and its twin build where the mock fills the place, one probe calling the mock and the twin's
+	/// seam initializer, and for a deferred place one calling the place's builder with `id` 7, which the comparator does not
+	/// call: `nil` where the twin rejects the graph or the mock passes the place up.
+	var valueProbes: [DifferentialValueProbe]? {
+		// Qualified by its module: Foundation, which the probe executable imports, declares `Host` on macOS.
+		let caller = "\(names.callerModuleName).\(names.caller)"
+		let token = names.token.lowercasedFirst
+		let calls: (mock: String, twin: String)? = switch cell.shape {
+		case .callersOwnValue:
+			("\(caller).mock()", "\(caller)()")
+		case .implementationReceivesWhatNothingProvides:
+			("\(caller).mock(\(token): \(names.token)())", "\(caller)(__safeDI_\(token): \(names.token)())")
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .noVisibleImplementation:
+			nil
+		}
+		guard let calls else { return nil }
+		let (mockCall, twinCall) = calls
+		var probes = [DifferentialValueProbe(name: caller, expression: mockCall, knownRightExpression: twinCall)]
+		switch cell.place {
+		case .plain:
+			break
+		case .deferred:
+			let place = "\(names.inner.lowercasedFirst).\(holePlace(protocolName: names.hole, fillName: names.fill).label)"
+			probes.append(DifferentialValueProbe(name: "\(caller).\(place).instantiate(7)", expression: "\(mockCall).\(place).instantiate(7)", knownRightExpression: "\(twinCall).\(place).instantiate(7)"))
+		}
+		return probes
 	}
 
 	/// Where production reports the shape's own error: the module and file, and the declaration the error is at.
@@ -657,6 +686,10 @@ struct GraphFuzzerCallingMockGraph {
 	/// Where production reports the graph's shape error, as the module's file and the declaration's line, or `nil` when
 	/// production accepts the graph.
 	let expectedTwinErrorSite: (file: String, declaration: String)?
+	/// What the differential value comparator describes where both forms are accepted and the mock passes up no place
+	/// without a reason: each probe's expression calls the calling mock, and its known-right expression the twin's seam
+	/// initializer. `nil` when the graph states none.
+	let valueProbes: [DifferentialValueProbe]?
 
 	var callerModule: String {
 		mockFiles.last?.module ?? ""
@@ -702,6 +735,7 @@ struct GraphFuzzerCallingMockGraph {
 		expectedTwinInitializerLabels: [String]? = nil,
 		expectedPassUpLabels: [String] = [],
 		expectedTwinErrorSite: (file: String, declaration: String)?,
+		valueProbes: [DifferentialValueProbe]? = nil,
 	) {
 		let twinFiles = mockFiles.enumerated().map { index, file in
 			guard index == mockFiles.count - 1 else { return file }
@@ -724,6 +758,7 @@ struct GraphFuzzerCallingMockGraph {
 			expectedTwinInitializerLabels: expectedTwinInitializerLabels,
 			expectedPassUpLabels: expectedPassUpLabels,
 			expectedTwinErrorSite: expectedTwinErrorSite,
+			valueProbes: valueProbes,
 		)
 	}
 
@@ -738,6 +773,7 @@ struct GraphFuzzerCallingMockGraph {
 		expectedTwinInitializerLabels: [String]?,
 		expectedPassUpLabels: [String],
 		expectedTwinErrorSite: (file: String, declaration: String)?,
+		valueProbes: [DifferentialValueProbe]? = nil,
 	) {
 		self.name = name
 		self.mockFiles = mockFiles
@@ -749,6 +785,7 @@ struct GraphFuzzerCallingMockGraph {
 		self.expectedTwinInitializerLabels = expectedTwinInitializerLabels
 		self.expectedPassUpLabels = expectedPassUpLabels
 		self.expectedTwinErrorSite = expectedTwinErrorSite
+		self.valueProbes = valueProbes
 	}
 }
 
@@ -824,6 +861,9 @@ struct GraphFuzzerCallingMockResult {
 	/// Why the twin's outcome is not the one the graph is drawn for – a drawing defect, never a mirroring requirement – or
 	/// `nil`.
 	let drawingDefect: String?
+	/// Whether the comparator compiled both forms and compared what they build: only where both are accepted, the mock
+	/// passes up no place without a reason, the graph states probes, the run asked for it, and compile verification is on.
+	let comparedValues: Bool
 	/// The first way the calling mock fails to mirror its twin, or `nil`.
 	let failure: GraphFuzzerFailure?
 
@@ -837,9 +877,10 @@ enum GraphFuzzerCallingMockCheck {
 	/// Runs `graph` in both forms through the module-info flow (`generate` per module, as Bazel runs it) and judges the
 	/// calling mock against its production twin: where the twin reports the graph's shape error, the mock reports the same
 	/// error, at the same sites; where the twin is accepted, the mock is too, and each place it passes up has a permanent
-	/// reason.
+	/// reason; and where it passes up none without one, when `comparesValues`, the mock compiles and builds what the twin
+	/// builds (`valueFailure`).
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	static func run(_ graph: GraphFuzzerCallingMockGraph, seed: UInt64) async throws -> GraphFuzzerCallingMockResult {
+	static func run(_ graph: GraphFuzzerCallingMockGraph, seed: UInt64, comparesValues: Bool = true) async throws -> GraphFuzzerCallingMockResult {
 		let twin = try await toolRun(of: graph, .twin)
 		let mock = try await toolRun(of: graph, .mock)
 		let twinSites = twin.diagnostics.map { GraphFuzzerDiagnosticSite.sites(inDiagnostics: $0, contentByRelativePath: graph.contentByRelativePath(.twin)) }
@@ -867,7 +908,7 @@ enum GraphFuzzerCallingMockCheck {
 			nil
 		}
 		let passUps = try mock.generatedCallerFile.map { try passUpsOf(graph, inGeneratedFile: $0) } ?? []
-		let failure: GraphFuzzerFailure? = if let twinSites {
+		let mirroringFailure: GraphFuzzerFailure? = if let twinSites {
 			if let mockSites {
 				mockSites == twinSites ? nil : GraphFuzzerFailure(
 					seed: seed,
@@ -896,6 +937,11 @@ enum GraphFuzzerCallingMockCheck {
 		} else {
 			nil
 		}
+		let valueJudgment: (compared: Bool, failure: GraphFuzzerFailure?) = if mirroringFailure == nil, drawingDefect == nil, comparesValues, let probes = graph.valueProbes, let feature = mock.valuePath, let knownRight = twin.valuePath {
+			try await valueFailure(of: graph, seed: seed, feature: feature, knownRight: knownRight, probes: probes)
+		} else {
+			(false, nil)
+		}
 		return GraphFuzzerCallingMockResult(
 			twinSites: twinSites,
 			mockSites: mockSites,
@@ -903,8 +949,48 @@ enum GraphFuzzerCallingMockCheck {
 			twinInitializerLabels: twinInitializerLabels,
 			passUps: passUps,
 			drawingDefect: drawingDefect,
-			failure: failure,
+			comparedValues: valueJudgment.compared,
+			failure: mirroringFailure ?? valueJudgment.failure,
 		)
+	}
+
+	/// Compiles the calling mock's path, `feature`, and its twin's, `knownRight`, with the differential value comparator,
+	/// and compares what `probes` build in each: a mock that does not compile, or that builds other values, fails. Returns
+	/// whether the values were compared, which they are not when compile verification is off. Any other failure of the
+	/// comparator, such as a twin that does not compile or a probe that names no declaration, is the harness's and throws.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	static func valueFailure(
+		of graph: GraphFuzzerCallingMockGraph,
+		seed: UInt64,
+		feature: DifferentialValuePath,
+		knownRight: DifferentialValuePath,
+		probes: [DifferentialValueProbe],
+	) async throws -> (compared: Bool, failure: GraphFuzzerFailure?) {
+		var filesToDelete = [URL]()
+		defer {
+			for file in filesToDelete {
+				try? FileManager.default.removeItem(at: file)
+			}
+		}
+		do {
+			guard let comparison = try await DifferentialValueOracle.compare(feature: feature, knownRight: knownRight, probes: probes, filesToDelete: &filesToDelete) else {
+				return (false, nil)
+			}
+			guard !comparison.differences.isEmpty else { return (true, nil) }
+			var failure = GraphFuzzerFailure(
+				seed: seed,
+				kind: .callingMockBuildsOtherValuesThanTwin,
+				details: "\(graph.name): the calling mock builds other values than its twin at \(comparison.differences.map(\.description).joined(separator: "\n"))\n\(comparison.report)",
+			)
+			failure.valueDifferences = comparison.differences.map(\.description)
+			return (true, failure)
+		} catch let error as DifferentialValueOracleError {
+			if error.path == .feature, case .compilingModule = error.stage {
+				return (true, GraphFuzzerFailure(seed: seed, kind: .callingMockDoesNotCompile, details: "\(graph.name): \(error)"))
+			} else {
+				throw HarnessError(description: "The value comparison of \(graph.name) could not run: \(error)")
+			}
+		}
 	}
 
 	/// Each parameter of the caller's `mock()` that is neither `safeDIOverrides` nor one of the graph's flat parameters: a
@@ -999,11 +1085,13 @@ enum GraphFuzzerCallingMockCheck {
 	}
 
 	/// One form's run: the tool's diagnostics and the module whose `generate` reported them when it rejects the graph, else
-	/// the calling mock's module's generated file.
+	/// the calling mock's module's generated file and the form's modules with their generated code, as the comparator
+	/// compiles them.
 	private struct ToolRun {
 		let diagnostics: String?
 		let failingModule: String?
 		let generatedCallerFile: String?
+		let valuePath: DifferentialValuePath?
 	}
 
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -1024,9 +1112,9 @@ enum GraphFuzzerCallingMockCheck {
 			guard let generatedCallerFile = output.modules[graph.callerModule]?.generatedFiles["\(graph.callerModule).swift"] else {
 				throw HarnessError(description: "The \(form) of \(graph.name) is accepted, and module \(graph.callerModule) generated no \(graph.callerModule).swift")
 			}
-			return ToolRun(diagnostics: nil, failingModule: nil, generatedCallerFile: generatedCallerFile)
+			return try ToolRun(diagnostics: nil, failingModule: nil, generatedCallerFile: generatedCallerFile, valuePath: DifferentialValuePath(output: output, modules: graph.modules(form)))
 		} catch let error as SafeDIToolMultiModuleTestError {
-			return ToolRun(diagnostics: "\(error.underlyingError)", failingModule: error.moduleName, generatedCallerFile: nil)
+			return ToolRun(diagnostics: "\(error.underlyingError)", failingModule: error.moduleName, generatedCallerFile: nil, valuePath: nil)
 		}
 	}
 }
