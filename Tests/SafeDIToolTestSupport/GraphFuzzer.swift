@@ -10033,6 +10033,23 @@ enum GraphFuzzerToolOutcome: Equatable {
 /// graph gives other results, or the graph split across modules gives other results under one multi-module
 /// integration than under the other.
 extension GraphFuzzerFailure {
+	/// The kinds of failure that, documented by a known issue, mask no later failure of the oracle's chain the issue does
+	/// not document (`GraphFuzzerFinding`), besides the builder surface's known kinds: a value or retention difference, the
+	/// value oracle's own fixture failures, and a scope case's, each judged after every oracle that could hide another.
+	/// `GraphFuzzerKnownIssue.masksNoLaterFailure` reads the same set through its signatures.
+	static let kindsMaskingNoLaterFailure: Set<Kind> = [
+		.seamBuildsOtherValuesThanInline,
+		.holeBuildsOtherValuesThanVisibleBuild,
+		.publicMockBuildsOtherValuesThanKnownRight,
+		.seamRetainsWhatInlineFrees,
+		.publicMockRetainsWhatKnownRightFrees,
+		.mockBuildsOtherValuesThanProduction,
+		.valueOracleFixtureRejected,
+		.valueOracleFixtureDoesNotCompile,
+		.declaredCaseNeverProduced,
+		.scopeCaseNamesNoProperty,
+	]
+
 	/// What follows a scope-case failure's descriptions in its details, before the graph (`scopeCaseFailures`).
 	static let scopeCaseGraphHeading = "\nThis graph:\n"
 
@@ -10749,7 +10766,7 @@ enum GraphFuzzerFinding: Equatable {
 		case let (nil, knownIssue?):
 			self = retentionIsJudged || !knownIssue.documentsOnlyRetention ? .staleKnownIssue(knownIssue) : .passed
 		case let (failure?, knownIssue?) where knownIssue.matches(failure):
-			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile].contains(failure.kind)
+			let masksNoLaterFailure = GraphFuzzerFailure.kindsMaskingNoLaterFailure.contains(failure.kind)
 				|| GraphFuzzerFailure.knownBuilderSurfaceKinds.contains(failure.kind)
 			if let unmasked = laterFailures.first(where: { (masksNoLaterFailure || $0.kind == .renamedGraphDiffers || $0.kind == .seamRetainsWhatInlineFrees || $0.kind == .publicMockRetainsWhatKnownRightFrees || GraphFuzzerFailure.builderSurfaceKindsNeverMasked.contains($0.kind)) && !knownIssue.matches($0) }) {
 				self = .failure(unmasked)

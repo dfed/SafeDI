@@ -5,9 +5,10 @@ name: Graph Fuzzer
 # corpora that ci.yml fuzzes on every pull request and push to main. Its
 # default, `iterations: corpus`, is the selected corpus: seeds
 # 0..<corpusSeedCount of the base corpus, 0..<seamCorpusSeedCount of the
-# seam corpus when `features` is `generateDependencyTree`, or
+# seam corpus when `features` is `generateDependencyTree`,
 # 0..<publicMockCorpusSeedCount of the public mock corpus when `features` is
-# `generateMockPublic` (see SafeDIToolGraphFuzzerTests.swift). The graphs
+# `generateMockPublic`, or the seeds of a combination corpus when `features`
+# adds `combinationDraws` to either (see SafeDIToolGraphFuzzerTests.swift). The graphs
 # are split across `shards` jobs (SAFEDI_GRAPH_FUZZER_SHARD), each building
 # the tests and uploading its report as `graph-fuzzer-report-<index>`, which
 # .github/scripts/combine-graph-fuzzer-reports.py combines with the reports of
@@ -42,11 +43,11 @@ on:
         required: false
         default: '0'
       features:
-        description: The generator features to draw with, comma-separated (`generateDependencyTree` for the seam corpus, `generateMockPublic` for the public mock corpus), or empty for the base corpus.
+        description: The generator features to draw with, comma-separated (`generateDependencyTree` for the seam corpus, `generateMockPublic` for the public mock corpus, either with `combinationDraws` for its combination corpus), or empty for the base corpus.
         required: false
         default: ''
       iterations:
-        description: The number of graphs to run, or `corpus` for every seed of the selected corpus (corpusSeedCount, seamCorpusSeedCount with the seam feature, or publicMockCorpusSeedCount with the public mock feature).
+        description: The number of graphs to run, or `corpus` for every seed of the selected corpus (corpusSeedCount, seamCorpusSeedCount with the seam feature, publicMockCorpusSeedCount with the public mock feature, or the combination corpus's count with `combinationDraws`).
         required: false
         default: 'corpus'
       shards:
@@ -280,9 +281,11 @@ jobs:
           - {corpus: generateDependencyTree, features: generateDependencyTree, starting-seed: 750, iterations: 250}
           - {corpus: generateMockPublic, features: generateMockPublic, starting-seed: 0, iterations: 500}
           - {corpus: generateMockPublic, features: generateMockPublic, starting-seed: 500, iterations: 500}
-          - {corpus: seamCombination, features: 'generateDependencyTree,combinationDraws', starting-seed: 0, iterations: 440}
-          - {corpus: seamCombination, features: 'generateDependencyTree,combinationDraws', starting-seed: 440, iterations: 440}
-          - {corpus: seamCombination, features: 'generateDependencyTree,combinationDraws', starting-seed: 880, iterations: 440}
+          - {corpus: seamCombination, features: 'generateDependencyTree,combinationDraws', starting-seed: 0, iterations: 264}
+          - {corpus: seamCombination, features: 'generateDependencyTree,combinationDraws', starting-seed: 264, iterations: 264}
+          - {corpus: seamCombination, features: 'generateDependencyTree,combinationDraws', starting-seed: 528, iterations: 264}
+          - {corpus: seamCombination, features: 'generateDependencyTree,combinationDraws', starting-seed: 792, iterations: 264}
+          - {corpus: seamCombination, features: 'generateDependencyTree,combinationDraws', starting-seed: 1056, iterations: 264}
           - {corpus: publicMockCombination, features: 'generateMockPublic,combinationDraws', starting-seed: 0, iterations: 330}
     defaults:
       run:
@@ -306,8 +309,10 @@ jobs:
       # Only the fuzzer's own process writes to the profile folder: every
       # process it starts gets an LLVM_PROFILE_FILE of its own in the test's
       # temporary directory. A shard's fuzzer has taken 4.4 to 7.7 minutes
-      # (run 43762600658); the step's limit is twice that and under the
-      # job's, so a shard that runs out of time still uploads what it has.
+      # (run 43762600658), and a combination shard about 6.3 minutes measured
+      # locally until CI's first run measures it; the step's limit is about
+      # twice the slowest and under the job's, so a shard that runs out of
+      # time still uploads what it has.
       - name: Run Graph Fuzzer
         timeout-minutes: 16
         env:
@@ -382,7 +387,7 @@ jobs:
         env:
           BASE: ${{ inputs.base }}
           # coverage-fuzz's matrix, `<corpus>-<starting-seed>` per shard.
-          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-250 generateDependencyTree-500 generateDependencyTree-750 generateMockPublic-0 generateMockPublic-500 seamCombination-0 seamCombination-440 seamCombination-880 publicMockCombination-0
+          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-250 generateDependencyTree-500 generateDependencyTree-750 generateMockPublic-0 generateMockPublic-500 seamCombination-0 seamCombination-264 seamCombination-528 seamCombination-792 seamCombination-1056 publicMockCombination-0
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           tar -xzf graph-fuzzer-test-bundle.tar.gz

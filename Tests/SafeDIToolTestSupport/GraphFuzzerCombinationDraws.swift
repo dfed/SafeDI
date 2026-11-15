@@ -248,8 +248,11 @@ struct GraphFuzzerCombinationDraw {
 	private mutating func declarations(of cell: GraphFuzzerCombinationCell) -> [TypeDeclaration] {
 		var random = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.randomSeedMask(of: cell))
 		let hasParent = random.percentChance(50)
-		// A mixed graph's wrappers are `Sendable` in its cell's first mixed graph and every second one after it.
-		let isSendableWrapper = isSendableGraph || (isMixedGraph && (indexInCell / 5) % 2 == 0)
+		// A mixed graph's wrappers are `Sendable` by a roll of their own, drawn in every graph so that the stream stays the
+		// same, and never by the seed's index in its cell, which chooses the cell's variants: tied to the index, the wrapper's
+		// kind would follow a two-variant row's choice in every mixed graph.
+		let mixedGraphWrappersAreSendable = random.percentChance(50)
+		let isSendableWrapper = isSendableGraph || (isMixedGraph && mixedGraphWrappersAreSendable)
 		instantiator = isSendableWrapper ? "SendableInstantiator" : "Instantiator"
 		erasedInstantiator = isSendableWrapper ? "SendableErasedInstantiator" : "ErasedInstantiator"
 		lazilyInstantiated = isSendableWrapper ? "SendableLazilyInstantiated" : "LazilyInstantiated"
@@ -430,8 +433,10 @@ struct GraphFuzzerCombinationDraw {
 			}
 		case .fulfillerSeam:
 			// One graph in five makes the host a seam, which, where the host holds a place, is D3's shape (a fulfiller that is
-			// a seam with a place it cannot fill generates code that does not compile), so that ten of each cell's fifteen judge.
-			if variant(of: 5) == 0 {
+			// a seam with a place it cannot fill generates code that does not compile), so that twelve of each cell's fifteen
+			// judge. The graphs are the cell's 1st, 7th and 13th, whose index's remainder by five equals its quotient: one
+			// `Sendable`, one mixed and one plain, since sendability follows the remainder alone.
+			if indexInCell % 5 == indexInCell / 5 {
 				declarations[hostIndex].instantiableArguments = Self.inserting("generateDependencyTree: true", into: host.instantiableArguments)
 			} else {
 				addToHost(PropertyDeclaration(attribute: "@Instantiated", label: "comboOwnSeamBuilder", type: "\(instantiator)<\(nameOfFilledSeam(hostName: hostName, in: column))>"))
@@ -502,9 +507,19 @@ struct GraphFuzzerCombinationDraw {
 			declarations[rootIndex].additionalDeclarations.append("#SafeDIConfiguration(additionalMocksToGenerate: [\"\(hostName)\"])")
 		case .conditionalCompilation:
 			let flaggedName = name("ComboFlagged")
-			let condition = variant(of: 2) == 0 ? "canImport(Foundation)" : "!COMBO_FLAG"
 			let conformance = isSendableGraph ? ", Sendable" : isMixedGraph ? ", @unchecked Sendable" : ""
-			declarations[hostIndex].additionalDeclarations.append("#if \(condition)\n@Instantiable\npublic final class \(flaggedName): Instantiable\(conformance) {\n\tpublic init() {}\n}\n#endif")
+			let activeDeclaration = "@Instantiable\npublic final class \(flaggedName): Instantiable\(conformance) {\n\tpublic init() {}\n}"
+			switch variant(of: 3) {
+			case 0:
+				declarations[hostIndex].additionalDeclarations.append("#if canImport(Foundation)\n\(activeDeclaration)\n#endif")
+			case 1:
+				declarations[hostIndex].additionalDeclarations.append("#if !COMBO_FLAG\n\(activeDeclaration)\n#endif")
+			default:
+				// An inactive clause SafeDI decides (`COMBO_FLAG` is never defined) declares the type again with a dependency
+				// nothing fulfills, which SafeDI must not read.
+				let inactiveDeclaration = "@Instantiable\npublic final class \(flaggedName): Instantiable\(conformance) {\n\tpublic init(comboUnbuilt: ComboUnbuilt) {\n\t\tself.comboUnbuilt = comboUnbuilt\n\t}\n\n\t@Instantiated let comboUnbuilt: ComboUnbuilt\n}"
+				declarations[hostIndex].additionalDeclarations.append("#if COMBO_FLAG\n\(inactiveDeclaration)\n#else\n\(activeDeclaration)\n#endif")
+			}
 			addToHost(PropertyDeclaration(attribute: "@Instantiated", label: "comboFlagged", type: flaggedName))
 		case .sharedInstance:
 			let shared = type("ComboShared", lowestModule)

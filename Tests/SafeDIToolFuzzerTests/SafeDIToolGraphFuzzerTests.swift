@@ -688,6 +688,20 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func knownIssueMatches_rejectsScopeCaseFailure_whenOneOfItsCaseLinesMatchesNoListedText() {
+		// A scope-case failure describes one case a line, so a listed seed's failure that gains a second case of the
+		// listed kind is a new failure, however the graph that follows the lines reads.
+		let knownIssue = GraphFuzzerKnownIssue(reason: "r", signatures: [.scopeCase(.declaredCaseNeverProduced, containing: "case comboLive")], seeds: [0])
+		let graph = "\(GraphFuzzerFailure.scopeCaseGraphHeading)case comboLive case comboOther"
+		let listedCaseOnly = GraphFuzzerFailure(seed: 0, kind: .declaredCaseNeverProduced, details: "S0_ComboBoundary_Scope declares case comboLive, which no path produces" + graph)
+		let secondCase = GraphFuzzerFailure(seed: 0, kind: .declaredCaseNeverProduced, details: "S0_ComboBoundary_Scope declares case comboLive, which no path produces\nS0_ComboBoundary_Scope declares case comboOther, which no path produces" + graph)
+		let otherKind = GraphFuzzerFailure(seed: 0, kind: .scopeCaseNamesNoProperty, details: "S0_ComboBoundary_Scope declares case comboLive" + graph)
+		#expect(knownIssue.matches(listedCaseOnly))
+		#expect(!knownIssue.matches(secondCase))
+		#expect(!knownIssue.matches(otherKind))
+	}
+
+	@Test
 	func integrationsDisagreeFailure_returnsNil_whenOutputsDifferOnlyBySourceLocationAndPluginHeader() {
 		// Only a flow that knows the compiler's spelling of an alias's file refers to it with a `#sourceLocation`
 		// directive, and every file the plugin writes opens with its header.
@@ -6488,7 +6502,7 @@ struct SafeDIToolGraphFuzzerTests {
 	)
 
 	static let seamCombinationCorpusSeedCount = 1_320
-	static let seamCombinationCorpusFixtureHash: UInt64 = 0xE93D8C126EB993D0
+	static let seamCombinationCorpusFixtureHash: UInt64 = 0xB5F0C0FECE2FD51F
 	static let seamCombinationCorpusAcceptedSeedCount = 1_320
 	static let seamCombinationCorpusAcceptedSeedsSum: UInt64 = 0x73CBBAC535574A10
 	static let seamCombinationCorpusValueOracleInspectedGraphCount = 1_320
@@ -6522,12 +6536,12 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: fulfillerSeamWithPlaceReason,
 			signatures: [.compilerError(containing: "_ComboNestImpl(__safeDI_")],
-			seeds: [9, 449, 889],
+			seeds: [9, 537, 1_065],
 		),
 		GraphFuzzerKnownIssue(
 			reason: inSeamLeakReason,
 			signatures: combinationInSeamLeakSignatures,
-			seeds: [176, 179, 214, 264, 267, 302, 309, 352, 355, 390, 399, 453, 489, 528, 531, 540, 543, 566, 616, 619, 630, 633, 654, 669, 704, 707, 720, 723, 742, 759, 792, 795, 813, 830, 900, 903, 939, 990, 1_029, 1_056, 1_059, 1_080, 1_083, 1_094, 1_119, 1_144, 1_147, 1_170, 1_182, 1_209, 1_232, 1_235, 1_260, 1_263, 1_270],
+			seeds: [126, 176, 179, 214, 264, 267, 302, 352, 355, 390, 531, 616, 619, 654, 704, 707, 742, 792, 795, 830, 1_006, 1_056, 1_059, 1_094, 1_144, 1_147, 1_182, 1_232, 1_235, 1_270],
 		),
 		GraphFuzzerKnownIssue(
 			reason: unproducedSendableFillCaseReason,
@@ -6535,7 +6549,7 @@ struct SafeDIToolGraphFuzzerTests {
 				.scopeCase(.declaredCaseNeverProduced, containing: "_ComboNestServiceBuilder_Sendable`, which no place's path produces"),
 				.scopeCase(.scopeCaseNamesNoProperty, containing: "_ComboNestServiceBuilder_Sendable`, which names no property of the seam"),
 			],
-			seeds: [0, 3, 88, 91, 440, 443, 880, 883, 968, 971],
+			seeds: [0, 3, 88, 91, 440, 443, 528, 880, 883, 968, 971],
 		),
 		GraphFuzzerKnownIssue(
 			reason: mainActorSeamWithNonisolatedInitializerReason,
@@ -6559,7 +6573,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// A fill that holds a place and builds itself, or a type above the place, again through a `SendableInstantiator`:
 	/// the calling seam's `@Sendable` enum declares a case for the inner seam's builder that no place's path produces.
-	private static let unproducedSendableFillCaseReason = "A fill that holds a place of its own and builds itself again through a `SendableInstantiator`: the calling seam’s `@Sendable` scope enum declares a case for the inner seam’s builder that no place’s path produces, an unused case in generated code (rules 5 and 6 of the seam contract), until its own fix, which the plan has not yet given a slice"
+	private static let unproducedSendableFillCaseReason = "A fill that holds a place of its own and builds itself again through a `SendableInstantiator`: the calling seam’s `@Sendable` scope enum declares a case for the inner seam’s builder that no place’s path produces, an unused case in generated code (rules 5 and 6 of the seam contract), until a fix in 2.3.1: no hand-written code names a case, so removing it breaks no caller and any release may make it"
 
 	/// D3: a type that fulfills a hole and is itself a seam with a place generates a call of an initializer it does not
 	/// generate, so its caller's code does not compile.
@@ -6599,7 +6613,7 @@ struct SafeDIToolGraphFuzzerTests {
 	)
 
 	static let publicMockCombinationCorpusSeedCount = 330
-	static let publicMockCombinationCorpusFixtureHash: UInt64 = 0xCB1AC07199D327CC
+	static let publicMockCombinationCorpusFixtureHash: UInt64 = 0x23EFD8D91B264C88
 	static let publicMockCombinationCorpusAcceptedSeedCount = 330
 	static let publicMockCombinationCorpusAcceptedSeedsSum: UInt64 = 0x9D80818A8FD8C829
 	static let publicMockCombinationCorpusValueOracleInspectedGraphCount = 330
@@ -6633,7 +6647,7 @@ struct SafeDIToolGraphFuzzerTests {
 					"_ComboLive alive holding comboHome.comboAgainBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 					"_ComboLive alive holding comboParent.comboHome.comboAgainBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 				].map { .publicMockRetainsWhatKnownRightFrees(containing: $0) },
-				seeds: [44, 66, 88, 132, 154, 176, 198, 207, 253, 264, 276, 286, 299, 308, 322],
+				seeds: [44, 66, 88, 154, 176, 198, 242, 264, 286, 308],
 			),
 		],
 	)

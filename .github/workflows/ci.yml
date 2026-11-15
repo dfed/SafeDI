@@ -1249,7 +1249,9 @@ jobs:
   # 0..<corpusSeedCount, the seam corpus, seeds 0..<seamCorpusSeedCount
   # drawn with the generateDependencyTree feature, and the public mock corpus,
   # seeds 0..<publicMockCorpusSeedCount drawn with the generateMockPublic
-  # feature (see SafeDIToolGraphFuzzerTests.swift) – split across shards that run the test
+  # feature, and the seam and public mock combination corpora, drawn with
+  # combinationDraws beside either (see SafeDIToolGraphFuzzerTests.swift) –
+  # split across shards that run the test
   # bundle "Build Tests on Linux" built. A shard fails when a graph fails,
   # a known issue goes stale, the run reports a problem with itself, the
   # process crashes, or no graph runs, and names the seeds in its summary.
@@ -1267,7 +1269,8 @@ jobs:
     strategy:
       fail-fast: false
       # Each corpus is drawn with a set of generator features (SAFEDI_GRAPH_FUZZER_FEATURES, empty for the base
-      # corpus, `generateDependencyTree` for the seam corpus, `generateMockPublic` for the public mock corpus) and
+      # corpus, `generateDependencyTree` for the seam corpus, `generateMockPublic` for the public mock corpus, either
+      # with `combinationDraws` for its combination corpus) and
       # has pins of its own (fixture hash, accepted count
       # and seed-set sum, known issues); the combine job checks each corpus's shards against its pins, that the
       # shards cover it exactly once, and that every corpus the long run names has a report.
@@ -1278,9 +1281,11 @@ jobs:
       # minutes, the seam corpus's two shards of 500 seeds for 14.0 and 9.9, and the public mock corpus's one of
       # 1000 for 16.5; split as below, the ten shards fuzzed for 4.4 to 7.7 minutes (run 43762600658). Each
       # report's `cpu` line says what each phase of a shard cost, which the combine job adds up per corpus.
-      # The combination corpora draw one combination cell per seed (`GraphFuzzerCombinationDraw`): the seam
-      # combination corpus in three shards of 440 (1.46 seconds a seed on four cores locally, about 11 minutes a
-      # shard), and the public mock combination corpus in one.
+      # The combination corpora (features `generateDependencyTree,combinationDraws` and
+      # `generateMockPublic,combinationDraws`) draw one combination cell per seed (`GraphFuzzerCombinationDraw`): the
+      # seam combination corpus in five shards of 264 (1.42 seconds a seed on four cores locally, about 6.3 minutes a
+      # shard), and the public mock combination corpus's 330 seeds in one (130 seconds locally), until CI's first run
+      # measures them. So six corpora run in sixteen shards.
       # No required check is a shard's: "Check Graph Fuzzer Corpus on Linux" is, so a change to this matrix needs no
       # stand-in for a Markdown-only change. A change to it changes graph-fuzzer-coverage's EXPECTED_SHARDS too.
       matrix:
@@ -1328,15 +1333,23 @@ jobs:
           - corpus: seamCombination
             features: generateDependencyTree,combinationDraws
             starting-seed: 0
-            iterations: 440
+            iterations: 264
           - corpus: seamCombination
             features: generateDependencyTree,combinationDraws
-            starting-seed: 440
-            iterations: 440
+            starting-seed: 264
+            iterations: 264
           - corpus: seamCombination
             features: generateDependencyTree,combinationDraws
-            starting-seed: 880
-            iterations: 440
+            starting-seed: 528
+            iterations: 264
+          - corpus: seamCombination
+            features: generateDependencyTree,combinationDraws
+            starting-seed: 792
+            iterations: 264
+          - corpus: seamCombination
+            features: generateDependencyTree,combinationDraws
+            starting-seed: 1056
+            iterations: 264
           - corpus: publicMockCombination
             features: generateMockPublic,combinationDraws
             starting-seed: 0
@@ -1520,7 +1533,7 @@ jobs:
         env:
           BEFORE: ${{ github.event.before }}
           # graph-fuzzer's matrix, `<corpus>-<starting-seed>` per shard.
-          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-250 generateDependencyTree-500 generateDependencyTree-750 generateMockPublic-0 generateMockPublic-500 seamCombination-0 seamCombination-440 seamCombination-880 publicMockCombination-0
+          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-250 generateDependencyTree-500 generateDependencyTree-750 generateMockPublic-0 generateMockPublic-500 seamCombination-0 seamCombination-264 seamCombination-528 seamCombination-792 seamCombination-1056 publicMockCombination-0
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           tar -xzf graph-fuzzer-test-bundle.tar.gz
