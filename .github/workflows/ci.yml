@@ -843,15 +843,16 @@ jobs:
       # flag through; the swiftbuild build system drops it.
       #
       # The time limit stops a test that hangs rather than letting it hold
-      # the runner for GitHub's six-hour default. Over the 177 completed CI
-      # runs from 2026-11-02 to 2026-11-05, 63 runs of this step, which then
-      # also ran four passes without compile verification, took 9.9 to 37.2
-      # minutes (median 24.1, 95th percentile 32.3). Without those passes
-      # (9.0 minutes in run 43207169056) the longest would have been about
-      # 28 minutes; twice that is the limit until runs of the single pass
-      # have been measured.
+      # the runner for GitHub's six-hour default. It is about twice the
+      # longest duration measured, rounded up to 5 minutes. On 2026-11-15,
+      # eight successful runs of this step took 17.1 to 55.1 minutes
+      # (median 32.2): 26.4 (run 43712596551), 45.2 (43692820935), 55.1
+      # (43687996075), 17.1 (43685323713), 23.9 (43682711345), 21.9
+      # (43676467330), 38.0 (43671437925) and 54.9 (main's run
+      # 43721724778). The longest took 92% of the 60-minute limit this
+      # step had.
       - name: Build and Test Framework
-        timeout-minutes: 60
+        timeout-minutes: 115
         env:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
         run: |
@@ -1443,16 +1444,21 @@ jobs:
         # first runs on the 4-core Linux runner, which has no measurement yet.
         timeout-minutes: 15
         run: swift build --build-system swiftbuild --traits sourceBuild --target SafeDIToolTestSupport --scratch-path "$RUNNER_TEMP/swiftbuild-test-support"
-      # A time limit for the macOS job's reason: twice the longest
-      # successful run of this step over the same 177 CI runs, in which 88
-      # runs took 2.8 to 15.9 minutes (median 8.2, 95th percentile 13.0).
+      # A time limit for the macOS job's reason: about twice the longest
+      # duration measured. On 2026-11-15, eight successful runs of this
+      # step took 18.5 to 32.6 minutes (median 19.3; the longest was main's
+      # run 43721724778), and the step of a pull request's run 43726656460
+      # reached the 35-minute limit after its tests had passed. The tests
+      # alone take about 5.5 minutes; the rest is the build, and the compile
+      # of the code each test generates, which the builder-surface check
+      # added tool runs to. Twice 35 minutes is 70.
       #
       # No cache of passed compile checks here, deliberately: this job
       # compiles every test's generated code on every run, so a check the
       # pinned jobs skip because it passed in an earlier run is still
       # compiled once per run, by a third compiler.
       - name: Build and Test Framework
-        timeout-minutes: 35
+        timeout-minutes: 70
         run: swift test --traits sourceBuild
 
   bazel:
