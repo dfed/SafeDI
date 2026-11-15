@@ -52,13 +52,17 @@ public enum Registry {
 
 	public static func describe(_ value: Any?) -> String {
 		guard let value else { return "nil" }
-		if let traced = value as? Traced { return traced.tracker.name }
+		if let traced = value as? Traced {
+			return traced.tracker.name
+		}
 		let mirror = Mirror(reflecting: value)
 		if mirror.displayStyle == .optional {
 			guard let child = mirror.children.first else { return "nil" }
 			return describe(child.value)
 		}
-		if let int = value as? Int { return String(int) }
+		if let int = value as? Int {
+			return String(int)
+		}
 		return "builder"
 	}
 

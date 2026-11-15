@@ -4,8 +4,8 @@ import Harness
 import SafeDI
 
 func handWrittenCallers() -> [Service] {
-    [
-        Service { DefaultUserService(analytics: Analytics(), session: nil) },
-        Service(userServiceBuilder: { DefaultUserService(analytics: Analytics(), session: Session()) }),
-    ]
+	[
+		Service { DefaultUserService(analytics: Analytics(), session: nil) },
+		Service(userServiceBuilder: { DefaultUserService(analytics: Analytics(), session: Session()) }),
+	]
 }

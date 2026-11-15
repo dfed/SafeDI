@@ -1,8 +1,8 @@
 import App
-#if canImport(Feature)
-import Feature
-#endif
 import Harness
+#if canImport(Feature)
+	import Feature
+#endif
 
 do {
 	let root = Root()
@@ -13,4 +13,5 @@ do {
 	Registry.printTrace()
 	withExtendedLifetime((root, screen1, screen2, screen3)) {}
 }
+
 Registry.printAlive("after dropping everything")

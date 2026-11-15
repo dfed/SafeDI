@@ -1,8 +1,8 @@
 import App
-#if canImport(Feature)
-import Feature
-#endif
 import Harness
+#if canImport(Feature)
+	import Feature
+#endif
 
 // Walks three levels: each screen's step builds a `Live` and opens the next screen through `screenBuilder`.
 do {
@@ -17,6 +17,7 @@ do {
 	Registry.printTrace()
 	withExtendedLifetime((root, screen1, step1, screen2, step2, screen3, step3)) {}
 }
+
 Registry.printAlive("after dropping everything")
 // Holds only the second level's step.
 do {
@@ -29,4 +30,5 @@ do {
 	Registry.printAlive("holding only step 2")
 	withExtendedLifetime(step2) {}
 }
+
 Registry.printAlive("after dropping step 2")

@@ -7,4 +7,5 @@ do {
 	Registry.printTrace()
 	withExtendedLifetime(root) {}
 }
+
 Registry.printAlive("after dropping Root")
