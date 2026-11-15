@@ -4741,7 +4741,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Long run
 
-	@Test(.enabled(if: GraphFuzzerLongRunConfiguration.current != nil, "Set SAFEDI_GRAPH_FUZZER_ITERATIONS to run"))
+	@Test(.enabled(if: GraphFuzzerLongRunConfiguration.current != nil, "Set SAFEDI_GRAPH_FUZZER_ITERATIONS or SAFEDI_GRAPH_FUZZER_SEEDS to run"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func longRun_findsNoUnknownFailures_whenEnabledByEnvironment() async throws {
 		let configuration = try #require(GraphFuzzerLongRunConfiguration.current)
@@ -4759,7 +4759,7 @@ struct SafeDIToolGraphFuzzerTests {
 			return
 		}
 		guard configuration.iterations > 0 else {
-			reportProblem("SAFEDI_GRAPH_FUZZER_ITERATIONS must be a positive integer or `corpus`, and SAFEDI_GRAPH_FUZZER_SHARD, when set, `<index>/<count>` naming a shard with at least one seed.")
+			reportProblem(configuration.noSeedsProblem)
 			return
 		}
 		let corpus = Self.corpus(for: features)
@@ -4836,7 +4836,7 @@ struct SafeDIToolGraphFuzzerTests {
 		var unremediedSiteCount = 0
 		var knownIssueCount = 0
 		var failureCount = 0
-		// Batches run concurrently, one per core, but their findings are recorded in seed order, so the report and
+		// Batches run concurrently, one per core, but their findings are recorded in the run's seed order, so the report and
 		// the issues are the same on every run. A batch's seeds are all finished when its results arrive.
 		let batchStarts = Array(stride(from: 0, to: configuration.iterations, by: Self.longRunBatchSize))
 		let concurrentBatchCount = max(1, ProcessInfo.processInfo.activeProcessorCount)
@@ -4855,7 +4855,7 @@ struct SafeDIToolGraphFuzzerTests {
 					let batchIndex = nextBatchIndex
 					let batchStart = batchStarts[batchIndex]
 					let seeds = (batchStart..<min(batchStart + Self.longRunBatchSize, configuration.iterations))
-						.map { configuration.startingSeed &+ UInt64($0) }
+						.map(configuration.seed(at:))
 					nextBatchIndex += 1
 					group.addTask { try await GraphFuzzerPhaseAccount.$current.withValue(phaseContext) {
 						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueGraphsOf: corpus.isolatedValueGraphSeeds) { seed in
@@ -5006,8 +5006,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 		// The oracle accepts any error the tool reports, so pin which graphs the tool accepts: a change that makes
 		// it reject valid graphs changes this. A shard of the corpus reports its part, which ci.yml's combine job
-		// adds up, and a run of the whole corpus checks the pins itself.
-		report.append("shard \(configuration.startingSeed) \(configuration.iterations) \(acceptedCount) \(Self.hexadecimal(acceptedSeedsSum.value)) \(corpus.name)")
+		// adds up, and a run of the whole corpus checks the pins itself; a run of listed seeds reports a `seeds` line.
+		report.append("\(configuration.seedsReportFields) \(acceptedCount) \(Self.hexadecimal(acceptedSeedsSum.value)) \(corpus.name)")
 		report.append("corpus \(corpus.seedCount) \(corpus.acceptedSeedCount) \(Self.hexadecimal(corpus.acceptedSeedsSum)) \(corpus.name)")
 		// The accepted graphs that show each feature, with the pinned counts, which ci.yml's combine job adds up and
 		// checks for a corpus that pins them.
@@ -5077,12 +5077,12 @@ struct SafeDIToolGraphFuzzerTests {
 		await report.append("cpu \(corpus.name) \(GraphFuzzerPhaseAccount.formatted(wallSeconds)) \(GraphFuzzerPhaseAccount.formatted(processCPUSeconds)) \(GraphFuzzerPhaseAccount.formatted(childProcessCPUSeconds)) \(phaseAccount.reportField)")
 		// Every corpus that exists, so the combine job can tell a corpus whose shards left no report from none.
 		report.append("corpora \(([Self.baseCorpus] + GraphFuzzerGeneratorFeature.allCases.map { Self.corpus(for: [$0]) }).map(\.name).joined(separator: " "))")
-		if configuration.startingSeed == 0, configuration.iterations == corpus.seedCount,
+		if configuration.coversCorpus(ofSeedCount: corpus.seedCount),
 		   acceptedCount != corpus.acceptedSeedCount || acceptedSeedsSum.value != corpus.acceptedSeedsSum
 		{
 			reportProblem("The tool accepted \(acceptedCount) of seeds 0..<\(corpus.seedCount) of the \(corpus.name) corpus (sum \(Self.hexadecimal(acceptedSeedsSum.value))), but \(corpus.acceptedSeedCount) are pinned (sum \(Self.hexadecimal(corpus.acceptedSeedsSum))). A tool change that rejects or accepts different graphs must update the pinned values deliberately.")
 		}
-		if configuration.startingSeed == 0, configuration.iterations == corpus.seedCount {
+		if configuration.coversCorpus(ofSeedCount: corpus.seedCount) {
 			if !corpus.acceptedFeatureCounts.isEmpty {
 				let mismatches = GraphFuzzerFeature.allCases.compactMap { feature -> String? in
 					let count = acceptedFeatureCounts[feature, default: 0]
@@ -7336,6 +7336,11 @@ extension GraphFuzzerToolRuns {
 struct GraphFuzzerLongRunConfiguration {
 	let iterations: Int
 	let startingSeed: UInt64
+	/// The seeds `SAFEDI_GRAPH_FUZZER_SEEDS` lists, in the order it lists them, which the run then covers in place of
+	/// the `iterations` consecutive seeds from `startingSeed`; `iterations` is their count and `startingSeed` the first.
+	let listedSeeds: [UInt64]?
+	/// Whether `SAFEDI_GRAPH_FUZZER_SEEDS` is set, whatever it holds.
+	let namesSeedList: Bool
 	/// The generator features the run's graphs are drawn with, which select the corpus and its pins, or `nil` when
 	/// `SAFEDI_GRAPH_FUZZER_FEATURES` names a feature that does not exist, which the run reports.
 	let features: Set<GraphFuzzerGeneratorFeature>?
@@ -7348,21 +7353,44 @@ struct GraphFuzzerLongRunConfiguration {
 	/// `cpu …` with what each `GraphFuzzerPhase` cost (`GraphFuzzerPhaseAccount`); and `completed …` at the end.
 	let reportPath: String?
 
-	/// `nil` unless `SAFEDI_GRAPH_FUZZER_ITERATIONS` is set: to a count of seeds, or to `corpus` for the seed count
+	/// The process's settings: `configuration(inEnvironment:)` of its environment.
+	static var current: GraphFuzzerLongRunConfiguration? {
+		configuration(inEnvironment: ProcessInfo.processInfo.environment)
+	}
+
+	/// `nil` unless `SAFEDI_GRAPH_FUZZER_ITERATIONS` or `SAFEDI_GRAPH_FUZZER_SEEDS` is set. `SAFEDI_GRAPH_FUZZER_ITERATIONS`
+	/// is a count of seeds, or `corpus` for the seed count
 	/// of the corpus `SAFEDI_GRAPH_FUZZER_FEATURES` selects – a comma-separated list of `GraphFuzzerGeneratorFeature`
 	/// names, or unset for the corpus drawn without features. Anything else becomes zero, which the run reports.
 	/// `SAFEDI_GRAPH_FUZZER_SHARD`, when set to `<index>/<count>`, runs only that shard of those seeds
 	/// (`shard(_:of:startingSeed:iterations:)`), as `graph-fuzzer.yml`'s jobs do; any other value also becomes zero.
-	static var current: GraphFuzzerLongRunConfiguration? {
-		let environment = ProcessInfo.processInfo.environment
-		guard let iterations = environment["SAFEDI_GRAPH_FUZZER_ITERATIONS"] else { return nil }
+	/// `SAFEDI_GRAPH_FUZZER_SEEDS` is a comma-separated list of distinct seeds, such as `98,311,383`, which one process
+	/// then runs in place of a process per seed. It replaces the count, the starting seed and the shard, so a list
+	/// set beside any of them, an empty list, and a list that repeats a seed or holds anything but seeds also become
+	/// zero. A listed run checks no corpus pin, whatever it lists (`coversCorpus(ofSeedCount:)`), and writes a `seeds`
+	/// line where a range writes its `shard` line.
+	static func configuration(inEnvironment environment: [String: String]) -> GraphFuzzerLongRunConfiguration? {
+		let seedList = environment["SAFEDI_GRAPH_FUZZER_SEEDS"]
+		guard environment["SAFEDI_GRAPH_FUZZER_ITERATIONS"] != nil || seedList != nil else { return nil }
+		let iterations = environment["SAFEDI_GRAPH_FUZZER_ITERATIONS"] ?? ""
 		let featureNames = (environment["SAFEDI_GRAPH_FUZZER_FEATURES"] ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
 		let features = featureNames.compactMap(GraphFuzzerGeneratorFeature.init(rawValue:))
 		let validFeatures: Set<GraphFuzzerGeneratorFeature>? = features.count == featureNames.count ? Set(features) : nil
 		let requestedIterations = iterations == "corpus" ? validFeatures.map { SafeDIToolGraphFuzzerTests.corpus(for: $0).seedCount } ?? 0 : Int(iterations) ?? 0
 		let requestedStartingSeed = environment["SAFEDI_GRAPH_FUZZER_STARTING_SEED"].flatMap { UInt64($0) } ?? 0
 		let seeds: (startingSeed: UInt64, iterations: Int)
-		if let shardDescription = environment["SAFEDI_GRAPH_FUZZER_SHARD"] {
+		var listedSeeds: [UInt64]?
+		if let seedList {
+			let listed = seedList.split(separator: ",", omittingEmptySubsequences: false).map { UInt64($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+			let namesNoOtherSeeds = ["SAFEDI_GRAPH_FUZZER_ITERATIONS", "SAFEDI_GRAPH_FUZZER_STARTING_SEED", "SAFEDI_GRAPH_FUZZER_SHARD"].allSatisfy { environment[$0] == nil }
+			let valid = listed.compactMap(\.self)
+			if namesNoOtherSeeds, valid.count == listed.count, Set(valid).count == valid.count, let first = valid.first {
+				seeds = (first, valid.count)
+				listedSeeds = valid
+			} else {
+				seeds = (requestedStartingSeed, 0)
+			}
+		} else if let shardDescription = environment["SAFEDI_GRAPH_FUZZER_SHARD"] {
 			let parts = shardDescription.split(separator: "/", omittingEmptySubsequences: false).map { Int($0) }
 			if parts.count == 2, let index = parts[0], let count = parts[1], let shard = shard(index, of: count, startingSeed: requestedStartingSeed, iterations: requestedIterations) {
 				seeds = shard
@@ -7375,9 +7403,45 @@ struct GraphFuzzerLongRunConfiguration {
 		return GraphFuzzerLongRunConfiguration(
 			iterations: seeds.iterations,
 			startingSeed: seeds.startingSeed,
+			listedSeeds: listedSeeds,
+			namesSeedList: seedList != nil,
 			features: validFeatures,
 			reportPath: environment["SAFEDI_GRAPH_FUZZER_REPORT"],
 		)
+	}
+
+	/// The run's seed at `offset`, which is in `0..<iterations`.
+	func seed(at offset: Int) -> UInt64 {
+		if let listedSeeds {
+			listedSeeds[offset]
+		} else {
+			startingSeed &+ UInt64(offset)
+		}
+	}
+
+	/// Whether the run is of the whole corpus of `seedCount` seeds, whose pins it then checks: consecutive seeds from
+	/// zero. Listed seeds never are, in whatever order and number, so that a list's order does not decide it.
+	func coversCorpus(ofSeedCount seedCount: Int) -> Bool {
+		listedSeeds == nil && startingSeed == 0 && iterations == seedCount
+	}
+
+	/// What the run reports when its settings name no seed.
+	var noSeedsProblem: String {
+		if namesSeedList {
+			"SAFEDI_GRAPH_FUZZER_SEEDS must be a comma-separated list of distinct seeds, set without SAFEDI_GRAPH_FUZZER_ITERATIONS, SAFEDI_GRAPH_FUZZER_STARTING_SEED or SAFEDI_GRAPH_FUZZER_SHARD."
+		} else {
+			"SAFEDI_GRAPH_FUZZER_ITERATIONS must be a positive integer or `corpus`, and SAFEDI_GRAPH_FUZZER_SHARD, when set, `<index>/<count>` naming a shard with at least one seed."
+		}
+	}
+
+	/// What the report's line of accepted graphs begins with: `shard <starting seed> <count>` for consecutive seeds,
+	/// which `ci.yml`'s combine job adds up, or `seeds <seed>,<seed>…` for listed ones, which belong to no shard.
+	var seedsReportFields: String {
+		if let listedSeeds {
+			"seeds \(listedSeeds.map(String.init).joined(separator: ","))"
+		} else {
+			"shard \(startingSeed) \(iterations)"
+		}
 	}
 
 	/// The seeds of shard `index` of `count` consecutive shards of the `iterations` seeds from `startingSeed`, the earlier

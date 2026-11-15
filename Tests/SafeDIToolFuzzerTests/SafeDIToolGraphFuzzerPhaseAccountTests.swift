@@ -22,8 +22,8 @@ import Foundation
 import Testing
 @testable import SafeDIToolTestSupport
 
-/// The long run's cost report (`GraphFuzzerPhaseAccount`, the report's `cpu` line) and its shards
-/// (`SAFEDI_GRAPH_FUZZER_SHARD`).
+/// The long run's cost report (`GraphFuzzerPhaseAccount`, the report's `cpu` line), its shards
+/// (`SAFEDI_GRAPH_FUZZER_SHARD`) and its listed seeds (`SAFEDI_GRAPH_FUZZER_SEEDS`).
 struct SafeDIToolGraphFuzzerPhaseAccountTests {
 	// MARK: Tests – Phase account
 
@@ -105,5 +105,96 @@ struct SafeDIToolGraphFuzzerPhaseAccountTests {
 		#expect(GraphFuzzerLongRunConfiguration.shard(2, of: 2, startingSeed: 0, iterations: 1_000)?.iterations == nil)
 		#expect(GraphFuzzerLongRunConfiguration.shard(-1, of: 2, startingSeed: 0, iterations: 1_000)?.iterations == nil)
 		#expect(GraphFuzzerLongRunConfiguration.shard(0, of: 0, startingSeed: 0, iterations: 1_000)?.iterations == nil)
+	}
+
+	// MARK: Tests – Seeds
+
+	@Test
+	func configuration_runsListedSeedsInListedOrder_whenSeedsAreListed() throws {
+		let configuration = try #require(GraphFuzzerLongRunConfiguration.configuration(inEnvironment: ["SAFEDI_GRAPH_FUZZER_SEEDS": "383, 98,311"]))
+
+		#expect(configuration.listedSeeds == [383, 98, 311])
+		#expect((0..<configuration.iterations).map(configuration.seed(at:)) == [383, 98, 311])
+	}
+
+	@Test
+	func seedsReportFields_listsSeeds_whenSeedsAreListed() throws {
+		let configuration = try #require(GraphFuzzerLongRunConfiguration.configuration(inEnvironment: ["SAFEDI_GRAPH_FUZZER_SEEDS": "383,98,311\n"]))
+
+		#expect(configuration.seedsReportFields == "seeds 383,98,311")
+	}
+
+	@Test
+	func seedsReportFields_namesShardsStartingSeedAndCount_whenShardOfRangeIsSet() throws {
+		let configuration = try #require(GraphFuzzerLongRunConfiguration.configuration(inEnvironment: [
+			"SAFEDI_GRAPH_FUZZER_ITERATIONS": "1000",
+			"SAFEDI_GRAPH_FUZZER_STARTING_SEED": "7",
+			"SAFEDI_GRAPH_FUZZER_SHARD": "1/3",
+		]))
+
+		#expect(configuration.seedsReportFields == "shard 341 333")
+	}
+
+	@Test
+	func coversCorpus_isTrue_whenConsecutiveSeedsFromZeroNumberTheCorpus() throws {
+		let configuration = try #require(GraphFuzzerLongRunConfiguration.configuration(inEnvironment: ["SAFEDI_GRAPH_FUZZER_ITERATIONS": "4"]))
+
+		#expect(configuration.coversCorpus(ofSeedCount: 4))
+	}
+
+	@Test
+	func coversCorpus_isFalse_whenListedSeedsFromZeroNumberTheCorpus() throws {
+		let configuration = try #require(GraphFuzzerLongRunConfiguration.configuration(inEnvironment: ["SAFEDI_GRAPH_FUZZER_SEEDS": "0,1,2,3"]))
+
+		#expect(!configuration.coversCorpus(ofSeedCount: 4))
+	}
+
+	@Test
+	func noSeedsProblem_namesSeedList_whenSeedListNamesNoSeed() throws {
+		let configuration = try #require(GraphFuzzerLongRunConfiguration.configuration(inEnvironment: ["SAFEDI_GRAPH_FUZZER_SEEDS": "x"]))
+
+		#expect(configuration.noSeedsProblem == "SAFEDI_GRAPH_FUZZER_SEEDS must be a comma-separated list of distinct seeds, set without SAFEDI_GRAPH_FUZZER_ITERATIONS, SAFEDI_GRAPH_FUZZER_STARTING_SEED or SAFEDI_GRAPH_FUZZER_SHARD.")
+	}
+
+	@Test
+	func noSeedsProblem_namesIterationsAndShard_whenIterationsNameNoSeed() throws {
+		let configuration = try #require(GraphFuzzerLongRunConfiguration.configuration(inEnvironment: ["SAFEDI_GRAPH_FUZZER_ITERATIONS": "x"]))
+
+		#expect(configuration.noSeedsProblem == "SAFEDI_GRAPH_FUZZER_ITERATIONS must be a positive integer or `corpus`, and SAFEDI_GRAPH_FUZZER_SHARD, when set, `<index>/<count>` naming a shard with at least one seed.")
+	}
+
+	@Test
+	func configuration_runsConsecutiveSeeds_whenIterationsAndStartingSeedAreSet() throws {
+		let configuration = try #require(GraphFuzzerLongRunConfiguration.configuration(inEnvironment: [
+			"SAFEDI_GRAPH_FUZZER_ITERATIONS": "3",
+			"SAFEDI_GRAPH_FUZZER_STARTING_SEED": "7",
+		]))
+
+		#expect(configuration.listedSeeds == nil)
+		#expect((0..<configuration.iterations).map(configuration.seed(at:)) == [7, 8, 9])
+	}
+
+	@Test
+	func configuration_isNil_whenNeitherIterationsNorSeedsIsSet() {
+		#expect(GraphFuzzerLongRunConfiguration.configuration(inEnvironment: ["SAFEDI_GRAPH_FUZZER_STARTING_SEED": "7"]) == nil)
+	}
+
+	@Test(arguments: ["", "1,,2", "1,2,", "1,1", "1,x", "-1"])
+	func configuration_runsNoSeed_whenSeedListIsNotDistinctSeeds(seedList: String) throws {
+		let configuration = try #require(GraphFuzzerLongRunConfiguration.configuration(inEnvironment: ["SAFEDI_GRAPH_FUZZER_SEEDS": seedList]))
+
+		#expect(configuration.iterations == 0)
+		#expect(configuration.listedSeeds == nil)
+	}
+
+	@Test(arguments: ["SAFEDI_GRAPH_FUZZER_ITERATIONS", "SAFEDI_GRAPH_FUZZER_STARTING_SEED", "SAFEDI_GRAPH_FUZZER_SHARD"])
+	func configuration_runsNoSeed_whenSeedListIsSetBesideAnotherSeedSetting(otherSetting: String) throws {
+		let configuration = try #require(GraphFuzzerLongRunConfiguration.configuration(inEnvironment: [
+			"SAFEDI_GRAPH_FUZZER_SEEDS": "98,311",
+			otherSetting: "1",
+		]))
+
+		#expect(configuration.iterations == 0)
+		#expect(configuration.listedSeeds == nil)
 	}
 }
