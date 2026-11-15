@@ -1,0 +1,17 @@
+import Harness
+import SafeDI
+
+public protocol Api: AnyObject {}
+
+#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)
+
+@Instantiable(generateDependencyTree: true)
+public final class S3: Instantiable, Traced {
+    public init(api: any Api) {
+        self.api = api
+        Registry.created(self, ["api": api])
+    }
+
+    public let tracker = Tracker("S3")
+    @Instantiated public let api: any Api
+}

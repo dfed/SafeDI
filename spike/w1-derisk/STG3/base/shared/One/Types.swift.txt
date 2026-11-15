@@ -1,0 +1,43 @@
+import Three
+import Two
+import Harness
+import SafeDI
+
+#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)
+
+@Instantiable
+public final class M1: Instantiable, Traced {
+    public init() {
+        Registry.created(self, [:])
+    }
+
+    public let tracker = Tracker("M1")
+}
+
+@Instantiable
+public final class Badge1: Instantiable, Traced {
+    public init(a: S2) {
+        self.a = a
+        Registry.created(self, ["a": a])
+    }
+
+    public let tracker = Tracker("Badge1")
+    @Received public let a: S2
+}
+
+@Instantiable(generateDependencyTree: true)
+public final class S1: Instantiable, Traced {
+    public init(m1: M1, a: S2, badge1: Badge1, b: S2) {
+        self.m1 = m1
+        self.a = a
+        self.badge1 = badge1
+        self.b = b
+        Registry.created(self, ["m1": m1, "a": a, "badge1": badge1, "b": b])
+    }
+
+    public let tracker = Tracker("S1")
+    @Instantiated public let m1: M1
+    @Instantiated public let a: S2
+    @Instantiated public let badge1: Badge1
+    @Instantiated public let b: S2
+}

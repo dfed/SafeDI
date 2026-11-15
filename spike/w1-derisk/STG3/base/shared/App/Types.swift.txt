@@ -1,0 +1,33 @@
+import One
+import Three
+import Two
+import Harness
+import SafeDI
+
+@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+public final class LiveApi: Instantiable, Traced, Api {
+    public init(m1: M1, badge1: Badge1?, m2: M2, badge2: Badge2?) {
+        self.m1 = m1
+        self.badge1 = badge1
+        self.m2 = m2
+        self.badge2 = badge2
+        Registry.created(self, ["m1": m1, "badge1": badge1, "m2": m2, "badge2": badge2])
+    }
+
+    public let tracker = Tracker("LiveApi")
+    @Received public let m1: M1
+    @Received(onlyIfAvailable: true) public let badge1: Badge1?
+    @Received public let m2: M2
+    @Received(onlyIfAvailable: true) public let badge2: Badge2?
+}
+
+@Instantiable(isRoot: true)
+public final class Root: Instantiable, Traced {
+    public init(s1: S1) {
+        self.s1 = s1
+        Registry.created(self, ["s1": s1])
+    }
+
+    public let tracker = Tracker("Root")
+    @Instantiated public let s1: S1
+}

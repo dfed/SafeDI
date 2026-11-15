@@ -1,0 +1,22 @@
+trace:
+  M1#1()
+  M2#1()
+  LiveApi#1(m1: M1#1, badge1: nil, m2: M2#1, badge2: nil)
+  S3#1(api: LiveApi#1)
+  Badge2#1(a: S3#1)
+  LiveApi#2(m1: M1#1, badge1: nil, m2: M2#1, badge2: Badge2#1)
+  S3#2(api: LiveApi#2)
+  S2#1(m2: M2#1, a: S3#1, badge2: Badge2#1, b: S3#2)
+  Badge1#1(a: S2#1)
+  M2#2()
+  LiveApi#3(m1: M1#1, badge1: Badge1#1, m2: M2#2, badge2: nil)
+  S3#3(api: LiveApi#3)
+  Badge2#2(a: S3#3)
+  LiveApi#4(m1: M1#1, badge1: Badge1#1, m2: M2#2, badge2: Badge2#2)
+  S3#4(api: LiveApi#4)
+  S2#2(m2: M2#2, a: S3#3, badge2: Badge2#2, b: S3#4)
+  S1#1(m1: M1#1, a: S2#1, badge1: Badge1#1, b: S2#2)
+  Root#1(s1: S1#1)
+alive holding everything: Badge1 1, Badge2 2, LiveApi 4, M1 1, M2 2, Root 1, S1 1, S2 2, S3 4
+alive holding only the last value: Badge2 1, LiveApi 2, M1 1, M2 1, S3 2
+alive after dropping everything: none
