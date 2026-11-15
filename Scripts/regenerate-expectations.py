@@ -87,6 +87,14 @@ RUN_PATH_PLACEHOLDER = re.compile(
 )
 
 
+# The fewest characters other than whitespace an interpolated literal's own text must spell to match an output.
+SHORTEST_ANCHOR = 8
+
+
+def non_whitespace_count(text):
+    return sum(1 for character in text if not character.isspace())
+
+
 def placeholder_count(parts):
     """How many run-path placeholders the literal's own text spells."""
     return sum(len(RUN_PATH_PLACEHOLDER.findall(text)) for kind, text in parts if kind == "text")
@@ -666,10 +674,12 @@ def match_literal(literal, content, header):
             continue
         greedy_match = greedy.fullmatch(body)
         spans = [lazy_match.span(group) for group in range(1, lazy.groups + 1)]
-        # A literal whose interpolations stand for more of the output than its own text spells on one line, such as
-        # `"\(self)"`, matches outputs it was never written for, so it proves nothing.
-        captured = sum(end - start for start, end in spans)
-        if captured > len(body) - captured and "\n" not in "".join(text for kind, text in literal.parts if kind == "text"):
+        # A literal whose own text spells little, or less than its interpolations stand for, such as `"\(self)"` or
+        # `"\(a)\n\(b)"`, matches outputs it was never written for, so it proves nothing. Only characters other than
+        # whitespace count, so line breaks and indentation anchor nothing.
+        anchor = non_whitespace_count(literal.plain_text)
+        captured = sum(non_whitespace_count(body[start:end]) for start, end in spans)
+        if anchor < SHORTEST_ANCHOR or captured > anchor:
             continue
         greedy_spans = [greedy_match.span(group) for group in range(1, greedy.groups + 1)]
         return mode, body, spans, spans != greedy_spans
@@ -1430,17 +1440,26 @@ def self_test(root):
 
     # interpolation in an unchanged region: rebuilt with the interpolation in place.
     test = case("interpolation-unchanged-region")
-    test.test_file(test_function('\t\t#expect(run() == """\n\t\tlet x = Old()\n\t\t// at \\(fixtures["A.swift"]):7\n\t\t""")'))
-    test.records([generation_record("k", 4, "let x = Old()\n// at $TARGET_DIRECTORY/A.swift:7")], [generation_record("k", 4, "let x = New()\n// at $TARGET_DIRECTORY/A.swift:7")], {"rename": [{"name": "rename", "table": {"Old": "New"}}]})
+    test.test_file(test_function('\t\t#expect(run() == """\n\t\tlet value = Old(configuration: .standard)\n\t\t// at \\(fixtures["A.swift"]):7\n\t\t""")'))
+    test.records([generation_record("k", 4, "let value = Old(configuration: .standard)\n// at $TARGET_DIRECTORY/A.swift:7")], [generation_record("k", 4, "let value = New(configuration: .standard)\n// at $TARGET_DIRECTORY/A.swift:7")], {"rename": [{"name": "rename", "table": {"Old": "New"}}]})
     status, summary = test.run()
     expect(status == 0 and summary["explained"] == 1, f"interpolation in an unchanged region: {status} {summary}")
-    expect(test.source() == test_function('\t\t#expect(run() == """\n\t\tlet x = New()\n\t\t// at \\(fixtures["A.swift"]):7\n\t\t""")'), "interpolation in an unchanged region: rebuilt source")
+    expect(test.source() == test_function('\t\t#expect(run() == """\n\t\tlet value = New(configuration: .standard)\n\t\t// at \\(fixtures["A.swift"]):7\n\t\t""")'), "interpolation in an unchanged region: rebuilt source")
+
+    # a literal whose own text is mostly line breaks anchors nothing: neither a helper's `"\(a)\n\(b)"` outside every
+    # test nor a test's `"\(path)\n"` matches an output.
+    test = case("weak-anchor")
+    original = 'struct FileTests {\n\tfunc joined(_ a: String, _ b: String) -> String {\n\t\t"\\(a)\\n\\(b)"\n\t}\n\n\t@Test\n\tfunc test() {\n\t\tlet path = run()\n\t\t#expect(read() == "\\(path)\\n")\n\t}\n}\n'
+    test.test_file(original)
+    test.records([generation_record("k", 9, "first line\nsecond line\n")], [generation_record("k", 9, "first line\ninserted\nsecond line\n")])
+    status, summary = test.run()
+    expect(status == 0 and summary["rewritten"] == 0 and summary["manual"] == 0 and summary["changedWithoutLiteral"] == 1 and test.source() == original, f"weak anchor: {status} {summary}")
 
     # interpolation in a changed region: manual.
     test = case("interpolation-changed-region")
-    original = test_function('\t\t#expect(run() == """\n\t\tlet x = \\(name)()\n\t\t""")')
+    original = test_function('\t\t#expect(run() == """\n\t\tlet value = \\(name)(configuration: .standard)\n\t\t""")')
     test.test_file(original)
-    test.records([generation_record("k", 4, "let x = Old()")], [generation_record("k", 4, "let y = Gone")])
+    test.records([generation_record("k", 4, "let value = Old(configuration: .standard)")], [generation_record("k", 4, "let value = Gone(configuration: .standard)")])
     status, summary = test.run()
     expect(status == 1 and summary["manualReasons"] == ["interpolation in a changed region"], f"interpolation in a changed region: {status} {summary}")
     expect(test.source() == original, "interpolation in a changed region: left unchanged")
