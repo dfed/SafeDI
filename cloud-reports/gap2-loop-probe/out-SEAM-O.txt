@@ -1,0 +1,22 @@
+-- hold deepest only false, via side first false
+created: Store Root LiveApi A Side LiveApi A Side LiveApi A
+all held: A 3, LiveApi 3, Root 1, Side 2, Store 1
+only the root held: A 0, LiveApi 0, Root 1, Side 0, Store 1
+nothing held: A 0, LiveApi 0, Root 0, Side 0, Store 0
+-- hold deepest only false, via side first true
+created: Store Root Side LiveApi A Side LiveApi A Side LiveApi A
+all held: A 3, LiveApi 3, Root 1, Side 2, Store 1
+only the root held: A 0, LiveApi 0, Root 1, Side 0, Store 1
+nothing held: A 0, LiveApi 0, Root 0, Side 0, Store 0
+-- hold deepest only true, via side first false
+created: Store Root LiveApi A Side LiveApi A Side LiveApi A
+all held: A 3, LiveApi 3, Root 1, Side 2, Store 1
+only the deepest A held: A 1, LiveApi 1, Root 0, Side 0, Store 0
+deepest A builds on after the root is gone: A 2, LiveApi 2, Root 0, Side 1, Store 0
+nothing held: A 0, LiveApi 0, Root 0, Side 0, Store 0
+-- hold deepest only true, via side first true
+created: Store Root Side LiveApi A Side LiveApi A Side LiveApi A
+all held: A 3, LiveApi 3, Root 1, Side 2, Store 1
+only the deepest A held: A 1, LiveApi 1, Root 0, Side 0, Store 0
+deepest A builds on after the root is gone: A 2, LiveApi 2, Root 0, Side 1, Store 0
+nothing held: A 0, LiveApi 0, Root 0, Side 0, Store 0
