@@ -8884,7 +8884,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				nestedLabels.insert(label)
 			}
 		}
-		let nestedStorage = nestedConfigurationStorage(of: nestedMembers, indent: innerIndent, sendable: false)
+		// The class box is `Sendable` where every configuration it holds is `@Sendable`-typed.
+		let nestedStorage = nestedConfigurationStorage(
+			of: nestedMembers,
+			indent: innerIndent,
+			sendable: rootChildren.allSatisfy { child in !nestedLabels.contains(disambiguatedLabel(for: child, labelMap: rootLabelMap)) || child.requiresSendable },
+		)
 		if let assignment = nestedStorage.assignment {
 			lines.append("\(memberIndent)\(assignment)")
 		}
@@ -9063,7 +9068,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case classBox
 	}
 
-	static let nestedConfigurationStorageForm = NestedConfigurationStorageForm.enumBox
+	static let nestedConfigurationStorageForm = NestedConfigurationStorageForm.classBox
 
 	/// A configuration nested in a generated configuration, read through a get-only computed property.
 	struct NestedConfigurationMember {
