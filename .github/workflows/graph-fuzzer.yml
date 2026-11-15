@@ -29,10 +29,11 @@ name: Graph Fuzzer
 #
 # A dispatched run caches under the ref it is dispatched on, which "Use
 # workflow from" limits to a branch or tag of this repository, and every job
-# builds or runs that ref's commit, never one an input names: a job that
-# builds code can reach the cache service, so a commit an input named,
-# perhaps a fork's, could write the caches of the branch the run is
-# dispatched on, main's when dispatched on main.
+# builds or runs that ref's commit, `github.sha`, never one an input or
+# another job's output names: a job that builds code can reach the cache
+# service, so a commit an input named, perhaps a fork's, could write the
+# caches of the branch the run is dispatched on, main's when dispatched on
+# main.
 on:
   workflow_dispatch:
     inputs:
@@ -132,23 +133,17 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
-    outputs:
-      commit: ${{ steps.commit.outputs.commit }}
     defaults:
       run:
         shell: bash
     env:
       SWIFT_BUILD_ARGUMENTS: -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
     steps:
+      # This checks out `github.sha`, the commit the run is dispatched on, and
+      # the other jobs name it, so a branch that moves during the run changes
+      # nothing.
       - name: Checkout Repo
         uses: actions/checkout@v7
-      # The other jobs check out this commit, the one the run is dispatched
-      # on, so a branch that moves during the run changes nothing.
-      - name: Name the Commit
-        id: commit
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Restore Build Directory
         uses: actions/cache/restore@v6
         with:
@@ -202,7 +197,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
         with:
-          ref: ${{ needs.coverage-build.outputs.commit }}
+          ref: ${{ github.sha }}
       - name: Download Test Bundle
         uses: actions/download-artifact@v8
         with:
@@ -274,7 +269,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
         with:
-          ref: ${{ needs.coverage-build.outputs.commit }}
+          ref: ${{ github.sha }}
       - name: Download Test Bundle
         uses: actions/download-artifact@v8
         with:
@@ -335,7 +330,7 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
         with:
-          ref: ${{ needs.coverage-build.outputs.commit }}
+          ref: ${{ github.sha }}
           # Every branch's history, so any base is present.
           fetch-depth: 0
       - name: Download Test Bundle
