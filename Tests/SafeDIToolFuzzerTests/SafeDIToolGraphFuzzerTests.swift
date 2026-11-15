@@ -6052,6 +6052,8 @@ struct SafeDIToolGraphFuzzerTests {
 			labels: [],
 			sameSupply: [1_020],
 			sameSupplyReason: seamMockTakesHoleValueReason,
+			sameSupplyBuilderKindFlips: [1_890],
+			remedyBuilderKindFlips: [1_890],
 			addedSupply: [],
 			forwardingOtherValues: [1_010, 1_020, 1_450, 1_890],
 			callingMocks: [],
@@ -6071,6 +6073,10 @@ struct SafeDIToolGraphFuzzerTests {
 		let sameSupply: [UInt64]
 		/// Why `sameSupply`'s graphs fail, which differs by corpus: the defect each corpus's same-supply edits show.
 		let sameSupplyReason: String
+		/// Seeds whose same-supply call stops compiling because the edit flips a builder's kind, `sameSupplyBuilderKindFlipReason`.
+		let sameSupplyBuilderKindFlips: [UInt64]
+		/// Seeds whose part (iii) remedy flips a builder's kind, so the remedy takes other builders, `remedyBuilderKindFlipReason`.
+		let remedyBuilderKindFlips: [UInt64]
 		let addedSupply: [UInt64]
 		let forwardingOtherValues: [UInt64]
 		let callingMocks: [UInt64]
@@ -6081,6 +6087,8 @@ struct SafeDIToolGraphFuzzerTests {
 		var issues = GraphFuzzerKnownIssue.adding(.builderSurface(.builderSurfaceNamesGeneratedType), reason: builderSurfaceReason, seeds: seeds.base, to: issues)
 		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.builderLabelBreaksContract), reason: labelReason, seeds: seeds.labels, to: issues)
 		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.sameSupplyCallStopsCompiling), reason: seeds.sameSupplyReason, seeds: seeds.sameSupply, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.sameSupplyCallStopsCompiling), reason: sameSupplyBuilderKindFlipReason, seeds: seeds.sameSupplyBuilderKindFlips, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.remedyAddsBuilder), reason: remedyBuilderKindFlipReason, seeds: seeds.remedyBuilderKindFlips, to: issues)
 		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.addedBuilderChangesExistingBuilder), reason: addedSupplyReason, seeds: seeds.addedSupply, to: issues)
 		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.placesForwardingOtherValuesAccepted), reason: forwardingOtherValuesReason, seeds: seeds.forwardingOtherValues, to: issues)
 		return GraphFuzzerKnownIssue.adding(.builderSurface(.callingMockChangesBuilder), reason: callingMocksReason, seeds: seeds.callingMocks, to: issues)
@@ -6098,6 +6106,12 @@ struct SafeDIToolGraphFuzzerTests {
 	/// The public mock corpus's same-supply defect: an internal calling mock takes `hole: S128_Hole` (seed 128), which the
 	/// calling-mock clause of contract rule 7, in the planned builder structs' last mock slice, removes.
 	private static let callingMockTakesHoleValueReason = "An internal calling mock passes the called public mock's hole up as the hole's value, or the wrapper its place spells, rather than filling it where the app fills or taking one builder per filling type, returned type and family (contract rules 7 and 8), so changing the place's wrapper changes the parameter's type or its label"
+
+	/// Transitional: owned by the change that hands every seam builder structs, which empties these seeds.
+	private static let sameSupplyBuilderKindFlipReason = "A transitional builder-kind flip: a seam takes builder structs only while its builders reach no place that forwards a value and hold no scope of another seam, so an edit that adds a place opening another seam's scope (an `.inner` case) flips a builder from a struct to a closure over a scope enum, and a call of the readable initializer stops compiling, until every seam takes builder structs"
+
+	/// Transitional: owned by the change that hands every seam builder structs, which empties these seeds.
+	private static let remedyBuilderKindFlipReason = "A transitional builder-kind flip: a seam takes builder structs only while its builders reach no place that forwards a value and hold no scope of another seam, so the remedy of places that forward other values, whose places forward the same values, flips a builder from a closure over a scope enum to a struct, until every seam takes builder structs"
 
 	private static let addedSupplyReason = "A builder takes `<fillingType>_<ReturnedType>Builder` only once a second returned type of its filling type appears, so adding a place of a new builder of an existing filling type renames the existing builder"
 
@@ -6126,6 +6140,8 @@ struct SafeDIToolGraphFuzzerTests {
 			19, 83, 98, 108, 135, 151, 273, 300, 326, 797, 854, 858, 929, 942, 990,
 		],
 		sameSupplyReason: seamMockTakesHoleValueReason,
+		sameSupplyBuilderKindFlips: [15, 69, 78, 277, 403, 418, 527, 809, 940, 950],
+		remedyBuilderKindFlips: [78, 277],
 		addedSupply: [],
 		forwardingOtherValues: [
 			15, 19, 59, 68, 69, 78, 83, 93, 94, 98, 108, 116, 121, 135, 151, 153, 163, 164, 215, 227, 252, 273,
@@ -6756,6 +6772,8 @@ struct SafeDIToolGraphFuzzerTests {
 			122, 128, 136, 145, 266, 332, 352, 411, 427, 580, 681, 740, 786, 814, 823, 827, 853, 977,
 		],
 		sameSupplyReason: callingMockTakesHoleValueReason,
+		sameSupplyBuilderKindFlips: [],
+		remedyBuilderKindFlips: [],
 		addedSupply: [],
 		forwardingOtherValues: [
 			3, 12, 22, 28, 59, 60, 64, 65, 79, 87, 88, 97, 106, 107, 117, 119, 128, 130, 136, 156,
