@@ -964,17 +964,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		/// The name of the guard enum `Host` generates.
 		var guardName: String {
 			switch self {
-			case .generic: "__safeDI_Host_CC41D3B2428F450E"
-			case .nested: "__safeDI_Host_54FA728246C5B100"
-			case .optional: "__safeDI_Host_413AEF7B650EB653"
-			case .array: "__safeDI_Host_1D749BFF7FDF1518"
-			case .dictionary: "__safeDI_Host_07BD41BB7FABBF0B"
-			case .tuple: "__safeDI_Host_A5FA9B2E58543DE2"
-			case .closure: "__safeDI_Host_C7F459DCA610F271"
-			case .attributed: "__safeDI_Host_F9090E6CB0F6C058"
-			case .metatype: "__safeDI_Host_8969CA9B155149F7"
-			case .variadic: "__safeDI_Host_E542022DA2AE6DC1"
-			case .void: "__safeDI_Host_CE6B0882ECDC82E2"
+			case .generic: "__safeDI_Host_181E655918D95068"
+			case .nested: "__safeDI_Host_62977D47F63CFE04"
+			case .optional: "__safeDI_Host_464D7546A32038EB"
+			case .array: "__safeDI_Host_AE86E26DF0F168F6"
+			case .dictionary: "__safeDI_Host_7918D46048698915"
+			case .tuple: "__safeDI_Host_ECC408FE814B1C54"
+			case .closure: "__safeDI_Host_8D59C8B92F9146B1"
+			case .attributed: "__safeDI_Host_CE877C9F39C27D46"
+			case .metatype: "__safeDI_Host_52760A16C394E675"
+			case .variadic: "__safeDI_Host_373D608B0E439CFB"
+			case .void: "__safeDI_Host_B318BCEF75FF1C14"
 			}
 		}
 	}
@@ -992,22 +992,38 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		let output = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature)])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen public enum SafeDIScope_\(spelling.stem) {
+		    @frozen nonisolated public enum SafeDIScope_\(spelling.stem) {
 		        case first(first_Values)
 		        case second(second_Values)
 
-		        public struct first_Values {}
+		        nonisolated public struct first_Values {}
 
-		        public struct second_Values {
+		        nonisolated public struct second_Values {
 		            public let first: \(spelling.spelledFirst)
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let first: (first_Values) -> __safeDI_Built
+		            public let second: (second_Values) -> __safeDI_Built
+
+		            public init(first: @escaping (first_Values) -> __safeDI_Built, second: @escaping (second_Values) -> __safeDI_Built) {
+		                self.first = first
+		                self.second = second
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.first = { _ in __safeDI_builder() }
+		                self.second = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_\(spelling.label): @escaping (SafeDIScope_\(spelling.stem)) -> \(spelling.spelledFirst)) {
-		        let first: \(spelling.spelledFirst) = __safeDI_\(spelling.label)(.first(SafeDIScope_\(spelling.stem).first_Values()))
-		        let second: \(spelling.spelledSecond) = __safeDI_\(spelling.label)(.second(SafeDIScope_\(spelling.stem).second_Values(first: first)))
+		    public init(__safeDI_\(spelling.label): SafeDIScope_\(spelling.stem).__safeDI_Builder<\(spelling.spelledFirst)>) {
+		        let first: \(spelling.spelledFirst) = __safeDI_\(spelling.label).first(SafeDIScope_\(spelling.stem).first_Values())
+		        let second: \(spelling.spelledSecond) = __safeDI_\(spelling.label).second(SafeDIScope_\(spelling.stem).second_Values(first: first))
 		        self.init(first: first, second: second)
 		    }
 		}

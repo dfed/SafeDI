@@ -109,15 +109,14 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
 		        func __safeDI_innerSeam() -> InnerSeam {
-		            _ = InnerSeam.__safeDI_InnerSeam_CF287AB62B83935B.self\(integration.seamCallComment(type: "InnerSeam", declaringModule: "InnerSeamModule"))
-		            func __safeDI_trackerBuilder_InnerSeam(_ scope: InnerSeam.SafeDIScope_Tracker) -> any Tracker {
-		                switch scope {
-		                case .tracker:
+		            _ = InnerSeam.__safeDI_InnerSeam_685966D1029C82B3.self\(integration.seamCallComment(type: "InnerSeam", declaringModule: "InnerSeamModule"))
+		            func __safeDI_trackerBuilder_InnerSeam() -> InnerSeam.SafeDIScope_Tracker.__safeDI_Builder<any Tracker> {
+		                .init(tracker: { _ in
 		                    let tracker: any Tracker = TrackerImpl()
 		                    return tracker
-		                }
+		                })
 		            }
-		            return InnerSeam(__safeDI_trackerBuilder: __safeDI_trackerBuilder_InnerSeam)
+		            return InnerSeam(__safeDI_trackerBuilder: __safeDI_trackerBuilder_InnerSeam())
 		        }
 		        let innerSeam: InnerSeam = __safeDI_innerSeam()
 		        self.init(innerSeam: innerSeam)

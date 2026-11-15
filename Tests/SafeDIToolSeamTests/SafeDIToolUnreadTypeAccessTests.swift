@@ -370,23 +370,36 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Image"], tiers: """
-		    @frozen public enum SafeDIScope_UserService {
+		    @frozen nonisolated public enum SafeDIScope_UserService {
 		        case service(service_Values)
 
-		        public struct service_Values {
+		        nonisolated public struct service_Values {
 		            public let image: Image
 		            internal let cache: Cache
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let service: (service_Values) -> __safeDI_Built
+
+		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                self.service = service
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.service = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_image image: Image, __safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
+		    public init(__safeDI_image image: Image, __safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
 		        let cache = Cache()
-		        let service: any UserService = __safeDI_userServiceBuilder(.service(SafeDIScope_UserService.service_Values(image: image, cache: cache)))
+		        let service: any UserService = __safeDI_userServiceBuilder.service(SafeDIScope_UserService.service_Values(image: image, cache: cache))
 		        self.init(image: image, service: service, cache: cache)
 		    }
-		""", guardHash: "FCD2E4EF2696F24A"))
+		""", guardHash: "4CBA8275D4B31380"))
 	}
 
 	@Test
@@ -404,23 +417,36 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Renderer"], tiers: """
-		    @frozen public enum SafeDIScope_Renderer {
+		    @frozen nonisolated public enum SafeDIScope_Renderer {
 		        case renderer(renderer_Values)
 
-		        public struct renderer_Values {
+		        nonisolated public struct renderer_Values {
 		            internal let cache: Cache
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let renderer: (renderer_Values) -> __safeDI_Built
+
+		            public init(renderer: @escaping (renderer_Values) -> __safeDI_Built) {
+		                self.renderer = renderer
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.renderer = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
 		    {COMMENT}
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_rendererBuilder: @escaping (SafeDIScope_Renderer) -> any Renderer) {
+		    public init(__safeDI_rendererBuilder: SafeDIScope_Renderer.__safeDI_Builder<any Renderer>) {
 		        let cache = Cache()
-		        let renderer: any Renderer = __safeDI_rendererBuilder(.renderer(SafeDIScope_Renderer.renderer_Values(cache: cache)))
+		        let renderer: any Renderer = __safeDI_rendererBuilder.renderer(SafeDIScope_Renderer.renderer_Values(cache: cache))
 		        self.init(renderer: renderer, cache: cache)
 		    }
-		""", guardHash: "4CCDF20E7039460C"))
+		""", guardHash: "870F155B2B16A508"))
 	}
 
 	// MARK: E: a `package` type of a module that does not run SafeDI
@@ -3769,26 +3795,39 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: ["Kit", "SafeDI"], tiers: """
-		    @frozen public enum SafeDIScope_UserService {
+		    @frozen nonisolated public enum SafeDIScope_UserService {
 		        case service(service_Values)
 
-		        public struct service_Values {
+		        nonisolated public struct service_Values {
 		            public let badgeBuilder: Instantiator<Badge>.Builder
 		            public let sendableBadgeBuilder: SendableInstantiator<Badge>.Builder
 		            public let erasedBadgeBuilder: ErasedInstantiator<(), Badge>.Builder
 		            public let sendableErasedBadgeBuilder: SendableErasedInstantiator<(), Badge>.Builder
 		            internal let cache: Cache
 		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let service: (service_Values) -> __safeDI_Built
+
+		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                self.service = service
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.service = { _ in __safeDI_builder() }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_badgeBuilder badgeBuilder: @escaping Instantiator<Badge>.Builder, __safeDI_sendableBadgeBuilder sendableBadgeBuilder: @escaping SendableInstantiator<Badge>.Builder, __safeDI_erasedBadgeBuilder erasedBadgeBuilder: @escaping ErasedInstantiator<(), Badge>.Builder, __safeDI_sendableErasedBadgeBuilder sendableErasedBadgeBuilder: @escaping SendableErasedInstantiator<(), Badge>.Builder, __safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
+		    public init(__safeDI_badgeBuilder badgeBuilder: @escaping Instantiator<Badge>.Builder, __safeDI_sendableBadgeBuilder sendableBadgeBuilder: @escaping SendableInstantiator<Badge>.Builder, __safeDI_erasedBadgeBuilder erasedBadgeBuilder: @escaping ErasedInstantiator<(), Badge>.Builder, __safeDI_sendableErasedBadgeBuilder sendableErasedBadgeBuilder: @escaping SendableErasedInstantiator<(), Badge>.Builder, __safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
 		        let cache = Cache()
-		        let service: any UserService = __safeDI_userServiceBuilder(.service(SafeDIScope_UserService.service_Values(badgeBuilder: badgeBuilder, sendableBadgeBuilder: sendableBadgeBuilder, erasedBadgeBuilder: erasedBadgeBuilder, sendableErasedBadgeBuilder: sendableErasedBadgeBuilder, cache: cache)))
+		        let service: any UserService = __safeDI_userServiceBuilder.service(SafeDIScope_UserService.service_Values(badgeBuilder: badgeBuilder, sendableBadgeBuilder: sendableBadgeBuilder, erasedBadgeBuilder: erasedBadgeBuilder, sendableErasedBadgeBuilder: sendableErasedBadgeBuilder, cache: cache))
 		        self.init(badgeBuilder: badgeBuilder, sendableBadgeBuilder: sendableBadgeBuilder, erasedBadgeBuilder: erasedBadgeBuilder, sendableErasedBadgeBuilder: sendableErasedBadgeBuilder, service: service, cache: cache)
 		    }
-		""", guardHash: "79CFB6518E7F29B8"))
+		""", guardHash: "D19EF7DC77ACB218"))
 	}
 
 	@Test
