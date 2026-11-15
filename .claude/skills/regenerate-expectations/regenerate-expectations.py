@@ -14,11 +14,11 @@ every output of a generation helper, and every mismatch of an assertion helper. 
   1. base records: a run on the old generator, such as the commit that adds a change's failing tests;
   2. head records: a run on the new generator.
 After each run, write that directory's manifest of Tests/:
-  python3 -I Scripts/regenerate-expectations.py --write-manifest RECORD_DIR --checkout .
+  python3 -I .claude/skills/regenerate-expectations/regenerate-expectations.py --write-manifest RECORD_DIR --checkout .
 SAFEDI_SKIP_COMPILE_CHECK=1 may skip compiles in a record run.
 
 Applying. With both record directories, the change's rules file and an empty report directory:
-  python3 -I Scripts/regenerate-expectations.py --base-records BASE --head-records HEAD --rules RULES.json \\
+  python3 -I .claude/skills/regenerate-expectations/regenerate-expectations.py --base-records BASE --head-records HEAD --rules RULES.json \\
       --report REPORT --checkout .
 A string literal is rewritten only when it equalled a base record exactly (or after `generatedFileHeader`), within
 the test function whose call recorded it, or the test function at the location of the test the record carries
