@@ -1,0 +1,58 @@
+[
+ {
+  "claim": "Two edits reaching one file under different spellings (a.swift and ./a.swift, or a symbolic link and its target) each apply to a separate copy; the later write overwrites the earlier, losing an edit while exiting 0.",
+  "real": true,
+  "severity": "blocking",
+  "reason": "Reproduced on a91dcea1 in /Users/dfed/Library/Caches/SafeDIScratch/review-apply-edit/adj. EDITS [{a.swift, alpha->ALPHA},{./a.swift, beta->BETA}] on `alpha beta` prints two '1 replacement' lines, exits 0, and leaves `alpha BETA`. The same happens with t.swift and l.swift -> t.swift. `contents` is keyed by the path string (apply-edit.py:52-53), so this is silent edit loss reported as success, against the docstring's 'A later edit of a file sees the earlier ones'.",
+  "fix": "Key `contents` and `counts` by os.path.realpath(path) (keep the caller's spelling for messages, and write to the resolved path or the first spelling). Add self-test cases for `./` and for a symbolic link."
+ },
+ {
+  "claim": "str.count counts only non-overlapping matches, so old text that matches twice with overlap is counted once and the first match is replaced without --all.",
+  "real": true,
+  "severity": "blocking",
+  "reason": "Reproduced: file `\\tfoo()\\n\\tfoo()\\n\\tfoo()\\n`, old `\\tfoo()\\n\\tfoo()`, new `\\tbar()` prints 'ov.swift: 1 replacement', exits 0, and leaves `\\tbar()\\n\\tfoo()\\n`. The old text matches at lines 1-2 and 2-3, so the edit is ambiguous and the script applies it anyway (apply-edit.py:59-64). Repeated identical lines make this shape realistic in Swift sources.",
+  "fix": "Count every match start, overlapping included (loop text.find(old, i + 1)); refuse more than one without --all, and with --all refuse overlapping matches. Add a self-test case."
+ },
+ {
+  "claim": "The write loop is neither all-or-nothing nor safe from truncation: open(path, 'w') truncates before encoding, and a later file's write failure leaves earlier files written; both end in a traceback, not an EditError.",
+  "real": true,
+  "severity": "should-fix",
+  "reason": "Reproduced both. (1) EDITS with new `\\ud800` on s.swift (18 bytes) raises UnicodeEncodeError, exit 1, and s.swift is left at 0 bytes. (2) EDITS for w1.swift and a chmod 444 w2.swift raises PermissionError on w2.swift, exit 1, while w1.swift already holds `ONE`. This contradicts 'Nothing is written unless every edit applies'. Should-fix, not blocking: both inputs are unusual (a lone surrogate in JSON, a read-only target) and the exit status is nonzero, but (1) destroys file content.",
+  "fix": "Before any write, encode every new content to bytes (raising EditError on UnicodeEncodeError) and check os.access(path, os.W_OK) for each target; then write the bytes in binary mode (or a sibling temporary file plus os.replace onto the resolved path, keeping the mode). Add self-test cases for both."
+ },
+ {
+  "claim": "No CI step runs Scripts/apply-edit.py --self-test, unlike unexecuted-lines.py --self-test.",
+  "real": true,
+  "severity": "should-fix",
+  "reason": "`git grep apply-edit a91dcea1` matches only CLAUDE.md:34 and the script. The only self-test step under .github is ci.yml:1304 (`python3 -I Scripts/unexecuted-lines.py --self-test ...`). The self-test passes locally on Python 3.15 and on /usr/bin/python3 3.9.6, but nothing runs it on Linux or guards regressions.",
+  "fix": "Add a step `python3 -I Scripts/apply-edit.py --self-test \"$RUNNER_TEMP/apply-edit-self-test\"` to a Linux job without a container, for example beside the instruction-file check at ci.yml:1597 or the unexecuted-lines self-test at ci.yml:1304."
+ },
+ {
+  "claim": "The self-test does not cover several refusals: a file that is not UTF-8, an EDITS.json that is not a list or is empty, an unknown key, a non-boolean \"all\", exit-2 usage errors, and an existing --self-test directory; nor the aliasing, overlap and write-failure cases.",
+  "real": true,
+  "severity": "should-fix",
+  "reason": "Read self_test (apply-edit.py:93-162): its cases are one occurrence, trim off/on, two occurrences with/without --all, absent, empty, equal, missing file, ordered list, failing list, missing \"new\", invalid JSON. None of the listed refusals has a case. By hand they behave correctly today (0xff file -> exit 1; `{}` -> exit 1; `--edits X --all` and two positionals -> exit 2; existing directory -> exit 2), so this is a coverage gap, not a defect.",
+  "fix": "Add expect() cases for each: an undecodable file, `{}` and `[]`, an entry with an extra key, `\"all\": \"yes\"`, `--edits X --all` == 2, two positionals == 2, --self-test on an existing directory == 2, plus cases for the fixes above; check the target is unchanged in each."
+ },
+ {
+  "claim": "--trim-final-newline is accepted with --edits and silently does nothing, while the usage line advertises it for --edits.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Reproduced: `--edits e5.json --trim-final-newline` with old `a\\n`, new `b\\n` exits 0 and leaves `b\\n`; the flag has no effect and no message. Usage line 3 lists `[--trim-final-newline]` for --edits, while the docstring (line 16) says EDITS.json texts are taken as they are. Harmless but inconsistent.",
+  "fix": "Drop `[--trim-final-newline]` from the --edits usage line and return 2 when both are given, as --all with --edits already does."
+ },
+ {
+  "claim": "argparse accepts abbreviated options, so `--a` turns on --all and replaces every occurrence.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Reproduced: `ae.py ab.swift x.o x.n --a` on `x x` prints 'ab.swift: 2 replacements', exits 0, leaves `y y`. ArgumentParser at apply-edit.py:166 does not pass allow_abbrev=False. Low likelihood in practice.",
+  "fix": "Pass allow_abbrev=False to ArgumentParser."
+ },
+ {
+  "claim": "The CLAUDE.md script-list entry omits --self-test DIR, though the unexecuted-lines.py entry names its self-test; otherwise the line fits and CLAUDE.md is 5,395 of 5,500 words.",
+  "real": true,
+  "severity": "nit",
+  "reason": "Confirmed: `wc -w` on a91dcea1:CLAUDE.md gives 5395; the new line 34 names only `FILE OLD_FILE NEW_FILE [--all]` and `--edits EDITS.json`, while line 33 ends with '`--self-test DIRECTORY` checks the script against fixtures.' The entry's format matches its neighbours. Optional consistency point only.",
+  "fix": "Append '; `--self-test DIRECTORY` checks it against fixtures' (about 7 words; stays under 5,500)."
+ }
+]
