@@ -1084,6 +1084,8 @@ struct SafeDIToolGraphFuzzerTests {
 		// The provider's file cannot be read, so the error is reported where the module refers to the call, naming the
 		// provider's module.
 		"/F/Root.swift:11:5: error: `Host` in module `Base` provides `theme: Theme`, but the `public` initializer SafeDI generated for `Screen` in module `Feature`, the narrowest one module `App` can call, does not take it.",
+		// A fill of a public mock's place holds the value, which the called mock hands it.
+		"/F/Screen.swift:12:5: error: `Panel`’s mock hands this fill `theme: Theme`, but the `public` mock SafeDI generated for `Service` in module `Impl`, the narrowest one module `App` can call, does not take it.",
 		// The caller is an outer seam that takes the value from its own callers, as R5 says of a pass-through.
 		"/F/Outer.swift:3:1: error: `Outer` takes `theme: Theme?` from its callers, but the `public` initializer SafeDI generated for `Service` in module `Base`, the narrowest one module `Mid` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline.",
 	])
@@ -4727,6 +4729,11 @@ struct SafeDIToolGraphFuzzerTests {
 								for feature in GraphFuzzerFeature.features(of: result.fixture, outcome: result.outcome) {
 									acceptedFeatureCounts[feature, default: 0] += 1
 								}
+								if corpus.features.contains(.generateMockPublic), case let .accepted(generatedFiles, _) = result.outcome {
+									for feature in GraphFuzzerPublicMockDraw.outputFeatures(of: result.fixture, generatedFiles: generatedFiles) {
+										publicMockOutputFeatureCounts[feature, default: 0] += 1
+									}
+								}
 								if !corpus.drawFeaturesCountedWhenAccepted.isEmpty {
 									for feature in GraphFuzzerFeature.seamDrawFeatures(of: result.fixture).intersection(corpus.drawFeaturesCountedWhenAccepted) {
 										acceptedDrawFeatureCounts[feature, default: 0] += 1
@@ -4734,11 +4741,6 @@ struct SafeDIToolGraphFuzzerTests {
 								}
 								if result.failure == nil {
 									acceptedSpellingDrawFeatures.formUnion(GraphFuzzerFeature.seamDrawFeatures(of: result.fixture).intersection(corpus.spellingDrawFeatures))
-									if corpus.features.contains(.generateMockPublic), case let .accepted(generatedFiles, _) = result.outcome {
-										for feature in GraphFuzzerPublicMockDraw.outputFeatures(of: result.fixture, generatedFiles: generatedFiles) {
-											publicMockOutputFeatureCounts[feature, default: 0] += 1
-										}
-									}
 								}
 							}
 							if result.isInspectedByValueOracle {
@@ -4837,8 +4839,8 @@ struct SafeDIToolGraphFuzzerTests {
 		report.append("draws \(corpus.name) \(drawFeatureCounts) \(drawFeaturePins)")
 		let errorCounts = corpus.errorMarkers.map { errorGraphCounts[$0, default: 0] }
 		report.append("errors \(corpus.name) \(errorCounts.map(String.init).joined(separator: ",")) \(corpus.errorGraphCounts.map(String.init).joined(separator: ","))")
-		// The output features of the accepted graphs that pass, with each pinned minimum share as a percentage of the
-		// corpus's accepted graphs, which ci.yml's combine job adds up and checks.
+		// The output features of the accepted graphs, whether or not they fail, with each pinned minimum share as a
+		// percentage of the corpus's accepted graphs, which ci.yml's combine job adds up and checks.
 		if corpus.features.contains(.generateMockPublic) {
 			let counts = GraphFuzzerPublicMockOutputFeature.allCases.map { "\($0.rawValue)=\(publicMockOutputFeatureCounts[$0, default: 0])" }.joined(separator: ",")
 			let minimums = corpus.outputFeatureMinimumShares.sorted { $0.key < $1.key }.map { "\($0.key.rawValue)=\($0.value)" }.joined(separator: ",")
@@ -5713,36 +5715,36 @@ struct SafeDIToolGraphFuzzerTests {
 		readTwinGraphCount: publicMockCorpusReadTwinGraphCount,
 	)
 
-	/// The least share of the public mock corpus's accepted graphs whose generated code shows each output feature, in
-	/// percent: the floor of the share the corpus run observed, for each feature the generated code shows today. The
-	/// commits that make another feature show pin it in turn.
+	/// The least share of the public mock corpus's accepted graphs, whether or not they fail, whose generated code shows
+	/// each output feature, in percent: the floor of the share the corpus run observed, for each feature the generated code
+	/// shows today. The commits that make another feature show pin it in turn.
 	static let publicMockCorpusOutputFeatureMinimumShares: [GraphFuzzerPublicMockOutputFeature: Int] = [
-		.allNonPublicConfiguration: 40,
-		.configurationStruct: 32,
-		.constructionFunction: 80,
-		.consumerCall: 78,
-		.consumerErasedCall: 18,
-		.consumerErasedInline: 2,
+		.allNonPublicConfiguration: 42,
+		.configurationStruct: 34,
+		.constructionFunction: 84,
+		.consumerCall: 82,
+		.consumerErasedCall: 19,
+		.consumerErasedInline: 3,
 		.consumerFillReentersPublicMock: 2,
 		.consumerFillsHole: 3,
-		.consumerInline: 34,
-		.consumerPassesHoleBuilderUp: 9,
-		.consumerPassesInstance: 42,
-		.consumerSendableFactory: 16,
-		.defaultRewritten: 85,
+		.consumerInline: 37,
+		.consumerPassesHoleBuilderUp: 14,
+		.consumerPassesInstance: 46,
+		.consumerSendableFactory: 17,
+		.defaultRewritten: 88,
 		.forwardedProvider: 3,
-		.holeBuilder: 34,
-		.isolatedConstruction: 2,
-		.moduleConfiguration: 80,
-		.publicTier: 95,
-		.secondTier: 57,
-		.sendableHoleBuilder: 1,
+		.holeBuilder: 39,
+		.isolatedConstruction: 3,
+		.moduleConfiguration: 84,
+		.publicTier: 100,
+		.secondTier: 60,
+		.sendableHoleBuilder: 2,
 		.thirdTier: 0,
-		.unreadTypeComment: 26,
+		.unreadTypeComment: 27,
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0xAD9CDA020E94461F
+	static let publicMockCorpusFixtureHash: UInt64 = 0xECA053722718124C
 	static let publicMockCorpusAcceptedSeedCount = 863
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x0ACCA7FED6243E41
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -5780,7 +5782,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xEDD09AB314C7041D
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x2F4722826B909A8B
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -5788,7 +5790,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "A public mock's parameters are sorted by label (decision 27), so reversing the labels reorders a `.public` consumer's `mock()` and the parameters it surfaces from its leaves",
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
-			seeds: [12, 65, 103, 106, 167, 251, 351, 407, 433, 528, 562, 708, 771, 947],
+			seeds: [12, 65, 103, 106, 167, 251, 351, 407, 433, 528, 562, 771, 947],
 		),
 		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
 		// cycle through it.
@@ -5824,9 +5826,38 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.holeNamesChangeWithSecondPlace(containing: "`t6Twin`"), .renamedGraphDiffers(.mockCode)],
 			seeds: [19, 299, 456, 510, 597],
 		),
+		// The root-level stream's label in two forms (`holeRootReceivesLabelInTwoForms`), in `T6`'s mock and in a consumer's
+		// call of it: a public mock's required parameters keep their places in the comparison, which sorts only the
+		// optional ones (`GraphFuzzerMockDifference`).
+		GraphFuzzerKnownIssue(
+			reason: publicMockFormsNamedApartOrderReason,
+			signatures: [.renamedGraphDiffers(.mockCode)],
+			seeds: [18, 22, 47, 101, 156, 161, 221, 242, 326, 327, 381, 474, 629, 821, 880, 881, 886, 970, 977, 983],
+		),
+		// The same, where `mockConditionalCompilation: nil` puts the mock in the type's dependency tree file.
+		GraphFuzzerKnownIssue(
+			reason: publicMockFormsNamedApartOrderReason,
+			signatures: [.renamedGraphDiffers(.dependencyTreeCode)],
+			seeds: [137],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(publicMockFormsNamedApartOrderReason); and a public mock's parameters are sorted by label (`Property.precedesInMockOrder`), so reversing the labels reorders a `.public` consumer's `mock()`",
+			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
+			seeds: [708],
+		),
+		// The root-level stream's lazily received `holeSession` (`holeRootLevelHoldsWrapper`): each call of `T6`'s mock wraps
+		// again the instance its consumer passes (M8.32), and its root level holds that wrapper, so the fill beneath a later
+		// leaf reads the wrapper that leaf made, first seen at the leaf, where the known-right path's reads the consumer's.
+		GraphFuzzerKnownIssue(
+			reason: "Each call of a public mock wraps again the instance a consumer passes for a value received lazily (M8.32), which the mock's root level holds, so a fill beneath a later leaf reads that leaf's wrapper again, a later sight of the re-made wrapper the stated divergence's exemption does not derive",
+			signatures: [.publicMockBuildsOtherValuesThanKnownRight(containing: "hole > value > holeSession")],
+			seeds: [162],
+		),
 	]
 
 	private static let publicMockBuilderOrderReason = "A mock's parameters are sorted by label, and a builder's label begins with its hole type's name, so moving type names across wrapper names moves a consumer's builder among its other parameters"
+
+	private static let publicMockFormsNamedApartOrderReason = "A mock names the forms of a label its tree receives in two apart, after their types, and orders them by `Property.precedesInMockOrder` (label, kind, then type), so moving type names across wrapper names reorders a public mock's required parameters"
 
 	private static let passedUpBuildersNamedApartReason = "An internal consumer that passes up the places of two public mocks of one hole type names the builders it takes for them apart after each called type, so adding the second call renames the first's builder"
 
@@ -5872,7 +5903,13 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeFillClosesLazyCycle: 15,
 		.holeFillReceivesField: 24,
 		.holeFillReceivesNonField: 56,
+		.holeFillReceivesFormBoundAgain: 17,
+		.holeFillReceivesRootLevelValue: 37,
+		.holeFillReceivesRootLevelWrapper: 15,
 		.holeOnPublicMockType: 228,
+		.holeRootLevelHoldsValues: 108,
+		.holeRootLevelHoldsWrapper: 90,
+		.holeRootReceivesLabelInTwoForms: 97,
 		.holeScopeHoldsPackageValue: 103,
 		.holeScopeHoldsPublicValue: 140,
 		.instantiableParameterType: 235,

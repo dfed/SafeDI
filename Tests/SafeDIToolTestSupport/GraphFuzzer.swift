@@ -9417,6 +9417,9 @@ struct GraphFuzzerFailure: Equatable {
 		/// A `public` or `package` declaration in generated code names a type narrower than the declaration, by the access
 		/// the generator gave the type: a public mock, override or configuration SafeDI proved from the wrong declaration.
 		case publicMockDeclarationWiderThanNamedType = "a generated public or package declaration is wider than a type it names"
+		/// A consumer's mock in a `generateMockPublic` graph takes a builder of `T6`'s places, which the fill its module declares
+		/// fills from what `T6`'s mock binds before its tree (`GraphFuzzerToolRuns.publicMockRootLevelFailure`).
+		case publicMockPassesUpPlaceItsRootLevelFills = "a consumer passes up a public mock's place its fill fills from what the public mock binds before its tree"
 		/// The differential value comparator describes other values for a probe of a `generateMockPublic` graph than for
 		/// the same probe of its known-right path, beyond the stated divergences.
 		case publicMockBuildsOtherValuesThanKnownRight = "the graph builds other values than its known-right path"
@@ -10707,7 +10710,7 @@ enum GraphFuzzerOracle {
 		}
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
+			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
 			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
@@ -11087,17 +11090,18 @@ enum GraphFuzzerOracle {
 
 	/// Whether `error`, a diagnostic line, reports a caller holding a value for a parameter the seam tier it calls
 	/// omits: "`Host` provides `theme: Theme`, but …", or, where the provider's file cannot be read, "`Host` in module
-	/// `Base` provides `theme: Theme`, but …", or, where the caller is an outer seam that takes the value as a parameter
-	/// of its own, "`Outer` takes `theme: Theme?` from its callers, but …".
+	/// `Base` provides `theme: Theme`, but …", or, where a fill of a public mock's place holds the value, "`Panel`’s mock
+	/// hands this fill `theme: Theme`, but …", or, where the caller is an outer seam that takes the value as a parameter of
+	/// its own, "`Outer` takes `theme: Theme?` from its callers, but …".
 	static func isOmittedValueError(_ error: Substring) -> Bool {
 		omittedValueLabel(of: error) != nil
 	}
 
-	/// The label of the parameter an omitted-value error names: `theme` of "`Host` provides `theme: Theme`, but …" or of
-	/// "`Outer` takes `theme: Theme?` from its callers, but …".
+	/// The label of the parameter an omitted-value error names: `theme` of "`Host` provides `theme: Theme`, but …", of
+	/// "`Panel`’s mock hands this fill `theme: Theme`, but …" or of "`Outer` takes `theme: Theme?` from its callers, but …".
 	static func omittedValueLabel(of error: Substring) -> String? {
 		guard let message = error.range(of: ": error: ").map({ error[$0.upperBound...] }), message.hasPrefix("`") else { return nil }
-		for (opening, closing) in [("` provides `", "`, but "), ("` takes `", "` from its callers, but ")] {
+		for (opening, closing) in [("` provides `", "`, but "), ("`’s mock hands this fill `", "`, but "), ("` takes `", "` from its callers, but ")] {
 			if let property = message.range(of: opening), let end = message[property.upperBound...].range(of: closing) {
 				return String(message[property.upperBound..<end.lowerBound].prefix { $0 != ":" })
 			}

@@ -95,7 +95,8 @@ extension DependencyTreeGenerator {
 	///   - reached: The places of the hole type, and the calls that pass one up, in the order the seam's generated code
 	///     reaches them.
 	///   - bindsReceivesAgain: Whether the tree is a public mock's, whose types' levels hold the receives it binds again
-	///     (`receivesBoundAgainOfAnyBuild(inTreeRootedAt:)`).
+	///     (`receivesBoundAgainOfAnyBuild(inTreeRootedAt:rootFields:namesApartAtRoot:)`).
+	///   - namesApartAtRoot: For a public mock, what its root binds only under names apart, which no level declares.
 	static func scopeEnumsByType(
 		of seam: Instantiable,
 		holeType: SeamSignature.HoleType,
@@ -106,6 +107,7 @@ extension DependencyTreeGenerator {
 		holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole],
 		parameters: [SeamSignature.Parameter],
 		bindsReceivesAgain: Bool,
+		namesApartAtRoot: PublicMockRootLevel.NamesApart,
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
 		reachedEnum: (SeamSignature.ScopeEnum.Key) -> SeamSignature.ScopeEnum?,
@@ -171,7 +173,11 @@ extension DependencyTreeGenerator {
 		})
 		let cycleParametersOfAnyBuild = Self.cycleParametersOfAnyBuild(inTreeRootedAt: generator)
 		let reboundPropertiesOfAnyBuild = Self.reboundPropertiesOfAnyBuild(inTreeRootedAt: generator)
-		let receivesBoundAgainOfAnyBuild = bindsReceivesAgain ? Self.receivesBoundAgainOfAnyBuild(inTreeRootedAt: generator) : [:]
+		let receivesBoundAgainOfAnyBuild = bindsReceivesAgain
+			? Self.receivesBoundAgainOfAnyBuild(inTreeRootedAt: generator, rootFields: parameters.map(\.property), namesApartAtRoot: namesApartAtRoot)
+			: [:]
+		// A mock's root declares no child of a label its root level's fields hold, or one that only names apart bind.
+		let labelsNoRootChildDeclares = bindsReceivesAgain ? namesApartAtRoot.labels.union(parameters.map(\.property.label)) : []
 
 		// What each type with an enum binds, in its order, and the cases each family's enum has.
 		struct DraftCase {
@@ -225,7 +231,7 @@ extension DependencyTreeGenerator {
 			let declarations = plainProperties.isEmpty && plainFills.isEmpty ? [] : levelDeclarations(
 				of: build,
 				isSeamRoot: type == seamType,
-				labelsNamedApart: bindsReceivesAgain && type == seamType ? build.labelsChildrenShare : [],
+				labelsNamedApart: type == seamType ? labelsNoRootChildDeclares : [],
 				cycleParameters: cycleParametersOfAnyBuild[type, default: []],
 				reboundProperties: reboundPropertiesOfAnyBuild[type, default: []],
 				receivesBoundAgain: receivesBoundAgainOfAnyBuild[type, default: []],
@@ -711,7 +717,11 @@ extension DependencyTreeGenerator {
 	/// from that binding, so a place beneath it is handed the value the type received, as inline's place reads it, never the
 	/// farther declaration of the label the binding hides. A build that does not binds the field from the label as Swift
 	/// sees it there, the nearest declaration, which provides the form the type receives, and so reads inline.
-	static func receivesBoundAgainOfAnyBuild(inTreeRootedAt root: ScopeGenerator) -> [TypeDescription: [Property]] {
+	///
+	/// A receive of a form the root binds only under a name apart (`id_Badge`), with no type on a fill's path that receives
+	/// that form, leaves the fill's own receive of it unprovided: the place is passed up, and the caller's builder can capture
+	/// the value. `fields(of:)` decides the same way.
+	static func receivesBoundAgainOfAnyBuild(inTreeRootedAt root: ScopeGenerator, rootFields: [Property], namesApartAtRoot: PublicMockRootLevel.NamesApart) -> [TypeDescription: [Property]] {
 		var propertiesByType = [TypeDescription: [Property]]()
 		// The nearest declaration of each label above each scope, as `fields(of:)` declares them on a place's path: the root's
 		// children, then each scope's forwarded properties, its builder function's cycle parameters, the receives the mock
@@ -721,11 +731,13 @@ extension DependencyTreeGenerator {
 				nearestDeclarations[property.label] = property
 			}
 		}
-		// A label the root's children share is named apart there, so none of them declares it (`labelsChildrenShare`): each
-		// receiver of it binds it again from the binding the mock names apart.
-		let labelsNamedApart = root.labelsChildrenShare
+		// The root level's fields, the bindings `mock()` holds under their bare labels before its tree, come first. A label only
+		// names apart bind there (`PublicMockRootLevel.NamesApart.labels`) has no declaration: each receiver of it binds it again
+		// from the binding of its form. Nor does a child declare a label a field holds.
 		var rootDeclarations = [String: Property]()
-		declaring(root.children.compactMap(\.property).filter { !labelsNamedApart.contains($0.label) }, in: &rootDeclarations)
+		declaring(rootFields, in: &rootDeclarations)
+		let rootFieldLabels = Set(rootFields.map(\.label))
+		declaring(root.children.compactMap(\.property).filter { !namesApartAtRoot.labels.contains($0.label) && !rootFieldLabels.contains($0.label) }, in: &rootDeclarations)
 		var generatorsToVisit = root.children.map { (generator: $0, nearestDeclarations: rootDeclarations) }
 		while let (generator, inheritedDeclarations) = generatorsToVisit.popLast() {
 			guard generator.fillHole == nil, generator.holeSite == nil, !generator.closesPropertyCycle, let instantiable = generator.builtInstantiable else { continue }
@@ -736,11 +748,12 @@ extension DependencyTreeGenerator {
 			// Every build of a type has its dependencies, so the type's are kept in their declaration order, whichever build
 			// binds each again.
 			var boundAgain = Set(propertiesByType[instantiable.concreteInstantiable, default: []])
-			for dependency in instantiable.dependencies {
+			// A wrapper the root binds apart is handed by name, never bound again.
+			for dependency in instantiable.dependencies where !namesApartAtRoot.wrappers.contains(dependency.property) {
 				let bindsAgain = if let nearest = nearestDeclarations[dependency.property.label] {
 					mockBindsAgain(receiving: dependency, beneath: nearest)
 				} else {
-					dependency.source.isReceived && labelsNamedApart.contains(dependency.property.label)
+					dependency.source.isReceived && namesApartAtRoot.labels.contains(dependency.property.label)
 				}
 				guard bindsAgain else { continue }
 				nearestDeclarations[dependency.property.label] = dependency.property
@@ -756,8 +769,9 @@ extension DependencyTreeGenerator {
 	}
 
 	/// What the scope `build` builds declares, in the order it binds the declarations, each as a field of a payload struct:
-	/// for the seam's root, its parameters, then its children but those of `labelsNamedApart`, which a mock's root names
-	/// apart and so does not declare (`ScopeGenerator.labelsChildrenShare`); for any other type, its `@Forwarded` properties, then the
+	/// for the seam's root, its parameters, then its children but those of `labelsNamedApart`, which a mock's root does not
+	/// declare as children: the labels its root level's fields hold and those it binds only under names apart
+	/// (`PublicMockRootLevel`); for any other type, its `@Forwarded` properties, then the
 	/// `cycleParameters` of its builder function that any build of the type declares, which hide every other declaration
 	/// of their labels, then the `reboundProperties` and `receivesBoundAgain` of any build of the type, then its children. A
 	/// case's payload holds those its type binds before the case's property.

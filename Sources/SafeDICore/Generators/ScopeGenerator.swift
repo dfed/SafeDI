@@ -2445,6 +2445,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let providerProperty: Property
 		let providerDeclaringType: TypeDescription
 		let providerDeclarationLocation: Dependency.DeclarationLocation?
+		/// Whether the provider is a field of the struct the mock of `providerDeclaringType` hands a fill: a value its tree
+		/// builds or one its own `mock()` is handed, which the diagnostic names as handed, not as provided by the type.
+		let providerIsHandedToFill: Bool
 	}
 
 	/// Every value the mock tree rooted at this scope holds for a parameter that a tier of a public mock it calls omits,
@@ -2501,7 +2504,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case .fill: true
 		}
 		func visibleDeclaration(of property: Property, instanceProperty: Property?) -> VisibleDeclaration {
-			VisibleDeclaration(
+			var declaration = VisibleDeclaration(
 				property: property,
 				instanceProperty: instanceProperty,
 				// A property a mock root promotes is declared by no type of the tree.
@@ -2509,6 +2512,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				declarationLocation: declarationLocationByProperty[property] ?? scopeDeclarationLocation,
 				sendableBuilderDepth: 0,
 			)
+			declaration.isHandedToFill = isFill
+			return declaration
 		}
 		var scopeDeclarationsByLabel = [String: [VisibleDeclaration]]()
 		for dependency in dependencies where dependency.source == .forwarded {
@@ -2561,6 +2566,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							// A property the mock root promotes is the mocked type's to provide.
 							providerDeclaringType: provider.declaringType ?? declaringType,
 							providerDeclarationLocation: provider.declarationLocation,
+							providerIsHandedToFill: provider.isHandedToFill,
 						)
 					}
 				}
@@ -2723,6 +2729,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// For a parameter of a builder function a lazy cycle closes on, as a walk of omissions enters it in the function's
 		/// body (see `OmissionFindings`): the function. `nil` for every other declaration.
 		var cycleFunction: ObjectIdentifier?
+		/// Whether the declaration is a field of the struct a public mock hands a fill of its place, which the fill binds:
+		/// `declaringType`'s mock hands it the value, which its tree built or its own `mock()` was handed.
+		var isHandedToFill = false
 
 		/// Whether a receive of `unwrappedProperty`, or of its optional form, resolves to this declaration.
 		func provides(_ unwrappedProperty: Property) -> Bool {
@@ -5568,12 +5577,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///   - lazilyInstantiatedInstanceProperties: The by-value properties whose labels the site's owner holds only as a
 	///     `LazilyInstantiated` property, whose instance the payload reads, as the owner's receivers do
 	///     (`SeamHoles.valuesArguments(of:readingInstancesOf:)`).
-	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole, functionName: String?, readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = []) -> String {
+	///   - lazilyInstantiatedBindingNames: In a public mock, the names the wrappers it binds apart from their instances' labels
+	///     have where the site is built, which the payload reads a field of such a wrapper by
+	///     (`SeamHoles.valuesArguments(of:readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)`).
+	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole, functionName: String?, readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:]) -> String {
 		// A place nested by type is handed what its owner binds before it; the cases that lead to it carry what each type on
 		// the way binds, which the tree bound before building the next. A place in a `@Sendable` enum held in a `Sendable`
 		// wrapper carries nothing.
 		let fields = site.enumPlace?.values ?? site.fields
-		let arguments = SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties)
+		let arguments = SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)
 		let valuesArgument = site.valuesType(qualifiedBy: nil).map { "\($0.asSource)(\(arguments))" }
 		// The expression that builds the value, the value an instantiator forwards being `forwarded`: the case carries it
 		// after its values.
@@ -7855,8 +7867,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			/// by name (`receivedBindingNamesPassedByName(to:flatParameterDisambiguationMap:lazilyInstantiatedBindingNames:)`),
 			/// is read under that name: its builder function does not bind the label again, so the label there names a
 			/// farther declaration than the one the node above received, which its level carries.
-			func line(bindingNamesPassedByName: [String: String]) -> String {
-				binding.line(readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName)
+			/// A field of a wrapper the mock binds apart from its instance's label is read under the name
+			/// `lazilyInstantiatedBindingNames` gives it there.
+			func line(bindingNamesPassedByName: [String: String], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]]) -> String {
+				binding.line(readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)
 			}
 		}
 
@@ -9278,7 +9292,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// itself, just before its builder function.
 				if !node.isInstantiator {
 					for valuesBinding in node.valuesBindings {
-						lines.append("\(indent)\(valuesBinding.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName))")
+						lines.append("\(indent)\(valuesBinding.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames))")
 					}
 				}
 				// A call that fills builders is made in a builder function of its own, which declares the fills and names
@@ -9595,7 +9609,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		indent: String,
 	) -> String {
 		if let holeSite = alias.holeSite {
-			return buildSiteCode(of: alias.property, at: holeSite, functionName: holeFunctionName, readingInstancesOf: alias.holeSiteLazilyInstantiatedInstanceProperties).split(separator: "\n").map(String.init)
+			return buildSiteCode(of: alias.property, at: holeSite, functionName: holeFunctionName, readingInstancesOf: alias.holeSiteLazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames).split(separator: "\n").map(String.init)
 				.map { "\(indent)\($0)" }
 				.joined(separator: "\n")
 		}
@@ -10303,7 +10317,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let functionReturnType = node.instantiatedTypeDescription.asSource
 			// The payloads of the cases on the routes to the places beneath this function, bound before it.
 			for valuesBinding in node.valuesBindings {
-				lines.prelude.append("\(indent)\(valuesBinding.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName))")
+				lines.prelude.append("\(indent)\(valuesBinding.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames))")
 			}
 			lines.function.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
 			// A member of a loop of builders first wraps again the functions of the members its tree receives inside the

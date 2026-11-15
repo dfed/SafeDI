@@ -249,6 +249,24 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		#expect(GraphFuzzerToolRuns(fixture: fixture, firstOutcome: internalField, secondOutcome: internalField, knownRightOutcome: internalField).publicMockAccessFailure == nil)
 	}
 
+	@Test
+	func publicMockRootLevelFailure_reportsConsumer_whenConsumerInFillsModuleTakesBuilderOfPlaceItsFillCanFillFromRootLevel() {
+		// Seed 10's fill, in `FuzzOther`, reads only what `T6`'s mock binds before its tree: `T8.mock` taking a builder of `T6`'s
+		// places fails the graph; a field of `SafeDIOverrides` that spells the builder's type inside its own does not.
+		let seed: UInt64 = 10
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic])
+		#expect(GraphFuzzerPublicMockDraw.drawFeatures(of: fixture).contains(.holeFillReceivesRootLevelValue))
+		let builderType = "@escaping (S\(seed)_T6.SafeDIMockScope_S\(seed)_Hole) -> S\(seed)_Hole"
+		func runs(consumerMock: String) -> GraphFuzzerToolRuns {
+			let accepted = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzOther/S\(seed)_T8+SafeDIMock.swift": consumerMock], warnings: [])
+			return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: accepted, secondOutcome: accepted, knownRightOutcome: accepted)
+		}
+		let passingUp = runs(consumerMock: "extension S\(seed)_T8 {\n    static func mock(\n        s\(seed)_HoleBuilder: \(builderType)\n    ) -> S\(seed)_T8 {\n    }\n}\n")
+		#expect(passingUp.publicMockRootLevelFailure?.kind == .publicMockPassesUpPlaceItsRootLevelFills)
+		let overriding = runs(consumerMock: "extension S\(seed)_T8 {\n    struct SafeDIOverrides {\n        let t6: ((\(builderType)) -> S\(seed)_T6)?\n    }\n\n    static func mock(\n        safeDIOverrides: SafeDIOverrides = .init()\n    ) -> S\(seed)_T8 {\n    }\n}\n")
+		#expect(overriding.publicMockRootLevelFailure == nil)
+	}
+
 	// MARK: Hand-written caller
 
 	@Test

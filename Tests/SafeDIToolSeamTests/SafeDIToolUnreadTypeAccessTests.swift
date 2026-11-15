@@ -613,7 +613,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesTypeDeclaredInExtensionOnPublicTier_whenExtensionAndTypeArePublic(integration: MultiModuleIntegration) async throws {
-		// EX1: Tolan's shape: `ChatService.TurnTakingMode`, declared `public` in an unspelled extension of the `public`
+		// EX1: a large production app’s shape: `ChatService.TurnTakingMode`, declared `public` in an unspelled extension of the `public`
 		// `ChatService` in a file without a SafeDI marker, is `public` exactly; no comment, since SafeDI reads it.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.screenModules(

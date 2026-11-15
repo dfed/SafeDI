@@ -6233,28 +6233,40 @@ public actor DependencyTreeGenerator {
 		// seam's are. The sites' fields are what is in scope there, read from the tree as a seam's are, and the tree is built
 		// again so that each site calls its builder, and each call hands its builders up.
 		guard instantiable.generateMock == .public, generator.containsBuildSite || generator.passesUpBuilder else { return generator }
+		// The root level holds what `mock()` binds under its bare label before its tree, as a seam's holds its parameters; the
+		// builders do not change what it binds, so the generator built without them gives it.
+		let rootLevel = await Self.publicMockRootLevel(
+			of: instantiable,
+			parameters: generator.mockRootParameters(instantiable: instantiable, mockDefaults: flatParameterMockDefaults),
+			generator: generator,
+			context: publicMockContext,
+		)
 		let holes = Self.holes(
 			of: instantiable,
 			generator: generator,
 			bindsReceivesAgain: true,
-			parameters: [],
+			namesApartAtRoot: rootLevel.namesApart,
+			parameters: rootLevel.parameters,
 			proof: publicMockContext.proof,
 			instantiables: typeDescriptionToFulfillingInstantiableMap,
 		)
 		let treeFunctionNames = Self.builderFunctionNamesOfProperties(in: generator, includingHoleSites: false)
+		let rootLevelLabels = Set(rootLevel.parameters.map(\.property.label))
 		func shapedBuilders(namedApartFrom otherParameters: [(label: String, access: AccessLevel)]) -> ShapedBuilders {
 			Self.shapedBuilders(
 				of: instantiable,
 				generator: generator,
 				holes: holes,
-				parameters: [],
-				otherParameters: otherParameters,
+				parameters: rootLevel.parameters,
+				// The root level's fields are parameters of `mock()` already named apart by `parameters`.
+				otherParameters: otherParameters.filter { !rootLevelLabels.contains($0.label) },
 				treeFunctionNames: treeFunctionNames,
 				proof: publicMockContext.proof,
 				instantiables: typeDescriptionToFulfillingInstantiableMap,
 				ownScopeEnums: [:],
 				scopeTypeNames: .publicMock,
 				bindsReceivesAgain: true,
+				namesApartAtRoot: rootLevel.namesApart,
 			)
 		}
 		let builders = shapedBuilders(namedApartFrom: [])
@@ -6272,6 +6284,134 @@ public actor DependencyTreeGenerator {
 		let buildersNamedApart = shapedBuilders(namedApartFrom: otherParameters)
 		guard buildersNamedApart.builders.map(SeamSignature.CallShape.Builder.init) != builders.builders.map(SeamSignature.CallShape.Builder.init) else { return builtGenerator }
 		return try mockRootGenerator(builders: buildersNamedApart)
+	}
+
+	/// What a public mock's root level holds beside the root's children: the payload of every case of its root enums, and the
+	/// first level on the route to every place beneath.
+	struct PublicMockRootLevel {
+		/// The fields `mock()`'s own bindings give the root level, before the root's children, each a binding `mock()` holds
+		/// under its bare label before it builds its tree, as a seam's root level holds the seam's parameters: each `@Forwarded`
+		/// property, in declaration order; each received dependency the mock cannot build, then each received only if
+		/// available, as `T?`, then each closure, tuple, array or optional the mocked type itself instantiates that nothing
+		/// builds, each in `mock()`'s order. One field per label. A received instance a type in the tree receives as a
+		/// `LazilyInstantiated` is held as the wrapper `mock()` binds around it.
+		let parameters: [SeamSignature.Parameter]
+		/// What the root binds only under names apart.
+		let namesApart: NamesApart
+
+		/// What a public mock's root binds only under names apart, which no field of its root level holds.
+		struct NamesApart {
+			/// The labels the root binds only under names apart (`user_User` and `user_Draft`, `id_Badge` and `id_Token`): every
+			/// receive of one beneath the root is bound again from the binding of its form, and its type's level carries it.
+			var labels = Set<String>()
+			/// The wrappers `mock()` builds around the instances it takes and binds under names apart (`session_lazilyInstantiated`
+			/// beside the instance `session`), which it hands each receiver of one by that name: no scope binds one again. Where
+			/// the instance keeps its label, the root level's field of it is the wrapper, which provides both forms. Where
+			/// `mock()` names the instance apart too, no field holds the label, so a fill beneath that reads the wrapper finds
+			/// no field of it, and the place is passed up.
+			var wrappers = Set<Property>()
+		}
+	}
+
+	/// The root level of `instantiable`'s public mock, whose `mock()` takes `parameters` and whose tree is `generator`'s.
+	///
+	/// A parameter `mock()` names apart has no field: the other holder of its label keeps the field, and a type beneath that
+	/// receives the named-apart form binds it again (`mockBindsAgain(receiving:beneath:)`), or, where no binding holds the
+	/// bare label, from the binding of its form (`NamesApart.labels`). A fill whose own receive is of a named-apart form that
+	/// no type on its path receives is not filled: the place is passed up, as for a label the root's children share, and the
+	/// caller's builder can capture the value instead. `fields(of:)` and `receivesBoundAgainOfAnyBuild` say so too.
+	static func publicMockRootLevel(
+		of instantiable: Instantiable,
+		parameters: ScopeGenerator.MockRootParameters,
+		generator: ScopeGenerator,
+		context: PublicMockContext,
+	) -> PublicMockRootLevel {
+		let parameterNames = ScopeGenerator.mockRootParameterNames(of: parameters)
+		let mockedTypeAccess = parameterAccess(instantiable.effectiveTypeAccess)
+		let receiverModulesByLabel = ScopeGenerator.receiverModules(in: parameters.parameterTree, context: context)
+		// The wrapper `mock()` binds around each instance it takes for a type that receives a `LazilyInstantiated`, by the
+		// instance's property, the first `mock()` binds where wrappers of two kinds share an instance.
+		var wrapperByInstance = [Property: Property]()
+		for wrapper in parameters.lazilyInstantiatedReceivedProperties.map(\.asUnwrappedProperty) where wrapperByInstance[wrapper.asValidatedForDependencyCycles] == nil {
+			wrapperByInstance[wrapper.asValidatedForDependencyCycles] = wrapper
+		}
+		// The field of a binding `mock()` holds under its bare label, which takes `parameter`: as visible as the parameter,
+		// capped at the mocked type, as a seam's parameter field is. Where a type in the tree receives the instance the
+		// parameter holds as a `LazilyInstantiated`, the field is the wrapper `mock()` binds around it, which a seam's
+		// root level holds where its tree receives the wrapper, and generated code reads it from the binding `mock()` names
+		// apart (`SeamHoles.valuesArguments`).
+		func field(takenBy parameter: Property, receivedAs receivedLabel: String?, isOnlyIfAvailable: Bool) -> SeamSignature.Parameter {
+			let access = ScopeGenerator.publicMockParameterAccess(ofType: parameter.typeDescription, receivedAs: receivedLabel, mockedType: instantiable, receiverModulesByLabel: receiverModulesByLabel, context: context)
+			let fieldProperty = if let wrapper = wrapperByInstance[parameter.asUnwrappedProperty] {
+				// `mock()` wraps an optional instance only where it holds one, so the wrapper is as optional as the parameter.
+				parameter.typeDescription == wrapper.asValidatedForDependencyCycles.typeDescription ? wrapper : Property(label: wrapper.label, typeDescription: .optional(wrapper.typeDescription))
+			} else {
+				parameter
+			}
+			return SeamSignature.Parameter(
+				property: fieldProperty,
+				isPassThrough: false,
+				access: access.level,
+				tierAccess: min(access.level, mockedTypeAccess),
+				isOnlyIfAvailable: isOnlyIfAvailable,
+				accessCause: access.cause,
+			)
+		}
+		// Each binding `mock()` holds under its bare label, in the root level's order; `mock()`'s parameters have distinct
+		// names, so each label is held once.
+		var fields = [SeamSignature.Parameter]()
+		var labelsBoundApart = Set<String>()
+		for dependency in instantiable.dependencies where dependency.source == .forwarded {
+			fields.append(field(takenBy: dependency.property, receivedAs: nil, isOnlyIfAvailable: false))
+		}
+		for (property, name) in zip(parameters.flatReceivedProperties, parameterNames.flatReceivedNames) {
+			if name == property.label {
+				fields.append(field(takenBy: property, receivedAs: property.label, isOnlyIfAvailable: false))
+			} else {
+				labelsBoundApart.insert(property.label)
+			}
+		}
+		// A field received only if available is `T?`, which fills no fulfiller's required receive of `T`, though inline the
+		// caller's `T` would: the place is passed up, a written limit `public-mocks.md` states.
+		for override in parameterNames.onlyIfAvailableOverrides {
+			if override.name == override.receivedProperty.label {
+				fields.append(field(takenBy: Property(label: override.name, typeDescription: override.typeDescription), receivedAs: override.name, isOnlyIfAvailable: true))
+			} else {
+				labelsBoundApart.insert(override.receivedProperty.label)
+			}
+		}
+		// What the mocked type instantiates that nothing can build and no builder builds – a closure, a tuple, an array or an
+		// optional – is a parameter of `mock()`, by value, which the type's tree receives. One a type built inside a `@Sendable`
+		// function instantiates is taken as a closure, which binds no value. A hole is a parameter of the tree built without
+		// builders only. Only the mocked type's own: one a type in its tree instantiates is a parameter `mock()` binds at its
+		// root too, but on no level, so a fill beneath that type that reads it is passed up, a written limit
+		// `public-mocks.md` states.
+		let holeSiteProperties = Set(generator.children.compactMap { child in child.holeSite == nil ? nil : child.property })
+		let mockedTypeInstantiatedProperties = Set(instantiable.dependencies.compactMap { dependency -> Property? in
+			if case .instantiated = dependency.source, !holeSiteProperties.contains(dependency.property) {
+				dependency.property
+			} else {
+				nil
+			}
+		})
+		for uncovered in parameters.flatUncoveredParameters where mockedTypeInstantiatedProperties.contains(uncovered.property) && !uncovered.isSendableAutoclosure {
+			if uncovered.label == uncovered.property.label {
+				fields.append(field(takenBy: uncovered.property, receivedAs: uncovered.property.label, isOnlyIfAvailable: false))
+			} else {
+				labelsBoundApart.insert(uncovered.property.label)
+			}
+		}
+		let fieldLabels = Set(fields.map(\.property.label))
+		// A child holds its label bare unless the root's children share it, or a field holds it.
+		let labelsChildrenShare = generator.labelsChildrenShare
+		let labelsChildrenHoldBare = Set(generator.children.compactMap(\.property?.label)).subtracting(labelsChildrenShare)
+		return PublicMockRootLevel(
+			parameters: fields,
+			namesApart: PublicMockRootLevel.NamesApart(
+				labels: labelsBoundApart.union(labelsChildrenShare).subtracting(fieldLabels).subtracting(labelsChildrenHoldBare),
+				wrappers: Set(parameters.lazilyInstantiatedReceivedProperties),
+			),
+		)
 	}
 
 	/// The names `instantiables` and `plainTypeDeclarations` declare types by at file scope. A type of such a name hides the

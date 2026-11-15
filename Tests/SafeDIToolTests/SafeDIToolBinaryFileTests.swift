@@ -1206,7 +1206,7 @@ private protocol BinarySample: BinaryCodable {
 /// Writes a sample value of `type`, which every type a cached struct or enum writes must provide.
 private func writeSample(of type: any BinaryCodable.Type, isDistinct: Bool, to writer: inout BinaryWriter) throws {
 	guard let sampleType = type as? any BinarySample.Type else {
-		throw MissingSampleError(type: type)
+		throw MissingSampleError(typeName: String(reflecting: type))
 	}
 	let sample = try sampleType.sample(isDistinct: isDistinct)
 	writer.write(sample)
@@ -1223,18 +1223,18 @@ private func read<Value: BinaryCodable>(_ bytes: [UInt8]) throws -> Value {
 }
 
 private struct MissingSampleError: Error, CustomStringConvertible {
-	let type: any BinaryCodable.Type
+	let typeName: String
 
 	var description: String {
-		"\(String(reflecting: type)) has no sample value: conform it to `BinarySample`"
+		"\(typeName) has no sample value: conform it to `BinarySample`"
 	}
 }
 
 private struct TooFewCasesError: Error, CustomStringConvertible {
-	let type: any BinaryCodable.Type
+	let typeName: String
 
 	var description: String {
-		"\(String(reflecting: type)) has too few cases for a distinct sample value"
+		"\(typeName) has too few cases for a distinct sample value"
 	}
 }
 
@@ -1251,7 +1251,7 @@ extension BinarySample where Self: BinarySchemaMember {
 		case let .enumeration(cases):
 			let tag = isDistinct ? 1 : 0
 			guard cases.indices.contains(tag) else {
-				throw TooFewCasesError(type: Self.self)
+				throw TooFewCasesError(typeName: String(reflecting: Self.self))
 			}
 			writer.writeUnsigned(UInt64(tag))
 			for element in cases[tag].payload {
