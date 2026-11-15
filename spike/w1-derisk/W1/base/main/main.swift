@@ -1,8 +1,8 @@
 import App
-#if canImport(Feature)
-import Feature
-#endif
 import Harness
+#if canImport(Feature)
+	import Feature
+#endif
 
 var deepest: AnyObject? = {
 	let root = Root()
@@ -15,6 +15,7 @@ var deepest: AnyObject? = {
 	withExtendedLifetime((root, s1, s2)) {}
 	return s3
 }()
+
 Registry.printAlive("holding only the deepest")
 deepest = nil
 Registry.printAlive("after dropping everything")

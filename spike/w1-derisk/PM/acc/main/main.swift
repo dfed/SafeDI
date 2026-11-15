@@ -1,8 +1,8 @@
 import App
-#if canImport(Feature)
-import Feature
-#endif
 import Harness
+#if canImport(Feature)
+	import Feature
+#endif
 
 var held: Any? = {
 	let root = Root()
@@ -17,6 +17,7 @@ var held: Any? = {
 	withExtendedLifetime((root, mocked, x1, s2, x2)) {}
 	return s3
 }()
+
 Registry.printAlive("holding only the last value")
 held = nil
 Registry.printAlive("after dropping everything")

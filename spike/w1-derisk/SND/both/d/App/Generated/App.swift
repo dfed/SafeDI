@@ -7,7 +7,8 @@ extension Root {
 	public convenience init() {
 		func __safeDI_store() -> Store {
 			// Per-type: one fill function for LiveApi, used by both families' level functions.
-			@Sendable func __safeDI_liveApi(db: Db) -> any Api {
+			@Sendable
+			func __safeDI_liveApi(db: Db) -> any Api {
 				LiveApi(db: db)
 			}
 			func __safeDI_apiBuilder_Store() -> Store.SafeDIScope_Api.__safeDI_Builder<any Api> {

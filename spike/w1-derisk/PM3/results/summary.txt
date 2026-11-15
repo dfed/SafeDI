@@ -1,0 +1,6 @@
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+c2 -Onone: trace DIFFERS from a-Onone.txt
+c2 -O: trace DIFFERS from a-Onone.txt
+h -Onone: trace equals a-Onone.txt
+h -O: trace equals a-Onone.txt

@@ -1,11 +1,11 @@
 import App
+import Harness
 #if canImport(Inner)
-import Inner
+	import Inner
 #endif
 #if canImport(Feature)
-import Feature
+	import Feature
 #endif
-import Harness
 
 var held: Any? = {
 	let root = Root()
@@ -17,6 +17,7 @@ var held: Any? = {
 	_ = root.store.a; withExtendedLifetime((root, a1)) {}
 	return a2
 }()
+
 Registry.printAlive("holding only the last value")
 held = nil
 Registry.printAlive("after dropping everything")

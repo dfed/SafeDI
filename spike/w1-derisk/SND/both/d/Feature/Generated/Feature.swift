@@ -48,7 +48,8 @@ extension Store {
 	public convenience init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
 		let db = Db()
 		let a = A(__safeDI_apiBuilder: __safeDI_apiBuilder.a(.init(db: db)))
-		@Sendable func __safeDI_aBuilder() -> A {
+		@Sendable
+		func __safeDI_aBuilder() -> A {
 			A(__safeDI_apiBuilder: __safeDI_apiSendableBuilder.aBuilder(.init(db: db)))
 		}
 		let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)

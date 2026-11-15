@@ -28,12 +28,14 @@ extension Store {
 
 	/// Only code SafeDI generates calls this initializer.
 	public convenience init(__safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
-		@Sendable func __safeDI_aBuilder() -> A {
+		@Sendable
+		func __safeDI_aBuilder() -> A {
 			let sideBuilder = SendableInstantiator<Side>(__safeDI_sideBuilder)
 			return A(__safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder.aBuilder(.init(sideBuilder: sideBuilder)))
 		}
 		let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
-		@Sendable func __safeDI_sideBuilder() -> Side {
+		@Sendable
+		func __safeDI_sideBuilder() -> Side {
 			let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
 			return Side(aBuilder: aBuilder)
 		}

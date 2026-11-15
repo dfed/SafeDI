@@ -1,0 +1,129 @@
+== G2X/plain
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: trace equals a-Onone.txt
+b -O: trace equals a-Onone.txt
+c -Onone: trace equals a-Onone.txt
+c -O: trace equals a-Onone.txt
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== G2X/scall
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: trace equals a-Onone.txt
+b -O: trace equals a-Onone.txt
+c -Onone: trace equals a-Onone.txt
+c -O: trace equals a-Onone.txt
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== G2X/sfam
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: trace equals a-Onone.txt
+b -O: trace equals a-Onone.txt
+c -Onone: trace equals a-Onone.txt
+c -O: trace equals a-Onone.txt
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== G2L/plain
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (1 distinct errors)
+b -O: does not compile (1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== G2L/scall
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (1 distinct errors)
+b -O: does not compile (1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== G2L/sfam
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (1 distinct errors)
+b -O: does not compile (1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== SND/sdb
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (1 distinct errors)
+b -O: does not compile (1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== SND/both
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (1 distinct errors)
+b -O: does not compile (1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== RE2/req
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (1 distinct errors)
+b -O: does not compile (1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== RE2/opt
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (1 distinct errors)
+b -O: does not compile (1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== RE2/one
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (1 distinct errors)
+b -O: does not compile (1 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== STG3/base
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (4 distinct errors)
+b -O: does not compile (4 distinct errors)
+d -Onone: trace equals a-Onone.txt
+d -O: trace equals a-Onone.txt
+d library evolution: compiles, interface verifies
+== PM3
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+c2 -Onone: trace DIFFERS from a-Onone.txt
+c2 -O: trace DIFFERS from a-Onone.txt
+h -Onone: trace equals a-Onone.txt
+h -O: trace equals a-Onone.txt
+== W1/base
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (1 distinct errors)
+b -O: does not compile (1 distinct errors)
+== PM/acc
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: trace equals a-Onone.txt
+b -O: trace equals a-Onone.txt
+== PM/w1
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (1 distinct errors)
+b -O: does not compile (1 distinct errors)
+== PMRE/base
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: does not compile (2 distinct errors)
+b -O: does not compile (2 distinct errors)
