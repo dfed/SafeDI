@@ -1,0 +1,7 @@
+# Slice 2 regeneration inputs (for the productivity lane)
+
+- Slice 2 head with the generator change and all regeneration so far: `dfed--claude/s2-builder-struct-snapshot` at 4ad19ed12 (base dd94eb73b, slice 1 after review). The head is AFTER the hand edits (commit 9636f4b27 + fixup c6d5883f2, "Hand-update expectations the regenerator cannot map") and after the fragment regeneration (4ad19ed12, 10 literals, by the reviewed regenerator ef0c16e2).
+- `report.txt`: the regenerator report of that last run (`regen4-report`): 10 rewritten, 7 manual, 428 changed outputs no literal matched (most are outputs no test compares as a whole).
+- `remaining-failures.txt`: the seam tests still red on linux-verify 4ad19ed12 (run 43760608315), the hand-update set.
+- `records4.tar.gz`: the base and head record directories of that run (`base/`, `head/`), recorded with `SAFEDI_TEST_RECORD_DIRECTORY` and `SAFEDI_SKIP_COMPILE_CHECK=1`, filter `SafeDIToolSeamTests|GraphFuzzerNestedScopeOracleTests|SafeDIToolMockTests|SafeDIToolGraphFuzzerPublicMockTests|SafeDIToolDependencyTreeGenerationTests|SourceRule`; manifests written with `--write-manifest`.
+- Command: `python3 -I regenerate-expectations.py --base-records records4/base --head-records records4/head --rules <rules> --report regen4-report --checkout <checkout>` with the script from claude/regenerator-skill at ef0c16e2 (behaviorally equal to 436c592d).
