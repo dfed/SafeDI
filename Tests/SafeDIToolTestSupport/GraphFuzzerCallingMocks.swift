@@ -247,7 +247,7 @@ struct GraphFuzzerCallingMockDraw {
 			fill = random.element(of: ["Fake", "Live", "Stub"]) + ["Api", "Store", "Tracker", "Gateway", "Feed"][index]
 			inner = random.element(of: ["Inner", "Panel", "Widget"])
 			outer = random.element(of: ["Feature", "Dashboard", "Profile"])
-			value = random.element(of: ["Db", "Session", "Cache", "Logger"])
+			value = random.element(of: ["Database", "Session", "Cache", "Logger"])
 			caller = random.element(of: ["Host", "Shell", "Screen"])
 			token = random.element(of: ["Token", "Secret"])
 			ticker = random.element(of: ["Ticker", "Metronome"])
@@ -815,7 +815,8 @@ struct GraphFuzzerCallingMockResult {
 	let mockSites: [GraphFuzzerDiagnosticSite]?
 	/// The twin's diagnostics as the tool printed them, for a report.
 	let twinDiagnostics: String?
-	/// The parameters of the twin's seam initializers, without the `__safeDI_` prefix, or `nil` when the twin is rejected.
+	/// The parameters of the twin's seam initializers, without the `__safeDI_` prefix, or `nil` when the twin is rejected or
+	/// its generated file declares no initializer in an extension of the caller.
 	let twinInitializerLabels: [String]?
 	/// Each place the accepted calling mock passes up, by its parameter's label, with its reason or `nil` when no reason
 	/// explains it.
@@ -843,7 +844,7 @@ enum GraphFuzzerCallingMockCheck {
 		let mock = try await toolRun(of: graph, .mock)
 		let twinSites = twin.diagnostics.map { GraphFuzzerDiagnosticSite.sites(inDiagnostics: $0, contentByRelativePath: graph.contentByRelativePath(.twin)) }
 		let mockSites = mock.diagnostics.map { GraphFuzzerDiagnosticSite.sites(inDiagnostics: $0, contentByRelativePath: graph.contentByRelativePath(.mock)) }
-		let twinInitializerLabels = twin.generatedCallerFile.map { initializerParameterLabels(ofType: graph.callerTypeName, inGeneratedFile: $0) }
+		let twinInitializerLabels = twin.generatedCallerFile.flatMap { initializerParameterLabels(ofType: graph.callerTypeName, inGeneratedFile: $0) }
 		let drawingDefect: String? = if graph.files(.twin).map(\.content) == graph.files(.mock).map(\.content) {
 			"the twin of \(graph.name) is its calling mock: no line declares the caller `@Instantiable(generateMock: …)`"
 		} else if let failingModule = twin.failingModule, failingModule != graph.callerModule {
@@ -857,11 +858,15 @@ enum GraphFuzzerCallingMockCheck {
 		} else if let diagnostics = twin.diagnostics {
 			"the twin of \(graph.name) is rejected where the graph is drawn for production to accept it: \(diagnostics)"
 		} else if let expected = graph.expectedTwinInitializerLabels, twinInitializerLabels != expected {
-			"the twin of \(graph.name) takes \(twinInitializerLabels ?? []) where the graph is drawn for it to take \(expected)"
+			if let twinInitializerLabels {
+				"the twin of \(graph.name) takes \(twinInitializerLabels) where the graph is drawn for it to take \(expected)"
+			} else {
+				"the twin of \(graph.name) declares no initializer in an extension of \(graph.callerTypeName) where the graph is drawn for it to take \(expected)"
+			}
 		} else {
 			nil
 		}
-		let passUps = mock.generatedCallerFile.map { passUpsOf(graph, inGeneratedFile: $0) } ?? []
+		let passUps = try mock.generatedCallerFile.map { try passUpsOf(graph, inGeneratedFile: $0) } ?? []
 		let failure: GraphFuzzerFailure? = if let twinSites {
 			if let mockSites {
 				mockSites == twinSites ? nil : GraphFuzzerFailure(
@@ -904,9 +909,14 @@ enum GraphFuzzerCallingMockCheck {
 
 	/// Each parameter of the caller's `mock()` that is neither `safeDIOverrides` nor one of the graph's flat parameters: a
 	/// place the mock passes up. It is classified only when the graph lists it among the places its module sees no type
-	/// that fulfills; every other pass-up is unclassified.
-	static func passUpsOf(_ graph: GraphFuzzerCallingMockGraph, inGeneratedFile generatedFile: String) -> [(label: String, reason: GraphFuzzerCallingMockPassUpReason?)] {
-		mockParameterLabels(ofType: graph.callerTypeName, inGeneratedFile: generatedFile)
+	/// that fulfills; every other pass-up is unclassified. Throws when `generatedFile` declares no `mock()` in an extension of
+	/// the caller, which a generated mock always has, so that a mock the parser misses is never read as one that passes
+	/// nothing up.
+	static func passUpsOf(_ graph: GraphFuzzerCallingMockGraph, inGeneratedFile generatedFile: String) throws -> [(label: String, reason: GraphFuzzerCallingMockPassUpReason?)] {
+		guard let labels = mockParameterLabels(ofType: graph.callerTypeName, inGeneratedFile: generatedFile) else {
+			throw HarnessError(description: "The calling mock of \(graph.name) is accepted, and its generated file declares no `mock()` in an extension of \(graph.callerTypeName)")
+		}
+		return labels
 			.filter { $0 != "safeDIOverrides" && !graph.flatParameterLabels.contains($0) }
 			.map { label in
 				(label, !graph.implementationIsVisible && graph.expectedPassUpLabels.contains(label) ? .noVisibleImplementation : nil)
@@ -914,20 +924,22 @@ enum GraphFuzzerCallingMockCheck {
 	}
 
 	/// The labels of the parameters of every `mock(…)` an extension of `typeName` declares in `generatedFile`, each once, in
-	/// order.
-	static func mockParameterLabels(ofType typeName: String, inGeneratedFile generatedFile: String) -> [String] {
+	/// order, or `nil` when it declares none.
+	static func mockParameterLabels(ofType typeName: String, inGeneratedFile generatedFile: String) -> [String]? {
 		parameterLabels(of: .mockFunction, ofType: typeName, inGeneratedFile: generatedFile)
 	}
 
 	/// The labels of the parameters of every initializer an extension of `typeName` declares in `generatedFile`, without
-	/// the `__safeDI_` prefix of the initializer only generated code calls, each once, in order.
-	static func initializerParameterLabels(ofType typeName: String, inGeneratedFile generatedFile: String) -> [String] {
+	/// the `__safeDI_` prefix of the initializer only generated code calls, each once, in order, or `nil` when it declares
+	/// none.
+	static func initializerParameterLabels(ofType typeName: String, inGeneratedFile generatedFile: String) -> [String]? {
 		parameterLabels(of: .initializer, ofType: typeName, inGeneratedFile: generatedFile)
 	}
 
-	private static func parameterLabels(of declarationKind: ParameterLabelVisitor.DeclarationKind, ofType typeName: String, inGeneratedFile generatedFile: String) -> [String] {
+	private static func parameterLabels(of declarationKind: ParameterLabelVisitor.DeclarationKind, ofType typeName: String, inGeneratedFile generatedFile: String) -> [String]? {
 		let visitor = ParameterLabelVisitor(declarationKind: declarationKind, typeName: typeName)
 		visitor.walk(Parser.parse(source: generatedFile))
+		guard visitor.matchedDeclaration else { return nil }
 		var labels = [String]()
 		for label in visitor.labels.map({ $0.hasPrefix("__safeDI_") ? String($0.dropFirst("__safeDI_".count)) : $0 }) where !labels.contains(label) {
 			labels.append(label)
@@ -950,15 +962,19 @@ enum GraphFuzzerCallingMockCheck {
 		let declarationKind: DeclarationKind
 		let typeName: String
 		var labels = [String]()
+		/// Whether a declaration of the kind was found, so that one without parameters is told from none.
+		var matchedDeclaration = false
 
 		override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
 			guard declarationKind == .mockFunction, node.name.text == "mock", isInExtensionOfType(node) else { return .skipChildren }
+			matchedDeclaration = true
 			labels += node.signature.parameterClause.parameters.map(\.firstName.text)
 			return .skipChildren
 		}
 
 		override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
 			guard declarationKind == .initializer, isInExtensionOfType(node) else { return .skipChildren }
+			matchedDeclaration = true
 			labels += node.signature.parameterClause.parameters.map(\.firstName.text)
 			return .skipChildren
 		}
@@ -976,7 +992,8 @@ enum GraphFuzzerCallingMockCheck {
 		}
 	}
 
-	/// A run the check cannot judge: a module the tool accepted generated no file for the caller's module.
+	/// A run the check cannot judge: a module the tool accepted generated no file for the caller's module, or the calling
+	/// mock's generated file declares no `mock()` for the caller.
 	struct HarnessError: Error, CustomStringConvertible {
 		let description: String
 	}

@@ -56,11 +56,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
 
-		#expect(result.twinHasIntendedOutcome)
 		#expect(result.twinInitializerLabels == [])
-		withKnownIssue("\(Self.callersOwnValueReason)") {
-			#expect(result.failure == nil)
-		}
+		Self.expectMirrorsTwin(result, failingOnMainAs: .callingMockPassesUpUnclassifiedPlace, reason: Self.callersOwnValueReason)
 	}
 
 	@Test
@@ -101,12 +98,11 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
 
-		#expect(result.twinHasIntendedOutcome)
 		#expect(result.twinInitializerLabels == ["token"])
 		withKnownIssue("\(Self.passesUpPlaceItsTwinFillsFromParameterReason)") {
 			#expect(result.passUps.isEmpty)
-			#expect(result.failure == nil)
 		}
+		Self.expectMirrorsTwin(result, failingOnMainAs: .callingMockPassesUpUnclassifiedPlace, reason: Self.passesUpPlaceItsTwinFillsFromParameterReason)
 	}
 
 	@Test
@@ -191,9 +187,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			GraphFuzzerDiagnosticSite(severity: "error", file: "Tests/TestsTypes.swift", line: 8, declaration: "@Received let database: Database"),
 			GraphFuzzerDiagnosticSite(severity: "note", file: "FeatureModule/FeatureModuleTypes.swift", line: 12, declaration: "@Instantiated public let database: Database"),
 		])
-		withKnownIssue("\(Self.outerSeamValueReason)") {
-			#expect(result.failure == nil)
-		}
+		Self.expectMirrorsTwin(result, failingOnMainAs: .callingMockAcceptedWhereTwinReportsShapeError, reason: Self.outerSeamValueReason)
 	}
 
 	@Test
@@ -256,9 +250,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			GraphFuzzerDiagnosticSite(severity: "error", file: "App/AppTypes.swift", line: 7, declaration: "@Received private let feedBuilder: ErasedInstantiator<(), any FeedPage>"),
 			GraphFuzzerDiagnosticSite(severity: "note", file: "Feature/FeatureTypes.swift", line: 22, declaration: "@Instantiated(fulfilledByType: \"Feed\") private let feedBuilder: ErasedInstantiator<(), any FeedPage>"),
 		])
-		withKnownIssue("\(Self.appOnlyScreenInLoopReason)") {
-			#expect(result.failure == nil)
-		}
+		Self.expectMirrorsTwin(result, failingOnMainAs: .callingMockAcceptedWhereTwinReportsShapeError, reason: Self.appOnlyScreenInLoopReason)
 	}
 
 	@Test
@@ -320,9 +312,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.twinSites == [
 			GraphFuzzerDiagnosticSite(severity: "error", file: "App/AppTypes.swift", line: 7, declaration: "@Received private let feedBuilder: ErasedInstantiator<(), any FeedPage>"),
 		])
-		withKnownIssue("\(Self.appOnlyScreenBuiltByValueReason)") {
-			#expect(result.failure == nil)
-		}
+		Self.expectMirrorsTwin(result, failingOnMainAs: .callingMockAcceptedWhereTwinReportsShapeError, reason: Self.appOnlyScreenBuiltByValueReason)
 	}
 
 	@Test
@@ -336,9 +326,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			GraphFuzzerDiagnosticSite(severity: "error", file: "App/AppTypes.swift", line: 7, declaration: "@Received let logger: Logger"),
 			GraphFuzzerDiagnosticSite(severity: "note", file: "Feature/FeatureTypes.swift", line: 20, declaration: "@Instantiated let logger: Logger"),
 		])
-		withKnownIssue("\(Self.seamBuiltAgainReason)") {
-			#expect(result.failure == nil)
-		}
+		Self.expectMirrorsTwin(result, failingOnMainAs: .callingMockAcceptedWhereTwinReportsShapeError, reason: Self.seamBuiltAgainReason)
 	}
 
 	/// Main's calling mock fills the place a seam built again passes up with `LiveGadget(logger: logger)` from the caller's
@@ -419,8 +407,22 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.twinSites == [
 			GraphFuzzerDiagnosticSite(severity: "error", file: "FeatureModule/FeatureModuleTypes.swift", line: 14, declaration: "@Received let innerBuilder: Instantiator<Inner>"),
 		])
-		withKnownIssue("\(Self.loopThroughInnerSeamBuilderReason)") {
-			#expect(result.failure == nil)
+		Self.expectMirrorsTwin(result, failingOnMainAs: .callingMockAcceptedWhereTwinReportsShapeError, reason: Self.loopThroughInnerSeamBuilderReason)
+	}
+
+	/// Expects the twin to give the graph's intended outcome and the calling mock to mirror it, which main's does not: until
+	/// the fix, the mock must fail as `knownKind`, the kind the shape's known issue lists, so a mock that begins to fail
+	/// another way is not absorbed as the known issue.
+	private static func expectMirrorsTwin(
+		_ result: GraphFuzzerCallingMockResult,
+		failingOnMainAs knownKind: GraphFuzzerFailure.Kind,
+		reason: String,
+		sourceLocation: SourceLocation = #_sourceLocation,
+	) {
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")", sourceLocation: sourceLocation)
+		#expect(result.failure == nil || result.failure?.kind == knownKind, "\(result.failure?.details ?? "")", sourceLocation: sourceLocation)
+		withKnownIssue("\(reason)", sourceLocation: sourceLocation) {
+			#expect(result.failure == nil, sourceLocation: sourceLocation)
 		}
 	}
 
@@ -478,6 +480,28 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(Self.sites("/a/Sources/Tests/TestsTypes.swift:4:5: error: one remedy") == [
 			GraphFuzzerDiagnosticSite(severity: "error", file: "Tests/TestsTypes.swift", line: 4, declaration: "@Received let database: Database"),
 		])
+	}
+
+	@Test
+	func passUps_areEmpty_whenMockDeclaresNoPlaceParameter() throws {
+		let generatedFile = "extension Host {\n    static func mock(safeDIOverrides: SafeDIOverrides = .init()) -> Host { fatalError() }\n}"
+
+		#expect(try GraphFuzzerCallingMockCheck.passUpsOf(Self.seamBuiltAgainGraph, inGeneratedFile: generatedFile).isEmpty)
+	}
+
+	@Test
+	func passUps_throw_whenGeneratedFileDeclaresNoMockOfCaller() {
+		let generatedFile = "extension Service {\n    static func mock(safeDIOverrides: SafeDIOverrides = .init()) -> Service { fatalError() }\n}"
+
+		#expect(throws: GraphFuzzerCallingMockCheck.HarnessError.self) {
+			try GraphFuzzerCallingMockCheck.passUpsOf(Self.seamBuiltAgainGraph, inGeneratedFile: generatedFile)
+		}
+	}
+
+	@Test
+	func initializerParameterLabels_areNil_whenGeneratedFileDeclaresNoInitializerOfCaller() {
+		#expect(GraphFuzzerCallingMockCheck.initializerParameterLabels(ofType: "Host", inGeneratedFile: "extension Service {\n    init() {}\n}") == nil)
+		#expect(GraphFuzzerCallingMockCheck.initializerParameterLabels(ofType: "Host", inGeneratedFile: "extension Host {\n    init() {}\n}") == [])
 	}
 
 	private static func sites(_ diagnostics: String) -> [GraphFuzzerDiagnosticSite] {
