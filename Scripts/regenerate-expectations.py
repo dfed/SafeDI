@@ -49,9 +49,12 @@ whose call skipped compile verification, a sample of N explained literals (--sam
 functions and records were mapped. Two runs over the same inputs write the same bytes.
 
 Exit status: 0 when every changed literal is explained; 1 when some are unexplained or manual (read the report).
-An output that changed but matched no literal, such as one a test assembles from fragments or never compares,
-is listed first in the report and leaves the status alone, since the script cannot tell whether a
-test compares it. 2 on an error, with nothing written: the two manifests differ or the checkout's Tests/ differs
+An output no literal equals may be one a helper assembles from fragments: the generated file header, import
+blocks, and literals of the test (or of no function) with blank lines between. When the literals tile the base
+output in exactly one way and the change leaves each fragment's first and last lines, its braces' balance and its
+count of top-level lines alone, each literal is rewritten to its part of the new output; otherwise the report gives
+the reason. An output that changed but matched no literal either way, such as one no test compares, is listed
+first in the report and leaves the status alone, since the script cannot tell whether a test compares it. 2 on an error, with nothing written: the two manifests differ or the checkout's Tests/ differs
 from them (as it does once the records are applied), a record's fileID names no single file under Tests/, a rule is
 rejected, a rewrite fails its own check, or a file cannot be parsed. --dry-run writes the report and no test file.
 
@@ -739,6 +742,127 @@ def map_spans(old, new, spans):
     return mapped
 
 
+# What a helper that assembles an expected file from fragments puts around them: the generated file header, a block
+# per import, and blank lines. Keep in step with `SafeDIToolSeamBuilderParameterTests.generatedFiles`.
+IMPORT_BLOCKS = r"(?:#if canImport\([^)\n]+\)\nimport [^\n]+\n#endif\n)*\n*"
+FRAGMENTS_AMBIGUOUS = "literals tile the output as fragments in more than one way"
+FRAGMENT_BOUNDARY_CHANGED = "literals tile the output as fragments, but the change touches a line beside a fragment’s first or last"
+FRAGMENT_DECLARATIONS_CHANGED = "literals tile the output as fragments, but a fragment gained or lost a top-level declaration, which may be its neighbor’s"
+FRAGMENT_UNBALANCED = "literals tile the output as fragments, but a fragment of the head output does not balance its braces"
+
+
+def tile_fragments(literals, content, header):
+    """How `content` is the header, import blocks and then `literals`' values, each once or more, with blank lines
+    between: ([(literal, start, end, capture spans, ambiguous)], None), or (None, reason) with a reason only when
+    they tile it in more than one way. A literal shorter than `SHORTEST_ANCHOR` tiles nothing."""
+    prefix = re.compile((re.escape(header) if header and content.startswith(header) else "") + IMPORT_BLOCKS).match(content)
+    start = prefix.end()
+    if start == len(content):
+        return None, None
+    boundaries = [index for index in range(start, len(content)) if content[index] == "\n"] + [len(content)]
+    solutions = {}  # position → (count of tilings from it, capped at two; the first)
+
+    def tilings(position):
+        if position == len(content):
+            return 1, []
+        if position not in solutions:
+            count, first = 0, None
+            for literal in literals:
+                if literal.interpolation_count == 0:
+                    text = literal.plain_text
+                    ends = [position + len(text)] if non_whitespace_count(text) >= SHORTEST_ANCHOR and content.startswith(text, position) else []
+                elif literal.parts[0][1] and content.startswith(literal.parts[0][1], position):
+                    ends = [end for end in boundaries if end > position]
+                else:
+                    ends = []
+                for end in ends:
+                    if end < len(content) and content[end] != "\n":
+                        continue
+                    matched = match_literal(literal, content[position:end], "")
+                    if matched is None:
+                        continue
+                    following = end
+                    while following < len(content) and content[following] == "\n":
+                        following += 1
+                    rest_count, rest = tilings(following)
+                    if rest_count:
+                        if first is None:
+                            first = [(literal, position, end, matched[2], matched[3])] + rest
+                        count = min(2, count + rest_count)
+                    if count > 1:
+                        break
+                if count > 1:
+                    break
+            solutions[position] = (count, first)
+        return solutions[position]
+
+    count, first = tilings(start)
+    if count == 0:
+        return None, None
+    if count > 1:
+        return None, FRAGMENTS_AMBIGUOUS
+    return first, None
+
+
+def braces_balance(text):
+    depth = 0
+    for character in text:
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth < 0:
+                return False
+    return depth == 0
+
+
+def top_level_line_count(text):
+    """How many lines of `text` that are not blank begin outside every brace."""
+    count = 0
+    depth = 0
+    for line in text.split("\n"):
+        if depth == 0 and line.strip():
+            count += 1
+        depth += line.count("{") - line.count("}")
+    return count
+
+
+def head_fragments(content, head, tiling):
+    """The part of `head` that stands where each fragment of `tiling` stands in `content`: ([text], None), or
+    (None, reason). What lies around the fragments must be unchanged together with the line before it and the line
+    after it, a fragment's last and the next one's first, so that a line the change adds or removes at a fragment's
+    edge is never given to the wrong fragment. Of several fragments, none may gain or lose a top-level declaration."""
+
+    def line_start(index):
+        return content.rfind("\n", 0, index) + 1
+
+    def line_end(index):
+        end = content.find("\n", index)
+        return len(content) if end < 0 else end
+
+    # Each span that must be unchanged, with the fragment edges inside it.
+    surroundings = [(0, line_end(tiling[0][1]), [tiling[0][1]])]
+    for previous, following in zip(tiling, tiling[1:]):
+        surroundings.append((line_start(previous[2]), line_end(following[1]), [previous[2], following[1]]))
+    surroundings.append((line_start(tiling[-1][2]), len(content), [tiling[-1][2]]))
+    edges = []
+    for index, (start, end, inner_edges) in enumerate(surroundings):
+        mapped = map_spans(content, head, [(start, end)])
+        if mapped is None or (index == 0 and mapped[0][0] != 0) or (index == len(surroundings) - 1 and mapped[0][1] != len(head)):
+            return None, FRAGMENT_BOUNDARY_CHANGED
+        edges.extend(mapped[0][0] + edge - start for edge in inner_edges)
+    if edges != sorted(edges):
+        return None, FRAGMENT_BOUNDARY_CHANGED
+    texts = [head[edges[index]:edges[index + 1]] for index in range(0, len(edges), 2)]
+    for (_, start, end, _, _), text in zip(tiling, texts):
+        if braces_balance(content[start:end]) and not braces_balance(text):
+            return None, FRAGMENT_UNBALANCED
+        # A declaration the change adds between two fragments reads as the end of one and as the start of the next.
+        if len(tiling) > 1 and top_level_line_count(content[start:end]) != top_level_line_count(text):
+            return None, FRAGMENT_DECLARATIONS_CHANGED
+    return texts, None
+
+
 def rebuilt_parts(literal, new_body, mapped_spans):
     expressions = [value for kind, value in literal.parts if kind == "interpolation"]
     parts = []
@@ -1119,6 +1243,51 @@ def apply(arguments):
                         head_body = head["content"]
                 outcome.matches.append((record, mode, body, spans, ambiguous, head_body, record.get("testName", "")))
                 mapped_record_keys.add(record["key"])
+    # A record no literal equals may be assembled from fragments: the header, import blocks, and literals of its test
+    # function or of no function, with blank lines between. Each fragment then stands for its part of the head output.
+    fragment_reasons = {}
+    fragment_record_keys = set()
+    literals_by_scope = {}  # (path, test function or None) → its literals
+
+    def literals_in(relative_path, function):
+        if relative_path not in literals_by_scope:
+            by_function = {}
+            for literal in files[relative_path].literals:
+                by_function.setdefault(files[relative_path].test_function_of_offset(literal.start), []).append(literal)
+            literals_by_scope[relative_path] = by_function
+        return literals_by_scope[relative_path].get(function, [])
+
+    for record in sorted(base_generation, key=lambda record: record["key"]):
+        if record["key"] in mapped_record_keys:
+            continue
+        call_path = resolver.resolve(record["fileID"])
+        scopes = [(call_path, files[call_path].test_function_of_line(record["line"]))]
+        if record.get("testFileID") and record.get("testLine"):
+            test_path = resolver.resolve(record["testFileID"])
+            scopes.append((test_path, files[test_path].test_function_declared_at(record["testLine"])))
+        path_of_literal = {}
+        for relative_path, function in scopes:
+            for literal in literals_in(relative_path, function) + (literals_in(relative_path, None) if function is not None else []):
+                path_of_literal.setdefault(id(literal), (relative_path, literal))
+        candidates = sorted(path_of_literal.values(), key=lambda candidate: (candidate[0], candidate[1].start))
+        tiling, reason = tile_fragments([literal for _, literal in candidates], record["content"], header)
+        if tiling is None:
+            if reason is not None:
+                fragment_reasons[record["key"]] = reason
+            continue
+        head = head_by_key.get(record["key"])
+        head_texts = [None] * len(tiling)
+        if head is not None:
+            head_texts, reason = head_fragments(record["content"], head["content"], tiling)
+            if head_texts is None:
+                fragment_reasons[record["key"]] = reason
+                continue
+        for (literal, start, end, spans, ambiguous), head_text in zip(tiling, head_texts):
+            relative_path = path_of_literal[id(literal)][0]
+            outcome = outcomes.setdefault((relative_path, literal.start), LiteralOutcome(files[relative_path], literal))
+            outcome.matches.append((record, "fragment", record["content"][start:end], spans, ambiguous, head_text, record.get("testName", "")))
+        mapped_record_keys.add(record["key"])
+        fragment_record_keys.add(record["key"])
     unmapped_reasons = {}
     for relative_path in sorted(records_by_file):
         current = files[relative_path]
@@ -1136,6 +1305,8 @@ def apply(arguments):
                     if literal_function in (None, function) and match_literal(literal, head["content"], header) is not None:
                         reason = WRITTEN_FOR_THE_NEW_OUTPUT
                         break
+            if reason is None:
+                reason = fragment_reasons.get(record["key"])
             unmapped_reasons[record["key"]] = (relative_path, record, reason)
 
     assertion_outcomes = []
@@ -1237,6 +1408,7 @@ def apply(arguments):
                 source = source[:start] + replacement + source[end:]
             with open(current.path, "w", encoding="utf-8") as source_file:
                 source_file.write(source)
+    summary["fragmentRecords"] = len(fragment_record_keys)
     write_report(arguments, rules, summary, explained, unexplained, manual, assertion_outcomes, no_head, unmapped_reasons, changed_without_literal, base_generation, mapped_record_keys, outcomes, resolver)
     summary["manualReasons"] = sorted(item[3] for item in manual) + sorted(outcome[2] for outcome in assertion_outcomes if outcome[2] is not None)
     status = 0 if not unexplained and summary["manual"] == 0 else 1
@@ -1309,13 +1481,13 @@ def write_report(arguments, rules, summary, explained, unexplained, manual, asse
         lines.append(f"--- {relative_path}:{line} ({', '.join(test_names)})")
         lines.append(diff.rstrip("\n"))
     lines.append("")
-    lines.extend(mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, outcomes, resolver))
+    lines.extend(mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, outcomes, resolver, summary["fragmentRecords"]))
     os.makedirs(arguments.report, exist_ok=True)
     with open(os.path.join(arguments.report, "report.txt"), "w", encoding="utf-8") as report_file:
         report_file.write("\n".join(lines) + "\n")
 
 
-def mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, outcomes, resolver):
+def mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, outcomes, resolver, fragment_records):
     functions = {}
     for record in base_generation:
         functions.setdefault((resolver.resolve(record["fileID"]), record.get("testName", "")), []).append(record)
@@ -1341,6 +1513,7 @@ def mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, ou
         "Mapping statistics",
         f"  Test functions with a base record that have a literal mapped: {share(mapped_functions, len(functions))}",
         f"  Base records mapped to a literal: {share(mapped_records, record_count)}",
+        f"  Base records mapped to literals as fragments, of those mapped: {fragment_records}",
         f"  Base records mapped, of those not unmapped for a named reason: {share(mapped_records, record_count - named)}",
         f"  Literals matched: {len(outcomes)} ({len(plain)} plain, {len(interpolated)} interpolated, holding {sum(outcome.literal.interpolation_count for outcome in interpolated)} interpolations)",
         "  Matched literals that would be manual if they changed:",
@@ -1753,6 +1926,136 @@ def self_test(root):
     second_status, summary = test.run()
     expect(first_status == 0 and applied == test_function('\t\t#expect(run() == "New")'), f"second apply: first apply {first_status}")
     expect(second_status == 2 and "changed since recording" in summary.get("error", "") and test.source() == applied, f"second apply: {second_status} {summary}")
+
+    # fragments: a helper assembles the expected file from the header, an import block and two literals.
+    imports = "#if canImport(Feature)\nimport Feature\n#endif\n\n"
+    first_fragment = "extension Root {\n    let service = OldService()\n}"
+    second_fragment = "extension Service {\n    let value = OldValue()\n}"
+    fragment_rules = {"rename": [{"name": "Old to New", "table": {"OldService": "NewService", "OldValue": "NewValue"}, "wordBoundaries": True}]}
+
+    def fragment_test(first, second):
+        def indented(text):
+            return "\n".join("\t\t\t" + line if line else "" for line in text.split("\n"))
+
+        return test_function('\t\texpect(run(), files(imports: ["Feature"], rootFiles: [\n\t\t\t"Root": """\n' + indented(first) + '\n\t\t\t""",\n\t\t\t"Service": """\n' + indented(second) + '\n\t\t\t""",\n\t\t]))')
+
+    test = case("fragments")
+    test.test_file(fragment_test(first_fragment, second_fragment))
+    test.records(
+        [generation_record("k", 4, SELF_TEST_HEADER + imports + first_fragment + "\n\n" + second_fragment)],
+        [generation_record("k", 4, SELF_TEST_HEADER + imports + first_fragment.replace("OldService", "NewService") + "\n\n" + second_fragment.replace("OldValue", "NewValue"))],
+        fragment_rules,
+    )
+    status, summary = test.run()
+    expect(status == 0 and summary["explained"] == 2 and summary["changedWithoutLiteral"] == 0 and summary["fragmentRecords"] == 1, f"fragments: {status} {summary}")
+    expect(test.source() == fragment_test(first_fragment.replace("OldService", "NewService"), second_fragment.replace("OldValue", "NewValue")), "fragments: each literal takes its part of the head output")
+
+    # fragments, one per file and combined: the records of two integrations give one literal the same new value, and
+    # a fragment gains lines, also beside a blank line of its own.
+    grown = "extension Root {\n    let service = NewService()\n\n    let more = 1\n}"
+    test = case("fragments-two-integrations")
+    test.test_file(fragment_test(first_fragment, second_fragment))
+    test.records(
+        [generation_record("combined", 4, SELF_TEST_HEADER + imports + first_fragment + "\n\n" + second_fragment), generation_record("root", 4, SELF_TEST_HEADER + imports + first_fragment), generation_record("service", 4, SELF_TEST_HEADER + imports + second_fragment)],
+        [generation_record("combined", 4, SELF_TEST_HEADER + imports + grown + "\n\n" + second_fragment), generation_record("root", 4, SELF_TEST_HEADER + imports + grown), generation_record("service", 4, SELF_TEST_HEADER + imports + second_fragment)],
+    )
+    status, summary = test.run()
+    expect(status == 1 and summary["unexplained"] == 1 and summary["manual"] == 0 and summary["fragmentRecords"] == 3, f"fragments, two integrations: {status} {summary}")
+    expect(test.source() == fragment_test(grown, second_fragment), "fragments, two integrations: the grown fragment is rewritten once")
+
+    # a declaration added between two fragments: the combined file cannot tell whose it is, the file of its own can.
+    added = first_fragment + "\n\nextension Root {\n    enum Added {}\n}"
+    test = case("fragments-added-declaration")
+    test.test_file(fragment_test(first_fragment, second_fragment))
+    test.records(
+        [generation_record("combined", 4, SELF_TEST_HEADER + imports + first_fragment + "\n\n" + second_fragment), generation_record("root", 4, SELF_TEST_HEADER + imports + first_fragment)],
+        [generation_record("combined", 4, SELF_TEST_HEADER + imports + added + "\n\n" + second_fragment), generation_record("root", 4, SELF_TEST_HEADER + imports + added)],
+    )
+    status, summary = test.run()
+    expect(status == 1 and summary["unexplained"] == 1 and summary["fragmentRecords"] == 1 and summary["changedWithoutLiteral"] == 1, f"fragments, added declaration: {status} {summary}")
+    expect(test.source() == fragment_test(added, second_fragment), "fragments, added declaration: the file of its own places it")
+
+    # fragments that disagree: the combined file and the file of its own give one literal different values.
+    test = case("fragments-disagree")
+    test.test_file(fragment_test(first_fragment, second_fragment))
+    original = test.source()
+    test.records(
+        [generation_record("combined", 4, SELF_TEST_HEADER + imports + first_fragment + "\n\n" + second_fragment), generation_record("root", 4, SELF_TEST_HEADER + imports + first_fragment)],
+        [generation_record("combined", 4, SELF_TEST_HEADER + imports + first_fragment.replace("OldService", "NewService") + "\n\n" + second_fragment), generation_record("root", 4, SELF_TEST_HEADER + imports + first_fragment.replace("OldService", "OtherService"))],
+    )
+    status, summary = test.run()
+    expect(status == 1 and summary["rewritten"] == 0 and summary["manualReasons"] == ["records that map to this literal disagree on its new value"] and test.source() == original, f"fragments that disagree: {status} {summary}")
+
+    # a fragment held in a constant outside the test function, and one with an interpolation the change leaves alone.
+    constant_test = 'struct FileTests {\n\t@Test\n\tfunc test() {\n\t\texpect(run(), files(rootFiles: ["Root": """\n\t\t\textension Root {\n\t\t\t    let service = OldService()\\(Self.comment)\n\t\t\t}\n\t\t\t""", "Service": Self.serviceCode]))\n\t}\n\n\tstatic let serviceCode = """\n\textension Service {\n\t    let value = OldValue()\n\t}\n\t"""\n}\n'
+    test = case("fragments-constant")
+    test.test_file(constant_test)
+    test.records(
+        [generation_record("k", 4, SELF_TEST_HEADER + first_fragment.replace("OldService()", "OldService() // plugin") + "\n\n" + second_fragment)],
+        [generation_record("k", 4, SELF_TEST_HEADER + first_fragment.replace("OldService()", "NewService() // plugin") + "\n\n" + second_fragment.replace("OldValue", "NewValue"))],
+        fragment_rules,
+    )
+    status, summary = test.run()
+    expect(status == 0 and summary["explained"] == 2, f"fragments, constant: {status} {summary}")
+    expect(test.source() == constant_test.replace("OldService", "NewService").replace("OldValue", "NewValue"), "fragments, constant: the constant and the interpolated literal are rewritten")
+
+    # a change beside a fragment's edge: a declaration added between two fragments belongs to neither for certain.
+    test = case("fragments-edge")
+    test.test_file(fragment_test(first_fragment, second_fragment))
+    original = test.source()
+    test.records(
+        [generation_record("k", 4, SELF_TEST_HEADER + imports + first_fragment + "\n\n" + second_fragment)],
+        [generation_record("k", 4, SELF_TEST_HEADER + imports + first_fragment + "\n\nextension Root {\n    enum Added {}\n}\n\n" + second_fragment)],
+    )
+    status, summary = test.run()
+    expect(status == 0 and summary["rewritten"] == 0 and summary["changedWithoutLiteral"] == 1 and summary["fragmentRecords"] == 0 and test.source() == original, f"fragments, edge: {status} {summary}")
+    expect(FRAGMENT_BOUNDARY_CHANGED in test.report_text() or FRAGMENT_DECLARATIONS_CHANGED in test.report_text(), "fragments, edge: the report says why the record was left")
+
+    # a changed import block lies outside every fragment.
+    test = case("fragments-imports")
+    test.test_file(fragment_test(first_fragment, second_fragment))
+    original = test.source()
+    test.records(
+        [generation_record("k", 4, SELF_TEST_HEADER + imports + first_fragment + "\n\n" + second_fragment)],
+        [generation_record("k", 4, SELF_TEST_HEADER + imports.replace("Feature", "Other") + first_fragment.replace("OldService", "NewService") + "\n\n" + second_fragment)],
+    )
+    status, summary = test.run()
+    expect(status == 0 and summary["rewritten"] == 0 and summary["changedWithoutLiteral"] == 1 and test.source() == original, f"fragments, imports: {status} {summary}")
+
+    # a fragment whose head part closes a brace it never opened was split at the wrong line.
+    test = case("fragments-braces")
+    test.test_file(fragment_test(first_fragment, second_fragment))
+    original = test.source()
+    test.records(
+        [generation_record("k", 4, SELF_TEST_HEADER + first_fragment + "\n\n" + second_fragment)],
+        [generation_record("k", 4, SELF_TEST_HEADER + "extension Root {\n    let service = NewService()\n    }\n}\n\n" + second_fragment)],
+    )
+    status, summary = test.run()
+    expect(status == 0 and summary["rewritten"] == 0 and summary["changedWithoutLiteral"] == 1 and test.source() == original, f"fragments, braces: {status} {summary}")
+    expect(FRAGMENT_UNBALANCED in test.report_text(), "fragments, braces: the report says why the record was left")
+
+    # two literals of one value tile the output in two ways.
+    test = case("fragments-ambiguous")
+    test.test_file(fragment_test(first_fragment, first_fragment))
+    original = test.source()
+    test.records(
+        [generation_record("k", 4, SELF_TEST_HEADER + first_fragment + "\n\n" + first_fragment)],
+        [generation_record("k", 4, SELF_TEST_HEADER + first_fragment.replace("OldService", "NewService") + "\n\n" + first_fragment)],
+    )
+    status, summary = test.run()
+    expect(status == 0 and summary["rewritten"] == 0 and summary["changedWithoutLiteral"] == 1 and test.source() == original, f"fragments, ambiguous: {status} {summary}")
+    expect(FRAGMENTS_AMBIGUOUS in test.report_text(), "fragments, ambiguous: the report says why the record was left")
+
+    # literals too short to prove anything tile nothing, and text between fragments that is no blank line stops it.
+    test = case("fragments-weak")
+    test.test_file(test_function('\t\texpect(run(), files(rootFiles: ["A": "let a", "B": "let b"]))\n\t\texpect(other(), ["extension Root {}", "extension Service {}"].joined(separator: "\\n// and\\n"))'))
+    original = test.source()
+    test.records(
+        [generation_record("short", 4, SELF_TEST_HEADER + "let a\n\nlet b"), generation_record("joined", 5, SELF_TEST_HEADER + "extension Root {}\n// and\nextension Service {}")],
+        [generation_record("short", 4, SELF_TEST_HEADER + "let a\n\nlet c"), generation_record("joined", 5, SELF_TEST_HEADER + "extension Root {}\n// and\nextension Other {}")],
+    )
+    status, summary = test.run()
+    expect(status == 0 and summary["rewritten"] == 0 and summary["changedWithoutLiteral"] == 2 and summary["fragmentRecords"] == 0 and test.source() == original, f"fragments, weak: {status} {summary}")
 
     for failure in failures:
         print(f"self-test failed: {failure}")
