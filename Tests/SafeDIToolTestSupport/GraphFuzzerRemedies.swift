@@ -47,6 +47,12 @@ enum GraphFuzzerRemedyKind: String, CaseIterable, Comparable {
 	/// "or receive it with `onlyIfAvailable: true` and an optional type so that it is not required", the same error's
 	/// other remedy.
 	case receiveOptionallyIfAvailable = "receive-optionally-if-available"
+	/// "Declare `@Received let x: X` on `Inner`, so the builder’s scope carries it (if module `M` cannot see a type `x: X`
+	/// names, first declare that type in module `M` or a module it depends on, with an initializer module `O` can call)",
+	/// for a fill of a builder a seam passes up that receives a value the seam builds before it calls `Inner`: each type
+	/// `X` names that `M` cannot see moves into `M` with a `public` initializer, and `Inner` receives the property
+	/// (`GraphFuzzerSeamRemedies`). The seam corpus's split graphs, whose remedied graph must also compile.
+	case receiveOnInnerSeam = "receive-on-inner-seam"
 
 	/// The words a failure line of a remedy of this kind begins with (`GraphFuzzerRemedyRun.failureLine`), which a known
 	/// issue's signature reads.
@@ -96,6 +102,11 @@ struct GraphFuzzerRemedy: Equatable {
 struct GraphFuzzerRemedyRun {
 	let remedy: GraphFuzzerRemedy
 	let outcome: GraphFuzzerToolOutcome
+	/// Why the remedied graph, which the tool accepts, does not compile, or draws a warning in generated code: only a
+	/// remedy the seam corpus applies is compiled (`GraphFuzzerSeamRemedies`).
+	var compilationFailure: String?
+	/// Whether the remedied graph, which the tool accepts, compiled with no warning in generated code.
+	var isCompiled = false
 
 	/// The messages of the errors the tool reports at the remedy's site in the remedied graph: none when the remedy fixes
 	/// what it answers and adds no error there.
@@ -106,8 +117,13 @@ struct GraphFuzzerRemedyRun {
 	/// The line a failure lists for this run, or `nil` when the remedy leaves no error at its site.
 	var failureLine: String? {
 		let errorsAtSite = errorsAtSite
-		guard !errorsAtSite.isEmpty else { return nil }
-		return "\(remedy.kind.failureLinePrefix)which \(remedy.description), leaves at \(remedy.site): \(errorsAtSite.joined(separator: " | "))"
+		if !errorsAtSite.isEmpty {
+			return "\(remedy.kind.failureLinePrefix)which \(remedy.description), leaves at \(remedy.site): \(errorsAtSite.joined(separator: " | "))"
+		} else if let compilationFailure {
+			return "\(remedy.kind.failureLinePrefix)which \(remedy.description), answers the errors at \(remedy.site), but \(compilationFailure)"
+		} else {
+			return nil
+		}
 	}
 }
 

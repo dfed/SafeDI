@@ -1269,6 +1269,15 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// instantiators `HoleRingA`'s builder function wraps again, which a level of its type leaves out
 	/// (`SeamPlaceLevels.Level.fieldsOfType`).
 	case holeLoopMemberAlsoBuiltByValue
+	/// `HoleStore`, a seam of the seam's module, builds `holeCart` and calls `HoleCheckout`, a seam of the module beneath
+	/// it, whose hole only `HoleCartImpl` in the roots' module fills, reading `holeCart`: the fill receives a value the
+	/// outer seam builds, which `HoleStore` cannot hand on, since it passes the builder up (rejected; the remedy oracle
+	/// follows the error's advice).
+	case holeFillReceivesValueOuterSeamBuilds
+	/// `HoleCartAisle`, which `HoleStore` builds, builds `holeCart` and calls `HoleCheckout`: the value is built on the path.
+	case holeFillReceivesValueBuiltOnPathToInnerSeam
+	/// The fill receives an instantiator of `HoleCart` rather than an instance.
+	case holeFillReceivesInstantiatorOuterSeamBuilds
 
 	/// `addingUncreatedAliasExtensions`' second declaration of the alias's label: a lazily instantiated wrapper of the
 	/// alias's property, on `AliasLeft`, `AliasMid` or the seam.
@@ -4820,6 +4829,12 @@ enum GraphFuzzerGenerator {
 			let loopImplReadsMark = holeRolls.loopPlace.percentChance(60)
 			let loopPlaceThroughLeaf = holeRolls.loopPlace.percentChance(30)
 			let loopMemberBuiltByValue = holeRolls.loopPlace.percentChance(35)
+			// A fill that receives a value an outer seam builds before it calls the inner seam, on a generator of its own, made
+			// whatever the base draw.
+			let drawsOuterSeamValue = holeRolls.outerSeamValue.percentChance(40)
+			let outerSeamValueOnPath = holeRolls.outerSeamValue.percentChance(30)
+			let outerSeamValueAsInstantiator = holeRolls.outerSeamValue.percentChance(30)
+			let outerSeamValueInstantiator = holeRolls.outerSeamValue.element(of: instantiators)
 			// The fillers and the root that reaches the seam are in another package than the seam's, unless the seam's module
 			// has no package, which this draw keeps apart from a caller in another package, as every other graph's draws were.
 			let fillsFromOtherPackage = drawsCrossPackage && !modulesOmittingPackageName.contains(.seamModule)
@@ -5465,6 +5480,49 @@ enum GraphFuzzerGenerator {
 			} else {
 				declarations[0].properties += rootProperties
 			}
+			// A fill that receives a value an outer seam builds: `HoleStore`, a seam of the seam's module the first root builds,
+			// builds `holeCart` – by value or, now and then, through an instantiator – and then calls `HoleCheckout`, a seam of
+			// the module beneath it, whose hole `holeCartService` only `HoleCartImpl` in the roots' module fills; now and then
+			// `HoleCartAisle`, which `HoleStore` builds, does both instead. `HoleCartImpl` receives `holeCart`, which
+			// `HoleStore` cannot hand it, since it passes `HoleCheckout`'s builder up to its own caller: the tool rejects the
+			// graph, and the remedy oracle follows the advice its error names (`GraphFuzzerSeamRemedies`), which moves
+			// `HoleCart` into `HoleCheckout`'s module, a module `HoleCheckout`'s module cannot see today. `HoleCart` and
+			// `HoleCartAisle` have `internal` initializers, so that no draw moves them beneath the seam's module. Never with
+			// the fillers in another package, nor where the seam's module has no package, which `HoleCheckout`'s module has.
+			if drawsOuterSeamValue, !fillsFromOtherPackage, !modulesOmittingPackageName.contains(.seamModule) {
+				let cartServiceName = name("HoleCartService")
+				var checkout = instantiable("HoleCheckout", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeCartService", type: "any \(cartServiceName)")])
+				checkout.instantiableArguments = ["generateDependencyTree: true"]
+				checkout.additionalDeclarations.append("public protocol \(cartServiceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+				var cart = instantiable("HoleCart", module: .seamModule)
+				cart.initializerAccess = .internal
+				let cartProperty = if outerSeamValueAsInstantiator {
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeCartBuilder", type: "\(outerSeamValueInstantiator)<\(cart.name)>")
+				} else {
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeCart", type: cart.name)
+				}
+				let checkoutProperty = PropertyDeclaration(attribute: "@Instantiated", label: "holeCheckout", type: checkout.name)
+				var store = instantiable("HoleStore", module: .seamModule)
+				store.instantiableArguments = ["generateDependencyTree: true"]
+				var storeDeclarations = [checkout, cart]
+				if outerSeamValueOnPath {
+					var aisle = instantiable("HoleCartAisle", module: .seamModule, properties: [cartProperty, checkoutProperty])
+					aisle.initializerAccess = .internal
+					storeDeclarations.append(aisle)
+					store.properties = [PropertyDeclaration(attribute: "@Instantiated", label: "holeCartAisle", type: aisle.name)]
+				} else {
+					store.properties = [cartProperty, checkoutProperty]
+				}
+				storeDeclarations.append(store)
+				var cartImpl = instantiable("HoleCartImpl", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Received", label: cartProperty.label, type: cartProperty.type)])
+				cartImpl.instantiableArguments = ["fulfillingAdditionalTypes: [\(cartServiceName).self]"]
+				cartImpl.additionalConformances.append(cartServiceName)
+				cartImpl.fillsHole = true
+				cartImpl.imports = [GraphFuzzerModule.seamDependency.name]
+				seamModuleDeclarations += storeDeclarations
+				callerDeclarations.append(cartImpl)
+				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeStore", type: store.name))
+			}
 			return declarations + [seam] + seamModuleDeclarations + [impl] + callerDeclarations
 		}
 
@@ -5491,6 +5549,7 @@ enum GraphFuzzerGenerator {
 				tangle = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6554616E67)
 				plainFillPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6546696C6C)
 				loopPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6552696E67)
+				outerSeamValue = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6543617274)
 			}
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
@@ -5519,6 +5578,8 @@ enum GraphFuzzerGenerator {
 			/// instantiators.
 			var plainFillPlace: GraphFuzzerRandomNumberGenerator
 			var loopPlace: GraphFuzzerRandomNumberGenerator
+			/// A fill that receives a value an outer seam builds before it calls the inner seam whose hole the fill fills.
+			var outerSeamValue: GraphFuzzerRandomNumberGenerator
 		}
 
 		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
@@ -8502,6 +8563,15 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				features.insert(.holeLoopMemberAlsoBuiltByValue)
 			}
 		}
+		if declares("HoleCheckout") {
+			features.insert(.holeFillReceivesValueOuterSeamBuilds)
+			if declares("HoleCartAisle") {
+				features.insert(.holeFillReceivesValueBuiltOnPathToInnerSeam)
+			}
+			if properties(of: "HoleCartImpl").contains(where: { $0.label == "holeCartBuilder" }) {
+				features.insert(.holeFillReceivesInstantiatorOuterSeamBuilds)
+			}
+		}
 		if declares("HoleMiddle") {
 			features.insert(.holeReentersSeamBeneathRedeclaredLabel)
 		}
@@ -11318,8 +11388,9 @@ enum GraphFuzzerOracle {
 			withoutSecondPath = GraphFuzzerSecondPathRun(typeName: withoutPath.typeName, label: withoutPath.label, outcome: outcome, placeFacts: facts)
 		}
 		// A base corpus graph the tool rejects is run again with each remedy its errors state, each of which must leave no
-		// error where the error is (`remedyFailure`).
-		let remedyRuns = try await remedyRuns(of: fixture, outcome: firstOutcome)
+		// error where the error is (`remedyFailure`), and so is a split seam corpus graph the tool rejects with a passed-up
+		// builder's fill error, whose remedied graph must compile where the tool accepts it.
+		let remedyRuns = try await remedyRuns(of: fixture, outcome: firstOutcome) + seamRemedyRuns(of: fixture, outcome: firstOutcome)
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
 			firstOutcome: firstOutcome,
@@ -11403,7 +11474,7 @@ enum GraphFuzzerOracle {
 				name: module.name,
 				packageName: module.packageName,
 				swiftFileContentByFilePath: Dictionary(uniqueKeysWithValues: modules.indices.filter { modules[$0] == module }.map { (fileNames[$0], fixture.swiftFileContent[$0]) }),
-				dependencies: (listsTransitiveDependencies ? module.transitiveDependencies : module.dependencies).filter(presentModules.contains).map(\.name),
+				dependencies: fixture.listedDependencies(of: module, modules: modules, listsTransitiveDependencies: listsTransitiveDependencies),
 				omitsPackageName: fixture.modulesOmittingPackageName.contains(module),
 			)
 		}

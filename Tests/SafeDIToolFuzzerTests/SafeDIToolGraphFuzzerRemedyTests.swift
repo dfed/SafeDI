@@ -18,12 +18,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Foundation
 import Testing
 @testable import SafeDIToolTestSupport
 
-/// The base corpus's remedy oracle: each remedy a rejected graph's error states, applied to the graph's declarations,
-/// must leave no error where the error was. One representative graph per remedy, each written as the fuzzer writes a
-/// graph. See "Remedy oracle" in `.claude/rules/fuzzer-remedy-oracle.md`.
+/// The remedy oracle: each remedy a rejected graph's error states, applied to the graph's declarations, must leave no
+/// error where the error was, and a remedied seam corpus graph the tool accepts must compile. One representative graph
+/// per remedy, each written as the fuzzer writes a graph. See "Remedy oracle" in `.claude/rules/fuzzer-remedy-oracle.md`.
 struct SafeDIToolGraphFuzzerRemedyTests {
 	// MARK: Remedies
 
@@ -721,6 +722,181 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 		#expect(GraphFuzzerRemedies.remedies(of: fixture, diagnostics: "\(declare)\n\(suggest)").isEmpty)
 		#expect(GraphFuzzerRemedies.unremediedSiteCount(of: fixture, diagnostics: "\(declare)\n\(suggest)") == 1)
 	}
+
+	// MARK: Seam corpus
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func seamRemedyRuns_moveTheReceivedTypeBeneathTheInnerSeamAndReceiveItThereAndCompile_whenAFillReceivesAValueTheOuterSeamBuilds() async throws {
+		let fixture = Self.fillReceivingValueOuterSeamBuilds
+		let outcome = try await GraphFuzzerOracle.toolOutcome(of: fixture)
+		guard case let .rejected(diagnostics) = outcome else {
+			Issue.record("The tool accepts the graph:\n\(outcome.description)")
+			return
+		}
+
+		let runs = try await GraphFuzzerOracle.seamRemedyRuns(of: fixture, outcome: outcome)
+
+		#expect(diagnostics.contains("(if module `FuzzSession` cannot see a type `holeCart: S1_HoleCart` names, first declare that type in module `FuzzSession` or a module it depends on, with an initializer module `FuzzFeature` can call)"))
+		#expect(runs.map(\.remedy.kind) == [.receiveOnInnerSeam])
+		#expect(runs.first?.remedy.fixture.swiftFileContent[0] == """
+		// module: FuzzSession
+
+		@Instantiable(generateDependencyTree: true)
+		public final class S1_HoleCheckout: Instantiable {
+			public init(holeCartService: any S1_HoleCartService, holeCart: S1_HoleCart) {
+				self.holeCartService = holeCartService
+				self.holeCart = holeCart
+			}
+
+			@Instantiated let holeCartService: any S1_HoleCartService
+			@Received let holeCart: S1_HoleCart
+		}
+
+		public protocol S1_HoleCartService {}
+		""")
+		#expect(runs.first?.remedy.fixture.swiftFileContent[1] == """
+		// module: FuzzSession
+
+		@Instantiable
+		public final class S1_HoleCart: Instantiable {
+			public init() {}
+		}
+		""")
+		#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(runs.map(\.failureLine) == [nil])
+		if compileVerificationIsEnabled {
+			#expect(runs.map(\.isCompiled) == [true])
+		}
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "The seam corpus's remedy oracle compiles a remedied graph only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func seamRemedyRuns_reportThatTheRemedyDoesNotCompile_whenTheErrorSaysOnlyToReceiveTheValueOnTheInnerSeam() async throws {
+		let fixture = Self.fillReceivingValueOuterSeamBuilds
+		let outcome = try await GraphFuzzerOracle.toolOutcome(of: fixture)
+		guard case let .rejected(diagnostics) = outcome,
+		      let parenthetical = diagnostics.range(of: #" \(if module `FuzzSession` cannot see a type [^)]*\)"#, options: .regularExpression)
+		else {
+			Issue.record("The tool does not reject the graph with the advice to declare the type beneath the inner seam:\n\(outcome.description)")
+			return
+		}
+		// The advice the error gave before it named the type's module: receive the value on the inner seam, alone.
+		var receiveOnlyDiagnostics = diagnostics
+		receiveOnlyDiagnostics.removeSubrange(parenthetical)
+
+		let runs = try await GraphFuzzerOracle.seamRemedyRuns(of: fixture, outcome: .rejected(diagnostics: receiveOnlyDiagnostics))
+
+		#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(runs.map(\.isCompiled) == [false])
+		#expect(runs.first?.failureLine?.contains("but module FuzzSession does not compile: ") == true)
+		#expect(runs.first?.failureLine?.contains("cannot find type 'S1_HoleCart' in scope") == true)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func seamRemedies_applyNoRemedy_whenTheTypeToMoveNamesATypeOnlyTheOuterSeamsModuleDeclares() {
+		var files = Self.fillReceivingValueOuterSeamBuilds.swiftFileContent
+		files[1] = """
+		// module: FuzzFeature
+		import FuzzSession
+
+		@Instantiable
+		public final class S1_HoleCart: Instantiable {
+			init(holeCartLine: S1_HoleCartLine) {
+				self.holeCartLine = holeCartLine
+			}
+
+			@Instantiated let holeCartLine: S1_HoleCartLine
+		}
+		"""
+		files.append("""
+		// module: FuzzFeature
+		import FuzzSession
+
+		@Instantiable
+		public final class S1_HoleCartLine: Instantiable {
+			public init() {}
+		}
+		""")
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: files)
+		let error = "/x/<fixture-directory>/FuzzApp/S1_HoleCartImpl.swift:12:2: error: `S1_HoleCartImpl` receives `holeCart: S1_HoleCart`, which `S1_HoleStore` builds where it calls `S1_HoleCheckout`, but `S1_HoleStore` passes the builder for `S1_HoleCheckout`’s `holeCartService: any S1_HoleCartService` (case `holeCartService` of `holeCartServiceBuilder`) on from its own caller, which cannot hand it `S1_HoleStore`’s values. Declare `@Received let holeCart: S1_HoleCart` on `S1_HoleCheckout`, so the builder’s scope carries it (if module `FuzzSession` cannot see a type `holeCart: S1_HoleCart` names, first declare that type in module `FuzzSession` or a module it depends on, with an initializer module `FuzzFeature` can call), or declare an @Instantiable type that fulfills `S1_HoleCartService` in module `FuzzFeature` or a module it lists among its SafeDI dependencies, so `S1_HoleStore` fills the builder itself."
+
+		#expect(GraphFuzzerSeamRemedies.remedies(of: fixture, diagnostics: error).map { $0 == nil } == [true])
+		#expect(GraphFuzzerSeamRemedies.unremediedSiteCount(of: fixture, diagnostics: error) == 1)
+	}
+
+	/// A graph as the seam corpus's `HoleCheckout` draw writes one: `S1_HoleStore`, a seam of `FuzzFeature`, builds
+	/// `holeCart` and calls `S1_HoleCheckout`, a seam of `FuzzSession`, whose hole only `S1_HoleCartImpl` in `FuzzApp`
+	/// fills, reading `holeCart`.
+	private static let fillReceivingValueOuterSeamBuilds = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+		"""
+		// module: FuzzSession
+
+		@Instantiable(generateDependencyTree: true)
+		public final class S1_HoleCheckout: Instantiable {
+			public init(holeCartService: any S1_HoleCartService) {
+				self.holeCartService = holeCartService
+			}
+
+			@Instantiated let holeCartService: any S1_HoleCartService
+		}
+
+		public protocol S1_HoleCartService {}
+		""",
+		"""
+		// module: FuzzFeature
+		import FuzzSession
+
+		@Instantiable
+		public final class S1_HoleCart: Instantiable {
+			init() {}
+		}
+		""",
+		"""
+		// module: FuzzFeature
+		import FuzzSession
+
+		@Instantiable(generateDependencyTree: true)
+		public final class S1_HoleStore: Instantiable {
+			public init(holeCart: S1_HoleCart, holeCheckout: S1_HoleCheckout) {
+				self.holeCart = holeCart
+				self.holeCheckout = holeCheckout
+			}
+
+			@Instantiated let holeCart: S1_HoleCart
+			@Instantiated let holeCheckout: S1_HoleCheckout
+		}
+		""",
+		"""
+		// module: FuzzApp
+		import FuzzFeature
+
+		@Instantiable(isRoot: true)
+		public final class S1_Root0: Instantiable {
+			public init(holeStore: S1_HoleStore) {
+				self.holeStore = holeStore
+			}
+
+			@Instantiated let holeStore: S1_HoleStore
+		}
+		""",
+		"""
+		// module: FuzzApp, fills a hole
+		import FuzzFeature
+
+		import FuzzSession
+
+		@Instantiable(fulfillingAdditionalTypes: [S1_HoleCartService.self])
+		public final class S1_HoleCartImpl: Instantiable, S1_HoleCartService {
+			public init(holeCart: S1_HoleCart) {
+				self.holeCart = holeCart
+			}
+
+			@Received let holeCart: S1_HoleCart
+		}
+		""",
+	])
 
 	// MARK: Helpers
 
