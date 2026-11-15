@@ -832,21 +832,21 @@ Here is what happens when the tree gains a narrower parameter. Suppose `Badge` a
 
 A new parameter at least as visible as the seam is on every tier, so hand-written calls stop compiling until they pass it.
 
-A hole is a type the seam’s tree instantiates that no `@Instantiable` declaration visible to the seam’s module fulfills, such as a protocol that only the app implements. The seam’s initializer takes one builder per hole type, named for that type: `userServiceBuilder` for `UserService`, `urlLoaderBuilder` for `URLLoader`. A builder is a closure that is handed a scope saying which place in the tree wants a value, and returns the value the property holds.
+A hole is a type the seam’s tree instantiates that no `@Instantiable` declaration visible to the seam’s module fulfills, such as a protocol that only the app implements. The seam’s initializer takes one builder per hole type, named for that type: `userServiceBuilder` for `UserService`, `urlLoaderBuilder` for `URLLoader`. Where no place of the type forwards a value and none is reached through another seam’s call, the builder takes nothing and returns the value the property holds: `userServiceBuilder: @escaping () -> any UserService`. A hand-written call passes `{ DefaultUserService() }`, `DefaultUserService.init`, or any other function that takes nothing, and the seam calls it at each place.
 
-The scope is an enum, such as `SafeDIScope_UserService`, with a case for each of the seam’s properties that leads to a place of the type. Each case’s first value, except an inner seam’s case, holds what that type has bound before the property, and the seam’s own cases also hold its parameters:
+Any other builder is a closure that is handed a scope saying which place in the tree wants a value, and returns the value the property holds. The scope is an enum, such as `SafeDIScope_UserService`, with a case for each of the seam’s properties that leads to a place of the type. Each case’s first value, except an inner seam’s case, holds what that type has bound before the property, and the seam’s own cases also hold its parameters:
 
 - A place’s case is named for its label, such as `.userService`.
 - The case of a property that builds a type with places beneath it, such as `profile: Profile`, also holds that type’s enum, `SafeDIScope_UserService.Profile_Scope`, whose cases follow these rules for `Profile`’s properties. So the place where `Profile` builds its `userService` is `.profile(values, .userService)`. A type has one enum, however many properties build it.
 - The case of a property that calls an inner seam holding places of the type holds only that seam’s enum, and no values: `case .inner:` leaves it closed, and `case let .inner(innerScope):` opens it.
 
-`{ _ in Implementation() }` fills every place alike, and one pattern, such as `case let .profile(values, .userService):`, singles out one place. For anything deeper, write a function on a type’s enum, which treats every place beneath that type alike, whoever builds it. Renaming a type, even an `internal` one, renames its enum, which such a function names and a pattern never does.
+Such a builder’s `{ _ in Implementation() }` fills every place alike, and one pattern, such as `case let .profile(values, .userService):`, singles out one place. For anything deeper, write a function on a type’s enum, which treats every place beneath that type alike, whoever builds it. Renaming a type, even an `internal` one, renames its enum, which such a function names and a pattern never does.
 
 A property held in a wrapper is no different to write: the closure returns the plain value, and the generated initializer builds the `LazilyInstantiated`, `Instantiator` or other wrapper around it. An instantiator calls the closure each time it instantiates, and hands it the value it forwards as the case’s second value, as in `case let .maker(values, name):`. That value’s type is `ErasedInstantiator`’s first generic type, which is left out only when spelled `()` or `Void`, and always `T.ForwardedProperties` for `Instantiator<T>`, since the seam’s module cannot always see whether `T` forwards anything.
 
 A builder’s label names what it builds: `userServiceBuilder` for a place of the type it fills, and `impl_UserServiceBuilder` when `fulfilledByType: "Impl"` fills a place of another type. Adding a place anywhere never renames it, unless the new builder’s label, or the name its enum takes, coincides with this one’s, when SafeDI names both apart by their types. A label equal to another parameter’s takes a trailing `_`. A builder, and each value in its scope, is as visible as the types it names, including an inner seam’s enum and a forwarded value’s type.
 
-> **Note:** A place the seam builds inside a `@Sendable` function, or holds in a [`Sendable` wrapper](#sendable-wrappers), is filled by a second builder, `userServiceSendableBuilder`, a `@Sendable` closure that takes a `SafeDISendableScope_UserService`. That enum nests by type too, and a case ending in `_Sendable` leads to a further `@Sendable` function or to an inner seam’s own `@Sendable` enum. A place there is handed only the values bound inside the innermost `@Sendable` function that builds it.
+> **Note:** A place the seam builds inside a `@Sendable` function, or holds in a [`Sendable` wrapper](#sendable-wrappers), is filled by a second builder, `userServiceSendableBuilder`, a `@Sendable` closure that takes nothing where the first one does, and otherwise a `SafeDISendableScope_UserService`. That enum nests by type too, and a case ending in `_Sendable` leads to a further `@Sendable` function or to an inner seam’s own `@Sendable` enum. A place there is handed only the values bound inside the innermost `@Sendable` function that builds it.
 
 Here, `Service` instantiates a `Profile`, which instantiates a `UserService` that only module `App` implements:
 
@@ -882,7 +882,7 @@ extension Service {
 }
 ```
 
-A tree that calls the seam fills the builder when its module can see an implementation, as `App`’s does:
+A tree that calls the seam fills the builder when its module can see an implementation, as `App`’s does, with one function for each type that leads to the place:
 
 ```swift
 // Generated in module App, which declares `DefaultUserService`, an implementation of `UserService`.
@@ -904,7 +904,7 @@ func __safeDI_service() -> Service {
 }
 ```
 
-The filling module builds the implementation from the values its scope holds and its own tree. Those types and initializers must be visible there, as a root’s are. A value the implementation receives must be in one of its scope’s values or come from the filling module.
+The filling module builds the implementation from the values the seam binds on the way to the place and its own tree. Those types and initializers must be visible there, as a root’s are. A value the implementation receives must be bound on that way or come from the filling module.
 
 When a tree cannot fill a place: a seam passes it up through its own builder, whose enum holds the inner seam’s in a case, for its caller to fill, and a root reports an error.
 
@@ -912,27 +912,16 @@ A seam can fill an inner seam’s place with a type whose own tree holds a place
 
 A type stops being a hole once the seam’s module reads a declaration that fulfills it ([Which modules to list](#which-modules-to-list)). The seam then builds the type itself, and a hand-written call that passes its builder stops compiling.
 
-A hand-written call fills a builder with a closure that switches over the scope and reads the values in its case:
+A hand-written call fills a builder that takes nothing with a closure that reads what it needs from the calling code:
 
 ```swift
-// In module Feature, `ExportFeature` instantiates `screenBuilder: Instantiator<ExportScreen>` and `uploader: any Uploader`,
-// and `ExportScreen` receives `exportService`. SafeDI generates the hole’s enum, whose public members are:
-@frozen public enum SafeDIScope_Uploader {
-    case uploader(uploader_Values)
-
-    public struct uploader_Values {
-        public var exportService: ExportService { … } // For a value a generated call defers, created when first read, as inline.
-        public let screenBuilder: Instantiator<ExportScreen>
-    }
-}
+// In module Feature, `ExportFeature` receives `exportService` and instantiates `uploader: any Uploader`, so its readable
+// initializer takes `uploaderBuilder: @escaping () -> any Uploader`.
 
 // In module App, which declares `DefaultUploader`, whose `UploadJob`s receive `exportService`, a hand-written call,
 // which Feature’s `generatePlainDependencyTreeInitializers: true` makes possible:
-let feature = ExportFeature(exportService: exportService, uploaderBuilder: { scope in
-    switch scope {
-    case let .uploader(values):
-        DefaultUploader(jobBuilder: Instantiator { UploadJob(exportService: values.exportService) })
-    }
+let feature = ExportFeature(exportService: exportService, uploaderBuilder: {
+    DefaultUploader(jobBuilder: Instantiator { UploadJob(exportService: exportService) })
 })
 // `exportService` exists before this call, as every argument of a hand-written call does, whether or not an `UploadJob` is ever built.
 // A generated call from a tree that holds the service as a `LazilyInstantiated` creates it when the first `UploadJob` is built, as inline.
