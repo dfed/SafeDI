@@ -17,19 +17,22 @@ name: Graph Fuzzer
 #
 # With `coverage`, the run instead lists the generator lines a change adds or
 # modifies that no corpus graph executed, the report ci.yml makes for a pull
-# request, for any commit before it is pushed for review. It builds `ref` for
-# coverage as "Build and Test on Linux" does, runs the unit suite once for its
-# coverage, fuzzes every corpus in the shards of ci.yml's graph-fuzzer job
-# with each shard's profile kept, and reports the lines changed since `base`
+# request, for any commit before it is pushed for review. It builds the
+# commit the run is dispatched on for coverage as "Build and Test on Linux"
+# does, runs the unit suite once for its coverage, fuzzes every corpus in the
+# shards of ci.yml's graph-fuzzer job with each shard's profile kept, and
+# reports the lines changed since `base`
 # (.github/scripts/report-graph-fuzzer-coverage.sh). The report is in the
 # report job's summary and its `fuzzer-coverage` artifact; see "Coverage of a
-# change" in .claude/rules/fuzzer-corpora.md. The report job runs the two
-# report scripts of the commit the run is dispatched on against `ref`'s
-# checkout, so `ref` need not have them or this workflow; the other jobs run
-# `ref`'s .github/actions/retry and
-# .github/scripts/summarize-graph-fuzzer-report.sh, so `ref` needs those. Inputs
-# reach the shell through environment variables, never interpolated into a
-# script.
+# change" in .claude/rules/fuzzer-corpora.md. Inputs reach the shell through
+# environment variables, never interpolated into a script.
+#
+# A dispatched run caches under the ref it is dispatched on, which "Use
+# workflow from" limits to a branch or tag of this repository, and every job
+# builds or runs that ref's commit, never one an input names: a job that
+# builds code can reach the cache service, so a commit an input named,
+# perhaps a fork's, could write the caches of the branch the run is
+# dispatched on, main's when dispatched on main.
 on:
   workflow_dispatch:
     inputs:
@@ -51,15 +54,11 @@ on:
         options: ['auto', '1', '2', '3', '4']
         default: 'auto'
       coverage:
-        description: Instead of the fuzzing above, list the generator lines changed since `base` that no corpus graph executed, fuzzing every corpus as ci.yml does. The inputs above are ignored.
+        description: Instead of the fuzzing above, list the generator lines the commit the run is dispatched on changed since `base` that no corpus graph executed, fuzzing every corpus as ci.yml does. The inputs above are ignored.
         type: boolean
         default: false
-      ref:
-        description: With `coverage`, the branch, tag or commit to build, or empty for the commit the run is dispatched on.
-        required: false
-        default: ''
       base:
-        description: With `coverage`, the commit or branch to list changes since, or empty for the merge base of `ref` with main.
+        description: With `coverage`, the commit or branch to list changes since, or empty for the merge base with main of the commit the run is dispatched on.
         required: false
         default: ''
 
@@ -123,8 +122,8 @@ jobs:
           if-no-files-found: ignore
 
   # The jobs below run only with `coverage`. This one builds the test bundle
-  # with "Build and Test on Linux"'s arguments, from main's build cache, which
-  # it reads and never saves.
+  # with "Build and Test on Linux"'s arguments, from the build cache of the
+  # branch the run is dispatched on or main's, which it reads and never saves.
   coverage-build:
     name: Build for Coverage on Linux
     if: ${{ inputs.coverage }}
@@ -143,10 +142,8 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.ref }}
-      # The other jobs check out this commit, so a branch that moves during
-      # the run changes nothing.
+      # The other jobs check out this commit, the one the run is dispatched
+      # on, so a branch that moves during the run changes nothing.
       - name: Name the Commit
         id: commit
         run: |
@@ -320,10 +317,8 @@ jobs:
           path: graph-fuzzer/
           if-no-files-found: ignore
 
-  # Reports with the scripts of the commit the run was dispatched on, checked
-  # out beside `ref`'s, so `ref` need not have them. Advisory: it fails only
-  # when it cannot report. It names a shard that left no profile or no
-  # report; EXPECTED_SHARDS names coverage-fuzz's matrix.
+  # Advisory: it fails only when it cannot report. It names a shard that left
+  # no profile or no report; EXPECTED_SHARDS names coverage-fuzz's matrix.
   coverage-report:
     name: Report Changed Lines No Fuzzer Graph Executed on Linux
     needs: [coverage-build, coverage-unit-suite, coverage-fuzz]
@@ -343,14 +338,6 @@ jobs:
           ref: ${{ needs.coverage-build.outputs.commit }}
           # Every branch's history, so any base is present.
           fetch-depth: 0
-      - name: Checkout Report Scripts
-        uses: actions/checkout@v7
-        with:
-          path: .graph-fuzzer-coverage-tools
-          sparse-checkout: |
-            Scripts/fuzzer-changed-line-coverage.py
-            .github/scripts/report-graph-fuzzer-coverage.sh
-          sparse-checkout-cone-mode: false
       - name: Download Test Bundle
         uses: actions/download-artifact@v8
         with:
@@ -384,7 +371,7 @@ jobs:
             echo "::error::The base '$BASE' names no commit of this repository."
             exit 1
           fi
-          .graph-fuzzer-coverage-tools/.github/scripts/report-graph-fuzzer-coverage.sh \
+          .github/scripts/report-graph-fuzzer-coverage.sh \
             .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest reports unit-suite/default.profdata \
             "$base" "$RUNNER_TEMP/fuzzer-coverage" "$EXPECTED_SHARDS"
       - name: Upload Coverage
