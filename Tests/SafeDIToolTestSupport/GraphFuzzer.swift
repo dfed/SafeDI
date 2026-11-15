@@ -67,6 +67,48 @@ struct GraphFuzzerFixture: Equatable {
 	/// fixtures of several seeds compile together as one module.
 	let swiftFileContent: [String]
 
+	/// A seam corpus graph, every module of which that declares a seam sets `generatePlainDependencyTreeInitializers: true`,
+	/// so the oracles read and call the readable initializer a person calls, beside the one only generated code calls. The
+	/// public-mock corpus's graphs are drawn as they are.
+	static func seamCorpusFixture(seed: UInt64, swiftFileContent: [String]) -> GraphFuzzerFixture {
+		GraphFuzzerFixture(seed: seed, swiftFileContent: enablingPlainDependencyTreeInitializers(in: swiftFileContent))
+	}
+
+	/// `contents` with `generatePlainDependencyTreeInitializers: true` set in each module that declares a seam: added to the
+	/// module's `#SafeDIConfiguration` where it declares one, since a second is an error, and declared beside its first seam
+	/// otherwise.
+	private static func enablingPlainDependencyTreeInitializers(in contents: [String]) -> [String] {
+		let isSplit = contents.contains { GraphFuzzerModule(declaredIn: $0) != nil }
+		var moduleOrder = [GraphFuzzerModule?]()
+		var indicesByModule = [GraphFuzzerModule?: [Int]]()
+		for (index, content) in contents.enumerated() {
+			let module: GraphFuzzerModule? = isSplit ? (GraphFuzzerModule(declaredIn: content) ?? .samePackageCaller) : nil
+			if indicesByModule[module] == nil {
+				moduleOrder.append(module)
+			}
+			indicesByModule[module, default: []].append(index)
+		}
+		var result = contents
+		for module in moduleOrder {
+			let indices = indicesByModule[module] ?? []
+			guard let seamIndex = indices.first(where: { contents[$0].contains("generateDependencyTree: true") }) else { continue }
+			guard !indices.contains(where: { contents[$0].contains("generatePlainDependencyTreeInitializers: true") }) else { continue }
+			if let configurationIndex = indices.first(where: { contents[$0].contains("#SafeDIConfiguration(") }) {
+				var lines = result[configurationIndex].components(separatedBy: "\n")
+				for lineIndex in lines.indices where lines[lineIndex].contains("#SafeDIConfiguration(") {
+					if let closing = lines[lineIndex].range(of: ")", options: .backwards) {
+						lines[lineIndex].replaceSubrange(closing, with: ", generatePlainDependencyTreeInitializers: true)")
+					}
+					break
+				}
+				result[configurationIndex] = lines.joined(separator: "\n")
+			} else {
+				result[seamIndex] += "\n\n#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n"
+			}
+		}
+		return result
+	}
+
 	var typeNamePrefix: String {
 		Self.typeNamePrefix(forSeed: seed)
 	}
@@ -1953,7 +1995,7 @@ enum GraphFuzzerGenerator {
 			return GraphFuzzerFixture(seed: seed, swiftFileContent: GraphFuzzerPublicMockDraw(seed: seed).swiftFileContent(storingEveryParameter: storingEveryParameter, isKnownRight: false))
 		}
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: storingEveryParameter)
-		return GraphFuzzerFixture(seed: seed, swiftFileContent: builder.build())
+		return GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: builder.build())
 	}
 
 	/// The graph for `seed` and `features` without its second place of a hole – the property a hole draw adds that gives a
@@ -1968,7 +2010,7 @@ enum GraphFuzzerGenerator {
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: false)
 		builder.omitsSecondHolePlace = true
 		let swiftFileContent = builder.build()
-		return builder.secondHolePlace.map { ($0.label, GraphFuzzerFixture(seed: seed, swiftFileContent: swiftFileContent)) }
+		return builder.secondHolePlace.map { ($0.label, GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: swiftFileContent)) }
 	}
 
 	/// The graph for `seed` and `features` with `edit` applied after every draw, or `nil` when the edit does not apply to
@@ -1982,7 +2024,7 @@ enum GraphFuzzerGenerator {
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: false)
 		builder.builderSurfaceEdit = edit
 		let swiftFileContent = builder.build()
-		return builder.appliesBuilderSurfaceEdit ? GraphFuzzerFixture(seed: seed, swiftFileContent: swiftFileContent) : nil
+		return builder.appliesBuilderSurfaceEdit ? GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: swiftFileContent) : nil
 	}
 
 	/// The graph for `seed` and `features` without its second path to a type that holds a place – the property a hole draw
@@ -1994,7 +2036,7 @@ enum GraphFuzzerGenerator {
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: false)
 		builder.omitsSecondPath = true
 		let swiftFileContent = builder.build()
-		return builder.secondPath.map { ($0.typeName, $0.label, GraphFuzzerFixture(seed: seed, swiftFileContent: swiftFileContent)) }
+		return builder.secondPath.map { ($0.typeName, $0.label, GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: swiftFileContent)) }
 	}
 
 	/// The known-right path of the `generateMockPublic` feature's value differential for `seed`: its graph with every
