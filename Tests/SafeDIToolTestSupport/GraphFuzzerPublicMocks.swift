@@ -1534,6 +1534,14 @@ struct GraphFuzzerPublicMockDraw {
 		GraphFuzzerModule.allCases.filter { module in module.isCaller && files.contains { $0.module == module } }
 	}
 
+	/// Whether a module of the graph sets `mockConditionalCompilation: nil`, under which a consumer's mock cannot call a
+	/// public mock generated under another condition: the gating draws stay out of such a graph, so that they reject no
+	/// graph the rest of the draw has the tool accept.
+	private var hasDifferingMockCondition: Bool {
+		let rendering = Rendering(prefix: prefix, storesEveryParameter: false, isKnownRight: false)
+		return files.contains { file in file.declarations.contains { $0(rendering).contains("mockConditionalCompilation: nil") } }
+	}
+
 	/// A protocol of the graph's, `Sendable` in a graph whose types all are, so that a type built inside a `@Sendable`
 	/// builder can hold one.
 	private func protocolDeclaration(_ protocolName: String) -> (Rendering) -> String {
@@ -1558,7 +1566,7 @@ struct GraphFuzzerPublicMockDraw {
 		let initializerRoll = random.integer(in: 0...7)
 		let consumerModuleRoll = random.integer(in: 0...1)
 		let consumerModules = consumerModules
-		guard drawsShape, !consumerModules.isEmpty else { return }
+		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
 		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
 		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
 		let apiName = name("SelfApi")
@@ -1628,7 +1636,7 @@ struct GraphFuzzerPublicMockDraw {
 		let innerInitializerRoll = random.integer(in: 0...9)
 		let consumerModuleRoll = random.integer(in: 0...1)
 		let consumerModules = consumerModules
-		guard drawsShape, !consumerModules.isEmpty else { return }
+		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
 		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
 		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
 		let serviceName = name("PfService")

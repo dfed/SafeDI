@@ -5254,16 +5254,16 @@ struct SafeDIToolGraphFuzzerTests {
 		.cycleParameterTwoLevelsDeep: 31,
 		.cycleParameterUndeclaredAbove: 3,
 		.cycleParameterWithoutReader: 10,
-		.forwardedLabelAcrossSeamCall: 0,
-		.forwardedLabelAcrossSeamCallCallerInsideSeam: 0,
-		.forwardedLabelAcrossSeamCallFillReadsLabel: 0,
-		.forwardedLabelAcrossSeamCallInnerOptional: 0,
-		.forwardedLabelAcrossSeamCallOtherTypes: 0,
-		.forwardedLabelAcrossSeamCallOuterDefers: 0,
-		.forwardedLabelAcrossSeamCallPlaceBeneath: 0,
-		.forwardedLabelAcrossSeamCallSameClassType: 0,
-		.forwardedLabelAcrossSeamCallSameValueType: 0,
-		.forwardedLabelAcrossSeamCallSendable: 0,
+		.forwardedLabelAcrossSeamCall: 107,
+		.forwardedLabelAcrossSeamCallCallerInsideSeam: 35,
+		.forwardedLabelAcrossSeamCallFillReadsLabel: 45,
+		.forwardedLabelAcrossSeamCallInnerOptional: 17,
+		.forwardedLabelAcrossSeamCallOtherTypes: 25,
+		.forwardedLabelAcrossSeamCallOuterDefers: 21,
+		.forwardedLabelAcrossSeamCallPlaceBeneath: 31,
+		.forwardedLabelAcrossSeamCallSameClassType: 18,
+		.forwardedLabelAcrossSeamCallSameValueType: 26,
+		.forwardedLabelAcrossSeamCallSendable: 29,
 	]
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
 	/// with their read twin.
@@ -5751,7 +5751,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x35B2A2B27ED15600
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x1C53AB818A2DF81A
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -5846,18 +5846,18 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeOnPublicMockType: 228,
 		.holeScopeHoldsPackageValue: 103,
 		.holeScopeHoldsPublicValue: 140,
-		.placeInsidePublicMockFill: 399,
-		.placeInsidePublicMockFillFilledByConsumer: 295,
-		.placeInsidePublicMockFillOnForwardingRoute: 169,
-		.placeInsidePublicMockFillPassedUp: 104,
-		.placeInsidePublicMockFillReadsForwardedValue: 79,
-		.placeInsidePublicMockFillReadsOuterValue: 85,
-		.selfBuildingPublicMock: 426,
-		.selfBuildingPublicMockFillReadsToken: 91,
-		.selfBuildingPublicMockPassedUp: 92,
-		.selfBuildingPublicMockPlaceBeneath: 140,
-		.selfBuildingPublicMockThroughSendableInstantiator: 39,
-		.selfBuildingPublicMockThroughStep: 114,
+		.placeInsidePublicMockFill: 355,
+		.placeInsidePublicMockFillFilledByConsumer: 261,
+		.placeInsidePublicMockFillOnForwardingRoute: 148,
+		.placeInsidePublicMockFillPassedUp: 94,
+		.placeInsidePublicMockFillReadsForwardedValue: 70,
+		.placeInsidePublicMockFillReadsOuterValue: 76,
+		.selfBuildingPublicMock: 383,
+		.selfBuildingPublicMockFillReadsToken: 84,
+		.selfBuildingPublicMockPassedUp: 82,
+		.selfBuildingPublicMockPlaceBeneath: 127,
+		.selfBuildingPublicMockThroughSendableInstantiator: 35,
+		.selfBuildingPublicMockThroughStep: 103,
 		.instantiableParameterType: 235,
 		.internalInitializer: 520,
 		.lazilyInstantiatedOmittedValueProvider: 58,
