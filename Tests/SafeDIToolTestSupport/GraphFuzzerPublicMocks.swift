@@ -277,7 +277,6 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case combinationForwardedValuePublicMockAtBoundary
 	case combinationForwardedValuePublicMockBeneath
 	case combinationAdditionalMockPublicMockBeneath
-	case combinationAdditionalMockPublicMockInsideFill
 	case combinationTwoRoutesPublicMockAtBoundary
 
 	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`,

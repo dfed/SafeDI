@@ -4779,6 +4779,11 @@ struct SafeDIToolGraphFuzzerTests {
 			reportProblem("SAFEDI_GRAPH_FUZZER_FEATURES must name generator features: \(GraphFuzzerGeneratorFeature.allCases.map(\.rawValue).joined(separator: ", ")).")
 			return
 		}
+		// `combinationDraws` draws a combination corpus's graphs, and `corpus(for:)` picks which by the feature beside it.
+		guard !features.contains(.combinationDraws) || features.contains(.generateDependencyTree) || features.contains(.generateMockPublic) else {
+			reportProblem("SAFEDI_GRAPH_FUZZER_FEATURES names combinationDraws without generateDependencyTree or generateMockPublic, one of which selects its corpus.")
+			return
+		}
 		guard configuration.iterations > 0 else {
 			reportProblem(configuration.noSeedsProblem)
 			return
@@ -6477,15 +6482,18 @@ struct SafeDIToolGraphFuzzerTests {
 		acceptedDrawFeatureCounts: seamCombinationCorpusAcceptedDrawFeatureCounts,
 		retentionCounts: seamCombinationCorpusRetentionCounts,
 		gatingSeamDrawFeatures: Set(GraphFuzzerSeamDrawFeature.allCases.filter(\.isCombinationShape)),
+		// Every cell's place is a plain `comboService`, beneath no lazy wrapper and forwarding nothing, and no edit of the
+		// builder surface is drawn in a combination cell; a place in a `Sendable` graph's instantiator is `@Sendable`.
+		builderSurfaceFlooredKinds: ["base-plain", "base-sendable"],
 	)
 
-	static let seamCombinationCorpusSeedCount = 1_350
-	static let seamCombinationCorpusFixtureHash: UInt64 = 0xE2048B971F6861FC
-	static let seamCombinationCorpusAcceptedSeedCount = 1_350
-	static let seamCombinationCorpusAcceptedSeedsSum: UInt64 = 0x4F60CF7F87C59197
-	static let seamCombinationCorpusValueOracleInspectedGraphCount = 1_350
+	static let seamCombinationCorpusSeedCount = 1_320
+	static let seamCombinationCorpusFixtureHash: UInt64 = 0xE93D8C126EB993D0
+	static let seamCombinationCorpusAcceptedSeedCount = 1_320
+	static let seamCombinationCorpusAcceptedSeedsSum: UInt64 = 0x73CBBAC535574A10
+	static let seamCombinationCorpusValueOracleInspectedGraphCount = 1_320
 	/// What the retention oracle judges over the seam combination corpus (`Corpus.retentionCounts`).
-	static let seamCombinationCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 385, judgedDrawingRetentionShape: 0, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
+	static let seamCombinationCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 377, judgedDrawingRetentionShape: 0, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
 	/// How many of the seam combination corpus's accepted graphs show each cell, counted whether or not the graph fails:
 	/// at least ten each. Each cell draws `seamCombinationCorpusSeedCount / GraphFuzzerCombinationDraw.seamCells.count`
 	/// graphs, all of which the tool accepts.
@@ -6514,12 +6522,12 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: fulfillerSeamWithPlaceReason,
 			signatures: [.compilerError(containing: "_ComboNestImpl(__safeDI_")],
-			seeds: [99, 189, 639, 1_089],
+			seeds: [9, 449, 889],
 		),
 		GraphFuzzerKnownIssue(
 			reason: inSeamLeakReason,
 			signatures: combinationInSeamLeakSignatures,
-			seeds: [3, 39, 90, 129, 180, 183, 270, 309, 360, 399, 453, 489, 540, 543, 579, 630, 633, 669, 720, 723, 759, 813, 900, 903, 939, 990, 1_029, 1_080, 1_083, 1_119, 1_170, 1_209, 1_260, 1_263, 1_299],
+			seeds: [176, 179, 214, 264, 267, 302, 309, 352, 355, 390, 399, 453, 489, 528, 531, 540, 543, 566, 616, 619, 630, 633, 654, 669, 704, 707, 720, 723, 742, 759, 792, 795, 813, 830, 900, 903, 939, 990, 1_029, 1_056, 1_059, 1_080, 1_083, 1_094, 1_119, 1_144, 1_147, 1_170, 1_182, 1_209, 1_232, 1_235, 1_260, 1_263, 1_270],
 		),
 		GraphFuzzerKnownIssue(
 			reason: unproducedSendableFillCaseReason,
@@ -6527,12 +6535,12 @@ struct SafeDIToolGraphFuzzerTests {
 				.scopeCase(.declaredCaseNeverProduced, containing: "_ComboNestServiceBuilder_Sendable`, which no place's path produces"),
 				.scopeCase(.scopeCaseNamesNoProperty, containing: "_ComboNestServiceBuilder_Sendable`, which names no property of the seam"),
 			],
-			seeds: [0, 93, 273, 363, 450, 810, 993, 1_173],
+			seeds: [0, 3, 88, 91, 440, 443, 880, 883, 968, 971],
 		),
 		GraphFuzzerKnownIssue(
 			reason: mainActorSeamWithNonisolatedInitializerReason,
 			signatures: [.compilerError(containing: "call to main actor-isolated initializer 'init(__safeDI_")],
-			seeds: [858, 1_128, 1_218],
+			seeds: [47, 70, 311, 334, 575, 598, 839, 862, 1_103, 1_126],
 		),
 	]
 
@@ -6551,7 +6559,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// A fill that holds a place and builds itself, or a type above the place, again through a `SendableInstantiator`:
 	/// the calling seam's `@Sendable` enum declares a case for the inner seam's builder that no place's path produces.
-	private static let unproducedSendableFillCaseReason = "A fill that holds a place of its own and builds itself again through a `SendableInstantiator`: the calling seam’s `@Sendable` scope enum declares a case for the inner seam’s builder that no place’s path produces, an unused case in generated code (rules 5 and 6 of the seam contract)"
+	private static let unproducedSendableFillCaseReason = "A fill that holds a place of its own and builds itself again through a `SendableInstantiator`: the calling seam’s `@Sendable` scope enum declares a case for the inner seam’s builder that no place’s path produces, an unused case in generated code (rules 5 and 6 of the seam contract), until its own fix, which the plan has not yet given a slice"
 
 	/// D3: a type that fulfills a hole and is itself a seam with a place generates a call of an initializer it does not
 	/// generate, so its caller's code does not compile.
@@ -6560,7 +6568,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// A seam whose type is isolated to the main actor and whose initializer is `nonisolated` generates its initializers
 	/// in an extension of the type, which inherit the isolation, so a caller outside the main actor cannot call them,
 	/// where the inline build calls the `nonisolated` initializer.
-	private static let mainActorSeamWithNonisolatedInitializerReason = "A `@MainActor` seam whose initializer is `nonisolated` generates initializers isolated to the main actor, which drop the `nonisolated` of the initializer they forward to, so a caller outside the main actor that the inline build compiles cannot call the seam"
+	private static let mainActorSeamWithNonisolatedInitializerReason = "A `@MainActor` seam whose initializer is `nonisolated` generates initializers isolated to the main actor, which drop the `nonisolated` of the initializer they forward to, so a caller outside the main actor that the inline build compiles cannot call the seam, until the leak fix’s second slice spells each generated seam initializer’s isolation as the initializer it forwards to"
 
 	/// The corpus drawn with `generateMockPublic` and `combinationDraws`: seeds `0..<publicMockCombinationCorpusSeedCount`,
 	/// each a graph of one public mock combination cell alone (`GraphFuzzerCombinationDraw.publicMockCells`, the seed's
@@ -6585,13 +6593,16 @@ struct SafeDIToolGraphFuzzerTests {
 		acceptedPublicMockDrawFeatureCounts: publicMockCombinationCorpusAcceptedDrawFeatureCounts,
 		retentionCounts: publicMockCombinationCorpusRetentionCounts,
 		gatingPublicMockDrawFeatures: Set(GraphFuzzerPublicMockDrawFeature.allCases.filter(\.isCombinationShape)),
+		// As in the seam combination corpus, every place is plain and no edit is drawn; too few calling mocks take a
+		// `@Sendable` builder (5) to floor that kind.
+		builderSurfaceFlooredKinds: ["base-plain"],
 	)
 
-	static let publicMockCombinationCorpusSeedCount = 345
-	static let publicMockCombinationCorpusFixtureHash: UInt64 = 0xCB9AECB2A77AE34
-	static let publicMockCombinationCorpusAcceptedSeedCount = 345
-	static let publicMockCombinationCorpusAcceptedSeedsSum: UInt64 = 0xBC347EAC9ECA1B77
-	static let publicMockCombinationCorpusValueOracleInspectedGraphCount = 345
+	static let publicMockCombinationCorpusSeedCount = 330
+	static let publicMockCombinationCorpusFixtureHash: UInt64 = 0xCB1AC07199D327CC
+	static let publicMockCombinationCorpusAcceptedSeedCount = 330
+	static let publicMockCombinationCorpusAcceptedSeedsSum: UInt64 = 0x9D80818A8FD8C829
+	static let publicMockCombinationCorpusValueOracleInspectedGraphCount = 330
 	static let publicMockCombinationCorpusErrorGraphCounts = [0, 0, 0, 0, 0, 0, 0, 0]
 	/// What the retention oracle judges over the public mock combination corpus (`Corpus.retentionCounts`).
 	static let publicMockCombinationCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 165, judgedDrawingRetentionShape: 0, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
@@ -6622,7 +6633,7 @@ struct SafeDIToolGraphFuzzerTests {
 					"_ComboLive alive holding comboHome.comboAgainBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 					"_ComboLive alive holding comboParent.comboHome.comboAgainBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 				].map { .publicMockRetainsWhatKnownRightFrees(containing: $0) },
-				seeds: [0, 23, 46, 69, 138, 161, 207, 253, 276, 299, 322],
+				seeds: [44, 66, 88, 132, 154, 176, 198, 207, 253, 264, 276, 286, 299, 308, 322],
 			),
 		],
 	)

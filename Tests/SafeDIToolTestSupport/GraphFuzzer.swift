@@ -71,9 +71,10 @@ struct GraphFuzzerFixture: Equatable {
 		Self.typeNamePrefix(forSeed: seed)
 	}
 
-	/// The names of the files `executeSafeDIToolTest` writes for `swiftFileContent`, in its order, which it names after
-	/// the `@Instantiable` type each declares. Every reader pairs a name with its file by position, so a file this cannot
-	/// name is reported, never left out: a list one name short would pair every later name with another file.
+	/// The names the harness gives the files of `swiftFileContent`, in its order: for the files the fuzzer draws, each
+	/// declaring one `@Instantiable` type under a name no other file's type has, the names `executeSafeDIToolTest` gives
+	/// them. Every reader pairs a name with its file by position, so a file this cannot name is reported, never left out:
+	/// a list one name short would pair every later name with another file.
 	var fileNames: [String] {
 		get throws {
 			try swiftFileContent.enumerated().map { index, content in
@@ -102,9 +103,10 @@ struct GraphFuzzerFixture: Equatable {
 		return filesByName
 	}
 
-	/// The name `executeSafeDIToolTest` writes `content` under, or `nil` for a file that declares no type, which it
-	/// would write as `File.swift`. A reader that looks for one file by its name reads each file's own name here, so no
-	/// file it cannot name shifts another's.
+	/// The name the harness gives `content`: its `// file: ` line's, else its first type's, as `executeSafeDIToolTest`
+	/// names a drawn file (it neither parses the type nor adds a suffix to a repeated name, which no drawn graph has), or
+	/// `nil` for a file that declares no type. A reader that looks for one file by its name reads each file's own name
+	/// here, so no file it cannot name shifts another's.
 	static func fileName(of content: String) -> String? {
 		markedFileName(in: content)
 			?? GraphFuzzerSourceLine.lines(of: content).lazy.compactMap(\.declaredTypeName).first.map { "\($0).swift" }
@@ -1665,7 +1667,6 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case combinationHandWrittenMockPlaceInsideFillInsideFill
 	case combinationAdditionalMockPlaceInsideFillAtBoundary
 	case combinationAdditionalMockPlaceInsideFillBeneath
-	case combinationAdditionalMockPlaceInsideFillInsideFill
 	case combinationConditionalCompilationPlaceInsideFillAtBoundary
 	case combinationConditionalCompilationPlaceInsideFillBeneath
 	case combinationConditionalCompilationPlaceInsideFillInsideFill
@@ -1701,7 +1702,6 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case combinationHandWrittenMockInnerSeamInsideFill
 	case combinationAdditionalMockInnerSeamAtBoundary
 	case combinationAdditionalMockInnerSeamBeneath
-	case combinationAdditionalMockInnerSeamInsideFill
 	case combinationConditionalCompilationInnerSeamAtBoundary
 	case combinationConditionalCompilationInnerSeamBeneath
 	case combinationConditionalCompilationInnerSeamInsideFill
@@ -1714,6 +1714,8 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case combinationFulfillerSeamInnerSeamInsideFill
 	case combinationErasedSeamTreeAtBoundary
 	case combinationErasedSeamTreeBeneath
+	case combinationActorIsolationSeamTreeAtBoundary
+	case combinationActorIsolationSeamTreeBeneath
 	case combinationHandWrittenMockSeamTreeAtBoundary
 	case combinationHandWrittenMockSeamTreeBeneath
 	case combinationAdditionalMockSeamTreeAtBoundary
@@ -1726,8 +1728,6 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case combinationActorIsolationHoleFillBeneath
 	case combinationHandWrittenMockHoleFillAtBoundary
 	case combinationHandWrittenMockHoleFillBeneath
-	case combinationAdditionalMockHoleFillAtBoundary
-	case combinationAdditionalMockHoleFillBeneath
 	case combinationConditionalCompilationHoleFillAtBoundary
 	case combinationConditionalCompilationHoleFillBeneath
 	case combinationGeneratedAttributesHoleFillAtBoundary
@@ -2230,6 +2230,8 @@ enum GraphFuzzerGenerator {
 	/// The places of holes the generator drew for `seed` and `features` beneath a lazy wrapper or forwarding a value: the
 	/// ground truth the builder surface's floors count a judged builder's place kind by.
 	static func drawnHolePlaces(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>) -> [GraphFuzzerDrawnHolePlace] {
+		// A combination cell's place is `comboService` by value, beneath no lazy wrapper and forwarding nothing.
+		guard !features.contains(.combinationDraws) else { return [] }
 		guard !features.contains(.generateMockPublic) else {
 			return GraphFuzzerPublicMockDraw(seed: seed).drawnHolePlaces
 		}
@@ -2461,12 +2463,16 @@ enum GraphFuzzerGenerator {
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
 			let sendabilityRoll = random.integer(in: 0...99)
-			sendability = if sendabilityRoll < 15 {
-				.sendable
+			if features.contains(.combinationDraws) {
+				// A combination cell chooses its graph's sendability by the seed's index in the cell, as it chooses its variants.
+				let (isSendable, isMixed) = GraphFuzzerCombinationDraw.sendability(forSeed: seed, isPublicMockCorpus: features.contains(.generateMockPublic))
+				sendability = isSendable ? .sendable : isMixed ? .mixed : .nonSendable
+			} else if sendabilityRoll < 15 {
+				sendability = .sendable
 			} else if sendabilityRoll < 40 {
-				.mixed
+				sendability = .mixed
 			} else {
-				.nonSendable
+				sendability = .nonSendable
 			}
 			typeCount = random.integer(in: 3...7)
 			lazyPercent = random.element(of: [25, 50, 75])
@@ -2598,7 +2604,7 @@ enum GraphFuzzerGenerator {
 		/// declarations name them, drawn from streams of its own: no other pass draws, so the seed's other graphs are
 		/// unaffected and every graph of the combination corpus is the cell's.
 		private mutating func buildingCombinationCell() -> [String] {
-			var draw = GraphFuzzerCombinationDraw(seed: seed, prefix: prefix, isSendableGraph: sendability == .sendable, isMixedGraph: sendability == .mixed)
+			var draw = GraphFuzzerCombinationDraw(seed: seed, prefix: prefix, isPublicMockCorpus: features.contains(.generateMockPublic))
 			let declarations = features.contains(.generateMockPublic) ? draw.publicMockDeclarations(isKnownRight: buildsKnownRightPath) : draw.seamDeclarations()
 			presentModules = Set(declarations.compactMap(\.module))
 			let sources = declarations.map(source(of:))
@@ -10026,6 +10032,17 @@ enum GraphFuzzerToolOutcome: Equatable {
 /// warning, the fixture itself does not compile (a defect in the fuzzer), two runs of the tool differ, a renamed
 /// graph gives other results, or the graph split across modules gives other results under one multi-module
 /// integration than under the other.
+extension GraphFuzzerFailure {
+	/// What follows a scope-case failure's descriptions in its details, before the graph (`scopeCaseFailures`).
+	static let scopeCaseGraphHeading = "\nThis graph:\n"
+
+	/// A scope-case failure's descriptions, one a case.
+	var scopeCaseDescriptions: [Substring] {
+		let descriptions = details.range(of: Self.scopeCaseGraphHeading).map { details[..<$0.lowerBound] } ?? details[...]
+		return descriptions.split(separator: "\n")
+	}
+}
+
 struct GraphFuzzerFailure: Equatable {
 	enum Kind: String, Equatable {
 		case generatedCodeDoesNotCompile = "generated code does not compile"
@@ -10495,16 +10512,17 @@ struct GraphFuzzerKnownIssue: Equatable {
 		}
 	}
 
-	/// Whether every shape of the issue is a value, retention or builder-surface difference, which documents only the
-	/// differences its signatures match and masks no later failure of the oracle's chain (`GraphFuzzerFinding`): a
-	/// graph listed under such an issue still reports a new failure of any oracle, so the gating draws count it as
-	/// judged.
+	/// Whether every shape of the issue is a value, retention, builder-surface or scope-case difference, which documents
+	/// only the differences its signatures match and masks no later failure of the oracle's chain (`GraphFuzzerFinding`;
+	/// only the renamed graphs' and the retention oracle's follow the scope-case oracles, and no known failure masks
+	/// either): a graph listed under such an issue still reports a new failure of any oracle, so the gating draws count
+	/// it as judged.
 	var masksNoLaterFailure: Bool {
 		signatures.allSatisfy { signature in
 			switch signature {
-			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .builderSurface:
+			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .builderSurface, .scopeCase:
 				true
-			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite, .scopeCase:
+			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite:
 				false
 			}
 		}
@@ -10534,8 +10552,18 @@ struct GraphFuzzerKnownIssue: Equatable {
 				failure.kind == .integrationsDisagree && failure.details.contains(text)
 			case let .seamPassesNilWhereInlinePassesValue(text):
 				failure.kind == .seamPassesNilWhereInlinePassesValue && failure.details.contains(text)
-			case let .scopeCase(kind, text):
-				[.declaredCaseNeverProduced, .scopeCaseNamesNoProperty].contains(kind) && failure.kind == kind && failure.details.contains(text)
+			case let .scopeCase(kind, _):
+				// Every case the failure describes must match one of the shape's texts of its kind, so a listed seed still
+				// reports another unproduced or misnamed case (`scopeCaseFailures` describes one a line).
+				[.declaredCaseNeverProduced, .scopeCaseNamesNoProperty].contains(kind) && failure.kind == kind && failure.scopeCaseDescriptions.allSatisfy { description in
+					signatures.contains { signature in
+						if case let .scopeCase(otherKind, text) = signature {
+							otherKind == kind && description.contains(text)
+						} else {
+							false
+						}
+					}
+				}
 			case let .valueComparatorCouldNotDescribeGraph(text):
 				failure.kind == .valueComparatorCouldNotDescribeGraph && failure.details.contains(text)
 			case .seamBuildsOtherValuesThanInline:
@@ -10984,7 +11012,7 @@ struct GraphFuzzerToolRuns {
 		var failures = [GraphFuzzerFailure]()
 		func append(_ kind: GraphFuzzerFailure.Kind, _ descriptions: [String]) {
 			guard !descriptions.isEmpty else { return }
-			failures.append(GraphFuzzerFailure(seed: fixture.seed, kind: kind, details: "\(descriptions.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)"))
+			failures.append(GraphFuzzerFailure(seed: fixture.seed, kind: kind, details: "\(descriptions.joined(separator: "\n"))\(GraphFuzzerFailure.scopeCaseGraphHeading)\(firstOutcome.description)"))
 		}
 		append(.producedCaseUndeclared, declarations.undeclaredProducedCases(of: placeFacts))
 		// A tangle of cycles no type always encloses can keep a case no run produces, which the design accepts.

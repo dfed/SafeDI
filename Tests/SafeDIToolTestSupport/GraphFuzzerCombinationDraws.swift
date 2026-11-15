@@ -75,7 +75,7 @@ enum GraphFuzzerCombinationRow: String, CaseIterable {
 	/// The host builds `ComboMocked`, which has a hand-written mock (`mock`, or `customMock` through `customMockName`),
 	/// and the root generates a mock.
 	case handWrittenMock = "HandWrittenMock"
-	/// The host's module lists it in `additionalMocksToGenerate`.
+	/// The roots' module, above the host's, lists the host in `additionalMocksToGenerate`.
 	case additionalMock = "AdditionalMock"
 	/// The host builds `ComboFlagged`, declared inside a platform-conditioned or a flag-conditioned `#if` block.
 	case conditionalCompilation = "ConditionalCompilation"
@@ -103,25 +103,61 @@ struct GraphFuzzerCombinationCell: Hashable {
 	var featureName: String {
 		"combination" + row.rawValue + column.rawValue + position.rawValue
 	}
+
+	/// Whether the cell's host is a type of the roots' module (the consumer's, in the public mock column): `ComboLive`, or
+	/// a hole fill's `ComboBelow`.
+	var hostIsInRootsModule: Bool {
+		position == .insideFill || column == .holeFill
+	}
 }
 
 // MARK: - Draw
 
 /// The combination corpora's graphs (`GraphFuzzerGeneratorFeature.combinationDraws`): each seed draws one cell, the seed's
 /// remainder by the number of cells, alone, so that nearly every graph is accepted and judged and a cell gets ten judged
-/// graphs in few seeds. Each cell draws its rolls from a stream of its own, seeded from the seed and the cell's name, and
-/// one roll in two puts the column's tree beneath `ComboParent`, a type of the roots' module that only builds it, so that
-/// the boundary type is not always the root's child. The root's file names the cell on a line of its own
-/// (`marker`), from which `cell(drawnIn:)` reads it.
+/// graphs in few seeds. The seed's index among its cell's seeds (`indexInCell`) chooses the cell's variants and the
+/// graph's sendability, so that each variant is drawn in a fixed share of the cell's graphs, every one in each fifteen;
+/// one roll in two, from a stream seeded from the seed and the cell's name, puts the column's tree beneath `ComboParent`,
+/// a type of the roots' module that only builds it, so that the boundary type is not always the root's child. The root's
+/// file names the cell on a line of its own (`marker`), from which `cell(drawnIn:)` reads it.
 struct GraphFuzzerCombinationDraw {
 	typealias TypeDeclaration = GraphFuzzerGenerator.TypeDeclaration
 	typealias PropertyDeclaration = GraphFuzzerGenerator.PropertyDeclaration
 
-	init(seed: UInt64, prefix: String, isSendableGraph: Bool, isMixedGraph: Bool) {
+	/// The draw of `seed`'s cell in the public mock combination corpus when `isPublicMockCorpus`, else in the seam
+	/// combination corpus, whose graph is `Sendable` or mixed as `sendability(forSeed:isPublicMockCorpus:)` says.
+	init(seed: UInt64, prefix: String, isPublicMockCorpus: Bool) {
 		self.seed = seed
 		self.prefix = prefix
-		self.isSendableGraph = isSendableGraph
-		self.isMixedGraph = isMixedGraph
+		cell = isPublicMockCorpus ? Self.publicMockCell(forSeed: seed) : Self.seamCell(forSeed: seed)
+		indexInCell = Int(seed / UInt64(isPublicMockCorpus ? Self.publicMockCells.count : Self.seamCells.count))
+		(isSendableGraph, isMixedGraph) = Self.sendability(of: cell, indexInCell: indexInCell)
+	}
+
+	/// Whether the graph of `seed`'s cell is `Sendable`, and whether it mixes both kinds of wrapper, by the seed's index in
+	/// its cell: one graph in five `Sendable`, one in five mixed, and the rest neither, but an actor isolation cell's
+	/// graphs that draw a `nonisolated` initializer, which are `Sendable`, since that initializer stores its properties
+	/// from outside the main actor, which Swift 6 allows only for `Sendable` values.
+	static func sendability(forSeed seed: UInt64, isPublicMockCorpus: Bool) -> (isSendable: Bool, isMixed: Bool) {
+		GraphFuzzerCombinationDraw(seed: seed, prefix: "", isPublicMockCorpus: isPublicMockCorpus).sendability
+	}
+
+	private static func sendability(of cell: GraphFuzzerCombinationCell, indexInCell: Int) -> (isSendable: Bool, isMixed: Bool) {
+		if cell.row == .actorIsolation, drawsNonisolatedInitializer(indexInCell: indexInCell) {
+			(true, false)
+		} else {
+			(indexInCell % 5 == 0, indexInCell % 5 == 1)
+		}
+	}
+
+	/// Whether an actor isolation cell's graph makes its host `@MainActor` with a `nonisolated` initializer, a third of
+	/// them, rather than every type of the graph `@MainActor`, which draws one shape at every position.
+	private static func drawsNonisolatedInitializer(indexInCell: Int) -> Bool {
+		indexInCell % 3 == 0
+	}
+
+	private var sendability: (isSendable: Bool, isMixed: Bool) {
+		(isSendableGraph, isMixedGraph)
 	}
 
 	/// What begins the line naming a graph's cell.
@@ -134,23 +170,27 @@ struct GraphFuzzerCombinationDraw {
 		}
 		let twoPositions: [GraphFuzzerCombinationPosition] = [.boundary, .beneath]
 		let threePositions: [GraphFuzzerCombinationPosition] = [.boundary, .beneath, .insideFill]
-		return cells(.placeInsideFill, [.builtAgain, .declaredAgainAlongCycle, .receivedInstantiatorLoop, .fulfillerSeam, .genericOrExtension, .actorIsolation, .handWrittenMock, .additionalMock, .conditionalCompilation, .sharedInstance, .generatedAttributes, .nestedType], positions: threePositions)
+		let cells = cells(.placeInsideFill, [.builtAgain, .declaredAgainAlongCycle, .receivedInstantiatorLoop, .fulfillerSeam, .genericOrExtension, .actorIsolation, .handWrittenMock, .additionalMock, .conditionalCompilation, .sharedInstance, .generatedAttributes, .nestedType], positions: threePositions)
 			+ cells(.innerSeam, [.erased, .declaredAgainAlongCycle, .receivedInstantiatorLoop, .genericOrExtension, .actorIsolation, .lazilyInstantiated, .handWrittenMock, .additionalMock, .conditionalCompilation, .generatedAttributes, .nestedType], positions: threePositions)
 			+ cells(.innerSeam, [.fulfillerSeam], positions: [.insideFill])
-			+ cells(.seamTree, [.erased, .handWrittenMock, .additionalMock, .generatedAttributes], positions: twoPositions)
+			+ cells(.seamTree, [.erased, .actorIsolation, .handWrittenMock, .additionalMock, .generatedAttributes], positions: twoPositions)
 			+ cells(.holeFill, [.fulfillerSeam, .actorIsolation, .handWrittenMock, .additionalMock, .conditionalCompilation, .generatedAttributes], positions: twoPositions)
+		// A module above the host lists it in `additionalMocksToGenerate`, so a host in the roots' module, the top one, has
+		// no cell of that row: its own module's list makes a mock as `generateMock: true` does.
+		return cells.filter { $0.row != .additionalMock || !$0.hostIsInRootsModule }
 	}()
 
 	/// The public mock corpus's cells: the public mock column's undrawn rows, at each position its scaffold has. A
 	/// forwarded value is not drawn on the fill, which a place builds by value, and the additional mock not on the
-	/// `.public` type, whose mock is generated already; the two routes are the boundary type's.
+	/// `.public` type, whose mock is generated already, nor on the fill, which is in the consumer's module, the top one; the
+	/// two routes are the boundary type's.
 	static let publicMockCells: [GraphFuzzerCombinationCell] = {
 		func cells(_ rows: [GraphFuzzerCombinationRow], positions: [GraphFuzzerCombinationPosition]) -> [GraphFuzzerCombinationCell] {
 			rows.flatMap { row in positions.map { GraphFuzzerCombinationCell(row: row, column: .publicMock, position: $0) } }
 		}
 		return cells([.builtAgain, .lazilyInstantiated, .receivedInstantiatorLoop, .genericOrExtension, .generatedAttributes, .sharedInstance], positions: [.boundary, .beneath, .insideFill])
 			+ cells([.forwardedValue], positions: [.boundary, .beneath])
-			+ cells([.additionalMock], positions: [.beneath, .insideFill])
+			+ cells([.additionalMock], positions: [.beneath])
 			+ cells([.twoRoutes], positions: [.boundary])
 	}()
 
@@ -187,13 +227,13 @@ struct GraphFuzzerCombinationDraw {
 
 	/// The seed's seam cell: its column's scaffold, with the row's feature drawn on the host its position names.
 	mutating func seamDeclarations() -> [TypeDeclaration] {
-		declarations(of: Self.seamCell(forSeed: seed))
+		declarations(of: cell)
 	}
 
 	/// The seed's public mock cell, drawn as `seamDeclarations()` draws a seam cell, or its known-right path: every
 	/// initializer `public` and every `.public` mock `true`, so that the consumer's mock builds the type inline.
 	mutating func publicMockDeclarations(isKnownRight: Bool) -> [TypeDeclaration] {
-		var declarations = declarations(of: Self.publicMockCell(forSeed: seed))
+		var declarations = declarations(of: cell)
 		guard isKnownRight else { return declarations }
 		for index in declarations.indices {
 			declarations[index].initializerAccess = nil
@@ -202,22 +242,23 @@ struct GraphFuzzerCombinationDraw {
 		return declarations
 	}
 
-	/// `cell`'s column's scaffold, with the row's feature drawn on the host its position names.
+	/// `cell`'s column's scaffold, with the row's feature drawn on the host its position names. Where the host, or the
+	/// type the row declares what the host receives on, is not in the scaffold, the root's file names no cell, so that the
+	/// cell's pinned count of graphs fails rather than count the bare scaffold as the cell.
 	private mutating func declarations(of cell: GraphFuzzerCombinationCell) -> [TypeDeclaration] {
 		var random = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.randomSeedMask(of: cell))
-		// Every roll is made before any is read, so that each draws as it does whatever the others draw.
 		let hasParent = random.percentChance(50)
-		let wrapperRoll = random.percentChance(50)
-		let variantRoll = random.integer(in: 0...99)
-		let secondVariantRoll = random.integer(in: 0...99)
-		let isSendableWrapper = isSendableGraph || (isMixedGraph && wrapperRoll)
+		// A mixed graph's wrappers are `Sendable` in its cell's first mixed graph and every second one after it.
+		let isSendableWrapper = isSendableGraph || (isMixedGraph && (indexInCell / 5) % 2 == 0)
 		instantiator = isSendableWrapper ? "SendableInstantiator" : "Instantiator"
 		erasedInstantiator = isSendableWrapper ? "SendableErasedInstantiator" : "ErasedInstantiator"
 		lazilyInstantiated = isSendableWrapper ? "SendableLazilyInstantiated" : "LazilyInstantiated"
 
-		var declarations = scaffold(of: cell.column, hasParent: hasParent)
+		let scaffold = scaffold(of: cell.column, hasParent: hasParent)
 		let hostName = name(ofHostAt: cell.position, in: cell.column)
-		declarations = adding(cell.row, toHostNamed: hostName, column: cell.column, position: cell.position, variantRoll: variantRoll, secondVariantRoll: secondVariantRoll, to: declarations)
+		guard var declarations = adding(cell.row, toHostNamed: hostName, column: cell.column, position: cell.position, to: scaffold) else {
+			return scaffold
+		}
 		if let rootIndex = declarations.firstIndex(where: { $0.name == nameOfRoot(in: cell.column) }) {
 			declarations[rootIndex].precedingDeclarations.insert(Self.marker + cell.featureName, at: 0)
 		}
@@ -318,10 +359,15 @@ struct GraphFuzzerCombinationDraw {
 		column == .placeInsideFill && hostName != name("ComboLive") ? name("ComboNest") : name("ComboHome")
 	}
 
-	/// `declarations` with `row` drawn on the type named `hostName`.
-	private func adding(_ row: GraphFuzzerCombinationRow, toHostNamed hostName: String, column: GraphFuzzerCombinationColumn, position: GraphFuzzerCombinationPosition, variantRoll: Int, secondVariantRoll: Int, to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+	/// `declarations` with `row` drawn on the type named `hostName`, in the variant the seed's index in its cell chooses,
+	/// or `nil` where the host, or the type the row declares what the host receives on, is missing.
+	private func adding(_ row: GraphFuzzerCombinationRow, toHostNamed hostName: String, column: GraphFuzzerCombinationColumn, position: GraphFuzzerCombinationPosition, to declarations: [TypeDeclaration]) -> [TypeDeclaration]? {
 		var declarations = declarations
-		guard let hostIndex = declarations.firstIndex(where: { $0.name == hostName }) else { return declarations }
+		guard let hostIndex = declarations.firstIndex(where: { $0.name == hostName }) else { return nil }
+		/// Which of `count` variants the graph draws: each in a fixed share of the cell's graphs.
+		func variant(of count: Int) -> Int {
+			indexInCell % count
+		}
 		let host = declarations[hostIndex]
 		let hostModule = host.module ?? .samePackageCaller
 		let lowestModule = declarations.compactMap(\.module).min() ?? .seamModule
@@ -338,13 +384,16 @@ struct GraphFuzzerCombinationDraw {
 			declarations[hostIndex].properties.append(property)
 		}
 		let declarerIndex = declarations.firstIndex { $0.name == nameOfDeclarer(in: column, position: position) }
+		if [.lazilyInstantiated, .sharedInstance].contains(row), declarerIndex == nil {
+			return nil
+		}
 		switch row {
 		case .erased:
 			var concrete = hostType("ComboErased")
 			let erasedName = name("AnyComboErased")
 			concrete.additionalDeclarations.append("public final class \(erasedName)\(helperTypesAreSendable ? ": Sendable" : "") {\n\tpublic init(_ value: \(concrete.name)) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: \(concrete.name)\n}")
 			let attribute = "@Instantiated(fulfilledByType: \"\(concrete.name)\", erasedToConcreteExistential: true)"
-			addToHost(variantRoll < 50
+			addToHost(variant(of: 2) == 0
 				? PropertyDeclaration(attribute: attribute, label: "comboErased", type: erasedName)
 				: PropertyDeclaration(attribute: attribute, label: "comboErasedBuilder", type: "\(erasedInstantiator)<(), \(erasedName)>"))
 			declarations.append(concrete)
@@ -352,7 +401,7 @@ struct GraphFuzzerCombinationDraw {
 			addToHost(PropertyDeclaration(attribute: "@Instantiated", label: "comboAgainBuilder", type: "\(instantiator)<\(hostName)>"))
 		case .declaredAgainAlongCycle:
 			let tag = hostType("ComboTag")
-			let reader = hostType("ComboReader", properties: [secondVariantRoll < 30
+			let reader = hostType("ComboReader", properties: [variant(of: 3) == 0
 					? PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "comboTag", type: tag.name + "?")
 					: PropertyDeclaration(attribute: "@Received", label: "comboTag", type: tag.name)])
 			let step = hostType("ComboStep", properties: [
@@ -364,7 +413,7 @@ struct GraphFuzzerCombinationDraw {
 			addToHost(PropertyDeclaration(attribute: "@Instantiated", label: "comboStepBuilder", type: "\(instantiator)<\(step.name)>"))
 			declarations += [tag, reader, step]
 		case .receivedInstantiatorLoop:
-			let memberSuffixes = variantRoll < 30 ? ["ComboRingA", "ComboRingB", "ComboRingC"] : ["ComboRingA", "ComboRingB"]
+			let memberSuffixes = variant(of: 3) == 0 ? ["ComboRingA", "ComboRingB", "ComboRingC"] : ["ComboRingA", "ComboRingB"]
 			func builderLabel(_ suffix: String) -> String {
 				"comboRing\(suffix.dropFirst("ComboRing".count))Builder"
 			}
@@ -375,13 +424,14 @@ struct GraphFuzzerCombinationDraw {
 			for suffix in memberSuffixes {
 				addToHost(PropertyDeclaration(attribute: "@Instantiated", label: builderLabel(suffix), type: "\(instantiator)<\(name(suffix))>"))
 			}
-			if secondVariantRoll < 30 {
+			// Independently of the members' number: the host builds `ComboRingA` by value in graphs 3 to 5, 9 to 11, ….
+			if (indexInCell / 3) % 2 == 1 {
 				addToHost(PropertyDeclaration(attribute: "@Instantiated", label: "comboRingA", type: name("ComboRingA")))
 			}
 		case .fulfillerSeam:
-			// Three draws in twenty make the host a seam, which, where the host holds a place, is D3's shape (a fulfiller
-			// that is a seam with a place it cannot fill generates code that does not compile), so that the rest judge.
-			if variantRoll < 15 {
+			// One graph in five makes the host a seam, which, where the host holds a place, is D3's shape (a fulfiller that is
+			// a seam with a place it cannot fill generates code that does not compile), so that ten of each cell's fifteen judge.
+			if variant(of: 5) == 0 {
 				declarations[hostIndex].instantiableArguments = Self.inserting("generateDependencyTree: true", into: host.instantiableArguments)
 			} else {
 				addToHost(PropertyDeclaration(attribute: "@Instantiated", label: "comboOwnSeamBuilder", type: "\(instantiator)<\(nameOfFilledSeam(hostName: hostName, in: column))>"))
@@ -390,7 +440,7 @@ struct GraphFuzzerCombinationDraw {
 			var token = hostType("ComboToken")
 			let tokenName = token.name
 			let uncheckedSendable = helperTypesAreSendable ? ": @unchecked Sendable" : ""
-			if variantRoll < 50 {
+			if variant(of: 2) == 0 {
 				let boxName = name("ComboBox")
 				token.additionalDeclarations.append("public final class \(boxName)<Value>\(uncheckedSendable) {\n\tpublic init(value: Value) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: Value\n}")
 				token.additionalDeclarations.append("@Instantiable\nextension \(boxName): Instantiable {\n\tpublic static func instantiate(comboToken: \(tokenName)) -> \(boxName)<\(tokenName)> {\n\t\t\(boxName)<\(tokenName)>(value: comboToken)\n\t}\n}")
@@ -406,8 +456,8 @@ struct GraphFuzzerCombinationDraw {
 			declarations.append(token)
 		case .actorIsolation:
 			// A `nonisolated` initializer stores its properties from outside the main actor, which Swift 6 allows only for
-			// `Sendable` values, so only a graph whose types are `Sendable` draws it.
-			if variantRoll < 50, helperTypesAreSendable {
+			// `Sendable` values, so its graphs are `Sendable` (`sendability(of:indexInCell:)`).
+			if Self.drawsNonisolatedInitializer(indexInCell: indexInCell) {
 				declarations[hostIndex].isMainActor = true
 				declarations[hostIndex].initializerIsNonisolated = true
 				declarations[hostIndex].additionalConformances.removeAll { $0 == "@unchecked Sendable" }
@@ -426,16 +476,16 @@ struct GraphFuzzerCombinationDraw {
 			if column == .publicMock, position == .insideFill, let homeIndex = declarations.firstIndex(where: { $0.name == name("ComboHome") }) {
 				declarations[homeIndex].properties.append(PropertyDeclaration(attribute: "@Received", label: "comboLazy", type: "\(lazilyInstantiated)<\(lazy.name)>"))
 			}
-			let receive = switch variantRoll {
-			case 0..<40: PropertyDeclaration(attribute: "@Received", label: "comboLazy", type: "\(lazilyInstantiated)<\(lazy.name)>")
-			case 40..<70: PropertyDeclaration(attribute: "@Received", label: "comboLazy", type: lazy.name)
+			let receive = switch variant(of: 3) {
+			case 0: PropertyDeclaration(attribute: "@Received", label: "comboLazy", type: "\(lazilyInstantiated)<\(lazy.name)>")
+			case 1: PropertyDeclaration(attribute: "@Received", label: "comboLazy", type: lazy.name)
 			default: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "comboLazy", type: "\(lazilyInstantiated)<\(lazy.name)>?")
 			}
 			addToHost(receive)
 			declarations.append(lazy)
 		case .handWrittenMock:
 			var mocked = hostType("ComboMocked")
-			if variantRoll < 50 {
+			if variant(of: 2) == 0 {
 				mocked.handWrittenMockName = "mock"
 			} else {
 				mocked.instantiableArguments = ["generateMock: true", "customMockName: \"customMock\""]
@@ -447,10 +497,12 @@ struct GraphFuzzerCombinationDraw {
 				declarations[rootIndex].instantiableArguments = Self.inserting("generateMock: true", into: declarations[rootIndex].instantiableArguments)
 			}
 		case .additionalMock:
-			declarations[hostIndex].additionalDeclarations.append("#SafeDIConfiguration(additionalMocksToGenerate: [\"\(hostName)\"])")
+			// The roots' module, above the host's, lists it, as the Manual defines the list: type names from dependent modules.
+			guard let rootIndex = declarations.firstIndex(where: { $0.name == nameOfRoot(in: column) }), declarations[rootIndex].module != hostModule else { return nil }
+			declarations[rootIndex].additionalDeclarations.append("#SafeDIConfiguration(additionalMocksToGenerate: [\"\(hostName)\"])")
 		case .conditionalCompilation:
 			let flaggedName = name("ComboFlagged")
-			let condition = variantRoll < 50 ? "canImport(Foundation)" : "!COMBO_FLAG"
+			let condition = variant(of: 2) == 0 ? "canImport(Foundation)" : "!COMBO_FLAG"
 			let conformance = isSendableGraph ? ", Sendable" : isMixedGraph ? ", @unchecked Sendable" : ""
 			declarations[hostIndex].additionalDeclarations.append("#if \(condition)\n@Instantiable\npublic final class \(flaggedName): Instantiable\(conformance) {\n\tpublic init() {}\n}\n#endif")
 			addToHost(PropertyDeclaration(attribute: "@Instantiated", label: "comboFlagged", type: flaggedName))
@@ -463,7 +515,7 @@ struct GraphFuzzerCombinationDraw {
 			if column == .publicMock, position == .insideFill, let homeIndex = declarations.firstIndex(where: { $0.name == name("ComboHome") }) {
 				declarations[homeIndex].properties.append(PropertyDeclaration(attribute: "@Received", label: "comboShared", type: shared.name))
 			}
-			addToHost(variantRoll < 30
+			addToHost(variant(of: 3) == 0
 				? PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"comboShared\", ofType: \(shared.name).self, onlyIfAvailable: true)", label: "comboSharedAlias", type: shared.name + "?")
 				: PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"comboShared\", ofType: \(shared.name).self)", label: "comboSharedAlias", type: shared.name))
 			declarations.append(shared)
@@ -471,9 +523,11 @@ struct GraphFuzzerCombinationDraw {
 			let attribute = "\"@available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)\""
 			let isSeam = host.instantiableArguments.contains("generateDependencyTree: true")
 			var arguments = host.instantiableArguments
-			if isSeam, variantRoll < 34 {
+			// A seam draws each of the three, any other host the two that come with a mock.
+			let attributeVariant = isSeam ? variant(of: 3) : 1 + variant(of: 2)
+			if attributeVariant == 0 {
 				arguments = Self.inserting("generatedInitializerAttributes: \(attribute)", into: arguments)
-			} else if variantRoll < 67 {
+			} else if attributeVariant == 1 {
 				arguments = Self.inserting("generatedAttributes: \(attribute)", into: Self.inserting("generateMock: true", into: arguments))
 			} else {
 				arguments = Self.inserting("mockAttributes: \(attribute)", into: Self.inserting("generateMock: true", into: arguments))
@@ -482,7 +536,7 @@ struct GraphFuzzerCombinationDraw {
 		case .nestedType:
 			var nested = hostType("ComboNested")
 			let enclosingName: String
-			if variantRoll < 50 {
+			if variant(of: 2) == 0 {
 				enclosingName = name("ComboSpace")
 				declarations[hostIndex].additionalDeclarations.append("public enum \(enclosingName) {}")
 			} else {
@@ -513,6 +567,9 @@ struct GraphFuzzerCombinationDraw {
 
 	private let seed: UInt64
 	private let prefix: String
+	private let cell: GraphFuzzerCombinationCell
+	/// The seed's index among its cell's seeds, the seed divided by the number of cells, which chooses the cell's variants.
+	private let indexInCell: Int
 	private let isSendableGraph: Bool
 	private let isMixedGraph: Bool
 	private var instantiator = "Instantiator"
