@@ -860,13 +860,16 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			if result.comparedValues {
 				comparedGraphCount += 1
 			}
+			let knownIssue = Self.callingMockKnownIssues.first { $0.seeds.contains(seed) }
+			for problem in Self.comparisonProblems(ofSeed: seed, draw: draw, result: result, isListed: knownIssue != nil) {
+				Issue.record("\(problem)")
+			}
 			for passUp in result.passUps {
 				passUpCountsByReason[passUp.reason?.rawValue ?? "unclassified", default: 0] += 1
 			}
 			if draw.cell.shape.isControl {
 				#expect(result.passUps.map(\.label) == draw.expectedPassUpLabels, "seed \(seed) (\(draw.cell))")
 			}
-			let knownIssue = Self.callingMockKnownIssues.first { $0.seeds.contains(seed) }
 			switch (result.failure, knownIssue) {
 			case (nil, nil):
 				break
@@ -908,6 +911,26 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 				GraphFuzzerDiagnosticSite(severity: "note", file: "Feature/FeatureTypes.swift", line: 22, declaration: "@Instantiated(fulfilledByType: \"\(feed)\") private let \(feedBuilder)"),
 			], "seed \(seed)")
 		}
+	}
+
+	/// Why seed `seed`'s run should have compared values and did not: a seed the cell test compares whose graph states
+	/// probes and that passes, unlisted, compares its values wherever compile verification is on, so a change that stops
+	/// the comparison cannot leave the cell test passing with nothing compiled.
+	static func comparisonProblems(ofSeed seed: UInt64, draw: GraphFuzzerCallingMockDraw, result: GraphFuzzerCallingMockResult, isListed: Bool) -> [String] {
+		guard comparesValues(ofSeed: seed), draw.valueProbes != nil, result.failure == nil, !isListed, result.comparedValues != compileVerificationIsEnabled else { return [] }
+		return ["Calling-mock seed \(seed) (\(draw.cell)) passes without comparing its values"]
+	}
+
+	@Test
+	func comparisonProblems_reportSeed_whenPassingProbedSeedComparesNoValues() {
+		let draw = GraphFuzzerCallingMockDraw(seed: 16)
+		let uncompared = GraphFuzzerCallingMockResult(twinSites: nil, mockSites: nil, twinDiagnostics: nil, twinInitializerLabels: [], passUps: [], drawingDefect: nil, comparedValues: !compileVerificationIsEnabled, failure: nil)
+		let compared = GraphFuzzerCallingMockResult(twinSites: nil, mockSites: nil, twinDiagnostics: nil, twinInitializerLabels: [], passUps: [], drawingDefect: nil, comparedValues: compileVerificationIsEnabled, failure: nil)
+
+		#expect(Self.comparesValues(ofSeed: 16))
+		#expect(Self.comparisonProblems(ofSeed: 16, draw: draw, result: uncompared, isListed: false) == ["Calling-mock seed 16 (callersOwnValue/internal/plain) passes without comparing its values"])
+		#expect(Self.comparisonProblems(ofSeed: 16, draw: draw, result: uncompared, isListed: true) == [])
+		#expect(Self.comparisonProblems(ofSeed: 16, draw: draw, result: compared, isListed: false) == [])
 	}
 
 	@Test
