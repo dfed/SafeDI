@@ -3449,7 +3449,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		// `Helper`, whose place the fill fills, not on `Host`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultService.swift"]):11:5: error: `DefaultService` receives `user: User`, which `Mid` builds where it calls `Helper`, but `Mid` passes the builder for `Helper`’s `gadget: any Gadget` (case `gadget` of `gadgetBuilder`) on from its own caller, which cannot hand it `Mid`’s values. Declare `@Received let user: User` on `Helper`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, so `Mid` fills the builder itself.
+			\(fixtures["App"]!["DefaultService.swift"]):11:5: error: `DefaultService` receives `user: User`, which `Mid` builds where it calls `Helper`, but `Mid` passes the builder for `Helper`’s `gadget: any Gadget` (case `gadget` of `gadgetBuilder`) on from its own caller, which cannot hand it `Mid`’s values. Declare `@Received let user: User` on `Helper`, so the builder’s scope carries it (if module `Lower` cannot see a type `user: User` names, first declare that type in module `Lower` or a module it depends on, with an initializer module `Middle` can call), or declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, so `Mid` fills the builder itself.
 			\(fixtures["Middle"]!["Mid.swift"]):10:5: note: `Mid` declares `user: User` here.
 			"""
 		}) {

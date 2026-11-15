@@ -328,6 +328,24 @@ enum SeamAccessExplanation {
 		return "declare an @\(InstantiableVisitor.macroName) type that fulfills \(name(fulfilledType)) in \(module) or a module it lists among its SafeDI dependencies\(effectClause)"
 	}
 
+	/// What a fill's receive of a value an outer seam builds where it calls an inner seam needs besides receiving the value on
+	/// the inner seam: the inner seam's module must see each type the receive names, which SafeDI cannot tell in general (the
+	/// type may be one no declaration SafeDI reads declares), so the clause is a condition. Empty where the two seams are
+	/// known to share a module, or no module of either is named, since the inner seam's module then sees what the outer's
+	/// does.
+	static func declareReceivedTypesWhereInnerSeamSeesThem(
+		receivedProperty: Property,
+		innerSeam: TypeDescription,
+		innerSeamModule: ModuleIdentity,
+		outerSeam: TypeDescription,
+		outerSeamModule: ModuleIdentity,
+	) -> String {
+		guard innerSeamModule.moduleName != outerSeamModule.moduleName else { return "" }
+		let innerModule = innerSeamModule.moduleName.map { "module `\($0)`" } ?? "\(name(innerSeam))’s module"
+		let outerModule = outerSeamModule.moduleName.map { "module `\($0)`" } ?? "\(name(outerSeam))’s module"
+		return " (if \(innerModule) cannot see a type `\(receivedProperty.asSource)` names, first declare that type in \(innerModule) or a module it depends on, with an initializer \(outerModule) can call)"
+	}
+
 	// MARK: Private
 
 	private static func name(_ type: TypeDescription) -> String {

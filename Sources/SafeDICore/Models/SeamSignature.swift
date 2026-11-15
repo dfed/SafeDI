@@ -355,6 +355,7 @@ public struct SeamSignature: Sendable {
 			public struct PresentedPlace: Sendable {
 				init(_ hole: Hole) {
 					seamType = hole.scopeSeamType
+					seamModule = hole.scopeSeamModule
 					ownerType = hole.ownerType
 					property = hole.property
 					instantiatedType = hole.instantiatedType
@@ -365,6 +366,8 @@ public struct SeamSignature: Sendable {
 
 				/// The seam whose tree holds the place.
 				public let seamType: TypeDescription
+				/// The module that declares `seamType`.
+				public let seamModule: ModuleIdentity
 				public let ownerType: TypeDescription
 				public let property: Property
 				public let instantiatedType: TypeDescription

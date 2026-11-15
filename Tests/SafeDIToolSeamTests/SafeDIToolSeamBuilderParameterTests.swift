@@ -598,7 +598,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// itself is `Shell`'s, which `App` knows only from the hole.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Shell` builds where it calls `Service`, but `Shell` passes the builder for `Profile`’s `userService: any UserService` (case `Profile_Scope.userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`’s values. Declare `@Received let theme: Theme` on `Service`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `UserService` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Shell` builds where it calls `Service`, but `Shell` passes the builder for `Profile`’s `userService: any UserService` (case `Profile_Scope.userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`’s values. Declare `@Received let theme: Theme` on `Service`, so the builder’s scope carries it (if module `Feature` cannot see a type `theme: Theme` names, first declare that type in module `Feature` or a module it depends on, with an initializer module `Mid` can call), or declare an @Instantiable type that fulfills `UserService` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
 			note: `Shell` declares `theme: Theme` here.
 			"""
 		}) {
@@ -1933,7 +1933,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// `Shell`'s values, and `Shell`'s caller, which fills the builder, does not hold them.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Shell` builds where it calls `Service`, but `Shell` passes the builder for `Profile`’s `userService: any UserService` (case `Profile_Scope.userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`’s values. Declare `@Received let theme: Theme` on `Service`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `UserService` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
+			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Shell` builds where it calls `Service`, but `Shell` passes the builder for `Profile`’s `userService: any UserService` (case `Profile_Scope.userService` of `userServiceBuilder`) on from its own caller, which cannot hand it `Shell`’s values. Declare `@Received let theme: Theme` on `Service`, so the builder’s scope carries it (if module `Feature` cannot see a type `theme: Theme` names, first declare that type in module `Feature` or a module it depends on, with an initializer module `Mid` can call), or declare an @Instantiable type that fulfills `UserService` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
 			\(fixtures["Mid"]!["Shell.swift"]):10:5: note: `Shell` declares `theme: Theme` here.
 			"""
 		}) {
@@ -2716,7 +2716,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// would be `Profile`'s, bound inside `Service`'s tree on the path, which `Shell`'s caller does not hold.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultLogger.swift"]):10:5: error: `DefaultLogger` receives `cache: Cache`, which `Profile` builds on the path where `Shell` calls `Inner2`, but `Shell` passes the builder for `Inner2`’s `logger: any Logger` (case `logger` of `loggerBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let cache: Cache` on `Inner2`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Logger` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
+			\(fixtures["App"]!["DefaultLogger.swift"]):10:5: error: `DefaultLogger` receives `cache: Cache`, which `Profile` builds on the path where `Shell` calls `Inner2`, but `Shell` passes the builder for `Inner2`’s `logger: any Logger` (case `logger` of `loggerBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let cache: Cache` on `Inner2`, so the builder’s scope carries it (if module `Feature` cannot see a type `cache: Cache` names, first declare that type in module `Feature` or a module it depends on, with an initializer module `Mid` can call), or declare an @Instantiable type that fulfills `Logger` in module `Mid` or a module it lists among its SafeDI dependencies, so `Shell` fills the builder itself.
 			\(fixtures["Feature"]!["Profile.swift"]):8:5: note: `Profile` declares `cache: Cache` here.
 			"""
 		}) {
