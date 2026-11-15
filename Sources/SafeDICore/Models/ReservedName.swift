@@ -100,6 +100,22 @@ public enum ReservedName: Hashable, Sendable {
 	/// instantiator forwards.
 	static let forwardedValueParameterName = "\(builderFunctionNamePrefix)forwarded"
 
+	/// The name of the struct a seam's scope type declares for each of its levels, generic over what the builder returns:
+	/// one stored function per member, each called where the seam binds that level.
+	static let builderStructTypeName = "\(builderFunctionNamePrefix)Builder"
+
+	/// The name of a builder struct's generic parameter: the type its builder returns, prefixed so that no type a struct's
+	/// member spells can be hidden by it.
+	static let builderStructGenericParameterName = "\(builderFunctionNamePrefix)Built"
+
+	/// The argument label of the initializer of a level's builder struct that wraps a builder that takes nothing, which a
+	/// seam's readable initializer passes the builder a person wrote to.
+	static let noScopeArgumentLabel = "\(builderFunctionNamePrefix)noScope"
+
+	/// The parameter name under which that initializer takes the builder: apart from every property label, since a
+	/// member can be named `builder`.
+	static let noScopeParameterName = "\(builderFunctionNamePrefix)builder"
+
 	/// The names of the types generated code constructs by name: the wrapper of each kind of property that is not
 	/// a constant, which generated code builds with its builder function.
 	static let constructedTypeNames = Set(Property.PropertyType.allCases.compactMap(\.wrapperTypeName))
