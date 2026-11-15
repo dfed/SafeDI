@@ -1,0 +1,838 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+import Foundation
+import SafeDICore
+import Testing
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
+
+/// A fill that opens its own seam again and reads, only if available, a value the place it fills carries but a place
+/// of the seam opened again does not: inline, the seam opened again sits beneath the fill's place, so that place reads
+/// the value from above; across modules the call hands the seam the fill's root dispatcher, which passes `nil`.
+struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
+	// MARK: Initialization
+
+	init() {
+		filesToDelete = [URL]()
+	}
+
+	deinit {
+		for fileToDelete in filesToDelete {
+			try! FileManager.default.removeItem(at: fileToDelete)
+		}
+	}
+
+	// MARK: Form B: the screen of the seam opened again forwards the value
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFieldOfReenteringPlace_whenFillOpeningItsSeamAgainReadsOnlyIfAvailableValueTheSeamsScreenForwards() async {
+		// Inline, the second `Checkout` sits beneath the screen, so its `LivePayments` reads the screen's cart; across
+		// modules the call hands the second `Checkout` the root dispatcher, whose top-level case passes `nil`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LivePayments.swift"]):11:5: error: `LivePayments` receives `cart: Cart?`, which the builder for `CartScreen`’s `payments: any Payments` (case `CartScreen_Scope.payments` of `paymentsBuilder`) carries from `CartScreen`, and that builder’s fill instantiates `Checkout` again (`retryBuilder`). Inline, `LivePayments` would read `CartScreen`’s `cart` inside that `Checkout`, but the call passes the builder on as module `App` fills it, whose scope there does not carry `cart`, so `LivePayments` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let cart: Cart?` on `Checkout`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Payments` in module `Shared` or a module it lists among its SafeDI dependencies.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.formB(checkout: Self.formBCheckout), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsSecondCheckoutTheScreensCart_whenSeamReceivesTheValueOnlyIfAvailable() async throws {
+		// The error's first remedy: the call opening `Checkout` again passes it the screen's cart, which its top-level place
+		// carries, so the second `LivePayments` gets the value inline hands it.
+		let modules = Self.formB(checkout: Self.formBCheckoutReceivingCart)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.formBRemedyAppFiles)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.formBVisible(checkout: Self.formBCheckoutReceivingCart))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFieldOfReenteringPlace_whenFillOpeningItsSeamAgainRequiresValueTheSeamsScreenForwards() async {
+		// The required read: the root's cart is passed where inline passes the screen's, another instance.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LivePayments.swift"]):11:5: error: `LivePayments` receives `cart: Cart`, which the builder for `CartScreen`’s `payments: any Payments` (case `CartScreen_Scope.payments` of `paymentsBuilder`) carries from `CartScreen`, and that builder’s fill instantiates `Checkout` again (`retryBuilder`). Inline, `LivePayments` would read `CartScreen`’s `cart` inside that `Checkout`, but the call passes the builder on as module `App` fills it, whose scope there does not carry `cart`, so `LivePayments` would get another value. Declare `@Received let cart: Cart` on `Checkout`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Payments` in module `Shared` or a module it lists among its SafeDI dependencies.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.requiredForm(checkout: Self.requiredFormCheckout), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsSecondCheckoutTheScreensCart_whenSeamReceivesTheRequiredValue() async throws {
+		let checkout = Self.requiredFormCheckout
+			.replacingOccurrences(of: "public init(payments: any Payments, cartScreenBuilder: Instantiator<CartScreen>) {\n        self.payments = payments", with: "public init(cart: Cart, payments: any Payments, cartScreenBuilder: Instantiator<CartScreen>) {\n        self.cart = cart\n        self.payments = payments")
+			.replacingOccurrences(of: "@Instantiated public let payments: any Payments                    // the app supplies this; no cart here", with: "@Received public let cart: Cart\n    @Instantiated public let payments: any Payments")
+		let modules = Self.requiredForm(checkout: checkout)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.requiredForm(checkout: checkout, visible: true))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsFillTheScreensCart_whenFillRequiresIt_andSeamAndFillAreInOneModule() async throws {
+		// In one module the fill joins the seam's tree, so the read is the inline build's; the error never fires there.
+		let modules = [Self.oneModule(checkout: Self.requiredFormCheckout, livePayments: Self.requiringLivePayments, root: Self.requiringRoot)]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let inlineModules = [Self.oneModule(checkout: Self.requiredFormCheckout.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable"), livePayments: Self.requiringLivePayments, root: Self.requiringRoot)]
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: inlineModules)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFieldOfReenteringPlace_whenCallOpeningSeamAgainPassesOnValueATypeOfTheSeamsTreeReceives() async {
+		// The fill reads nothing itself, but `Tracker`, in `Checkout`'s own tree, receives the cart only if available, which
+		// the call opening `Checkout` again passes from the fill's scope: `nil`, where inline hands it the screen's cart.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LivePayments.swift"]):10:5: error: The call by which `LivePayments` instantiates `Checkout` (`retryBuilder`) passes on `cart: Cart?`, which the builder for `CartScreen`’s `payments: any Payments` (case `CartScreen_Scope.payments` of `paymentsBuilder`) carries from `CartScreen`, and that builder’s fill instantiates `Checkout` again (`retryBuilder`). Inline, the call would read `CartScreen`’s `cart` inside that `Checkout`, but the call passes the builder on as module `App` fills it, whose scope there does not carry `cart`, so the call would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let cart: Cart?` on `Checkout`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Payments` in module `Shared` or a module it lists among its SafeDI dependencies.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.formB(checkout: Self.formBCheckoutWithTracker, livePayments: Self.livePaymentsReadingNothing), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsSecondCheckoutsTrackerTheScreensCart_whenSeamReceivesTheValueOnlyIfAvailable() async throws {
+		let checkout = Self.formBCheckoutWithTracker
+			.replacingOccurrences(of: "@Instantiated public let payments: any Payments                    // the app supplies this; no cart here", with: "@Instantiated public let payments: any Payments\n    @Received(onlyIfAvailable: true) public let cart: Cart?")
+			.replacingOccurrences(of: "public init(payments: any Payments, tracker: Tracker, cartScreenBuilder: Instantiator<CartScreen>) {", with: "public init(payments: any Payments, cart: Cart?, tracker: Tracker, cartScreenBuilder: Instantiator<CartScreen>) {\n        self.cart = cart")
+		let modules = Self.formB(checkout: checkout, livePayments: Self.livePaymentsReadingNothing)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.formBVisible(checkout: checkout, livePayments: Self.livePaymentsReadingNothing), probe: Self.trackerProbe)
+	}
+
+	// MARK: Form A: an inner seam's screen in a third module forwards the value
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFieldOfReenteringPlace_whenFillOpeningItsSeamAgainReadsValueAnInnerSeamsScreenForwards() async {
+		// The fill fills a place inside `CartItemImpl`, the fill of the inner seam `CartFlow`, whose screen forwards the
+		// cart; the second `Checkout`'s `Receipt` place, outside `CartFlow`, would get `nil`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LivePayments.swift"]):12:5: error: `LivePayments` receives `cart: Cart?`, which the builder for `CartItemImpl`’s `payments: any Payments` (case `CartItemImpl_Scope.payments` of `paymentsBuilder`) carries from `CartScreen`, and that builder’s fill instantiates `Checkout` again (`retryBuilder`). Inline, `LivePayments` would read `CartScreen`’s `cart` inside that `Checkout`, but the call passes the builder on as module `App` fills it, whose scope there does not carry `cart`, so `LivePayments` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let cart: Cart?` on `Checkout`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Payments` in module `Shared` or a module it lists among its SafeDI dependencies.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.formA(checkoutExtra: ""), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsSecondCheckoutsReceiptTheScreensCart_whenSeamReceivesTheValueOnlyIfAvailable() async throws {
+		let extra = "\n    @Received(onlyIfAvailable: true) public let cart: Cart?"
+		let modules = Self.formA(checkoutExtra: extra)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.formA(checkoutExtra: extra, visible: true), probe: Self.formAProbe)
+	}
+
+	// MARK: Neighbours whose values are already right
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_acceptsFillOpeningItsSeamAgain_whenSeamBuildsTheValueItself() async throws {
+		let checkout = Self.formBCheckout
+			.replacingOccurrences(of: "public final class Cart {", with: "@Instantiable\npublic final class Cart: Instantiable {")
+			.replacingOccurrences(of: "public init(payments: any Payments, cartScreenBuilder: Instantiator<CartScreen>) {\n        self.payments = payments\n        self.cartScreenBuilder = cartScreenBuilder\n    }", with: "public init(cart: Cart, payments: any Payments) {\n        self.cart = cart\n        self.payments = payments\n    }")
+			.replacingOccurrences(of: "@Instantiated public let payments: any Payments                    // the app supplies this; no cart here\n    @Instantiated public let cartScreenBuilder: Instantiator<CartScreen>", with: "@Instantiated public let cart: Cart\n    @Instantiated public let payments: any Payments")
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.formB(checkout: checkout), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.neighbourOneAppFiles)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_acceptsFillOpeningItsSeamAgain_whenSeamsScreenBuildsTheValue() async throws {
+		let checkout = Self.formBCheckout
+			.replacingOccurrences(of: "public final class Cart {", with: "@Instantiable\npublic final class Cart: Instantiable {")
+			.replacingOccurrences(of: "public init(payments: any Payments, cartScreenBuilder: Instantiator<CartScreen>) {\n        self.payments = payments\n        self.cartScreenBuilder = cartScreenBuilder\n    }", with: "public init(screen: CheckoutScreen) {\n        self.screen = screen\n    }")
+			.replacingOccurrences(of: "@Instantiated public let payments: any Payments                    // the app supplies this; no cart here\n    @Instantiated public let cartScreenBuilder: Instantiator<CartScreen>", with: "@Instantiated public let screen: CheckoutScreen")
+			.replacingOccurrences(of: "public struct CartScreen: Instantiable {\n    public init(cart: Cart, payments: any Payments) {", with: "public struct CheckoutScreen: Instantiable {\n    public init(cart: Cart, payments: any Payments) {")
+			.replacingOccurrences(of: "@Forwarded public let cart: Cart", with: "@Instantiated public let cart: Cart")
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.formB(checkout: checkout), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.neighbourTwoAppFiles)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_acceptsFillOpeningItsSeamAgain_whenSeamsOnlyPlaceIsInsideTheInnerSeamsScreen() async throws {
+		// The second `Checkout`'s only place is under the inner screen again, which forwards a cart of its own: inline's.
+		let modules = Self.formA(checkoutExtra: "", holdsReceipt: false)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.neighbourThreeAppFiles)
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_acceptsFillOpeningItsSeamAgain_whenFillAndSeamAreInOneModule(checkoutIsSeam: Bool) async throws {
+		let checkout = checkoutIsSeam ? Self.formBCheckout : Self.formBCheckout.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable")
+		let output = try await executeSafeDIToolMultiModuleTest(modules: [Self.oneModule(checkout: checkout)], integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Shared"]?.generatedFiles, checkoutIsSeam ? Self.neighbourFiveSharedFiles : Self.neighbourFourSharedFiles)
+	}
+
+	// MARK: Mocks
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_handsSecondCheckoutTheScreensCart_whenCallingMockBuildsTheSeamInline() async throws {
+		// A mock builds every seam inline, so its fill sits beneath the screen as inline's does: nothing to reject.
+		let modules = [
+			ModuleFixture(name: "Shared", packageName: "Shop", swiftFileContent: [Self.formBCheckout]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import SafeDI\nimport Shared\n\n" + Self.livePayments, Self.holder], dependencies: ["Shared"]),
+		]
+		let visible = [
+			ModuleFixture(name: "Shared", packageName: "Shop", swiftFileContent: [Self.formBCheckout, "import SafeDI\n\n" + Self.livePayments]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [Self.holder], dependencies: ["Shared"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visible, probe: Self.retryProbe.replacingOccurrences(of: "Root()", with: "Holder.mock()"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesBuilderForPlace_whenCallerOfPublicMockCannotFillPlaceWithoutOpeningTheSeamAgain() async throws {
+		// The fill reads `cart`, which the public mock's top-level place does not hold, so the caller passes the place up
+		// as a builder of its own mock: no generated fill opens `Checkout` again, so no value is lost.
+		let checkout = Self.formBCheckout
+			.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable(generateDependencyTree: true, generateMock: .public)")
+			.replacingOccurrences(of: "    public init(payments: any Payments, cartScreenBuilder: Instantiator<CartScreen>) {", with: "    init(payments: any Payments, cartScreenBuilder: Instantiator<CartScreen>) {")
+		let modules = [
+			ModuleFixture(name: "Shared", packageName: "Shop", swiftFileContent: [checkout]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import SafeDI\nimport Shared\n\n" + Self.livePayments, Self.holder], dependencies: ["Shared"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.publicMockAppFiles)
+	}
+
+	// MARK: Fixtures
+
+	static let formAProbe = "{ let cart = Cart(); let screen = Root().checkout.cartFlow.screenBuilder.instantiate(cart); let live = (screen.item as! CartItemImpl).payments as! LivePayments; return (live.retryBuilder.instantiate().receiptBuilder.instantiate().payments as! LivePayments).cart === cart }()"
+
+	static func formA(checkoutExtra: String, holdsReceipt: Bool = true, visible: Bool = false) -> [ModuleFixture] {
+		let base = """
+		import SafeDI
+
+		public final class Cart {
+		    public init() {}
+		}
+
+		public protocol CartItem: AnyObject {}
+
+		@Instantiable(generateDependencyTree: true)
+		public struct CartFlow: Instantiable {
+		    public init(screenBuilder: Instantiator<CartScreen>) {
+		        self.screenBuilder = screenBuilder
+		    }
+
+		    @Instantiated public let screenBuilder: Instantiator<CartScreen>
+		}
+
+		@Instantiable
+		public struct CartScreen: Instantiable {
+		    public init(cart: Cart, item: any CartItem) {
+		        self.cart = cart
+		        self.item = item
+		    }
+
+		    @Forwarded public let cart: Cart
+		    @Instantiated public let item: any CartItem
+		}
+		"""
+		let initializerExtra = checkoutExtra.isEmpty ? "" : ", cart: Cart?"
+		let assignmentExtra = checkoutExtra.isEmpty ? "" : "\n        self.cart = cart"
+		let receiptParameter = holdsReceipt ? "receiptBuilder: Instantiator<Receipt>, " : ""
+		let receiptAssignment = holdsReceipt ? "self.receiptBuilder = receiptBuilder\n        " : ""
+		let receiptProperty = holdsReceipt ? "@Instantiated public let receiptBuilder: Instantiator<Receipt>\n    " : ""
+		let receiptType = holdsReceipt ? """
+
+		@Instantiable
+		public final class Receipt: Instantiable {
+		    public init(payments: any Payments) {
+		        self.payments = payments
+		    }
+
+		    @Instantiated public let payments: any Payments
+		}
+
+		""" : "\n"
+		let shared = """
+		import Base
+		import SafeDI
+
+		public protocol Payments: AnyObject {}
+
+		@Instantiable(generateDependencyTree: true)
+		public struct Checkout: Instantiable {
+		    public init(\(receiptParameter)cartFlow: CartFlow\(initializerExtra)) {
+		        \(receiptAssignment)self.cartFlow = cartFlow\(assignmentExtra)
+		    }
+
+		    \(receiptProperty)@Instantiated public let cartFlow: CartFlow\(checkoutExtra)
+		}
+		\(receiptType)
+		@Instantiable(fulfillingAdditionalTypes: [(any CartItem).self])
+		public final class CartItemImpl: CartItem, Instantiable {
+		    public init(payments: any Payments) {
+		        self.payments = payments
+		    }
+
+		    @Instantiated public let payments: any Payments
+		}
+		"""
+		let live = "import Base\nimport SafeDI\nimport Shared\n\n" + livePayments
+		let appRoot = "import SafeDI\nimport Shared\n\n" + root
+		if visible {
+			return [
+				ModuleFixture(name: "Base", packageName: "Base", swiftFileContent: [base]),
+				ModuleFixture(name: "Shared", packageName: "Shop", swiftFileContent: [shared, live.replacingOccurrences(of: "import Shared\n", with: "")], dependencies: ["Base"]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [appRoot], dependencies: ["Base", "Shared"]),
+			]
+		} else {
+			return [
+				ModuleFixture(name: "Base", packageName: "Base", swiftFileContent: [base]),
+				ModuleFixture(name: "Shared", packageName: "Shop", swiftFileContent: [shared], dependencies: ["Base"]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [live, appRoot], dependencies: ["Base", "Shared"]),
+			]
+		}
+	}
+
+	static let formBCheckout = """
+	import SafeDI
+
+	public final class Cart {
+	    public init() {}
+	}
+
+	public protocol Payments: AnyObject {}
+
+	@Instantiable(generateDependencyTree: true)
+	public struct Checkout: Instantiable {
+	    public init(payments: any Payments, cartScreenBuilder: Instantiator<CartScreen>) {
+	        self.payments = payments
+	        self.cartScreenBuilder = cartScreenBuilder
+	    }
+
+	    @Instantiated public let payments: any Payments                    // the app supplies this; no cart here
+	    @Instantiated public let cartScreenBuilder: Instantiator<CartScreen>
+	}
+
+	@Instantiable
+	public struct CartScreen: Instantiable {
+	    public init(cart: Cart, payments: any Payments) {
+	        self.cart = cart
+	        self.payments = payments
+	    }
+
+	    @Forwarded public let cart: Cart
+	    @Instantiated public let payments: any Payments
+	}
+	"""
+
+	static let livePayments = """
+	@Instantiable(fulfillingAdditionalTypes: [(any Payments).self])
+	public final class LivePayments: Payments, Instantiable {
+	    public init(cart: Cart?, retryBuilder: Instantiator<Checkout>) {
+	        self.cart = cart
+	        self.retryBuilder = retryBuilder
+	    }
+
+	    @Received(onlyIfAvailable: true) public let cart: Cart?
+	    @Instantiated public let retryBuilder: Instantiator<Checkout>
+	}
+	"""
+
+	static let root = """
+	@Instantiable(isRoot: true)
+	public struct Root: Instantiable {
+	    public init(checkout: Checkout) {
+	        self.checkout = checkout
+	    }
+
+	    @Instantiated public let checkout: Checkout
+	}
+	"""
+
+	static func formB(checkout: String, livePayments: String = livePayments) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Shared", packageName: "Shop", swiftFileContent: [checkout]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import SafeDI\nimport Shared\n\n" + livePayments, "import SafeDI\nimport Shared\n\n" + root], dependencies: ["Shared"]),
+		]
+	}
+
+	static func formBVisible(checkout: String, livePayments: String = livePayments) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Shared", packageName: "Shop", swiftFileContent: [checkout, "import SafeDI\n\n" + livePayments]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import SafeDI\nimport Shared\n\n" + root], dependencies: ["Shared"]),
+		]
+	}
+
+	static let retryProbe = "{ let cart = Cart(); let screen = Root().checkout.cartScreenBuilder.instantiate(cart); return ((screen.payments as! LivePayments).retryBuilder.instantiate().payments as! LivePayments).cart === cart }()"
+
+	static let formBCheckoutReceivingCart = formBCheckout
+		.replacingOccurrences(of: "@Instantiated public let payments: any Payments                    // the app supplies this; no cart here", with: "@Instantiated public let payments: any Payments\n    @Received(onlyIfAvailable: true) public let cart: Cart?")
+		.replacingOccurrences(of: "public init(payments: any Payments, cartScreenBuilder: Instantiator<CartScreen>) {\n        self.payments = payments", with: "public init(payments: any Payments, cart: Cart?, cartScreenBuilder: Instantiator<CartScreen>) {\n        self.payments = payments\n        self.cart = cart")
+
+	static let formBCheckoutWithTracker = formBCheckout
+		.replacingOccurrences(of: "public init(payments: any Payments, cartScreenBuilder: Instantiator<CartScreen>) {", with: "public init(payments: any Payments, tracker: Tracker, cartScreenBuilder: Instantiator<CartScreen>) {\n        self.tracker = tracker")
+		.replacingOccurrences(of: "@Instantiated public let cartScreenBuilder: Instantiator<CartScreen>", with: "@Instantiated public let cartScreenBuilder: Instantiator<CartScreen>\n    @Instantiated public let tracker: Tracker")
+		+ "\n@Instantiable\npublic final class Tracker: Instantiable {\n    public init(cart: Cart?) {\n        self.cart = cart\n    }\n\n    @Received(onlyIfAvailable: true) public let cart: Cart?\n}\n"
+
+	static let livePaymentsReadingNothing = """
+	@Instantiable(fulfillingAdditionalTypes: [(any Payments).self])
+	public final class LivePayments: Payments, Instantiable {
+	    public init(retryBuilder: Instantiator<Checkout>) {
+	        self.retryBuilder = retryBuilder
+	    }
+
+	    @Instantiated public let retryBuilder: Instantiator<Checkout>
+	}
+	"""
+
+	static let trackerProbe = "{ let cart = Cart(); let screen = Root().checkout.cartScreenBuilder.instantiate(cart); return (screen.payments as! LivePayments).retryBuilder.instantiate().tracker.cart === cart }()"
+
+	static let requiredFormCheckout = formBCheckout.replacingOccurrences(of: "public final class Cart {", with: "@Instantiable\npublic final class Cart: Instantiable {")
+
+	static let requiringLivePayments = livePayments
+		.replacingOccurrences(of: "@Received(onlyIfAvailable: true) public let cart: Cart?", with: "@Received public let cart: Cart")
+		.replacingOccurrences(of: "init(cart: Cart?", with: "init(cart: Cart")
+
+	static let requiringRoot = root
+		.replacingOccurrences(of: "public init(checkout: Checkout) {\n        self.checkout = checkout", with: "public init(cart: Cart, checkout: Checkout) {\n        self.cart = cart\n        self.checkout = checkout")
+		.replacingOccurrences(of: "@Instantiated public let checkout: Checkout", with: "@Instantiated public let cart: Cart\n    @Instantiated public let checkout: Checkout")
+
+	/// `checkout`'s, `livePayments`' and `root`'s declarations in one module, `Shared`.
+	static func oneModule(checkout: String, livePayments: String = livePayments, root: String = root) -> ModuleFixture {
+		ModuleFixture(name: "Shared", packageName: "Shop", swiftFileContent: [checkout, "import SafeDI\n\n" + livePayments, "import SafeDI\n\n" + root])
+	}
+
+	/// The required read: `Cart` is `@Instantiable`, `Root` builds one, and `LivePayments` requires it.
+	static func requiredForm(checkout: String, visible: Bool = false) -> [ModuleFixture] {
+		let live = requiringLivePayments
+		if visible {
+			return [
+				ModuleFixture(name: "Shared", packageName: "Shop", swiftFileContent: [checkout, "import SafeDI\n\n" + live]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import SafeDI\nimport Shared\n\n" + requiringRoot], dependencies: ["Shared"]),
+			]
+		} else {
+			return [
+				ModuleFixture(name: "Shared", packageName: "Shop", swiftFileContent: [checkout]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import SafeDI\nimport Shared\n\n" + live, "import SafeDI\nimport Shared\n\n" + requiringRoot], dependencies: ["Shared"]),
+			]
+		}
+	}
+
+	static let holder = "import SafeDI\nimport Shared\n\n@Instantiable(generateMock: true)\npublic struct Holder: Instantiable {\n    public init(checkout: Checkout) {\n        self.checkout = checkout\n    }\n\n    @Instantiated public let checkout: Checkout\n}\n"
+
+	// MARK: Expected output
+
+	static let formBRemedyAppFiles: [String: String] = [
+		"App.swift": #"""
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Shared)
+		import Shared
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_checkout() -> Checkout {
+		            _ = Checkout.__safeDI_Checkout_B0254DB87C78D244.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_paymentsBuilder_Checkout(_ scope: Checkout.SafeDIScope_Payments) -> any Payments {
+		                switch scope {
+		                case let .payments(scope):
+		                    let cart = scope.cart
+		                    func __safeDI_payments() -> LivePayments {
+		                        func __safeDI_retryBuilder() -> Checkout {
+		                            _ = Checkout.__safeDI_Checkout_B0254DB87C78D244.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                            return Checkout(__safeDI_cart: cart, __safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout)
+		                        }
+		                        let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+		                        return LivePayments(cart: cart, retryBuilder: retryBuilder)
+		                    }
+		                    let payments: any Payments = __safeDI_payments()
+		                    return payments
+		                case let .cartScreenBuilder(_, scope): return __safeDI_paymentsBuilder_Checkout_CartScreen_Scope(scope)
+		                }
+		            }
+		            func __safeDI_paymentsBuilder_Checkout_CartScreen_Scope(_ scope: Checkout.SafeDIScope_Payments.CartScreen_Scope) -> any Payments {
+		                switch scope {
+		                case let .payments(scope):
+		                    let cart = scope.cart
+		                    func __safeDI_payments() -> LivePayments {
+		                        func __safeDI_retryBuilder() -> Checkout {
+		                            _ = Checkout.__safeDI_Checkout_B0254DB87C78D244.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                            return Checkout(__safeDI_cart: cart, __safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout)
+		                        }
+		                        let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+		                        return LivePayments(cart: cart, retryBuilder: retryBuilder)
+		                    }
+		                    let payments: any Payments = __safeDI_payments()
+		                    return payments
+		                }
+		            }
+		            return Checkout(__safeDI_cart: nil, __safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout)
+		        }
+		        let checkout: Checkout = __safeDI_checkout()
+		        self.init(checkout: checkout)
+		    }
+		}
+		"""#,
+	]
+	static let neighbourOneAppFiles: [String: String] = [
+		"App.swift": #"""
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Shared)
+		import Shared
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_checkout() -> Checkout {
+		            _ = Checkout.__safeDI_Checkout_E0CC0A71A5A4C780.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_paymentsBuilder_Checkout(_ scope: Checkout.SafeDIScope_Payments) -> any Payments {
+		                switch scope {
+		                case let .payments(scope):
+		                    let cart = scope.cart
+		                    func __safeDI_payments() -> LivePayments {
+		                        func __safeDI_retryBuilder() -> Checkout {
+		                            _ = Checkout.__safeDI_Checkout_E0CC0A71A5A4C780.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                            return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout)
+		                        }
+		                        let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+		                        return LivePayments(cart: cart, retryBuilder: retryBuilder)
+		                    }
+		                    let payments: any Payments = __safeDI_payments()
+		                    return payments
+		                }
+		            }
+		            return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout)
+		        }
+		        let checkout: Checkout = __safeDI_checkout()
+		        self.init(checkout: checkout)
+		    }
+		}
+		"""#,
+	]
+	static let neighbourTwoAppFiles: [String: String] = [
+		"App.swift": #"""
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Shared)
+		import Shared
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_checkout() -> Checkout {
+		            _ = Checkout.__safeDI_Checkout_8B871AAE9B6C3CE4.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_paymentsBuilder_Checkout(_ scope: Checkout.SafeDIScope_Payments) -> any Payments {
+		                switch scope {
+		                case let .screen(_, scope): return __safeDI_paymentsBuilder_Checkout_CheckoutScreen_Scope(scope)
+		                }
+		            }
+		            func __safeDI_paymentsBuilder_Checkout_CheckoutScreen_Scope(_ scope: Checkout.SafeDIScope_Payments.CheckoutScreen_Scope) -> any Payments {
+		                switch scope {
+		                case let .payments(scope):
+		                    let cart = scope.cart
+		                    func __safeDI_payments() -> LivePayments {
+		                        func __safeDI_retryBuilder() -> Checkout {
+		                            _ = Checkout.__safeDI_Checkout_8B871AAE9B6C3CE4.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                            return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout)
+		                        }
+		                        let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+		                        return LivePayments(cart: cart, retryBuilder: retryBuilder)
+		                    }
+		                    let payments: any Payments = __safeDI_payments()
+		                    return payments
+		                }
+		            }
+		            return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout)
+		        }
+		        let checkout: Checkout = __safeDI_checkout()
+		        self.init(checkout: checkout)
+		    }
+		}
+		"""#,
+	]
+	static let neighbourThreeAppFiles: [String: String] = [
+		"App.swift": #"""
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(Base)
+		import Base
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Shared)
+		import Shared
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_checkout() -> Checkout {
+		            _ = Checkout.__safeDI_Checkout_FB7A3D040FE7103E.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_paymentsBuilder_Checkout(_ scope: Checkout.SafeDIScope_Payments) -> any Payments {
+		                switch scope {
+		                case let .cartFlow_cartItemBuilder(_, innerScope, scope): return __safeDI_paymentsBuilder_Checkout_CartItemImpl_Scope(scope, cart: __safeDI_cart_CartFlow_SafeDIScope_CartItem(innerScope))
+		                }
+		            }
+		            func __safeDI_paymentsBuilder_Checkout_CartItemImpl_Scope(_ scope: Checkout.SafeDIScope_Payments.CartItemImpl_Scope, cart: Cart) -> any Payments {
+		                switch scope {
+		                case .payments:
+		                    func __safeDI_payments() -> LivePayments {
+		                        func __safeDI_retryBuilder() -> Checkout {
+		                            _ = Checkout.__safeDI_Checkout_FB7A3D040FE7103E.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                            return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout)
+		                        }
+		                        let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+		                        return LivePayments(cart: cart, retryBuilder: retryBuilder)
+		                    }
+		                    let payments: any Payments = __safeDI_payments()
+		                    return payments
+		                }
+		            }
+		            func __safeDI_cart_CartFlow_SafeDIScope_CartItem(_ scope: CartFlow.SafeDIScope_CartItem) -> Cart {
+		                switch scope {
+		                case let .screenBuilder(_, scope): return __safeDI_cart_CartFlow_CartScreen_Scope(scope)
+		                }
+		            }
+		            func __safeDI_cart_CartFlow_CartScreen_Scope(_ scope: CartFlow.SafeDIScope_CartItem.CartScreen_Scope) -> Cart {
+		                switch scope {
+		                case let .item(values): return values.cart
+		                }
+		            }
+		            return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout)
+		        }
+		        let checkout: Checkout = __safeDI_checkout()
+		        self.init(checkout: checkout)
+		    }
+		}
+		"""#,
+	]
+	static let neighbourFourSharedFiles: [String: String] = [
+		"Shared.swift": #"""
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_checkout() -> Checkout {
+		            func __safeDI_payments(cart: Cart?) -> LivePayments {
+		                func __safeDI_retryBuilder() -> Checkout {
+		                    let payments: any Payments = __safeDI_payments(cart: cart)
+		                    func __safeDI_cartScreenBuilder(cart: Cart) -> CartScreen {
+		                        let payments: any Payments = __safeDI_payments(cart: cart)
+		                        return CartScreen(cart: cart, payments: payments)
+		                    }
+		                    let cartScreenBuilder = Instantiator<CartScreen> {
+		                        __safeDI_cartScreenBuilder(cart: $0)
+		                    }
+		                    return Checkout(payments: payments, cartScreenBuilder: cartScreenBuilder)
+		                }
+		                let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+		                return LivePayments(cart: cart, retryBuilder: retryBuilder)
+		            }
+		            let payments: any Payments = __safeDI_payments(cart: nil)
+		            func __safeDI_cartScreenBuilder(cart: Cart) -> CartScreen {
+		                func __safeDI_payments() -> LivePayments {
+		                    func __safeDI_retryBuilder() -> Checkout {
+		                        let payments: any Payments = __safeDI_payments()
+		                        let cartScreenBuilder = Instantiator<CartScreen> {
+		                            __safeDI_cartScreenBuilder(cart: $0)
+		                        }
+		                        return Checkout(payments: payments, cartScreenBuilder: cartScreenBuilder)
+		                    }
+		                    let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+		                    return LivePayments(cart: cart, retryBuilder: retryBuilder)
+		                }
+		                let payments: any Payments = __safeDI_payments()
+		                return CartScreen(cart: cart, payments: payments)
+		            }
+		            let cartScreenBuilder = Instantiator<CartScreen> {
+		                __safeDI_cartScreenBuilder(cart: $0)
+		            }
+		            return Checkout(payments: payments, cartScreenBuilder: cartScreenBuilder)
+		        }
+		        let checkout: Checkout = __safeDI_checkout()
+		        self.init(checkout: checkout)
+		    }
+		}
+		"""#,
+	]
+	static let neighbourFiveSharedFiles: [String: String] = [
+		"Shared.swift": #"""
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Checkout {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_cart: @autoclosure @escaping () -> Cart?) {
+		        let cart = LazilyInstantiated<Cart?>(__safeDI_cart)
+		        func __safeDI_payments() -> LivePayments {
+		            func __safeDI_retryBuilder() -> Checkout {
+		                _ = Checkout.__safeDI_Checkout_EF7D77798DF123F5.self
+		                return Checkout(__safeDI_cart: cart.instance)
+		            }
+		            let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+		            return LivePayments(cart: cart.instance, retryBuilder: retryBuilder)
+		        }
+		        let payments: any Payments = __safeDI_payments()
+		        func __safeDI_cartScreenBuilder(cart: Cart) -> CartScreen {
+		            func __safeDI_payments() -> LivePayments {
+		                func __safeDI_retryBuilder() -> Checkout {
+		                    _ = Checkout.__safeDI_Checkout_EF7D77798DF123F5.self
+		                    return Checkout(__safeDI_cart: cart)
+		                }
+		                let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
+		                return LivePayments(cart: cart, retryBuilder: retryBuilder)
+		            }
+		            let payments: any Payments = __safeDI_payments()
+		            return CartScreen(cart: cart, payments: payments)
+		        }
+		        let cartScreenBuilder = Instantiator<CartScreen> {
+		            __safeDI_cartScreenBuilder(cart: $0)
+		        }
+		        self.init(payments: payments, cartScreenBuilder: cartScreenBuilder)
+		    }
+		}
+
+		extension Checkout {
+		    public enum __safeDI_Checkout_EF7D77798DF123F5 {}
+		}
+
+		extension Root {
+		    public init() {
+		        func __safeDI_checkout() -> Checkout {
+		            _ = Checkout.__safeDI_Checkout_EF7D77798DF123F5.self
+		            return Checkout(__safeDI_cart: nil)
+		        }
+		        let checkout: Checkout = __safeDI_checkout()
+		        self.init(checkout: checkout)
+		    }
+		}
+		"""#,
+	]
+	static let publicMockAppFiles: [String: String] = [
+		"App.swift": #"""
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Shared)
+		import Shared
+		#endif
+
+		#if DEBUG
+		extension Holder {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            checkout: Checkout.SafeDIOverrides = .init()
+		        ) {
+		            self.checkout = checkout
+		        }
+
+		        let checkout: Checkout.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        paymentsBuilder: @escaping (Checkout.SafeDIMockScope_Payments) -> any Payments,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Holder {
+		        _ = Checkout.__safeDI_Checkout_mock_7CF65FDA5821BF57.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let checkout = Checkout.mock(paymentsBuilder: paymentsBuilder, safeDIOverrides: safeDIOverrides.checkout)
+		        return Holder(checkout: checkout)
+		    }
+		}
+		#endif
+		"""#,
+	]
+
+	// MARK: Private
+
+	private var filesToDelete: [URL]
+
+	/// Expects `generatedFiles` to equal `expected`, recording the files generated when they do not, so a failure shows
+	/// the output in full.
+	private func expectGeneratedFiles(_ generatedFiles: [String: String]?, _ expected: [String: String], sourceLocation: SourceLocation = #_sourceLocation) {
+		#expect(generatedFiles == expected, sourceLocation: sourceLocation)
+		if let generatedFiles, generatedFiles != expected {
+			Issue.record(Comment(rawValue: generatedFiles.sorted { $0.key < $1.key }.map { "=== \($0.key)\n\($0.value)" }.joined(separator: "\n")), sourceLocation: sourceLocation)
+		}
+	}
+
+	private mutating func expectValuesEqualVisibleBuild(
+		_ output: MultiModuleTestOutput,
+		modules: [ModuleFixture],
+		visibleModules: [ModuleFixture],
+		probe: String = Self.retryProbe,
+		sourceLocation: SourceLocation = #_sourceLocation,
+	) async throws {
+		guard compileVerificationIsEnabled else { return }
+		let visibleOutput = try await executeSafeDIToolMultiModuleTest(modules: visibleModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		try await expectDifferentialValuesAgree(
+			feature: DifferentialValuePath(output: output, modules: modules),
+			knownRight: DifferentialValuePath(output: visibleOutput, modules: visibleModules),
+			probes: (probe.contains("Root()") ? [DifferentialValueProbe("Root()")] : []) + [DifferentialValueProbe(probe)],
+			filesToDelete: &filesToDelete,
+			sourceLocation: sourceLocation,
+		)
+	}
+}

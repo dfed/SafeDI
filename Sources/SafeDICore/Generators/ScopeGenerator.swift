@@ -10632,6 +10632,7 @@ extension SeamSignature.Hole.Field {
 			declarationLocation: declarationLocation,
 			isReceivedOnlyIfAvailable: isReceivedOnlyIfAvailable,
 			deferral: deferral,
+			isSeamParameter: isSeamParameter,
 		)
 	}
 }

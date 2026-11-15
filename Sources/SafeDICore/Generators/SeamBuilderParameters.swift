@@ -900,6 +900,7 @@ extension DependencyTreeGenerator {
 						isReceivedOnlyIfAvailable: declaration.isReceivedOnlyIfAvailable,
 						parameterTakingType: declaration.parameterTakingType,
 						deferral: declaration.deferral,
+						isSeamParameter: declaration.frameLevel < 0,
 					))
 				} else if declaration.frameLevel >= 0, let innermostFunction = sendableFunctions.last {
 					// Bound in the seam's tree outside the innermost `@Sendable` function: a fill that reads it is reported. A
@@ -1375,24 +1376,36 @@ extension DependencyTreeGenerator {
 				.compactMap(\.self)
 				.contains { $0 == property || $0 == property.asUnwrappedProperty }
 		}
-		func checkReceive(of property: Property, by instantiable: Instantiable, declaredAt declarationLocation: Dependency.DeclarationLocation?, onlyIfAvailable: Bool) {
+		/// Whether `field` gives a receive of `property` its value.
+		func provides(_ field: SeamSignature.Hole.Field, _ property: Property) -> Bool {
+			field.property == property
+				|| (property.typeDescription.isOptional && field.property == property.asUnwrappedProperty)
+				|| field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding.map { $0 == property || (property.typeDescription.isOptional && $0 == property.asUnwrappedProperty) } == true
+		}
+		/// Checks a receive the fill resolves from the caller's scope: a call inside a fill of a place that carries the
+		/// label, which opens this fill's seam again, hands this fill the outer call's value, where inline the seam opened
+		/// again sits beneath that place and reads its field, so the fill would read `nil` or another value than inline's.
+		func checkReadFromCallersScope(of property: Property, by reader: DependencyTreeGeneratorError.FillFinding.Reader, onlyIfAvailable: Bool) {
+			guard let carried = hidden.fieldsOfReenteringPlaces[property.label], provides(carried.field, property) else { return }
+			findings.append(.init(hole: hole, kind: .fieldOfReenteringPlace(reader: reader, isOnlyIfAvailable: onlyIfAvailable, carried: carried, callerModule: callerModule, seamModule: seamModule)))
+		}
+		func checkReceive(of property: Property, by instantiable: Instantiable, declaredAt declarationLocation: Dependency.DeclarationLocation?, onlyIfAvailable: Bool, passingCall: DependencyTreeGeneratorError.FillFinding.PassingCall? = nil) {
 			// Inline, a receive only if available of the property the fill builds finds it still being built and is handed
 			// `nil`, which the fill's tree passes it too, unless the property is an instantiator, which is handed a wrapper of
 			// its own (see `instantiatorBuildingSite`).
 			guard !onlyIfAvailable || ScopeGenerator.isBuilder(hole.property) || !isHolesOwnProperty(property) else { return }
-			let reader = DependencyTreeGeneratorError.FillFinding.Reader(property: property, type: instantiable.concreteInstantiable, declarationLocation: declarationLocation)
+			let reader = DependencyTreeGeneratorError.FillFinding.Reader(property: property, type: instantiable.concreteInstantiable, declarationLocation: declarationLocation, passingCall: passingCall)
 			let sameLabelFields = fields.filter { $0.property.label == property.label }
 			// A value a cycle in the seam's tree hands the site's owner when it builds it again is wrong at every level but the
 			// first, whether a field carries the label or the fill reads it from the caller's scope.
 			if let declaration = hole.cycleReentryDeclarations.first(where: { $0.property.label == property.label }) {
 				findings.append(.init(hole: hole, kind: .declarationBoundOnCycleReentry(reader: reader, declaration: declaration, seamModule: seamModule)))
-			} else if let field = sameLabelFields.first(where: { field in
-				field.property == property
-					|| (property.typeDescription.isOptional && field.property == property.asUnwrappedProperty)
-					|| field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding.map { $0 == property || (property.typeDescription.isOptional && $0 == property.asUnwrappedProperty) } == true
-			}) {
+			} else if let field = sameLabelFields.first(where: { provides($0, property) }) {
 				if !field.access.satisfies(requirement) {
 					findings.append(.init(hole: hole, kind: .fieldNotReadable(reader: reader, field: field, callerModule: callerModule, seamModule: seamModule, requirement: requirement)))
+				} else if field.isDeferredParameter, hidden.pathDeclarations[property.label] == nil {
+					// A field bound from a deferred parameter is read from the caller's scope (`fillUnderConstruction`).
+					checkReadFromCallersScope(of: property, by: reader, onlyIfAvailable: onlyIfAvailable)
 				}
 			} else if !onlyIfAvailable, let field = sameLabelFields.first(where: { $0.property.typeDescription.isOptional && $0.property.asUnwrappedProperty == property }) {
 				findings.append(.init(hole: hole, kind: .fieldHeldOnlyOptionally(reader: reader, field: field, seamModule: seamModule)))
@@ -1420,6 +1433,8 @@ extension DependencyTreeGenerator {
 					callerModule: callerModule,
 					seamModule: seamModule,
 				)))
+			} else if sameLabelFields.isEmpty {
+				checkReadFromCallersScope(of: property, by: reader, onlyIfAvailable: onlyIfAvailable)
 			}
 			// A field of the label with another type is the inline hidden-label error, which validation reported.
 		}
@@ -1428,11 +1443,17 @@ extension DependencyTreeGenerator {
 		func visit(_ generator: ScopeGenerator, parent: Instantiable?, providedProperties: Set<Property>, fillAncestors: [DependencyTreeGeneratorError.FillFinding.FillAncestor], judgesClosers: Bool) {
 			let childProvidedProperties = providedProperties.union(generator.providedProperties)
 			if let instantiable = generator.builtInstantiable {
+				// A seam's call receives what it passes on to the seam's tree.
+				let passingCall: DependencyTreeGeneratorError.FillFinding.PassingCall? = if generator.seamCall != nil, let parent, let property = generator.property {
+					.init(callingType: parent.concreteInstantiable, property: property, declarationLocation: parent.dependencies.first { $0.property == property }?.declarationLocation)
+				} else {
+					nil
+				}
 				for dependency in instantiable.dependencies {
 					switch dependency.source {
 					case let .received(onlyIfAvailable):
 						guard !isProvided(dependency.property, by: providedProperties) else { continue }
-						checkReceive(of: dependency.property, by: instantiable, declaredAt: dependency.declarationLocation, onlyIfAvailable: onlyIfAvailable)
+						checkReceive(of: dependency.property, by: instantiable, declaredAt: dependency.declarationLocation, onlyIfAvailable: onlyIfAvailable, passingCall: passingCall)
 					case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 						guard !isProvided(fulfillingProperty, by: childProvidedProperties) else { continue }
 						checkReceive(of: fulfillingProperty, by: instantiable, declaredAt: dependency.declarationLocation, onlyIfAvailable: onlyIfAvailable)
@@ -1494,6 +1515,31 @@ extension DependencyTreeGenerator {
 		/// The declarations the copies of this fill's hole that those calls' seams take do not carry, by label, the first
 		/// met for each.
 		var calledCopyDeclarations = [String: SeamSignature.Hole.UncarriedDeclaration]()
+		/// The fields of the places whose fills make those calls, by label, each the one that comes first in source order
+		/// (`FieldOfReenteringPlace.precedesInSourceOrder`): inline, the seam such a call opens again sits beneath that
+		/// place, so a read of the label this fill makes from the caller's scope would find that field.
+		var fieldsOfReenteringPlaces = [String: FieldOfReenteringPlace]()
+	}
+
+	/// A field of the place whose fill makes a call that passes a fill of the same seam call on, with that call.
+	struct FieldOfReenteringPlace {
+		let field: SeamSignature.Hole.Field
+		/// The place whose fill makes the call.
+		let reenteringHole: SeamSignature.Hole
+		let callProperty: Property
+		let callDeclarationLocation: Dependency.DeclarationLocation?
+		let calledSeam: TypeDescription
+
+		/// Whether this comes before `other` in source order: by where the field is declared, then where the place and each
+		/// declaration of the path to it are, then where the call is declared, so which of several is named never depends
+		/// on a name or on the order the fills are walked in.
+		func precedesInSourceOrder(_ other: FieldOfReenteringPlace) -> Bool {
+			orderingLocations.lexicographicallyPrecedes(other.orderingLocations, by: Dependency.DeclarationLocation.precedesInSourceOrder)
+		}
+
+		private var orderingLocations: [Dependency.DeclarationLocation?] {
+			[field.declarationLocation, reenteringHole.declarationLocation] + reenteringHole.declaredSitePath.map(\.declarationLocation) + [callDeclarationLocation]
+		}
 	}
 
 	/// What the calls inside the fills of `leaf`'s seam call hide from each of those fills, by the fill's key: each fill's
@@ -1512,25 +1558,41 @@ extension DependencyTreeGenerator {
 	static func hiddenByReenteringCalls(ofFills children: [ScopeGenerator]) -> [String: FillReentryHidings] {
 		var hiddenByFillKey = [String: FillReentryHidings]()
 		for case let (pathHole?, fulfiller?) in children.map({ ($0.fillHole, $0.children.first) }) {
-			var generatorsToVisit = [(generator: fulfiller, callingType: TypeDescription?.none, pathDeclarations: [SeamSignature.Hole.UncarriedDeclaration]())]
-			while let (generator, callingType, pathDeclarations) = generatorsToVisit.popLast() {
+			var generatorsToVisit = [(generator: fulfiller, calling: Instantiable?.none, pathDeclarations: [SeamSignature.Hole.UncarriedDeclaration]())]
+			while let (generator, calling, pathDeclarations) = generatorsToVisit.popLast() {
 				guard !generator.closesPropertyCycle else { continue }
 				for (fillKey, calledHole) in generator.enclosingFillsPassed {
 					var hidden = hiddenByFillKey[fillKey, default: FillReentryHidings()]
 					for declaration in calledHole.uncarriedDeclarations where hidden.calledCopyDeclarations[declaration.property.label] == nil {
 						hidden.calledCopyDeclarations[declaration.property.label] = declaration
 					}
-					// The fill's root declares what is on every path, so a call that is the root itself has no scope above it.
-					if let callingType, let callProperty = generator.property, let calledSeam = generator.builtInstantiable?.concreteInstantiable {
-						for declaration in pathDeclarations where hidden.pathDeclarations[declaration.property.label] == nil {
-							hidden.pathDeclarations[declaration.property.label] = DeclarationOnPathToReenteringCall(declaration: declaration, pathHole: pathHole, callingType: callingType, callProperty: callProperty, calledSeam: calledSeam)
+					if let callProperty = generator.property, let calledSeam = generator.builtInstantiable?.concreteInstantiable {
+						// The fill's root declares what is on every path, so a call that is the root itself has no scope above it.
+						if let calling {
+							for declaration in pathDeclarations where hidden.pathDeclarations[declaration.property.label] == nil {
+								hidden.pathDeclarations[declaration.property.label] = DeclarationOnPathToReenteringCall(declaration: declaration, pathHole: pathHole, callingType: calling.concreteInstantiable, callProperty: callProperty, calledSeam: calledSeam)
+							}
+						}
+						// A field bound from a parameter of the seam is the caller's own, which the call hands the seam opened again too.
+						for field in pathHole.fields where !field.isSeamParameter {
+							let candidate = FieldOfReenteringPlace(
+								field: field,
+								reenteringHole: pathHole,
+								callProperty: callProperty,
+								callDeclarationLocation: calling?.dependencies.first { $0.property == callProperty }?.declarationLocation,
+								calledSeam: calledSeam,
+							)
+							if let current = hidden.fieldsOfReenteringPlaces[field.property.label], !candidate.precedesInSourceOrder(current) {
+								continue
+							}
+							hidden.fieldsOfReenteringPlaces[field.property.label] = candidate
 						}
 					}
 					hiddenByFillKey[fillKey] = hidden
 				}
 				let childPathDeclarations = pathDeclarations + declarationsBound(by: generator, includingForwardedProperties: true, reason: .other)
-				let childCallingType = generator.builtInstantiable?.concreteInstantiable ?? callingType
-				generatorsToVisit.append(contentsOf: generator.children.reversed().map { ($0, childCallingType, childPathDeclarations) })
+				let childCalling = generator.builtInstantiable ?? calling
+				generatorsToVisit.append(contentsOf: generator.children.reversed().map { ($0, childCalling, childPathDeclarations) })
 			}
 		}
 		return hiddenByFillKey
@@ -1551,6 +1613,16 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 		struct Reader {
 			let property: Property
 			let type: TypeDescription
+			let declarationLocation: Dependency.DeclarationLocation?
+			/// For a receive of a seam's call, which passes it on to the seam's tree: the type that makes the call, the call's
+			/// property, and where that property is declared.
+			var passingCall: PassingCall?
+		}
+
+		/// A call of a seam, by `callingType`'s `property`, declared at `declarationLocation`.
+		struct PassingCall {
+			let callingType: TypeDescription
+			let property: Property
 			let declarationLocation: Dependency.DeclarationLocation?
 		}
 
@@ -1582,6 +1654,10 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				callerModule: ModuleIdentity,
 				seamModule: ModuleIdentity,
 			)
+			/// The fill resolves the reader's receive from the caller's scope, which a call inside the fill of `carried`'s place
+			/// hands it from the outer call, while inline the seam that call opens again sits beneath that place, whose field
+			/// gives the receive its value: the fill reads `nil`, or the outer call's value, in place of inline's.
+			case fieldOfReenteringPlace(reader: Reader, isOnlyIfAvailable: Bool, carried: DependencyTreeGenerator.FieldOfReenteringPlace, callerModule: ModuleIdentity, seamModule: ModuleIdentity)
 			/// A scope in the fill closes a cycle on `closingProperty`, a property of the seam's path, declared by
 			/// `closingType` beneath `fillAncestors`.
 			/// `closedOnDeclaration` is the declaration of the seam's path it repeats, and `closesOnOwnerOfHole` says that
@@ -1650,6 +1726,8 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				"receivesInstantiatorBuildingSite"
 			case .declarationBoundOnPathToReenteringCall:
 				"declarationBoundOnPathToReenteringCall"
+			case .fieldOfReenteringPlace:
+				"fieldOfReenteringPlace"
 			case .closesCycleInSeamTree:
 				"closesCycleInSeamTree"
 			case .fieldFormsDifferBetweenPlaces:
@@ -1836,6 +1914,23 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				return [
 					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(declaringType) declares on the path from \(builderDescription(of: pathHole)) to the call by which `\(callingType.asSource)` instantiates `\(calledSeam.asSource)` again (`\(callProperty.label)`), but that call passes the builder on as \(module(callerModule)) fills it, which cannot hand it \(declaringType)’s values. Declare `@\(Dependency.Source.receivedRawValue) let \(reader.property.asSource)` on \(seamName), so the builder’s scope carries it, or \(fulfillRemedy(seamModule))."),
 					SourceDiagnostic(severity: .note, location: declaration.declarationLocation, message: "\(declaringType) declares `\(declaration.property.asSource)` here."),
+				]
+			case let .fieldOfReenteringPlace(reader, isOnlyIfAvailable, carried, callerModule, seamModule):
+				let field = carried.field
+				let declaringType = "`\(field.declaringType.asSource)`"
+				let calledSeam = "`\(carried.calledSeam.asSource)`"
+				let receive = isOnlyIfAvailable
+					? "@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true) let \((field.property.typeDescription.isOptional ? field.property : field.property.asOptionalProperty).asSource)"
+					: "@\(Dependency.Source.receivedRawValue) let \(field.property.asSource)"
+				let handed = isOnlyIfAvailable ? "`nil` or another value" : "another value"
+				// A seam's call in the fill passes the value on to the seam's tree: it is reported where the call is declared.
+				let (readerName, receives, location) = if let passingCall = reader.passingCall {
+					("the call", "The call by which `\(passingCall.callingType.asSource)` instantiates `\(reader.type.asSource)` (`\(passingCall.property.label)`) passes on `\(reader.property.asSource)`", passingCall.declarationLocation)
+				} else {
+					("`\(reader.type.asSource)`", "`\(reader.type.asSource)` receives `\(reader.property.asSource)`", reader.declarationLocation)
+				}
+				return [
+					SourceDiagnostic(severity: .error, location: location, message: "\(receives), which \(builderDescription(of: carried.reenteringHole)) carries from \(declaringType), and that builder’s fill instantiates \(calledSeam) again (`\(carried.callProperty.label)`). Inline, \(readerName) would read \(declaringType)’s `\(field.property.label)` inside that \(calledSeam), but the call passes the builder on as \(module(callerModule)) fills it, whose scope there does not carry `\(field.property.label)`, so \(readerName) would get \(handed). Declare `\(receive)` on \(calledSeam), so the builder’s scope carries it, or \(fulfillRemedy(seamModule))."),
 				]
 			case let .closesCycleInSeamTree(closingProperty, closingType, declarationLocation, fillAncestors, closedOnDeclaration, closesOnOwnerOfHole, seamModule):
 				let closingTypeName = "`\(closingType.asSource)`"
