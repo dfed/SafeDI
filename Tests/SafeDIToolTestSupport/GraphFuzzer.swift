@@ -9878,12 +9878,18 @@ struct GraphFuzzerFailure: Equatable {
 		/// A call written against the graph's readable initializers and mocks stops compiling against the graph with an edit
 		/// that keeps every builder's places (`GraphFuzzerToolRuns.sameSupplyFailure`).
 		case sameSupplyCallStopsCompiling = "a call of a readable initializer or a mock stops compiling when an edit keeps every builder's places"
+		/// The tool rejects a graph edited to keep every builder's places, or the graph it is edited from
+		/// (`GraphFuzzerToolRuns.sameSupplyEditRejectedFailure`): the calls are never judged.
+		case sameSupplyEditRejected = "the tool rejects a graph edited to keep every builder's places"
 		/// Adding a place of a new builder whose filling type is an existing builder's renames, retypes or reorders an
 		/// existing builder (`GraphFuzzerToolRuns.addedSupplyFailure`).
 		case addedBuilderChangesExistingBuilder = "adding a builder of an existing filling type changes an existing builder's label or type"
 		/// The tool accepts a graph whose places of one builder forward other values, or rejects it only outside the module
-		/// where the places meet, or rejects the graph with the remedy applied (`GraphFuzzerToolRuns.forwardedValuesFailure`).
-		case placesForwardingOtherValuesAccepted = "places of one builder that forward other values are accepted, or their remedy is rejected"
+		/// where the places meet (`GraphFuzzerToolRuns.forwardedValuesFailure`).
+		case placesForwardingOtherValuesAccepted = "places of one builder that forward other values are accepted, or rejected only outside the module where they meet"
+		/// The tool accepts the remedy of places of one builder that forward other values with other builders than the drawn
+		/// graph's (`GraphFuzzerToolRuns.remedyBuildersFailure`). No known issue lists it.
+		case remedyAddsBuilder = "the remedy of places of one builder that forward other values takes other builders than the drawn graph"
 		/// A second call of another module's public mock renames, retypes or reorders a builder a calling mock takes
 		/// (`GraphFuzzerToolRuns.callingMockFailure`).
 		case callingMockChangesBuilder = "a second call of a public mock changes a builder of the calling mock"
@@ -11308,7 +11314,7 @@ enum GraphFuzzerOracle {
 			let renamedGraphFailures = runs.renamedGraphFailures
 			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, runs.builderLabelFailure, runs.sameSupplyFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			failures.append(contentsOf: renamedGraphFailures)
 			// The retention oracle judges last. No known failure masks what it finds, as none masks a renamed graph's

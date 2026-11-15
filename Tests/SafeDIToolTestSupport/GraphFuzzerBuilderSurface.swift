@@ -351,6 +351,17 @@ extension GraphFuzzerBuilderSurface {
 		/// `.Builder`; `nil` for a builder whose places forward nothing, or one handed a scope, which carries what they forward.
 		var forwardedType: String?
 
+		/// Whether the builder's places forward nothing: no forwarded type, or `<Returned>.ForwardedProperties`, the type an
+		/// `Instantiator<T>.Builder` names whether or not `T` forwards anything, which the surface cannot tell apart.
+		var forwardsNothing: Bool {
+			forwardedType.map { Self.forwardsNothing($0, returnedType: returnedType) } ?? true
+		}
+
+		/// Whether `forwardedType` is `<returnedType>.ForwardedProperties`.
+		static func forwardsNothing(_ forwardedType: String, returnedType: String) -> Bool {
+			forwardedType == "\(typeName(returnedType)).ForwardedProperties"
+		}
+
 		/// The label contract rule 8 gives the builder: `<fillingType>Builder` when the filling type is the returned type,
 		/// else `<fillingType>_<ReturnedType>Builder`, the filling type's leading capitals lowered as SafeDI lowers them;
 		/// a `@Sendable` builder's label says `Sendable` before `Builder`, as SafeDI's does today, since the rule does not
@@ -490,7 +501,7 @@ extension GraphFuzzerBuilderSurface {
 		return callables.map { callable in
 			Call(key: callable.key, arguments: callable.parameters.compactMap { parameter -> Argument? in
 				if isBuilder(parameter), let facts = builderFacts(of: parameter) {
-					guard facts.forwardedType == nil else {
+					guard facts.forwardsNothing else {
 						return .builder(label: facts.contractLabel, facts: facts, form: .forwardingClosure)
 					}
 					defer { builderIndex += 1 }
@@ -502,13 +513,14 @@ extension GraphFuzzerBuilderSurface {
 	}
 
 	/// Whether a parameter of type `parameterType` takes a builder for `facts` written in `form`: the one place that says
-	/// which forms each parameter type accepts, by the type clause of contract rule 8. A place that forwards nothing takes
-	/// `() -> B`, `Instantiator<T>.Builder` (whose `T` forwards nothing), `ErasedInstantiator<(), B>.Builder` or a
-	/// `Sendable` twin, each of which takes every form but a forwarding closure; a place that forwards `F` takes `(F) -> B`
-	/// or the wrapper's `.Builder` whose forwarded type is `F` – `ErasedInstantiator<F, B>.Builder`, or
-	/// `Instantiator<B>.Builder` for `F` `B.ForwardedProperties` – which takes a forwarding closure, or a stored closure of
-	/// that type; a `@Sendable` parameter takes a stored closure only when it is `@Sendable` too; a closure handed a scope
-	/// takes none. The builder-struct work can back this with a compile of the call.
+	/// which forms each parameter type accepts, by the type clause of contract rule 8. A wrapper's `.Builder` whose
+	/// forwarded type is `B.ForwardedProperties` – every `Instantiator<B>.Builder` – is read as forwarding nothing, since the
+	/// surface does not say whether `B` forwards anything, and the corpora's `Instantiator` places forward nothing. A place
+	/// that forwards nothing takes `() -> B`, `ErasedInstantiator<(), B>.Builder`, a `.Builder` read so, or a `Sendable`
+	/// twin, each of which takes every form but a forwarding closure; a place that forwards `F` takes `(F) -> B` or
+	/// `ErasedInstantiator<F, B>.Builder`, which takes a forwarding closure, or a stored closure of that type; a `@Sendable`
+	/// parameter takes a stored closure only when it is `@Sendable` too; a closure handed a scope takes none. The
+	/// builder-struct work can back this with a compile of the call.
 	static func accepts(parameterType: String, facts: BuilderFacts, form: BuilderForm) -> Bool {
 		guard generatedTypeNamed(by: "_: " + parameterType) == nil else { return false }
 		let isSendable = isSendableBuilderType(parameterType)
@@ -516,14 +528,11 @@ extension GraphFuzzerBuilderSurface {
 			return false
 		}
 		let returnedName = BuilderFacts.typeName(facts.returnedType)
-		let takesForwardedValue = form == .forwardingClosure || (form == .storedClosure && facts.forwardedType != nil)
+		let takesForwardedValue = form == .forwardingClosure || (form == .storedClosure && !facts.forwardsNothing)
 		if let wrapperBuilder = wrapperBuilder(of: parameterType) {
 			guard BuilderFacts.typeName(wrapperBuilder.returnedType) == returnedName else { return false }
-			guard takesForwardedValue else {
-				// An `Instantiator<T>`'s `T.ForwardedProperties` is `Void` where `T` forwards nothing.
-				return wrapperBuilder.forwardedType == nil || wrapperBuilder.wrapper.hasSuffix("Instantiator") && !wrapperBuilder.wrapper.hasSuffix("ErasedInstantiator")
-			}
-			return wrapperBuilder.forwardedType == facts.forwardedType
+			let wrapperForwardsNothing = wrapperBuilder.forwardedType.map { BuilderFacts.forwardsNothing($0, returnedType: wrapperBuilder.returnedType) } ?? true
+			return takesForwardedValue ? !wrapperForwardsNothing && wrapperBuilder.forwardedType == facts.forwardedType : wrapperForwardsNothing
 		}
 		var type = parameterType
 		for attribute in ["@escaping ", "@Sendable "] {
@@ -842,7 +851,7 @@ extension GraphFuzzerBuilderSurface {
 			return PairJudgment(isJudged: false, problems: [])
 		}
 		guard case let .accepted(editedFiles, _) = edited else {
-			return PairJudgment(isJudged: true, problems: [rejectedEditProblem(edited)])
+			return PairJudgment(isJudged: false, problems: [rejectedEditProblem(edited)])
 		}
 		let drawnCallables = callables(in: drawnFiles)
 		let editedCallables = callables(in: editedFiles)
@@ -855,7 +864,8 @@ extension GraphFuzzerBuilderSurface {
 	}
 
 	/// The problem of an edit that keeps or adds to the supply which the tool rejects: the edit changes nothing a valid graph
-	/// may not have, so a rejection is the part's failure, never a pair left unjudged.
+	/// may not have, so a rejection is a failure (`sameSupplyEditRejected` for part (i), the part's own for part (ii)),
+	/// though the pair, whose calls were never judged, counts toward no floor.
 	static func rejectedEditProblem(_ outcome: GraphFuzzerToolOutcome) -> String {
 		switch outcome {
 		case .accepted:
@@ -870,10 +880,10 @@ extension GraphFuzzerBuilderSurface {
 	/// added still compiles; `keys` limits the callables judged (a calling mock's, for part (iv)).
 	static func addedSupplyJudgment(without: GraphFuzzerToolOutcome, with: GraphFuzzerToolOutcome, judging isJudgedKey: (String) -> Bool = { _ in true }) -> PairJudgment {
 		guard case let .accepted(withoutFiles, _) = without else {
-			return PairJudgment(isJudged: true, problems: ["The tool rejects the graph without the added places, which it accepts with them:\n\(without)"])
+			return PairJudgment(isJudged: false, problems: ["The tool rejects the graph without the added places, which it accepts with them:\n\(without)"])
 		}
 		guard case let .accepted(withFiles, _) = with else {
-			return PairJudgment(isJudged: true, problems: [rejectedEditProblem(with)])
+			return PairJudgment(isJudged: false, problems: [rejectedEditProblem(with)])
 		}
 		let withCallables = callables(in: withFiles)
 		var problems = [String]()
@@ -897,29 +907,36 @@ extension GraphFuzzerBuilderSurface {
 	}
 
 	/// Part (iii): a graph whose builder's places forward other values must be rejected by the module where the places
-	/// meet in one builder – the seam's, or the public mock's, which takes an inner seam's places too – with an error there, and the same graph with the remedy applied – the added place forwarding what the drawn
-	/// places forward – must be accepted with exactly the drawn graph's builders, callable by callable, since its places are
-	/// places of the drawn graph's builder. The rejection's problems are part (iii)'s, and the remedy's rejection its own
-	/// (`remedyJudgment(drawn:remedied:)`).
-	static func rejectionJudgment(drawn: GraphFuzzerToolOutcome, unremedied: GraphFuzzerToolOutcome, remedied: GraphFuzzerToolOutcome, meetingModule: GraphFuzzerModule) -> PairJudgment {
-		var problems = [String]()
+	/// meet in one builder – the seam's, or the public mock's, which takes an inner seam's places too – with an error there.
+	/// The remedy's rejection (`remedyJudgment(remedied:)`) and the remedy's builders (`remedyBuildersJudgment(drawn:remedied:)`)
+	/// are judged apart.
+	static func rejectionJudgment(unremedied: GraphFuzzerToolOutcome, meetingModule: GraphFuzzerModule) -> PairJudgment {
 		switch unremedied {
 		case .accepted:
-			problems.append("The tool accepts a builder whose places forward other values")
+			return PairJudgment(isJudged: true, problems: ["The tool accepts a builder whose places forward other values"])
 		case let .rejected(diagnostics):
 			let errors = diagnostics.split(separator: "\n").filter { $0.contains(": error: ") }
-			if !errors.contains(where: { $0.contains("/\(meetingModule.name)/") }) {
-				problems.append("The tool rejects a builder whose places forward other values only outside \(meetingModule.name), where they meet:\n\(errors.joined(separator: "\n"))")
+			guard !errors.contains(where: { $0.contains("/\(meetingModule.name)/") }) else {
+				return PairJudgment(isJudged: true, problems: [])
 			}
+			return PairJudgment(isJudged: true, problems: ["The tool rejects a builder whose places forward other values only outside \(meetingModule.name), where they meet:\n\(errors.joined(separator: "\n"))"])
 		}
-		if case let .accepted(drawnFiles, _) = drawn, case let .accepted(remediedFiles, _) = remedied {
-			let remediedBuilders = Dictionary(grouping: callables(in: remediedFiles), by: \.key).mapValues { $0.flatMap(\.parameters).filter(isBuilder) }
-			for callable in callables(in: drawnFiles) {
-				let builders = callable.parameters.filter(isBuilder)
-				let remedied = remediedBuilders[callable.key] ?? []
-				if remedied != builders {
-					problems.append("\(callable.key) takes builders \(remedied.map { "`\($0.description)`" }.joined(separator: ", ")) with the remedy and \(builders.map { "`\($0.description)`" }.joined(separator: ", ")) without it, so the remedied place is not a place of the drawn builder")
-				}
+	}
+
+	/// The remedy of part (iii), the added place forwarding what the drawn places forward, must be accepted with exactly the
+	/// drawn graph's builders, callable by callable, since its places are places of the drawn graph's builder. Judged only
+	/// where the tool accepts both graphs.
+	static func remedyBuildersJudgment(drawn: GraphFuzzerToolOutcome, remedied: GraphFuzzerToolOutcome) -> PairJudgment {
+		guard case let .accepted(drawnFiles, _) = drawn, case let .accepted(remediedFiles, _) = remedied else {
+			return PairJudgment(isJudged: false, problems: [])
+		}
+		var problems = [String]()
+		let remediedBuilders = Dictionary(grouping: callables(in: remediedFiles), by: \.key).mapValues { $0.flatMap(\.parameters).filter(isBuilder) }
+		for callable in callables(in: drawnFiles) {
+			let builders = callable.parameters.filter(isBuilder)
+			let remedied = remediedBuilders[callable.key] ?? []
+			if remedied != builders {
+				problems.append("\(callable.key) takes builders \(remedied.map { "`\($0.description)`" }.joined(separator: ", ")) with the remedy and \(builders.map { "`\($0.description)`" }.joined(separator: ", ")) without it, so the remedied place is not a place of the drawn builder")
 			}
 		}
 		return PairJudgment(isJudged: true, problems: problems)
@@ -931,7 +948,7 @@ extension GraphFuzzerBuilderSurface {
 		case .accepted:
 			PairJudgment(isJudged: true, problems: [])
 		case let .rejected(diagnostics):
-			PairJudgment(isJudged: true, problems: ["The tool rejects the remedied graph, whose places forward the same values:\n\(diagnostics)"])
+			PairJudgment(isJudged: false, problems: ["The tool rejects the remedied graph, whose places forward the same values:\n\(diagnostics)"])
 		}
 	}
 }
@@ -966,7 +983,7 @@ extension GraphFuzzerToolRuns {
 			     .sendableInstantiatorChangedToSendableErasedInstantiator:
 				if let base = outcome(of: .instantiatorMadeSendable) {
 					let judgment = if case .rejected = base {
-						GraphFuzzerBuilderSurface.PairJudgment(isJudged: true, problems: [GraphFuzzerBuilderSurface.rejectedEditProblem(base)])
+						GraphFuzzerBuilderSurface.PairJudgment(isJudged: false, problems: [GraphFuzzerBuilderSurface.rejectedEditProblem(base)])
 					} else {
 						GraphFuzzerBuilderSurface.sameSupplyJudgment(drawn: base, edited: run.outcome, seed: fixture.seed)
 					}
@@ -980,17 +997,25 @@ extension GraphFuzzerToolRuns {
 				}
 			case .placeForwardingOtherValues, .placeForwardingOtherValuesInInnerSeamOfAnotherModule:
 				let remedy: GraphFuzzerBuilderSurfaceEdit = run.edit == .placeForwardingOtherValues ? .placeForwardingOtherValuesRemedied : .placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied
-				if let remedied = outcome(of: remedy) {
-					judgments.append((run.edit.rawValue, GraphFuzzerBuilderSurface.rejectionJudgment(drawn: firstOutcome, unremedied: run.outcome, remedied: remedied, meetingModule: .seamModule)))
+				if outcome(of: remedy) != nil {
+					judgments.append((run.edit.rawValue, GraphFuzzerBuilderSurface.rejectionJudgment(unremedied: run.outcome, meetingModule: .seamModule)))
 				}
 			case .placeForwardingOtherValuesRemedied, .placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied:
 				judgments.append((run.edit.rawValue, GraphFuzzerBuilderSurface.remedyJudgment(remedied: run.outcome)))
+				judgments.append((Self.remedyBuildersPairKind, GraphFuzzerBuilderSurface.remedyBuildersJudgment(drawn: firstOutcome, remedied: run.outcome)))
 			}
 		}
-		// The reverse directions: a call written against the edited graph's surface, judged against the drawn graph's.
-		for (edit, kind) in [(GraphFuzzerBuilderSurfaceEdit.instantiatorPlaceMovedToPlainPlace, Self.plainPlaceMovedToInstantiatorPairKind), (.instantiatorChangedToErasedInstantiator, Self.erasedInstantiatorChangedToInstantiatorPairKind)] {
-			if let edited = outcome(of: edit), case .accepted = edited {
-				judgments.append((kind, GraphFuzzerBuilderSurface.sameSupplyJudgment(drawn: edited, edited: firstOutcome, seed: fixture.seed)))
+		// The reverse directions: a call written against the edited graph's surface, judged against the graph it was edited
+		// from – the drawn graph, or for a `@Sendable` twin the graph whose `Instantiator` is made `SendableInstantiator`.
+		let reverses: [(edit: GraphFuzzerBuilderSurfaceEdit, kind: String, base: GraphFuzzerToolOutcome?)] = [
+			(.instantiatorPlaceMovedToPlainPlace, Self.plainPlaceMovedToInstantiatorPairKind, firstOutcome),
+			(.instantiatorChangedToErasedInstantiator, Self.erasedInstantiatorChangedToInstantiatorPairKind, firstOutcome),
+			(.sendableInstantiatorPlaceMovedToPlainPlace, Self.plainPlaceMovedToSendableInstantiatorPairKind, outcome(of: .instantiatorMadeSendable)),
+			(.sendableInstantiatorChangedToSendableErasedInstantiator, Self.sendableErasedInstantiatorChangedToSendableInstantiatorPairKind, outcome(of: .instantiatorMadeSendable)),
+		]
+		for reverse in reverses {
+			if let edited = outcome(of: reverse.edit), case .accepted = edited, let base = reverse.base, case .accepted = base {
+				judgments.append((reverse.kind, GraphFuzzerBuilderSurface.sameSupplyJudgment(drawn: edited, edited: base, seed: fixture.seed)))
 			}
 		}
 		if let withoutSecondHolePlaceOutcome {
@@ -1011,21 +1036,38 @@ extension GraphFuzzerToolRuns {
 	static let plainPlaceMovedToInstantiatorPairKind = "plainPlaceMovedToInstantiator"
 	/// The reverse of `instantiatorChangedToErasedInstantiator`: an `ErasedInstantiator` changed to `Instantiator<Hole>`.
 	static let erasedInstantiatorChangedToInstantiatorPairKind = "erasedInstantiatorChangedToInstantiator"
+	/// The reverse of `sendableInstantiatorPlaceMovedToPlainPlace`: a plain place moved to `SendableInstantiator<Hole>`.
+	static let plainPlaceMovedToSendableInstantiatorPairKind = "plainPlaceMovedToSendableInstantiator"
+	/// The reverse of `sendableInstantiatorChangedToSendableErasedInstantiator`: a `SendableErasedInstantiator` changed to
+	/// `SendableInstantiator<Hole>`.
+	static let sendableErasedInstantiatorChangedToSendableInstantiatorPairKind = "sendableErasedInstantiatorChangedToSendableInstantiator"
+	/// The kind of a pair of part (iii)'s remedy and the drawn graph, whose builders must be the same.
+	static let remedyBuildersPairKind = "remedyKeepsDrawnBuilders"
 
-	/// Part (i)'s failure, or `nil`.
+	/// The pair kinds of part (i).
+	static let sameSupplyPairKinds = [
+		GraphFuzzerBuilderSurfaceEdit.secondPlaceInAnotherType.rawValue,
+		GraphFuzzerBuilderSurfaceEdit.secondPlaceInInnerSeamOfAnotherModule.rawValue,
+		GraphFuzzerBuilderSurfaceEdit.holderMovedToInnerSeamOfAnotherModule.rawValue,
+		GraphFuzzerBuilderSurfaceEdit.placeBehindLazilyInstantiated.rawValue,
+		GraphFuzzerBuilderSurfaceEdit.instantiatorPlaceMovedToPlainPlace.rawValue,
+		GraphFuzzerBuilderSurfaceEdit.instantiatorChangedToErasedInstantiator.rawValue,
+		GraphFuzzerBuilderSurfaceEdit.sendableInstantiatorPlaceMovedToPlainPlace.rawValue,
+		GraphFuzzerBuilderSurfaceEdit.sendableInstantiatorChangedToSendableErasedInstantiator.rawValue,
+		plainPlaceMovedToInstantiatorPairKind,
+		erasedInstantiatorChangedToInstantiatorPairKind,
+		plainPlaceMovedToSendableInstantiatorPairKind,
+		sendableErasedInstantiatorChangedToSendableInstantiatorPairKind,
+	]
+
+	/// Part (i)'s failure, or `nil`: a judged pair's call that stops compiling.
 	var sameSupplyFailure: GraphFuzzerFailure? {
-		failure(of: .sameSupplyCallStopsCompiling, kinds: [
-			GraphFuzzerBuilderSurfaceEdit.secondPlaceInAnotherType.rawValue,
-			GraphFuzzerBuilderSurfaceEdit.secondPlaceInInnerSeamOfAnotherModule.rawValue,
-			GraphFuzzerBuilderSurfaceEdit.holderMovedToInnerSeamOfAnotherModule.rawValue,
-			GraphFuzzerBuilderSurfaceEdit.placeBehindLazilyInstantiated.rawValue,
-			GraphFuzzerBuilderSurfaceEdit.instantiatorPlaceMovedToPlainPlace.rawValue,
-			GraphFuzzerBuilderSurfaceEdit.instantiatorChangedToErasedInstantiator.rawValue,
-			GraphFuzzerBuilderSurfaceEdit.sendableInstantiatorPlaceMovedToPlainPlace.rawValue,
-			GraphFuzzerBuilderSurfaceEdit.sendableInstantiatorChangedToSendableErasedInstantiator.rawValue,
-			Self.plainPlaceMovedToInstantiatorPairKind,
-			Self.erasedInstantiatorChangedToInstantiatorPairKind,
-		])
+		failure(of: .sameSupplyCallStopsCompiling, kinds: Self.sameSupplyPairKinds, judged: true)
+	}
+
+	/// The failure of a graph whose same-supply edit the tool rejects, or `nil`: its calls are never judged.
+	var sameSupplyEditRejectedFailure: GraphFuzzerFailure? {
+		failure(of: .sameSupplyEditRejected, kinds: Self.sameSupplyPairKinds, judged: false)
 	}
 
 	/// Part (ii)'s failure, or `nil`.
@@ -1053,13 +1095,20 @@ extension GraphFuzzerToolRuns {
 		])
 	}
 
+	/// The failure of a graph whose part (iii) remedy the tool accepts with other builders than the drawn graph's, or `nil`.
+	var remedyBuildersFailure: GraphFuzzerFailure? {
+		failure(of: .remedyAddsBuilder, kinds: [Self.remedyBuildersPairKind])
+	}
+
 	/// Part (iv)'s failure, or `nil`.
 	var callingMockFailure: GraphFuzzerFailure? {
 		failure(of: .callingMockChangesBuilder, kinds: [Self.callingMockPairKind])
 	}
 
-	private func failure(of failureKind: GraphFuzzerFailure.Kind, kinds: [String]) -> GraphFuzzerFailure? {
-		let problems = builderSurfaceJudgments.filter { kinds.contains($0.kind) }.flatMap { judged in judged.judgment.problems.map { "\(judged.kind): \($0)" } }
+	/// The failure of `failureKind` from the problems of the pairs of `kinds`, only judged pairs' or only unjudged pairs'
+	/// when `judged` says so.
+	private func failure(of failureKind: GraphFuzzerFailure.Kind, kinds: [String], judged: Bool? = nil) -> GraphFuzzerFailure? {
+		let problems = builderSurfaceJudgments.filter { pair in kinds.contains(pair.kind) && (judged.map { $0 == pair.judgment.isJudged } ?? true) }.flatMap { judged in judged.judgment.problems.map { "\(judged.kind): \($0)" } }
 		guard !problems.isEmpty else { return nil }
 		return GraphFuzzerFailure(seed: fixture.seed, kind: failureKind, details: "\(problems.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)")
 	}
@@ -1076,6 +1125,8 @@ extension GraphFuzzerBuilderSurface {
 		+ [
 			GraphFuzzerToolRuns.plainPlaceMovedToInstantiatorPairKind,
 			GraphFuzzerToolRuns.erasedInstantiatorChangedToInstantiatorPairKind,
+			GraphFuzzerToolRuns.plainPlaceMovedToSendableInstantiatorPairKind,
+			GraphFuzzerToolRuns.sendableErasedInstantiatorChangedToSendableInstantiatorPairKind,
 			GraphFuzzerToolRuns.secondErasurePairKind,
 			GraphFuzzerToolRuns.callingMockPairKind,
 		]
@@ -1138,6 +1189,7 @@ extension GraphFuzzerResult {
 		.builderSurfaceNamesGeneratedType,
 		.builderLabelBreaksContract,
 		.sameSupplyCallStopsCompiling,
+		.sameSupplyEditRejected,
 		.addedBuilderChangesExistingBuilder,
 		.placesForwardingOtherValuesAccepted,
 		.callingMockChangesBuilder,

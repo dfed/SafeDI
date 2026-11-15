@@ -2061,7 +2061,8 @@ struct GraphFuzzerPublicMockDraw {
 		case (.placeOfNewBuilderOfExistingFillingType, .erasedConstant), (.placeOfNewBuilderOfExistingFillingType, .erasedInstantiator):
 			// A second erasure of the fill, to a second eraser: a builder of the same filling type returning another type.
 			let otherErasedName = erasedName + "Other"
-			let otherType = spelling == .erasedConstant ? otherErasedName : "ErasedInstantiator<(), \(otherErasedName)>"
+			// The hole's own type with its eraser replaced, so a hole that forwards a value keeps forwarding it.
+			let otherType = type.replacingOccurrences(of: erasedName, with: otherErasedName)
 			return ([place, Property(attribute: attribute, label: label + "Other", type: otherType)], [{ rendering in
 				[
 					"\(rendering.modifier(.public))struct \(otherErasedName): \(protocolName) {",
