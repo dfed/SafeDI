@@ -1,6 +1,8 @@
 # Spike: one function per type in a seam's body, under the builder-struct interface
 
-Status: **checkpoint 1** (F1, F2, F4, F6). F5, F3 and Stage 2 follow in later pushes of this file.
+Status: **checkpoint 2** (Stage 1 complete: F1–F6). Stage 2 follows in a later push of this file.
+
+**Ruling received (tech lead, 2026-11-15):** candidate B. `F2/mark` is the case that rules candidate A out: A gives `nil` where inline gives a value, and seam and inline builds must behave the same. From F5 on, the spike writes candidate B only; A stays only as the failing contrast in `F2/mark`.
 
 ## Setup
 
@@ -46,6 +48,16 @@ Every figure and verdict below comes from 6.2.4. No other compiler was used.
 | F4 | (b) today | yes | **no**: the retried Checkout's `LivePayments` gets `cart: nil` (D1) | **no**: inline keeps the cart alive through that `LivePayments` |
 | F4 | (c) and (d), today's caller shape | yes, evolution yes | **no** (same as today) | no |
 | F4 | (c) and (d), root level function takes `cart: Cart?` | yes, evolution yes | **yes** | **yes** |
+| F5 `next` | (b) today | yes | yes | **no**: holding only the screen at depth 4 (or 8) keeps `Live 2`, inline `Live 1` |
+| F5 `next` | (c) leak fix (A and B have the same struct here) | yes | yes | yes |
+| F5 `next` | (d) per-type | yes, evolution yes | yes | yes |
+| F5 `screenBuilder` | (b) today | yes | yes | yes |
+| F5 `screenBuilder` | (c) A, (c) B | yes | yes | yes |
+| F5 `screenBuilder` | (d) A, (d) B | yes, evolution yes | yes | yes |
+| F3 | (b) today | no: `declarationBoundOnCycleReentry` (tool, at `Live`) | – | – |
+| F3 | (c) leak fix, B | struct and readable `mock(apiBuilder:safeDIOverrides:)` compile with the callers; body "rejected in 2.3.0" | – | – |
+| F3 | (d) per-type `__safeDI_mock`, B | yes, evolution yes | yes (1, 2, 3) | yes (screen 1's cache freed) |
+| F3 `accepted` (neighbor: `Live` reads nothing) | (b) today | yes | yes | **no**: holding only screen 2's step keeps `Cache 1` more than inline |
 | F6 (i) | (b), (c), (d1), (d2) | yes, evolution yes | yes | yes |
 | F6 (ii) | (b), (c), (d1), (d2) | yes, evolution yes | yes | yes |
 
@@ -66,7 +78,28 @@ Today's text is reproduced by the tool (`F1/b/stored/Feature.swift.txt`; the fix
 
 - The hypothesis holds: the cause is on the calling side. With the root level function taking `cart: Cart?` (`Root` passes `nil`; the re-entry from `CartScreen_Scope`'s fill passes the screen's `cart`), **(c), today's per-path body over the struct, already equals inline's values and frees**. D1 needs no per-type body.
 - Frees, stated explicitly: holding only the retried Checkout, inline keeps `Cart 1, Checkout 1, LivePayments 1`; the fixed (c) and (d) keep the same. The re-entered root level function's struct captures the screen's `cart`, but so does inline's `retryBuilder` closure (inline's `__safeDI_payments(cart:)` takes it as a cycle parameter), so nothing more is retained. Today keeps `Checkout 1, LivePayments 1`, because its `LivePayments` holds `nil`.
+- **The exact signature** (`F4/c-fixed/App/Generated/App.swift`, the same in `F4/d-fixed`), declared inside the caller's `__safeDI_checkout()`:
+  - root level function: `func __safeDI_paymentsBuilder_Checkout(cart: Cart?) -> Checkout.SafeDIScope_Payments.__safeDI_Builder<any Payments>`;
+  - `Root`'s call: `Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout(cart: nil))`;
+  - inside it, the fill of the root's `payments` member builds `LivePayments(cart: cart, retryBuilder:)`, and its `retryBuilder` re-enters with `__safeDI_paymentsBuilder_Checkout(cart: cart)`, its own parameter;
+  - the `CartScreen_Scope` level function, `func __safeDI_paymentsBuilder_Checkout_CartScreen_Scope() -> Checkout.SafeDIScope_Payments.CartScreen_Scope.__safeDI_Builder<any Payments>`, builds its member `payments: { values in __safeDI_payments(cart: values.cart) }`, whose hoisted `func __safeDI_payments(cart: Cart) -> any Payments` builds `LivePayments(cart: cart, retryBuilder:)` with `retryBuilder` re-entering through `__safeDI_paymentsBuilder_Checkout(cart: cart)`: the screen's `cart`, passed as `Cart` into the `Cart?` parameter.
+  - The seam's own code is unchanged from (c): the fix is the caller's only.
 - Which mechanism gives D1's value (the dispatcher fixed point or the lift step) is not mine to decide; the hand-written code is the dispatcher fixed point's output for this shape.
+
+### F5, a screen that opens itself
+
+- `next`: main's enum already has a case at `next` (`Screen_Scope.next` holds `Screen_Scope`), so candidates A and B have the same struct here; they differ only in the body. (c), today's per-path body over the struct, hands every deeper screen the struct the first `next` returned (closing by declaration), and still gives inline's values and frees, because the struct's closures capture nothing of `next_Values` (`Live` reads only `id`, which each `api` call carries). (d) calls each screen's own `next` member.
+- `screenBuilder`: (c) A re-enters through the root member, (c) B and (d) B through `Screen_Scope.screenBuilder`; all equal inline.
+- **Defect on main, beyond the ones named**: today's code for `next` keeps the first screen's `Live` alive from every deeper screen (`F5/next/results/b-Onone.txt`: `Live 2` where inline has `Live 1`, at depth 4 and at depth 8, so it does not grow with depth). The nested `__safeDI_next` captures `__safeDI_apiValues_next`, the first screen's `next_Values`, which holds its `api`. Under the builder struct the payload is a parameter of a member call and nothing keeps it, so the leak fix removes this; I did not check whether main's retention oracle draws this shape.
+
+### F3, a stale loop value in a public mock
+
+- (d) is `__safeDI_mock(apiBuilder: SafeDIMockScope_Api.__safeDI_Builder<any Api>, safeDIOverrides:)`, which the readable `mock(apiBuilder: @escaping () -> any Api, safeDIOverrides:)` forwards to, over candidate B's struct (`Step_Scope.screenBuilder` returns `Screen_Scope`'s struct). Values 1, 2, 3 and frees equal inline's, including the probe that holds only screen 2's step (inline frees screen 1's cache; so does (d)).
+- **Overrides, read as today's path reads them**: the first `Screen` reads `safeDIOverrides.screen` (`cache` and `safeDIBuilder`); a reopened `Screen` reads none (`Cache()`, `safeDIBuilder: nil`); every `Step`, first or reopened, reads `safeDIOverrides.screen.stepBuilder.safeDIBuilder` (today's one shared `__safeDI_stepBuilder`). So:
+  - `Step`'s function reads the same configuration at every call: it captures `safeDIOverrides`, no parameter needed.
+  - `Screen`'s two kinds of place read different configurations. **One shared function for `Screen` would need the configuration passed as a parameter** (the deferred mock-overrides storage change), so I did not build it. Under "exact, or not shared", the first `Screen` keeps its own text in the body and the reopened screens share one function: the key is the type plus the override outcome.
+- **Defect on main, beyond the ones named**: in `F3/accepted` (the same modules, with `Live` reading nothing, which main accepts), today's public mock keeps screen 1's `Cache` alive from screen 2's step (`F3/accepted/results/b-Onone.txt`: `Cache 1, Live 1, Step 1` where inline has `Live 1, Step 1`). The reopened screens' `stepBuilder` calls the first screen's `__safeDI_stepBuilder`, which captures `__safeDI_apiValues_stepBuilder`, the first screen's `stepBuilder_Values { cache }`. The builder struct removes this too.
+- Whether F3's mock half belongs in 2.3.1 is the maintainer's question.
 
 ### F6, the `@Sendable` family
 
@@ -91,14 +124,19 @@ Today's text is reproduced by the tool (`F1/b/stored/Feature.swift.txt`; the fix
 | F2 `screenBuilder` | none | none |
 | F2 `mark` | **(d) cannot use A's struct and give inline's values**: it needs a member at `next` (B's) | none |
 | F4 | none (no loop in the seam) | – |
+| F5 `next` | none (A and B coincide) | none |
+| F5 `screenBuilder` | none | none |
+| F3 | – (ruled out) | none: (c) and (d) compile the same struct and readable mock |
 | F6 | none | – |
 
 The calling module's level functions are the same for (c) and (d) everywhere; F4's fix and B's extra member change them, and those changes are the leak fix's, not per-type's.
 
-## What worked and what broke (so far)
+## What worked and what broke
 
 - Worked: everything a person writes stays as the leak fix leaves it while the body becomes one function per type, in every fixture so far.
 - Broke: candidate A, as soon as a value bound between the root and a reopened level is read below it (`F2/mark`).
+- Not shareable without a new parameter: a mock type whose places read different override configurations (F3's `Screen`).
+- Found on main: two retentions that inline frees, in shapes main accepts (F5 `next`; F3 `accepted`), both from a nested function capturing a level's payload. The builder struct removes both.
 - The brief's word "reopening property" is not defined for `next`, where inline closes the cycle at `Screen.stepBuilder`, not at `next`; I read it as the property whose type is already on the path (`Step.next` reopens `Screen`), which is how the brief's F2 sketch uses it.
 
 ## Rules needed so far
@@ -111,7 +149,8 @@ The calling module's level functions are the same for (c) and (d) everywhere; F4
 
 ## Questions (not mine to decide)
 
-1. **Candidate B's member at the reopening property (and its `_Values`)**: the per-type body needs it to give inline's values when a value bound between the root and the reopened level is read inside it (`F2/mark`). Should the leak fix ship candidate B?
+1. ~~Candidate A or B~~: **settled, candidate B** (tech lead, 2026-11-15), with `F2/mark` as the case that rules A out.
 2. **D1's mechanism**: F4 shows the dispatcher fixed point's output (the root level function takes `cart: Cart?`) gives inline's values and frees with today's per-path body. Dispatcher fixed point or lift step?
 3. **F6's family sentence**: no builder moved in (i) or (ii); per-type marks a function `@Sendable` when any place needs it, and the plain place calling it changed no family. The wording of rule 8's sentence stays the maintainer's.
-4. **Invented names** (flagged): `__safeDI_<type>` for a per-type function (`__safeDI_avatar`, `__safeDI_step`, `__safeDI_screen`), `__safeDI_<type>_Sendable` in (d2), `__safeDI_rootBuilder` in (d) A, and `__safeDI_live`, `__safeDI_payments(cart:)` for the hoisted fill functions in the calling module.
+4. **F3's mock half**: does it belong in 2.3.1? Its `Screen` needs the override configuration as a parameter to share one function across the first and reopened builds (the deferred mock-overrides storage change).
+5. **Invented names** (flagged): `__safeDI_<type>` for a per-type function (`__safeDI_avatar`, `__safeDI_step`, `__safeDI_screen`), `__safeDI_<type>_Sendable` in (d2), `__safeDI_rootBuilder` in (d) A, and `__safeDI_live`, `__safeDI_payments(cart:)` for the hoisted fill functions in the calling module.

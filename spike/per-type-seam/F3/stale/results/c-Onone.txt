@@ -1,0 +1,55 @@
+Feat/Feat.swift:89: Fatal error: rejected in 2.3.0
+
+*** Signal 4: Backtracing from 0x7f226b0e2a58... done ***
+
+*** Program crashed: Illegal instruction at 0x00007f226b0e2a58 ***
+
+Platform: x86_64 Linux (Ubuntu 24.04.5 LTS)
+
+Thread 0 "main" crashed:
+
+  0      0x00007f226b0e2a58 _assertionFailure(_:_:file:line:flags:) + 264 in libswiftCore.so
+  1 [ra] 0x000055b8aff2297b static Home.__safeDI_mock(apiBuilder:safeDIOverrides:) + 186 in main
+  2 [ra] 0x000055b8aff235ab __safeDI_home #1 () in static Root.mock(safeDIOverrides:) + 138 in main
+  3 [ra] 0x000055b8aff2437d static Root.mock(safeDIOverrides:) + 44 in main
+  4 [ra] 0x000055b8aff2460c rootMock() + 43 in main
+  5 [ra] 0x000055b8aff24e9f main + 94 in main
+  6 [ra] 0x00007f226a82a1ca __libc_start_call_main + 121 in libc.so.6
+  7 [ra] 0x00007f226a82a28b __libc_start_main@GLIBC_2.2.5 + 138 in libc.so.6
+...
+
+
+Registers:
+
+rax 0x0000000000000000  0
+rdx 0x0000000000000002  2
+rcx 0x0000000000000001  1
+rbx 0x000000055b8db7f6  23010850806
+rsi 0x800055b8aff30490  9223466288569058448
+rdi 0x000055b8db7f6e40  2e 30 0a 00 00 00 00 00 31 00 00 00 00 00 00 00  .0······1·······
+rbp 0x00007ffdcceb2f20  90 2f eb cc fd 7f 00 00 7b 29 f2 af b8 55 00 00  ·/ëÌý···{)ò¯¸U··
+rsp 0x00007ffdcceb2eb0  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ················
+ r8 0x000055b8db7e4010  00 00 01 00 01 00 01 00 00 00 00 00 00 00 00 00  ················
+ r9 0x0000000000000007  7
+r10 0x000055b8db7f6e50  f6 b7 8d 5b 05 00 00 00 fa b1 66 c7 e4 be bc cb  ö··[····ú±fÇä¾¼Ë
+r11 0xcbbcbee4c766b1fa  14680818775128191482
+r12 0x0000000000000000  0
+r13 0x000055b8aff31478  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ················
+r14 0x000055b8aff2f230  80 ca 3f 6b 22 7f 00 00 b0 ef 3f 6b 22 7f 00 00  ·Ê?k"···°ï?k"···
+r15 0x00007f226b6f8000  e0 92 6f 6b 22 7f 00 00 11 00 00 00 00 00 00 00  à·ok"···········
+rip 0x00007f226b0e2a58  0f 0b 48 8d 35 7f 0c fb ff 48 8d 55 a0 45 31 e4  ··H·5··ûÿH·U E1ä
+
+rflags 0x0000000000010202  
+
+cs 0x0033  fs 0x0000  gs 0x0000
+
+
+Images (13 omitted):
+
+0x000055b8aff16000–0x000055b8aff2d6e0 fa3c6a6bfe8e8ced69862460f380c9f6a31dbcb7 main            /root/.cache/per-type-seam-spike/F3/stale/c/out-Onone/main
+0x00007f226a800000–0x00007f226a9b0039 a4a7992a8e66555c8141ab2a08a8465ff6e0ea65 libc.so.6       /usr/lib/x86_64-linux-gnu/libc.so.6
+0x00007f226ae00000–0x00007f226b3b23a0 558d88bb27dd3a5fa8ef79eb481d2942416f4535 libswiftCore.so /opt/swift/swift-6.2.4-RELEASE-ubuntu24.04/usr/lib/swift/linux/libswiftCore.so
+
+Backtrace took 0.02s
+
+exit 132

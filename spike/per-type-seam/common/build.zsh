@@ -46,6 +46,11 @@ sources_of() {
 	print -r -- "${files[@]}"
 }
 
+package_of() {
+	# VARIANT/<Module>/package names the module's package; the default is Spike.
+	if [[ -f "$variant/$1/package" ]]; then head -1 "$variant/$1/package"; else print Spike; fi
+}
+
 objects=()
 for module in "${module_list[@]}"; do
 	mkdir -p "$output/src/$module"
@@ -55,7 +60,7 @@ for module in "${module_list[@]}"; do
 		sources=("$output/src/$module"/*.swift)
 		print -rn -- "${(j:,:)sources}" >"$output/$module.csv"
 		arguments=("$output/$module.csv" --combined-output "$output/src/$module/__Generated.swift" --compiler-receives-input-paths-unchanged
-			--module-info-output "$output/$module.safedi" --module-name "$module" --package-name Spike --active-compilation-conditions DEBUG)
+			--module-info-output "$output/$module.safedi" --module-name "$module" --package-name "$(package_of $module)" --active-compilation-conditions DEBUG)
 		dependency_paths=()
 		for dependency in ${(z)deps[$module]}; do [[ -f "$output/$dependency.safedi" ]] && dependency_paths+=("$output/$dependency.safedi"); done
 		if (( ${#dependency_paths} )); then
@@ -73,7 +78,7 @@ for module in "${module_list[@]}"; do
 	sources=("$output/src/$module"/*.swift)
 	if [[ "$module" == "${module_list[-1]}" ]]; then library=(); flags=(); else library=(-parse-as-library); flags=("${extra[@]}"); fi
 	swiftc -emit-object -whole-module-optimization "${library[@]}" -$optimization \
-		-o "$output/$module.o" -module-name "$module" -package-name Spike \
+		-o "$output/$module.o" -module-name "$module" -package-name "$(package_of $module)" \
 		-emit-module -emit-module-path "$output/$module.swiftmodule" \
 		-I "$module_search_path" -I "$output" \
 		-load-plugin-executable "$macros#SafeDIMacros" -swift-version 6 -warnings-as-errors -D DEBUG \

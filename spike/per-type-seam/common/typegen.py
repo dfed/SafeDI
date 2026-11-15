@@ -4,7 +4,7 @@ A property is (kind, label, type): kind is `inst`, `recv`, `opt` (received only 
 """
 
 
-def swift_type(name, properties, seam=False, root=False, fulfills=None, sendable=False, attributes=None):
+def swift_type(name, properties, seam=False, root=False, fulfills=None, sendable=False, attributes=None, initializer_access="public"):
     if attributes is None:
         if seam:
             attributes = "(generateDependencyTree: true)"
@@ -29,7 +29,7 @@ def swift_type(name, properties, seam=False, root=False, fulfills=None, sendable
         "fwd": "@Forwarded",
     }
     lines = [f"@Instantiable{attributes}", f"public final class {name}: {', '.join(conformances)} {{"]
-    lines.append(f"    public init({parameters}) {{")
+    lines.append(f"    {initializer_access + ' ' if initializer_access else ''}init({parameters}) {{")
     for _, label, _ in properties:
         lines.append(f"        self.{label} = {label}")
     received = ", ".join(f'"{label}": {label}' for _, label, _ in properties) or ":"
