@@ -1690,7 +1690,7 @@ def self_test(root):
     source = checked_encoding(literal, [("text", "a\n\n\tb\n")])
     expect(source == '"""\n\t\ta\n\n\t\t\tb\n\n\t\t"""', f"lint-clean: {source!r}")
 
-    # applying twice gives the same report and no second edit.
+    # two dry runs write the same report and no test file.
     test = case("idempotent")
     test.test_file(test_function('\t\t#expect(run() == "Old")'))
     test.records([generation_record("k", 4, "Old")], [generation_record("k", 4, "New")], {"rename": [{"name": "rename", "table": {"Old": "New"}}]})
@@ -1698,6 +1698,16 @@ def self_test(root):
     first_report = test.report_text()
     test.run(dry_run=True)
     expect(test.report_text() == first_report and test.source() == test_function('\t\t#expect(run() == "Old")'), "idempotent: dry runs agree and write no test file")
+
+    # applying for real, then again, edits once: the second apply finds Tests/ changed since recording and refuses.
+    test = case("second-apply")
+    test.test_file(test_function('\t\t#expect(run() == "Old")'))
+    test.records([generation_record("k", 4, "Old")], [generation_record("k", 4, "New")], {"rename": [{"name": "rename", "table": {"Old": "New"}}]})
+    first_status, _ = test.run()
+    applied = test.source()
+    second_status, summary = test.run()
+    expect(first_status == 0 and applied == test_function('\t\t#expect(run() == "New")'), f"second apply: first apply {first_status}")
+    expect(second_status == 2 and "changed since recording" in summary.get("error", "") and test.source() == applied, f"second apply: {second_status} {summary}")
 
     for failure in failures:
         print(f"self-test failed: {failure}")
