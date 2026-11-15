@@ -513,7 +513,7 @@ struct GraphFuzzerLevelFunctionCaptureTests: ~Copyable {
 			],
 		), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 
-		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 3, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0))
+		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 3, namedMemberClosureCount: 3, conversionFunctionCount: 0, fillFunctionCount: 1))
 	}
 
 	@Test
