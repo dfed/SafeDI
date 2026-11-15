@@ -255,7 +255,8 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func seamSmokeSeeds_produceNoUnknownFailures_whenRunThroughToolAndCompiler() async throws {
-		// The smoke batch's graphs pass, but those the in-seam leak fails until its fix, which must fail exactly as listed
+		// The smoke batch's graphs pass, but those the in-seam leak fails until its fix, and those with a hole, which
+		// fail the builder surface until the planned builder structs, which must fail exactly as listed
 		// (`seamSmokeKnownIssuesBySeed`).
 		for result in try await seamSmokeResults.value {
 			for finding in GraphFuzzerFinding.findings(failure: result.failure, laterFailures: result.laterFailures, knownIssue: Self.seamSmokeKnownIssuesBySeed[result.fixture.seed], retentionIsJudged: result.isJudgedForRetention) {
@@ -4815,6 +4816,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs of each gating draw that the oracles after acceptance judged, by the draw's name.
 		var gatingDrawJudgedCounts = [String: Int]()
 		var readTwinGraphCount = 0
+		var builderSurfaceCounts = [String: Int]()
 		var acceptedSpellingDrawFeatures = Set<GraphFuzzerSeamDrawFeature>()
 		var omittedValueGraphCount = 0
 		var publicMockOutputFeatureCounts = [GraphFuzzerPublicMockOutputFeature: Int]()
@@ -4941,6 +4943,8 @@ struct SafeDIToolGraphFuzzerTests {
 							retentionCounts.add(result.retentionCounts)
 							for draw in corpus.gatingDrawsJudged(by: result, knownIssue: knownIssuesBySeed[seed]) {
 								gatingDrawJudgedCounts[draw, default: 0] += 1
+							for kind in result.builderSurfaceFloorKinds {
+								builderSurfaceCounts[kind, default: 0] += 1
 							}
 							if result.isComparedWithReadTwin {
 								readTwinGraphCount += 1
@@ -5021,6 +5025,11 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs the oracle compared with their read twin, with the pin, which ci.yml's combine job adds up: an oracle
 		// that stops running the twins fails it.
 		report.append("read-twins \(readTwinGraphCount) \(corpus.readTwinGraphCount) \(corpus.name)")
+		// The graphs the builder surface judges, by kind, with the kinds whose floor the corpus must reach, which ci.yml's
+		// combine job adds up and checks: a draw or an edit that stops landing in accepted graphs fails it.
+		// Every corpus writes it, the base corpus, which has no holes, with no floored kind.
+		let builderSurfaceCountsField = GraphFuzzerBuilderSurface.floorKinds.map { "\($0)=\(builderSurfaceCounts[$0, default: 0])" }.joined(separator: ",")
+		report.append("builder-surface \(corpus.name) \(builderSurfaceCountsField) \(corpus.builderSurfaceFlooredKinds.joined(separator: ","))")
 		// The graphs the tool rejects because a caller holds a value its tier omits, which ci.yml's combine job adds up.
 		report.append("omitted-values \(omittedValueGraphCount) \(corpus.omittedValueGraphCount) \(corpus.name)")
 		report.append("spellings \(corpus.name) \(corpus.spellingDrawFeatures.map(\.rawValue).sorted().joined(separator: ",")) \(acceptedSpellingDrawFeatures.map(\.rawValue).sorted().joined(separator: ","))")
@@ -5093,6 +5102,8 @@ struct SafeDIToolGraphFuzzerTests {
 			let thinGatingDraws = corpus.flooredGatingDrawNames.filter { gatingDrawJudgedCounts[$0, default: 0] < Self.gatingDrawJudgedGraphFloor }
 			if !thinGatingDraws.isEmpty {
 				reportProblem("The oracles judged fewer than \(Self.gatingDrawJudgedGraphFloor) graphs of the \(corpus.name) corpus that draw \(thinGatingDraws.map { "\($0) (\(gatingDrawJudgedCounts[$0, default: 0]))" }.joined(separator: ", ")): such a draw gates nothing.")
+			for kind in corpus.builderSurfaceFlooredKinds where builderSurfaceCounts[kind, default: 0] < Self.builderSurfaceFloor {
+				reportProblem("The builder surface judged \(builderSurfaceCounts[kind, default: 0]) graphs of the \(corpus.name) corpus as \(kind), below its floor of \(Self.builderSurfaceFloor).")
 			}
 			if omittedValueGraphCount != corpus.omittedValueGraphCount {
 				reportProblem("The tool rejected \(omittedValueGraphCount) graphs of the \(corpus.name) corpus because a caller holds a value its tier omits, but \(corpus.omittedValueGraphCount) are pinned.")
@@ -5351,6 +5362,10 @@ struct SafeDIToolGraphFuzzerTests {
 			return seamDraws.map(\.rawValue) + publicMockDraws.map(\.rawValue)
 		}
 
+		/// The builder surface's kinds (`GraphFuzzerBuilderSurface.floorKinds`) whose judged graphs must reach
+		/// `builderSurfaceFloor` over the corpus, which ci.yml's combine job adds up and checks: none for a corpus without
+		/// holes, and a kind the corpus does not draw yet is left out, as the pull request that added the floors says.
+		var builderSurfaceFlooredKinds = [String]()
 		/// The seeds whose value graphs' probes traverse more wrappers than `DifferentialValueLimits()` allows, each listed
 		/// by name so that only its graphs get `DifferentialValueLimits.isolatedFuzzerGraph`'s budget.
 		var seedsTraversingPastTheBatchBudget = Set<UInt64>()
@@ -5463,6 +5478,10 @@ struct SafeDIToolGraphFuzzerTests {
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
 		gatingSeamDrawFeatures: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape }),
+		builderSurfaceFlooredKinds: [
+			"base-plain", "base-lazy", "base-sendable", "secondPlaceInAnotherType", "placeBehindLazilyInstantiated",
+			"placeForwardingOtherValues", "secondErasureOfFillingType",
+		],
 		seedsTraversingPastTheBatchBudget: seamCorpusSeedsTraversingPastTheBatchBudget,
 	)
 
@@ -5880,7 +5899,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`seamCorpusSeedsAddedToInheritedShapes`): the inherited shapes are listed from `knownIssues` with those
 	/// adjustments, a shape left with no seed dropped, so that a fix there is a fix here, and the long run reports a
 	/// seed that diverges as stale or new. The seam's own shape follows them. Each seed is listed once.
-	static let seamKnownIssues: [GraphFuzzerKnownIssue] = knownIssues.compactMap { knownIssue in
+	static let seamKnownIssues: [GraphFuzzerKnownIssue] = addingBuilderSurfaceShapes(seeds: seamBuilderSurfaceSeeds, to: knownIssues.compactMap { knownIssue in
 		// The base corpus's value oracle runs in no other corpus.
 		guard !knownIssue.isBaseCorpusValueOracleShape else { return nil }
 		let seeds = (knownIssue.seeds.filter { $0 < UInt64(seamCorpusSeedCount) && !seamCorpusSeedsOfOtherShapes.contains($0) }
@@ -5995,10 +6014,75 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
 			seeds: [300],
 		),
-	]
+	])
 
-	/// The seam corpus's known issues and `seamSmokeKnownIssuesBeyondTheCorpus`, by seed, which the smoke batch consults.
-	static let seamSmokeKnownIssuesBySeed = Dictionary(uniqueKeysWithValues: (seamKnownIssues + seamSmokeKnownIssuesBeyondTheCorpus).flatMap { knownIssue in knownIssue.seeds.map { ($0, knownIssue) } })
+	/// `seamKnownIssues` and `seamSmokeKnownIssuesBeyondTheCorpus`, with the smoke seeds beyond the seam corpus that fail
+	/// the builder surface's base check, which the corpus's list, bounded by its size, cannot hold.
+	static let seamSmokeKnownIssues = addingBuilderSurfaceShapes(
+		seeds: BuilderSurfaceSeeds(base: [1_010, 1_020, 1_450, 1_814, 1_890], sameSupply: [], addedSupply: [], forwardingOtherValues: [], callingMocks: []),
+		to: seamKnownIssues + seamSmokeKnownIssuesBeyondTheCorpus,
+	)
+
+	/// The fewest graphs of a corpus the builder surface must judge for each kind it floors (`Corpus.builderSurfaceFlooredKinds`):
+	/// below ten, a draw no longer stands in for unit tests of its shape.
+	static let builderSurfaceFloor = 10
+
+	struct BuilderSurfaceSeeds {
+		let base: [UInt64]
+		let sameSupply: [UInt64]
+		let addedSupply: [UInt64]
+		let forwardingOtherValues: [UInt64]
+		let callingMocks: [UInt64]
+	}
+
+	/// `issues` with each part of the builder surface's shape added for its seeds (`GraphFuzzerKnownIssue.adding`).
+	private static func addingBuilderSurfaceShapes(seeds: BuilderSurfaceSeeds, to issues: [GraphFuzzerKnownIssue]) -> [GraphFuzzerKnownIssue] {
+		var issues = GraphFuzzerKnownIssue.adding(.builderSurfaceNamesGeneratedType, reason: builderSurfaceReason, seeds: seeds.base, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.sameSupplyCallStopsCompiling, reason: sameSupplyReason, seeds: seeds.sameSupply, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.addedBuilderChangesExistingBuilder, reason: addedSupplyReason, seeds: seeds.addedSupply, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.placesForwardingOtherValuesAccepted, reason: forwardingOtherValuesReason, seeds: seeds.forwardingOtherValues, to: issues)
+		return GraphFuzzerKnownIssue.adding(.callingMockChangesBuilder, reason: callingMocksReason, seeds: seeds.callingMocks, to: issues)
+	}
+
+	/// Why a graph with a hole fails the builder surface on main (`GraphFuzzerToolRuns.builderSurfaceFailure`).
+	static let builderSurfaceReason = "A seam's readable initializer and a mock hand each hole's builder a generated scope enum, so a builder a person writes names generated code; the planned builder structs replace it with builders that take only what their place forwards"
+
+	private static let sameSupplyReason = "An internal mock that cannot build a hole takes the hole's value, or the wrapper its place spells, as a parameter rather than a builder, so moving the place behind a wrapper changes the parameter a call passes"
+
+	private static let addedSupplyReason = "A builder takes `<fillingType>_<ReturnedType>Builder` only once a second returned type of its filling type appears, so adding a place of a new builder of an existing filling type renames the existing builder"
+
+	private static let forwardingOtherValuesReason = "Places of one builder that forward other values are merged into one builder rather than rejected, so the builder cannot take only what each place forwards"
+
+	private static let callingMocksReason = "An internal mock that passes up the places of two calls of public mocks of one hole type names their builders apart after each called type, so adding the second call renames the first's builder"
+
+	/// The seam corpus's graphs that fail each part of the builder surface today, observed from a run of the tool over
+	/// the corpus (`GraphFuzzerBuilderSurface`), each part's seeds apart: the base check (every graph with a hole the tool
+	/// accepts), same supply (i), added supply (ii), places forwarding other values (iii) and calling mocks (iv). The
+	/// planned builder structs empty them, each slice the seeds it fixes.
+	static let seamBuilderSurfaceSeeds = BuilderSurfaceSeeds(
+		base: [
+			15, 18, 19, 24, 30, 59, 68, 69, 78, 83, 88, 93, 94, 98, 108, 116, 121, 135, 144, 151,
+			153, 162, 163, 164, 209, 215, 227, 240, 241, 252, 273, 277, 281, 283, 298, 300, 304, 308, 309, 311,
+			321, 326, 330, 334, 338, 347, 348, 362, 365, 383, 391, 403, 407, 418, 430, 448, 454, 468, 471, 478,
+			481, 494, 500, 527, 532, 548, 556, 567, 568, 594, 595, 600, 605, 609, 617, 618, 623, 627, 663, 669,
+			670, 699, 701, 705, 709, 732, 743, 750, 751, 760, 787, 788, 794, 797, 809, 832, 834, 836, 850, 851,
+			854, 858, 866, 867, 876, 883, 886, 892, 905, 923, 929, 930, 931, 934, 940, 942, 945, 947, 948, 950,
+			969, 990,
+		],
+		sameSupply: [19, 83, 98, 108, 151, 273, 300, 326, 854, 858, 929, 942, 990],
+		addedSupply: [98, 311, 338, 383, 481, 595, 836, 929, 931, 948],
+		forwardingOtherValues: [
+		15, 19, 59, 68, 69, 78, 83, 93, 94, 98, 108, 116, 121, 135, 151, 153, 163, 164, 215, 227, 252, 273,
+		277, 281, 283, 298, 300, 304, 308, 309, 311, 326, 330, 338, 347, 348, 362, 365, 383, 391, 403, 407,
+		418, 454, 468, 478, 481, 494, 527, 548, 556, 567, 568, 594, 595, 600, 605, 618, 623, 663, 670, 699,
+		701, 743, 750, 751, 760, 787, 794, 797, 809, 832, 836, 850, 854, 858, 866, 867, 876, 883, 886, 892,
+		923, 929, 930, 931, 940, 942, 945, 947, 948, 950, 969, 990,
+		],
+		callingMocks: [],
+	)
+
+	/// `seamSmokeKnownIssues` by seed, which the smoke batch consults.
+	static let seamSmokeKnownIssuesBySeed = Dictionary(uniqueKeysWithValues: seamSmokeKnownIssues.flatMap { knownIssue in knownIssue.seeds.map { ($0, knownIssue) } })
 
 	/// The known issues of the smoke batch's seeds beyond the seam corpus, which no corpus run reaches: the in-seam leak,
 	/// until its fix.
@@ -6242,6 +6326,11 @@ struct SafeDIToolGraphFuzzerTests {
 		readTwinGraphCount: publicMockCorpusReadTwinGraphCount,
 		retentionCounts: publicMockCorpusRetentionCounts,
 		gatingPublicMockDrawFeatures: Set(GraphFuzzerPublicMockDrawFeature.allCases.filter(\.isCountedWhenAccepted)),
+		builderSurfaceFlooredKinds: [
+			"base-plain", "base-lazy", "base-sendable", "placeBehindLazilyInstantiated", "instantiatorPlaceMovedToPlainPlace",
+			"instantiatorChangedToErasedInstantiator", "placeOfNewBuilderOfExistingFillingType", "placeForwardingOtherValues",
+			"secondCallOfPublicMock",
+		],
 	)
 
 	/// How many of the public mock corpus's accepted graphs show each gating draw (`isCountedWhenAccepted`), counted
@@ -6343,7 +6432,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
-	static let publicMockKnownIssues: [GraphFuzzerKnownIssue] = [
+	static let publicMockKnownIssues: [GraphFuzzerKnownIssue] = addingBuilderSurfaceShapes(seeds: publicMockBuilderSurfaceSeeds, to: [
 		GraphFuzzerKnownIssue(
 			reason: publicMockParametersSortedByLabelReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
@@ -6510,7 +6599,44 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.holeNamesChangeWithSecondPlace(containing: "`t6Twin`"), .renamedGraphDiffers(.mockConfigurationFieldPresence), .renamedGraphDiffers(.dependencyTreeCode)],
 			seeds: [658],
 		),
-	]
+	])
+
+	/// The public mock corpus's graphs that fail each part of the builder surface today, observed from a run of the tool over
+	/// the corpus (`GraphFuzzerBuilderSurface`), each part's seeds apart: the base check (every graph with a hole the tool
+	/// accepts), same supply (i), added supply (ii), places forwarding other values (iii) and calling mocks (iv). The
+	/// planned builder structs empty them, each slice the seeds it fixes.
+	static let publicMockBuilderSurfaceSeeds = BuilderSurfaceSeeds(
+		base: [
+			2, 3, 10, 12, 18, 19, 20, 21, 22, 28, 33, 34, 37, 43, 47, 50, 55, 56, 59, 60,
+			62, 63, 64, 65, 67, 70, 73, 79, 84, 85, 87, 88, 89, 90, 92, 93, 96, 97, 101, 103,
+			106, 107, 108, 111, 117, 119, 122, 128, 130, 136, 137, 143, 145, 150, 151, 156, 157, 161, 162, 165,
+			166, 167, 168, 171, 176, 180, 181, 186, 197, 199, 207, 210, 211, 213, 216, 219, 221, 222, 225, 228,
+			229, 230, 238, 242, 243, 247, 248, 251, 259, 262, 264, 265, 266, 269, 273, 281, 283, 284, 289, 295,
+			296, 297, 299, 301, 302, 307, 310, 311, 313, 314, 316, 318, 319, 326, 327, 328, 330, 331, 332, 333,
+			336, 337, 339, 341, 344, 348, 350, 351, 352, 356, 361, 370, 372, 380, 381, 386, 389, 392, 397, 402,
+			406, 407, 409, 411, 415, 417, 423, 424, 425, 427, 429, 433, 434, 435, 436, 448, 449, 450, 453, 455,
+			456, 459, 463, 465, 468, 469, 474, 477, 486, 489, 490, 497, 499, 500, 508, 510, 528, 537, 539, 542,
+			543, 546, 549, 551, 554, 555, 558, 559, 561, 562, 563, 564, 565, 577, 580, 581, 584, 587, 591, 592,
+			595, 597, 598, 601, 606, 609, 611, 614, 615, 621, 623, 627, 629, 631, 635, 636, 644, 646, 647, 648,
+			652, 653, 658, 663, 664, 666, 668, 670, 673, 677, 679, 680, 681, 685, 688, 692, 695, 697, 699, 707,
+			708, 715, 716, 718, 720, 723, 724, 725, 726, 728, 730, 737, 740, 741, 743, 748, 751, 765, 766, 775,
+			779, 781, 782, 786, 790, 795, 797, 798, 799, 804, 812, 814, 821, 823, 824, 827, 830, 832, 833, 834,
+			836, 844, 845, 846, 847, 848, 850, 851, 853, 854, 863, 866, 875, 876, 880, 881, 885, 886, 887, 888,
+			892, 895, 897, 902, 904, 906, 909, 910, 911, 912, 917, 919, 923, 926, 927, 931, 936, 940, 942, 943,
+			946, 947, 953, 958, 959, 960, 961, 962, 967, 970, 974, 977, 978, 979, 983, 990, 991, 995, 996, 998,
+		],
+		sameSupply: [50, 122, 128, 136, 145, 266, 332, 352, 411, 427, 580, 681, 740, 786, 814, 823, 827, 853, 977],
+		addedSupply: [2, 19, 20, 21, 33, 34, 37, 43, 47, 55, 56, 84, 89, 90, 93, 96, 103, 108, 151, 162, 167, 168, 176, 180, 181, 186, 197, 207, 210, 213, 229, 243, 247, 248, 283, 295, 301, 302, 311, 319, 330, 339, 341, 348, 356, 372, 380, 381, 389, 407, 415, 429, 433, 434, 436, 450, 465, 468, 469, 486, 490, 499, 500, 508, 554, 555, 558, 561, 581, 584, 592, 597, 601, 611, 614, 615, 621, 623, 627, 631, 636, 653, 673, 685, 688, 695, 697, 707, 715, 718, 720, 728, 730, 737, 751, 766, 781, 782, 795, 798, 799, 804, 824, 830, 832, 844, 845, 846, 847, 848, 850, 851, 866, 875, 886, 895, 897, 902, 910, 923, 931, 942, 943, 946, 960, 962, 978, 979, 991, 996, 998],
+		forwardingOtherValues: [
+		3, 12, 22, 28, 59, 60, 64, 65, 79, 87, 88, 97, 106, 107, 117, 119, 128, 130, 136, 156, 166, 199,
+		221, 230, 238, 242, 251, 259, 262, 264, 269, 273, 284, 296, 314, 327, 328, 332, 344, 351, 370, 386,
+		397, 402, 406, 423, 425, 435, 449, 455, 456, 459, 463, 474, 477, 489, 497, 510, 537, 539, 543, 549,
+		551, 559, 562, 587, 606, 609, 629, 635, 647, 648, 658, 668, 679, 692, 699, 716, 723, 724, 725, 743,
+		779, 786, 790, 797, 821, 833, 834, 836, 876, 892, 904, 906, 909, 911, 912, 919, 936, 947, 958, 959,
+		967, 977, 983, 995,
+		],
+		callingMocks: [19, 211, 230, 299, 307, 333, 406, 456, 486, 510, 597, 658, 692, 743, 748, 845, 960],
+	)
 
 	/// What a public mock's leak keeps alive in the public mock corpus's graphs, each type after its graph's prefix with what
 	/// is held and both counts, as the corpus run observed.
