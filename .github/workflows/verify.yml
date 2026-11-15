@@ -20,7 +20,10 @@ name: Verify
 # identity hashes the test arguments.
 #
 # A dispatched run checks out and caches under the ref it is dispatched on, so
-# its caches are scoped to that branch and never become main's. Dispatching
+# its caches are scoped to that branch and never become main's. The one thing
+# it shares is the list of compile checks that passed, which "Share Passed
+# Compile Checks" adds to a list every run restores, so a check that passed on
+# one scratch branch is not compiled again on the next. Dispatching
 # takes write access to the repository, and the ref must be a branch or tag of
 # this repository, so a fork's code cannot run here. The job reads the
 # repository and nothing else: no secrets, and the filter and mode reach the
@@ -114,6 +117,15 @@ jobs:
           key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-
+      # And the checks that passed in any other run of this repository, on
+      # whatever branch, which this run's own cache cannot hold. Sharing only
+      # saves compiles, so neither this step nor the upload after the tests
+      # can fail the job.
+      - name: Restore Shared Passed Compile Checks
+        continue-on-error: true
+        uses: ./.github/actions/restore-shared-compile-checks
+        with:
+          identity: ${{ steps.compile-check-identity.outputs.identity }}
       - name: Test
         timeout-minutes: 60
         env:
@@ -132,6 +144,12 @@ jobs:
         with:
           path: .compile-check-cache
           key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Upload Passed Compile Checks to Share
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: ./.github/actions/upload-passed-compile-checks
+        with:
+          identity: ${{ steps.compile-check-identity.outputs.identity }}
 
   # Builds fast mode's tests on main, so that the dependencies' debug build
   # products (swift-syntax's, most of a cold build) are in a cache every branch
