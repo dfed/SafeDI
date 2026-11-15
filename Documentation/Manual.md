@@ -832,7 +832,7 @@ Here is what happens when the tree gains a narrower parameter. Suppose `Badge` a
 
 A new parameter at least as visible as the seam is on every tier, so hand-written calls stop compiling until they pass it.
 
-A hole is a type the seam’s tree instantiates that no `@Instantiable` declaration visible to the seam’s module fulfills, such as a protocol that only the app implements. The seam’s initializer takes one builder per hole type, named for that type: `userServiceBuilder` for `UserService`, `urlLoaderBuilder` for `URLLoader`. Where no place of the type forwards a value and none is reached through another seam’s call, the builder takes nothing and returns the value the property holds: `userServiceBuilder: @escaping () -> any UserService`. A hand-written call passes `{ DefaultUserService() }`, `DefaultUserService.init`, or any other function that takes nothing, and the seam calls it at each place.
+A hole is a type the seam’s tree instantiates that no `@Instantiable` declaration visible to the seam’s module fulfills, such as a protocol that only the app implements. The seam’s initializer takes one builder per hole type, named for that type: `userServiceBuilder` for `UserService`, `urlLoaderBuilder` for `URLLoader`. Where no place of the type forwards a value and none is reached through another seam’s call, the builder takes nothing and returns the value the property holds: `userServiceBuilder: @escaping () -> any UserService`. A hand-written call passes `{ DefaultUserService() }`, `DefaultUserService.init`, or any other function that takes nothing, and the seam calls it at each place. The initializer only generated code calls takes such a builder as a struct, `SafeDIScope_UserService.__safeDI_Builder<any UserService>`, with one function for each case of the scope enum below, which the seam calls where it binds that level, so the code that fills the builder keeps only the values it reads.
 
 Any other builder is a closure that is handed a scope saying which place in the tree wants a value, and returns the value the property holds. The scope is an enum, such as `SafeDIScope_UserService`, with a case for each of the seam’s properties that leads to a place of the type. Each case’s first value, except an inner seam’s case, holds what that type has bound before the property, and the seam’s own cases also hold its parameters:
 
@@ -853,27 +853,53 @@ Here, `Service` instantiates a `Profile`, which instantiates a `UserService` tha
 ```swift
 // Generated in module Feature, where `Profile` instantiates `userService: any UserService`.
 extension Service {
-    @frozen public enum SafeDIScope_UserService {
+    @frozen nonisolated public enum SafeDIScope_UserService {
         case profile(profile_Values, SafeDIScope_UserService.Profile_Scope)
 
-        public struct profile_Values {
+        nonisolated public struct profile_Values {
             public let analytics: Analytics
         }
 
-        @frozen public enum Profile_Scope {
+        @frozen nonisolated public enum Profile_Scope {
             case userService(userService_Values)
 
-            public struct userService_Values {}
+            nonisolated public struct userService_Values {}
+
+            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+            nonisolated public struct __safeDI_Builder<Built> {
+                public let userService: (userService_Values) -> Built
+
+                public init(userService: @escaping (userService_Values) -> Built) {
+                    self.userService = userService
+                }
+
+                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+                    self.userService = { _ in __safeDI_builder() }
+                }
+            }
+        }
+
+        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+        nonisolated public struct __safeDI_Builder<Built> {
+            public let profile: (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<Built>
+
+            public init(profile: @escaping (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<Built>) {
+                self.profile = profile
+            }
+
+            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+                self.profile = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+            }
         }
     }
 
     /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
     /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-    public init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
+    public init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
         let analytics = Analytics()
-        let __safeDI_userServiceValues_profile = SafeDIScope_UserService.profile_Values(analytics: analytics)
+        let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile(SafeDIScope_UserService.profile_Values(analytics: analytics))
         func __safeDI_profile() -> Profile {
-            let userService: any UserService = __safeDI_userServiceBuilder(.profile(__safeDI_userServiceValues_profile, .userService(SafeDIScope_UserService.Profile_Scope.userService_Values())))
+            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService(SafeDIScope_UserService.Profile_Scope.userService_Values())
             return Profile(userService: userService, analytics: analytics)
         }
         let profile: Profile = __safeDI_profile()
@@ -887,20 +913,17 @@ A tree that calls the seam fills the builder when its module can see an implemen
 ```swift
 // Generated in module App, which declares `DefaultUserService`, an implementation of `UserService`.
 func __safeDI_service() -> Service {
-    _ = Service.__safeDI_Service_6E216DA2A3D4C4DA.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
-    func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-        switch scope {
-        case let .profile(values, scope): return __safeDI_userServiceBuilder_Service_Profile_Scope(scope, analytics: values.analytics)
-        }
+    _ = Service.__safeDI_Service_BEE5EF0BBCBFF8CE.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
+    func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+        .init(profile: { values in __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: values.analytics) })
     }
-    func __safeDI_userServiceBuilder_Service_Profile_Scope(_ scope: Service.SafeDIScope_UserService.Profile_Scope, analytics: Analytics) -> any UserService {
-        switch scope {
-        case .userService:
+    func __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: Analytics) -> Service.SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<any UserService> {
+        .init(userService: { _ in
             let userService: any UserService = DefaultUserService(analytics: analytics)
             return userService
-        }
+        })
     }
-    return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+    return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 }
 ```
 
