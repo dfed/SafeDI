@@ -2935,7 +2935,7 @@ extension GraphFuzzerPublicMockDraw {
 			}
 		}
 		// The mock condition.
-		for (fileName, content) in zip(fixture.fileNames, fixture.swiftFileContent) where content.contains("#SafeDIConfiguration(mockConditionalCompilation: nil)") {
+		for (fileName, content) in zip(fixture.fileNames, fixture.swiftFileContent) where content.contains("#SafeDIConfiguration(mockConditionalCompilation: nil") {
 			features.insert(.mockConditionDiffers)
 			if GraphFuzzerModule(declaredIn: content) == .seamModule, fileName.hasSuffix("/SafeDIConfiguration.swift") {
 				features.insert(.declaringModuleConfigurationFile)

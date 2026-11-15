@@ -67,6 +67,48 @@ struct GraphFuzzerFixture: Equatable {
 	/// fixtures of several seeds compile together as one module.
 	let swiftFileContent: [String]
 
+	/// Every module of the fixture that declares a seam sets `generatePlainDependencyTreeInitializers: true`, so the oracles
+	/// read and call the readable initializer a person calls, beside the one only generated code calls.
+	init(seed: UInt64, swiftFileContent: [String]) {
+		self.seed = seed
+		self.swiftFileContent = Self.enablingPlainDependencyTreeInitializers(in: swiftFileContent)
+	}
+
+	/// `contents` with `generatePlainDependencyTreeInitializers: true` set in each module that declares a seam: added to the
+	/// module's `#SafeDIConfiguration` where it declares one, since a second is an error, and declared beside its first seam
+	/// otherwise.
+	private static func enablingPlainDependencyTreeInitializers(in contents: [String]) -> [String] {
+		let isSplit = contents.contains { GraphFuzzerModule(declaredIn: $0) != nil }
+		var moduleOrder = [GraphFuzzerModule?]()
+		var indicesByModule = [GraphFuzzerModule?: [Int]]()
+		for (index, content) in contents.enumerated() {
+			let module: GraphFuzzerModule? = isSplit ? (GraphFuzzerModule(declaredIn: content) ?? .samePackageCaller) : nil
+			if indicesByModule[module] == nil {
+				moduleOrder.append(module)
+			}
+			indicesByModule[module, default: []].append(index)
+		}
+		var result = contents
+		for module in moduleOrder {
+			let indices = indicesByModule[module] ?? []
+			guard let seamIndex = indices.first(where: { contents[$0].contains("generateDependencyTree: true") }) else { continue }
+			guard !indices.contains(where: { contents[$0].contains("generatePlainDependencyTreeInitializers: true") }) else { continue }
+			if let configurationIndex = indices.first(where: { contents[$0].contains("#SafeDIConfiguration(") }) {
+				var lines = result[configurationIndex].components(separatedBy: "\n")
+				for lineIndex in lines.indices where lines[lineIndex].contains("#SafeDIConfiguration(") {
+					if let closing = lines[lineIndex].range(of: ")", options: .backwards) {
+						lines[lineIndex].replaceSubrange(closing, with: ", generatePlainDependencyTreeInitializers: true)")
+					}
+					break
+				}
+				result[configurationIndex] = lines.joined(separator: "\n")
+			} else {
+				result[seamIndex] += "\n\n#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n"
+			}
+		}
+		return result
+	}
+
 	var typeNamePrefix: String {
 		Self.typeNamePrefix(forSeed: seed)
 	}
