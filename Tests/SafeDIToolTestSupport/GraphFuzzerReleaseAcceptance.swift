@@ -315,6 +315,7 @@ enum GraphFuzzerReleaseAcceptance {
 
 	/// Runs `release` over `fixture` and, when its tool accepts the graph, compiles the fixture and the generated files
 	/// against the release's runtime and macros.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	static func run(
 		_ release: GraphFuzzerRelease,
 		over fixture: GraphFuzzerFixture,
@@ -448,6 +449,7 @@ enum GraphFuzzerReleaseAcceptance {
 	/// Runs a release's built `SafeDITool` over `fixture` as that release's SwiftPM plugin runs it: `scan` over a CSV of
 	/// the fixture's files, every file mock-scoped, then `generate` with the manifest `scan` wrote, which writes one
 	/// file per root and per mock into the output directory.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private static func executableToolOutcome(of fixture: GraphFuzzerFixture, toolURL: URL, filesToDelete: inout [URL]) async throws -> GraphFuzzerToolOutcome {
 		guard FileManager.default.isExecutableFile(atPath: toolURL.path) else {
 			throw GraphFuzzerInfrastructureError(description: "No SafeDITool executable at \(toolURL.path).")
@@ -493,6 +495,7 @@ enum GraphFuzzerReleaseAcceptance {
 
 	/// Compiles `fixture` and `generatedFiles` into an object file against `runtimeSource`'s runtime and macros, the
 	/// runtime the value comparator compiles, so that a release's code compiles against that release's `SafeDI`.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private static func compile(
 		_ fixture: GraphFuzzerFixture,
 		generatedFiles: [String: String],
