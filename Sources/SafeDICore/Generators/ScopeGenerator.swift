@@ -1438,8 +1438,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				builderStructKeysToVisit += enumsByKey[key]?.cases.compactMap(SeamSignature.ScopeEnum.heldKey(of:)) ?? []
 			}
 			/// Whether the dispatcher of the enum of `key` returns its builder struct (`FillDispatcher.returnsBuilderStruct`).
+			/// An enclosing call that declares its dispatchers over the enum, which this call reuses, keeps it from declaring
+			/// any of its own of the hole type.
 			func returnsBuilderStruct(_ key: SeamSignature.ScopeEnum.Key) -> Bool {
-				builderStructKeys.contains(key) && !innerScopeNameByKey.keys.contains { $0.seamType == key.seamType && $0.holeType == key.holeType }
+				builderStructKeys.contains(key)
+					&& !innerScopeNameByKey.keys.contains { $0.seamType == key.seamType && $0.holeType == key.holeType }
+					&& !calledBuilders.builders.contains { $0.enumKey.holeType == key.holeType && enclosingDispatchers[Self.key(of: $0.enumKey)] != nil }
 			}
 			// The enums each family's routes reach that lead to a filled place, in the order the builders first reach them.
 			var reachedKeys = [SeamSignature.ScopeEnum.Key]()

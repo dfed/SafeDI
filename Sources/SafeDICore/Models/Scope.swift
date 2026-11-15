@@ -1221,9 +1221,11 @@ private struct ScopeGeneratorUnderConstruction {
 			}
 			// A seam that takes a builder struct is handed the struct its root level's function returns, but where a case of the
 			// seam whose tree makes the call carries the scope value the call hands its fills, whose dispatchers keep their enum
-			// form to pass it on: it is then handed a struct whose members hand the dispatcher the case.
+			// form to pass it on, or an enclosing call declares those dispatchers in that form, which this call reuses: it is
+			// then handed a struct whose members hand the dispatcher the case.
 			let returnsBuilderStruct = builder.takesBuilderStruct && !calledBuilders.builders.contains { calledBuilder in
-				calledBuilder.enumKey.holeType == enumKey.holeType && seamHoles.innerScope(at: sitePath, innerKey: calledBuilder.enumKey) != nil
+				calledBuilder.enumKey.holeType == enumKey.holeType
+					&& (seamHoles.innerScope(at: sitePath, innerKey: calledBuilder.enumKey) != nil || enclosingFills[ScopeGenerator.FillDispatcher.key(of: calledBuilder.enumKey)] != nil)
 			}
 			let dispatcherKey = ScopeGenerator.FillDispatcher.key(of: enumKey, returnsBuilderStruct: returnsBuilderStruct)
 			let dispatcher = fillNames[dispatcherKey] ?? ""
