@@ -6,18 +6,39 @@ name: Verify
 # filter=SafeDIToolSeam`; an empty filter runs the whole suite. Pull request
 # checks are unaffected.
 #
-# Two modes. `release`, the default, runs the same build as "Build and Test on
-# Linux" in ci.yml, so it restores main's build and passed-compile-check
-# caches; it builds SafeDI's own targets in release with code coverage, which
-# takes most of a run however small the filter. `fast` builds in debug without
-# coverage, as "Build and Test on Latest Swift" does, from a build cache of its
-# own that "Warm the Fast Verify Build Cache" below keeps on main. Its build
-# takes half as long or less, but its tests run slower, because the parser and
-# macros come from a debug build of swift-syntax. So it pays off for a narrow
-# filter; for the whole suite, or a whole test target that compiles generated
-# code, the two modes take about as long, and `release` builds as CI does.
-# Each mode keeps its passed compile checks under its own identity, since the
-# identity hashes the test arguments.
+# Two modes test; a third, `warm`, only saves a build (see "Warm the Release
+# Verify Build Cache" below). `release`, the default, runs the same build as
+# "Build and Test on Linux" in ci.yml, with that job's passed-compile-check
+# cache. It builds SafeDI's own targets in release with code coverage,
+# starting from the build of main's newest commit that "Warm the Release
+# Verify Build Cache" below saved, so it compiles again only the targets
+# whose files differ from that commit's and the targets that depend on them:
+# a change to tests alone rebuilds the test targets it touches, and a change
+# to SafeDICore nearly everything. That works because both jobs give every
+# tracked file a modification time derived from its content
+# (.github/scripts/stamp-source-times.sh); a checkout alone gives every file
+# a new time, and SwiftPM then rebuilds every target. The script's header
+# holds what was measured, in debug and in release on Linux. `fast` builds in
+# debug without coverage, as "Build and Test on Latest Swift" does, from a
+# build cache of its own that "Warm the Fast Verify Build Cache" below keeps
+# on main. Its build takes half as long or less, but its tests run slower,
+# because the parser and macros come from a debug build of swift-syntax. So
+# it pays off for a narrow filter; for the whole suite, or a whole test
+# target that compiles generated code, the two modes take about as long, and
+# `release` builds as CI does. Each mode keeps its passed compile checks
+# under its own identity, since the identity hashes the test arguments.
+#
+# A `release` run of the whole suite (an empty filter) builds once and then
+# runs the tests in seven jobs at the same time, four for the largest test
+# targets, two for the graph fuzzer's smoke tests and one for the rest, each
+# from the test bundle the build uploads; "Save Passed Compile Checks of
+# Verify" joins the checks the seven passed into the one list an unsplit run
+# saves, and "Check Every Verify Test Ran Once" fails unless all seven
+# reported and their test counts sum to the bundle's. Such a run took 9.0
+# minutes from start to end with every compile check compiling (run
+# 43766692766). A run with a filter, and every `fast` run, tests in the job
+# that builds, since handing the bundle to another job costs about two
+# minutes.
 #
 # A dispatched run checks out and caches under the ref it is dispatched on, so
 # its caches are scoped to that branch and never become main's. The one thing
@@ -36,15 +57,17 @@ on:
         required: false
         default: ''
       mode:
-        description: '`release` builds as "Build and Test on Linux" does; `fast` builds in debug without coverage.'
+        description: '`release` builds as "Build and Test on Linux" does; `fast` builds in debug without coverage; `warm` saves this branch a release build for its later `release` runs and tests nothing.'
         required: false
         type: choice
         options:
           - release
           - fast
+          - warm
         default: release
-  # Only to warm fast mode's build cache, which a dispatched run on any branch
-  # can restore because main saved it. Markdown cannot change what it builds.
+  # Only to warm the two modes' build caches, which a dispatched run on any
+  # branch can restore because main saved them. Markdown cannot change what
+  # they build.
   push:
     branches:
       - main
@@ -63,15 +86,39 @@ jobs:
   verify:
     # Nothing here needs macOS, so it uses the Linux test job's container.
     name: Verify on Linux
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'warm' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     timeout-minutes: 75
     permissions:
       contents: read
+    outputs:
+      identity: ${{ steps.compile-check-identity.outputs.identity }}
+      split: ${{ steps.split.outputs.split }}
+      tests: ${{ steps.count.outputs.tests }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
+      # The whole suite in release mode runs in "Verify Tests on Linux"
+      # below, one job per group of test targets, from the bundle this job
+      # builds. A filter, or fast mode, runs here as one process.
+      - name: Decide Whether to Split the Tests
+        id: split
+        env:
+          FILTER: ${{ inputs.filter }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          if [ "$MODE" = release ] && [ -z "$FILTER" ]; then
+            echo "split=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "split=false" >> "$GITHUB_OUTPUT"
+          fi
+      # Before anything reads a source's modification time. The checkout is
+      # the container's, so git needs telling that this user may read it.
+      - name: Stamp Source Times
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          .github/scripts/stamp-source-times.sh
       - name: Choose Test Arguments
         env:
           MODE: ${{ inputs.mode }}
@@ -81,14 +128,21 @@ jobs:
             fast) echo "SWIFT_TEST_ARGUMENTS=$FAST_SWIFT_TEST_ARGUMENTS" >> "$GITHUB_ENV" ;;
             *) echo "Unknown mode '$MODE'."; exit 1 ;;
           esac
-      - name: Cache Release Build Directory
+      # The newest build the warming job saved: this branch's own, when it has
+      # one, and otherwise main's. Before either has saved one the build is
+      # cold: the build "Build and Test on Linux" saves is no start, since
+      # its sources were not stamped and a build from it compiled the
+      # dependencies again too (12 minutes, run 43761135608). This job saves
+      # no build, so one branch's build never becomes another's.
+      - name: Restore Release Build Directory
         if: ${{ inputs.mode == 'release' }}
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: .build
-          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/ci.yml') }}
+          key: verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            spm-release-${{ runner.os }}-swift-6.2-
+            verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}-
+            verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
       # The key is the warming job's. A hit is never re-saved, so this
       # workflow, which sets the build's arguments, is in it.
       - name: Cache Debug Build Directory
@@ -110,7 +164,53 @@ jobs:
           identity=$(.github/scripts/compile-check-identity.sh $SWIFT_TEST_ARGUMENTS)
           test "${#identity}" -eq 64
           echo "identity=$identity" >> "$GITHUB_OUTPUT"
+      # From a stamped build of the same commit the step took about 10
+      # seconds (run 43762598351), after a change to one test file about 2
+      # minutes (43763818802), and from nothing 10 to 17 minutes, 12 in
+      # 43761135608. The limit is twice the slowest cold build.
+      - name: Build Tests
+        if: ${{ steps.split.outputs.split == 'true' }}
+        timeout-minutes: 35
+        run: |
+          # shellcheck disable=SC2086 # The arguments are words to split.
+          swift build --build-tests $SWIFT_TEST_ARGUMENTS
+      # What "Check Every Verify Test Ran Once" compares the groups' counts
+      # with. A listing ignores `--filter` and `--skip`, so a group cannot
+      # list what it would run; it reports what it ran.
+      - name: Count the Bundle's Tests
+        id: count
+        if: ${{ steps.split.outputs.split == 'true' }}
+        env:
+          LLVM_PROFILE_FILE: ${{ runner.temp }}/verify-list-%p.profraw
+        run: |
+          .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing --list-tests > verify-tests.txt
+          tests=$(LC_ALL=C sort -u verify-tests.txt | wc -l)
+          test "$tests" -gt 0
+          echo "tests=$tests" >> "$GITHUB_OUTPUT"
+          echo "The bundle lists $tests tests."
+      # What a test job needs of the build, as "Build and Test on Linux"
+      # packages it for the graph fuzzer's shards: the bundle, SafeDITool and
+      # the macro plugin (which compile checks run), and SafeDI's module.
+      - name: Package Test Bundle
+        if: ${{ steps.split.outputs.split == 'true' }}
+        run: |
+          products=.build/x86_64-unknown-linux-gnu/release
+          tar -czf verify-test-bundle.tar.gz \
+            "$products/SafeDIPackageTests.xctest" \
+            "$products/SafeDITool" \
+            "$products/SafeDIMacros-tool" \
+            "$products/Modules/SafeDI.swiftmodule"
+      - name: Upload Test Bundle
+        if: ${{ steps.split.outputs.split == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: verify-test-bundle
+          path: verify-test-bundle.tar.gz
+          retention-days: 1
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
       - name: Restore Passed Compile Checks
+        if: ${{ steps.split.outputs.split == 'false' }}
         uses: actions/cache/restore@v6
         with:
           path: .compile-check-cache
@@ -122,11 +222,13 @@ jobs:
       # saves compiles, so neither this step nor the upload after the tests
       # can fail the job.
       - name: Restore Shared Passed Compile Checks
+        if: ${{ steps.split.outputs.split == 'false' }}
         continue-on-error: true
         uses: ./.github/actions/restore-shared-compile-checks
         with:
           identity: ${{ steps.compile-check-identity.outputs.identity }}
       - name: Test
+        if: ${{ steps.split.outputs.split == 'false' }}
         timeout-minutes: 60
         env:
           FILTER: ${{ inputs.filter }}
@@ -139,17 +241,275 @@ jobs:
             swift test $SWIFT_TEST_ARGUMENTS
           fi
       - name: Save Passed Compile Checks
-        if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        if: ${{ always() && steps.split.outputs.split == 'false' && hashFiles('.compile-check-cache/passed.txt') != '' }}
         uses: actions/cache/save@v6
         with:
           path: .compile-check-cache
           key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Upload Passed Compile Checks to Share
-        if: ${{ always() }}
+        if: ${{ always() && steps.split.outputs.split == 'false' }}
         continue-on-error: true
         uses: ./.github/actions/upload-passed-compile-checks
         with:
           identity: ${{ steps.compile-check-identity.outputs.identity }}
+
+  # The whole suite, one job per group of test targets, each running the
+  # bundle "Verify on Linux" built, as the graph fuzzer's shards run the
+  # bundle of "Build and Test on Linux". Linux runners are plentiful, and the
+  # suite's time is mostly compile checks, which one runner's four cores were
+  # the limit on: in one process the tests took 8 to 9 minutes when the
+  # passed-check cache skipped the compiles and 15 to 20 when they all ran.
+  # The four largest targets each get a job, and the graph fuzzer's smoke
+  # tests two, since the compile-check cache does not cover the compiles
+  # they make: with the four targets split off, the rest took 6.4 minutes,
+  # 3.7 of them the smoke seeds and 6.3 the seam smoke seeds, which ran
+  # beside each other on four cores (run 43763818802; the four targets took
+  # 17 seconds to 2 minutes). The last job runs every test the others'
+  # filters leave out, so a new swift-testing target or suite runs without
+  # an edit here. As seven jobs, with every compile check compiling, the
+  # tests took 5.5 minutes for the seams, 5.0 for the mocks, 3.4 for the seam
+  # smoke seeds, 1.9 for the other smoke tests and 1.2 to 1.3 for each of the
+  # other three (run 43766692766, 9.0 minutes from start to end).
+  verify-tests:
+    name: Verify Tests on Linux (${{ matrix.group }})
+    needs: verify
+    if: ${{ needs.verify.outputs.split == 'true' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: mocks
+            selection: --filter ^SafeDIToolMockTests\.
+          - group: seams
+            selection: --filter ^SafeDIToolSeamTests\.
+          - group: dependency-trees
+            selection: --filter ^SafeDIToolDependencyTreeTests\.
+          - group: tool
+            selection: --filter ^SafeDIToolTests\.
+          - group: fuzzer-seam-smoke
+            selection: --filter ^SafeDIToolFuzzerTests\.SafeDIToolGraphFuzzerTests/seamSmokeSeeds
+          - group: fuzzer-smoke
+            selection: --filter ^SafeDIToolFuzzerTests\.SafeDIToolGraphFuzzerTests/ --skip ^SafeDIToolFuzzerTests\.SafeDIToolGraphFuzzerTests/seamSmokeSeeds
+          - group: others
+            selection: --skip ^SafeDIToolMockTests\. --skip ^SafeDIToolSeamTests\. --skip ^SafeDIToolDependencyTreeTests\. --skip ^SafeDIToolTests\. --skip ^SafeDIToolFuzzerTests\.SafeDIToolGraphFuzzerTests/
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Download Test Bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: verify-test-bundle
+      - name: Unpack Test Bundle
+        run: tar -xzf verify-test-bundle.tar.gz
+      - name: Restore Passed Compile Checks
+        uses: actions/cache/restore@v6
+        with:
+          path: .compile-check-cache
+          key: compile-checks-v1-${{ runner.os }}-${{ needs.verify.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            compile-checks-v1-${{ runner.os }}-${{ needs.verify.outputs.identity }}-
+      - name: Restore Shared Passed Compile Checks
+        continue-on-error: true
+        uses: ./.github/actions/restore-shared-compile-checks
+        with:
+          identity: ${{ needs.verify.outputs.identity }}
+      # The bundle is built for coverage, which nothing here reads, so its
+      # profiles go to the runner's temporary directory.
+      # The limit is twice the slowest group's time with every compile check
+      # compiling: the seam tests took 5.5 minutes, the mock tests 5.0, the
+      # seam smoke seeds 3.4, the other smoke tests 1.9 and the other three
+      # groups 1.2 to 1.3 (run 43766692766).
+      - name: Test
+        timeout-minutes: 11
+        shell: bash
+        env:
+          SELECTION: ${{ matrix.selection }}
+          GROUP: ${{ matrix.group }}
+          SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
+          LLVM_PROFILE_FILE: ${{ runner.temp }}/verify-tests-%p.profraw
+        run: |
+          set -o pipefail
+          # shellcheck disable=SC2086 # The selection is words to split.
+          .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing $SELECTION 2>&1 | tee "$RUNNER_TEMP/verify-test-output.txt"
+          # The count of tests the run's last line reports, for "Check Every
+          # Verify Test Ran Once".
+          mkdir -p verify-test-count
+          grep -oE 'Test run with [0-9]+ tests? in [0-9]+ suites?' "$RUNNER_TEMP/verify-test-output.txt" | tail -1 | grep -oE '[0-9]+' | head -1 > "verify-test-count/$GROUP.txt"
+          test -s "verify-test-count/$GROUP.txt"
+      - name: Upload the Group's Test Count
+        uses: actions/upload-artifact@v7
+        with:
+          name: verify-test-count-${{ matrix.group }}
+          path: verify-test-count
+          retention-days: 1
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
+      - name: Upload Passed Compile Checks of the Group
+        if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: verify-passed-compile-checks-${{ matrix.group }}
+          path: .compile-check-cache/passed.txt
+          retention-days: 1
+          include-hidden-files: true
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
+
+  # Fails unless all seven groups reported and their test counts sum to the
+  # bundle's, which any selection that drops or repeats tests breaks. It only
+  # reads counts, so it needs no container.
+  verify-test-partition:
+    name: Check Every Verify Test Ran Once
+    needs: [verify, verify-tests]
+    if: ${{ needs.verify.outputs.split == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Download the Groups' Test Counts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: verify-test-count-*
+          path: verify-test-counts
+          merge-multiple: true
+      - name: Compare the Groups' Tests With the Bundle's
+        env:
+          BUNDLE_TESTS: ${{ needs.verify.outputs.tests }}
+          # The count of groups in "Verify Tests on Linux"'s matrix.
+          EXPECTED_GROUPS: 7
+        run: |
+          groups=$(find verify-test-counts -name '*.txt' | wc -l)
+          sum=0
+          for count in verify-test-counts/*.txt; do
+            echo "$(basename "$count" .txt): $(cat "$count") tests"
+            sum=$((sum + $(cat "$count")))
+          done
+          echo "The $groups groups ran $sum tests; the bundle lists $BUNDLE_TESTS."
+          test "$groups" -eq "$EXPECTED_GROUPS"
+          test "$sum" -eq "$BUNDLE_TESTS"
+
+  # Joins the groups' lists of passed compile checks into the one list this
+  # run saves for its branch and uploads for "Share Passed Compile Checks",
+  # as the one process did. In the test jobs' container, because a cache
+  # restores only where the compression matches (gzip there). It cannot fail
+  # the run's verdict on the tests: every step only saves compiles.
+  verify-passed-compile-checks:
+    name: Save Passed Compile Checks of Verify
+    needs: [verify, verify-tests]
+    if: ${{ always() && needs.verify.outputs.split == 'true' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      # The steps below move a few hundred kilobytes; the limits only stop a
+      # stalled transfer, as in "Share Passed Compile Checks".
+      - name: Download the Groups' Passed Compile Checks
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: verify-passed-compile-checks-*
+          path: group-compile-checks
+      - name: Join the Groups' Passed Compile Checks
+        run: |
+          mkdir -p .compile-check-cache
+          groups=$(find group-compile-checks -name passed.txt 2>/dev/null | wc -l)
+          if [ "$groups" -gt 0 ]; then
+            find group-compile-checks -name passed.txt -exec cat {} + | LC_ALL=C sort -u > .compile-check-cache/passed.txt
+            echo "Passed compile checks of $groups groups: $(wc -l < .compile-check-cache/passed.txt) together."
+          else
+            echo "No group uploaded passed compile checks."
+          fi
+          rm -rf group-compile-checks
+      - name: Save Passed Compile Checks
+        if: ${{ hashFiles('.compile-check-cache/passed.txt') != '' }}
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: .compile-check-cache
+          key: compile-checks-v1-${{ runner.os }}-${{ needs.verify.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Upload Passed Compile Checks to Share
+        continue-on-error: true
+        uses: ./.github/actions/upload-passed-compile-checks
+        with:
+          identity: ${{ needs.verify.outputs.identity }}
+
+  # Builds release mode's tests on every push to main, from the build of the
+  # push before it, and saves the build directory under the commit, so that a
+  # dispatched run on any branch starts from main's newest build. The sources
+  # are stamped as the job above stamps them, which is what lets either build
+  # skip a target whose files did not change. Dispatched with `mode=warm` it
+  # does the same for the branch it is dispatched on, whose later `release`
+  # runs then start from that build: a way to try a change to this workflow
+  # before it lands, and to spare a long-lived branch its first full build.
+  # A newer push cancels an older one's job, since only the newest build is
+  # restored. Each saved build is about 520 MB; GitHub evicts the caches
+  # least recently read once a repository holds 10 GB, which are the older
+  # commits' builds. It runs on Linux beside CI and slows none of CI's jobs,
+  # reads the repository and nothing else, and saving a cache takes no token
+  # permission. The step took 12 minutes from nothing (run 43761135608),
+  # and the job above about 10 seconds from the same commit's build and 2
+  # minutes after a change to one test file; its limit is twice the 17
+  # minutes of the slowest full release build.
+  warm-release-cache:
+    name: Warm the Release Verify Build Cache
+    if: ${{ github.event_name == 'push' || inputs.mode == 'warm' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 45
+    # A run that skips this job gets a group of its own, so that a
+    # dispatched `release` or `fast` run never cancels a build being saved.
+    concurrency:
+      group: verify-warm-release-${{ github.ref }}-${{ (github.event_name == 'push' || inputs.mode == 'warm') && 'warm' || github.run_id }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Stamp Source Times
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          .github/scripts/stamp-source-times.sh
+      - name: Restore Older Release Build Directory
+        id: restore
+        uses: actions/cache/restore@v6
+        with:
+          path: .build
+          key: verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}-
+            verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
+      - name: Resolve Package Dependencies
+        uses: ./.github/actions/retry
+        with:
+          command: swift package resolve
+      - name: Build Tests
+        timeout-minutes: 35
+        run: |
+          # shellcheck disable=SC2086 # The arguments are words to split.
+          swift build --build-tests $RELEASE_SWIFT_TEST_ARGUMENTS
+      # The run's attempt is in the key because a key is saved once: a second
+      # attempt at one commit would otherwise fail to save. A run that
+      # restored this commit's own build has nothing new to save.
+      - name: Save Release Build Directory
+        if: ${{ !contains(steps.restore.outputs.cache-matched-key, format('-{0}-', github.sha)) }}
+        uses: actions/cache/save@v6
+        with:
+          path: .build
+          key: verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   # Builds fast mode's tests on main, so that the dependencies' debug build
   # products (swift-syntax's, most of a cold build) are in a cache every branch
