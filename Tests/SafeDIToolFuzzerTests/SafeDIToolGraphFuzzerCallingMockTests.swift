@@ -461,10 +461,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		    @Instantiated let database: Database
 		    @Instantiated let inner: Inner
 		}
-		""", expectedTwinErrorSite: nil, valueProbes: [
-			Self.hostProbe,
-			DifferentialValueProbe(name: "Host.inner.apiBuilder.instantiate(7)", expression: "Tests.Host.mock().inner.apiBuilder.instantiate(7)", knownRightExpression: "Tests.Host().inner.apiBuilder.instantiate(7)"),
-		])
+		""", expectedTwinErrorSite: nil, valueProbes: [Self.hostAndFillProbe])
 
 		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
 
@@ -520,6 +517,38 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.failure?.kind == .callingMockBuildsOtherValuesThanTwin)
 		#expect(result.failure?.valueDifferences == [
 			"probe `Host` at <1> Host > inner > api > database:\n  feature:     database: <5> Database\n  known right: database: <2> Database (seen, first at <1> Host > database)",
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func check_reportsOtherValues_whenMocksDeferredFillBuildsValueTwinsFillReceivesFromCaller() async throws {
+		// The fill is built only when its builder is called, so the probe must describe the caller and the fill together for
+		// the twin's fill to show the caller's `Database` and the mock's a second one.
+		let mockGraph = Self.innerSeamGraph(named: "the mock's fill", innerModule: Self.deferredInnerModule, tests: Self.deferredFillReading(database: "@Instantiated"), expectedTwinErrorSite: nil)
+		let twinGraph = Self.innerSeamGraph(named: "the twin's fill", innerModule: Self.deferredInnerModule, tests: Self.deferredFillReading(database: "@Received"), expectedTwinErrorSite: nil)
+		let graph = GraphFuzzerCallingMockGraph(
+			name: "a mock whose deferred fill builds what its twin's receives",
+			mockFiles: mockGraph.mockFiles,
+			twinFiles: twinGraph.twinFiles,
+			callerTypeName: "Host",
+			callerIsPublic: false,
+			flatParameterLabels: [],
+			implementationIsVisible: true,
+			expectedTwinInitializerLabels: [],
+			expectedPassUpLabels: [],
+			expectedTwinErrorSite: nil,
+			valueProbes: [Self.hostAndFillProbe],
+		)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
+
+		#expect(result.twinHasIntendedOutcome)
+		#expect(result.passUps.isEmpty)
+		#expect(result.comparedValues)
+		#expect(result.failure?.kind == .callingMockBuildsOtherValuesThanTwin)
+		#expect(result.failure?.valueDifferences == [
+			"probe `(Host, Host.inner.apiBuilder.instantiate(7))` at (Host, Api) > .1 > database:\n  feature:     database: <6> Database\n  known right: database: <2> Database (seen, first at (Host, Api) > .0 > database)",
 		])
 	}
 
@@ -1012,6 +1041,39 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	    @Instantiated let inner: Inner
 	}
 	"""
+
+	/// `Host` and what its `inner.apiBuilder` builds for `id` 7, in one probe, as the draw describes a deferred place.
+	private static var hostAndFillProbe: DifferentialValueProbe {
+		DifferentialValueProbe(
+			name: "(Host, Host.inner.apiBuilder.instantiate(7))",
+			expression: GraphFuzzerCallingMockDraw.callerAndFill(of: "Tests.Host.mock()", place: "inner.apiBuilder"),
+			knownRightExpression: GraphFuzzerCallingMockDraw.callerAndFill(of: "Tests.Host()", place: "inner.apiBuilder"),
+		)
+	}
+
+	/// A deferred fill forwarding `id` that reads the caller's `database`: `@Received` in the twin, `@Instantiated` in the
+	/// mock.
+	private static func deferredFillReading(database attribute: String) -> String {
+		"""
+		import SafeDI
+		import InnerModule
+		import FeatureModule
+
+		@Instantiable
+		final class Fake: Api, Instantiable {
+		    init(id: Int, database: Database) { self.id = id; self.database = database }
+		    @Forwarded let id: Int
+		    \(attribute) let database: Database
+		}
+
+		@Instantiable(generateMock: true)
+		final class Host: Instantiable {
+		    init(database: Database, inner: Inner) { self.database = database; self.inner = inner }
+		    @Instantiated let database: Database
+		    @Instantiated let inner: Inner
+		}
+		"""
+	}
 
 	private static var hostProbe: DifferentialValueProbe {
 		// Qualified by its module: Foundation, which the probe executable imports, declares `Host` on macOS.

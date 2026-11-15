@@ -197,9 +197,10 @@ struct GraphFuzzerCallingMockDraw {
 		implementationIsVisible ? [] : [holeBuilderLabel]
 	}
 
-	/// What the calling mock and its twin build where the mock fills the place, one probe calling the mock and the twin's
-	/// seam initializer, and for a deferred place one calling the place's builder with `id` 7, which the comparator does not
-	/// call: `nil` where the twin rejects the graph or the mock passes the place up.
+	/// What the calling mock and its twin build where the mock fills the place: a probe calling the mock and the twin's seam
+	/// initializer, or, for a deferred place, one describing that value and what the place's builder builds for `id` 7 as a
+	/// tuple (`callerAndFill(of:place:)`), since the comparator calls no `ErasedInstantiator` and numbers identities per
+	/// probe. `nil` where the twin rejects the graph or the mock passes the place up.
 	var valueProbes: [DifferentialValueProbe]? {
 		// Qualified by its module: Foundation, which the probe executable imports, declares `Host` on macOS.
 		let caller = "\(names.callerModuleName).\(names.caller)"
@@ -214,15 +215,23 @@ struct GraphFuzzerCallingMockDraw {
 		}
 		guard let calls else { return nil }
 		let (mockCall, twinCall) = calls
-		var probes = [DifferentialValueProbe(name: caller, expression: mockCall, knownRightExpression: twinCall)]
 		switch cell.place {
 		case .plain:
-			break
+			return [DifferentialValueProbe(name: caller, expression: mockCall, knownRightExpression: twinCall)]
 		case .deferred:
 			let place = "\(names.inner.lowercasedFirst).\(holePlace(protocolName: names.hole, fillName: names.fill).label)"
-			probes.append(DifferentialValueProbe(name: "\(caller).\(place).instantiate(7)", expression: "\(mockCall).\(place).instantiate(7)", knownRightExpression: "\(twinCall).\(place).instantiate(7)"))
+			return [DifferentialValueProbe(
+				name: "(\(caller), \(caller).\(place).instantiate(7))",
+				expression: Self.callerAndFill(of: mockCall, place: place),
+				knownRightExpression: Self.callerAndFill(of: twinCall, place: place),
+			)]
 		}
-		return probes
+	}
+
+	/// An expression of the caller `call` builds and the fill its deferred place `place` builds for `id` 7, as one tuple, so
+	/// the comparator identifies a value the fill receives against the caller's own.
+	static func callerAndFill(of call: String, place: String) -> String {
+		"{ let caller = \(call); return (caller, caller.\(place).instantiate(7)) }()"
 	}
 
 	/// Where production reports the shape's own error: the module and file, and the declaration the error is at.
