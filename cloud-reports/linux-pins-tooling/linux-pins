@@ -1,0 +1,527 @@
+#!/bin/zsh
+# Usage: linux-pins <commit-ish> [--mode coverage] [--out DIR]
+#        linux-pins --from-run <run id>[,<run id>…] --commit <commit-ish> [--out DIR]   # existing ci.yml or graph-fuzzer.yml runs
+#        linux-pins --from-dir <reports dir> --commit <commit-ish> [--out DIR]   # no network: analysis only
+#
+# Reads the graph fuzzer's pinned constants (`Check Graph Fuzzer Corpus on Linux`'s values) for one commit from Linux
+# runners, so that a stack's top is pushed with its pins already right. It pushes the commit to a scratch branch
+# verify/pins-<sha9>-<pid>, dispatches the commit's own .github/workflows/graph-fuzzer.yml on it, waits through the
+# shared poller, downloads every shard report, and runs linux-pins-analyze.py (beside this script) over them with the
+# commit's own combine script and SafeDIToolGraphFuzzerTests.swift. It decides nothing: the orchestrator judges whether
+# the change explains each move.
+# Why (2026-11-15, speedup recommendation 4): a generator change that moved the pins needed two full CI runs on a
+# stack's top, one to show the values and one to confirm them (#713/#708: about 3.5 h). Read at hand-back, beside
+# linux-verify, the first CI run on the top is already green.
+#
+# Modes:
+#   coverage (the only dispatch mode) one dispatch with `-f coverage=true`: one build from main's release cache
+#                       (read, never saved), then ci.yml's seven corpus shards, plus the fuzzer coverage report
+#                       hand-backs need anyway (artifacts graph-fuzzer-report-<corpus>-<seed>, fuzzer-coverage).
+#                       Measured on 247598444 (2026-11-15), run concurrently: 32 min 44 s from dispatch to completion,
+#                       about 87 runner-minutes (build 15.5 min, the public mock shard 15.8 min).
+#   corpora (removed)   three dispatches of ci.yml's split (`features=` 4 shards, `generateDependencyTree` 2,
+#                       `generateMockPublic` 1, each `iterations=corpus`) took 33 min 53 s and about 195 runner-minutes,
+#                       because every shard builds release from nothing (about half of each job), so it was removed by
+#                       the orchestrator's rule (keep it only if not slower). --from-run still reads such runs: pass
+#                       their ids comma-separated; each run is attributed to its corpus by its reports' `corpus` lines.
+#   --from-run          nothing is dispatched: a ci.yml run (push or pull_request) or a graph-fuzzer.yml run in
+#                       either mode; comma-separated ids read several runs of one commit and event together, such as
+#                       a corpora dispatch's three. --commit must resolve to each run's headSha (else exit 64; values are never
+#                       relabelled). A cancelled run whose reports are all complete is analyzed normally:
+#                       completeness comes from the reports, never from the run's conclusion.
+#   --from-dir          nothing at all: every **/report.txt under the directory.
+# --from-run and --from-dir take no slot and no throttle.
+#
+# The provenance rule. Every output names the commit its values are valid for:
+#   - a dispatch of this tool, and a `push` or `workflow_dispatch` run: valid for that commit only; a rebase
+#     invalidates every value.
+#   - a `pull_request` run: its jobs checked out GitHub's merge of the head into the base as the base stood when the
+#     run started, so the values are for that merge, and hold for the head only if that base was an ancestor of it.
+#     The merge-base method: every shard's summary.md (an artifact, not a log) says "on <sha>", the commit the job
+#     checked out. That merge commit is read from the object store, fetched by SHA with no ref when absent
+#     (`git fetch --no-write-fetch-head origin <sha>`); its second parent must be the run's headSha, and its first
+#     parent is the base. Then `git merge-base --is-ancestor <base> <headSha>` gives validForHead true or false; when
+#     any step fails it is `unknown`. While it is not true, the output says the values are for judging moves only and
+#     must not be committed. The base ref's name comes from `gh pr list --head <branch>` (null when not found).
+#   - --from-dir: the tool cannot establish where the reports came from, and says so.
+#
+# The line-splitting rule, and how each report line maps to a constant: see linux-pins-analyze.py's header.
+#
+# Outputs, in --out (default ~/Library/Caches/SafeDIScratch/linux-pins/<sha9>-<mode>; replaced only when it is empty or
+# holds a previous run's output, which the marker file .linux-pins-output identifies, else DIR.$$ is used):
+#   report.md, pins.json     the analysis: (a) pins that differ, (b) unknown failures and crashed shards, (c) stale and
+#                            misfiled known-issue seeds, (d) floors below their floor, Observed, Integrity, Not derived
+#   reports/<run id>/        the downloads (untrusted data: read only, never run), canonical/, combine-summary.md,
+#                            combine.log, timing.txt (wall time per run, dispatch to completion, and per job), tools/
+#                            (the commit's combine script and Swift sources), context.json, and fuzzer-coverage/ when a
+#                            coverage run or a ci.yml run has it.
+# It prints report.md's first 60 lines and its path.
+#
+# Concurrency: at most two invocations hold dispatches at a time, machine-wide. The dispatch-to-download part runs under
+# `lockf -k -s -t 0` on ~/Library/Caches/SafeDIScratch/linux-pins/slots/slot-1, then slot-2 (heavy's mechanism; -k keeps
+# the slot files); while both are held it retries every 30 s and says so once. The kernel releases a slot when its
+# holder dies. Throttle: a lane whose working directory matches a line of heavy-low-priority.txt waits while 10 or more
+# Verify or Graph Fuzzer runs are unfinished in the shared poller's snapshot, as linux-verify does.
+# Waiting: gh-wait-branch --appear for the run ids, then gh-wait-run --timeout 570 again while it exits 2 (or 4, a
+# stale snapshot), up to 150 min from dispatch; `gh run view` every 120 s only when the poller tools fail outright.
+# At the deadline the tool cancels its runs, keeps what it downloaded, and exits 69.
+# Interrupting it (INT, TERM, HUP) cancels only its own runs, deletes its branch and exits 130. It deletes the branch
+# on success and failure too. It pushes nothing but its verify/pins-* branch, which ghstate and
+# clean-scratch-branches watch.
+#
+# Exit status (sysexits; unlike linux-verify's 2 for a usage error, deliberately):
+#   0  combine is green, and (a) to (d) and integrity are all empty
+#   1  anything to report
+#   69 no complete report for some corpus (a build failure, a timeout, or a run without fuzzer reports); report.md is
+#      still written when there are any reports
+#   64 a usage error or a failed precondition: no or unknown arguments; a commit that does not resolve or is not in
+#      ~/source/SafeDI's object store; for a dispatch, a graph-fuzzer.yml without the `shards` input (before
+#      #682), or, in coverage mode, without the `coverage` input (before #695); a commit without
+#      .github/scripts/combine-graph-fuzzer-reports.py; --from-run with --commit other than the run's headSha
+#   130 interrupted
+set -u
+setopt no_nomatch extended_glob
+# The body is one brace block, which zsh parses whole before running it: an edit to this file while an invocation runs
+# (zsh otherwise reads a script as it goes) cannot break that invocation. Replace the file atomically all the same.
+{
+self=${0:A}
+tools=${0:A:h}
+analyzer=$tools/linux-pins-analyze.py
+repo=dfed/SafeDI
+main_checkout=~/source/SafeDI
+scratch=$HOME/Library/Caches/SafeDIScratch
+slots_directory=$scratch/linux-pins/slots
+usage() {
+	print -u2 "usage: linux-pins <commit-ish> [--mode coverage] [--out DIR]"
+	print -u2 "       linux-pins --from-run <run id>[,<run id>…] --commit <commit-ish> [--out DIR]"
+	print -u2 "       linux-pins --from-dir <reports dir> --commit <commit-ish> [--out DIR]"
+	exit 64
+}
+fail() { print -u2 "linux-pins: $1"; exit 64; }
+
+in_slot=0
+if [[ "${1:-}" == --in-slot ]]; then in_slot=1; shift; fi
+(( $# >= 1 )) || usage
+commit=""; mode=""; out=""; from_run=""; from_dir=""
+while (( $# )); do
+	case "$1" in
+		--mode) (( $# >= 2 )) || usage; mode=$2; shift 2 ;;
+		--out) (( $# >= 2 )) || usage; out=$2; shift 2 ;;
+		--from-run) (( $# >= 2 )) || usage; from_run=$2; shift 2 ;;
+		--from-dir) (( $# >= 2 )) || usage; from_dir=$2; shift 2 ;;
+		--commit) (( $# >= 2 )) || usage; [[ -z "$commit" ]] || usage; commit=$2; shift 2 ;;
+		-*) usage ;;
+		*) [[ -z "$commit" && -z "$from_run$from_dir" ]] || usage; commit=$1; shift ;;
+	esac
+done
+[[ -n "$commit" ]] || usage
+if [[ -n "$from_run" || -n "$from_dir" ]]; then
+	[[ -n "$from_run" && -n "$from_dir" ]] && usage
+	[[ -z "$mode" ]] || usage
+	[[ -z "$from_run" || "$from_run" == <->(,<->)# ]] || fail "--from-run takes run ids separated by commas, not $from_run"
+	[[ -z "$from_dir" || -d "$from_dir" ]] || fail "--from-dir $from_dir is not a directory"
+else
+	[[ -n "$mode" ]] || mode=coverage
+	[[ "$mode" != corpora ]] || fail "corpora mode was removed: it was slower than coverage mode (33 min 53 s against 32 min 44 s on 247598444) and used about twice the runner time; read an existing corpora dispatch with --from-run <id>,<id>,<id>"
+	[[ "$mode" == coverage ]] || usage
+fi
+[[ -f "$analyzer" ]] || fail "no $analyzer"
+[[ "$(git -C $main_checkout remote get-url origin)" == *[:/]dfed/SafeDI(|.git) ]] || fail "$main_checkout's origin is not $repo"
+
+# Resolve the commit where the caller stands (a worktree's HEAD or branch), else in the main checkout after a fetch.
+if [[ "$commit" == [0-9a-f](#c40) ]]; then
+	git -C $main_checkout cat-file -e "${commit}^{commit}" 2>/dev/null || fail "$commit is not in $main_checkout's object store"
+	sha=$commit
+else
+	sha=$(git rev-parse --verify -q "${commit}^{commit}" 2>/dev/null)
+	if [[ -z "$sha" ]]; then
+		git -C $main_checkout fetch -q origin 2>/dev/null
+		sha=$(git -C $main_checkout rev-parse --verify -q "${commit}^{commit}") || fail "unknown commit $commit"
+	fi
+	git -C $main_checkout cat-file -e "${sha}^{commit}" 2>/dev/null || fail "$sha is not in $main_checkout's object store"
+fi
+git -C $main_checkout cat-file -e "${sha}:.github/scripts/combine-graph-fuzzer-reports.py" 2>/dev/null || fail "${sha:0:9} has no .github/scripts/combine-graph-fuzzer-reports.py (it arrived in #414, 7a7a2c466)"
+# The commit's own harness, never main's: pins mean something only under the commit's own workflow and scripts.
+if [[ -z "$from_run$from_dir" ]]; then
+	workflow=$(git -C $main_checkout show "${sha}:.github/workflows/graph-fuzzer.yml" 2>/dev/null) || fail "${sha:0:9} has no .github/workflows/graph-fuzzer.yml"
+	print -r -- "$workflow" | grep -qE '^      shards:' || fail "${sha:0:9}'s graph-fuzzer.yml has no \`shards\` input (it arrived in #682, 1f587b3a3)"
+	print -r -- "$workflow" | grep -qE '^      coverage:' || fail "${sha:0:9}'s graph-fuzzer.yml has no \`coverage\` input (it arrived in #695, 58bca6e0e)"
+fi
+if [[ -n "$from_dir" ]]; then from_dir=${from_dir:A}; fi
+
+# --from-run: read the run once.
+from_runs=()
+typeset -A run_jsons
+if [[ -n "$from_run" ]]; then
+	from_runs=(${(u)${(s:,:)from_run}})
+	first_event=""
+	for run in $from_runs; do
+		run_json=$(gh run view "$run" -R $repo --json event,headSha,headBranch,conclusion,workflowName,url,createdAt,updatedAt 2>&1) || { print -u2 -r -- "linux-pins: cannot read run $run: $run_json"; exit 69; }
+		run_head=$(print -r -- "$run_json" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["headSha"])')
+		run_workflow=$(print -r -- "$run_json" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["workflowName"])')
+		run_event=$(print -r -- "$run_json" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["event"])')
+		if [[ "$run_head" != "$sha" ]]; then
+			print -u2 "linux-pins: --commit resolves to $sha, but run $run ran on $run_head; values are never relabelled"
+			exit 64
+		fi
+		[[ "$run_workflow" == (CI|Graph\ Fuzzer) ]] || fail "run $run is a \`$run_workflow\` run, not a ci.yml or graph-fuzzer.yml run"
+		[[ -z "$first_event" || "$run_event" == "$first_event" ]] || fail "run $run is a \`$run_event\` run and run ${from_runs[1]} a \`$first_event\` one; read runs of one event together"
+		first_event=$run_event
+		run_jsons[$run]=$run_json
+	done
+fi
+
+# A dispatch waits for one of two machine-wide slots, then runs again under lockf, which holds the slot until it exits.
+if [[ -z "$from_run$from_dir" ]] && (( ! in_slot )); then
+	mkdir -p "$slots_directory" || exit 1
+	child_arguments=(--in-slot "$sha" --mode "$mode")
+	[[ -n "$out" ]] && child_arguments+=(--out "${out:A}")
+	holder=""
+	forward() {
+		trap '' INT TERM HUP
+		if [[ -n "$holder" ]]; then
+			local child
+			for child in $(pgrep -P "$holder" 2>/dev/null); do kill -TERM "$child" 2>/dev/null; done
+			wait "$holder" 2>/dev/null
+		fi
+		exit 130
+	}
+	trap forward INT TERM HUP
+	announced=0
+	while true; do
+		for slot in 1 2; do
+			lockf -k -s -t 0 "$slots_directory/slot-$slot" /bin/zsh "$self" "${child_arguments[@]}" &
+			holder=$!
+			wait "$holder"
+			slot_status=$?
+			holder=""
+			(( slot_status == 75 )) || exit $slot_status
+		done
+		(( announced )) || { print "waiting for a linux-pins slot (both in use)"; announced=1; }
+		sleep 30
+	done
+fi
+
+# The output directory.
+redirected=""
+case "$from_run$from_dir" in
+	"") label=$mode ;;
+	*) [[ -n "$from_run" ]] && label="from-run-${from_run//,/+}" || label=from-dir ;;
+esac
+[[ -n "$out" ]] || out=$scratch/linux-pins/${sha:0:9}-$label
+out=${out:A}
+if [[ -n "$from_dir" && ( "$from_dir" == "$out" || "$from_dir" == "$out"/* || "$out" == "$from_dir"/* ) ]]; then
+	fail "--from-dir $from_dir and --out $out overlap"
+fi
+if [[ -e "$out" ]]; then
+	if [[ -d "$out" && ( -z "$(ls -A "$out")" || -f "$out/.linux-pins-output" ) ]]; then
+		rm -rf -- "$out"
+	else
+		print -u2 "linux-pins: $out holds something other than a linux-pins output; writing to $out.$$ instead"
+		redirected=" (--out $out held something other than a linux-pins output, so this run wrote to $out.$$)"
+		out="$out.$$"
+	fi
+fi
+mkdir -p "$out/reports" "$out/tools" || exit 1
+print -r -- "linux-pins output for $sha" > "$out/.linux-pins-output"
+git -C $main_checkout show "${sha}:.github/scripts/combine-graph-fuzzer-reports.py" > "$out/tools/combine.py" || exit 1
+for file in Tests/SafeDIToolFuzzerTests/SafeDIToolGraphFuzzerTests.swift ${(f)"$(git -C $main_checkout ls-tree --name-only "$sha" -- Tests/SafeDIToolTestSupport/ | grep -E '/GraphFuzzer[^/]*\.swift$')"}; do
+	git -C $main_checkout show "${sha}:${file}" > "$out/tools/${file:t}" 2>/dev/null || rm -f "$out/tools/${file:t}"
+done
+
+# context.json: what the analyzer reports as provenance. Written by Python from the values below.
+write_context() {
+	python3 -I - "$out/context.json" "$sha" "$1" "$2" "$out/runs.tsv" "$3" "$4" "$5" "$6" <<'PYTHON'
+import json, sys
+path, sha, mode, event, runs_path, base_ref, base_sha, valid, extra = sys.argv[1:10]
+runs = []
+try:
+    with open(runs_path) as file:
+        for line in file:
+            identifier, url, conclusion, wall = line.rstrip("\n").split("\t")
+            runs.append({"corpus": None, "id": int(identifier), "url": url, "conclusion": conclusion, "wallSeconds": int(wall) if wall.lstrip("-").isdigit() else None})
+except OSError:
+    pass
+valid_value = {"true": True, "false": False}.get(valid, "unknown")
+provenance = {"event": event or None, "headSha": sha, "baseRef": base_ref or None, "baseSha": base_sha or None, "validForHead": valid_value}
+extra = json.loads(extra) if extra else {}
+provenance.update(extra.get("provenance", {}))
+if event == "pull_request":
+    statement = "values are for the merge of `%s` into `%s` at `%s`; they hold for `%s` only if that base was an ancestor of it (validForHead: %s)" % (sha, base_ref or "an unknown base ref", extra.get("createdAt"), sha, json.dumps(valid_value))
+    if valid_value is not True:
+        statement += ". Until validForHead is true, these values are for judging moves only and must not be committed"
+elif event == "directory":
+    statement = "reports read from a directory: the tool cannot establish which commit produced them; they hold for `%s` only if they came from a run on it, so they are for judging moves only unless you know that" % sha
+else:
+    statement = "valid only for `%s`; a rebase invalidates every value" % sha
+json.dump({"commit": sha, "mode": mode, "provenance": provenance, "runs": runs, "statement": statement}, open(path, "w"), indent=2)
+PYTHON
+}
+analyze() {
+	python3 -I "$analyzer" "$out"
+	local analysis_status=$?
+	if [[ -f "$out/report.md" ]]; then
+		head -60 "$out/report.md"
+		print "linux-pins ${sha:0:9}: exit $analysis_status; the whole report is $out/report.md$redirected"
+	else
+		print "linux-pins ${sha:0:9}: exit $analysis_status; no report written (output in $out)"
+	fi
+	return $analysis_status
+}
+download_reports() {
+	local run=$1 attempt result
+	mkdir -p "$out/reports/$run"
+	for attempt in 1 2 3; do
+		result=$(gh run download "$run" -R $repo -p 'graph-fuzzer-report-*' -D "$out/reports/$run/" 2>&1) && return 0
+		[[ "$result" == *"no valid artifacts"* || "$result" == *"no artifact matches"* ]] && return 2
+		sleep 20
+	done
+	print -u2 -r -- "linux-pins: could not download run $run's reports: $result"
+	return 1
+}
+download_coverage() {
+	local run=$1 attempt
+	for attempt in 1 2 3; do
+		gh run download "$run" -R $repo -n fuzzer-coverage -D "$out/fuzzer-coverage/" >/dev/null 2>&1 && return 0
+		[[ -d "$out/fuzzer-coverage" ]] && rm -rf -- "$out/fuzzer-coverage"
+		sleep 10
+	done
+	return 1
+}
+seconds_of() { python3 -I -c 'import sys,datetime; print(int(datetime.datetime.strptime(sys.argv[1], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc).timestamp()))' "$1"; }
+
+# --from-dir: copy the reports (only report.txt and summary.md) under OUT, then analyze.
+if [[ -n "$from_dir" ]]; then
+	count=0
+	while IFS= read -r -d '' file; do
+		relative=${file#$from_dir/}
+		mkdir -p "$out/reports/${relative:h}"
+		cp "$file" "$out/reports/$relative"
+		[[ -f "${file:h}/summary.md" ]] && cp "${file:h}/summary.md" "$out/reports/${relative:h}/summary.md"
+		count=$((count + 1))
+	done < <(find "$from_dir" -name report.txt -type f -print0)
+	(( count > 0 )) || { print -u2 "linux-pins: $from_dir holds no report.txt"; exit 69; }
+	: > "$out/runs.tsv"
+	print "reports read from $from_dir: $count" > "$out/timing.txt"
+	write_context from-dir directory "" "" unknown ""
+	analyze
+	exit $?
+fi
+
+# --from-run: download, establish the provenance, analyze.
+if [[ -n "$from_run" ]]; then
+	: > "$out/runs.tsv"
+	: > "$out/timing.txt"
+	for run in $from_runs; do
+		download_reports "$run"
+		if [[ ! -d "$out/fuzzer-coverage" ]] && { [[ "$(print -r -- "${run_jsons[$run]}" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["workflowName"])')" == CI ]] || [[ -n "$(gh api "repos/$repo/actions/runs/$run/artifacts" --jq '.artifacts[].name' 2>/dev/null | grep -x fuzzer-coverage)" ]]; }; then
+			download_coverage "$run" || print "linux-pins: run $run has no fuzzer-coverage artifact"
+		fi
+		print -r -- "${run_jsons[$run]}" | python3 -I -c '
+import datetime, json, sys
+run = json.load(sys.stdin)
+def seconds(text):
+    return int(datetime.datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc).timestamp())
+wall = seconds(run["updatedAt"]) - seconds(run["createdAt"])
+with open(sys.argv[2], "a") as file:
+    file.write("%s\t%s\t%s\t%d\n" % (sys.argv[1], run["url"], run["conclusion"] or "none", wall))
+with open(sys.argv[3], "a") as file:
+    file.write("run %s: created %s, last updated %s, %d s (the run\u2019s own times; this tool dispatched nothing)\n" % (sys.argv[1], run["createdAt"], run["updatedAt"], wall))
+' "$run" "$out/runs.tsv" "$out/timing.txt"
+	done
+	if [[ -z "$(find "$out/reports" -name report.txt -print -quit 2>/dev/null)" ]]; then
+		print -u2 "linux-pins: run ${from_run//,/, } has no fuzzer reports (no graph-fuzzer-report-* artifacts): a Markdown-only change skips the fuzzer jobs, and a run that failed before them uploads none"
+		exit 69
+	fi
+	first_json=${run_jsons[${from_runs[1]}]}
+	event=$(print -r -- "$first_json" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["event"])')
+	created=$(print -r -- "$first_json" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["createdAt"])')
+	branch=$(print -r -- "$first_json" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["headBranch"])')
+	base_ref=""; base_sha=""; valid=true; merge=""
+	if [[ "$event" == pull_request ]]; then
+		valid=unknown
+		merges=(${(u)${(f)"$(grep -h -r -oE ' on [0-9a-f]{40}\.' --include=summary.md "$out/reports" 2>/dev/null | sed -E 's/^ on ([0-9a-f]{40})\.$/\1/')"}})
+		if (( ${#merges} == 1 )); then
+			merge=${merges[1]}
+			git -C $main_checkout cat-file -e "${merge}^{commit}" 2>/dev/null || git -C $main_checkout fetch -q --no-write-fetch-head origin "$merge" 2>/dev/null
+			parents=(${=$(git -C $main_checkout rev-list --parents -n 1 "$merge" 2>/dev/null)})
+			if (( ${#parents} == 3 )) && [[ "${parents[3]}" == "$sha" ]]; then
+				base_sha=${parents[2]}
+				if git -C $main_checkout merge-base --is-ancestor "$base_sha" "$sha" 2>/dev/null; then valid=true; else valid=false; fi
+			fi
+		fi
+		base_ref=$(gh pr list -R $repo --head "$branch" --state all --json baseRefName,headRefOid --limit 20 2>/dev/null | python3 -I -c '
+import json, sys
+pulls = json.load(sys.stdin)
+match = [pull for pull in pulls if pull.get("headRefOid") == sys.argv[1]] or pulls
+print(match[0]["baseRefName"] if match else "")' "$sha" 2>/dev/null)
+		print "pull_request run: merge commit ${merge:-unknown (the shards' summary.md files name ${#merges} commits)}, base ${base_sha:-unknown}, validForHead $valid" >> "$out/timing.txt"
+	fi
+	extra=$(python3 -I -c 'import json,sys; print(json.dumps({"createdAt": sys.argv[1], "provenance": {"mergeSha": sys.argv[2] or None} if sys.argv[3] == "pull_request" else {}}))' "$created" "$merge" "$event")
+	write_context from-run "$event" "$base_ref" "$base_sha" "$valid" "$extra"
+	analyze
+	exit $?
+fi
+
+# A dispatch, holding a slot (in_slot).
+# Long-run log (productivity lane): a run over LONG_RUN_LOG_MINUTES (default 20) appends one line to the inbox.
+long_run_started=$(date +%s)
+log_long_run() {
+	{
+		local elapsed=$(( $(date +%s) - long_run_started ))
+		(( elapsed >= ${LONG_RUN_LOG_MINUTES:-20} * 60 )) || return 0
+		print -r -- "$(date '+%Y-%m-%d %H:%M %Z') $1 $(( elapsed / 60 )) $2 $3" >> ~/Library/Caches/SafeDIScratch/lanes/productivity-inbox.md
+	} 2>/dev/null
+	return 0
+}
+trap 'log_long_run linux-pins "${sha:0:9}" "$mode"' EXIT
+branch="verify/pins-${sha:0:9}-$$"
+started=$(date +%s)
+runs=()
+dispatched=0
+finished=0
+cleaned=0
+cleanup() {
+	(( cleaned )) && return
+	cleaned=1
+	if (( dispatched && ! finished )); then
+		if (( ${#runs} == 0 )); then
+			runs=(${(f)"$(gh run list -R $repo --branch "$branch" --workflow graph-fuzzer.yml --json databaseId -q '.[].databaseId' 2>/dev/null)"})
+		fi
+		local run
+		for run in $runs; do
+			[[ "$run" == <-> ]] || continue
+			gh run cancel "$run" -R $repo >/dev/null 2>&1 && print "cancelled https://github.com/$repo/actions/runs/$run"
+		done
+	fi
+	git -C $main_checkout push -q origin --delete "$branch" 2>/dev/null && print "deleted $branch"
+}
+trap 'trap "" INT TERM HUP; print "linux-pins: interrupted"; cleanup; exit 130' INT TERM HUP
+
+# Throttle (linux-verify's): a low-priority lane waits while 10 or more scratch runs are unfinished, from the snapshot.
+snapshot=$scratch/github-api-batching/state/status.json
+low_priority=0
+while IFS= read -r pattern; do
+	[[ -n "$pattern" && "$pattern" != \#* && "$PWD" == *"$pattern"* ]] && { low_priority=1; break; }
+done < "$tools/heavy-low-priority.txt"
+for i in {1..60}; do
+	(( low_priority )) || break
+	active=$(python3 -I -c 'import json,sys
+d=json.load(open(sys.argv[1]))
+print(sum(1 for r in d.get("runs",{}).values() if r.get("status")!="completed" and r.get("workflow") in ("Verify","Graph Fuzzer")))' "$snapshot" 2>/dev/null)
+	[[ -z "$active" || "$active" -lt 10 ]] && break
+	(( i == 1 )) && print "waiting: $active scratch runs are unfinished; dispatching when fewer than 10 are"
+	sleep 60
+done
+
+push_output=$(git -C $main_checkout push -q origin "${sha}:refs/heads/${branch}" 2>&1) || { print -r -- "linux-pins: could not push $branch: $push_output"; exit 69; }
+print "pushed $branch (${sha:0:9}, mode $mode)"
+dispatch_time=$(date +%s)
+dispatched=1
+expected=1
+gh workflow run graph-fuzzer.yml -R $repo --ref "$branch" -f coverage=true || { cleanup; exit 69; }
+print "dispatched Graph Fuzzer ×$expected on $branch"
+
+# The run ids, through the shared poller's snapshot; if the tool fails outright, ask GitHub every 10 s (linux-verify's).
+appeared=$("$tools/gh-wait-branch" --appear --workflow "Graph Fuzzer" --count $expected --timeout 900 "$branch")
+appear_status=$?
+runs=(${(f)appeared})
+if (( appear_status != 0 && appear_status != 2 )) || [[ -n "${runs[*]}" && "${runs[*]}" != <->(| <->)(| <->) ]]; then
+	print "gh-wait-branch failed (exit $appear_status); asking GitHub for the runs every 10 s"
+	runs=()
+	for i in {1..90}; do
+		runs=(${(f)"$(gh run list -R $repo --workflow graph-fuzzer.yml --branch "$branch" --limit 10 --json databaseId -q '.[].databaseId' 2>/dev/null)"})
+		(( ${#runs} >= expected )) && break
+		sleep 10
+	done
+fi
+if (( ${#runs} < expected )); then print "linux-pins: ${#runs} of $expected runs appeared"; cleanup; exit 69; fi
+for run in $runs; do print "run https://github.com/${repo}/actions/runs/${run}"; done
+
+# Wait: gh-wait-run 570 s at a time while it says "still running" (2) or "stale snapshot" (4), to 150 min from dispatch.
+deadline=$(( dispatch_time + 150 * 60 ))
+completed=0
+fallback=0
+while (( $(date +%s) < deadline )); do
+	waited=$("$tools/gh-wait-run" --timeout 570 $runs)
+	wait_status=$?
+	if (( wait_status == 2 )); then continue; fi
+	if (( wait_status == 4 )); then sleep 60; continue; fi
+	if (( wait_status == 0 || wait_status == 1 )); then
+		lines=(${(f)waited})
+		mismatch=0
+		for line in $lines; do
+			fields=(${=line})
+			[[ "${fields[4]:-}" == "$branch" ]] || { mismatch=1; print "linux-pins: gh-wait-run reports ${fields[1]:-?} on branch ${fields[4]:-?}, not $branch"; }
+		done
+		if (( mismatch )); then cleanup; exit 69; fi
+		completed=1
+	else
+		print "gh-wait-run failed (exit $wait_status); asking GitHub for the runs every 120 s"
+		fallback=1
+	fi
+	break
+done
+while (( fallback && ! completed )) && (( $(date +%s) < deadline )); do
+	completed=1
+	for run in $runs; do
+		state=$(gh run view "$run" -R $repo --json status -q .status 2>/dev/null)
+		[[ "$state" == completed ]] || completed=0
+	done
+	(( completed )) || sleep 120
+done
+timed_out=0
+if (( ! completed )); then
+	timed_out=1
+	print "linux-pins: the runs did not finish within 150 min of dispatch; cancelling them"
+fi
+
+# Each run's times and jobs (one request a run), its reports, and in coverage mode the fuzzer coverage report.
+: > "$out/runs.tsv"
+print "dispatched $(date -r $dispatch_time -u +%Y-%m-%dT%H:%M:%SZ) (mode $mode, branch $branch)" > "$out/timing.txt"
+for run in $runs; do
+	view=$(gh run view "$run" -R $repo --json url,status,conclusion,createdAt,updatedAt,jobs 2>/dev/null)
+	python3 -I - "$run" "$dispatch_time" "$out/runs.tsv" "$out/timing.txt" "$view" <<'PYTHON'
+import datetime, json, sys
+run, dispatched, runs_path, timing_path, view = sys.argv[1:6]
+def seconds(text):
+    return int(datetime.datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc).timestamp()) if text else None
+try:
+    data = json.loads(view)
+except ValueError:
+    data = {}
+completed = data.get("status") == "completed"
+updated = seconds(data.get("updatedAt"))
+wall = updated - int(dispatched) if completed and updated else None
+with open(runs_path, "a") as file:
+    file.write("%s\t%s\t%s\t%s\n" % (run, data.get("url", "https://github.com/dfed/SafeDI/actions/runs/" + run), data.get("conclusion") or data.get("status") or "unknown", "" if wall is None else wall))
+with open(timing_path, "a") as file:
+    file.write("run %s: %s, %s from dispatch to completion\n" % (run, data.get("conclusion") or data.get("status"), "%d min %d s" % divmod(wall, 60) if wall is not None else "not completed"))
+    for job in data.get("jobs", []):
+        started, finished = seconds(job.get("startedAt")), seconds(job.get("completedAt"))
+        duration = "%d min %d s" % divmod(finished - started, 60) if started and finished and finished >= started else "-"
+        queued = "%d min %d s after dispatch" % divmod(started - int(dispatched), 60) if started else "-"
+        file.write("  job %s: %s, ran %s, started %s\n" % (job.get("name"), job.get("conclusion") or job.get("status"), duration, queued))
+PYTHON
+	state=$(print -r -- "$view" | python3 -I -c 'import json,sys
+try: print(json.load(sys.stdin).get("status",""))
+except ValueError: print("")')
+	if [[ "$state" == completed ]]; then
+		download_reports "$run"
+		[[ "$mode" == coverage ]] && { download_coverage "$run" || print "linux-pins: no fuzzer-coverage artifact from run $run"; }
+	fi
+done
+(( timed_out )) || finished=1
+cleanup
+print "linux-pins: $(( ($(date +%s) - started) / 60 )) min $(( ($(date +%s) - started) % 60 )) s wall in the slot"
+write_context "$mode" workflow_dispatch "" "" true ""
+if [[ -z "$(find "$out/reports" -name report.txt -print -quit 2>/dev/null)" ]]; then
+	print "linux-pins: no fuzzer reports were downloaded (output in $out)"
+	exit 69
+fi
+analyze
+analysis_status=$?
+(( timed_out )) && exit 69
+(( analysis_status == 75 )) && exit 70
+exit $analysis_status
+}

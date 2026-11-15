@@ -1,0 +1,181 @@
+{
+ "schema": 1,
+ "commit": "eddac9a3d365f9c38dc766aaa3b7af7c05b1ab43",
+ "mode": "coverage",
+ "provenance": {
+  "event": "workflow_dispatch",
+  "headSha": "eddac9a3d365f9c38dc766aaa3b7af7c05b1ab43",
+  "baseRef": null,
+  "baseSha": null,
+  "validForHead": true
+ },
+ "statement": "valid only for `eddac9a3d365f9c38dc766aaa3b7af7c05b1ab43`; a rebase invalidates every value",
+ "runs": [
+  {
+   "corpus": "all",
+   "id": 43764374914,
+   "url": "https://github.com/dfed/SafeDI/actions/runs/43764374914",
+   "conclusion": "failure",
+   "wallSeconds": 2521
+  }
+ ],
+ "combine": {
+  "exit": 1,
+  "problems": [
+   "canonical/generateMockPublic-0/report.txt: problem The generator's graphs for seeds 0..<1000 of the generateMockPublic corpus changed (fixture hash 0x9731E1275C7C8651, pinned 0x7A3E59F695DB4AE1). Re-derive the known issues, smoke seeds, and pinned values."
+  ]
+ },
+ "pins": [
+  {
+   "corpus": "generateMockPublic",
+   "constant": "publicMockCorpusFixtureHash",
+   "corpusLabel": "fixtureHash",
+   "key": null,
+   "pinned": "0x7A3E59F695DB4AE1",
+   "actual": "0x9731E1275C7C8651",
+   "note": ""
+  }
+ ],
+ "unknownFailures": [],
+ "crashedShards": [],
+ "stale": [],
+ "misfiled": [],
+ "floors": [],
+ "observed": {
+  "known": [
+   {
+    "corpus": "base",
+    "list": "knownIssues",
+    "reason": "A mock's parameters and fields are sorted by label, so a renaming that reorders labels reorders them",
+    "count": 87
+   },
+   {
+    "corpus": "base",
+    "list": "knownIssues",
+    "reason": "A mock's parameters and fields are sorted by label, so a renaming that reorders labels reorders them, and which back-edge of a lazy cycle loses its override follows the order of type names, so one field of a configuration struct is present under one naming and absent under another",
+    "count": 17
+   },
+   {
+    "corpus": "base",
+    "list": "knownIssues",
+    "reason": "An error advises declaring a property on a root whose own properties the declared type's tree receives and that require the declaration, so the declaration closes a dependency cycle there (remedyRuns_leaveNoErrorAtTheReceive_whenTheDeclaredTypesTreeReceivesARootPropertyThatRequiresTheDeclaration: Root builds `t2: T2`, which requires `t0Builder: Instantiator<T0>`, and T0 receives `t2`)",
+    "count": 4
+   },
+   {
+    "corpus": "base",
+    "list": "knownIssues",
+    "reason": "An error advises receiving a property only if available, or a suggested property, beneath a type whose mock is generated and that declares the label with another type, so the mock rejects the receive as hidden (remedyRuns_leaveNoErrorAtTheReceive_whenAMockedTypeBetweenDeclaresItsLabelWithAnotherType: T3, mocked, declares `t4: T1` and builds T5, which Root builds too and which requires `t4: T0?`, and the error says to declare `t4: T0` on Root and receive it only if available)",
+    "count": 17
+   },
+   {
+    "corpus": "base",
+    "list": "knownIssues",
+    "reason": "An error at a receive inside a `@Sendable` builder advises receiving, or declaring, a property that is not `Sendable`, which then cannot be received there (remedyRuns_leaveNoErrorAtTheReceive_whenTheSuggestedOnlyIfAvailableReceiveIsInsideASendableBuilder: Root builds `t1Builder: SendableInstantiator<T1>` and `t2Builder: Instantiator<T2>`, and T1 requires `t2Builder: Instantiator<T2>?`, which the error says to receive only if available)",
+    "count": 18
+   },
+   {
+    "corpus": "base",
+    "list": "knownIssues",
+    "reason": "An error suggests receiving a property whose receive closes a dependency cycle (remedyRuns_leaveNoErrorAtTheReceive_whenTheSuggestedPropertyIsOfTheMockedReceiversOwnType: T1, mocked, requires `t0: T1` beneath T2, which forwards `t0: T1?` and builds T1, and the error suggests `t0: T1?`, which the mock of T1 receives while building T1)",
+    "count": 6
+   },
+   {
+    "corpus": "base",
+    "list": "knownIssues",
+    "reason": "Each error reports one path to a receiver, so receiving the property one path suggests leaves an error on another path, which suggests the first label again (remedyRuns_leaveNoErrorAtTheReceive_whenTwoPathsToTheReceiverDeclareTheReceivedTypeUnderOtherLabels: T1 declares `t4: T4` and T2 declares `lazyT4: T4`, and each builds T3, which requires `t4: T4`)",
+    "count": 2
+   },
+   {
+    "corpus": "base",
+    "list": "knownIssues",
+    "reason": "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree",
+    "count": 19
+   },
+   {
+    "corpus": "base",
+    "list": "knownIssues",
+    "reason": "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree, in a graph whose lazy cycle also drops another configuration field under a renaming",
+    "count": 1
+   },
+   {
+    "corpus": "base",
+    "list": "knownIssues",
+    "reason": "Intended: a root's mock rejects a tree that repeats a label along a branch, a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree, in a graph whose mock's parameters and fields also reorder under a renaming",
+    "count": 3
+   },
+   {
+    "corpus": "base",
+    "list": "knownIssues",
+    "reason": "Which back-edge of a lazy cycle loses its override follows the order of type names, so one field of a configuration struct, with the reads of it, is present under one naming and absent under another",
+    "count": 229
+   },
+   {
+    "corpus": "generateDependencyTree",
+    "list": "seamKnownIssues",
+    "reason": "A fill that re-enters its own seam hands the re-entered seam the root dispatcher, not its own values, so a fill there reads `nil` for an only-if-available value its visible build and its inline build pass; fixed in a later PR; and A seam's builder functions capture the values of each level on the way to a place, so holding a builder keeps them alive where the inline build frees them, until the in-seam leak fix; and A seam's readable initializer and a mock hand each hole's builder a generated scope enum, so a builder a person writes names generated code; the planned builder structs replace it with builders that take only what their place forwards; and Places of one builder that forward other values are merged into one builder rather than rejected, so the builder cannot take only what each place forwards",
+    "count": 1
+   },
+   {
+    "corpus": "generateDependencyTree",
+    "list": "seamKnownIssues",
+    "reason": "A fill that re-enters its own seam hands the re-entered seam the root dispatcher, not its own values, so a fill there reads `nil` for an only-if-available value its visible build and its inline build pass; fixed in a later PR; and A seam's builders are ordered by label, which its hole type's names spell, so moving type names across wrapper names reorders the builders of a seam with two hole types, its generated initializers and the calls of them; and A seam's builder functions capture the values of each level on the way to a place, so holding a builder keeps them alive where the inline build frees them, until the in-seam leak fix; and A builder written by hand, handed to a seam as its readable initializer hands it on, keeps alive every value of each level on the way to its places, even when it reads none, where the inline build frees them, until the in-seam leak fix gives the readable initializer a builder that reads nothing; and A seam's readable initializer and a mock hand each hole's builder a generated scope enum, so a builder a person writes names generated code; the planned builder structs replace it with builders that take only what their place forwards; and Places of one builder that forward other values are merged into one builder rather than rejected, so the builder cannot take only what each place forwards",
+    "count": 1
+   },
+   {
+    "corpus": "generateDependencyTree",
+    "list": "seamKnownIssues",
+    "reason": "A mock's parameters and fields are sorted by label, so a renaming that reorders labels reorders them",
+    "count": 5
+   },
+   {
+    "corpus": "generateDependencyTree",
+    "list": "seamKnownIssues",
+    "reason": "A mock's parameters and fields are sorted by label, so a renaming that reorders labels reorders them, and which back-edge of a lazy cycle loses its override follows the order of type names, so one field of a configuration struct is present under one naming and absent under another",
+    "count": 2
+   },
+   {
+    "corpus": "generateDependencyTree",
+    "list": "seamKnownIssues",
+    "reason": "A mock's parameters and fields are sorted by label, so a renaming that reorders labels reorders them; and A seam's builder functions capture the values of each level on the way to a place, so holding a builder keeps them alive where the inline build frees them, until the in-seam leak fix; and A builder written by hand, handed to a seam as its readable initializer hands it on, keeps alive every value of each level on the way to its places, even when it reads none, where the inline build frees them, until the in-seam leak fix gives the readable initializer a builder that reads nothing; and A seam's readable initializer and a mock hand each hole's builder a generated scope enum, so a builder a person writes names generated code; the planned builder structs replace it with builders that take only what their place forwards; and A seam's own internal mock, which cannot build a hole whose fill is in another module, takes the hole's value, or the wrapper its place spells, as a parameter where the seam takes one builder per filling type, returned type and family, as contract rules 7 and 8 ask of the mock too, so moving the place behind `LazilyInstantiated` or into an inner seam, or giving a second place the same label, changes the parameter's type, its label or its order; and Places of one builder that forward other values are merged into one builder rather than rejected, so the builder cannot take only what each place forwards",
+    "count": 1
+   },
+   {
+    "corpus": "generateDependencyTree",
+    "list": "seamKnownIssues",
+    "reason": "A mock's parameters and fields are sorted by label, so a renaming that reorders labels reorders them; and A seam's readable initializer and a mock hand each hole's builder a generated scope enum, so a builder a person writes names generated code; the planned builder structs replace it with builders that take only what their place forwards",
+    "count": 2
+   },
+   {
+    "corpus": "generateDependencyTree",
+    "list": "seamKnownIssues",
+    "reason": "A mock's parameters and fields are sorted by label, so a renaming that reorders labels reorders them; and A seam's readable initializer and a mock hand each hole's builder a generated scope enum, so a builder a person writes names generated code; the planned builder structs replace it with builders that take only what their place forwards; and Places of one builder that forward other values are merged into one builder rather than rejected, so the builder cannot take only what each place forwards",
+    "count": 1
+   },
+   {
+    "corpus": "generateDependencyTree",
+    "list": "seamKnownIssues",
+    "reason": "A seam's builder functions capture the values of each level on the way to a place, so holding a builder keeps them alive where the inline build frees them, until the in-seam leak fix; and A builder written by hand, handed to a seam as its readable initializer hands it on, keeps alive every value of each level on the way to its places, even when it reads none, where the inline build frees them, until the in-seam leak fix gives the readable initializer a builder that reads nothing; and A seam's readable initializer and a mock hand each hole's builder a generated scope enum, so a builder a person writes names generated code; the planned builder structs replace it with builders that take only what their place forwards",
+    "count": 2
+   },
+   {
+    "corpus": "generateDependencyTree",
+    "list": "seamKnownIssues",
+    "reason": "A seam's builder functions capture the values of each level on the way to a place, so holding a builder keeps them alive where the inline build frees them, until the in-seam leak fix; and A builder written by hand, handed to a seam as its readable initializer hands it on, keeps alive every value of each level on the way to its places, even when it reads none, where the inline build frees them, until the in-seam leak fix gives the readable initializer a builder that reads nothing; and A seam's readable initializer and a mock hand each hole's builder a generated scope enum, so a builder a person writes names generated code; the planned builder structs replace it with builders that take only what their place forwards; and Places of one builder that forward other values are merged into one builder rather than rejected, so the builder cannot take only what each place forwards",
+    "count": 8
+   },
+   {
+    "corpus": "generateDependencyTree",
+    "list": "seamKnownIssues",
+    "reason": "A seam's builder functions capture the values of each level on the way to a place, so holding a builder keeps them alive where the inline build frees them, until the in-seam leak fix; and A seam's readable initializer and a mock hand each hole's builder a generated scope enum, so a builder a person writes names generated code; the planned builder structs replace it with builders that take only what their place forwards",
+    "count": 1
+   },
+   {
+    "corpus": "generateDependencyTree",
+    "list": "seamKnownIssues",
+    "reason": "A seam's builder functions capture the values of each level on the way to a place, so holding a builder keeps them alive where the inline build frees them, until the in-seam leak fix; and A seam's readable initializer and a mock hand each hole's builder a generated scope enum, so a builder a person writes names generated code; the planned builder structs replace it with builders that take only what their place forwards; and A seam's own internal mock, which cannot build a hole whose fill is in another module, takes the hole's value, or the wrapper its place spells, as a parameter where the seam takes one builder per filling type, returned type and family, as contract rules 7 and 8 ask of the mock too, so moving the place behind `LazilyInstantiated` or into an inner seam, or giving a second place the same label, changes the parameter's type, its label or its order; and Places of one builder that forward other values are merged into one builder rather than rejected, so the builder cannot take only what each place forwards",
+    "count": 2
+   },
+   {
+    "corpus": "generateDependencyTree",
+    "list": "seamKnownIssues",
+    "reason": "A seam's builder functions capture the values of each level on the way to a place, so holding a builder keeps them alive where the inline build frees them, until

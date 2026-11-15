@@ -1,0 +1,21 @@
+{
+  "commit": "eddac9a3d365f9c38dc766aaa3b7af7c05b1ab43",
+  "mode": "coverage",
+  "provenance": {
+    "event": "workflow_dispatch",
+    "headSha": "eddac9a3d365f9c38dc766aaa3b7af7c05b1ab43",
+    "baseRef": null,
+    "baseSha": null,
+    "validForHead": true
+  },
+  "runs": [
+    {
+      "corpus": null,
+      "id": 43764374914,
+      "url": "https://github.com/dfed/SafeDI/actions/runs/43764374914",
+      "conclusion": "failure",
+      "wallSeconds": 2521
+    }
+  ],
+  "statement": "valid only for `eddac9a3d365f9c38dc766aaa3b7af7c05b1ab43`; a rebase invalidates every value"
+}
