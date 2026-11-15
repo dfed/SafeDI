@@ -403,7 +403,8 @@ func executeSafeDIToolTest(
 				outputs.append(ExpectationRecording.Output(integration: nil, module: nil, outputName: ExpectationRecording.combinedOutputName, content: combined))
 			}
 			let encoder = JSONEncoder()
-			encoder.outputFormatting = [.sortedKeys]
+			// Slashes unescaped, so the fixture paths the graph spells are replaced by placeholders before the digest.
+			encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
 			let encodedTargetGraph = try pluginTargetGraph.map { try String(decoding: encoder.encode($0(inputSwiftFilePaths)), as: UTF8.self) }
 			ExpectationRecording.recordGeneration(
 				of: outputs,
