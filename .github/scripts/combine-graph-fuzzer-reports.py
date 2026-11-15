@@ -241,7 +241,7 @@ for path in report_paths:
         shards_by_corpus.setdefault(corpus, []).append((starting_seed, count, accepted_count, accepted_sum))
 
 if not report_paths:
-    problems.append("No shard reports were found. The shards fail, or are skipped when \"Build and Test on Linux\" fails.")
+    problems.append("No shard reports were found. The shards fail, or are skipped when \"Build Tests on Linux\" fails.")
 if report_paths and not pins_by_corpus:
     problems.append("No report names its corpus and the corpus's pins, so nothing can be checked against them.")
 for corpus in sorted(expected_corpora - set(pins_by_corpus)):

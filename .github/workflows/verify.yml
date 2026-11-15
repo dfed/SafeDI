@@ -8,25 +8,25 @@ name: Verify
 #
 # Two modes test; a third, `warm`, only saves a build (see "Warm the Release
 # Verify Build Cache" below). `release`, the default, runs the same build as
-# "Build and Test on Linux" in ci.yml, with that job's passed-compile-check
-# cache. It builds SafeDI's own targets in release with code coverage,
-# starting from the build of main's newest commit that "Warm the Release
-# Verify Build Cache" below saved, so it compiles again only the targets
-# whose files differ from that commit's and the targets that depend on them:
-# a change to tests alone rebuilds the test targets it touches, and a change
-# to SafeDICore nearly everything. That works because both jobs give every
-# tracked file a modification time derived from its content
-# (.github/scripts/stamp-source-times.sh); a checkout alone gives every file
-# a new time, and SwiftPM then rebuilds every target. The script's header
-# holds what was measured, in debug and in release on Linux. `fast` builds in
-# debug without coverage, as "Build and Test on Latest Swift" does, from a
-# build cache of its own that "Warm the Fast Verify Build Cache" below keeps
-# on main. Its build takes half as long or less, but its tests run slower,
-# because the parser and macros come from a debug build of swift-syntax. So
-# it pays off for a narrow filter; for the whole suite, or a whole test
-# target that compiles generated code, the two modes take about as long, and
-# `release` builds as CI does. Each mode keeps its passed compile checks
-# under its own identity, since the identity hashes the test arguments.
+# "Build Tests on Linux" in ci.yml, with the passed-compile-check cache of
+# "Build and Test on Linux". It builds SafeDI's own targets in release with
+# code coverage, starting from the build of main's newest commit that "Warm
+# the Release Verify Build Cache" below saved, so it compiles again only the
+# targets whose files differ from that commit's and the targets that depend on
+# them: a change to tests alone rebuilds the test targets it touches, and a
+# change to SafeDICore nearly everything. That works because both jobs give
+# every tracked file a modification time derived from its content
+# (.github/scripts/stamp-source-times.sh); a checkout alone gives every file a
+# new time, and SwiftPM then rebuilds every target. The script's header holds
+# what was measured, in debug and in release on Linux. `fast` builds in debug
+# without coverage, as "Build and Test on Latest Swift" does, from a build
+# cache of its own that "Warm the Fast Verify Build Cache" below keeps on
+# main. Its build takes half as long or less, but its tests run slower,
+# because the parser and macros come from a debug build of swift-syntax. So it
+# pays off for a narrow filter; for the whole suite, or a whole test target
+# that compiles generated code, the two modes take about as long, and
+# `release` builds as CI does. Each mode keeps its passed compile checks under
+# its own identity, since the identity hashes the test arguments.
 #
 # A `release` run of the whole suite (an empty filter) builds once and then
 # runs the tests in seven jobs at the same time, four for the largest test
@@ -57,7 +57,7 @@ on:
         required: false
         default: ''
       mode:
-        description: '`release` builds as "Build and Test on Linux" does; `fast` builds in debug without coverage; `warm` saves this branch a release build for its later `release` runs and tests nothing.'
+        description: '`release` builds as "Build Tests on Linux" does; `fast` builds in debug without coverage; `warm` saves this branch a release build for its later `release` runs and tests nothing.'
         required: false
         type: choice
         options:
@@ -130,7 +130,7 @@ jobs:
           esac
       # The newest build the warming job saved: this branch's own, when it has
       # one, and otherwise main's. Before either has saved one the build is
-      # cold: the build "Build and Test on Linux" saves is no start, since
+      # cold: the build "Build Tests on Linux" saves is no start, since
       # its sources were not stamped and a build from it compiled the
       # dependencies again too (12 minutes, run 43761135608). This job saves
       # no build, so one branch's build never becomes another's.
@@ -188,7 +188,7 @@ jobs:
           test "$tests" -gt 0
           echo "tests=$tests" >> "$GITHUB_OUTPUT"
           echo "The bundle lists $tests tests."
-      # What a test job needs of the build, as "Build and Test on Linux"
+      # What a test job needs of the build, as "Build Tests on Linux"
       # packages it for the graph fuzzer's shards: the bundle, SafeDITool and
       # the macro plugin (which compile checks run), and SafeDI's module.
       - name: Package Test Bundle
@@ -255,7 +255,7 @@ jobs:
 
   # The whole suite, one job per group of test targets, each running the
   # bundle "Verify on Linux" built, as the graph fuzzer's shards run the
-  # bundle of "Build and Test on Linux". Linux runners are plentiful, and the
+  # bundle of "Build Tests on Linux". Linux runners are plentiful, and the
   # suite's time is mostly compile checks, which one runner's four cores were
   # the limit on: in one process the tests took 8 to 9 minutes when the
   # passed-check cache skipped the compiles and 15 to 20 when they all ran.
