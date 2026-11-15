@@ -67,11 +67,11 @@ struct GraphFuzzerFixture: Equatable {
 	/// fixtures of several seeds compile together as one module.
 	let swiftFileContent: [String]
 
-	/// Every module of the fixture that declares a seam sets `generatePlainDependencyTreeInitializers: true`, so the oracles
-	/// read and call the readable initializer a person calls, beside the one only generated code calls.
-	init(seed: UInt64, swiftFileContent: [String]) {
-		self.seed = seed
-		self.swiftFileContent = Self.enablingPlainDependencyTreeInitializers(in: swiftFileContent)
+	/// A seam corpus graph, every module of which that declares a seam sets `generatePlainDependencyTreeInitializers: true`,
+	/// so the oracles read and call the readable initializer a person calls, beside the one only generated code calls. The
+	/// public-mock corpus's graphs are drawn as they are.
+	static func seamCorpusFixture(seed: UInt64, swiftFileContent: [String]) -> GraphFuzzerFixture {
+		GraphFuzzerFixture(seed: seed, swiftFileContent: enablingPlainDependencyTreeInitializers(in: swiftFileContent))
 	}
 
 	/// `contents` with `generatePlainDependencyTreeInitializers: true` set in each module that declares a seam: added to the
@@ -1995,7 +1995,7 @@ enum GraphFuzzerGenerator {
 			return GraphFuzzerFixture(seed: seed, swiftFileContent: GraphFuzzerPublicMockDraw(seed: seed).swiftFileContent(storingEveryParameter: storingEveryParameter, isKnownRight: false))
 		}
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: storingEveryParameter)
-		return GraphFuzzerFixture(seed: seed, swiftFileContent: builder.build())
+		return GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: builder.build())
 	}
 
 	/// The graph for `seed` and `features` without its second place of a hole – the property a hole draw adds that gives a
@@ -2010,7 +2010,7 @@ enum GraphFuzzerGenerator {
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: false)
 		builder.omitsSecondHolePlace = true
 		let swiftFileContent = builder.build()
-		return builder.secondHolePlace.map { ($0.label, GraphFuzzerFixture(seed: seed, swiftFileContent: swiftFileContent)) }
+		return builder.secondHolePlace.map { ($0.label, GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: swiftFileContent)) }
 	}
 
 	/// The graph for `seed` and `features` with `edit` applied after every draw, or `nil` when the edit does not apply to
@@ -2024,7 +2024,7 @@ enum GraphFuzzerGenerator {
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: false)
 		builder.builderSurfaceEdit = edit
 		let swiftFileContent = builder.build()
-		return builder.appliesBuilderSurfaceEdit ? GraphFuzzerFixture(seed: seed, swiftFileContent: swiftFileContent) : nil
+		return builder.appliesBuilderSurfaceEdit ? GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: swiftFileContent) : nil
 	}
 
 	/// The graph for `seed` and `features` without its second path to a type that holds a place – the property a hole draw
@@ -2036,7 +2036,7 @@ enum GraphFuzzerGenerator {
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: false)
 		builder.omitsSecondPath = true
 		let swiftFileContent = builder.build()
-		return builder.secondPath.map { ($0.typeName, $0.label, GraphFuzzerFixture(seed: seed, swiftFileContent: swiftFileContent)) }
+		return builder.secondPath.map { ($0.typeName, $0.label, GraphFuzzerFixture.seamCorpusFixture(seed: seed, swiftFileContent: swiftFileContent)) }
 	}
 
 	/// The known-right path of the `generateMockPublic` feature's value differential for `seed`: its graph with every
