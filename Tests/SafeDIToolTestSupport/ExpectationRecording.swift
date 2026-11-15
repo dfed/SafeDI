@@ -66,6 +66,11 @@ enum ExpectationRecording {
 		let column: Int
 		/// The name of the test that made the call, or an empty string outside a test.
 		let testName: String
+		/// Where the test that made the call is declared (`Test.current`'s source location), or `nil` outside a test. A
+		/// call made through a helper function records the helper's line, so this is what ties its output to the literal
+		/// the test compares; a file and line name one test, its suite included, where a name alone may not.
+		let testFileID: String?
+		let testLine: Int?
 		/// The multi-module integration, or `nil` for `executeSafeDIToolTest`.
 		let integration: String?
 		/// The module whose output this is, or `nil` for `executeSafeDIToolTest`.
@@ -123,7 +128,8 @@ enum ExpectationRecording {
 	/// Replaces each run-specific path in a text with a fixed placeholder: first the call's own directories, then the
 	/// directories every call shares, each in every spelling the harness knows, longest first; then any remaining path
 	/// that names a UUID-named entry of a run-specific directory, such as a path of an earlier call that a test
-	/// interpolates, becomes `$RUN_DIRECTORY`.
+	/// interpolates, becomes `$RUN_DIRECTORY`. `RUN_PATH_PLACEHOLDER` in `Scripts/regenerate-expectations.py` lists every
+	/// placeholder this and the helpers' `RunDirectory` values write; keep the two in step.
 	struct PathNormalization {
 		init(runDirectories: [RunDirectory]) {
 			let currentDirectory = FileManager.default.currentDirectoryPath
@@ -296,6 +302,8 @@ enum ExpectationRecording {
 					line: sourceLocation.line,
 					column: sourceLocation.column,
 					testName: testName,
+					testFileID: Test.current?.sourceLocation.fileID,
+					testLine: Test.current?.sourceLocation.line,
 					integration: output.integration,
 					module: output.module,
 					outputName: output.outputName,
