@@ -1,0 +1,12 @@
+trace:
+  Home#1(screenBuilder: builder)
+  Root#1(home: Home#1)
+  LiveApi#1(screenBuilder: builder)
+  Screen#1(api: LiveApi#1)
+  LiveApi#2(screenBuilder: builder)
+  Screen#2(api: LiveApi#2)
+  LiveApi#3(screenBuilder: builder)
+  Screen#3(api: LiveApi#3)
+alive holding everything: Home 1, LiveApi 3, Root 1, Screen 3
+alive holding only the deepest: LiveApi 1, Screen 1
+alive after dropping everything: none

@@ -1,0 +1,61 @@
+import Harness
+import SafeDI
+
+public protocol Api: AnyObject, Sendable {}
+
+@Instantiable
+public final class A: Instantiable, Traced, Sendable {
+    public init(api: any Api) {
+        self.api = api
+        Registry.created(self, ["api": api])
+    }
+
+    public let tracker = Tracker("A")
+    @Instantiated public let api: any Api
+}
+
+@Instantiable
+public final class Side: Instantiable, Traced, Sendable {
+    public init(aBuilder: SendableInstantiator<A>) {
+        self.aBuilder = aBuilder
+        Registry.created(self, ["aBuilder": aBuilder])
+    }
+
+    public let tracker = Tracker("Side")
+    @Received public let aBuilder: SendableInstantiator<A>
+}
+
+@Instantiable
+public final class Store: Instantiable, Traced {
+    public init(aBuilder: SendableInstantiator<A>, sideBuilder: SendableInstantiator<Side>) {
+        self.aBuilder = aBuilder
+        self.sideBuilder = sideBuilder
+        Registry.created(self, ["aBuilder": aBuilder, "sideBuilder": sideBuilder])
+    }
+
+    public let tracker = Tracker("Store")
+    @Instantiated public let aBuilder: SendableInstantiator<A>
+    @Instantiated public let sideBuilder: SendableInstantiator<Side>
+}
+
+@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+public final class LiveApi: Instantiable, Traced, Api, Sendable {
+    public init(sideBuilder: SendableInstantiator<Side>) {
+        self.sideBuilder = sideBuilder
+        Registry.created(self, ["sideBuilder": sideBuilder])
+    }
+
+    public let tracker = Tracker("LiveApi")
+    @Received public let sideBuilder: SendableInstantiator<Side>
+}
+
+@Instantiable(isRoot: true)
+public final class Root: Instantiable, Traced {
+    public init(store: Store) {
+        self.store = store
+        Registry.created(self, ["store": store])
+    }
+
+    public let tracker = Tracker("Root")
+    @Instantiated public let store: Store
+}

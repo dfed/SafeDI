@@ -1,0 +1,28 @@
+import Harness
+import SafeDI
+
+public protocol Api: AnyObject, Sendable {}
+
+#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)
+
+@Instantiable
+public final class Inner: Instantiable, Traced, Sendable {
+    public init(api: any Api) {
+        self.api = api
+        Registry.created(self, ["api": api])
+    }
+
+    public let tracker = Tracker("Inner")
+    @Instantiated public let api: any Api
+}
+
+@Instantiable(generateDependencyTree: true)
+public final class A: Instantiable, Traced, Sendable {
+    public init(innerBuilder: SendableInstantiator<Inner>) {
+        self.innerBuilder = innerBuilder
+        Registry.created(self, ["innerBuilder": innerBuilder])
+    }
+
+    public let tracker = Tracker("A")
+    @Instantiated public let innerBuilder: SendableInstantiator<Inner>
+}

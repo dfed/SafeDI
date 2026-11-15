@@ -1,0 +1,25 @@
+import Feature
+import Harness
+import SafeDI
+
+@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+public final class LiveApi: Instantiable, Traced, Api {
+    public init(screenBuilder: Instantiator<Screen>) {
+        self.screenBuilder = screenBuilder
+        Registry.created(self, ["screenBuilder": screenBuilder])
+    }
+
+    public let tracker = Tracker("LiveApi")
+    @Received public let screenBuilder: Instantiator<Screen>
+}
+
+@Instantiable(isRoot: true)
+public final class Root: Instantiable, Traced {
+    public init(home: Home) {
+        self.home = home
+        Registry.created(self, ["home": home])
+    }
+
+    public let tracker = Tracker("Root")
+    @Instantiated public let home: Home
+}

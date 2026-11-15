@@ -1,0 +1,19 @@
+trace:
+  Store#1(aBuilder: builder, sideBuilder: builder)
+  Root#1(store: Store#1)
+  A#1(innerBuilder: builder)
+  LiveApi#1(sideBuilder: builder)
+  Inner#1(api: LiveApi#1)
+  Side#1(aBuilder: builder)
+  A#2(innerBuilder: builder)
+  LiveApi#2(sideBuilder: builder)
+  Inner#2(api: LiveApi#2)
+  Side#2(aBuilder: builder)
+  A#3(innerBuilder: builder)
+  LiveApi#3(sideBuilder: builder)
+  Inner#3(api: LiveApi#3)
+  Side#3(aBuilder: builder)
+  A#4(innerBuilder: builder)
+alive holding everything: A 4, Inner 3, LiveApi 3, Root 1, Side 2, Store 1
+alive holding only the deepest: Inner 1, LiveApi 1
+alive after dropping everything: none

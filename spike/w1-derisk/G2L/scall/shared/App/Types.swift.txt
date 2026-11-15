@@ -1,0 +1,26 @@
+import Feature
+import Inner
+import Harness
+import SafeDI
+
+@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+public final class LiveApi: Instantiable, Traced, Api, Sendable {
+    public init(sideBuilder: SendableInstantiator<Side>) {
+        self.sideBuilder = sideBuilder
+        Registry.created(self, ["sideBuilder": sideBuilder])
+    }
+
+    public let tracker = Tracker("LiveApi")
+    @Received public let sideBuilder: SendableInstantiator<Side>
+}
+
+@Instantiable(isRoot: true)
+public final class Root: Instantiable, Traced {
+    public init(store: Store) {
+        self.store = store
+        Registry.created(self, ["store": store])
+    }
+
+    public let tracker = Tracker("Root")
+    @Instantiated public let store: Store
+}
