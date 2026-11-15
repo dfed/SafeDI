@@ -668,6 +668,8 @@ enum GraphFuzzerMultiModuleProperty {
 				integration: integration,
 				compileVerification: .skipped,
 				filesToDelete: &filesToDelete,
+				// The fuzzer's graphs are no test's expectations, so a record run never writes them.
+				recordDirectory: nil,
 			).modules
 		} catch let error as SafeDIToolMultiModuleTestError {
 			outputsByModuleName = error.outputs
