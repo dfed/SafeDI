@@ -776,10 +776,8 @@ public struct SeamSignature: Sendable {
 		/// The root enum whose builder takes the inner enum.
 		public let rootKey: ScopeEnum.Key
 		public let route: [Hole.RouteStep]
+		/// The call's own case, which holds the inner enum and nothing else.
 		public let caseName: String
-		/// The type of the call's case's payload struct, as the seam's extension spells it, and its fields, or `nil` for a case
-		/// of a `@Sendable` enum, which carries no values.
-		public let values: (type: TypeDescription, fields: [Hole.Field])?
 	}
 
 	/// How the seam's tree hands each inner seam's enum up from a call whose case is in an enum nested by type. Read by the

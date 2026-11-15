@@ -31,11 +31,11 @@ import SwiftSyntax
 /// extension, one nested enum per type that holds a place, named after the type as the seam's module spells it with
 /// `_Scope` appended (and `_` while a name collides), a case per property that leads to a place, named by the property's
 /// label (`p_Sendable` for one that leads to a further `@Sendable` function, `<call>_<builder>` for a place inside a
-/// fill), whose payload is the level's `<label>_Values` struct, then a forwarded value, the nested enum of the type the
-/// property builds, or an inner seam's root enum; a case for a place inside a fill, `<call>_<builder>`, holds the
-/// level's struct, the root enum of the seam whose tree holds the filled place, and the enum of the type the fill builds.
-/// The oracles below read every seam's enums; a public mock's, which keep a case per path inside a fill, are left to the
-/// public mock corpus.
+/// fill), whose payload is the level's `<label>_Values` struct, then a forwarded value or the nested enum of the type the
+/// property builds; an inner seam's wrapping case holds that seam's root enum alone, and a case for a place inside a
+/// fill, `<call>_<builder>`, holds the level's struct, the root enum of the seam whose tree holds the filled place, and
+/// the enum of the type the fill builds. The oracles below read every seam's enums; a public mock's, which keep a case
+/// per path inside a fill, are left to the public mock corpus.
 struct GraphFuzzerScopeDeclarations {
 	/// The scope enums and value structs every file of `generatedFiles` declares, in the order of the files' names.
 	init(generatedFiles: [String: String]) {

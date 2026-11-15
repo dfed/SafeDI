@@ -369,7 +369,6 @@ extension DependencyTreeGenerator {
 				rootKey: callRoute.rootKey,
 				route: namedRoute(callRoute.route, ofHoleType: callRoute.rootKey.holeType),
 				caseName: callRoute.caseName,
-				values: callRoute.values,
 			)
 		}
 

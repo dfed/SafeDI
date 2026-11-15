@@ -1006,9 +1006,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		extension Outer {
 		    @frozen public enum SafeDIScope_Panel {
-		        case inner(inner_Values, Inner.SafeDIScope_Panel)
-
-		        public struct inner_Values {}
+		        case inner(Inner.SafeDIScope_Panel)
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1016,7 +1014,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    public init(__safeDI_panelBuilder: @escaping (SafeDIScope_Panel) -> Panel) {
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_0D39F8A8EF1A9F4A.self
-		            return Inner(__safeDI_panelBuilder: { __safeDI_panelBuilder(.inner(SafeDIScope_Panel.inner_Values(), $0)) })
+		            return Inner(__safeDI_panelBuilder: { __safeDI_panelBuilder(.inner($0)) })
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(inner: inner)
@@ -1024,17 +1022,17 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		}
 
 		extension Outer {
-		    public enum __safeDI_Outer_28D7A7F2559D6961 {}
+		    public enum __safeDI_Outer_3EB48B04EDC58A42 {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, SafeDIToolSeamBuilderParameterTests.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
 		extension Root {
 		    public init() {
 		        func __safeDI_outer() -> Outer {
-		            _ = Outer.__safeDI_Outer_28D7A7F2559D6961.self\(seamCallComment(seam: "Outer"))
+		            _ = Outer.__safeDI_Outer_3EB48B04EDC58A42.self\(seamCallComment(seam: "Outer"))
 		            func __safeDI_panelBuilder_Outer(_ scope: Outer.SafeDIScope_Panel) -> Panel {
 		                switch scope {
-		                case let .inner(_, scope): return __safeDI_panelBuilder_Inner(scope)
+		                case let .inner(scope): return __safeDI_panelBuilder_Inner(scope)
 		                }
 		            }
 		            func __safeDI_panelBuilder_Inner(_ scope: Inner.SafeDIScope_Panel) -> Panel {
