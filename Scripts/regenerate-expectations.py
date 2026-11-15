@@ -78,6 +78,18 @@ MODIFIERS = {
     "borrowing", "async",
 }
 WRITTEN_FOR_THE_NEW_OUTPUT = "the head output matches a literal (a test written for the new output)"
+# The placeholders `ExpectationRecording.PathNormalization` puts in place of run-specific paths. Keep in step with
+# Tests/SafeDIToolTestSupport/ExpectationRecording.swift and its callers. A literal's own text can never spell one
+# that a run fills in, so a rewrite that would write one outside an interpolation is left for a person.
+RUN_PATH_PLACEHOLDER = re.compile(
+    r"\$(?:TARGET_DIRECTORY|ADDITIONAL_DIRECTORY|OUTPUT_DIRECTORY|REPORTED_TARGET_DIRECTORY|REPORTED_PROJECT_ROOT"
+    r"|FIXTURE_ROOT|TEST_TEMPORARY_DIRECTORY|FIXTURE_PARENT_DIRECTORY|CURRENT_DIRECTORY|RUN_DIRECTORY)(?![A-Z_])"
+)
+
+
+def placeholder_count(parts):
+    """How many run-path placeholders the literal's own text spells."""
+    return sum(len(RUN_PATH_PLACEHOLDER.findall(text)) for kind, text in parts if kind == "text")
 # The longest changed region whose characters are aligned to place interpolations; a longer one is manual.
 LONGEST_CHARACTER_ALIGNMENT = 20000
 
@@ -1128,8 +1140,12 @@ def apply(arguments):
             if mapped is None:
                 reason, detail = "interpolation in a changed region", change_diff(body, head_body)
                 break
+            parts = rebuilt_parts(literal, head_body, mapped)
+            if placeholder_count(parts) > placeholder_count(literal.parts):
+                reason, detail = "the new value names a run directory outside its interpolations", change_diff(body, head_body)
+                break
             try:
-                sources.add(checked_encoding(literal, rebuilt_parts(literal, head_body, mapped)))
+                sources.add(checked_encoding(literal, parts))
             except EncodeError as error:
                 reason, detail = f"the new value cannot be spelled: {error}", change_diff(body, head_body)
                 break
@@ -1609,6 +1625,14 @@ def self_test(root):
         '\t\tawait assertThrowsError("New error.") {\n\t\t\ttry run()\n\t\t}\n'
         '\t\tawait assertThrowsError(diagnostics: { fixtures in\n\t\t\t"\\(fixtures["A.swift"]):1:1: error: New message the run printed."\n\t\t}) {\n\t\t\ttry run()\n\t\t}'
     ), "assertion: rewritten source")
+
+    # a new value that spells a run path outside every interpolation could never equal the next run's output: manual.
+    test = case("placeholder-outside-interpolation")
+    original = test_function('\t\t#expect(run() == """\n\t\tlet a = Old()\n\t\t""")\n\t\tawait assertThrowsError("Old message the run printed.") {\n\t\t\ttry run()\n\t\t}')
+    test.test_file(original)
+    test.records([generation_record("k", 4, "let a = Old()")], [generation_record("k", 4, "// Declared at $TARGET_DIRECTORY/A.swift:3\nlet a = New()"), assertion_record("a", 7, "plain", "Old message the run printed.", "$FIXTURE_ROOT/App/A.swift:1:1: error: New message the run printed.")], {"rename": [{"name": "rename", "table": {"Old": "New"}}]})
+    status, summary = test.run()
+    expect(status == 1 and summary["rewritten"] == 0 and summary["manualReasons"] == ["the new value names a run directory outside its interpolations"] * 2 and test.source() == original, f"placeholder outside interpolation: {status} {summary}")
 
     # a wrapper's call site: its expected value is no literal there, so manual.
     test = case("wrapper")
