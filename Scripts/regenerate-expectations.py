@@ -21,8 +21,9 @@ Applying. With both record directories, the change's rules file and an empty rep
   python3 -I Scripts/regenerate-expectations.py --base-records BASE --head-records HEAD --rules RULES.json \\
       --report REPORT --checkout .
 A string literal is rewritten only when it equalled a base record exactly (or after `generatedFileHeader`), within
-the test function whose call recorded it (or anywhere in the file, for a literal outside every test function), or,
-for an assertion record, when it is the literal the failing assertion call compared and it evaluates to the recorded
+the test function whose call recorded it, or whose Swift Testing name the record carries when no other test function
+of the file has that name, as for a call made through a helper function of the file (or anywhere in the file, for a
+literal outside every test function), or, for an assertion record, when it is the literal the failing assertion call compared and it evaluates to the recorded
 expected value. Its new value is the head record of the same key. An interpolated literal is matched as a pattern,
 each `\\(…)` a capture, and an expression spelled twice capturing one value; one whose captures stand for more of
 the output than its one-line text does, such as `"\\(self)"`, matches nothing. Each interpolation is put back only
@@ -47,8 +48,8 @@ whose call skipped compile verification, a sample of N explained literals (--sam
 functions and records were mapped. Two runs over the same inputs write the same bytes.
 
 Exit status: 0 when every changed literal is explained; 1 when some are unexplained or manual (read the report).
-An output that changed but matched no literal, such as one a test compares through a helper function or assembles
-from fragments, is listed first in the report and leaves the status alone, since the script cannot tell whether a
+An output that changed but matched no literal, such as one a test assembles from fragments or never compares,
+is listed first in the report and leaves the status alone, since the script cannot tell whether a
 test compares it. 2 on an error, with nothing written: the two manifests differ or the checkout's Tests/ differs
 from them (as it does once the records are applied), a record's fileID names no single file under Tests/, a rule is
 rejected, a rewrite fails its own check, or a file cannot be parsed. --dry-run writes the report and no test file.
@@ -439,8 +440,34 @@ class SwiftFile:
             if body is None:
                 continue
             closing = self.tokens[self.matching[body]]
-            functions.append((self.line_of(token.start), self.line_of(closing.end - 1), self.tokens[body].start, closing.end, self._is_test(position)))
+            functions.append((self.line_of(token.start), self.line_of(closing.end - 1), self.tokens[body].start, closing.end, self._is_test(position), self._test_name(position)))
         return functions
+
+    def _test_name(self, position):
+        """The function's name as Swift Testing names it: `name(label:label:)`."""
+        name = self.tokens[position + 1].text
+        opening = position + 2
+        while opening < len(self.tokens) and self.tokens[opening].text != "(":
+            opening += 1
+        closing = self.matching[opening]
+        labels = []
+        current = []
+        index = opening + 1
+        while index < closing:
+            token = self.tokens[index]
+            if token.text in "([{" and token.kind == "punctuation":
+                current.append(token)
+                index = self.matching[index] + 1
+                continue
+            if token.text == "," and token.kind == "punctuation":
+                labels.append(current[0].text if current else "")
+                current = []
+            else:
+                current.append(token)
+            index += 1
+        if current:
+            labels.append(current[0].text)
+        return name + "(" + "".join(label + ":" for label in labels) + ")"
 
     def test_function_of_offset(self, offset):
         """The outermost test function whose body holds `offset`, or None."""
@@ -1017,7 +1044,8 @@ def apply(arguments):
             if function is None:
                 candidates = file_records
             else:
-                candidates = records_by_function.get(function, [])
+                same_name = [other for other in current.functions if other[4] and other[5] == function[5]]
+                candidates = records_by_function.get(function, []) + ([record for record in file_records if record.get("testName") == function[5] and current.test_function_of_line(record["line"]) != function] if len(same_name) == 1 else [])
             for record in candidates:
                 matched = match_literal(literal, record["content"], header)
                 if matched is None:
@@ -1465,6 +1493,23 @@ def self_test(root):
     test.records([generation_record("k", 9, "Old")], [generation_record("k", 9, "New")])
     status, summary = test.run()
     expect(status == 0 and summary["rewritten"] == 0 and summary["changedWithoutLiteral"] == 1 and test.source() == original, f"scope: {status} {summary}")
+
+    # a call made through a helper function of the file maps to the literal of the test whose name its record carries.
+    test = case("helper-call-site")
+    helper = '\tfunc check() -> String {\n\t\trun()\n\t}\n'
+    test.test_file('struct FileTests {\n' + helper + '\n\t@Test(arguments: [1])\n\tfunc test(value: Int) {\n\t\t#expect(check() == "Old")\n\t}\n}\n')
+    test.records([generation_record("k", 3, "Old", test_name="test(value:)")], [generation_record("k", 3, "New", test_name="test(value:)")], {"rename": [{"name": "rename", "table": {"Old": "New"}}]})
+    status, summary = test.run()
+    expect(status == 0 and summary["explained"] == 1, f"helper call site: {status} {summary}")
+    expect(test.source() == 'struct FileTests {\n' + helper + '\n\t@Test(arguments: [1])\n\tfunc test(value: Int) {\n\t\t#expect(check() == "New")\n\t}\n}\n', "helper call site: rewritten source")
+
+    # a test name two test functions of the file share maps no helper's record to either.
+    test = case("helper-call-site-shared-name")
+    original = 'struct FileTests {\n' + helper + '\n\t@Test\n\tfunc test() {\n\t\t#expect(check() == "Old")\n\t}\n}\n\nextension Other {\n\t@Test\n\tfunc test() {\n\t\t#expect(check() == "Old")\n\t}\n}\n'
+    test.test_file(original)
+    test.records([generation_record("k", 3, "Old")], [generation_record("k", 3, "New")])
+    status, summary = test.run()
+    expect(status == 0 and summary["rewritten"] == 0 and summary["changedWithoutLiteral"] == 1 and test.source() == original, f"helper call site, shared name: {status} {summary}")
 
     # a base record with no literal: listed, not an error.
     test = case("record-without-literal")
