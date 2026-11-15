@@ -9973,7 +9973,8 @@ struct GraphFuzzerFailure: Equatable {
 		/// where the places meet (`GraphFuzzerToolRuns.forwardedValuesFailure`).
 		case placesForwardingOtherValuesAccepted = "places of one builder that forward other values are accepted, or rejected only outside the module where they meet"
 		/// The tool accepts the remedy of places of one builder that forward other values with other builders than the drawn
-		/// graph's (`GraphFuzzerToolRuns.remedyBuildersFailure`). No known issue lists it.
+		/// graph's (`GraphFuzzerToolRuns.remedyBuildersFailure`). Known issues list it only for the transitional builder-kind
+		/// flip (`GraphFuzzerFailure.knownBuilderSurfaceKinds`).
 		case remedyAddsBuilder = "the remedy of places of one builder that forward other values takes other builders than the drawn graph"
 		/// A second call of another module's public mock renames, retypes or reorders a builder a calling mock takes
 		/// (`GraphFuzzerToolRuns.callingMockFailure`).
