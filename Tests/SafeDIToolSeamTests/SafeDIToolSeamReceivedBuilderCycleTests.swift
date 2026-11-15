@@ -273,28 +273,28 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            }
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let widget: (widget_Values) -> Built
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let widget: (widget_Values) -> __safeDI_Built
 
-		                public init(widget: @escaping (widget_Values) -> Built) {
+		                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
 		                    self.widget = widget
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.widget = { _ in __safeDI_builder() }
 		                }
 		            }
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<Built>
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<Built>) {
+		            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.aBuilder = aBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
@@ -377,14 +377,14 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            }
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let widget: (widget_Values) -> Built
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let widget: (widget_Values) -> __safeDI_Built
 
-		                public init(widget: @escaping (widget_Values) -> Built) {
+		                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
 		                    self.widget = widget
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.widget = { _ in __safeDI_builder() }
 		                }
 		            }
@@ -397,14 +397,14 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		        nonisolated public struct aBuilder_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built>: Sendable {
-		            public let aBuilder: @Sendable (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<Built>
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let aBuilder: @Sendable (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(aBuilder: @escaping @Sendable (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<Built>) {
+		            public init(aBuilder: @escaping @Sendable (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.aBuilder = aBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
@@ -493,14 +493,14 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            nonisolated public struct p_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let p: (p_Values) -> SafeDIScope_Widget.P_Scope.__safeDI_Builder<Built>
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let p: (p_Values) -> SafeDIScope_Widget.P_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(p: @escaping (p_Values) -> SafeDIScope_Widget.P_Scope.__safeDI_Builder<Built>) {
+		                public init(p: @escaping (p_Values) -> SafeDIScope_Widget.P_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.p = p
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.p = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		                }
 		            }
@@ -512,14 +512,14 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            nonisolated public struct aBuilder_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<Built>
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<Built>) {
+		                public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.aBuilder = aBuilder
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		                }
 		            }
@@ -534,28 +534,28 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            }
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let widget: (widget_Values) -> Built
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let widget: (widget_Values) -> __safeDI_Built
 
-		                public init(widget: @escaping (widget_Values) -> Built) {
+		                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
 		                    self.widget = widget
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.widget = { _ in __safeDI_builder() }
 		                }
 		            }
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let xBuilder: (xBuilder_Values) -> SafeDIScope_Widget.X_Scope.__safeDI_Builder<Built>
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let xBuilder: (xBuilder_Values) -> SafeDIScope_Widget.X_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(xBuilder: @escaping (xBuilder_Values) -> SafeDIScope_Widget.X_Scope.__safeDI_Builder<Built>) {
+		            public init(xBuilder: @escaping (xBuilder_Values) -> SafeDIScope_Widget.X_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.xBuilder = xBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.xBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
@@ -668,14 +668,14 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            }
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let widget: (widget_Values) -> Built
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let widget: (widget_Values) -> __safeDI_Built
 
-		                public init(widget: @escaping (widget_Values) -> Built) {
+		                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
 		                    self.widget = widget
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.widget = { _ in __safeDI_builder() }
 		                }
 		            }
@@ -690,30 +690,30 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            }
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let widget: (widget_Values) -> Built
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let widget: (widget_Values) -> __safeDI_Built
 
-		                public init(widget: @escaping (widget_Values) -> Built) {
+		                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
 		                    self.widget = widget
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.widget = { _ in __safeDI_builder() }
 		                }
 		            }
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<Built>
-		            public let bBuilder: (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<Built>
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let bBuilder: (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<Built>, bBuilder: @escaping (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<Built>) {
+		            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>, bBuilder: @escaping (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.aBuilder = aBuilder
 		                self.bBuilder = bBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		                self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
@@ -817,28 +817,28 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            }
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let widget: (widget_Values) -> Built
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let widget: (widget_Values) -> __safeDI_Built
 
-		                public init(widget: @escaping (widget_Values) -> Built) {
+		                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
 		                    self.widget = widget
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.widget = { _ in __safeDI_builder() }
 		                }
 		            }
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let bBuilder: (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<Built>
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let bBuilder: (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(bBuilder: @escaping (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<Built>) {
+		            public init(bBuilder: @escaping (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.bBuilder = bBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
@@ -927,16 +927,16 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            }
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let leaf: (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<Built>
-		                public let widget: (widget_Values) -> Built
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let leaf: (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let widget: (widget_Values) -> __safeDI_Built
 
-		                public init(leaf: @escaping (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<Built>, widget: @escaping (widget_Values) -> Built) {
+		                public init(leaf: @escaping (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>, widget: @escaping (widget_Values) -> __safeDI_Built) {
 		                    self.leaf = leaf
 		                    self.widget = widget
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.leaf = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		                    self.widget = { _ in __safeDI_builder() }
 		                }
@@ -952,14 +952,14 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            }
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let leaf: (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<Built>
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let leaf: (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(leaf: @escaping (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<Built>) {
+		                public init(leaf: @escaping (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.leaf = leaf
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.leaf = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		                }
 		            }
@@ -971,32 +971,32 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            nonisolated public struct widget_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let widget: (widget_Values) -> Built
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let widget: (widget_Values) -> __safeDI_Built
 
-		                public init(widget: @escaping (widget_Values) -> Built) {
+		                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
 		                    self.widget = widget
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.widget = { _ in __safeDI_builder() }
 		                }
 		            }
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<Built>
-		            public let bBuilder: (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<Built>
-		            public let leaf: (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<Built>
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let bBuilder: (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let leaf: (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<Built>, bBuilder: @escaping (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<Built>, leaf: @escaping (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<Built>) {
+		            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>, bBuilder: @escaping (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>, leaf: @escaping (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.aBuilder = aBuilder
 		                self.bBuilder = bBuilder
 		                self.leaf = leaf
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		                self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		                self.leaf = { _ in .init(__safeDI_noScope: __safeDI_builder) }
@@ -1106,14 +1106,14 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            nonisolated public struct aBuilder_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<Built>
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<Built>) {
+		                public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.aBuilder = aBuilder
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		                }
 		            }
@@ -1128,30 +1128,30 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		            }
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let widget: (widget_Values) -> Built
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let widget: (widget_Values) -> __safeDI_Built
 
-		                public init(widget: @escaping (widget_Values) -> Built) {
+		                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
 		                    self.widget = widget
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.widget = { _ in __safeDI_builder() }
 		                }
 		            }
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let flow: (flow_Values) -> SafeDIScope_Widget.Flow_Scope.__safeDI_Builder<Built>
-		            public let a: (a_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<Built>
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let flow: (flow_Values) -> SafeDIScope_Widget.Flow_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let a: (a_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(flow: @escaping (flow_Values) -> SafeDIScope_Widget.Flow_Scope.__safeDI_Builder<Built>, a: @escaping (a_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<Built>) {
+		            public init(flow: @escaping (flow_Values) -> SafeDIScope_Widget.Flow_Scope.__safeDI_Builder<__safeDI_Built>, a: @escaping (a_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.flow = flow
 		                self.a = a
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.flow = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		                self.a = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }

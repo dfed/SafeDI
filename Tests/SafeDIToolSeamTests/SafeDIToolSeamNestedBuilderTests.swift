@@ -129,28 +129,28 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            nonisolated public struct service_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<Built> {
-			                public let service: (service_Values) -> Built
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let service: (service_Values) -> __safeDI_Built
 
-			                public init(service: @escaping (service_Values) -> Built) {
+			                public init(service: @escaping (service_Values) -> __safeDI_Built) {
 			                    self.service = service
 			                }
 
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                    self.service = { _ in __safeDI_builder() }
 			                }
 			            }
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let panel: (panel_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<Built>
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let panel: (panel_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(panel: @escaping (panel_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<Built>) {
+			            public init(panel: @escaping (panel_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.panel = panel
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 			            }
 			        }
@@ -231,14 +231,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            nonisolated public struct service_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<Built> {
-			                public let service: (service_Values) -> Built
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let service: (service_Values) -> __safeDI_Built
 
-			                public init(service: @escaping (service_Values) -> Built) {
+			                public init(service: @escaping (service_Values) -> __safeDI_Built) {
 			                    self.service = service
 			                }
 
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                    self.service = { _ in __safeDI_builder() }
 			                }
 			            }
@@ -250,30 +250,30 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            nonisolated public struct service_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<Built> {
-			                public let service: (service_Values) -> Built
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let service: (service_Values) -> __safeDI_Built
 
-			                public init(service: @escaping (service_Values) -> Built) {
+			                public init(service: @escaping (service_Values) -> __safeDI_Built) {
 			                    self.service = service
 			                }
 
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                    self.service = { _ in __safeDI_builder() }
 			                }
 			            }
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let panel: (panel_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<Built>
-			            public let row: (row_Values) -> SafeDIScope_Service.Row_Scope.__safeDI_Builder<Built>
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let panel: (panel_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let row: (row_Values) -> SafeDIScope_Service.Row_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(panel: @escaping (panel_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<Built>, row: @escaping (row_Values) -> SafeDIScope_Service.Row_Scope.__safeDI_Builder<Built>) {
+			            public init(panel: @escaping (panel_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>, row: @escaping (row_Values) -> SafeDIScope_Service.Row_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.panel = panel
 			                self.row = row
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 			                self.row = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 			            }
@@ -366,30 +366,30 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            nonisolated public struct service_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<Built> {
-			                public let service: (service_Values) -> Built
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let service: (service_Values) -> __safeDI_Built
 
-			                public init(service: @escaping (service_Values) -> Built) {
+			                public init(service: @escaping (service_Values) -> __safeDI_Built) {
 			                    self.service = service
 			                }
 
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                    self.service = { _ in __safeDI_builder() }
 			                }
 			            }
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let first: (first_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<Built>
-			            public let second: (second_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<Built>
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let first: (first_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let second: (second_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(first: @escaping (first_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<Built>, second: @escaping (second_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<Built>) {
+			            public init(first: @escaping (first_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>, second: @escaping (second_Values) -> SafeDIScope_Service.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.first = first
 			                self.second = second
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.first = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 			                self.second = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 			            }
@@ -445,16 +445,16 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let first: (first_Values) -> Built
-			            public let second: (second_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let first: (first_Values) -> __safeDI_Built
+			            public let second: (second_Values) -> __safeDI_Built
 
-			            public init(first: @escaping (first_Values) -> Built, second: @escaping (second_Values) -> Built) {
+			            public init(first: @escaping (first_Values) -> __safeDI_Built, second: @escaping (second_Values) -> __safeDI_Built) {
 			                self.first = first
 			                self.second = second
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.first = { _ in __safeDI_builder() }
 			                self.second = { _ in __safeDI_builder() }
 			            }
@@ -528,14 +528,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let gadget: (gadget_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let gadget: (gadget_Values) -> __safeDI_Built
 
-			            public init(gadget: @escaping (gadget_Values) -> Built) {
+			            public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 			                self.gadget = gadget
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.gadget = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -547,14 +547,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        nonisolated public struct service_Values {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let service: (service_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let service: (service_Values) -> __safeDI_Built
 
-			            public init(service: @escaping (service_Values) -> Built) {
+			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
 			                self.service = service
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.service = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -634,14 +634,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let erased: (erased_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let erased: (erased_Values) -> __safeDI_Built
 
-		            public init(erased: @escaping (erased_Values) -> Built) {
+		            public init(erased: @escaping (erased_Values) -> __safeDI_Built) {
 		                self.erased = erased
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.erased = { _ in __safeDI_builder() }
 		            }
 		        }
@@ -653,14 +653,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        nonisolated public struct plain_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let plain: (plain_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let plain: (plain_Values) -> __safeDI_Built
 
-		            public init(plain: @escaping (plain_Values) -> Built) {
+		            public init(plain: @escaping (plain_Values) -> __safeDI_Built) {
 		                self.plain = plain
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.plain = { _ in __safeDI_builder() }
 		            }
 		        }
@@ -700,14 +700,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let other: (other_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let other: (other_Values) -> __safeDI_Built
 
-		            public init(other: @escaping (other_Values) -> Built) {
+		            public init(other: @escaping (other_Values) -> __safeDI_Built) {
 		                self.other = other
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.other = { _ in __safeDI_builder() }
 		            }
 		        }
@@ -719,14 +719,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        nonisolated public struct service_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let service: (service_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let service: (service_Values) -> __safeDI_Built
 
-		            public init(service: @escaping (service_Values) -> Built) {
+		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
 		                self.service = service
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.service = { _ in __safeDI_builder() }
 		            }
 		        }
@@ -769,16 +769,16 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let first: (first_Values) -> Built
-		            public let second: (second_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let first: (first_Values) -> __safeDI_Built
+		            public let second: (second_Values) -> __safeDI_Built
 
-		            public init(first: @escaping (first_Values) -> Built, second: @escaping (second_Values) -> Built) {
+		            public init(first: @escaping (first_Values) -> __safeDI_Built, second: @escaping (second_Values) -> __safeDI_Built) {
 		                self.first = first
 		                self.second = second
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.first = { _ in __safeDI_builder() }
 		                self.second = { _ in __safeDI_builder() }
 		            }
@@ -822,16 +822,16 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let first: (first_Values) -> Built
-		            public let second: (second_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let first: (first_Values) -> __safeDI_Built
+		            public let second: (second_Values) -> __safeDI_Built
 
-		            public init(first: @escaping (first_Values) -> Built, second: @escaping (second_Values) -> Built) {
+		            public init(first: @escaping (first_Values) -> __safeDI_Built, second: @escaping (second_Values) -> __safeDI_Built) {
 		                self.first = first
 		                self.second = second
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.first = { _ in __safeDI_builder() }
 		                self.second = { _ in __safeDI_builder() }
 		            }
@@ -1064,16 +1064,16 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let first: (first_Values) -> Built
-		            public let second: (second_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let first: (first_Values) -> __safeDI_Built
+		            public let second: (second_Values) -> __safeDI_Built
 
-		            public init(first: @escaping (first_Values) -> Built, second: @escaping (second_Values) -> Built) {
+		            public init(first: @escaping (first_Values) -> __safeDI_Built, second: @escaping (second_Values) -> __safeDI_Built) {
 		                self.first = first
 		                self.second = second
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.first = { _ in __safeDI_builder() }
 		                self.second = { _ in __safeDI_builder() }
 		            }
@@ -1143,14 +1143,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        nonisolated public struct service_Values {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let service: (service_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let service: (service_Values) -> __safeDI_Built
 
-			            public init(service: @escaping (service_Values) -> Built) {
+			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
 			                self.service = service
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.service = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -1287,14 +1287,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        nonisolated public struct service_Values {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let service: (service_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let service: (service_Values) -> __safeDI_Built
 
-			            public init(service: @escaping (service_Values) -> Built) {
+			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
 			                self.service = service
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.service = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -1364,14 +1364,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        nonisolated public struct service_Values {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let service: (service_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let service: (service_Values) -> __safeDI_Built
 
-			            public init(service: @escaping (service_Values) -> Built) {
+			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
 			                self.service = service
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.service = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -1554,14 +1554,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        nonisolated public struct service_Values {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let service: (service_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let service: (service_Values) -> __safeDI_Built
 
-			            public init(service: @escaping (service_Values) -> Built) {
+			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
 			                self.service = service
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.service = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -1635,14 +1635,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        nonisolated public struct service_Values {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let service: (service_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let service: (service_Values) -> __safeDI_Built
 
-			            public init(service: @escaping (service_Values) -> Built) {
+			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
 			                self.service = service
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.service = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -1783,14 +1783,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            nonisolated public struct service_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<Built> {
-			                public let service: (service_Values) -> Built
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let service: (service_Values) -> __safeDI_Built
 
-			                public init(service: @escaping (service_Values) -> Built) {
+			                public init(service: @escaping (service_Values) -> __safeDI_Built) {
 			                    self.service = service
 			                }
 
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                    self.service = { _ in __safeDI_builder() }
 			                }
 			            }
@@ -1803,14 +1803,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        nonisolated public struct job_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built>: Sendable {
-			            public let job: @Sendable (job_Values) -> SafeDIScope_Service.Job_Scope.__safeDI_Builder<Built>
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let job: @Sendable (job_Values) -> SafeDIScope_Service.Job_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(job: @escaping @Sendable (job_Values) -> SafeDIScope_Service.Job_Scope.__safeDI_Builder<Built>) {
+			            public init(job: @escaping @Sendable (job_Values) -> SafeDIScope_Service.Job_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.job = job
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			                self.job = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 			            }
 			        }
@@ -2310,14 +2310,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        nonisolated public struct service_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let service: (service_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let service: (service_Values) -> __safeDI_Built
 
-		            public init(service: @escaping (service_Values) -> Built) {
+		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
 		                self.service = service
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.service = { _ in __safeDI_builder() }
 		            }
 		        }
@@ -2489,16 +2489,16 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let `default`: (default_Values) -> Built
-			            public let `my leaf`: (`my leaf_Values`) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let `default`: (default_Values) -> __safeDI_Built
+			            public let `my leaf`: (`my leaf_Values`) -> __safeDI_Built
 
-			            public init(`default`: @escaping (default_Values) -> Built, `my leaf`: @escaping (`my leaf_Values`) -> Built) {
+			            public init(`default`: @escaping (default_Values) -> __safeDI_Built, `my leaf`: @escaping (`my leaf_Values`) -> __safeDI_Built) {
 			                self.`default` = `default`
 			                self.`my leaf` = `my leaf`
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.`default` = { _ in __safeDI_builder() }
 			                self.`my leaf` = { _ in __safeDI_builder() }
 			            }
@@ -2553,14 +2553,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let kp: (kp_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let kp: (kp_Values) -> __safeDI_Built
 
-		            public init(kp: @escaping (kp_Values) -> Built) {
+		            public init(kp: @escaping (kp_Values) -> __safeDI_Built) {
 		                self.kp = kp
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.kp = { _ in __safeDI_builder() }
 		            }
 		        }
@@ -2572,14 +2572,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        nonisolated public struct loader_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let loader: (loader_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let loader: (loader_Values) -> __safeDI_Built
 
-		            public init(loader: @escaping (loader_Values) -> Built) {
+		            public init(loader: @escaping (loader_Values) -> __safeDI_Built) {
 		                self.loader = loader
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.loader = { _ in __safeDI_builder() }
 		            }
 		        }
@@ -2618,14 +2618,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let service: (service_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let service: (service_Values) -> __safeDI_Built
 
-		            public init(service: @escaping (service_Values) -> Built) {
+		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
 		                self.service = service
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.service = { _ in __safeDI_builder() }
 		            }
 		        }
@@ -2666,16 +2666,16 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let service: (service_Values_) -> Built
-		            public let service_Values: (service_Values_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let service: (service_Values_) -> __safeDI_Built
+		            public let service_Values: (service_Values_Values) -> __safeDI_Built
 
-		            public init(service: @escaping (service_Values_) -> Built, service_Values: @escaping (service_Values_Values) -> Built) {
+		            public init(service: @escaping (service_Values_) -> __safeDI_Built, service_Values: @escaping (service_Values_Values) -> __safeDI_Built) {
 		                self.service = service
 		                self.service_Values = service_Values
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.service = { _ in __safeDI_builder() }
 		                self.service_Values = { _ in __safeDI_builder() }
 		            }
@@ -2715,14 +2715,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        nonisolated public struct nested_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let nested: (nested_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let nested: (nested_Values) -> __safeDI_Built
 
-		            public init(nested: @escaping (nested_Values) -> Built) {
+		            public init(nested: @escaping (nested_Values) -> __safeDI_Built) {
 		                self.nested = nested
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.nested = { _ in __safeDI_builder() }
 		            }
 		        }
@@ -2736,14 +2736,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let joined: (joined_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let joined: (joined_Values) -> __safeDI_Built
 
-		            public init(joined: @escaping (joined_Values) -> Built) {
+		            public init(joined: @escaping (joined_Values) -> __safeDI_Built) {
 		                self.joined = joined
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.joined = { _ in __safeDI_builder() }
 		            }
 		        }
@@ -2789,14 +2789,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let nested: (nested_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let nested: (nested_Values) -> __safeDI_Built
 
-		            public init(nested: @escaping (nested_Values) -> Built) {
+		            public init(nested: @escaping (nested_Values) -> __safeDI_Built) {
 		                self.nested = nested
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.nested = { _ in __safeDI_builder() }
 		            }
 		        }
@@ -2811,14 +2811,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let joined: (joined_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let joined: (joined_Values) -> __safeDI_Built
 
-		            public init(joined: @escaping (joined_Values) -> Built) {
+		            public init(joined: @escaping (joined_Values) -> __safeDI_Built) {
 		                self.joined = joined
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.joined = { _ in __safeDI_builder() }
 		            }
 		        }
@@ -3032,14 +3032,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        nonisolated public struct service_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let service: (service_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let service: (service_Values) -> __safeDI_Built
 
-		            public init(service: @escaping (service_Values) -> Built) {
+		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
 		                self.service = service
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.service = { _ in __safeDI_builder() }
 		            }
 		        }
@@ -3639,28 +3639,28 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			            nonisolated public struct service_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<Built> {
-			                public let service: (service_Values) -> Built
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let service: (service_Values) -> __safeDI_Built
 
-			                public init(service: @escaping (service_Values) -> Built) {
+			                public init(service: @escaping (service_Values) -> __safeDI_Built) {
 			                    self.service = service
 			                }
 
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                    self.service = { _ in __safeDI_builder() }
 			                }
 			            }
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let zsvc: (zsvc_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let zsvc: (zsvc_Values) -> __safeDI_Built
 
-			            public init(zsvc: @escaping (zsvc_Values) -> Built) {
+			            public init(zsvc: @escaping (zsvc_Values) -> __safeDI_Built) {
 			                self.zsvc = zsvc
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.zsvc = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -3672,14 +3672,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        nonisolated public struct job_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built>: Sendable {
-			            public let job: @Sendable (job_Values) -> SafeDIScope_Service.Job_Scope.__safeDI_Builder<Built>
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let job: @Sendable (job_Values) -> SafeDIScope_Service.Job_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(job: @escaping @Sendable (job_Values) -> SafeDIScope_Service.Job_Scope.__safeDI_Builder<Built>) {
+			            public init(job: @escaping @Sendable (job_Values) -> SafeDIScope_Service.Job_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.job = job
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			                self.job = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 			            }
 			        }
@@ -3760,14 +3760,14 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 			        nonisolated public struct service_Values {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let service: (service_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let service: (service_Values) -> __safeDI_Built
 
-			            public init(service: @escaping (service_Values) -> Built) {
+			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
 			                self.service = service
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.service = { _ in __safeDI_builder() }
 			            }
 			        }
