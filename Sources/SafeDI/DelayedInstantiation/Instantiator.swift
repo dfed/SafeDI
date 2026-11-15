@@ -51,3 +51,10 @@ public final class Instantiator<T: Instantiable> {
 
 	private let instantiator: (T.ForwardedProperties) -> T
 }
+
+extension Instantiator {
+	/// A closure that takes `T.ForwardedProperties` and returns an instance of `T`: what an `Instantiator` is created with.
+	///
+	/// A closure of this type may keep a forwarded property that is itself a closure, as one passed to `init(_:)` may.
+	public typealias Builder = (T.ForwardedProperties) -> T
+}

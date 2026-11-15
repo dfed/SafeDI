@@ -52,3 +52,11 @@ public final class ErasedInstantiator<ForwardedProperties, Instantiable> {
 
 	private let instantiator: (ForwardedProperties) -> Instantiable
 }
+
+extension ErasedInstantiator {
+	/// A closure that takes `ForwardedProperties` and returns an instance of `Instantiable`: what an
+	/// `ErasedInstantiator` is created with.
+	///
+	/// A closure of this type may keep a forwarded property that is itself a closure, as one passed to `init(_:)` may.
+	public typealias Builder = (ForwardedProperties) -> Instantiable
+}

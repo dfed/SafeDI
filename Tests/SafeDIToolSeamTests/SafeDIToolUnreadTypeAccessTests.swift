@@ -3694,9 +3694,267 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 	}
 
+	// MARK: SB: SafeDI's nested `Builder` types are SafeDI's, which no comment names
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesBuilderTypesOfEveryWrapperOnPublicTierWithoutComment_whenSeamReceivesThem(integration: MultiModuleIntegration) async throws {
+		// SB1: the seam receives each wrapper's `Builder`, which `App` forwards through a host; the public tier takes them,
+		// and the comment names none of them.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.screenModules(
+				receives: Self.builderTypeReceives,
+				extraFeatureFiles: ["Badge.swift": Self.badgeSource],
+				hostForwards: Self.builderTypeForwards,
+				featureImportsSafeDI: true,
+			),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Kit", "SafeDI"], tiers: """
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_badgeBuilder badgeBuilder: @escaping Instantiator<Badge>.Builder, __safeDI_sendableBadgeBuilder sendableBadgeBuilder: @escaping SendableInstantiator<Badge>.Builder, __safeDI_erasedBadgeBuilder erasedBadgeBuilder: @escaping ErasedInstantiator<(), Badge>.Builder, __safeDI_sendableErasedBadgeBuilder sendableErasedBadgeBuilder: @escaping SendableErasedInstantiator<(), Badge>.Builder) {
+		        let cache = Cache()
+		        self.init(badgeBuilder: badgeBuilder, sendableBadgeBuilder: sendableBadgeBuilder, erasedBadgeBuilder: erasedBadgeBuilder, sendableErasedBadgeBuilder: sendableErasedBadgeBuilder, cache: cache)
+		    }
+		""", guardHash: "39DCCEBE3CCD9737"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesBuilderTypesOfEveryWrapperOnPublicTierWithoutComment_whenTypeBeneathSeamReceivesThem() async throws {
+		// SB2: `Banner`, beneath the seam, receives each wrapper's `Builder`: pass-throughs the public tier takes.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.screenModules(
+				receives: [],
+				instantiates: ["@Instantiated let banner: Banner"],
+				extraFeatureFiles: ["Badge.swift": Self.badgeSource, "Banner.swift": Self.bannerSource],
+				hostForwards: Self.builderTypeForwards,
+				featureImportsSafeDI: true,
+			),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: ["Kit", "SafeDI"], tiers: """
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_badgeBuilder: @autoclosure @escaping () -> Instantiator<Badge>.Builder, __safeDI_erasedBadgeBuilder: @autoclosure @escaping () -> ErasedInstantiator<(), Badge>.Builder, __safeDI_sendableBadgeBuilder: @autoclosure @escaping () -> SendableInstantiator<Badge>.Builder, __safeDI_sendableErasedBadgeBuilder: @autoclosure @escaping () -> SendableErasedInstantiator<(), Badge>.Builder) {
+		        let badgeBuilder = LazilyInstantiated<Instantiator<Badge>.Builder>(__safeDI_badgeBuilder)
+		        let erasedBadgeBuilder = LazilyInstantiated<ErasedInstantiator<(), Badge>.Builder>(__safeDI_erasedBadgeBuilder)
+		        let sendableBadgeBuilder = LazilyInstantiated<SendableInstantiator<Badge>.Builder>(__safeDI_sendableBadgeBuilder)
+		        let sendableErasedBadgeBuilder = LazilyInstantiated<SendableErasedInstantiator<(), Badge>.Builder>(__safeDI_sendableErasedBadgeBuilder)
+		        let banner = Banner(badgeBuilder: badgeBuilder.instance, sendableBadgeBuilder: sendableBadgeBuilder.instance, erasedBadgeBuilder: erasedBadgeBuilder.instance, sendableErasedBadgeBuilder: sendableErasedBadgeBuilder.instance)
+		        let cache = Cache()
+		        self.init(banner: banner, cache: cache)
+		    }
+		""", guardHash: "92A2504D1CEC969D"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesBuilderTypesOfEveryWrapperAsHoleScopeFieldsWithoutComment_whenFillReceivesThem() async throws {
+		// SB3: `App` fills the seam's hole with `AppUserService`, which receives each wrapper's `Builder`: the hole's scope
+		// struct holds them as `public` fields, and the comment names none of them.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.screenModules(
+				receives: Self.builderTypeReceives,
+				instantiates: ["@Instantiated let service: any UserService"],
+				extraFeatureFiles: ["Badge.swift": Self.badgeSource, "UserService.swift": "public protocol UserService {}"],
+				hostForwards: Self.builderTypeForwards,
+				featureImportsSafeDI: true,
+				appFiles: ["AppUserService.swift": Self.appUserServiceSource],
+			),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: ["Kit", "SafeDI"], tiers: """
+		    @frozen public enum SafeDIScope_UserService {
+		        case service(service_Values)
+
+		        public struct service_Values {
+		            public let badgeBuilder: Instantiator<Badge>.Builder
+		            public let sendableBadgeBuilder: SendableInstantiator<Badge>.Builder
+		            public let erasedBadgeBuilder: ErasedInstantiator<(), Badge>.Builder
+		            public let sendableErasedBadgeBuilder: SendableErasedInstantiator<(), Badge>.Builder
+		            internal let cache: Cache
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_badgeBuilder badgeBuilder: @escaping Instantiator<Badge>.Builder, __safeDI_sendableBadgeBuilder sendableBadgeBuilder: @escaping SendableInstantiator<Badge>.Builder, __safeDI_erasedBadgeBuilder erasedBadgeBuilder: @escaping ErasedInstantiator<(), Badge>.Builder, __safeDI_sendableErasedBadgeBuilder sendableErasedBadgeBuilder: @escaping SendableErasedInstantiator<(), Badge>.Builder, __safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
+		        let cache = Cache()
+		        let service: any UserService = __safeDI_userServiceBuilder(.service(SafeDIScope_UserService.service_Values(badgeBuilder: badgeBuilder, sendableBadgeBuilder: sendableBadgeBuilder, erasedBadgeBuilder: erasedBadgeBuilder, sendableErasedBadgeBuilder: sendableErasedBadgeBuilder, cache: cache)))
+		        self.init(badgeBuilder: badgeBuilder, sendableBadgeBuilder: sendableBadgeBuilder, erasedBadgeBuilder: erasedBadgeBuilder, sendableErasedBadgeBuilder: sendableErasedBadgeBuilder, service: service, cache: cache)
+		    }
+		""", guardHash: "79CFB6518E7F29B8"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesBuilderTypesOfEveryWrapperOnPublicMockWithoutComment_whenMockedTypeReceivesThem() async throws {
+		// SB4: the public mock takes each wrapper's `Builder`; `App`, in another package, calls it.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: [
+					"Badge.swift": Self.badgeSource,
+					"Screen.swift": Self.publicMockScreenSource(receives: Self.builderTypeReceives, imports: ["SafeDI"]),
+				]),
+				ModuleFixture(name: "App", packageName: "Store", swiftFileContentByFilePath: [
+					"Preview.swift": "import Feature\n\n#if DEBUG\nfunc preview() -> Screen {\n    Screen.mock(badgeBuilder: { Badge() }, erasedBadgeBuilder: { Badge() }, sendableBadgeBuilder: { Badge() }, sendableErasedBadgeBuilder: { Badge() })\n}\n#endif",
+				], dependencies: ["Feature"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.importLines(["SafeDI"]) + """
+		#if DEBUG
+		extension Screen {
+		    public static func mock(
+		        badgeBuilder: @escaping Instantiator<Badge>.Builder,
+		        erasedBadgeBuilder: @escaping ErasedInstantiator<(), Badge>.Builder,
+		        sendableBadgeBuilder: @escaping SendableInstantiator<Badge>.Builder,
+		        sendableErasedBadgeBuilder: @escaping SendableErasedInstantiator<(), Badge>.Builder
+		    ) -> Screen {
+		        return Screen(badgeBuilder: badgeBuilder, sendableBadgeBuilder: sendableBadgeBuilder, erasedBadgeBuilder: erasedBadgeBuilder, sendableErasedBadgeBuilder: sendableErasedBadgeBuilder)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_mock_159E1F597B1883D5 {}
+		}
+		#endif
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesBuilderTypeQualifiedBySafeDIOnPublicTierWithoutComment_whenSeamReceivesIt() async throws {
+		// SB5: `SafeDI.Instantiator<Badge>.Builder` is SafeDI's too.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.screenModules(
+				receives: ["@Received let badgeBuilder: SafeDI.Instantiator<Badge>.Builder"],
+				extraFeatureFiles: ["Badge.swift": Self.badgeSource],
+				hostForwards: ["badgeBuilder: @escaping SafeDI.Instantiator<Badge>.Builder"],
+				featureImportsSafeDI: true,
+			),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: [], imports: ["Kit", "SafeDI"], tiers: """
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_badgeBuilder badgeBuilder: @escaping SafeDI.Instantiator<Badge>.Builder) {
+		        let cache = Cache()
+		        self.init(badgeBuilder: badgeBuilder, cache: cache)
+		    }
+		""", guardHash: "C97EBD6D04347108"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesUnreadTypeOnPublicTier_whenParameterNamesBuilderNestedInUnreadType() async throws {
+		// SB6: a `Builder` nested in a type that is not SafeDI's, here `Kit`'s unread `Toolbar`, is named as any unread
+		// type is.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.screenModules(receives: ["@Received let toolbarBuilder: Toolbar.Builder"], hostForwards: ["toolbarBuilder: @escaping Toolbar.Builder"]),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Toolbar.Builder"], tiers: """
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_toolbarBuilder toolbarBuilder: @escaping Toolbar.Builder) {
+		        let cache = Cache()
+		        self.init(toolbarBuilder: toolbarBuilder, cache: cache)
+		    }
+		""", guardHash: "CD8E56B7EDA800FC"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesUnreadTypeOnPublicTier_whenSeamReceivesBuilderOfErasedInstantiatorOfUnreadType() async throws {
+		// SB7, A5's twin: `ErasedInstantiator<(), Window>.Builder` is SafeDI's, which no comment names; its generic
+		// argument `Window` is named.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.screenModules(receives: ["@Received let windowBuilder: ErasedInstantiator<(), Window>.Builder"], hostForwards: ["windowBuilder: @escaping ErasedInstantiator<(), Window>.Builder"], featureImportsSafeDI: true),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(.moduleInfo, comment: ["Window"], imports: ["Kit", "SafeDI"], tiers: """
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_windowBuilder windowBuilder: @escaping ErasedInstantiator<(), Window>.Builder) {
+		        let cache = Cache()
+		        self.init(windowBuilder: windowBuilder, cache: cache)
+		    }
+		""", guardHash: "76B82D2BE9D57341"))
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// A seam's or mocked type's receive of each SafeDI wrapper's `Builder`.
+	private static let builderTypeReceives = [
+		"@Received let badgeBuilder: Instantiator<Badge>.Builder",
+		"@Received let sendableBadgeBuilder: SendableInstantiator<Badge>.Builder",
+		"@Received let erasedBadgeBuilder: ErasedInstantiator<(), Badge>.Builder",
+		"@Received let sendableErasedBadgeBuilder: SendableErasedInstantiator<(), Badge>.Builder",
+	]
+
+	/// What `App`'s host forwards for `builderTypeReceives`.
+	private static let builderTypeForwards = [
+		"badgeBuilder: @escaping Instantiator<Badge>.Builder",
+		"sendableBadgeBuilder: @escaping SendableInstantiator<Badge>.Builder",
+		"erasedBadgeBuilder: @escaping ErasedInstantiator<(), Badge>.Builder",
+		"sendableErasedBadgeBuilder: @escaping SendableErasedInstantiator<(), Badge>.Builder",
+	]
+
+	/// `Feature`'s `Badge`, which each wrapper's `Builder` builds.
+	private static let badgeSource = "@Instantiable\npublic struct Badge: Instantiable {\n    public init() {}\n}"
+
+	/// `Feature`'s `Banner`, which receives each wrapper's `Builder`.
+	private static let bannerSource = """
+	import SafeDI
+
+	@Instantiable
+	struct Banner: Instantiable {
+	    init(badgeBuilder: @escaping Instantiator<Badge>.Builder, sendableBadgeBuilder: @escaping SendableInstantiator<Badge>.Builder, erasedBadgeBuilder: @escaping ErasedInstantiator<(), Badge>.Builder, sendableErasedBadgeBuilder: @escaping SendableErasedInstantiator<(), Badge>.Builder) {
+	        self.badgeBuilder = badgeBuilder
+	        self.sendableBadgeBuilder = sendableBadgeBuilder
+	        self.erasedBadgeBuilder = erasedBadgeBuilder
+	        self.sendableErasedBadgeBuilder = sendableErasedBadgeBuilder
+	    }
+
+	    @Received let badgeBuilder: Instantiator<Badge>.Builder
+	    @Received let sendableBadgeBuilder: SendableInstantiator<Badge>.Builder
+	    @Received let erasedBadgeBuilder: ErasedInstantiator<(), Badge>.Builder
+	    @Received let sendableErasedBadgeBuilder: SendableErasedInstantiator<(), Badge>.Builder
+	}
+	"""
+
+	/// `App`'s `AppUserService`, which fills `Feature`'s hole and receives each wrapper's `Builder`.
+	private static let appUserServiceSource = """
+	import Feature
+	import SafeDI
+
+	@Instantiable(fulfillingAdditionalTypes: [UserService.self])
+	struct AppUserService: UserService, Instantiable {
+	    init(badgeBuilder: @escaping Instantiator<Badge>.Builder, sendableBadgeBuilder: @escaping SendableInstantiator<Badge>.Builder, erasedBadgeBuilder: @escaping ErasedInstantiator<(), Badge>.Builder, sendableErasedBadgeBuilder: @escaping SendableErasedInstantiator<(), Badge>.Builder) {
+	        self.badgeBuilder = badgeBuilder
+	        self.sendableBadgeBuilder = sendableBadgeBuilder
+	        self.erasedBadgeBuilder = erasedBadgeBuilder
+	        self.sendableErasedBadgeBuilder = sendableErasedBadgeBuilder
+	    }
+
+	    @Received let badgeBuilder: Instantiator<Badge>.Builder
+	    @Received let sendableBadgeBuilder: SendableInstantiator<Badge>.Builder
+	    @Received let erasedBadgeBuilder: ErasedInstantiator<(), Badge>.Builder
+	    @Received let sendableErasedBadgeBuilder: SendableErasedInstantiator<(), Badge>.Builder
+	}
+	"""
 
 	/// The root `Root`, which instantiates an `Instantiator<Owner>`.
 	private static let rootBuildingOwner = """
@@ -3764,6 +4022,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		"Brush.swift": "public struct Brush {\n    public init() {}\n}",
 		"Canvas.swift": "public struct Canvas {\n    public init() {}\n}",
 		"Palette.swift": "public struct Palette {\n    public init() {}\n}",
+		"Toolbar.swift": "public struct Toolbar {\n    public init() {}\n\n    public typealias Builder = () -> Toolbar\n}",
 	]
 
 	/// `kitFiles`, with a `public` `Theme`, which a module SafeDI reads may declare only in some clauses.
@@ -3914,7 +4173,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			let property = declaration[declaration.range(of: " let ")!.upperBound...]
 			return (String(property.prefix { $0 != ":" }), property.drop { $0 != ":" }.dropFirst().trimmingCharacters(in: .whitespaces))
 		}
-		let parameters = properties.map { "\($0.label): \(GraphFuzzerSpelling.isFunctionType($0.type) ? "@escaping " : "")\($0.type)" }.joined(separator: ", ")
+		let parameters = properties.map { "\($0.label): \(isFunctionType($0.type) ? "@escaping " : "")\($0.type)" }.joined(separator: ", ")
 		return imports.map { "import \($0)\n" }.joined() + """
 
 		@Instantiable(generateDependencyTree: true)
@@ -3943,13 +4202,20 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 		@Instantiable(generateMock: .public)
 		public struct Screen: Instantiable {
-		    init(\(properties.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) {
+		    init(\(properties.map { "\($0.label): \(isFunctionType($0.type) ? "@escaping " : "")\($0.type)" }.joined(separator: ", "))) {
 		\(properties.map { "        self.\($0.label) = \($0.label)" }.joined(separator: "\n"))
 		    }
 
 		\(receives.map { "    \($0)" }.joined(separator: "\n"))
 		}
 		"""
+	}
+
+	/// Whether a parameter of `type` is a function, which an initializer that stores it takes `@escaping`: a function type,
+	/// or any type named `….Builder`, which every fixture here declares as a function type (a SafeDI wrapper's, or `Kit`'s
+	/// `Toolbar.Builder`).
+	private static func isFunctionType(_ type: String) -> Bool {
+		GraphFuzzerSpelling.isFunctionType(type) || type.hasSuffix(".Builder")
 	}
 
 	/// `Kit`, `Feature` with the seam `Screen` (`screenSource`) and `extraFeatureFiles`, and, unless `hostForwards` is
