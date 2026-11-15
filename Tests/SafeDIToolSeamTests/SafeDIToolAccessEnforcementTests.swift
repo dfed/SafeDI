@@ -1058,22 +1058,35 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		)
 		let featureCode = """
 		extension Service {
-		    @frozen public enum SafeDIScope_UserService {
+		    @frozen nonisolated public enum SafeDIScope_UserService {
 		        case userService(userService_Values)
 
-		        public struct userService_Values {}
+		        nonisolated public struct userService_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<Built> {
+		            public let userService: (userService_Values) -> Built
+
+		            public init(userService: @escaping (userService_Values) -> Built) {
+		                self.userService = userService
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                self.userService = { _ in __safeDI_builder() }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public convenience init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
-		        let userService: any UserService = __safeDI_userServiceBuilder(.userService(SafeDIScope_UserService.userService_Values()))
+		    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
+		        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.userService_Values())
 		        self.init(userService: userService)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_47FCCD49F0077492 {}
+		    public enum __safeDI_Service_DE15AB8B7FF442DE {}
 		}
 		"""
 		let featureImplCode = """

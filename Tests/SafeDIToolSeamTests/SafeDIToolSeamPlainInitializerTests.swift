@@ -1372,27 +1372,40 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles["Service+SafeDI.swift"] == generatedFileHeader + """
 		extension Service {
-		    @frozen public enum SafeDIScope_UserService {
+		    @frozen nonisolated public enum SafeDIScope_UserService {
 		        case userService(userService_Values)
 
-		        public struct userService_Values {}
+		        nonisolated public struct userService_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<Built> {
+		            public let userService: (userService_Values) -> Built
+
+		            public init(userService: @escaping (userService_Values) -> Built) {
+		                self.userService = userService
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                self.userService = { _ in __safeDI_builder() }
+		            }
+		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
-		    public init(userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
-		        self.init(__safeDI_userServiceBuilder: userServiceBuilder)
+		    public init(userServiceBuilder: @escaping () -> any UserService) {
+		        self.init(__safeDI_userServiceBuilder: .init(__safeDI_noScope: userServiceBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
-		    public init(__safeDI_userServiceBuilder: @escaping (SafeDIScope_UserService) -> any UserService) {
-		        let userService: any UserService = __safeDI_userServiceBuilder(.userService(SafeDIScope_UserService.userService_Values()))
+		    public init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
+		        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.userService_Values())
 		        self.init(userService: userService)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_47FCCD49F0077492 {}
+		    public enum __safeDI_Service_DE15AB8B7FF442DE {}
 		}
 		""")
 	}
