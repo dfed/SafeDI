@@ -61,6 +61,9 @@ extension DependencyTreeGenerator {
 		let builders: [SeamSignature.Builder]
 		let scopeEnums: [SeamSignature.ScopeEnum]
 		let builderBySite: [SeamSignature.Hole.Site: SeamSignature.Builder]
+		/// Each of `holes`, in its order, with the builder `builderBySite` gives its site: the first builder whose enum
+		/// reaches the place.
+		var holesWithBuilders = [(hole: SeamSignature.Hole, builder: SeamSignature.Builder)]()
 		/// How the seam's tree hands each inner seam's enum up from a call whose case is nested by type.
 		var callRoutes = [SeamSignature.CallRoute]()
 	}
@@ -460,6 +463,7 @@ extension DependencyTreeGenerator {
 		let enumsByKey = Dictionary(scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
 		var visitedEnums = Set<SeamSignature.ScopeEnum.Key>()
 		var builderBySite = [SeamSignature.Hole.Site: SeamSignature.Builder]()
+		var holesWithBuilders = [(hole: SeamSignature.Hole, builder: SeamSignature.Builder)]()
 		for builder in builders {
 			var keysToVisit = [builder.enumKey]
 			while let key = keysToVisit.popLast() {
@@ -479,13 +483,14 @@ extension DependencyTreeGenerator {
 						if let hole = holesBySite[site] {
 							orderedHoles.append(hole)
 							builderBySite[site] = builder
+							holesWithBuilders.append((hole, builder))
 						}
 					}
 				}
 				keysToVisit.append(contentsOf: innerKeys.reversed())
 			}
 		}
-		return ShapedBuilders(holes: orderedHoles, builders: builders, scopeEnums: scopeEnums, builderBySite: builderBySite, callRoutes: callRoutes)
+		return ShapedBuilders(holes: orderedHoles, builders: builders, scopeEnums: scopeEnums, builderBySite: builderBySite, holesWithBuilders: holesWithBuilders, callRoutes: callRoutes)
 	}
 
 	/// A call whose fill leads to a place, the builder filled, and the type of the scope value it hands: what one inner scope's
