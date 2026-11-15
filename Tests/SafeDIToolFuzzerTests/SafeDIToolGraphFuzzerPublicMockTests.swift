@@ -416,7 +416,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 				try? FileManager.default.removeItem(at: fileToDelete)
 			}
 		}
-		let cases = [
+		let cases = try [
 			Self.heldWrapperCase(seed: 901, leafWrapsHeldInstance: true),
 			Self.heldWrapperCase(seed: 902, leafWrapsHeldInstance: false),
 			Self.instancePerLeafCase(seed: 903, callerHoldsSession: false),
@@ -521,15 +521,15 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	/// A stamped graph of `files` (`// module:` marked contents, the counter in the first) whose drawn path generated
 	/// `featureFiles` and whose known-right path, `knownRightFiles` (rendered with every declaration `public`), generated
 	/// `knownRightGeneratedFiles`.
-	private static func statedDivergenceCase(seed: UInt64, files: [String], knownRightFiles: [String], featureFiles: [String: String], knownRightGeneratedFiles: [String: String], probe: String) -> StatedDivergenceCase {
+	private static func statedDivergenceCase(seed: UInt64, files: [String], knownRightFiles: [String], featureFiles: [String: String], knownRightGeneratedFiles: [String: String], probe: String) throws -> StatedDivergenceCase {
 		let fixture = GraphFuzzerFixture(seed: seed, swiftFileContent: files)
 		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: featureFiles, warnings: [])
 		return StatedDivergenceCase(
 			runs: GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome, knownRightOutcome: .accepted(generatedFiles: knownRightGeneratedFiles, warnings: [])),
 			graph: DifferentialValueGraph(
 				name: "seed \(seed)",
-				feature: DifferentialValuePath(fixture: fixture, generatedFiles: featureFiles),
-				knownRight: DifferentialValuePath(fixture: GraphFuzzerFixture(seed: seed, swiftFileContent: knownRightFiles), generatedFiles: knownRightGeneratedFiles),
+				feature: try DifferentialValuePath(fixture: fixture, generatedFiles: featureFiles),
+				knownRight: try DifferentialValuePath(fixture: GraphFuzzerFixture(seed: seed, swiftFileContent: knownRightFiles), generatedFiles: knownRightGeneratedFiles),
 				probes: [DifferentialValueProbe(probe)],
 			),
 		)
@@ -538,7 +538,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	/// M8.32: `T8`, in another package, holds `analytics` lazily, receives `T0`, which receives the wrapper, and calls
 	/// `T0`'s public mock with `analytics.instance`, which the mock wraps again – around the instance it is passed, or,
 	/// unless `leafWrapsHeldInstance`, around a new one.
-	private static func heldWrapperCase(seed: UInt64, leafWrapsHeldInstance: Bool) -> StatedDivergenceCase {
+	private static func heldWrapperCase(seed: UInt64, leafWrapsHeldInstance: Bool) throws -> StatedDivergenceCase {
 		let p = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 		let stamp = DifferentialValueCreationStamp.property(counterNamed: "\(p)Counter")
 		let files = [
@@ -547,7 +547,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			"// module: FuzzOther\nimport FuzzFeature\n\n@Instantiable(generateMock: true)\npublic final class \(p)T8: Instantiable {\n\t\(stamp)\n\n\tpublic init(t0: \(p)T0, analytics: LazilyInstantiated<\(p)Analytics>) {\n\t\tself.t0 = t0\n\t\tself.analytics = analytics\n\t}\n\n\t@Received let t0: \(p)T0\n\t@Instantiated let analytics: LazilyInstantiated<\(p)Analytics>\n}\n",
 		]
 		let reWrapped = leafWrapsHeldInstance ? "analytics ?? \(p)Analytics()" : "\(p)Analytics()"
-		return statedDivergenceCase(
+		return try statedDivergenceCase(
 			seed: seed,
 			files: files,
 			knownRightFiles: files.map { $0.replacingOccurrences(of: "generateMock: .public", with: "generateMock: true") },
@@ -566,7 +566,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	/// `secondLeafReceivesOnlyIfAvailable`, receives only if available and its mock leaves `nil` – and a caller calls both
 	/// without passing it: `T8` in another package, or, when `callerHoldsSession`, `T7` in the same package holding
 	/// `session` itself.
-	private static func instancePerLeafCase(seed: UInt64, callerHoldsSession: Bool, secondLeafReceivesOnlyIfAvailable: Bool = false) -> StatedDivergenceCase {
+	private static func instancePerLeafCase(seed: UInt64, callerHoldsSession: Bool, secondLeafReceivesOnlyIfAvailable: Bool = false) throws -> StatedDivergenceCase {
 		let p = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 		let stamp = DifferentialValueCreationStamp.property(counterNamed: "\(p)Counter")
 		func leaf(_ index: Int, access: String) -> String {
@@ -590,7 +590,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		let caller = callerHoldsSession ? "\(p)T7" : "\(p)T8"
 		let callerArguments = callerHoldsSession ? "session: session, t0: t0, t1: t1" : "t0: t0, t1: t1"
 		let heldSession = callerHoldsSession ? "        let session = \(p)Session()\n" : ""
-		return statedDivergenceCase(
+		return try statedDivergenceCase(
 			seed: seed,
 			files: files(sessionAccess: "package"),
 			knownRightFiles: files(sessionAccess: "public"),

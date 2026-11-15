@@ -2695,13 +2695,13 @@ struct DifferentialValueComparatorTests: ~Copyable {
 	}
 
 	@Test
-	func fixture_drawsTheSameGraph_whetherOrNotItStoresEveryParameter_forEverySmokeAndKnownIssueSeed() {
+	func fixture_drawsTheSameGraph_whetherOrNotItStoresEveryParameter_forEverySmokeAndKnownIssueSeed() throws {
 		// Storing every parameter changes only how a type is written, never what the seed draws: the declarations SafeDI
 		// reads are the same, so the tool's verdict and generated code are too, and the base corpus pins do not move.
 		for seed in SafeDIToolGraphFuzzerTests.smokeSeeds + SafeDIToolGraphFuzzerTests.knownIssues.flatMap(\.seeds) {
 			let fixture = GraphFuzzerGenerator.fixture(forSeed: seed)
 			let storingFixture = GraphFuzzerGenerator.fixture(forSeed: seed, storingEveryParameter: true)
-			#expect(fixture.fileNames == storingFixture.fileNames)
+			#expect(try fixture.fileNames == storingFixture.fileNames)
 			#expect(fixture.swiftFileContent.map(Self.declarationsSafeDIReads(in:)) == storingFixture.swiftFileContent.map(Self.declarationsSafeDIReads(in:)), "Seed \(seed)")
 		}
 	}
@@ -2733,7 +2733,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		func path(of fixture: GraphFuzzerFixture, replacingDefault: Bool) async throws -> (path: DifferentialValuePath, probes: [DifferentialValueProbe]) {
 			let generatedFiles = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: []).generatedFiles
 			#expect(!generatedFiles.isEmpty, "Seed 0 is expected to be accepted")
-			let path = DifferentialValuePath(fixture: fixture, generatedFiles: generatedFiles)
+			let path = try DifferentialValuePath(fixture: fixture, generatedFiles: generatedFiles)
 			let probes = fixture.differentialValueProbes(generatedFiles: generatedFiles)
 			guard replacingDefault else { return (path, probes) }
 			return (DifferentialValuePath(modules: path.modules.map { module in

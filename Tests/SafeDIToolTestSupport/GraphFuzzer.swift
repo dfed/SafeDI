@@ -71,13 +71,65 @@ struct GraphFuzzerFixture: Equatable {
 		Self.typeNamePrefix(forSeed: seed)
 	}
 
-	/// The names of the files `executeSafeDIToolTest` writes for `swiftFileContent`, which it names after the
-	/// `@Instantiable` type each declares.
+	/// The names of the files `executeSafeDIToolTest` writes for `swiftFileContent`, in its order, which it names after
+	/// the `@Instantiable` type each declares. Every reader pairs a name with its file by position, so a file this cannot
+	/// name is reported, never left out: a list one name short would pair every later name with another file.
 	var fileNames: [String] {
-		swiftFileContent.compactMap { content in
-			Self.markedFileName(in: content)
-				?? GraphFuzzerSourceLine.lines(of: content).lazy.compactMap(\.declaredTypeName).first.map { "\($0).swift" }
+		get throws {
+			try swiftFileContent.enumerated().map { index, content in
+				guard let name = Self.fileName(of: content) else {
+					let leadingLines = content.split(separator: "\n").filter { !$0.hasPrefix("//") }.prefix(3).map { "`\($0)`" }
+					throw GraphFuzzerInfrastructureError(description: "The test harness cannot name file \(index + 1) of seed \(seed), which declares no type and names itself on no `\(Self.fileNameMarker)` line: \(leadingLines.joined(separator: ", ")).")
+				}
+				return name
+			}
 		}
+	}
+
+	/// The fixture's files keyed by `fileNames`, the names to give them in `swiftFileContent`'s order, keeping only the
+	/// files `isIncluded` accepts by index. A list of names of another length, or two files given one name, is the harness
+	/// failing, which is reported rather than paired by position or merged.
+	func filesByName(_ fileNames: [String], including isIncluded: (Int) -> Bool = { _ in true }) throws -> [String: String] {
+		guard fileNames.count == swiftFileContent.count else {
+			throw GraphFuzzerInfrastructureError(description: "The test harness was given \(fileNames.count) file name\(fileNames.count == 1 ? "" : "s") for the \(swiftFileContent.count) files of seed \(seed).")
+		}
+		var filesByName = [String: String]()
+		for (index, (fileName, content)) in zip(fileNames, swiftFileContent).enumerated() where isIncluded(index) {
+			guard filesByName.updateValue(content, forKey: fileName) == nil else {
+				throw GraphFuzzerInfrastructureError(description: "The test harness gave two files of seed \(seed) the name \(fileName).")
+			}
+		}
+		return filesByName
+	}
+
+	/// The name `executeSafeDIToolTest` writes `content` under, or `nil` for a file that declares no type, which it
+	/// would write as `File.swift`. A reader that looks for one file by its name reads each file's own name here, so no
+	/// file it cannot name shifts another's.
+	static func fileName(of content: String) -> String? {
+		markedFileName(in: content)
+			?? GraphFuzzerSourceLine.lines(of: content).lazy.compactMap(\.declaredTypeName).first.map { "\($0).swift" }
+			?? firstDeclaredTypeName(in: content).map { "\($0).swift" }
+	}
+
+	/// The type `executeSafeDIToolTest` names a file after where the fuzzer's own reader finds none: the first type
+	/// declared after the file's `@Instantiable` attribute, else its first type, as `createSwiftFixtureFiles` reads them.
+	/// It names a file whose `@Instantiable` precedes another attribute, and a file of plain declarations.
+	private static func firstDeclaredTypeName(in content: String) -> String? {
+		func firstMatch(of pattern: String, in text: Substring) -> String? {
+			let source = String(text)
+			// The patterns are literals that compile, so the expression is never `nil`.
+			let expression = try? NSRegularExpression(pattern: pattern)
+			guard let match = expression?.firstMatch(in: source, range: NSRange(source.startIndex..., in: source)),
+			      let range = Range(match.range(at: 1), in: source)
+			else { return nil }
+			return String(source[range])
+		}
+		if let instantiableRange = content.range(of: "@Instantiable"),
+		   let name = firstMatch(of: #"(?:class|struct|actor|enum)\s+(\w+)"#, in: content[instantiableRange.upperBound...])
+		{
+			return name
+		}
+		return firstMatch(of: #"(?:class|struct|actor|enum|protocol)\s+(\w+)"#, in: content[...])
 	}
 
 	/// What precedes a file's name on one of its first lines, for a file whose name is not its first `@Instantiable`
@@ -657,9 +709,9 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 
 	/// The names to give the files of `fixture`, in its order: their own names or, when this renaming reverses
 	/// file names, the same names with a prefix that reverses their order.
-	func fileNames(of fixture: GraphFuzzerFixture) -> [String]? {
+	func fileNames(of fixture: GraphFuzzerFixture) throws -> [String]? {
 		guard reversesFileNames else { return nil }
-		let fileNames = fixture.fileNames
+		let fileNames = try fixture.fileNames
 		let rankByFileName = Dictionary(uniqueKeysWithValues: fileNames.sorted().enumerated().map { ($1, $0) })
 		return fileNames.map { "F\(99 - rankByFileName[$0]!)_\($0)" }
 	}
@@ -11640,8 +11692,8 @@ enum GraphFuzzerOracle {
 			return true
 		}
 		// A base corpus graph whose value-oracle fixture the tool accepts as planned.
-		let valueOracleGraphs = toolRuns.compactMap { runs -> (runs: GraphFuzzerToolRuns, graph: DifferentialValueGraph)? in
-			guard runs.valueOracleFixtureFailure == nil, let graph = runs.valueOracle?.valueGraph else { return nil }
+		let valueOracleGraphs = try toolRuns.compactMap { runs -> (runs: GraphFuzzerToolRuns, graph: DifferentialValueGraph)? in
+			guard runs.valueOracleFixtureFailure == nil, let graph = try runs.valueOracle?.valueGraph else { return nil }
 			return (runs, graph)
 		}
 		guard !inspectedRuns.isEmpty || !visibleRuns.isEmpty, compileVerificationIsEnabled else { return ValueComparisons() }
@@ -11655,29 +11707,29 @@ enum GraphFuzzerOracle {
 		// (`publicMockValueGraph(of:)`), a seam graph's against its inline build.
 		// A graph with a hole also judges retention: what each probe keeps alive, holding one wrapper of its value, once the
 		// value is released (rule 3 of the seam contract).
-		let graphs = inspectedRuns.compactMap { runs -> (runs: GraphFuzzerToolRuns, graph: DifferentialValueGraph)? in
-			if let graph = publicMockValueGraph(of: runs, judgesRetention: holdsHole(fixture: runs.fixture, generatedFiles: runs.generatedFiles)) {
+		let graphs = try inspectedRuns.compactMap { runs -> (runs: GraphFuzzerToolRuns, graph: DifferentialValueGraph)? in
+			if let graph = try publicMockValueGraph(of: runs, judgesRetention: holdsHole(fixture: runs.fixture, generatedFiles: runs.generatedFiles)) {
 				return (runs, graph)
 			}
 			guard case let .accepted(seamFiles, _) = runs.firstOutcome, case let .accepted(inlineFiles, _) = runs.inlineOutcome else { return nil }
 			let storingFixture = GraphFuzzerGenerator.fixture(forSeed: runs.fixture.seed, features: GraphFuzzerGeneratorFeature.features(drawnIn: runs.fixture), storingEveryParameter: true)
 			return (runs, DifferentialValueGraph(
 				name: "seed \(runs.fixture.seed)",
-				feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: seamFiles),
-				knownRight: DifferentialValuePath(fixture: storingFixture.withoutSeams, generatedFiles: inlineFiles),
+				feature: try DifferentialValuePath(fixture: storingFixture, generatedFiles: seamFiles),
+				knownRight: try DifferentialValuePath(fixture: storingFixture.withoutSeams, generatedFiles: inlineFiles),
 				probes: storingFixture.differentialValueProbes(generatedFiles: seamFiles),
 				samples: storingFixture.holeDrawForwardedPropertiesSamples + storingFixture.forwardedLabelAcrossSeamCallSamples,
 				exemptions: [],
 				judgesRetention: holdsHole(fixture: runs.fixture, generatedFiles: seamFiles),
 			))
 		}
-		let visibleGraphs = visibleRuns.compactMap { runs -> (runs: GraphFuzzerToolRuns, graph: DifferentialValueGraph)? in
+		let visibleGraphs = try visibleRuns.compactMap { runs -> (runs: GraphFuzzerToolRuns, graph: DifferentialValueGraph)? in
 			guard case let .accepted(holeFiles, _) = runs.firstOutcome, case let .accepted(visibleFiles, _) = runs.visibleOutcome else { return nil }
 			let storingFixture = GraphFuzzerGenerator.fixture(forSeed: runs.fixture.seed, features: GraphFuzzerGeneratorFeature.features(drawnIn: runs.fixture), storingEveryParameter: true)
 			return (runs, DifferentialValueGraph(
 				name: "seed \(runs.fixture.seed), visible build",
-				feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: holeFiles),
-				knownRight: DifferentialValuePath(fixture: storingFixture.withoutHoles, generatedFiles: visibleFiles),
+				feature: try DifferentialValuePath(fixture: storingFixture, generatedFiles: holeFiles),
+				knownRight: try DifferentialValuePath(fixture: storingFixture.withoutHoles, generatedFiles: visibleFiles),
 				probes: storingFixture.differentialValueProbes(generatedFiles: holeFiles),
 				samples: storingFixture.holeDrawForwardedPropertiesSamples + storingFixture.forwardedLabelAcrossSeamCallSamples,
 			))
@@ -12139,7 +12191,7 @@ enum GraphFuzzerOracle {
 		// partition does not model.
 		var multiModuleRuns = [GraphFuzzerMultiModuleRuns]()
 		if GraphFuzzerGeneratorFeature.features(drawnIn: fixture).isEmpty {
-			let partition = GraphFuzzerPartition.partition(of: fixture)
+			let partition = try GraphFuzzerPartition.partition(of: fixture)
 			multiModuleRuns = try await GraphFuzzerPhaseAccount.measuring(.multiModule) {
 				var multiModuleRuns = [GraphFuzzerMultiModuleRuns]()
 				for renaming in multiModuleRenamings {
@@ -12275,6 +12327,7 @@ enum GraphFuzzerOracle {
 		if let modules = fixture.modules {
 			return try await splitToolRun(of: fixture, modules: modules, fileNames: fileNames ?? fixture.fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies || GraphFuzzerCombinationDraw.cell(drawnIn: fixture) != nil)
 		}
+		let writtenFileNames = try fileNames ?? fixture.fileNames
 		var filesToDelete = [URL]()
 		defer {
 			for fileToDelete in filesToDelete {
@@ -12284,18 +12337,18 @@ enum GraphFuzzerOracle {
 		do {
 			let output = try await executeSafeDIToolTest(
 				swiftFileContent: fileNames == nil ? fixture.swiftFileContent : [],
-				swiftFileContentByFilePath: fileNames.map { Dictionary(uniqueKeysWithValues: zip($0, fixture.swiftFileContent)) } ?? [:],
+				swiftFileContentByFilePath: fileNames.map { try fixture.filesByName($0) } ?? [:],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 				skipCompileVerification: true,
 			)
-			let normalize = try normalizer(fixtureDirectory: fixtureDirectory(of: fileNames ?? fixture.fileNames, in: output.fixtures, seed: fixture.seed).path)
+			let normalize = try normalizer(fixtureDirectory: fixtureDirectory(of: writtenFileNames, in: output.fixtures, seed: fixture.seed).path)
 			return (.accepted(
 				generatedFiles: addingSeamCallers(to: (output.generatedFiles ?? [:]).mapValues(normalize), seamTypeAccess: fixture.seamTypeAccess, mainActorSeamTypeNames: fixture.mainActorSeamTypeNames),
 				warnings: output.warnings.map { normalize("\($0)") },
 			), nil)
 		} catch let error as SafeDIToolTestError {
-			let directory = try fixtureDirectory(of: fileNames ?? fixture.fileNames, in: error.fixtures, seed: fixture.seed)
+			let directory = try fixtureDirectory(of: writtenFileNames, in: error.fixtures, seed: fixture.seed)
 			// `executeSafeDIToolTest` schedules the fixture directory for deletion only when `generate` succeeds.
 			filesToDelete.append(directory)
 			return (.rejected(diagnostics: normalizer(fixtureDirectory: directory.path)("\(error.underlyingError)")), nil)
@@ -12322,11 +12375,11 @@ enum GraphFuzzerOracle {
 			}
 		}
 		let presentModules = Set(modules)
-		let moduleFixtures = GraphFuzzerModule.allCases.filter(presentModules.contains).map { module in
-			ModuleFixture(
+		let moduleFixtures = try GraphFuzzerModule.allCases.filter(presentModules.contains).map { module in
+			try ModuleFixture(
 				name: module.name,
 				packageName: module.packageName,
-				swiftFileContentByFilePath: Dictionary(uniqueKeysWithValues: modules.indices.filter { modules[$0] == module }.map { (fileNames[$0], fixture.swiftFileContent[$0]) }),
+				swiftFileContentByFilePath: fixture.filesByName(fileNames, including: { modules[$0] == module }),
 				dependencies: (listsTransitiveDependencies ? module.transitiveDependencies : module.dependencies).filter(presentModules.contains).map(\.name),
 				omitsPackageName: fixture.modulesOmittingPackageName.contains(module),
 			)

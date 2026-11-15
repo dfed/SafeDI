@@ -2250,7 +2250,7 @@ extension GraphFuzzerToolRuns {
 		guard features.contains(.holeFillReceivesRootLevelValue) || features.contains(.holeFillReceivesFormBoundAgain) else { return nil }
 		let prefix = fixture.typeNamePrefix
 		// The draw declares the fill in one consumer module, whose consumer reaches `T6`.
-		let fillFile = zip(fixture.fileNames, fixture.swiftFileContent).first { fileName, _ in fileName.hasSuffix("\(prefix)HoleFill.swift") }
+		let fillFile = fixture.swiftFileContent.map { (GraphFuzzerFixture.fileName(of: $0) ?? "", $0) }.first { fileName, _ in fileName.hasSuffix("\(prefix)HoleFill.swift") }
 		guard let fillModule = fillFile.flatMap({ GraphFuzzerModule(declaredIn: $0.1) }) else { return nil }
 		let consumerName = "\(prefix)T\(fillModule == .samePackageCaller ? 7 : 8)"
 		// A builder `mock()` takes, as a parameter on a line of its own, `<label>: @escaping (<T6>.SafeDIMockScope_…`; a field of
@@ -2341,15 +2341,15 @@ extension GraphFuzzerOracle {
 	/// stated divergences it derives from the graph's leaf calls (`statedPublicMockValueDivergences(in:of:)`).
 	/// - Parameter judgesRetention: Whether the probes also judge what each wrapper of their value keeps alive once the
 	///   value is released, as for a graph with a hole.
-	static func publicMockValueGraph(of runs: GraphFuzzerToolRuns, judgesRetention: Bool = false) -> DifferentialValueGraph? {
+	static func publicMockValueGraph(of runs: GraphFuzzerToolRuns, judgesRetention: Bool = false) throws -> DifferentialValueGraph? {
 		guard case let .accepted(featureFiles, _) = runs.firstOutcome, case let .accepted(knownRightFiles, _) = runs.knownRightOutcome else { return nil }
 		let features = GraphFuzzerGeneratorFeature.features(drawnIn: runs.fixture)
 		let storingFixture = GraphFuzzerGenerator.fixture(forSeed: runs.fixture.seed, features: features, storingEveryParameter: true)
 		let knownRightFixture = GraphFuzzerGenerator.knownRightPublicMockFixture(forSeed: runs.fixture.seed, features: features, storingEveryParameter: true)
 		return DifferentialValueGraph(
 			name: "seed \(runs.fixture.seed)",
-			feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: featureFiles),
-			knownRight: DifferentialValuePath(fixture: knownRightFixture, generatedFiles: knownRightFiles),
+			feature: try DifferentialValuePath(fixture: storingFixture, generatedFiles: featureFiles),
+			knownRight: try DifferentialValuePath(fixture: knownRightFixture, generatedFiles: knownRightFiles),
 			probes: storingFixture.differentialValueProbes(generatedFiles: featureFiles),
 			samples: storingFixture.placeInFillInnerScreenSamples + storingFixture.combinationForwardedValueSamples,
 			judgesRetention: judgesRetention,
@@ -2956,7 +2956,7 @@ extension GraphFuzzerPublicMockDraw {
 			// The consumer modules that reach `T6`, and the one that declares the fill.
 			var reachingModules = Set<GraphFuzzerModule>()
 			var fillModule: GraphFuzzerModule?
-			for (fileName, content) in zip(fixture.fileNames, fixture.swiftFileContent) {
+			for (fileName, content) in fixture.swiftFileContent.map({ (GraphFuzzerFixture.fileName(of: $0) ?? "", $0) }) {
 				guard let module = GraphFuzzerModule(declaredIn: content), module.isCaller else { continue }
 				if content.contains(" let t6: \(holeLeafName)\n") {
 					reachingModules.insert(module)
@@ -2995,7 +2995,7 @@ extension GraphFuzzerPublicMockDraw {
 			}
 		}
 		// The mock condition.
-		for (fileName, content) in zip(fixture.fileNames, fixture.swiftFileContent) where content.contains("#SafeDIConfiguration(mockConditionalCompilation: nil)") {
+		for (fileName, content) in fixture.swiftFileContent.map({ (GraphFuzzerFixture.fileName(of: $0) ?? "", $0) }) where content.contains("#SafeDIConfiguration(mockConditionalCompilation: nil)") {
 			features.insert(.mockConditionDiffers)
 			if GraphFuzzerModule(declaredIn: content) == .seamModule, fileName.hasSuffix("/SafeDIConfiguration.swift") {
 				features.insert(.declaringModuleConfigurationFile)

@@ -94,14 +94,18 @@ struct GraphFuzzerRemedy: Equatable {
 /// The remedied graph's outcome.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct GraphFuzzerRemedyRun {
+	init(remedy: GraphFuzzerRemedy, outcome: GraphFuzzerToolOutcome) throws {
+		self.remedy = remedy
+		self.outcome = outcome
+		errorsAtSite = try GraphFuzzerRemedies.errors(at: remedy.site, in: outcome, of: remedy.fixture)
+	}
+
 	let remedy: GraphFuzzerRemedy
 	let outcome: GraphFuzzerToolOutcome
 
 	/// The messages of the errors the tool reports at the remedy's site in the remedied graph: none when the remedy fixes
 	/// what it answers and adds no error there.
-	var errorsAtSite: [String] {
-		GraphFuzzerRemedies.errors(at: remedy.site, in: outcome, of: remedy.fixture)
-	}
+	let errorsAtSite: [String]
 
 	/// The line a failure lists for this run, or `nil` when the remedy leaves no error at its site.
 	var failureLine: String? {
@@ -220,14 +224,14 @@ enum GraphFuzzerRemedies {
 	/// reports the sites: every error the tool reports at a site must state the same remedy, or, for a receive no type in
 	/// its chain fulfills, the same declaration on its own root, which each root then declares. A site whose errors state
 	/// other remedies, or one the oracle cannot apply as stated (`StatedRemedy`), gets none.
-	static func remedies(of fixture: GraphFuzzerFixture, diagnostics: String) -> [GraphFuzzerRemedy] {
-		sites(of: fixture, diagnostics: diagnostics).flatMap(\.remedies)
+	static func remedies(of fixture: GraphFuzzerFixture, diagnostics: String) throws -> [GraphFuzzerRemedy] {
+		try sites(of: fixture, diagnostics: diagnostics).flatMap(\.remedies)
 	}
 
 	/// The number of sites of `diagnostics` whose errors are in a family the oracle reads – a receive no type in its chain
 	/// fulfills, or a cycle – and that get no remedy: the oracle's blind spot, which the long run reports.
-	static func unremediedSiteCount(of fixture: GraphFuzzerFixture, diagnostics: String) -> Int {
-		sites(of: fixture, diagnostics: diagnostics).count(where: { site in
+	static func unremediedSiteCount(of fixture: GraphFuzzerFixture, diagnostics: String) throws -> Int {
+		try sites(of: fixture, diagnostics: diagnostics).count(where: { site in
 			site.remedies.isEmpty && site.errors.contains { error in
 				error.message.hasPrefix("Dependency cycle: ") || error.message.contains("` is not @Instantiated or @Forwarded in chain: ")
 			}
@@ -236,8 +240,8 @@ enum GraphFuzzerRemedies {
 
 	/// Each property declaration `diagnostics` reports an error at, in the order of its first error, with its errors and
 	/// the remedies they state.
-	private static func sites(of fixture: GraphFuzzerFixture, diagnostics: String) -> [(errors: [ReportedError], remedies: [GraphFuzzerRemedy])] {
-		guard let files = Files(fixture) else { return [] }
+	private static func sites(of fixture: GraphFuzzerFixture, diagnostics: String) throws -> [(errors: [ReportedError], remedies: [GraphFuzzerRemedy])] {
+		let files = try Files(fixture)
 		var sites = [GraphFuzzerRemedy.Site]()
 		var errorsBySite = [GraphFuzzerRemedy.Site: [ReportedError]]()
 		for diagnosticLine in diagnostics.split(separator: "\n") {
@@ -254,8 +258,9 @@ enum GraphFuzzerRemedies {
 	}
 
 	/// The messages of the errors `outcome` reports at `site` of `fixture`.
-	static func errors(at site: GraphFuzzerRemedy.Site, in outcome: GraphFuzzerToolOutcome, of fixture: GraphFuzzerFixture) -> [String] {
-		guard case let .rejected(diagnostics) = outcome, let files = Files(fixture) else { return [] }
+	static func errors(at site: GraphFuzzerRemedy.Site, in outcome: GraphFuzzerToolOutcome, of fixture: GraphFuzzerFixture) throws -> [String] {
+		guard case let .rejected(diagnostics) = outcome else { return [] }
+		let files = try Files(fixture)
 		return diagnostics.split(separator: "\n").compactMap { diagnosticLine in
 			guard let error = ReportedError(diagnosticLine), files.site(of: error) == site else { return nil }
 			return error.message
@@ -364,9 +369,8 @@ enum GraphFuzzerRemedies {
 		private(set) var contents: [String]
 		private let fileNames: [String]
 
-		init?(_ fixture: GraphFuzzerFixture) {
-			let fileNames = fixture.fileNames
-			guard fileNames.count == fixture.swiftFileContent.count else { return nil }
+		init(_ fixture: GraphFuzzerFixture) throws {
+			let fileNames = try fixture.fileNames
 			contents = fixture.swiftFileContent
 			self.fileNames = fileNames
 		}
@@ -492,7 +496,7 @@ extension GraphFuzzerOracle {
 	static func remedyRuns(of fixture: GraphFuzzerFixture, outcome: GraphFuzzerToolOutcome) async throws -> [GraphFuzzerRemedyRun] {
 		guard GraphFuzzerGeneratorFeature.features(drawnIn: fixture).isEmpty, fixture.modules == nil, case let .rejected(diagnostics) = outcome else { return [] }
 		var runs = [GraphFuzzerRemedyRun]()
-		for remedy in GraphFuzzerRemedies.remedies(of: fixture, diagnostics: diagnostics) {
+		for remedy in try GraphFuzzerRemedies.remedies(of: fixture, diagnostics: diagnostics) {
 			try await runs.append(GraphFuzzerRemedyRun(remedy: remedy, outcome: toolOutcome(of: remedy.fixture)))
 		}
 		return runs

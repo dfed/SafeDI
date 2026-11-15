@@ -26,6 +26,6 @@ The draw now writes `@MainActor` first, as the rest of the fuzzer does. With onl
 
 No SafeDI code under `Sources/` or `Plugins/` trapped, and `SeamBuilderFamilies.swift:279` is not involved. The whole seam combination corpus has since run without a trap: 1,350 seeds, several times.
 
-## A gap left in the harness
+## The harness fix
 
-`GraphFuzzerFixture.fileNames` still drops a file it cannot name instead of reporting it. Any draw that renders a file the reader cannot name traps in `splitToolOutcome` this way, rather than failing with a message.
+`GraphFuzzerFixture.fileNames` now names each file as `executeSafeDIToolTest` writes it: by its `// file: ` line, else the type after its `@Instantiable` attribute (whatever attribute lies between), else its first type. A file that declares no type, which the harness would write as `File.swift`, is reported with an infrastructure error that quotes its first lines, never left out. `filesByName` pairs names with files only when the counts match and no two files share a name, so `splitToolOutcome` cannot index out of range. `GraphFuzzerFileNameTests` covers an `@Instantiable` written above `@MainActor` (named after its type), the same file in a split graph (which trapped before the fix), a file that declares no type, alone and in a split graph, and a split graph given too few names.

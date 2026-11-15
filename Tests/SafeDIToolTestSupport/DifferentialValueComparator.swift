@@ -2192,26 +2192,27 @@ extension DifferentialValuePath {
 	/// One module holding a fuzzer graph's fixture, with its files named as `executeSafeDIToolTest` names them, and
 	/// the files the tool generated for it; or, for a graph split across modules, each of its modules, with the
 	/// generated files keyed by the module's name.
-	init(fixture: GraphFuzzerFixture, generatedFiles: [String: String]) {
+	init(fixture: GraphFuzzerFixture, generatedFiles: [String: String]) throws {
 		guard let fileModules = fixture.modules else {
 			// In the seam module's package, as the oracle compiles a graph in one module, so that `package` compiles.
-			self.init(modules: [DifferentialValueModule(
+			try self.init(modules: [DifferentialValueModule(
 				name: standaloneVerificationModuleName,
 				packageName: GraphFuzzerModule.seamModule.packageName,
-				fixtureFiles: Dictionary(uniqueKeysWithValues: zip(fixture.fileNames, fixture.swiftFileContent)),
+				fixtureFiles: fixture.filesByName(fixture.fileNames),
 				generatedFiles: generatedFiles,
 			)])
 			return
 		}
 		let presentModules = Set(fileModules)
 		let modulesWithoutPackage = fixture.modulesOmittingPackageName
-		self.init(modules: GraphFuzzerModule.allCases.filter(presentModules.contains).map { module in
-			DifferentialValueModule(
+		let fileNames = try fixture.fileNames
+		try self.init(modules: GraphFuzzerModule.allCases.filter(presentModules.contains).map { module in
+			try DifferentialValueModule(
 				name: module.name,
 				// A module without a package compiles without `-package-name`, as the oracle compiles it.
 				packageName: modulesWithoutPackage.contains(module) ? nil : module.packageName,
 				dependencyModuleNames: module.dependencies.filter(presentModules.contains).map(\.name),
-				fixtureFiles: Dictionary(uniqueKeysWithValues: fileModules.indices.filter { fileModules[$0] == module }.map { (fixture.fileNames[$0], fixture.swiftFileContent[$0]) }),
+				fixtureFiles: fixture.filesByName(fileNames, including: { fileModules[$0] == module }),
 				generatedFiles: Dictionary(uniqueKeysWithValues: generatedFiles.compactMap { fileName, contents in
 					fileName.hasPrefix(module.name + "/") ? (String(fileName.dropFirst(module.name.count + 1)), contents) : nil
 				}),

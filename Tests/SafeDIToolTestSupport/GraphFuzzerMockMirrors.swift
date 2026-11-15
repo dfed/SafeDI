@@ -1789,13 +1789,15 @@ struct GraphFuzzerValueOracleRun {
 	/// generated for it, and the plan's pairs followed by the override oracle's, or `nil` when the tool did not accept the
 	/// fixture.
 	var valueGraph: DifferentialValueGraph? {
-		guard case let .accepted(generatedFiles, _) = outcome else { return nil }
-		return DifferentialValueGraph(
-			name: "seed \(plan.fixture.seed), value oracle",
-			path: DifferentialValuePath(fixture: plan.valueOracleFixture(storingEveryParameter: true), generatedFiles: generatedFiles),
-			probePairs: plan.probePairs + overrideProbes.map(\.pair),
-			samples: plan.forwardedPropertiesSamples,
-		)
+		get throws {
+			guard case let .accepted(generatedFiles, _) = outcome else { return nil }
+			return try DifferentialValueGraph(
+				name: "seed \(plan.fixture.seed), value oracle",
+				path: DifferentialValuePath(fixture: plan.valueOracleFixture(storingEveryParameter: true), generatedFiles: generatedFiles),
+				probePairs: plan.probePairs + overrideProbes.map(\.pair),
+				samples: plan.forwardedPropertiesSamples,
+			)
+		}
 	}
 
 	/// The override oracle's probes of the value-oracle run's mocks (`GraphFuzzerValueOraclePlan.overrideProbes`), none

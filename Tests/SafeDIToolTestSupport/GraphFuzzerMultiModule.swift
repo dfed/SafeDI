@@ -93,13 +93,13 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 	/// declarations – one-line `public final class` declarations of `<prefix>Value` and `<prefix>Unbuildable<n>`, under
 	/// any letter a renaming moves the prefix to – moved out of the file declaring them, each with the blank line
 	/// before it, into a last file named `helperFileName(of:)`. A fixture that declares none projects to its own files.
-	static func projectedFiles(of fixture: GraphFuzzerFixture) -> [ProjectedFile] {
+	static func projectedFiles(of fixture: GraphFuzzerFixture) throws -> [ProjectedFile] {
 		let helperExpression = try! NSRegularExpression(
 			pattern: "^public final class [A-Za-z]" + NSRegularExpression.escapedPattern(for: String(fixture.typeNamePrefix.dropFirst())) + "(?:Value|Unbuildable[0-9]+)(?::[^{]*)? \\{\\}$",
 		)
 		var projectedFiles = [ProjectedFile]()
 		var helperDeclarations = [String]()
-		for (fileName, content) in zip(fixture.fileNames, fixture.swiftFileContent) {
+		for (fileName, content) in try zip(fixture.fileNames, fixture.swiftFileContent) {
 			var keptLines = [Substring]()
 			for line in content.split(separator: "\n", omittingEmptySubsequences: false) {
 				let source = String(line)
@@ -140,7 +140,7 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 	///
 	/// - Parameter moduleCount: How many modules to split the files into, as far as their components allow, or `nil`
 	///   for the count `moduleCount(forComponentCount:of:)` chooses, which the oracle uses.
-	static func partition(of fixture: GraphFuzzerFixture, moduleCount requestedModuleCount: Int? = nil) -> GraphFuzzerPartition {
+	static func partition(of fixture: GraphFuzzerFixture, moduleCount requestedModuleCount: Int? = nil) throws -> GraphFuzzerPartition {
 		let prefix = NSRegularExpression.escapedPattern(for: fixture.typeNamePrefix)
 		let declarationExpression = try! NSRegularExpression(pattern: "(?:class|protocol|extension)\\s+(" + prefix + "[A-Za-z0-9_]+)")
 		let referenceExpression = try! NSRegularExpression(pattern: "(?<![A-Za-z0-9_])" + prefix + "[A-Za-z0-9_]+")
@@ -150,7 +150,7 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 				source.substring(with: $0.range(at: group))
 			}
 		}
-		let projectedFiles = projectedFiles(of: fixture)
+		let projectedFiles = try projectedFiles(of: fixture)
 		let fileCount = projectedFiles.count
 		var declaringFileIndexByName = [String: Int]()
 		for (fileIndex, file) in projectedFiles.enumerated() {
@@ -221,10 +221,10 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 	/// refers to before it; the helper types' file is named `helperFileName(of:)` explicitly, the rest after the type
 	/// each declares. With a `renaming`, the files are those of `fixture.renamed(by:)`, which lists the fixture's files
 	/// in reverse order, named as `renaming.fileNames(of:)` names them.
-	func moduleFixtures(of fixture: GraphFuzzerFixture, renamedBy renaming: GraphFuzzerRenaming? = nil) -> [ModuleFixture] {
+	func moduleFixtures(of fixture: GraphFuzzerFixture, renamedBy renaming: GraphFuzzerRenaming? = nil) throws -> [ModuleFixture] {
 		let renamedFixture = renaming.map(fixture.renamed(by:)) ?? fixture
-		let renamedFileNames = renaming.flatMap { $0.fileNames(of: renamedFixture) }
-		let renamedProjectedFiles = Self.projectedFiles(of: renamedFixture)
+		let renamedFileNames = try renaming.flatMap { try $0.fileNames(of: renamedFixture) }
+		let renamedProjectedFiles = try Self.projectedFiles(of: renamedFixture)
 		let fixtureFileCount = fixture.swiftFileContent.count
 		func renamedIndex(ofFileAt fileIndex: Int) -> Int {
 			renaming == nil || fileIndex >= fixtureFileCount ? fileIndex : fixtureFileCount - 1 - fileIndex
@@ -626,7 +626,7 @@ enum GraphFuzzerMultiModuleProperty {
 	/// Runs `fixture`, split by `partition` and renamed by `renaming`, through `executeSafeDIToolMultiModuleTest`
 	/// under each integration, without compiling, and reduces what each produced to a `GraphFuzzerMultiModuleOutcome`.
 	static func runs(of fixture: GraphFuzzerFixture, partition: GraphFuzzerPartition, renaming: GraphFuzzerRenaming? = nil) async throws -> GraphFuzzerMultiModuleRuns {
-		let modules = partition.moduleFixtures(of: fixture, renamedBy: renaming)
+		let modules = try partition.moduleFixtures(of: fixture, renamedBy: renaming)
 		// The plugin's `scan` plans a dependency-tree file for every root in its CSV, which lists the files of the
 		// modules the module depends on, and `generate` writes the file of a root another module declares without
 		// code, as the module-info integration writes no file for it: the outcomes are compared as written.

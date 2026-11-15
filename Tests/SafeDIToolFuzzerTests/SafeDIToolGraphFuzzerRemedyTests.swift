@@ -670,7 +670,7 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 		// The remedied graph's receive is on the same line, which a remedy on another file leaves where it was.
 		let keptError = "/x/<fixture-directory>/S1_T1.swift:7:2: error: @Received property `t2: S1_T2` is still unfulfilled."
 		let otherError = "/x/<fixture-directory>/S1_Root0.swift:7:2: error: Another error at another declaration."
-		let runs = GraphFuzzerToolRuns(
+		let runs = try GraphFuzzerToolRuns(
 			fixture: fixture,
 			firstOutcome: .rejected(diagnostics: "/x/<fixture-directory>/S1_T1.swift:7:2: error: \(error)"),
 			secondOutcome: .rejected(diagnostics: "/x/<fixture-directory>/S1_T1.swift:7:2: error: \(error)"),
@@ -704,7 +704,7 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func remedies_areNone_whenTheErrorsAtASiteStateOtherRemedies() {
+	func remedies_areNone_whenTheErrorsAtASiteStateOtherRemedies() throws {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [Self.leaf("S1_Root0"), """
 		@Instantiable
 		public final class S1_T1: Instantiable {
@@ -718,8 +718,8 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 		let declare = "/x/<fixture-directory>/S1_T1.swift:7:2: error: @Received property `t2: S1_T2` is not @Instantiated or @Forwarded in chain: S1_Root0 -> S1_T1. Declare `@Instantiated let t2: S1_T2` on `S1_Root0` or on another type in the chain to fix."
 		let suggest = "/x/<fixture-directory>/S1_T1.swift:7:2: error: @Received property `t2: S1_T2` is not @Instantiated or @Forwarded in chain: S1_T3 -> S1_T1. Did you mean `t3: S1_T2`?"
 
-		#expect(GraphFuzzerRemedies.remedies(of: fixture, diagnostics: "\(declare)\n\(suggest)").isEmpty)
-		#expect(GraphFuzzerRemedies.unremediedSiteCount(of: fixture, diagnostics: "\(declare)\n\(suggest)") == 1)
+		#expect(try GraphFuzzerRemedies.remedies(of: fixture, diagnostics: "\(declare)\n\(suggest)").isEmpty)
+		#expect(try GraphFuzzerRemedies.unremediedSiteCount(of: fixture, diagnostics: "\(declare)\n\(suggest)") == 1)
 	}
 
 	// MARK: Helpers

@@ -2017,7 +2017,7 @@ struct SafeDIToolGraphFuzzerTests {
 		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: [:], warnings: [])
 		let multiModuleRuns = GraphFuzzerMultiModuleRuns(
 			seed: seed,
-			partition: GraphFuzzerPartition.partition(of: fixture),
+			partition: try GraphFuzzerPartition.partition(of: fixture),
 			renaming: nil,
 			moduleInfoOutcome: GraphFuzzerMultiModuleOutcome(verdicts: [.init(moduleName: "Alpha", kind: .accepted(GraphFuzzerGeneratedModule(units: [:], importsByFileName: ["Alpha.swift": []], warnings: [])))]),
 			pluginOutcome: GraphFuzzerMultiModuleOutcome(verdicts: [.init(moduleName: "Alpha", kind: .rejected(diagnostics: "error"))]),
@@ -2484,7 +2484,7 @@ struct SafeDIToolGraphFuzzerTests {
 		])
 		let renaming = GraphFuzzerRenaming(reversesTypeNames: true, reversesLabels: true, reversesFileNames: true, movesTypeNamesAcrossWrapperNames: true)
 
-		let fileNames = try #require(renaming.fileNames(of: fixture.renamed(by: renaming)))
+		let fileNames = try #require(try renaming.fileNames(of: fixture.renamed(by: renaming)))
 
 		// `S12_T1` and `S12_T2` become `S12_T8` and `S12_T7`, which move to `A12_T8` and `Z12_T7`.
 		#expect(fileNames == ["F98_Z12_T7.swift", "F99_A12_T8.swift"])
@@ -2499,7 +2499,7 @@ struct SafeDIToolGraphFuzzerTests {
 		])
 		let renaming = GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: false, reversesFileNames: true)
 
-		let fileNames = try #require(renaming.fileNames(of: fixture))
+		let fileNames = try #require(try renaming.fileNames(of: fixture))
 
 		#expect(fileNames == ["F98_S12_T1.swift", "F99_S12_T0.swift"])
 		#expect(renaming.restore("/tmp/<fixture-directory>/F98_S12_T1.swift:1:1: error", typeNamePrefix: fixture.typeNamePrefix) == "/tmp/<fixture-directory>/S12_T1.swift:1:1: error")
@@ -4057,7 +4057,7 @@ struct SafeDIToolGraphFuzzerTests {
 	// MARK: Multi-module partition
 
 	@Test
-	func partition_keepsLazyCycleInOneModule_whenInstantiatorsCloseIt() {
+	func partition_keepsLazyCycleInOneModule_whenInstantiatorsCloseIt() throws {
 		// `Root0` instantiates `T1`, which instantiates `T2` through an instantiator, which instantiates `T1` through
 		// one: a lazy cycle, whose types must share a module. `T3` refers to nothing and nothing refers to it.
 		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
@@ -4067,7 +4067,7 @@ struct SafeDIToolGraphFuzzerTests {
 			Self.typeSource(named: "S12_T3", properties: []),
 		])
 
-		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 4)
+		let partition = try GraphFuzzerPartition.partition(of: fixture, moduleCount: 4)
 
 		#expect(partition.modules == [
 			GraphFuzzerPartition.Module(name: "Alpha", fileIndices: [1, 2], referencedModuleNames: [], dependencies: []),
@@ -4078,7 +4078,7 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func partitionDescription_listsEachModuleWithItsDependenciesAndFilesImports_whenModulesDependOnOneAnother() {
+	func partitionDescription_listsEachModuleWithItsDependenciesAndFilesImports_whenModulesDependOnOneAnother() throws {
 		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
 			Self.typeSource(named: "S12_Root0", arguments: "isRoot: true", properties: ["@Instantiated let t1: S12_T1"]),
 			Self.typeSource(named: "S12_T1", properties: ["@Instantiated let t2Builder: Instantiator<S12_T2>"]),
@@ -4086,7 +4086,7 @@ struct SafeDIToolGraphFuzzerTests {
 			Self.typeSource(named: "S12_T3", properties: []),
 		])
 
-		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 4)
+		let partition = try GraphFuzzerPartition.partition(of: fixture, moduleCount: 4)
 
 		#expect(partition.description == """
 		Alpha: S12_T1.swift, S12_T2.swift
@@ -4096,7 +4096,7 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func partition_listsEveryModuleATreeReachesAsDependency_whenModulesFormChain() {
+	func partition_listsEveryModuleATreeReachesAsDependency_whenModulesFormChain() throws {
 		// `Root0`'s tree reaches `T2` through `T1`, so `Root0`'s module must read `T2`'s `.safedi` as well as `T1`'s,
 		// as a Bazel user must list it, while its file imports only `T1`'s module.
 		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
@@ -4105,7 +4105,7 @@ struct SafeDIToolGraphFuzzerTests {
 			Self.typeSource(named: "S12_T2", properties: []),
 		])
 
-		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 3)
+		let partition = try GraphFuzzerPartition.partition(of: fixture, moduleCount: 3)
 
 		#expect(partition.modules == [
 			GraphFuzzerPartition.Module(name: "Alpha", fileIndices: [2], referencedModuleNames: [], dependencies: []),
@@ -4116,7 +4116,7 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func partition_dealsComponentsOutToFewerModules_whenModuleCountIsBelowComponentCount() {
+	func partition_dealsComponentsOutToFewerModules_whenModuleCountIsBelowComponentCount() throws {
 		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
 			Self.typeSource(named: "S12_Root0", arguments: "isRoot: true", properties: ["@Instantiated let t1: S12_T1"]),
 			Self.typeSource(named: "S12_T1", properties: ["@Instantiated let t2: S12_T2"]),
@@ -4124,24 +4124,24 @@ struct SafeDIToolGraphFuzzerTests {
 		])
 
 		// The three components, `T2`, `T1`, and `Root0`, are dealt out in that order: the first two to `Alpha`.
-		#expect(GraphFuzzerPartition.partition(of: fixture, moduleCount: 2).modules == [
+		#expect(try GraphFuzzerPartition.partition(of: fixture, moduleCount: 2).modules == [
 			GraphFuzzerPartition.Module(name: "Alpha", fileIndices: [1, 2], referencedModuleNames: [], dependencies: []),
 			GraphFuzzerPartition.Module(name: "Beta", fileIndices: [0], referencedModuleNames: ["Alpha"], dependencies: ["Alpha"]),
 		])
-		#expect(GraphFuzzerPartition.partition(of: fixture, moduleCount: 1).modules == [
+		#expect(try GraphFuzzerPartition.partition(of: fixture, moduleCount: 1).modules == [
 			GraphFuzzerPartition.Module(name: "Alpha", fileIndices: [0, 1, 2], referencedModuleNames: [], dependencies: []),
 		])
 	}
 
 	@Test
-	func partition_refersToModuleDeclaringErasedType_whenFileNamesOnlyTheErasedType() {
+	func partition_refersToModuleDeclaringErasedType_whenFileNamesOnlyTheErasedType() throws {
 		// `T1` receives `T2`'s erased type, declared beside `T2`, and nothing names `T2` itself.
 		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
 			Self.typeSource(named: "S12_T1", properties: ["@Received let anyT2: S12_AnyT2"]),
 			Self.typeSource(named: "S12_T2", properties: [], declaresHelperTypes: true),
 		])
 
-		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 2)
+		let partition = try GraphFuzzerPartition.partition(of: fixture, moduleCount: 2)
 
 		#expect(partition.modules == [
 			GraphFuzzerPartition.Module(name: "Alpha", fileIndices: [1], referencedModuleNames: [], dependencies: []),
@@ -4150,14 +4150,14 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func partition_refersToModuleDeclaringProtocol_whenFileNamesOnlyTheProtocol() {
+	func partition_refersToModuleDeclaringProtocol_whenFileNamesOnlyTheProtocol() throws {
 		// `T1` aliases `t2` as `T2`'s protocol, declared beside `T2`, and nothing names `T2` itself.
 		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
 			Self.typeSource(named: "S12_T1", properties: ["@Received(fulfilledByDependencyNamed: \"t2\", ofType: S12_T2Protocol.self) let t2Protocol: S12_T2Protocol"]),
 			Self.typeSource(named: "S12_T2", properties: [], declaresHelperTypes: true),
 		])
 
-		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 2)
+		let partition = try GraphFuzzerPartition.partition(of: fixture, moduleCount: 2)
 
 		#expect(partition.modules == [
 			GraphFuzzerPartition.Module(name: "Alpha", fileIndices: [1], referencedModuleNames: [], dependencies: []),
@@ -4166,7 +4166,7 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func partition_movesHelperTypesIntoTheirOwnFile_whenRootFileDeclaresThem() {
+	func partition_movesHelperTypesIntoTheirOwnFile_whenRootFileDeclaresThem() throws {
 		// The generator declares `Value` and `Unbuildable<n>` in `Root0`'s file. `T1` names `Value`, so left there, `T1`
 		// and `Root0` would refer to each other and share a module; moved, the helper file lands first and the root's
 		// module depends on `T1`'s.
@@ -4176,7 +4176,7 @@ struct SafeDIToolGraphFuzzerTests {
 			Self.typeSource(named: "S12_T1", properties: ["@Received let items: Instantiator<S12_Value>"]),
 		])
 
-		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 3)
+		let partition = try GraphFuzzerPartition.partition(of: fixture, moduleCount: 3)
 
 		#expect(partition.fileNames == ["S12_Root0.swift", "S12_T1.swift", "S12_Helpers.swift"])
 		#expect(partition.modules == [
@@ -4184,13 +4184,13 @@ struct SafeDIToolGraphFuzzerTests {
 			GraphFuzzerPartition.Module(name: "Beta", fileIndices: [1], referencedModuleNames: ["Alpha"], dependencies: ["Alpha"]),
 			GraphFuzzerPartition.Module(name: "Gamma", fileIndices: [0], referencedModuleNames: ["Beta"], dependencies: ["Alpha", "Beta"]),
 		])
-		let modules = partition.moduleFixtures(of: fixture)
+		let modules = try partition.moduleFixtures(of: fixture)
 		#expect(modules.map(\.swiftFileContent) == [[], ["import Alpha\n\n" + fixture.swiftFileContent[1]], ["import Beta\n\n" + Self.typeSource(named: "S12_Root0", arguments: "isRoot: true", properties: ["@Instantiated let t1: S12_T1"])]])
 		#expect(modules.map(\.swiftFileContentByFilePath) == [["S12_Helpers.swift": "public final class S12_Value: Instantiable {}\n\npublic final class S12_Unbuildable0 {}\n"], [:], [:]])
 	}
 
 	@Test
-	func partition_putsHelperFileInFirstModule_whenOnlyATypeNoRootReachesNamesIt() {
+	func partition_putsHelperFileInFirstModule_whenOnlyATypeNoRootReachesNamesIt() throws {
 		// Visited in file order, the helper file would be met from `T2`, after the roots' components; visited first, it
 		// is the first component wherever it is named from.
 		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
@@ -4200,7 +4200,7 @@ struct SafeDIToolGraphFuzzerTests {
 			Self.typeSource(named: "S12_T2", properties: ["@Received let items: Instantiator<S12_Value>"]),
 		])
 
-		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 4)
+		let partition = try GraphFuzzerPartition.partition(of: fixture, moduleCount: 4)
 
 		#expect(partition.fileNames == ["S12_Root0.swift", "S12_T1.swift", "S12_T2.swift", "S12_Helpers.swift"])
 		#expect(partition.modules == [
@@ -4212,15 +4212,15 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func moduleFixtures_prependImportOfEachReferencedModule_whenFilesReferToOtherModules() {
+	func moduleFixtures_prependImportOfEachReferencedModule_whenFilesReferToOtherModules() throws {
 		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
 			Self.typeSource(named: "S12_Root0", arguments: "isRoot: true", properties: ["@Instantiated let t1: S12_T1", "@Instantiated let t2: S12_T2"]),
 			Self.typeSource(named: "S12_T1", properties: []),
 			Self.typeSource(named: "S12_T2", properties: []),
 		])
-		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 3)
+		let partition = try GraphFuzzerPartition.partition(of: fixture, moduleCount: 3)
 
-		let modules = partition.moduleFixtures(of: fixture)
+		let modules = try partition.moduleFixtures(of: fixture)
 
 		#expect(modules.map(\.name) == ["Alpha", "Beta", "Gamma"])
 		#expect(modules.map(\.packageName) == ["Graph", "Graph", "Graph"])
@@ -4234,15 +4234,15 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func moduleFixtures_keepEachFileInItsModuleUnderRenamedNames_whenRenamingReversesTypeAndFileNames() {
+	func moduleFixtures_keepEachFileInItsModuleUnderRenamedNames_whenRenamingReversesTypeAndFileNames() throws {
 		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
 			Self.typeSource(named: "S12_T1", properties: ["@Instantiated let t2: S12_T2"]),
 			Self.typeSource(named: "S12_T2", properties: []),
 		])
-		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 2)
+		let partition = try GraphFuzzerPartition.partition(of: fixture, moduleCount: 2)
 		let renaming = GraphFuzzerRenaming(reversesTypeNames: true, reversesLabels: false, reversesFileNames: true)
 
-		let modules = partition.moduleFixtures(of: fixture, renamedBy: renaming)
+		let modules = try partition.moduleFixtures(of: fixture, renamedBy: renaming)
 
 		// `T2`, in `Alpha`, becomes `T7`, and `T1`, in `Beta`, becomes `T8`; the files are named to reverse their order.
 		#expect(modules.map(\.name) == ["Alpha", "Beta"])
@@ -4252,10 +4252,10 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func moduleCount_variesWithTheGraph_acrossSmokeSeeds() {
+	func moduleCount_variesWithTheGraph_acrossSmokeSeeds() throws {
 		// Chosen from the graph's text, so that single-module graphs stay in the corpus beside the others.
-		let moduleCounts = Set(Self.smokeSeeds.map { seed in
-			GraphFuzzerPartition.partition(of: GraphFuzzerGenerator.fixture(forSeed: seed)).modules.count
+		let moduleCounts = try Set(Self.smokeSeeds.map { seed in
+			try GraphFuzzerPartition.partition(of: GraphFuzzerGenerator.fixture(forSeed: seed)).modules.count
 		})
 
 		#expect(moduleCounts.contains(1))
@@ -4265,11 +4265,11 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func partition_matchesReferenceHash_forSmokeAndKnownIssueSeeds() {
+	func partition_matchesReferenceHash_forSmokeAndKnownIssueSeeds() throws {
 		// The partition draws nothing from the seed, so a change to it changes neither the graphs nor the pins on
 		// them; this pins the partition itself, so a change to it is deliberate. The long run pins it for the corpus.
 		let seeds = Self.smokeSeeds + Self.knownIssues.flatMap(\.seeds)
-		#expect(Self.partitionHash(forSeeds: seeds) == Self.smokeAndKnownIssuePartitionHash)
+		#expect(try Self.partitionHash(forSeeds: seeds) == Self.smokeAndKnownIssuePartitionHash)
 	}
 
 	@Test
@@ -4609,7 +4609,7 @@ struct SafeDIToolGraphFuzzerTests {
 			Self.typeSource(named: "S12_Root1", arguments: "isRoot: true", properties: ["@Instantiated let t1: S12_T1"]),
 			Self.typeSource(named: "S12_T1", properties: []),
 		])
-		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 2)
+		let partition = try GraphFuzzerPartition.partition(of: fixture, moduleCount: 2)
 		#expect(partition.modules.map(\.fileIndices) == [[0, 2], [1]])
 
 		let runs = try await GraphFuzzerMultiModuleProperty.runs(of: fixture, partition: partition)
@@ -4808,7 +4808,7 @@ struct SafeDIToolGraphFuzzerTests {
 			let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: corpus.features)
 			generatedCorpusHash.combine(fixture.description)
 			if isPartitioned {
-				let partition = GraphFuzzerPartition.partition(of: fixture)
+				let partition = try GraphFuzzerPartition.partition(of: fixture)
 				partitionedCorpusHash.combine(partition.description)
 				graphCountByModuleCount[partition.modules.count] += 1
 				if partition.modules.last?.name == "Delta", partition.modules.last?.dependencies.contains("Gamma") == true {
@@ -4988,7 +4988,7 @@ struct SafeDIToolGraphFuzzerTests {
 								}
 							}
 							if result.fixture.modules == nil, GraphFuzzerGeneratorFeature.features(drawnIn: result.fixture).isEmpty, case let .rejected(diagnostics) = result.outcome {
-								unremediedSiteCount += GraphFuzzerRemedies.unremediedSiteCount(of: result.fixture, diagnostics: diagnostics)
+								unremediedSiteCount += try GraphFuzzerRemedies.unremediedSiteCount(of: result.fixture, diagnostics: diagnostics)
 							}
 							// Counted whether or not the graph also fails another way.
 							for renamedGraphFailure in result.renamedGraphFailures {
@@ -7466,10 +7466,10 @@ struct SafeDIToolGraphFuzzerTests {
 		return hash.value
 	}
 
-	static func partitionHash(forSeeds seeds: [UInt64]) -> UInt64 {
+	static func partitionHash(forSeeds seeds: [UInt64]) throws -> UInt64 {
 		var hash = GraphFuzzerHash()
 		for seed in seeds {
-			hash.combine(GraphFuzzerPartition.partition(of: GraphFuzzerGenerator.fixture(forSeed: seed)).description)
+			hash.combine(try GraphFuzzerPartition.partition(of: GraphFuzzerGenerator.fixture(forSeed: seed)).description)
 		}
 		return hash.value
 	}
