@@ -62,6 +62,11 @@ is read: a declaration that changes at a fragment's edge stays with the fragment
 its neighbor's now when their opening and closing lines are equal, and everything a single fragment's output
 gains goes to that fragment. A file per fragment, which the plugin integration records, settles both.
 
+What is checked against what. A literal outside every test function is compared with the records of the calls in
+its own file and of the calls the tests of its own file make through helper functions; a constant a test of
+another file compares is not seen. A record that a whole literal matched is not tiled, so a constant the same test
+also uses as a fragment of that output is checked only against the records that are tiled.
+
 Exit status: 0 when every changed literal is explained; 1 when some are unexplained or manual (read the report).
 An output that changed but matched no literal, such as one no test compares, is listed first in the report and
 leaves the status alone, since the script cannot tell whether a test compares it. 2 on an error, with nothing
@@ -2226,7 +2231,8 @@ def self_test(root):
     status, summary = test.run()
     expect(constant_last_test.count("static let shared") == 1 and constant_last_test.index("static let shared") > constant_last_test.index("func second") and status == 1 and summary["rewritten"] == 0 and summary["manualReasons"] == [FRAGMENTS_AMBIGUOUS] and test.source() == constant_last_test, f"fragments, ambiguous sharer declared last: {status} {summary}")
 
-    # Every way a record reaches a literal: the literal inside the test function or outside every function; the call
+    # The ways a record reaches a literal that this draws: the literal inside the test function or outside every
+    # function of the test's file; the call
     # in the test, through a helper function of the test's file, or through one of another file; the literal the
     # whole output, also one too short to be a fragment, or a fragment of it. In each, two records that agree
     # rewrite the literal, and two that contradict each other leave it for a person.
@@ -2284,6 +2290,21 @@ def self_test(root):
                         expect(status == expected_status and summary["rewritten"] == 1 and summary["manual"] == 0 and test.source() == source.replace(old, heads[0]), f"{name}: {status} {summary}")
                     else:
                         expect(status == expected_status and summary["rewritten"] == 0 and summary["manualReasons"] == ["records that map to this literal disagree on its new value"] and test.source() == source, f"{name}: {status} {summary}")
+
+    # a constant outside every function that one test compares directly and another, which also holds a literal of
+    # the same value, passes to a helper function of another file: the first test's record renames it, the second's
+    # output did not change, so the constant is left for a person.
+    long_constant_test = 'struct FileTests {\n\tstatic let shared = """\n\textension Shared {\n\t    let value = OldShared()\n\t}\n\t"""\n\n\t@Test\n\tfunc first() {\n\t\texpect(run(), Self.shared)\n\t}\n\n\t@Test\n\tfunc second() {\n\t\tlet local = """\n\t\t\textension Shared {\n\t\t\t    let value = OldShared()\n\t\t\t}\n\t\t\t"""\n\t\tcheck(Self.shared, local)\n\t}\n}\n'
+    test = case("constant-and-equal-literal-through-helper")
+    test.test_file(long_constant_test)
+    test.test_file("func check(_ expected: Any, _ other: Any) {\n\texpect(run(), expected)\n}\n", "Tests/Mod/Helper.swift")
+    test.records(
+        [generation_record("first", 10, shared_fragment, test_name="first()"), generation_record("second", 2, shared_fragment, test_name="second()", file_id="Mod/Helper.swift", test_file_id="Mod/FileTests.swift", test_line=14)],
+        [generation_record("first", 10, shared_fragment.replace("OldShared", "NewShared"), test_name="first()"), generation_record("second", 2, shared_fragment, test_name="second()", file_id="Mod/Helper.swift", test_file_id="Mod/FileTests.swift", test_line=14)],
+        {"rename": [{"name": "shared", "table": {"OldShared": "NewShared"}, "wordBoundaries": True}]},
+    )
+    status, summary = test.run()
+    expect(status == 1 and summary["rewritten"] == 0 and summary["manualReasons"] == ["records that map to this literal disagree on its new value"] and test.source() == long_constant_test, f"constant and equal literal through a helper: {status} {summary}")
 
     # fragments of a call made through a helper function are the literals of the test the record names.
     helper_test = 'struct FileTests {\n\tfunc check(_ expected: [String: String]) {\n\t\texpect(run(), expected)\n\t}\n\n\t@Test\n\tfunc test() {\n\t\tcheck(files(rootFiles: ["Root": """\n\t\t\textension Root {\n\t\t\t    let service = OldService()\n\t\t\t}\n\t\t\t""", "Service": """\n\t\t\textension Service {\n\t\t\t    let value = OldValue()\n\t\t\t}\n\t\t\t"""]))\n\t}\n}\n'
