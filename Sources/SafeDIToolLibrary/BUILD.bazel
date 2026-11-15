@@ -3,12 +3,12 @@ load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 swift_library(
     name = "SafeDIToolLibrary",
     srcs = glob(["**/*.swift"]),
-    # The module name SwiftPM gives the library. A `.safedi` file's schema
-    # fingerprint includes the module name of each type it stores, so
-    # without it rules_swift would name the module after the label
-    # (`Sources_SafeDIToolLibrary_SafeDIToolLibrary`), and the `.safedi`
-    # files of SafeDITool built here could not be read by SafeDITool built
-    # any other way, nor theirs by it.
+    # The module name SwiftPM gives the library, which SafeDITool's main
+    # file imports by that name. Without it rules_swift would name the
+    # module after the label (`Sources_SafeDIToolLibrary_SafeDIToolLibrary`).
+    # The name does not reach the `.safedi` files: their schema fingerprint
+    # is a checked-in constant, so every build of the tool writes the same
+    # one (`.claude/rules/serialization.md`).
     module_name = "SafeDIToolLibrary",
     visibility = ["//Sources/SafeDITool:__pkg__"],
     deps = [
