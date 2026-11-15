@@ -1214,7 +1214,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			let unlistedModules = unlistedModuleNames.map { "`\($0)`" }.joinedAsList(conjunction: "or")
 			let listRemedy = (unlistedModuleNames.count > 1 ? "for each, " : "") + DependencyTreeGenerator.DependencyTreeGeneratorError.listModuleRemedy
 			let listUnlistedModules = unlistedModuleNames.isEmpty ? "" : " A module that declares a root lists every module beneath it, and \(callerModule) does not list \(unlistedModules): \(listRemedy) Listing \(unlistedModuleNames.count > 1 ? "them" : "it") lets SafeDI follow the chain, but \(typeName) still needs a declaration that fulfills it."
-			let takenBuilder = hole.enumPlace.map { "`\(hole.builderLabel)`, whose case `\($0.describedCase)` builds `\(hole.property.label)`" } ?? "`\(hole.builderLabel)`, which builds `\(hole.property.label)`"
+			let takenBuilder = hole.enumPlace.map { "`\(hole.builderLabel)`, whose member `\($0.describedCase)` builds `\(hole.property.label)`" } ?? "`\(hole.builderLabel)`, which builds `\(hole.property.label)`"
 			let fill = "\(seamName) generates its dependency tree \(seamModule), so the initializer SafeDI generated for it takes \(takenBuilder), and the root `\(rootType.asSource)` must fill it.\(listUnlistedModules)"
 			let message = if let unreachedFulfillingType {
 				"`\(unreachedFulfillingType.asSource)` fulfills \(reference), but SafeDI cannot follow that chain, because \(callerModule) does not list \(unlistedModules). A module that declares a root lists every module beneath it: \(listRemedy)"
@@ -1662,15 +1662,15 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 		}
 
 		var sourceDiagnostics: [SourceDiagnostic] {
-			// A place in a scope enum is named by its case too, which is what the builder reads.
+			// A place in a scope enum is named by its case too, which a message calls the builder's member.
 			func builderDescription(of hole: SeamSignature.Hole) -> String {
 				builderDescription(of: SeamSignature.Hole.UncarriedDeclaration.PresentedPlace(hole))
 			}
 			func builderDescription(of place: SeamSignature.Hole.UncarriedDeclaration.PresentedPlace) -> String {
-				"the builder for `\(place.ownerType.asSource)`’s `\(place.property.asSource)`\(place.caseName.map { " (case `\($0)` of `\(place.builderLabel)`)" } ?? "")"
+				"the builder for `\(place.ownerType.asSource)`’s `\(place.property.asSource)`\(place.caseName.map { " (member `\($0)` of `\(place.builderLabel)`)" } ?? "")"
 			}
 			let builder = builderDescription(of: hole)
-			let scope = "the scope SafeDI hands \(builder)"
+			let scope = "the values struct SafeDI hands \(builder)"
 			let seamName = "`\(hole.scopeSeamType.asSource)`"
 			func module(_ identity: ModuleIdentity) -> String {
 				identity.moduleName.map { "module `\($0)`" } ?? "this module"
@@ -1769,9 +1769,9 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					remedies.append(receiveInstantiatorRemedy(declaration))
 				}
 				remedies.append(fulfillRemedy(seamModule))
-				// What a message about a place built inside a `@Sendable` function, `functionProperty`'s, says of the scope it is
-				// handed, and the remedy every such message ends with when it has no other.
-				let sendableScope = "the scope SafeDI hands \(builderDescription(of: hole))"
+				// What a message about a place built inside a `@Sendable` function, `functionProperty`'s, says of the values struct
+				// it is handed, and the remedy every such message ends with when it has no other.
+				let sendableScope = "the values struct SafeDI hands \(builderDescription(of: hole))"
 				func outside(_ functionProperty: Property) -> String {
 					"outside the `@Sendable` function that builds `\(functionProperty.asSource)`, and \(sendableScope) carries only what that function binds."
 				}
@@ -1787,14 +1787,14 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 							// A place a `@Sendable` function builds is handed only what that function binds, so no parameter of the
 							// place's seam carries the value: its fill reads the caller's own.
 							? " Instantiate `\(declaration.property.label)` outside `\(seam.asSource)` and declare `@\(Dependency.Source.receivedRawValue) let \(declaration.property.asSource)` on `\(seam.asSource)`, so the builder’s caller reads its own, or \(SeamAccessExplanation.fulfillRemedy(fulfilling: place.instantiatedType, seamModuleName: seamModule.moduleName, effect: .seamFillsBuilder(seam)))."
-							: " Declare `@\(Dependency.Source.receivedRawValue) let \(reader.property.asSource)` on `\(place.seamType.asSource)`, so the builder’s scope carries it, or \(SeamAccessExplanation.fulfillRemedy(fulfilling: place.instantiatedType, seamModuleName: seamModule.moduleName, effect: .seamFillsBuilder(seam))).")
+							: " Declare `@\(Dependency.Source.receivedRawValue) let \(reader.property.asSource)` on `\(place.seamType.asSource)`, so the builder’s values struct carries it, or \(SeamAccessExplanation.fulfillRemedy(fulfilling: place.instantiatedType, seamModuleName: seamModule.moduleName, effect: .seamFillsBuilder(seam))).")
 				case let .receivesPathScopeOnlyIfAvailable(type):
 					"`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(builderOfDeclaration(declaration)) builds after \(pathScope), since `\(type.asSource)` receives \(pathScope) only if available, so \(scope) does not carry it. Receive \(pathScope) on `\(type.asSource)` some other way, or \(fulfillRemedy(seamModule))."
 				case let .requiresOtherCarrier(type, carrier):
 					"`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(builderOfDeclaration(declaration)) builds after \(pathScope), since `\(type.asSource)` requires `\(carrier.label)`, which carries another builder, so \(scope) does not carry it. Declare `\(declaration.property.label)` before \(pathScope) in `\(declaration.declaringType.asSource)`, or \(fulfillRemedy(seamModule))."
 				case .other, .instantiatorBuildingSite:
 					// The builder is named once, so the sentence that it does not carry the value refers back to it.
-					"`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(declaration.declaringType == hole.scopeSeamType ? "\(seamName)’s tree builds only after it calls" : "`\(declaration.declaringType.asSource)` builds only after \(seamName)’s tree calls") \(builderDescription(of: hole)), so that builder’s scope does not carry it. \(SeamAccessExplanation.joined(remedies))"
+					"`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(declaration.declaringType == hole.scopeSeamType ? "\(seamName)’s tree builds only after it calls" : "`\(declaration.declaringType.asSource)` builds only after \(seamName)’s tree calls") \(builderDescription(of: hole)), so that builder’s values struct does not carry it. \(SeamAccessExplanation.joined(remedies))"
 				case let .boundOutsideSendableFunction(functionProperty, functionBuiltType, isForwarded, cycleParameter, alias):
 					// A place built inside a `@Sendable` function is handed only what that function binds, whether the read is
 					// required or only if available: a silent `nil` would hand the fill another value than inline's.
@@ -1836,7 +1836,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			case let .declarationBoundOnPathToReenteringCall(reader, declaration, pathHole, callingType, callProperty, calledSeam, callerModule, seamModule):
 				let declaringType = "`\(declaration.declaringType.asSource)`"
 				return [
-					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(declaringType) declares on the path from \(builderDescription(of: pathHole)) to the call by which `\(callingType.asSource)` instantiates `\(calledSeam.asSource)` again (`\(callProperty.label)`), but that call passes the builder on as \(module(callerModule)) fills it, which cannot hand it \(declaringType)’s values. Declare `@\(Dependency.Source.receivedRawValue) let \(reader.property.asSource)` on \(seamName), so the builder’s scope carries it, or \(fulfillRemedy(seamModule))."),
+					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(declaringType) declares on the path from \(builderDescription(of: pathHole)) to the call by which `\(callingType.asSource)` instantiates `\(calledSeam.asSource)` again (`\(callProperty.label)`), but that call passes the builder on as \(module(callerModule)) fills it, which cannot hand it \(declaringType)’s values. Declare `@\(Dependency.Source.receivedRawValue) let \(reader.property.asSource)` on \(seamName), so the builder’s values struct carries it, or \(fulfillRemedy(seamModule))."),
 					SourceDiagnostic(severity: .note, location: declaration.declarationLocation, message: "\(declaringType) declares `\(declaration.property.asSource)` here."),
 				]
 			case let .closesCycleInSeamTree(closingProperty, closingType, declarationLocation, fillAncestors, closedOnDeclaration, closesOnOwnerOfHole, seamModule):
