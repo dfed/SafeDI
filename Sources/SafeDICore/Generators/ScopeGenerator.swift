@@ -6958,6 +6958,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for (fillingGenerator, propertiesGeneratedLater) in rootItems.fillingGenerators {
 				try await fillingGenerator.prepareFillCode(propertiesGeneratedLater: propertiesGeneratedLater)
 			}
+			// Spike (D2): an internal mock writes a builder function needed at several places once.
+			let sharedMockBuilders = publicMock == nil ? SharedMockBuilders.analyzing(rootItems, indent: bodyIndent) : nil
 			let bodyBindings = await Self.generateMockBodyBindings(
 				items: rootItems,
 				propertyNodeLabelMap: rootLabelMap,
@@ -6979,6 +6981,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						sendableConfigurationTypeNames: context.sendableConfigurationTypeNames,
 					)
 				},
+				sharedMockBuilders: sharedMockBuilders,
+				placesSharedMockBuilders: sharedMockBuilders != nil,
 			)
 			lines.append(contentsOf: bodyBindings)
 		} else {
@@ -9068,7 +9072,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case classBox
 	}
 
-	static let nestedConfigurationStorageForm = NestedConfigurationStorageForm.classBox
+	static let nestedConfigurationStorageForm = NestedConfigurationStorageForm.enumBox
 
 	/// A configuration nested in a generated configuration, read through a get-only computed property.
 	struct NestedConfigurationMember {
@@ -9161,6 +9165,143 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// enclosing that one needs no reservation: it builds a property on the
 	/// override's path, whose label every local of the function spells after
 	/// the function's own.
+	/// Spike (D2): the builder functions an internal `mock()` writes once for several places.
+	///
+	/// Places share a function when their key matches: the concrete type, the type the function returns, its erasure,
+	/// the construction (`init`, a hand-written mock, or `instantiate`), the forwarded properties, and that the place
+	/// reads a configuration. A place is a candidate only when nothing in its subtree is on a cycle, in a loop of builders,
+	/// `@Sendable`, a public mock call or fill, passed `nil` for an `onlyIfAvailable` receive, or reads an instance of a
+	/// `LazilyInstantiated`, and when no declaration on its path below the mock root has the label of a value its subtree
+	/// reads from outside, so each such value has one declaration, the mock body's, at every call, which the function
+	/// captures. The function is declared in the mock body, before the first top-level statement that reaches it, takes
+	/// the place's configuration as its last parameter, and each call passes `safeDIOverrides.<path>`.
+	final class SharedMockBuilders {
+		struct SharedFunction {
+			let key: String
+			let name: String
+		}
+
+		let indent: String
+		var sharedFunctionByNode = [ObjectIdentifier: SharedFunction]()
+		var emittedKeys = Set<String>()
+		var currentItemLineIndex = 0
+		var placedFunctions = [(lineIndex: Int, lines: [String])]()
+
+		init(indent: String) {
+			self.indent = indent
+		}
+
+		func sharedFunction(of node: MockParameterNode) -> SharedFunction? {
+			sharedFunctionByNode[ObjectIdentifier(node)]
+		}
+
+		static func analyzing(_ rootItems: [MockTreeItem], indent: String) -> SharedMockBuilders? {
+			var plainByNode = [ObjectIdentifier: Bool]()
+			var readsByNode = [ObjectIdentifier: Set<String>]()
+			func declared(by node: MockParameterNode) -> Set<String> {
+				var labels = Set(node.forwardedProperties.map(\.label))
+				for item in node.children {
+					switch item {
+					case let .property(child):
+						labels.insert(child.propertyLabel)
+					case let .alias(alias):
+						labels.insert(alias.property.label)
+					}
+				}
+				return labels
+			}
+			func isPlain(_ node: MockParameterNode) -> Bool {
+				if let plain = plainByNode[ObjectIdentifier(node)] { return plain }
+				var plain = !node.isPropertyCycle
+					&& node.cycleParameters.isEmpty
+					&& node.cycleClosedOnDeclarations.isEmpty
+					&& !node.isReferencedByCycleClosingScope
+					&& !node.buildsInSendableFunction
+					&& !node.requiresSendable
+					&& node.loop == nil
+					&& node.valuesBindings.isEmpty
+					&& node.fillingGenerator == nil
+					&& node.publicMockCall == nil
+					&& node.referencedFillNames.isEmpty
+					&& node.unavailableProperties.isEmpty
+					&& node.lazilyInstantiatedInstanceProperties.isEmpty
+				for item in node.children where plain {
+					switch item {
+					case let .property(child):
+						plain = isPlain(child)
+					case let .alias(alias):
+						plain = alias.loop == nil && alias.holeSite == nil && !alias.onlyIfAvailable
+					}
+				}
+				plainByNode[ObjectIdentifier(node)] = plain
+				return plain
+			}
+			func reads(_ node: MockParameterNode) -> Set<String> {
+				if let reads = readsByNode[ObjectIdentifier(node)] { return reads }
+				var labels = Set<String>()
+				for dependency in node.dependencies {
+					switch dependency.source {
+					case .received:
+						labels.insert(dependency.property.label)
+					case let .aliased(fulfillingProperty, _, _):
+						labels.insert(fulfillingProperty.label)
+					case .instantiated, .forwarded:
+						break
+					}
+				}
+				for item in node.children {
+					switch item {
+					case let .property(child):
+						labels.formUnion(reads(child))
+					case let .alias(alias):
+						labels.insert(alias.fulfillingLabel)
+					}
+				}
+				let result = labels.subtracting(declared(by: node))
+				readsByNode[ObjectIdentifier(node)] = result
+				return result
+			}
+			func key(of node: MockParameterNode) -> String {
+				"\(node.concreteType.asSource)|\(node.instantiatedTypeDescription.asSource)|\(node.erasedToConcreteExistential)|\(node.useMockInitializer)|\(node.isExtensionBased)|\(node.forwardedProperties.sorted().map { "\($0.label): \($0.typeDescription.asSource)" })|\(node.needsConfigurationStruct)"
+			}
+			var placesByKey = [String: [MockParameterNode]]()
+			var keyOrder = [String]()
+			var keysByLabel = [String: Set<String>]()
+			var stack: [(items: [MockTreeItem], pathDeclared: Set<String>)] = [(rootItems, [])]
+			while let entry = stack.popLast() {
+				let pathDeclared = entry.pathDeclared
+				for case let .property(node) in entry.items {
+					let nodeKey = key(of: node)
+					keysByLabel[node.propertyLabel, default: []].insert(nodeKey)
+					if node.isInstantiator, node.needsConfigurationStruct, isPlain(node), reads(node).isDisjoint(with: pathDeclared) {
+						if placesByKey[nodeKey] == nil { keyOrder.append(nodeKey) }
+						placesByKey[nodeKey, default: []].append(node)
+					}
+					stack.append((node.children, pathDeclared.union(declared(by: node))))
+				}
+			}
+			let sharedKeys = keyOrder.filter { (placesByKey[$0]?.count ?? 0) >= 2 }
+			guard !sharedKeys.isEmpty else { return nil }
+			let registry = SharedMockBuilders(indent: indent)
+			var takenNames = Set(keysByLabel.keys.map { ScopeGenerator.functionName(toBuildPropertyNamed: $0) })
+			for sharedKey in sharedKeys.sorted() {
+				guard let places = placesByKey[sharedKey], let first = places.first else { continue }
+				var name = ScopeGenerator.functionName(toBuildPropertyNamed: first.propertyLabel)
+				if keysByLabel[first.propertyLabel, default: []].count > 1 || registry.sharedFunctionByNode.values.contains(where: { $0.name == name }) {
+					name = ScopeGenerator.functionName(toBuildPropertyNamed: "\(first.propertyLabel)_\(first.concreteType.asIdentifier)")
+					while takenNames.contains(name) {
+						name += "_"
+					}
+				}
+				takenNames.insert(name)
+				for place in places {
+					registry.sharedFunctionByNode[ObjectIdentifier(place)] = SharedFunction(key: sharedKey, name: name)
+				}
+			}
+			return registry
+		}
+	}
+
 	final class SendableOverrideExtractor {
 		init(functionName: String, names: GeneratedNameAllocator) {
 			self.functionName = functionName
@@ -9230,6 +9371,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		sendableConfigurationTypeNames: Set<String>,
 		publicMock: PublicMockEmission? = nil,
 		enclosingBindingNamesPassedByName: [String: String] = [:],
+		sharedMockBuilders: SharedMockBuilders? = nil,
+		placesSharedMockBuilders: Bool = false,
 	) async -> [String] {
 		var lines = [String]()
 
@@ -9347,6 +9490,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		for item in items {
+			if placesSharedMockBuilders {
+				// A shared builder function first reached while this top-level item is emitted is declared before it.
+				sharedMockBuilders?.currentItemLineIndex = lines.count
+			}
 			let itemLoop = switch item {
 			case let .alias(alias):
 				alias.loop
@@ -9492,6 +9639,71 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					var childAncestors = ancestorTypes
 					childAncestors.insert(nodeTypeKey)
 					let loopMemberEmission = loopMembers?.emission(of: node, atPropertyNodeIndex: propertyNodeIndex - 1, functionName: functionName, flatParameterDisambiguationMap: flatParameterDisambiguationMap, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)
+					if let sharedMockBuilders,
+					   let shared = sharedMockBuilders.sharedFunction(of: node),
+					   sendableOverrideExtractor == nil,
+					   publicMock == nil,
+					   loopMemberEmission == nil,
+					   promotedParameterName == nil,
+					   bindingNamesPassedByName.isEmpty,
+					   enclosingBindingNamesPassedByName.isEmpty,
+					   sendableAutoclosureBindings.isEmpty,
+					   thisOverrideReachable,
+					   !isCycleNode,
+					   !node.typeDescription.unwrapped.isConstructedByAnnotation
+					{
+						let configurationParameterName = ReservedName.mockOverridesParameterName
+						if !sharedMockBuilders.emittedKeys.contains(shared.key) {
+							sharedMockBuilders.emittedKeys.insert(shared.key)
+							let lineIndex = sharedMockBuilders.currentItemLineIndex
+							var sharedOverrideLocalNames = GeneratedNameAllocator(reserving: [])
+							let sharedArguments = mockBuilderArguments(
+								for: node,
+								nodePath: configurationParameterName,
+								lazilyInstantiatedBindingNames: argumentLazilyInstantiatedBindingNames,
+								uncoveredDependencyNames: uncoveredDependencyNames,
+								sendableOverrideExtractor: nil,
+								overrideReachable: true,
+								handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
+								sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+								publicMock: nil,
+								bindingNamesPassedByName: [:],
+							)
+							let sharedLines = await generateInstantiatorBinding(
+								for: node,
+								outerBindingName: outerBindingName,
+								functionName: shared.name,
+								enclosingFunctionNames: [:],
+								nodePath: configurationParameterName,
+								overrideExpression: node.overridePath(nodePath: configurationParameterName),
+								arguments: sharedArguments,
+								sendableAutoclosureBindings: [],
+								indent: sharedMockBuilders.indent,
+								ancestorTypes: [nodeTypeKey],
+								sendableOverrideExtractor: nil,
+								flatParameterDisambiguationMap: combinedDisambiguationMap,
+								lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+								uncoveredDependencyNames: uncoveredDependencyNames,
+								sendableAutoclosureParameters: sendableAutoclosureParameters,
+								cycleEdges: cycleEdges,
+								overridePathReachable: true,
+								handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+								sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+								publicMockOverridesIsSendableClosure: publicMockOverridesIsSendableClosure,
+								overrideLocalNames: &sharedOverrideLocalNames,
+								bindingNamesPassedByName: [:],
+								enclosingBindingNamesPassedByName: [:],
+								configurationParameter: "\(configurationParameterName): \(node.configurationTypeName)",
+								sharedMockBuilders: sharedMockBuilders,
+							)
+							sharedMockBuilders.placedFunctions.append((lineIndex: lineIndex, lines: sharedLines.prelude + sharedLines.function))
+						}
+						let callArguments = (mockForwardedArguments(of: node.forwardedProperties.sorted()) + ["\(configurationParameterName): \(nodePath)"]).joined(separator: ", ")
+						lines.append("\(indent)let \(outerBindingName) = \(node.typeDescription.unwrapped.spelledForConstruction) {")
+						lines.append("\(indent)\(standardIndent)\(shared.name)(\(callArguments))")
+						lines.append("\(indent)}")
+						continue
+					}
 					let bindingLines = await generateInstantiatorBinding(
 						for: node,
 						outerBindingName: outerBindingName,
@@ -9519,6 +9731,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						loopMemberEmission: loopMemberEmission,
 						bindingNamesPassedByName: bindingNamesPassedByName,
 						enclosingBindingNamesPassedByName: enclosingBindingNamesPassedByName,
+						sharedMockBuilders: sharedMockBuilders,
 					)
 					if let loop = node.loop {
 						appendToLoopUnit(loop, bindingLines)
@@ -9617,6 +9830,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 						publicMock: publicMock?.beneathRoot,
 						enclosingBindingNamesPassedByName: bindingNamesPassedByName,
+						sharedMockBuilders: sharedMockBuilders,
 					)
 
 					let functionConstructionExpression = if let startedSendableOverrideExtractor {
@@ -9680,6 +9894,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		emitLoopUnit()
+		if placesSharedMockBuilders, let sharedMockBuilders {
+			// Inserted last first, so functions placed before one item keep the order they were completed in: a function
+			// completes after every shared function its body reaches first.
+			for placed in sharedMockBuilders.placedFunctions.reversed() {
+				lines.insert(contentsOf: placed.lines, at: placed.lineIndex)
+			}
+		}
 		return lines
 	}
 
@@ -10261,6 +10482,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		loopMemberEmission: LoopMemberEmission? = nil,
 		bindingNamesPassedByName: [String: String],
 		enclosingBindingNamesPassedByName: [String: String],
+		configurationParameter: String? = nil,
+		sharedMockBuilders: SharedMockBuilders? = nil,
 	) async -> InstantiatorBindingLines {
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let innerIndent = "\(indent)\(standardIndent)"
@@ -10298,10 +10521,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Build the inner function parameter list (forwarded properties, and the parameters a lazy cycle closing on the
 		// function needs).
 		let functionParameters = forwardedProperties + ownCycleParameters.map(\.property)
-		let functionArguments = if functionParameters.isEmpty {
+		var functionArguments = if functionParameters.isEmpty {
 			""
 		} else {
 			functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: node.typesDeclaredEscaping).map(\.description).joined()
+		}
+		if let configurationParameter {
+			// A shared builder function takes its place's configuration last.
+			functionArguments = functionArguments.isEmpty ? configurationParameter : "\(functionArguments), \(configurationParameter)"
 		}
 
 		// Build the forwarded arguments for the Instantiator closure call, followed by the bindings in scope here of the
@@ -10365,6 +10592,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 				publicMock: publicMock?.beneathRoot,
 				enclosingBindingNamesPassedByName: bindingNamesPassedByName,
+				sharedMockBuilders: sharedMockBuilders,
 			)
 
 			let nodeHandWrittenMockDefaultParameters = handWrittenMockDefaultParameters[node.concreteType, default: []]
