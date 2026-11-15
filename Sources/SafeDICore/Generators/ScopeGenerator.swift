@@ -11702,6 +11702,7 @@ extension SeamSignature.Hole.Field {
 			isReceivedOnlyIfAvailable: isReceivedOnlyIfAvailable,
 			deferral: deferral,
 			bindsMemo: bindsMemo,
+			isSeamParameter: isSeamParameter,
 		)
 	}
 
@@ -11721,6 +11722,7 @@ extension SeamSignature.Hole.Field {
 			parameterTakingType: parameterTakingType,
 			deferral: deferral,
 			bindsMemo: true,
+			isSeamParameter: isSeamParameter,
 		)
 	}
 

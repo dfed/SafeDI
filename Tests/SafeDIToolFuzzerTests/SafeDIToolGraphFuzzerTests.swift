@@ -994,6 +994,15 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func seamCorpus_acceptsTenGraphsOfEachScreenPlaceNeighbour_whenPinsAreRead() {
+		// A screen's place whose fill reads the screen's value stands in for the unit tests of the neighbours the tool must
+		// accept beside the shape it rejects (`fieldOfReenteringPlace`) only while the corpus accepts enough of each.
+		for feature in [GraphFuzzerSeamDrawFeature.holeScreenValueReadWithoutReentry, .holeScreenValueBuiltBySeam] {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) accepted in fewer than ten graphs")
+		}
+	}
+
+	@Test
 	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachErasurePlace() {
 		// The places of a builder whose filling type is not the type it returns – inside a plain fill, inside a `@Sendable`
 		// fill, and beneath the seam in the `@Sendable` family – stand in for unit tests of their labels and their builders
@@ -3128,6 +3137,16 @@ struct SafeDIToolGraphFuzzerTests {
 
 		#expect(diagnosticFailures == [])
 		#expect(codeFailures.map { $0.details.prefix { $0 != "\n" } } == ["Reversing its type names changes its generated mock code, in S12_T0+SafeDIMock.swift."])
+	}
+
+	@Test
+	func differences_reportNothing_whenFieldOfReenteringPlaceListsItsTypesSeamsAndCallsInAnotherOrder() {
+		// A renaming reorders the lists of a fill's error about a value its seam, opened again, loses, which follow names.
+		func outcome(_ first: String, _ second: String) -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `\(first)Owner`’s `service: any Service` and `\(second)Owner`’s `service: any Service` carries from `\(first)Screen` and `\(second)Screen`, and each of their fills instantiates `\(first)Seam` and `\(second)Seam` again (`\(first)Builder` and `\(second)Builder`). Inline, `Impl` would read `\(first)Screen`’s or `\(second)Screen`’s `id` inside that `\(first)Seam` or `\(second)Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `\(first)Seam` and `\(second)Seam`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
+		}
+
+		#expect(GraphFuzzerToolOutcome.differences(between: outcome("A", "B"), and: outcome("B", "A")) == [])
 	}
 
 	@Test
@@ -6231,7 +6250,7 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isScreenPlaceShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
@@ -6293,12 +6312,16 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`unpassableCycleLabel`), a fill that requires what its scope carries only optionally (`fieldHeldOnlyOptionally`),
 	/// and a plain wrapper captured inside a `Sendable` one (`nonSendableWrapperCaptures`). The third marker is the part of
 	/// `fieldHeldOnlyOptionally`'s message both of its causes share: the seam's tree receiving the label only if available,
-	/// and a builder function a lazy cycle closes on taking it as a parameter.
+	/// and a builder function a lazy cycle closes on taking it as a parameter. The last two are a fill that builds its seam
+	/// again and reads a value only the place it fills carries (`fieldOfReenteringPlace`), which `addingHoleShapes` draws in
+	/// a screen: a read only if available, then a required read, counted apart.
 	static let seamCorpusErrorMarkers = [
 		"holds the same values at every level of that cycle",
 		"which one value cannot carry together",
 		"carries only as `",
 		"cannot be received inside a `@Sendable` function in chain",
+		"would get `nil` or another value.",
+		"would get another value.",
 	]
 	/// How many of the seam corpus's graphs the tool rejects with each error of `seamCorpusErrorMarkers`, in its order.
 	static let seamCorpusErrorGraphCounts = [4, 11, 0, 26]
@@ -6433,8 +6456,10 @@ struct SafeDIToolGraphFuzzerTests {
 	/// hole type, for a hole read only if available. Seeds 309, 1010, 1020 and 1890, whose seams later draws gave a second
 	/// hole type that the move reorders, stay for the shapes above: they are listed under `seamBuilderOrderReason`, a
 	/// sanctioned order, which `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` counts as passing
-	/// (`seamBuilderOrderShape(listedBy:)`). Pinned by `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
+	/// (`seamBuilderOrderShape(listedBy:)`). Seeds 2006 and 3575 are a fill that builds its seam again and reads a value
+	/// only the place it fills, inside an inner seam's screen, carries, which the tool rejects (`fieldOfReenteringPlace`).
+	/// Pinned by `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890, 2_006, 3_575]
 
 	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x18CB353E24F0F8BF
 
@@ -6780,19 +6805,6 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockParameterAndFieldOrder)] + inSeamLeakSignatures,
 			seeds: [548],
 		),
-		// A fill that re-enters its own seam: the place the re-entered seam builds is handed the root dispatcher, not the
-		// fill's values, so `HoleImpl`'s only-if-available `holeNestId` is `nil` where the visible build and the inline
-		// build pass it.
-		GraphFuzzerKnownIssue(
-			reason: "\(fillReenteringItsSeamLosesValueReason); and \(seamBuilderOrderReason); and \(inSeamLeakReason)",
-			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .seamBuildsOtherValuesThanInline(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures,
-			seeds: [600],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "\(fillReenteringItsSeamLosesValueReason); and \(seamBuilderOrderReason); and \(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
-			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .seamBuildsOtherValuesThanInline(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
-			seeds: [945],
-		),
 		// The in-seam leak (rule 3 of the seam contract), which the retention check must fail on until its fix: a seam's
 		// builder functions capture the values of each level on the way to a place, so holding a builder keeps them alive
 		// where the inline build frees them. Listed so that main stays green while the check gates: the fix makes each entry
@@ -6926,10 +6938,10 @@ struct SafeDIToolGraphFuzzerTests {
 			15, 18, 19, 24, 25, 30, 56, 59, 68, 69, 78, 80, 83, 84, 93, 94, 98, 108, 116, 121,
 			135, 151, 153, 162, 163, 164, 187, 209, 215, 227, 240, 241, 247, 252, 273, 277, 279, 281, 300, 304,
 			306, 308, 309, 311, 321, 326, 330, 334, 338, 347, 348, 362, 365, 370, 383, 384, 391, 403, 407, 418,
-			430, 448, 454, 468, 471, 478, 481, 494, 517, 527, 532, 548, 550, 556, 567, 568, 594, 595, 600, 605,
+			430, 448, 454, 468, 471, 478, 481, 494, 517, 527, 532, 548, 550, 556, 567, 568, 594, 595, 605,
 			609, 617, 623, 627, 663, 669, 670, 701, 705, 709, 718, 732, 750, 751, 760, 769, 787, 788, 791, 794,
 			797, 809, 819, 832, 834, 835, 836, 851, 854, 858, 866, 867, 876, 883, 886, 892, 912, 920, 923, 930,
-			931, 934, 940, 942, 945, 947, 948, 950, 969, 990,
+			931, 934, 940, 942, 947, 948, 950, 969, 990,
 		],
 		labels: [],
 		sameSupply: [
@@ -7449,10 +7461,6 @@ struct SafeDIToolGraphFuzzerTests {
 	/// A hand-written builder's retention of `addingRetentionShapes`' `RetainNavigator` (`handWrittenRetentionProbe`), whose
 	/// probe holds `RetainHome`'s builder itself.
 	private static let handWrittenBuilderRetentionSignature = GraphFuzzerKnownIssue.Signature.seamRetainsWhatInlineFrees(containing: "_RetainNavigator alive holding retainDetailBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path")
-
-	private static let fillReenteringItsSeamLosesValueReason = "A fill that re-enters its own seam hands the re-entered seam the root dispatcher, not its own values, so a fill there reads `nil` for an only-if-available value its visible build and its inline build pass; fixed in a later PR"
-
-	private static let fillReenteringItsSeamLosesValueDifference = "> holeService > holeNestId:\n  feature:     holeNestId: nil\n  known right: holeNestId: Int 7"
 
 	private static let handWrittenBuilderRetentionReason = "A builder written by hand, handed to a seam as its readable initializer hands it on, keeps alive every value of each level on the way to its places, even when it reads none, where the inline build frees them, until the in-seam leak fix gives the readable initializer a builder that reads nothing"
 

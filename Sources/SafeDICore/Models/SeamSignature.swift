@@ -234,10 +234,11 @@ public struct SeamSignature: Sendable {
 	public struct Hole: Sendable {
 		/// A value in scope at the site, which the scope struct the builder is handed carries.
 		public struct Field: Sendable {
-			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, parameterTakingType: TypeDescription? = nil, deferral: Parameter.Deferral = .none, bindsMemo: Bool = false) {
+			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, parameterTakingType: TypeDescription? = nil, deferral: Parameter.Deferral = .none, bindsMemo: Bool = false, isSeamParameter: Bool = false) {
 				self.property = property
 				self.bindsMemo = bindsMemo
 				self.deferral = deferral
+				self.isSeamParameter = isSeamParameter
 				self.access = access
 				self.accessCause = accessCause
 				self.declaringType = declaringType
@@ -274,6 +275,10 @@ public struct SeamSignature: Sendable {
 			/// whose instance the fill's tree reads where it reads the value. The field keeps its own property, which decides
 			/// what it satisfies.
 			public let bindsMemo: Bool
+			/// Whether the field is bound from a parameter of the seam, which the seam's caller passes: a call that opens the
+			/// seam again inside a fill passes it the nearest declaration of its label there, which a place of the seam opened
+			/// again carries too.
+			public let isSeamParameter: Bool
 
 			/// Whether the field is bound from a deferred parameter (`SeamSignature.Parameter.isDeferred`).
 			public var isDeferredParameter: Bool {
