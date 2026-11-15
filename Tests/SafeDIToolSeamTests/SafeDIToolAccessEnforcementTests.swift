@@ -1106,19 +1106,19 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_47FCCD49F0077492.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
-		            func __safeDI_userServiceBuilder_Service(_ scope: Service.SafeDIScope_UserService) -> any UserService {
-		                switch scope {
-		                case .userService:
-		                    func __safeDI_userService() -> DefaultUserService {
-		                        _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(integration.seamCallComment(type: "DefaultUserService", declaringModule: "FeatureImpl"))
-		                        return DefaultUserService()
-		                    }
-		                    let userService: any UserService = __safeDI_userService()
-		                    return userService
+		            _ = Service.__safeDI_Service_DE15AB8B7FF442DE.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
+		            func __safeDI_userServiceBuilder_Service_userService(_ scope: Service.SafeDIScope_UserService.userService_Values) -> any UserService {
+		                func __safeDI_userService() -> DefaultUserService {
+		                    _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(integration.seamCallComment(type: "DefaultUserService", declaringModule: "FeatureImpl"))
+		                    return DefaultUserService()
 		                }
+		                let userService: any UserService = __safeDI_userService()
+		                return userService
 		            }
-		            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service)
+		            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
+		                .init(userService: { scope in __safeDI_userServiceBuilder_Service_userService(scope) })
+		            }
+		            return Service(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Service())
 		        }
 		        let service: Service = __safeDI_service()
 		        self.init(service: service)

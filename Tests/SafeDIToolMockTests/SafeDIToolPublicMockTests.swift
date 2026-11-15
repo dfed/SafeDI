@@ -11220,26 +11220,39 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		let imports = "#if canImport(SharedModule)\nimport SharedModule\n#endif\n\n"
 		let seamCode = """
 		extension FeedScreen {
-		    @frozen public enum SafeDIScope_FeedService {
+		    @frozen nonisolated public enum SafeDIScope_FeedService {
 		        case service(service_Values)
 
-		        public struct service_Values {
+		        nonisolated public struct service_Values {
 		            public let shared: SharedThing
 		            internal let store: FeedStore
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<Built> {
+		            public let service: (service_Values) -> Built
+
+		            public init(service: @escaping (service_Values) -> Built) {
+		                self.service = service
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                self.service = { _ in __safeDI_builder() }
+		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: @escaping (SafeDIScope_FeedService) -> FeedService) {
+		    public convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: SafeDIScope_FeedService.__safeDI_Builder<FeedService>) {
 		        let store = FeedStore(shared: shared)
-		        let service: FeedService = __safeDI_feedServiceBuilder(.service(SafeDIScope_FeedService.service_Values(shared: shared, store: store)))
+		        let service: FeedService = __safeDI_feedServiceBuilder.service(SafeDIScope_FeedService.service_Values(shared: shared, store: store))
 		        self.init(shared: shared, store: store, service: service)
 		    }
 		}
 
 		extension FeedScreen {
-		    public enum __safeDI_FeedScreen_02075E6332BCA310 {}
+		    public enum __safeDI_FeedScreen_F057834D041E69F6 {}
 		}
 		"""
 		let mockCode = """

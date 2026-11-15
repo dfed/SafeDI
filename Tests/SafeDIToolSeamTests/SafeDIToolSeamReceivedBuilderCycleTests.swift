@@ -102,15 +102,14 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    public init() {
 		        func __safeDI_screenABuilder() -> ScreenA {
 		            let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
-		            _ = ScreenA.__safeDI_ScreenA_A0792761FA8A7C8E.self\(Self.callComment(module: "Feature"))
-		            func __safeDI_widgetBuilder_ScreenA(_ scope: ScreenA.SafeDIScope_Widget) -> any Widget {
-		                switch scope {
-		                case .widget:
+		            _ = ScreenA.__safeDI_ScreenA_E2E61649C1295C1A.self\(Self.callComment(module: "Feature"))
+		            func __safeDI_widgetBuilder_ScreenA() -> ScreenA.SafeDIScope_Widget.__safeDI_Builder<any Widget> {
+		                .init(widget: { _ in
 		                    let widget: any Widget = DefaultWidget(screenBBuilder: screenBBuilder)
 		                    return widget
-		                }
+		                })
 		            }
-		            return ScreenA(__safeDI_widgetBuilder: __safeDI_widgetBuilder_ScreenA)
+		            return ScreenA(__safeDI_widgetBuilder: __safeDI_widgetBuilder_ScreenA())
 		        }
 		        let screenABuilder = Instantiator<ScreenA>(__safeDI_screenABuilder)
 		        func __safeDI_screenBBuilder() -> ScreenB {
@@ -328,21 +327,18 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_9367E336398C16B0.self\(Self.callComment(module: "Feature"))
-		            func __safeDI_widgetBuilder_Flow(_ scope: Flow.SafeDIScope_Widget) -> any Widget {
-		                switch scope {
-		                case let .aBuilder(_, scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
-		                }
+		            _ = Flow.__safeDI_Flow_20DCF66259ADDF0C.self\(Self.callComment(module: "Feature"))
+		            func __safeDI_widgetBuilder_Flow() -> Flow.SafeDIScope_Widget.__safeDI_Builder<any Widget> {
+		                .init(aBuilder: { _ in __safeDI_widgetBuilder_Flow_A_Scope() })
 		            }
-		            func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
-		                switch scope {
-		                case let .widget(scope):
+		            func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.SafeDIScope_Widget.A_Scope.__safeDI_Builder<any Widget> {
+		                .init(widget: { scope in
 		                    let bBuilder = scope.bBuilder
 		                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
 		                    return widget
-		                }
+		                })
 		            }
-		            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow)
+		            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow())
 		        }
 		        let flow: Flow = __safeDI_flow()
 		        self.init(flow: flow)
@@ -441,21 +437,18 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_05DBCEB3CE79CFA6.self\(Self.callComment(module: "Feature"))
-		            @Sendable func __safeDI_widgetSendableBuilder_Flow(_ scope: Flow.SafeDISendableScope_Widget) -> any Widget {
-		                switch scope {
-		                case let .aBuilder(scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
-		                }
+		            _ = Flow.__safeDI_Flow_5BBDD9120D0F8038.self\(Self.callComment(module: "Feature"))
+		            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Flow() -> Flow.SafeDISendableScope_Widget.__safeDI_Builder<any Widget> {
+		                .init(aBuilder: { _ in __safeDI_widgetBuilder_Flow_A_Scope() })
 		            }
-		            @Sendable func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
-		                switch scope {
-		                case let .widget(scope):
+		            @Sendable nonisolated func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.SafeDIScope_Widget.A_Scope.__safeDI_Builder<any Widget> {
+		                .init(widget: { scope in
 		                    let bBuilder = scope.bBuilder
 		                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
 		                    return widget
-		                }
+		                })
 		            }
-		            return Flow(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Flow)
+		            return Flow(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Flow())
 		        }
 		        let flow: Flow = __safeDI_flow()
 		        self.init(flow: flow)
@@ -606,31 +599,24 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_3E3E253138724B42.self\(Self.callComment(module: "Feature"))
-		            func __safeDI_widgetBuilder_Flow(_ scope: Flow.SafeDIScope_Widget) -> any Widget {
-		                switch scope {
-		                case let .xBuilder(_, scope): return __safeDI_widgetBuilder_Flow_X_Scope(scope)
-		                }
+		            _ = Flow.__safeDI_Flow_73CD2DC53157BB36.self\(Self.callComment(module: "Feature"))
+		            func __safeDI_widgetBuilder_Flow() -> Flow.SafeDIScope_Widget.__safeDI_Builder<any Widget> {
+		                .init(xBuilder: { _ in __safeDI_widgetBuilder_Flow_X_Scope() })
 		            }
-		            func __safeDI_widgetBuilder_Flow_X_Scope(_ scope: Flow.SafeDIScope_Widget.X_Scope) -> any Widget {
-		                switch scope {
-		                case let .p(_, scope): return __safeDI_widgetBuilder_Flow_P_Scope(scope)
-		                }
+		            func __safeDI_widgetBuilder_Flow_X_Scope() -> Flow.SafeDIScope_Widget.X_Scope.__safeDI_Builder<any Widget> {
+		                .init(p: { _ in __safeDI_widgetBuilder_Flow_P_Scope() })
 		            }
-		            func __safeDI_widgetBuilder_Flow_P_Scope(_ scope: Flow.SafeDIScope_Widget.P_Scope) -> any Widget {
-		                switch scope {
-		                case let .aBuilder(_, scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
-		                }
+		            func __safeDI_widgetBuilder_Flow_P_Scope() -> Flow.SafeDIScope_Widget.P_Scope.__safeDI_Builder<any Widget> {
+		                .init(aBuilder: { _ in __safeDI_widgetBuilder_Flow_A_Scope() })
 		            }
-		            func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
-		                switch scope {
-		                case let .widget(scope):
+		            func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.SafeDIScope_Widget.A_Scope.__safeDI_Builder<any Widget> {
+		                .init(widget: { scope in
 		                    let bBuilder = scope.bBuilder
 		                    let widget: any Widget = DefaultWidget(bBuilder: bBuilder)
 		                    return widget
-		                }
+		                })
 		            }
-		            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow)
+		            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow())
 		        }
 		        let flow: Flow = __safeDI_flow()
 		        self.init(flow: flow)
@@ -765,30 +751,25 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_flow() -> Flow {
-		            _ = Flow.__safeDI_Flow_F6CC9DA5320C1EA1.self\(Self.callComment(module: "Feature"))
-		            func __safeDI_widgetBuilder_Flow(_ scope: Flow.SafeDIScope_Widget) -> any Widget {
-		                switch scope {
-		                case let .aBuilder(_, scope): return __safeDI_widgetBuilder_Flow_A_Scope(scope)
-		                case let .bBuilder(_, scope): return __safeDI_widgetBuilder_Flow_B_Scope(scope)
-		                }
+		            _ = Flow.__safeDI_Flow_4C218B5535260BA5.self\(Self.callComment(module: "Feature"))
+		            func __safeDI_widgetBuilder_Flow() -> Flow.SafeDIScope_Widget.__safeDI_Builder<any Widget> {
+		                .init(aBuilder: { _ in __safeDI_widgetBuilder_Flow_A_Scope() }, bBuilder: { _ in __safeDI_widgetBuilder_Flow_B_Scope() })
 		            }
-		            func __safeDI_widgetBuilder_Flow_A_Scope(_ scope: Flow.SafeDIScope_Widget.A_Scope) -> any Widget {
-		                switch scope {
-		                case let .widget(scope):
+		            func __safeDI_widgetBuilder_Flow_A_Scope() -> Flow.SafeDIScope_Widget.A_Scope.__safeDI_Builder<any Widget> {
+		                .init(widget: { scope in
 		                    let mark = scope.mark
 		                    let widget: any Widget = DefaultWidget(mark: mark)
 		                    return widget
-		                }
+		                })
 		            }
-		            func __safeDI_widgetBuilder_Flow_B_Scope(_ scope: Flow.SafeDIScope_Widget.B_Scope) -> any Widget {
-		                switch scope {
-		                case let .widget(scope):
+		            func __safeDI_widgetBuilder_Flow_B_Scope() -> Flow.SafeDIScope_Widget.B_Scope.__safeDI_Builder<any Widget> {
+		                .init(widget: { scope in
 		                    let mark = scope.mark
 		                    let widget: any Widget = DefaultWidget(mark: mark)
 		                    return widget
-		                }
+		                })
 		            }
-		            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow)
+		            return Flow(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Flow())
 		        }
 		        let flow: Flow = __safeDI_flow()
 		        self.init(flow: flow)

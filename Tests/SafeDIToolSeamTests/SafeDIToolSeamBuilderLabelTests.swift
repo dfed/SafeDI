@@ -565,7 +565,7 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 				import SafeDI
 
 				func handWrittenHost() -> Host {
-				    Host(apiBuilder: 1, apiBuilder_: { _ in Live() })
+				    Host(apiBuilder: 1, apiBuilder_: { Live() })
 				}
 				""",
 			], dependencies: ["Feature"]),

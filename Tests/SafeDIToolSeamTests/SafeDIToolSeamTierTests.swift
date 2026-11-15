@@ -1544,7 +1544,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		    package init(__safeDI_serviceBuilder: @autoclosure @escaping () -> Thing?, __safeDI_serviceSendableBuilder: SafeDISendableScope_Service.__safeDI_Builder<any Service>) {
 		        let serviceBuilder = LazilyInstantiated<Thing?>(__safeDI_serviceBuilder)
 		        let badge = Badge(serviceBuilder: serviceBuilder.instance)
-		        @Sendable func __safeDI_service() -> any Service {
+		        @Sendable nonisolated func __safeDI_service() -> any Service {
 		            __safeDI_serviceSendableBuilder.service(SafeDISendableScope_Service.service_Values())
 		        }
 		        let service = SendableLazilyInstantiated<any Service>(__safeDI_service)
