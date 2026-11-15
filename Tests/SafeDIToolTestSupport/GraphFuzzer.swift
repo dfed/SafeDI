@@ -1233,6 +1233,9 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// Two erasures of `HoleGadgetImpl` on `HoleGadgetOwner`, two hole types of one instantiated type, whose builders are
 	/// named apart by the type each returns.
 	case holeSecondHoleTypeCollidingStem
+	/// `HoleSeam`'s erased instantiator of `any HoleTicketService`, which `HoleTicketImpl` fills: a place whose wrapper
+	/// forwards a value, `holeTicketId`, to its builder.
+	case holeForwardingPlace
 	/// `HoleBoth`, a seam that builds `HoleSeam` by value and in a `SendableInstantiator`: an inner seam reached by a plain
 	/// and a `@Sendable` route.
 	case holeInnerSeamPlainAndSendableRoutes
@@ -1968,6 +1971,20 @@ enum GraphFuzzerGenerator {
 		return builder.secondHolePlace.map { ($0.label, GraphFuzzerFixture(seed: seed, swiftFileContent: swiftFileContent)) }
 	}
 
+	/// The graph for `seed` and `features` with `edit` applied after every draw, or `nil` when the edit does not apply to
+	/// the graph (it has no place the edit changes).
+	static func fixture(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>, builderSurfaceEdit edit: GraphFuzzerBuilderSurfaceEdit) -> GraphFuzzerFixture? {
+		guard !features.contains(.generateMockPublic) else {
+			let draw = GraphFuzzerPublicMockDraw(seed: seed, builderSurfaceEdit: edit)
+			return draw.appliesBuilderSurfaceEdit ? GraphFuzzerFixture(seed: seed, swiftFileContent: draw.swiftFileContent(storingEveryParameter: false, isKnownRight: false)) : nil
+		}
+		guard features.contains(.generateDependencyTree) else { return nil }
+		var builder = Builder(seed: seed, features: features, storesEveryParameter: false)
+		builder.builderSurfaceEdit = edit
+		let swiftFileContent = builder.build()
+		return builder.appliesBuilderSurfaceEdit ? GraphFuzzerFixture(seed: seed, swiftFileContent: swiftFileContent) : nil
+	}
+
 	/// The graph for `seed` and `features` without its second path to a type that holds a place – the property a hole draw
 	/// adds on a type that holds a place without it, which builds a type another path builds too – drawn otherwise exactly
 	/// as the graph is, with that property's type name and label, or `nil` when the graph has none. The second-path oracle
@@ -2007,7 +2024,7 @@ enum GraphFuzzerGenerator {
 	}
 
 	struct TypeDeclaration {
-		var name: String
+		let name: String
 		var instantiableArguments: [String]
 		var properties: [PropertyDeclaration]
 		let declaresHelperTypes: Bool
@@ -2178,7 +2195,7 @@ enum GraphFuzzerGenerator {
 		}
 	}
 
-	struct Builder {
+	private struct Builder {
 		init(seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>, storesEveryParameter: Bool) {
 			self.features = features
 			self.storesEveryParameter = storesEveryParameter
@@ -2314,7 +2331,12 @@ enum GraphFuzzerGenerator {
 				finalDeclarations[index].properties.removeAll { $0.label == secondPath.label }
 			}
 			// The builder surface's edit, made after every draw (`GraphFuzzerBuilderSurfaceEdit`).
-			if let builderSurfaceEdit, let edited = GraphFuzzerGenerator.applying(builderSurfaceEdit, to: finalDeclarations, prefix: prefix, isSendableGraph: sendability == .sendable) {
+			if let builderSurfaceEdit, let edited = GraphFuzzerGenerator.applying(builderSurfaceEdit, to: finalDeclarations, markerFreeFiles: &markerFreeFiles, context: BuilderSurfaceEditContext(
+				prefix: prefix,
+				isSendableGraph: sendability == .sendable,
+				helperTypesAreSendable: helperTypesAreSendable,
+				seamModuleOmitsPackageName: modulesOmittingPackageName.contains(.seamModule),
+			)) {
 				finalDeclarations = edited
 				appliesBuilderSurfaceEdit = true
 			}
@@ -4898,6 +4920,8 @@ enum GraphFuzzerGenerator {
 			let nestedFillWrapper = holeRolls.nestedFill.element(of: instantiators)
 			// The nested builders' draws, each on a generator of its own, made whatever the base draw.
 			let drawsSecondHoleType = holeRolls.secondHoleType.percentChance(25)
+			let drawsForwardingPlace = holeRolls.forwardingPlace.percentChance(35)
+			let forwardingPlaceWrapper = holeRolls.forwardingPlace.element(of: sendability == .nonSendable ? ["ErasedInstantiator"] : sendability == .sendable ? ["SendableErasedInstantiator"] : ["ErasedInstantiator", "SendableErasedInstantiator"])
 			let secondHoleTypeCollides = holeRolls.secondHoleType.percentChance(40)
 			let drawsInnerSeamRoutes = holeRolls.innerSeamRoutes.percentChance(25)
 			let innerSeamRoutesBeneathOuterSeam = holeRolls.innerSeamRoutes.percentChance(50)
@@ -5242,6 +5266,18 @@ enum GraphFuzzerGenerator {
 				seamModuleDeclarations.append(gadgetOwner)
 				callerDeclarations.append(gadgetImpl)
 				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeGadgetOwner", type: gadgetOwner.name))
+			}
+			// A hole whose place forwards a value to its builder: the seam instantiates an erased instantiator of
+			// `any HoleTicketService`, a protocol of the seam's module that `HoleTicketImpl`, which forwards `holeTicketId`,
+			// fills from the fillers' module, so the builder takes what the place forwards (`holeForwardingPlace`).
+			if drawsForwardingPlace {
+				let ticketServiceName = name("HoleTicketService")
+				seam.additionalDeclarations.append("public protocol \(ticketServiceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+				var ticketImpl = instantiable("HoleTicketImpl", module: fillerModule, properties: [PropertyDeclaration(attribute: "@Forwarded", label: "holeTicketId", type: "Int")])
+				ticketImpl.additionalConformances.append(ticketServiceName)
+				ticketImpl.fillsHole = true
+				callerDeclarations.append(ticketImpl)
+				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(ticketImpl.name)\")", label: "holeTicketBuilder", type: "\(forwardingPlaceWrapper)<Int, any \(ticketServiceName)>"))
 			}
 			// A wrapper of the hole beside its by-value place, on the type that holds it: a `LazilyInstantiated`, a plain
 			// wrapper whose place is a case of the plain enum, or a `SendableLazilyInstantiated`, whose place is a case of the `@Sendable` enum. A mock
@@ -5601,6 +5637,7 @@ enum GraphFuzzerGenerator {
 				tangle = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6554616E67)
 				plainFillPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6546696C6C)
 				loopPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6552696E67)
+				forwardingPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C65466F7277)
 			}
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
@@ -5629,6 +5666,8 @@ enum GraphFuzzerGenerator {
 			/// instantiators.
 			var plainFillPlace: GraphFuzzerRandomNumberGenerator
 			var loopPlace: GraphFuzzerRandomNumberGenerator
+			/// A place of its own hole type whose wrapper forwards a value to the builder (`holeForwardingPlace`).
+			var forwardingPlace: GraphFuzzerRandomNumberGenerator
 		}
 
 		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
@@ -8797,6 +8836,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		} else if declares("HoleGadgetOwner") {
 			features.insert(.holeSecondHoleType)
 		}
+		if seamProperties.contains(where: { $0.label == "holeTicketBuilder" }) {
+			features.insert(.holeForwardingPlace)
+		}
 		if declares("HoleBoth") {
 			features.insert(.holeInnerSeamPlainAndSendableRoutes)
 		}
@@ -9845,6 +9887,12 @@ struct GraphFuzzerFailure: Equatable {
 		/// A second call of another module's public mock renames, retypes or reorders a builder a calling mock takes
 		/// (`GraphFuzzerToolRuns.callingMockFailure`).
 		case callingMockChangesBuilder = "a second call of a public mock changes a builder of the calling mock"
+		/// A builder a seam's readable initializer or a generated `mock()` takes, which takes no scope, is labeled otherwise than
+		/// contract rule 8 says (`GraphFuzzerToolRuns.builderLabelFailure`).
+		case builderLabelBreaksContract = "a builder's label is not the one the contract gives its filling type, returned type and family"
+		/// The tool rejects the remedy of places of one builder that forward other values, whose places forward the same
+		/// values (`GraphFuzzerToolRuns.forwardingRemedyFailure`). No known issue lists it.
+		case remedyOfPlacesForwardingOtherValuesRejected = "the remedy of places of one builder that forward other values is rejected"
 		/// Two builds of one type in a seam's tree bind other values before the same property (`SeamPlaceLevels.levelDisagreements()`):
 		/// the levels a scope enum would nest by type would depend on the path.
 		case placeLevelsDifferBetweenBuildsOfType = "two builds of one type in a seam's tree bind other values before the same property"
@@ -10124,15 +10172,10 @@ struct GraphFuzzerKnownIssue: Equatable {
 		/// A builder label, scope type or case name of the graph without its second place of a hole changes when the place is
 		/// added, with details containing this text, such as the second place's label.
 		case holeNamesChangeWithSecondPlace(containing: String)
-		/// A seam's readable initializer or a generated `mock()` takes a parameter naming a type SafeDI generates, or a builder
-		/// the fuzzer writes by hand takes a scope (`GraphFuzzerToolRuns.builderSurfaceFailure`).
-		case builderSurfaceNamesGeneratedType
-		/// The builder surface's other parts, each its own way of failing: same supply, added supply, places forwarding other
-		/// values, and calling mocks.
-		case sameSupplyCallStopsCompiling
-		case addedBuilderChangesExistingBuilder
-		case placesForwardingOtherValuesAccepted
-		case callingMockChangesBuilder
+		/// A failure of the builder surface of this kind (`GraphFuzzerResult.knownBuilderSurfaceFailureKinds`): what a person
+		/// writes names a generated type, breaks the label rule, or stops compiling when the supply is kept or added to. A
+		/// rejected remedy has no signature, so no listed seed hides it.
+		case builderSurface(GraphFuzzerFailure.Kind)
 		/// A remedy of this kind, which an error of a base corpus graph states, leaves an error at the declaration the error
 		/// is at, with a line (`GraphFuzzerFailure.remedyFailures`) containing this text, or matching another of the shape's
 		/// remedy signatures, for each remedy that does: the text names the error the remedy leaves, which tells the shapes of
@@ -10152,7 +10195,9 @@ struct GraphFuzzerKnownIssue: Equatable {
 			switch signature {
 			case .mockBuildsOtherValuesThanProduction, .valueOracleFixtureDoesNotCompile, .valueOracleFixtureRejected, .remedyLeavesErrorAtSite:
 				true
-			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .holeNamesChangeWithSecondPlace, .builderSurfaceNamesGeneratedType, .sameSupplyCallStopsCompiling, .addedBuilderChangesExistingBuilder, .placesForwardingOtherValuesAccepted, .callingMockChangesBuilder:
+			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .holeNamesChangeWithSecondPlace:
+				false
+			case .builderSurface:
 				false
 			}
 		}
@@ -10165,21 +10210,24 @@ struct GraphFuzzerKnownIssue: Equatable {
 			switch signature {
 			case .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees:
 				true
-			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite, .builderSurfaceNamesGeneratedType, .sameSupplyCallStopsCompiling, .addedBuilderChangesExistingBuilder, .placesForwardingOtherValuesAccepted, .callingMockChangesBuilder:
+			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite:
+				false
+			case .builderSurface:
 				false
 			}
 		}
 	}
 
-	/// Whether every shape of the issue is a value or retention difference, which documents only the differences its
-	/// signatures match and masks no later failure of the oracle's chain (`GraphFuzzerFinding`): a graph listed under such
-	/// an issue still reports a new failure of any oracle, so the gating draws count it as judged.
+	/// Whether every shape of the issue is a value, retention or builder-surface difference, which documents only the
+	/// differences its signatures match and masks no later failure of the oracle's chain (`GraphFuzzerFinding`): a
+	/// graph listed under such an issue still reports a new failure of any oracle, so the gating draws count it as
+	/// judged.
 	var masksNoLaterFailure: Bool {
 		signatures.allSatisfy { signature in
 			switch signature {
-			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile:
+			case .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .builderSurface:
 				true
-			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite, .builderSurfaceNamesGeneratedType, .sameSupplyCallStopsCompiling, .addedBuilderChangesExistingBuilder, .placesForwardingOtherValuesAccepted, .callingMockChangesBuilder:
+			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .holeNamesChangeWithSecondPlace, .remedyLeavesErrorAtSite:
 				false
 			}
 		}
@@ -10285,16 +10333,8 @@ struct GraphFuzzerKnownIssue: Equatable {
 				failure.kind == .valueOracleFixtureDoesNotCompile && failure.details.contains(text)
 			case let .holeNamesChangeWithSecondPlace(text):
 				failure.kind == .holeNamesChangeWithSecondPlace && failure.details.prefix { $0 != "\n" }.contains(text)
-			case .builderSurfaceNamesGeneratedType:
-				failure.kind == .builderSurfaceNamesGeneratedType
-			case .sameSupplyCallStopsCompiling:
-				failure.kind == .sameSupplyCallStopsCompiling
-			case .addedBuilderChangesExistingBuilder:
-				failure.kind == .addedBuilderChangesExistingBuilder
-			case .placesForwardingOtherValuesAccepted:
-				failure.kind == .placesForwardingOtherValuesAccepted
-			case .callingMockChangesBuilder:
-				failure.kind == .callingMockChangesBuilder
+			case let .builderSurface(kind):
+				GraphFuzzerResult.knownBuilderSurfaceFailureKinds.contains(kind) && failure.kind == kind
 			case .remedyLeavesErrorAtSite:
 				// As for the value signatures, every remedy that leaves an error must match one.
 				failure.kind == .remedyLeavesErrorAtSite && !failure.remedyFailures.isEmpty && failure.remedyFailures.allSatisfy { remedyFailure in
@@ -10368,6 +10408,10 @@ enum GraphFuzzerFinding: Equatable {
 	/// show: a seed sits on an entry only for what its difference shows, so it belongs on the entry that names exactly that.
 	/// The graph still fails, so the report calls the seed misfiled, not stale.
 	case staleRenamedGraphDifference(GraphFuzzerKnownIssue, GraphFuzzerOutcomeDifference.Aspect)
+	/// The graph's seed is a known issue that lists this builder surface failure, which the graph does not show: a seed sits
+	/// on an entry only for the parts of the builder surface it fails, so it belongs on the entry that names exactly those.
+	/// The graph still fails, so the report calls the seed misfiled, not stale.
+	case staleBuilderSurfaceSignature(GraphFuzzerKnownIssue, GraphFuzzerFailure.Kind)
 	/// The graph fails, and no known issue documents that failure: either its seed is not a known issue, or
 	/// it fails another way than its known issue documents.
 	case failure(GraphFuzzerFailure)
@@ -10376,9 +10420,10 @@ enum GraphFuzzerFinding: Equatable {
 	///   failure masks none of them: the first the known issue does not document is the finding. Nor does a known
 	///   rejection of a base corpus graph's value-oracle fixture, or a known failure of it to compile, of each of which
 	///   every later failure is independent: the value comparison does not run, and the wrapper, multi-module and
-	///   rename oracles judge the drawn graph. No known failure masks a renamed graph's difference, which judges only
-	///   what the tool generates, nor what the retention oracle finds, since what a graph keeps alive does not depend on
-	///   how else it fails, so a known failure never hides a leak.
+	///   rename oracles judge the drawn graph. Nor does a known failure of the builder surface, which judges only the
+	///   surface a person writes against, of which every later oracle is independent. No known failure masks a renamed
+	///   graph's difference, which judges only what the tool generates, nor what the retention oracle finds, since what a
+	///   graph keeps alive does not depend on how else it fails, so a known failure never hides a leak.
 	/// - Parameter retentionIsJudged: Whether the retention oracle judged the graph, which it does only where the run
 	///   compiles and runs its code. A graph it did not judge that fails nothing else passes, rather than making stale a
 	///   known issue every signature of which documents a leak (`documentsOnlyRetention`); a known issue that lists
@@ -10391,6 +10436,7 @@ enum GraphFuzzerFinding: Equatable {
 			self = retentionIsJudged || !knownIssue.documentsOnlyRetention ? .staleKnownIssue(knownIssue) : .passed
 		case let (failure?, knownIssue?) where knownIssue.matches(failure):
 			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile].contains(failure.kind)
+				|| GraphFuzzerResult.knownBuilderSurfaceFailureKinds.contains(failure.kind)
 			if let unmasked = laterFailures.first(where: { (masksNoLaterFailure || $0.kind == .renamedGraphDiffers || $0.kind == .seamRetainsWhatInlineFrees || $0.kind == .publicMockRetainsWhatKnownRightFrees) && !knownIssue.matches($0) }) {
 				self = .failure(unmasked)
 			} else {
@@ -10419,6 +10465,10 @@ enum GraphFuzzerFinding: Equatable {
 			for case let .renamedGraphDiffers(aspect) in knownIssue.signatures where !shownAspects.contains(aspect) {
 				findings.append(.staleRenamedGraphDifference(knownIssue, aspect))
 			}
+			let shownKinds = Set(([failure] + laterFailures).map(\.kind))
+			for case let .builderSurface(kind) in knownIssue.signatures where !shownKinds.contains(kind) {
+				findings.append(.staleBuilderSurfaceSignature(knownIssue, kind))
+			}
 		}
 		return findings
 	}
@@ -10434,6 +10484,8 @@ enum GraphFuzzerFinding: Equatable {
 			"stale \(seed) \(knownIssue.reason)"
 		case let .staleRenamedGraphDifference(knownIssue, aspect):
 			"misfiled \(seed) \(knownIssue.reason): the renamed graph does not show \(aspect.rawValue); list the seed under the entry that names exactly what it shows"
+		case let .staleBuilderSurfaceSignature(knownIssue, kind):
+			"misfiled \(seed) \(knownIssue.reason): the graph does not show \(kind.rawValue); list the seed under the entry that names exactly what it shows"
 		case let .failure(failure) where failure.kind == .renamedGraphDiffers:
 			// Each difference of a graph is a finding, so its line says which, without the sentence's period.
 			"failure \(seed) \(failure.kind.rawValue): \(failure.details.prefix { $0 != "\n" }.dropLast())"
@@ -11256,7 +11308,7 @@ enum GraphFuzzerOracle {
 			let renamedGraphFailures = runs.renamedGraphFailures
 			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, runs.sameSupplyFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, runs.builderLabelFailure, runs.sameSupplyFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			failures.append(contentsOf: renamedGraphFailures)
 			// The retention oracle judges last. No known failure masks what it finds, as none masks a renamed graph's
@@ -11928,7 +11980,7 @@ enum GraphFuzzerOracle {
 		if isDrawnForItsSeed, case .accepted = firstOutcome {
 			for edit in GraphFuzzerBuilderSurfaceEdit.allCases {
 				guard let edited = GraphFuzzerGenerator.fixture(forSeed: fixture.seed, features: drawnFeatures, builderSurfaceEdit: edit) else { continue }
-				try await builderSurfaceRuns.append(GraphFuzzerBuilderSurfaceRun(edit: edit, fixture: edited, outcome: toolOutcome(of: edited)))
+				try await builderSurfaceRuns.append(GraphFuzzerBuilderSurfaceRun(edit: edit, fixture: edited, outcome: toolOutcome(of: edited, listsTransitiveDependencies: edit.listsTransitiveDependencies)))
 			}
 		}
 		return try await GraphFuzzerToolRuns(

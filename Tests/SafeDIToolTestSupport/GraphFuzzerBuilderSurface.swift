@@ -56,7 +56,11 @@ enum GraphFuzzerBuilderSurface {
 	}
 
 	/// Each parameter of a seam's readable initializer, every tier, in `generatedFiles` that names a generated type.
-	/// Files the oracle adds (the hand-written seam and public mock callers) are not generated, and are not read.
+	/// Files the oracle adds (the hand-written seam and public mock callers) are not generated, and are not read. The
+	/// initializer read is each tier's one that only generated code calls (`GraphFuzzerOracle.seamInitializers`), read as
+	/// the plain initializer spells its parameters: the fuzzer's graphs set no `generatePlainDependencyTreeInitializers`,
+	/// so today that tier stands in for the plain readable initializer, whose parameters it shares. The leak-fix slice, in
+	/// which the two diverge, must read the plain initializer itself.
 	static func readableInitializerFindings(in generatedFiles: [String: String]) -> [Finding] {
 		var findings = [Finding]()
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where isGenerated(fileName) {
@@ -140,6 +144,65 @@ extension GraphFuzzerToolRuns {
 		return GraphFuzzerFailure(
 			seed: fixture.seed,
 			kind: .builderSurfaceNamesGeneratedType,
+			details: "\(findings.map(\.description).joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
+		)
+	}
+}
+
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+extension GraphFuzzerBuilderSurface {
+	/// Each builder parameter of a readable initializer or a `mock()` in `generatedFiles` whose label is not the one contract
+	/// rule 8 gives it, read from the surface alone: `<fillingType>Builder` when its filling type is its returned type, else
+	/// `<fillingType>_<ReturnedType>Builder`, the filling type's leading capitals lowered, with `Sendable` before `Builder`
+	/// for a builder of the `@Sendable` family. A builder handed a scope names its filling type in the scope's name; one that
+	/// takes no scope names only its returned type, so its label must name the returned type where the filling type is
+	/// expected to be it, or after `_` where the label names another filling type.
+	static func labelFindings(in generatedFiles: [String: String]) -> [Finding] {
+		var findings = [Finding]()
+		for callable in callables(in: generatedFiles) {
+			for parameter in callable.parameters where isBuilder(parameter) {
+				guard let facts = builderFacts(of: parameter) else { continue }
+				let label = parameter.label.hasPrefix("__safeDI_") ? String(parameter.label.dropFirst("__safeDI_".count)) : parameter.label
+				guard let expected = expectedLabel(of: label, facts: facts), expected != label else { continue }
+				findings.append(Finding(declaration: callable.key, parameter: parameter.description, reason: "contract rule 8 labels `\(expected)`"))
+			}
+		}
+		return findings
+	}
+
+	/// The label contract rule 8 gives a builder of `facts` labeled `label`, or `nil` when the label could be the contract's
+	/// for some filling type the surface does not name.
+	static func expectedLabel(of label: String, facts: BuilderFacts) -> String? {
+		let suffix = facts.isSendable ? "SendableBuilder" : "Builder"
+		let returnedName = BuilderFacts.typeName(facts.returnedType)
+		let returnedStem = String(GraphFuzzerPublicMockDraw.builderLabel(ofTypeNamed: returnedName).dropLast("Builder".count))
+		guard facts.surfaceLabel != nil else {
+			let fillingStem = String(GraphFuzzerPublicMockDraw.builderLabel(ofTypeNamed: facts.fillingType).dropLast("Builder".count))
+			return fillingStem + (facts.fillingType == returnedName ? "" : "_\(returnedName)") + suffix
+		}
+		// A builder that takes no scope: its filling type is its returned type, or another type its label names before
+		// `_<ReturnedType>`.
+		guard label.hasSuffix(suffix) else { return returnedStem + suffix }
+		let stem = label.dropLast(suffix.count)
+		if stem == returnedStem {
+			return nil
+		}
+		let fillingStem = stem.hasSuffix("_" + returnedName) ? stem.dropLast(returnedName.count + 1) : ""
+		return fillingStem.isEmpty || fillingStem == returnedStem ? returnedStem + suffix : nil
+	}
+}
+
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+extension GraphFuzzerToolRuns {
+	/// The failure of a graph the tool accepts some builder of whose readable initializers or generated mocks is labeled
+	/// otherwise than contract rule 8 says (`GraphFuzzerBuilderSurface.labelFindings(in:)`), or `nil`.
+	var builderLabelFailure: GraphFuzzerFailure? {
+		guard case let .accepted(generatedFiles, _) = firstOutcome else { return nil }
+		let findings = GraphFuzzerBuilderSurface.labelFindings(in: generatedFiles)
+		guard !findings.isEmpty else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .builderLabelBreaksContract,
 			details: "\(findings.map(\.description).joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
 		)
 	}
@@ -245,7 +308,34 @@ extension GraphFuzzerBuilderSurface {
 			return true
 		}
 		let labelNamesBuilder = parameter.label.hasSuffix("Builder") || parameter.label.contains("Builder_")
-		return labelNamesBuilder && (parameter.type.contains(") -> ") || parameter.type.hasSuffix(".Builder"))
+		return labelNamesBuilder && (isFunctionType(parameter.type) || parameter.type.hasSuffix(".Builder"))
+	}
+
+	/// Whether `type`, its attributes aside, is a function type, `(…) -> R`, rather than a type that only holds one, such as
+	/// an erased instantiator whose forwarded tuple holds a closure.
+	static func isFunctionType(_ type: String) -> Bool {
+		var remainder = Substring(type)
+		while remainder.hasPrefix("@") {
+			guard let space = remainder.firstIndex(of: " ") else { return false }
+			remainder = remainder[remainder.index(after: space)...]
+		}
+		guard remainder.hasPrefix("(") else { return false }
+		var depth = 0
+		for index in remainder.indices {
+			switch remainder[index] {
+			case "(", "<", "[":
+				depth += 1
+			case ")", ">", "]":
+				depth -= 1
+				if depth == 0 {
+					let rest = remainder[remainder.index(after: index)...]
+					return rest.hasPrefix(" -> ") || rest.hasPrefix(" throws") || rest.hasPrefix(" async")
+				}
+			default:
+				break
+			}
+		}
+		return false
 	}
 
 	/// What a hand-written builder is for: the type that fills its places, the type it returns, and whether its places are
@@ -257,6 +347,9 @@ extension GraphFuzzerBuilderSurface {
 		/// The label the surface gives a builder that takes no scope, which then follows the contract; `nil` for a builder
 		/// handed a scope, whose label the contract renames.
 		var surfaceLabel: String?
+		/// What the builder's places forward, which a builder that takes no scope takes: `F` of `(F) -> B` or of a wrapper's
+		/// `.Builder`; `nil` for a builder whose places forward nothing, or one handed a scope, which carries what they forward.
+		var forwardedType: String?
 
 		/// The label contract rule 8 gives the builder: `<fillingType>Builder` when the filling type is the returned type,
 		/// else `<fillingType>_<ReturnedType>Builder`, the filling type's leading capitals lowered as SafeDI lowers them;
@@ -280,14 +373,17 @@ extension GraphFuzzerBuilderSurface {
 		}
 	}
 
-	/// The facts of a builder parameter, read from its type: what it returns after its last `-> `, whether it is
-	/// `@Sendable`, and, on main, the filling type its scope enum is named after (`SafeDI…Scope_<FillingType>` or
-	/// `SafeDI…Scope_<FillingType>_<ReturnedType>`); once builders take no scope, the label is the surface's own, which then
-	/// follows the contract, and a closure builds the returned type.
+	/// The facts of a builder parameter, read from its type: what it returns, whether it is `@Sendable`, and, on main, the
+	/// filling type its scope enum is named after (`SafeDI…Scope_<FillingType>` or `SafeDI…Scope_<FillingType>_<ReturnedType>`);
+	/// once builders take no scope, the label is the surface's own, which then follows the contract, the filling type is the
+	/// returned type, and what the places forward is the closure's parameter or the wrapper's first generic argument.
 	static func builderFacts(of parameter: Parameter) -> BuilderFacts? {
+		let isSendable = isSendableBuilderType(parameter.type)
+		if let wrapperBuilder = wrapperBuilder(of: parameter.type) {
+			return BuilderFacts(fillingType: BuilderFacts.typeName(wrapperBuilder.returnedType), returnedType: wrapperBuilder.returnedType, isSendable: isSendable, surfaceLabel: parameter.label, forwardedType: wrapperBuilder.forwardedType)
+		}
 		guard let arrow = parameter.type.range(of: ") -> ", options: .backwards) else { return nil }
 		let returnedType = String(parameter.type[arrow.upperBound...])
-		let isSendable = parameter.type.contains("@Sendable")
 		let returnedName = BuilderFacts.typeName(returnedType)
 		if let scopeRange = parameter.type.range(of: #"SafeDI\w*Scope_\w+"#, options: .regularExpression) {
 			let scope = String(parameter.type[scopeRange])
@@ -297,7 +393,32 @@ extension GraphFuzzerBuilderSurface {
 			}
 			return BuilderFacts(fillingType: core, returnedType: returnedType, isSendable: isSendable)
 		}
-		return BuilderFacts(fillingType: returnedName, returnedType: returnedType, isSendable: isSendable, surfaceLabel: parameter.label)
+		let parameters = parameter.type[..<arrow.lowerBound].split(separator: "(", maxSplits: 1, omittingEmptySubsequences: false).last.map(String.init) ?? ""
+		return BuilderFacts(fillingType: returnedName, returnedType: returnedType, isSendable: isSendable, surfaceLabel: parameter.label, forwardedType: parameters.isEmpty ? nil : parameters)
+	}
+
+	/// The returned type and forwarded type of a wrapper's nested `Builder` (`Instantiator<T>.Builder` and its `Sendable` and
+	/// erased forms), or `nil` for another type. An `Instantiator<T>`'s places forward `T.ForwardedProperties`, and an erased
+	/// instantiator's its first generic argument, nothing where that is `()` or `Void`.
+	static func wrapperBuilder(of type: String) -> (wrapper: String, returnedType: String, forwardedType: String?)? {
+		var type = type
+		for attribute in ["@escaping ", "@Sendable "] {
+			type = type.replacingOccurrences(of: attribute, with: "")
+		}
+		guard type.hasSuffix(".Builder"), let open = type.firstIndex(of: "<") else { return nil }
+		let wrapper = String(type[..<open])
+		let arguments = GraphFuzzerOracle.topLevelParameters(String(type[type.index(after: open)..<type.index(type.endIndex, offsetBy: -".Builder".count - 1)]))
+			.map { $0.trimmingCharacters(in: .whitespaces) }
+		switch wrapper {
+		case "Instantiator", "SendableInstantiator":
+			guard arguments.count == 1 else { return nil }
+			return (wrapper, arguments[0], "\(BuilderFacts.typeName(arguments[0])).ForwardedProperties")
+		case "ErasedInstantiator", "SendableErasedInstantiator":
+			guard arguments.count == 2 else { return nil }
+			return (wrapper, arguments[1], ["()", "Void"].contains(arguments[0]) ? nil : arguments[0])
+		default:
+			return nil
+		}
 	}
 }
 
@@ -306,11 +427,16 @@ extension GraphFuzzerBuilderSurface {
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension GraphFuzzerBuilderSurface {
 	/// How a person writes a builder, as the Manual teaches: a closure that builds the value, `{ X() }`; the filling type's
-	/// initializer, `X.init`; or a closure value stored with the parameter's own type, `() -> X`.
+	/// initializer, `X.init`; a closure value stored with the parameter's own type, `() -> X`; or, for places that forward
+	/// a value, a closure that takes it, `{ value in X(value) }`.
 	enum BuilderForm: String, CaseIterable, Equatable {
 		case closure
 		case initializerReference
 		case storedClosure
+		case forwardingClosure
+
+		/// The forms of a builder whose places forward nothing, which a call writes in turn.
+		static let formsForwardingNothing: [BuilderForm] = [.closure, .initializerReference, .storedClosure]
 	}
 
 	/// One argument of a call `C`: a value of exactly the type the drawn graph's surface takes, or a builder written in
@@ -337,7 +463,9 @@ extension GraphFuzzerBuilderSurface {
 				case .initializerReference:
 					"\(label): \(facts.fillingType).init"
 				case .storedClosure:
-					"\(label): <\(facts.isSendable ? "@Sendable " : "")() -> \(facts.returnedType)>"
+					"\(label): <\(facts.isSendable ? "@Sendable " : "")(\(facts.forwardedType ?? "")) -> \(facts.returnedType)>"
+				case .forwardingClosure:
+					"\(label): { value in \(facts.fillingType)(value) }"
 				}
 			}
 		}
@@ -357,12 +485,16 @@ extension GraphFuzzerBuilderSurface {
 	/// per parameter without a default, and one builder in the contract's label per builder parameter, in a form chosen by
 	/// `seed` and the builder's position, so that the corpus writes every form. No `SafeDIOverrides`.
 	static func calls(against callables: [Callable], seed: UInt64) -> [Call] {
-		var builderIndex = Int(seed % UInt64(BuilderForm.allCases.count))
+		let forms = BuilderForm.formsForwardingNothing
+		var builderIndex = Int(seed % UInt64(forms.count))
 		return callables.map { callable in
 			Call(key: callable.key, arguments: callable.parameters.compactMap { parameter -> Argument? in
 				if isBuilder(parameter), let facts = builderFacts(of: parameter) {
+					guard facts.forwardedType == nil else {
+						return .builder(label: facts.contractLabel, facts: facts, form: .forwardingClosure)
+					}
 					defer { builderIndex += 1 }
-					return .builder(label: facts.contractLabel, facts: facts, form: BuilderForm.allCases[builderIndex % BuilderForm.allCases.count])
+					return .builder(label: facts.contractLabel, facts: facts, form: forms[builderIndex % forms.count])
 				}
 				return parameter.hasDefault ? nil : .value(label: parameter.label, type: parameter.type)
 			})
@@ -371,36 +503,42 @@ extension GraphFuzzerBuilderSurface {
 
 	/// Whether a parameter of type `parameterType` takes a builder for `facts` written in `form`: the one place that says
 	/// which forms each parameter type accepts, by the type clause of contract rule 8. A place that forwards nothing takes
-	/// `() -> B`, `Instantiator<T>.Builder`, `ErasedInstantiator<(), B>.Builder` or a `Sendable` twin, each of which takes
-	/// every form; a `@Sendable` parameter takes a stored closure only when it is `@Sendable` too; a closure handed a scope
+	/// `() -> B`, `Instantiator<T>.Builder` (whose `T` forwards nothing), `ErasedInstantiator<(), B>.Builder` or a
+	/// `Sendable` twin, each of which takes every form but a forwarding closure; a place that forwards `F` takes `(F) -> B`
+	/// or the wrapper's `.Builder` whose forwarded type is `F` – `ErasedInstantiator<F, B>.Builder`, or
+	/// `Instantiator<B>.Builder` for `F` `B.ForwardedProperties` – which takes a forwarding closure, or a stored closure of
+	/// that type; a `@Sendable` parameter takes a stored closure only when it is `@Sendable` too; a closure handed a scope
 	/// takes none. The builder-struct work can back this with a compile of the call.
 	static func accepts(parameterType: String, facts: BuilderFacts, form: BuilderForm) -> Bool {
-		var type = parameterType
-		for attribute in ["@escaping ", "@Sendable "] {
-			type = type.replacingOccurrences(of: attribute, with: "")
-		}
-		guard generatedTypeNamed(by: "_: " + type) == nil else { return false }
-		let isSendable = parameterType.contains("@Sendable") || type.hasPrefix("Sendable")
+		guard generatedTypeNamed(by: "_: " + parameterType) == nil else { return false }
+		let isSendable = isSendableBuilderType(parameterType)
 		if form == .storedClosure, isSendable != facts.isSendable {
 			return false
 		}
 		let returnedName = BuilderFacts.typeName(facts.returnedType)
-		if type.hasPrefix("() -> ") {
-			return BuilderFacts.typeName(String(type.dropFirst("() -> ".count))) == returnedName
+		let takesForwardedValue = form == .forwardingClosure || (form == .storedClosure && facts.forwardedType != nil)
+		if let wrapperBuilder = wrapperBuilder(of: parameterType) {
+			guard BuilderFacts.typeName(wrapperBuilder.returnedType) == returnedName else { return false }
+			guard takesForwardedValue else {
+				// An `Instantiator<T>`'s `T.ForwardedProperties` is `Void` where `T` forwards nothing.
+				return wrapperBuilder.forwardedType == nil || wrapperBuilder.wrapper.hasSuffix("Instantiator") && !wrapperBuilder.wrapper.hasSuffix("ErasedInstantiator")
+			}
+			return wrapperBuilder.forwardedType == facts.forwardedType
 		}
-		guard type.hasSuffix(".Builder"), let open = type.firstIndex(of: "<") else { return false }
-		let wrapper = String(type[..<open])
-		let arguments = GraphFuzzerOracle.topLevelParameters(String(type[type.index(after: open)..<type.index(type.endIndex, offsetBy: -".Builder".count - 1)]))
-			.map { $0.trimmingCharacters(in: .whitespaces) }
-		switch wrapper {
-		case "Instantiator", "SendableInstantiator":
-			return arguments.count == 1 && BuilderFacts.typeName(arguments[0]) == returnedName
-		case "ErasedInstantiator", "SendableErasedInstantiator":
-			let forwardsNothing = arguments.first.map { ["()", "Void"].contains($0) || $0.hasSuffix(".ForwardedProperties") } ?? false
-			return arguments.count == 2 && forwardsNothing && BuilderFacts.typeName(arguments[1]) == returnedName
-		default:
-			return false
+		var type = parameterType
+		for attribute in ["@escaping ", "@Sendable "] {
+			type = type.replacingOccurrences(of: attribute, with: "")
 		}
+		guard type.hasPrefix("("), let arrow = type.range(of: ") -> ", options: .backwards) else { return false }
+		let forwardedType = String(type[type.index(after: type.startIndex)..<arrow.lowerBound])
+		guard BuilderFacts.typeName(String(type[arrow.upperBound...])) == returnedName else { return false }
+		return takesForwardedValue ? forwardedType == facts.forwardedType : forwardedType.isEmpty
+	}
+
+	/// Whether a builder parameter's type is of the `@Sendable` family: a `@Sendable` closure or a `Sendable` wrapper's
+	/// `Builder`. The one test the base check's hole kinds and `accepts` share.
+	static func isSendableBuilderType(_ type: String) -> Bool {
+		type.contains("@Sendable") || type.replacingOccurrences(of: "@escaping ", with: "").hasPrefix("Sendable")
 	}
 
 	/// Why `call` would not compile against `callables`, one line per problem, or nothing when every argument meets a
@@ -441,11 +579,17 @@ extension GraphFuzzerBuilderSurface {
 // MARK: - Edited graphs
 
 /// One edit of a drawn graph with a hole, made after every other draw so that the rest of the graph is drawn as before
-/// (`GraphFuzzerGenerator.fixture(forSeed:features:builderSurfaceEdit:)`).
-enum GraphFuzzerBuilderSurfaceEdit: String, CaseIterable, Comparable {
+/// (`GraphFuzzerGenerator.fixture(forSeed:features:builderSurfaceEdit:)`). An inner seam of another module is
+/// `HoleSurfaceInner`, a seam of the module beneath the seam's that the seam builds as it builds the type holding the hole,
+/// so its places are of the seam's builder's family; the hole's protocol moves into that module with it.
+enum GraphFuzzerBuilderSurfaceEdit: String, CaseIterable {
 	/// Same supply: a second place of an existing builder, in another type of the seam's tree (`HoleSurfaceExtra`, a copy
 	/// of the type that holds the hole, built as that type is).
 	case secondPlaceInAnotherType
+	/// Same supply: a second place of an existing builder in an inner seam of another module.
+	case secondPlaceInInnerSeamOfAnotherModule
+	/// Same supply: the place moved from the type holding it into an inner seam of another module, which that type builds.
+	case holderMovedToInnerSeamOfAnotherModule
 	/// Same supply: a plain place moved behind `LazilyInstantiated`, or a lazy place moved back.
 	case placeBehindLazilyInstantiated
 	/// Same supply: `Instantiator<Hole>`, whose `Hole` forwards nothing, moved to a plain place.
@@ -453,56 +597,144 @@ enum GraphFuzzerBuilderSurfaceEdit: String, CaseIterable, Comparable {
 	/// Same supply: `Instantiator<Hole>` changed to `ErasedInstantiator<Hole.ForwardedProperties, Hole>` with
 	/// `fulfilledByType: "Hole"`.
 	case instantiatorChangedToErasedInstantiator
+	/// The base of the `@Sendable` twins: `Instantiator<Hole>` changed to `SendableInstantiator<Hole>`, whose places are of
+	/// the `@Sendable` family; judged only against the twins.
+	case instantiatorMadeSendable
+	/// The `@Sendable` twin of `instantiatorPlaceMovedToPlainPlace`: the place a plain `Hole` on `HoleSurfaceHost`, which
+	/// `SendableInstantiator<HoleSurfaceHost>` builds in a `@Sendable` function.
+	case sendableInstantiatorPlaceMovedToPlainPlace
+	/// The `@Sendable` twin of `instantiatorChangedToErasedInstantiator`: `SendableErasedInstantiator<Hole.ForwardedProperties,
+	/// Hole>`.
+	case sendableInstantiatorChangedToSendableErasedInstantiator
 	/// Added supply: a place of a new builder whose filling type is an existing builder's, returning another type.
 	case placeOfNewBuilderOfExistingFillingType
+	/// Added supply: a place of a new builder of the existing filling type in the inner seam of another module that
+	/// `secondPlaceInInnerSeamOfAnotherModule` adds, against whose graph it is judged.
+	case placeOfNewBuilderInInnerSeamOfAnotherModule
 	/// Rejection: a place of an existing builder that forwards other values (`ErasedInstantiator<Int, …>`).
 	case placeForwardingOtherValues
 	/// The rejection's remedy: the same place forwarding what the existing places forward (`ErasedInstantiator<(), …>`).
 	case placeForwardingOtherValuesRemedied
+	/// Rejection across modules: the place forwarding other values in an inner seam of another module, whose builder the seam
+	/// takes beside its own places' builder, so the places meet in the seam's module.
+	case placeForwardingOtherValuesInInnerSeamOfAnotherModule
+	/// That rejection's remedy.
+	case placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied
 
-	/// The edits that keep every (filling type, returned type, family, forwarded values), against whose graphs the drawn
-	/// graph's call must still compile.
-	static let sameSupply: [GraphFuzzerBuilderSurfaceEdit] = [.secondPlaceInAnotherType, .placeBehindLazilyInstantiated, .instantiatorPlaceMovedToPlainPlace, .instantiatorChangedToErasedInstantiator]
-
-	static func < (lhs: GraphFuzzerBuilderSurfaceEdit, rhs: GraphFuzzerBuilderSurfaceEdit) -> Bool {
-		allCases.firstIndex(of: lhs) ?? 0 < allCases.firstIndex(of: rhs) ?? 0
+	/// Whether each module of the edited graph lists every module it depends on. A module that declares a root whose only
+	/// route to a fill passes beneath the seam's module must list the module the route reaches, the remedy the tool states
+	/// ("A module that declares a root lists every module beneath it"), so the edit that leaves the inner seam the only
+	/// holder of the place follows it, as an adopter would.
+	var listsTransitiveDependencies: Bool {
+		switch self {
+		case .holderMovedToInnerSeamOfAnotherModule:
+			true
+		case .secondPlaceInAnotherType,
+		     .secondPlaceInInnerSeamOfAnotherModule,
+		     .placeBehindLazilyInstantiated,
+		     .instantiatorPlaceMovedToPlainPlace,
+		     .instantiatorChangedToErasedInstantiator,
+		     .instantiatorMadeSendable,
+		     .sendableInstantiatorPlaceMovedToPlainPlace,
+		     .sendableInstantiatorChangedToSendableErasedInstantiator,
+		     .placeOfNewBuilderOfExistingFillingType,
+		     .placeOfNewBuilderInInnerSeamOfAnotherModule,
+		     .placeForwardingOtherValues,
+		     .placeForwardingOtherValuesRemedied,
+		     .placeForwardingOtherValuesInInnerSeamOfAnotherModule,
+		     .placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied:
+			false
+		}
 	}
 }
 
 extension GraphFuzzerGenerator {
-	/// The graph for `seed` and `features` with `edit` applied after every draw, or `nil` when the edit does not apply to
-	/// the graph (it has no place the edit changes).
-	static func fixture(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>, builderSurfaceEdit edit: GraphFuzzerBuilderSurfaceEdit) -> GraphFuzzerFixture? {
-		guard !features.contains(.generateMockPublic) else {
-			let draw = GraphFuzzerPublicMockDraw(seed: seed, builderSurfaceEdit: edit)
-			return draw.appliesBuilderSurfaceEdit ? GraphFuzzerFixture(seed: seed, swiftFileContent: draw.swiftFileContent(storingEveryParameter: false, isKnownRight: false)) : nil
-		}
-		guard features.contains(.generateDependencyTree) else { return nil }
-		var builder = Builder(seed: seed, features: features, storesEveryParameter: false)
-		builder.builderSurfaceEdit = edit
-		let swiftFileContent = builder.build()
-		return builder.appliesBuilderSurfaceEdit ? GraphFuzzerFixture(seed: seed, swiftFileContent: swiftFileContent) : nil
+	/// What `applying(_:to:markerFreeFiles:context:)` needs of the graph beyond its declarations.
+	struct BuilderSurfaceEditContext {
+		let prefix: String
+		/// Whether every wrapper of the graph is `Sendable`.
+		let isSendableGraph: Bool
+		/// Whether the graph's types that are not `@Instantiable` are `Sendable`.
+		let helperTypesAreSendable: Bool
+		/// Whether the seam's module has no package, beside which no seam of the module beneath it is drawn.
+		let seamModuleOmitsPackageName: Bool
 	}
 
 	/// `declarations`, a seam corpus graph's after every draw, with `edit` applied to `HoleSeam`'s hole, `holeService`, or
-	/// `nil` when the edit does not apply to it.
-	static func applying(_ edit: GraphFuzzerBuilderSurfaceEdit, to declarations: [TypeDeclaration], prefix: String, isSendableGraph: Bool) -> [TypeDeclaration]? {
+	/// `nil` when the edit does not apply to it. An edit into an inner seam of another module moves `HoleService` into that
+	/// module, from `HoleSeam`'s declarations or the file without a SafeDI marker that `markerFreeFiles` holds, so it applies
+	/// only where the protocol is `public` and nothing a fill reads from the scope must be named there: `HoleImpl` receives
+	/// nothing.
+	static func applying(_ edit: GraphFuzzerBuilderSurfaceEdit, to declarations: [TypeDeclaration], markerFreeFiles: inout [(ownerName: String, fileName: String, declaration: String)], context: BuilderSurfaceEditContext) -> [TypeDeclaration]? {
+		let prefix = context.prefix
 		let serviceType = "any \(prefix)HoleService"
 		guard let holderIndex = declarations.firstIndex(where: { declaration in
 			declaration.module == .seamModule && declaration.properties.contains { $0.label == "holeService" && $0.type == serviceType }
 		}) else { return nil }
 		var declarations = declarations
 		let holder = declarations[holderIndex]
+		let seamName = "\(prefix)HoleSeam"
+		/// The property the seam builds `name`, a new type, with: by value where the seam holds the hole, else as it builds the
+		/// type holding it, so that the new type's places are built in the same family.
+		func propertyBuilding(_ name: String, label: String) -> PropertyDeclaration? {
+			guard holder.name != seamName else {
+				return PropertyDeclaration(attribute: "@Instantiated", label: label, type: name)
+			}
+			guard let seamIndex = declarations.firstIndex(where: { $0.name == seamName }),
+			      let ownerProperty = declarations[seamIndex].properties.first(where: { $0.type.contains(holder.name) })
+			else { return nil }
+			let wrapped = ownerProperty.type.replacingOccurrences(of: holder.name, with: name)
+			return PropertyDeclaration(attribute: ownerProperty.attribute, label: wrapped == name ? label : label + "Builder", type: wrapped)
+		}
+		/// `declarations` with `HoleSurfaceInner`, a seam of the module beneath the seam's holding `properties`, which the seam
+		/// builds as `propertyBuilding` says, and `HoleService` moved into its module; `nil` where the protocol cannot move.
+		func addingInnerSeam(holding properties: [PropertyDeclaration], builtBy builder: (inout [TypeDeclaration], PropertyDeclaration) -> Bool) -> [TypeDeclaration]? {
+			guard !context.seamModuleOmitsPackageName,
+			      let implIndex = declarations.firstIndex(where: { $0.name == "\(prefix)HoleImpl" }),
+			      !declarations[implIndex].properties.contains(where: { $0.attribute.hasPrefix("@Received") }),
+			      let seamIndex = declarations.firstIndex(where: { $0.name == seamName })
+			else { return nil }
+			let serviceDeclaration = "public protocol \(prefix)HoleService\(context.helperTypesAreSendable ? ": Sendable" : "") {}"
+			let innerName = "\(prefix)HoleSurfaceInner"
+			var inner = TypeDeclaration(name: innerName, instantiableArguments: ["generateDependencyTree: true"], properties: properties, declaresHelperTypes: false)
+			inner.module = .seamDependency
+			let markerFreeFileIndex = markerFreeFiles.firstIndex { $0.ownerName == seamName && $0.declaration == serviceDeclaration }
+			if let declarationIndex = declarations[seamIndex].additionalDeclarations.firstIndex(of: serviceDeclaration) {
+				declarations[seamIndex].additionalDeclarations.remove(at: declarationIndex)
+				inner.additionalDeclarations.append(serviceDeclaration)
+			} else if markerFreeFileIndex == nil {
+				return nil
+			}
+			guard let property = propertyBuilding(innerName, label: "holeSurfaceInner"), builder(&declarations, property) else { return nil }
+			if let markerFreeFileIndex {
+				// The protocol's file without a SafeDI marker moves with it, into its owner's module.
+				markerFreeFiles[markerFreeFileIndex].ownerName = innerName
+			}
+			// The declarations of the callers' modules that name the protocol import its new module, which they do not list.
+			for index in declarations.indices where ![.seamModule, .seamDependency].contains(declarations[index].module)
+				&& (declarations[index].additionalConformances.contains("\(prefix)HoleService") || declarations[index].properties.contains { $0.type.contains("\(prefix)HoleService") })
+			{
+				declarations[index].imports.append(GraphFuzzerModule.seamDependency.name)
+			}
+			declarations.append(inner)
+			return declarations
+		}
+		/// Inserts `property`, which builds the inner seam, on the seam beside the property that builds the holder.
+		func insertingOnSeam(_ declarations: inout [TypeDeclaration], _ property: PropertyDeclaration) -> Bool {
+			guard let seamIndex = declarations.firstIndex(where: { $0.name == seamName }) else { return false }
+			declarations[seamIndex].properties.append(property)
+			return true
+		}
+		let place = PropertyDeclaration(attribute: "@Instantiated", label: "holeService", type: serviceType)
 		switch edit {
 		case .secondPlaceInAnotherType:
-			let seamName = "\(prefix)HoleSeam"
 			guard let seamIndex = declarations.firstIndex(where: { $0.name == seamName }) else { return nil }
 			let extraName = "\(prefix)HoleSurfaceExtra"
 			var extra = TypeDeclaration(name: extraName, instantiableArguments: [], properties: [], declaresHelperTypes: false)
 			extra.module = .seamModule
 			if holder.name == seamName {
 				// The seam holds the hole: the extra type, built by value at the seam's root as the hole is, holds a place of it.
-				extra.properties = [PropertyDeclaration(attribute: "@Instantiated", label: "holeService", type: serviceType)]
+				extra.properties = [place]
 				guard let holeIndex = declarations[seamIndex].properties.firstIndex(where: { $0.label == "holeService" }) else { return nil }
 				declarations[seamIndex].properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "holeSurfaceExtra", type: extraName), at: holeIndex + 1)
 			} else {
@@ -520,12 +752,39 @@ extension GraphFuzzerGenerator {
 				), at: ownerIndex + 1)
 			}
 			declarations.insert(extra, at: holderIndex + 1)
+		case .secondPlaceInInnerSeamOfAnotherModule:
+			return addingInnerSeam(holding: [place], builtBy: insertingOnSeam)
+		case .holderMovedToInnerSeamOfAnotherModule:
+			// The type holding the place builds the inner seam by value where the place was, so the place stays in its family.
+			return addingInnerSeam(holding: [place]) { declarations, _ in
+				guard let index = declarations.firstIndex(where: { $0.name == holder.name }),
+				      let holeIndex = declarations[index].properties.firstIndex(where: { $0.label == "holeService" && $0.type == serviceType })
+				else { return false }
+				declarations[index].properties[holeIndex] = PropertyDeclaration(attribute: "@Instantiated", label: "holeSurfaceInner", type: "\(prefix)HoleSurfaceInner")
+				return true
+			}
+		case .placeOfNewBuilderInInnerSeamOfAnotherModule:
+			// A second returned type of the protocol's builder: an erasure the inner seam's module declares.
+			let erasedName = "\(prefix)HoleSurfaceAny"
+			guard var edited = addingInnerSeam(holding: [
+				place,
+				PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(prefix)HoleService\", erasedToConcreteExistential: true)", label: "holeSurfaceErased", type: erasedName),
+			], builtBy: insertingOnSeam) else { return nil }
+			edited[edited.count - 1].additionalDeclarations.append("public struct \(erasedName)\(context.helperTypesAreSendable ? ": Sendable" : "") {\n\tpublic init(_ value: \(serviceType)) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: \(serviceType)\n}")
+			return edited
+		case .placeForwardingOtherValuesInInnerSeamOfAnotherModule, .placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied:
+			let forwarded = edit == .placeForwardingOtherValuesInInnerSeamOfAnotherModule ? "Int" : "()"
+			return addingInnerSeam(holding: [PropertyDeclaration(
+				attribute: "@Instantiated(fulfilledByType: \"\(prefix)HoleService\")",
+				label: "holeServiceForwarding",
+				type: "\(context.isSendableGraph ? "SendableErasedInstantiator" : "ErasedInstantiator")<\(forwarded), \(serviceType)>",
+			)], builtBy: insertingOnSeam)
 		case .placeBehindLazilyInstantiated:
 			// A `LazilyInstantiated` is not `Sendable`, so a graph whose types all are holds none; and a
 			// `SendableLazilyInstantiated` place is built in a `@Sendable` function, which is another family.
-			guard !isSendableGraph else { return nil }
+			guard !context.isSendableGraph else { return nil }
 			if let lazyIndex = holder.properties.firstIndex(where: { $0.label == "holeServiceLazy" && $0.type == "LazilyInstantiated<\(serviceType)>" }) {
-				declarations[holderIndex].properties[lazyIndex] = PropertyDeclaration(attribute: "@Instantiated", label: "holeServiceLazy", type: serviceType)
+				declarations[holderIndex].properties[lazyIndex] = place.relabeled("holeServiceLazy")
 			} else if let holeIndex = holder.properties.firstIndex(where: { $0.label == "holeService" }) {
 				declarations[holderIndex].properties[holeIndex] = PropertyDeclaration(attribute: "@Instantiated", label: "holeService", type: "LazilyInstantiated<\(serviceType)>")
 			}
@@ -536,12 +795,24 @@ extension GraphFuzzerGenerator {
 				label: "holeServiceForwarding",
 				type: "ErasedInstantiator<\(forwarded), \(serviceType)>",
 			))
-		case .instantiatorPlaceMovedToPlainPlace, .instantiatorChangedToErasedInstantiator, .placeOfNewBuilderOfExistingFillingType:
+		case .instantiatorPlaceMovedToPlainPlace,
+		     .instantiatorChangedToErasedInstantiator,
+		     .instantiatorMadeSendable,
+		     .sendableInstantiatorPlaceMovedToPlainPlace,
+		     .sendableInstantiatorChangedToSendableErasedInstantiator,
+		     .placeOfNewBuilderOfExistingFillingType:
 			// The seam corpus's holes are existentials, which no `Instantiator` wraps, and its colliding erasures already
 			// draw a new builder of an existing filling type (`holeGadgetOther`, read as a pair from the graph without it).
 			return nil
 		}
 		return declarations
+	}
+}
+
+extension GraphFuzzerGenerator.PropertyDeclaration {
+	/// This property under `label`.
+	func relabeled(_ label: String) -> Self {
+		Self(attribute: attribute, label: label, type: type)
 	}
 }
 
@@ -567,8 +838,11 @@ extension GraphFuzzerBuilderSurface {
 	/// `drawn`, judged by `problems(of:against:)`: a problem `C` has against `edited` and not against `drawn` fails. On
 	/// main every builder takes a scope, so `C` fails against both for the base check's reason, and nothing else shows.
 	static func sameSupplyJudgment(drawn: GraphFuzzerToolOutcome, edited: GraphFuzzerToolOutcome, seed: UInt64) -> PairJudgment {
-		guard case let .accepted(drawnFiles, _) = drawn, case let .accepted(editedFiles, _) = edited else {
+		guard case let .accepted(drawnFiles, _) = drawn else {
 			return PairJudgment(isJudged: false, problems: [])
+		}
+		guard case let .accepted(editedFiles, _) = edited else {
+			return PairJudgment(isJudged: true, problems: [rejectedEditProblem(edited)])
 		}
 		let drawnCallables = callables(in: drawnFiles)
 		let editedCallables = callables(in: editedFiles)
@@ -580,12 +854,26 @@ extension GraphFuzzerBuilderSurface {
 		return PairJudgment(isJudged: true, problems: added)
 	}
 
+	/// The problem of an edit that keeps or adds to the supply which the tool rejects: the edit changes nothing a valid graph
+	/// may not have, so a rejection is the part's failure, never a pair left unjudged.
+	static func rejectedEditProblem(_ outcome: GraphFuzzerToolOutcome) -> String {
+		switch outcome {
+		case .accepted:
+			"The tool accepts the edited graph"
+		case let .rejected(diagnostics):
+			"The tool rejects the edited graph:\n\(diagnostics)"
+		}
+	}
+
 	/// Parts (ii) and (iv), added supply: every builder parameter of `without`, the graph without the added places, keeps its
 	/// label and type, in its order among the other builders, in `with`, so that a call with only the new builders' arguments
 	/// added still compiles; `keys` limits the callables judged (a calling mock's, for part (iv)).
 	static func addedSupplyJudgment(without: GraphFuzzerToolOutcome, with: GraphFuzzerToolOutcome, judging isJudgedKey: (String) -> Bool = { _ in true }) -> PairJudgment {
-		guard case let .accepted(withoutFiles, _) = without, case let .accepted(withFiles, _) = with else {
-			return PairJudgment(isJudged: false, problems: [])
+		guard case let .accepted(withoutFiles, _) = without else {
+			return PairJudgment(isJudged: true, problems: ["The tool rejects the graph without the added places, which it accepts with them:\n\(without)"])
+		}
+		guard case let .accepted(withFiles, _) = with else {
+			return PairJudgment(isJudged: true, problems: [rejectedEditProblem(with)])
 		}
 		let withCallables = callables(in: withFiles)
 		var problems = [String]()
@@ -608,23 +896,43 @@ extension GraphFuzzerBuilderSurface {
 		return PairJudgment(isJudged: true, problems: problems)
 	}
 
-	/// Part (iii): a graph whose builder's places forward other values must be rejected by the module that builds the places,
-	/// with an error there, and the same graph with the remedy applied must be accepted. `nil` when the graph has no pair.
-	static func rejectionJudgment(unremedied: GraphFuzzerToolOutcome, remedied: GraphFuzzerToolOutcome, declaringModule: GraphFuzzerModule) -> PairJudgment {
+	/// Part (iii): a graph whose builder's places forward other values must be rejected by the module where the places
+	/// meet in one builder – the seam's, or the public mock's, which takes an inner seam's places too – with an error there, and the same graph with the remedy applied – the added place forwarding what the drawn
+	/// places forward – must be accepted with exactly the drawn graph's builders, callable by callable, since its places are
+	/// places of the drawn graph's builder. The rejection's problems are part (iii)'s, and the remedy's rejection its own
+	/// (`remedyJudgment(drawn:remedied:)`).
+	static func rejectionJudgment(drawn: GraphFuzzerToolOutcome, unremedied: GraphFuzzerToolOutcome, remedied: GraphFuzzerToolOutcome, meetingModule: GraphFuzzerModule) -> PairJudgment {
 		var problems = [String]()
 		switch unremedied {
 		case .accepted:
 			problems.append("The tool accepts a builder whose places forward other values")
 		case let .rejected(diagnostics):
 			let errors = diagnostics.split(separator: "\n").filter { $0.contains(": error: ") }
-			if !errors.contains(where: { $0.contains("/\(declaringModule.name)/") }) {
-				problems.append("The tool rejects a builder whose places forward other values only outside \(declaringModule.name), where they meet:\n\(errors.joined(separator: "\n"))")
+			if !errors.contains(where: { $0.contains("/\(meetingModule.name)/") }) {
+				problems.append("The tool rejects a builder whose places forward other values only outside \(meetingModule.name), where they meet:\n\(errors.joined(separator: "\n"))")
 			}
 		}
-		if case let .rejected(diagnostics) = remedied {
-			problems.append("The tool rejects the remedied graph, whose places forward the same values:\n\(diagnostics)")
+		if case let .accepted(drawnFiles, _) = drawn, case let .accepted(remediedFiles, _) = remedied {
+			let remediedBuilders = Dictionary(grouping: callables(in: remediedFiles), by: \.key).mapValues { $0.flatMap(\.parameters).filter(isBuilder) }
+			for callable in callables(in: drawnFiles) {
+				let builders = callable.parameters.filter(isBuilder)
+				let remedied = remediedBuilders[callable.key] ?? []
+				if remedied != builders {
+					problems.append("\(callable.key) takes builders \(remedied.map { "`\($0.description)`" }.joined(separator: ", ")) with the remedy and \(builders.map { "`\($0.description)`" }.joined(separator: ", ")) without it, so the remedied place is not a place of the drawn builder")
+				}
+			}
 		}
 		return PairJudgment(isJudged: true, problems: problems)
+	}
+
+	/// The remedy of part (iii): the graph whose added place forwards what the drawn places forward must be accepted.
+	static func remedyJudgment(remedied: GraphFuzzerToolOutcome) -> PairJudgment {
+		switch remedied {
+		case .accepted:
+			PairJudgment(isJudged: true, problems: [])
+		case let .rejected(diagnostics):
+			PairJudgment(isJudged: true, problems: ["The tool rejects the remedied graph, whose places forward the same values:\n\(diagnostics)"])
+		}
 	}
 }
 
@@ -632,23 +940,57 @@ extension GraphFuzzerBuilderSurface {
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension GraphFuzzerToolRuns {
-	/// The judged pairs of each part: each edit kind's, the second-place pairs of part (ii) (`holeGadgetOther`, a new
-	/// builder of an existing filling type) and of part (iv) (a second call of a public mock, `t6Twin` or `t6Second`), each
-	/// counted toward its kind's floor whether it passes or fails, as a compile of the call would count it.
+	/// The judged pairs of each part: each edit kind's, the reverse pairs of the same supply edits that change an
+	/// `Instantiator` (the edited graph's calls judged against the drawn graph), the `@Sendable` twins (judged against
+	/// `instantiatorMadeSendable`'s graph), the second-place pairs of part (ii) (`holeGadgetOther`, a new builder of an
+	/// existing filling type) and of part (iv) (a second call of a public mock, `t6Twin` or `t6Second`), each counted toward
+	/// its kind's floor whether it passes or fails, as a compile of the call would count it.
 	var builderSurfaceJudgments: [(kind: String, judgment: GraphFuzzerBuilderSurface.PairJudgment)] {
 		var judgments = [(kind: String, judgment: GraphFuzzerBuilderSurface.PairJudgment)]()
+		func outcome(of edit: GraphFuzzerBuilderSurfaceEdit) -> GraphFuzzerToolOutcome? {
+			builderSurfaceRuns.first { $0.edit == edit }?.outcome
+		}
 		for run in builderSurfaceRuns {
 			switch run.edit {
-			case .secondPlaceInAnotherType, .placeBehindLazilyInstantiated, .instantiatorPlaceMovedToPlainPlace, .instantiatorChangedToErasedInstantiator:
+			case .secondPlaceInAnotherType,
+			     .secondPlaceInInnerSeamOfAnotherModule,
+			     .holderMovedToInnerSeamOfAnotherModule,
+			     .placeBehindLazilyInstantiated,
+			     .instantiatorPlaceMovedToPlainPlace,
+			     .instantiatorChangedToErasedInstantiator:
 				judgments.append((run.edit.rawValue, GraphFuzzerBuilderSurface.sameSupplyJudgment(drawn: firstOutcome, edited: run.outcome, seed: fixture.seed)))
+			case .instantiatorMadeSendable:
+				// The twins' base, judged only as their drawn graph.
+				break
+			case .sendableInstantiatorPlaceMovedToPlainPlace,
+			     .sendableInstantiatorChangedToSendableErasedInstantiator:
+				if let base = outcome(of: .instantiatorMadeSendable) {
+					let judgment = if case .rejected = base {
+						GraphFuzzerBuilderSurface.PairJudgment(isJudged: true, problems: [GraphFuzzerBuilderSurface.rejectedEditProblem(base)])
+					} else {
+						GraphFuzzerBuilderSurface.sameSupplyJudgment(drawn: base, edited: run.outcome, seed: fixture.seed)
+					}
+					judgments.append((run.edit.rawValue, judgment))
+				}
 			case .placeOfNewBuilderOfExistingFillingType:
 				judgments.append((run.edit.rawValue, GraphFuzzerBuilderSurface.addedSupplyJudgment(without: firstOutcome, with: run.outcome)))
-			case .placeForwardingOtherValues:
-				if let remedied = builderSurfaceRuns.first(where: { $0.edit == .placeForwardingOtherValuesRemedied }) {
-					judgments.append((run.edit.rawValue, GraphFuzzerBuilderSurface.rejectionJudgment(unremedied: run.outcome, remedied: remedied.outcome, declaringModule: .seamModule)))
+			case .placeOfNewBuilderInInnerSeamOfAnotherModule:
+				if let without = outcome(of: .secondPlaceInInnerSeamOfAnotherModule) {
+					judgments.append((run.edit.rawValue, GraphFuzzerBuilderSurface.addedSupplyJudgment(without: without, with: run.outcome)))
 				}
-			case .placeForwardingOtherValuesRemedied:
-				break
+			case .placeForwardingOtherValues, .placeForwardingOtherValuesInInnerSeamOfAnotherModule:
+				let remedy: GraphFuzzerBuilderSurfaceEdit = run.edit == .placeForwardingOtherValues ? .placeForwardingOtherValuesRemedied : .placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied
+				if let remedied = outcome(of: remedy) {
+					judgments.append((run.edit.rawValue, GraphFuzzerBuilderSurface.rejectionJudgment(drawn: firstOutcome, unremedied: run.outcome, remedied: remedied, meetingModule: .seamModule)))
+				}
+			case .placeForwardingOtherValuesRemedied, .placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied:
+				judgments.append((run.edit.rawValue, GraphFuzzerBuilderSurface.remedyJudgment(remedied: run.outcome)))
+			}
+		}
+		// The reverse directions: a call written against the edited graph's surface, judged against the drawn graph's.
+		for (edit, kind) in [(GraphFuzzerBuilderSurfaceEdit.instantiatorPlaceMovedToPlainPlace, Self.plainPlaceMovedToInstantiatorPairKind), (.instantiatorChangedToErasedInstantiator, Self.erasedInstantiatorChangedToInstantiatorPairKind)] {
+			if let edited = outcome(of: edit), case .accepted = edited {
+				judgments.append((kind, GraphFuzzerBuilderSurface.sameSupplyJudgment(drawn: edited, edited: firstOutcome, seed: fixture.seed)))
 			}
 		}
 		if let withoutSecondHolePlaceOutcome {
@@ -665,20 +1007,50 @@ extension GraphFuzzerToolRuns {
 	static let secondErasurePairKind = "secondErasureOfFillingType"
 	/// The kind of a pair of part (iv): a second call of a public mock of the hole's type.
 	static let callingMockPairKind = "secondCallOfPublicMock"
+	/// The reverse of `instantiatorPlaceMovedToPlainPlace`: a plain place moved to `Instantiator<Hole>`.
+	static let plainPlaceMovedToInstantiatorPairKind = "plainPlaceMovedToInstantiator"
+	/// The reverse of `instantiatorChangedToErasedInstantiator`: an `ErasedInstantiator` changed to `Instantiator<Hole>`.
+	static let erasedInstantiatorChangedToInstantiatorPairKind = "erasedInstantiatorChangedToInstantiator"
 
 	/// Part (i)'s failure, or `nil`.
 	var sameSupplyFailure: GraphFuzzerFailure? {
-		failure(of: .sameSupplyCallStopsCompiling, kinds: GraphFuzzerBuilderSurfaceEdit.sameSupply.map(\.rawValue))
+		failure(of: .sameSupplyCallStopsCompiling, kinds: [
+			GraphFuzzerBuilderSurfaceEdit.secondPlaceInAnotherType.rawValue,
+			GraphFuzzerBuilderSurfaceEdit.secondPlaceInInnerSeamOfAnotherModule.rawValue,
+			GraphFuzzerBuilderSurfaceEdit.holderMovedToInnerSeamOfAnotherModule.rawValue,
+			GraphFuzzerBuilderSurfaceEdit.placeBehindLazilyInstantiated.rawValue,
+			GraphFuzzerBuilderSurfaceEdit.instantiatorPlaceMovedToPlainPlace.rawValue,
+			GraphFuzzerBuilderSurfaceEdit.instantiatorChangedToErasedInstantiator.rawValue,
+			GraphFuzzerBuilderSurfaceEdit.sendableInstantiatorPlaceMovedToPlainPlace.rawValue,
+			GraphFuzzerBuilderSurfaceEdit.sendableInstantiatorChangedToSendableErasedInstantiator.rawValue,
+			Self.plainPlaceMovedToInstantiatorPairKind,
+			Self.erasedInstantiatorChangedToInstantiatorPairKind,
+		])
 	}
 
 	/// Part (ii)'s failure, or `nil`.
 	var addedSupplyFailure: GraphFuzzerFailure? {
-		failure(of: .addedBuilderChangesExistingBuilder, kinds: [GraphFuzzerBuilderSurfaceEdit.placeOfNewBuilderOfExistingFillingType.rawValue, Self.secondErasurePairKind])
+		failure(of: .addedBuilderChangesExistingBuilder, kinds: [
+			GraphFuzzerBuilderSurfaceEdit.placeOfNewBuilderOfExistingFillingType.rawValue,
+			GraphFuzzerBuilderSurfaceEdit.placeOfNewBuilderInInnerSeamOfAnotherModule.rawValue,
+			Self.secondErasurePairKind,
+		])
 	}
 
 	/// Part (iii)'s failure, or `nil`.
 	var forwardedValuesFailure: GraphFuzzerFailure? {
-		failure(of: .placesForwardingOtherValuesAccepted, kinds: [GraphFuzzerBuilderSurfaceEdit.placeForwardingOtherValues.rawValue])
+		failure(of: .placesForwardingOtherValuesAccepted, kinds: [
+			GraphFuzzerBuilderSurfaceEdit.placeForwardingOtherValues.rawValue,
+			GraphFuzzerBuilderSurfaceEdit.placeForwardingOtherValuesInInnerSeamOfAnotherModule.rawValue,
+		])
+	}
+
+	/// The failure of a graph whose part (iii) remedy the tool rejects, or `nil`. No known issue lists it.
+	var forwardingRemedyFailure: GraphFuzzerFailure? {
+		failure(of: .remedyOfPlacesForwardingOtherValuesRejected, kinds: [
+			GraphFuzzerBuilderSurfaceEdit.placeForwardingOtherValuesRemedied.rawValue,
+			GraphFuzzerBuilderSurfaceEdit.placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied.rawValue,
+		])
 	}
 
 	/// Part (iv)'s failure, or `nil`.
@@ -700,8 +1072,13 @@ extension GraphFuzzerBuilderSurface {
 	/// Every kind the long run counts toward a floor, in report order: each hole kind the base check judges (`base-…`),
 	/// then each edit's and second place's pair kind.
 	static let floorKinds: [String] = HoleKind.allCases.map(\.floorKind)
-		+ GraphFuzzerBuilderSurfaceEdit.allCases.filter { $0 != .placeForwardingOtherValuesRemedied }.map(\.rawValue)
-		+ [GraphFuzzerToolRuns.secondErasurePairKind, GraphFuzzerToolRuns.callingMockPairKind]
+		+ GraphFuzzerBuilderSurfaceEdit.allCases.filter { $0 != .instantiatorMadeSendable }.map(\.rawValue)
+		+ [
+			GraphFuzzerToolRuns.plainPlaceMovedToInstantiatorPairKind,
+			GraphFuzzerToolRuns.erasedInstantiatorChangedToInstantiatorPairKind,
+			GraphFuzzerToolRuns.secondErasurePairKind,
+			GraphFuzzerToolRuns.callingMockPairKind,
+		]
 
 	/// The kinds of hole whose builders the base check judges in a graph.
 	enum HoleKind: String, CaseIterable {
@@ -727,7 +1104,7 @@ extension GraphFuzzerBuilderSurface {
 		guard !builders.isEmpty else { return [] }
 		let source = fixture.swiftFileContent.joined(separator: "\n")
 		var kinds = [HoleKind]()
-		if builders.contains(where: { !$0.type.contains("@Sendable") }) {
+		if builders.contains(where: { !isSendableBuilderType($0.type) }) {
 			kinds.append(.plain)
 		}
 		if source.range(of: #"LazilyInstantiated<(any )?S\d+_\w*Hole\w*>"#, options: .regularExpression) != nil {
@@ -736,7 +1113,7 @@ extension GraphFuzzerBuilderSurface {
 		if source.range(of: #"ErasedInstantiator<(Int|\w+\.ForwardedProperties), (any )?S\d+_\w*Hole\w*>"#, options: .regularExpression) != nil {
 			kinds.append(.forwarding)
 		}
-		if builders.contains(where: { $0.type.contains("@Sendable") }) {
+		if builders.contains(where: { isSendableBuilderType($0.type) }) {
 			kinds.append(.sendable)
 		}
 		return kinds
@@ -755,15 +1132,21 @@ extension GraphFuzzerToolRuns {
 }
 
 extension GraphFuzzerResult {
-	/// The kinds of failure the builder surface reports.
-	static let builderSurfaceFailureKinds: Set<GraphFuzzerFailure.Kind> = [
-		.builderSurfaceNamesGeneratedType, .sameSupplyCallStopsCompiling, .addedBuilderChangesExistingBuilder, .placesForwardingOtherValuesAccepted, .callingMockChangesBuilder,
+	/// The kinds of failure of the builder surface a known issue may list (`GraphFuzzerKnownIssue.Signature.builderSurface`).
+	/// The rejection of a remedy is not among them: no seed hides it.
+	static let knownBuilderSurfaceFailureKinds: Set<GraphFuzzerFailure.Kind> = [
+		.builderSurfaceNamesGeneratedType,
+		.builderLabelBreaksContract,
+		.sameSupplyCallStopsCompiling,
+		.addedBuilderChangesExistingBuilder,
+		.placesForwardingOtherValuesAccepted,
+		.callingMockChangesBuilder,
 	]
 
-	/// Whether the graph fails no oracle but the builder surface's. Until the planned builder structs, every graph with a
-	/// hole fails the builder surface, so what the smoke batches and the long run read from graphs that pass – the output
-	/// features they show, the spellings they draw, the cross-process sample – reads these graphs too.
+	/// Whether the graph fails no oracle but the builder surface's known kinds. Until the planned builder structs, every
+	/// graph with a hole fails the builder surface, so what the smoke batches and the long run read from graphs that pass –
+	/// the output features they show, the spellings they draw, the cross-process sample – reads these graphs too.
 	var passesBesidesBuilderSurface: Bool {
-		([failure] + laterFailures).compactMap(\.self).allSatisfy { Self.builderSurfaceFailureKinds.contains($0.kind) }
+		([failure] + laterFailures).compactMap(\.self).allSatisfy { Self.knownBuilderSurfaceFailureKinds.contains($0.kind) }
 	}
 }

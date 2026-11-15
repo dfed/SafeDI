@@ -175,6 +175,9 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case holeDeclaredAsExistential
 	case holeDeclaredAsErasedConstant
 	case holeDeclaredAsErasedInstantiator
+	/// An `ErasedInstantiator` hole that forwards `holeTicket: Int`, which `HoleFill` forwards: a place whose wrapper forwards a
+	/// value to its builder.
+	case holeForwardsValue
 	/// `T6` instantiating a `package` type, or a public one, before the hole, which the hole's scope struct holds as fields.
 	case holeScopeHoldsPackageValue
 	case holeScopeHoldsPublicValue
@@ -442,6 +445,8 @@ struct GraphFuzzerPublicMockDraw {
 		var secondCalledMockRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockSecondCalledMockRandomSeedMask)
 		var rootLevelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockRootLevelRandomSeedMask)
 		var holeLoopRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleLoopRandomSeedMask)
+		var holeForwardingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleForwardingRandomSeedMask)
+		drawsHoleForwardingValue = holeForwardingRandom.percentChance(60)
 		draw(
 			random: &random,
 			spellingRandom: &spellingRandom,
@@ -514,6 +519,10 @@ struct GraphFuzzerPublicMockDraw {
 	/// Whether every type of the graph is `Sendable`, which alone may build a type inside a `@Sendable` builder.
 	private var isSendableGraph = false
 	private let builderSurfaceEdit: GraphFuzzerBuilderSurfaceEdit?
+	/// Whether an `ErasedInstantiator` hole forwards `holeTicket: Int`, which `HoleFill` forwards.
+	private var drawsHoleForwardingValue = false
+	/// Whether the hole is an `ErasedInstantiator` that forwards `holeTicket: Int` (`drawsHoleForwardingValue`).
+	private var holeForwardsValue = false
 	/// Whether the draw made `builderSurfaceEdit`: the graph has the hole spelling the edit changes.
 	private(set) var appliesBuilderSurfaceEdit = false
 
@@ -577,6 +586,10 @@ struct GraphFuzzerPublicMockDraw {
 	/// Draws only the retention oracle's shape (`drawRetentionPublicMock`): rolls added after the rest of the draw was
 	/// pinned, so that its other shapes are drawn as before.
 	static let publicMockRetentionRandomSeedMask: UInt64 = 0x7075626D6B726574
+	/// Draws only whether an `ErasedInstantiator` hole forwards a value, `holeTicket: Int`, which `HoleFill` forwards
+	/// (`holeForwardsValue`): a roll added after the rest of the draw was pinned, so that its other shapes are drawn as
+	/// before.
+	static let publicMockHoleForwardingRandomSeedMask: UInt64 = 0x7075626D6B667764
 	/// What begins the comment in `T6`'s file that holds its hand-written caller's call, after the caller's module:
 	/// `// publicMockCaller in FuzzOther: S1_T6.mock(s1_HoleBuilder: …)`. `GraphFuzzerOracle.addingPublicMockCallers` reads it.
 	static let publicMockCallerMarker = "// publicMockCaller in "
@@ -1195,7 +1208,8 @@ struct GraphFuzzerPublicMockDraw {
 				holeType = "any \(protocolName)"
 				value = "\(conformerName)()"
 			case .erasedConstant, .erasedInstantiator:
-				holeType = spelling == .erasedConstant ? erasedName : "ErasedInstantiator<(), \(erasedName)>"
+				holeForwardsValue = spelling == .erasedInstantiator && drawsHoleForwardingValue
+				holeType = spelling == .erasedConstant ? erasedName : "ErasedInstantiator<\(holeForwardsValue ? "Int" : "()"), \(erasedName)>"
 				value = "\(erasedName)(\(conformerName)())"
 				attribute = "@Instantiated(fulfilledByType: \"\(fillName)\", erasedToConcreteExistential: true)"
 				plainDeclarations.append { rendering in
@@ -1265,7 +1279,15 @@ struct GraphFuzzerPublicMockDraw {
 			}
 			// The builder surface's edit (`GraphFuzzerBuilderSurfaceEdit`), which draws nothing, so the graph is drawn as without it.
 			var holeProperties = [Property(attribute: attribute, label: holeLabel, type: holeType)]
-			if let builderSurfaceEdit, let edited = Self.holeProperties(editedBy: builderSurfaceEdit, attribute: attribute, label: holeLabel, type: holeType, spelling: spelling, holeName: holeName, erasedName: erasedName, protocolName: protocolName, isSendableGraph: isSendableGraph) {
+			if builderSurfaceEdit == .sendableInstantiatorPlaceMovedToPlainPlace, spelling == .instantiator {
+				// The place a plain `Hole` on `HoleSurfaceHost`, which a `SendableInstantiator` builds, so that the place is still
+				// built in a `@Sendable` function.
+				var surfaceHost = instantiableClass("HoleSurfaceHost")
+				surfaceHost.properties = [Property(attribute: attribute, label: "hole", type: holeName)]
+				declaringFiles.append(File(module: .seamModule, declarations: [Self.renderer(of: surfaceHost)]))
+				holeProperties = [Property(attribute: "@Instantiated", label: "holeSurfaceHostBuilder", type: "SendableInstantiator<\(surfaceHost.name)>")]
+				appliesBuilderSurfaceEdit = true
+			} else if let builderSurfaceEdit, let edited = Self.holeProperties(editedBy: builderSurfaceEdit, attribute: attribute, label: holeLabel, type: holeType, spelling: spelling, holeName: holeName, erasedName: erasedName, protocolName: protocolName, isSendableGraph: isSendableGraph) {
 				holeProperties = edited.properties
 				plainDeclarations += edited.declarations
 				appliesBuilderSurfaceEdit = true
@@ -1572,6 +1594,9 @@ struct GraphFuzzerPublicMockDraw {
 						}
 						fill.conformances = [name("HoleProtocol")] + conformances
 						fill.properties = dependencies
+						if holeForwardsValue {
+							fill.properties.insert(Property(attribute: "@Forwarded", label: "holeTicket", type: "Int"), at: 0)
+						}
 						// D530-2, on the call-shape stream: now and then a `mockOnly` fake fulfills the existential hole too,
 						// which a mock builds in place of `HoleFill` – the inline mock, and so the fill – or alone, so that only
 						// mocks fill the hole.
@@ -2017,8 +2042,6 @@ struct GraphFuzzerPublicMockDraw {
 
 	// MARK: Rendering
 
-	/// The label of the plain builder a public mock takes for the holes of the type named `typeName`: the name with its
-	/// leading capitals lowered, keeping the last when a lowercase letter follows it, then `Builder`.
 	/// The properties `T6`'s hole is declared with once `edit` is made, and the declarations the edit adds, or `nil` when
 	/// the edit does not apply to the hole's spelling.
 	private static func holeProperties(editedBy edit: GraphFuzzerBuilderSurfaceEdit, attribute: String, label: String, type: String, spelling: HoleSpelling, holeName: String, erasedName: String, protocolName: String, isSendableGraph: Bool) -> (properties: [Property], declarations: [(Rendering) -> String])? {
@@ -2031,6 +2054,10 @@ struct GraphFuzzerPublicMockDraw {
 			return ([Property(attribute: attribute, label: label, type: holeName)], [])
 		case (.instantiatorChangedToErasedInstantiator, .instantiator):
 			return ([Property(attribute: "@Instantiated(fulfilledByType: \"\(holeName)\")", label: label, type: "ErasedInstantiator<\(holeName).ForwardedProperties, \(holeName)>")], [])
+		case (.instantiatorMadeSendable, .instantiator):
+			return ([Property(attribute: attribute, label: label, type: "SendableInstantiator<\(holeName)>")], [])
+		case (.sendableInstantiatorChangedToSendableErasedInstantiator, .instantiator):
+			return ([Property(attribute: "@Instantiated(fulfilledByType: \"\(holeName)\")", label: label, type: "SendableErasedInstantiator<\(holeName).ForwardedProperties, \(holeName)>")], [])
 		case (.placeOfNewBuilderOfExistingFillingType, .erasedConstant), (.placeOfNewBuilderOfExistingFillingType, .erasedInstantiator):
 			// A second erasure of the fill, to a second eraser: a builder of the same filling type returning another type.
 			let otherErasedName = erasedName + "Other"
@@ -2049,11 +2076,28 @@ struct GraphFuzzerPublicMockDraw {
 		case (.placeForwardingOtherValues, .plain), (.placeForwardingOtherValuesRemedied, .plain):
 			let forwarded = edit == .placeForwardingOtherValues ? "Int" : "()"
 			return ([place, Property(attribute: "@Instantiated(fulfilledByType: \"\(holeName)\")", label: label + "Forwarding", type: "ErasedInstantiator<\(forwarded), \(holeName)>")], [])
-		case (.secondPlaceInAnotherType, _), (.placeBehindLazilyInstantiated, _), (.instantiatorPlaceMovedToPlainPlace, _), (.instantiatorChangedToErasedInstantiator, _), (.placeOfNewBuilderOfExistingFillingType, _), (.placeForwardingOtherValues, _), (.placeForwardingOtherValuesRemedied, _):
+		case (.secondPlaceInAnotherType, _),
+		     (.secondPlaceInInnerSeamOfAnotherModule, _),
+		     (.holderMovedToInnerSeamOfAnotherModule, _),
+		     (.placeBehindLazilyInstantiated, _),
+		     (.instantiatorPlaceMovedToPlainPlace, _),
+		     (.instantiatorChangedToErasedInstantiator, _),
+		     (.instantiatorMadeSendable, _),
+		     (.sendableInstantiatorPlaceMovedToPlainPlace, _),
+		     (.sendableInstantiatorChangedToSendableErasedInstantiator, _),
+		     (.placeOfNewBuilderOfExistingFillingType, _),
+		     (.placeOfNewBuilderInInnerSeamOfAnotherModule, _),
+		     (.placeForwardingOtherValues, _),
+		     (.placeForwardingOtherValuesRemedied, _),
+		     (.placeForwardingOtherValuesInInnerSeamOfAnotherModule, _),
+		     (.placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied, _):
+			// `sendableInstantiatorPlaceMovedToPlainPlace` adds a type, which the draw declares where it makes the edit.
 			return nil
 		}
 	}
 
+	/// The label of the plain builder a public mock takes for the holes of the type named `typeName`: the name with its
+	/// leading capitals lowered, keeping the last when a lowercase letter follows it, then `Builder`.
 	static func builderLabel(ofTypeNamed typeName: String) -> String {
 		let characters = Array(typeName)
 		let capitalCount = characters.prefix { $0.isUppercase }.count
@@ -2821,6 +2865,9 @@ extension GraphFuzzerPublicMockDraw {
 			if let holeProperty {
 				if holeProperty.attribute.contains("erasedToConcreteExistential: true") {
 					features.insert(holeProperty.type.hasPrefix("ErasedInstantiator<") ? .holeDeclaredAsErasedInstantiator : .holeDeclaredAsErasedConstant)
+					if holeProperty.type.hasPrefix("ErasedInstantiator<Int, ") {
+						features.insert(.holeForwardsValue)
+					}
 				} else if holeProperty.type.hasPrefix("Instantiator<") {
 					features.insert(.holeDeclaredAsInstantiator)
 				} else if holeProperty.type.hasPrefix("any ") {

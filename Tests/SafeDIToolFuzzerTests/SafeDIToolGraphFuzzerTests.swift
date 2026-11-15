@@ -267,6 +267,8 @@ struct SafeDIToolGraphFuzzerTests {
 					Issue.record("Seed \(result.fixture.seed) no longer fails: \(knownIssue.reason)")
 				case let .staleRenamedGraphDifference(knownIssue, aspect):
 					Issue.record("Seed \(result.fixture.seed) sits on \"\(knownIssue.reason)\", which lists \(aspect.rawValue), but its renamed graphs do not show it.")
+				case let .staleBuilderSurfaceSignature(knownIssue, kind):
+					Issue.record("Seed \(result.fixture.seed) sits on \"\(knownIssue.reason)\", which lists \(kind.rawValue), but the graph does not show it.")
 				case let .failure(failure):
 					Issue.record(failure.issueComment(fixture: result.fixture))
 				}
@@ -350,6 +352,7 @@ struct SafeDIToolGraphFuzzerTests {
 			.holeLoopPlaceThroughSharedLeaf,
 			.holeLoopBeneathSeam,
 			.holeLoopMemberLevelReadByFill,
+			.holeForwardingPlace,
 			.holeLoopMemberAlsoBuiltByValue,
 		]).subtracting(drawFeatures).sorted() == [])
 		// `addingCycleParameterShapes`' cycle, in accepted graphs: its hole between the cycle's ends at or beneath the type that
@@ -4984,7 +4987,7 @@ struct SafeDIToolGraphFuzzerTests {
 									knownIssueCount += 1
 								case .failure:
 									failureCount += 1
-								case .passed, .staleKnownIssue, .staleRenamedGraphDifference:
+								case .passed, .staleKnownIssue, .staleRenamedGraphDifference, .staleBuilderSurfaceSignature:
 									break
 								}
 								Self.record(finding, fixture: result.fixture)
@@ -5481,8 +5484,18 @@ struct SafeDIToolGraphFuzzerTests {
 		retentionCounts: seamCorpusRetentionCounts,
 		gatingSeamDrawFeatures: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape }),
 		builderSurfaceFlooredKinds: [
-			"base-plain", "base-lazy", "base-sendable", "secondPlaceInAnotherType", "placeBehindLazilyInstantiated",
-			"placeForwardingOtherValues", "secondErasureOfFillingType",
+			"base-plain",
+			"base-lazy",
+			"base-forwarding",
+			"base-sendable",
+			"secondPlaceInAnotherType",
+			"secondPlaceInInnerSeamOfAnotherModule",
+			"holderMovedToInnerSeamOfAnotherModule",
+			"placeBehindLazilyInstantiated",
+			"placeOfNewBuilderInInnerSeamOfAnotherModule",
+			"placeForwardingOtherValues",
+			"placeForwardingOtherValuesInInnerSeamOfAnotherModule",
+			"secondErasureOfFillingType",
 		],
 		seedsTraversingPastTheBatchBudget: seamCorpusSeedsTraversingPastTheBatchBudget,
 	)
@@ -5628,9 +5641,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// and opened by value inside `Sendable` wrappers (seed 277). The union of the batches the hole rolls and the seam tests'
 	/// draws were each pinned with, less the seeds whose renamed graph shows a known issue's shape: a tangle of cycles, which
 	/// the tool now accepts, giving the seam a second hole type whose builders the move across wrapper names reorders
-	/// (`seamBuilderOrderReason`), or a lazy cycle's configuration field (`lazyCycleConfigurationFieldReason`). Pinned by
-	/// `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 1_010, 1_020, 1_450, 1_814, 1_890]
+	/// (`seamBuilderOrderReason`), or a lazy cycle's configuration field (`lazyCycleConfigurationFieldReason`); seed 850 stands in for seed 93, whose forwarding place became a second
+	/// hole type, for a hole read only if available. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
 
 	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xB5E719C74E5AD4EE
 
@@ -5901,7 +5914,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`seamCorpusSeedsAddedToInheritedShapes`): the inherited shapes are listed from `knownIssues` with those
 	/// adjustments, a shape left with no seed dropped, so that a fix there is a fix here, and the long run reports a
 	/// seed that diverges as stale or new. The seam's own shape follows them. Each seed is listed once.
-	static let seamKnownIssues: [GraphFuzzerKnownIssue] = addingBuilderSurfaceShapes(seeds: seamBuilderSurfaceSeeds, to: knownIssues.compactMap { knownIssue in
+	static let seamKnownIssuesBesideBuilderSurface: [GraphFuzzerKnownIssue] = knownIssues.compactMap { knownIssue in
 		// The base corpus's value oracle runs in no other corpus.
 		guard !knownIssue.isBaseCorpusValueOracleShape else { return nil }
 		let seeds = (knownIssue.seeds.filter { $0 < UInt64(seamCorpusSeedCount) && !seamCorpusSeedsOfOtherShapes.contains($0) }
@@ -5923,7 +5936,18 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeCode)],
-			seeds: [298, 308, 326, 391, 407, 701],
+			seeds: [93, 298, 308, 326, 391, 407, 670, 701, 750],
+		),
+		// The forwarding place's hole type is a second hole type beside `HoleService`, so its builders reorder too.
+		GraphFuzzerKnownIssue(
+			reason: "\(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
+			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
+			seeds: [163, 567],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(seamBuilderOrderReason); and \(mockParameterAndFieldOrderReason)",
+			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
+			seeds: [281],
 		),
 		// A fill that re-enters its own seam: the place the re-entered seam builds is handed the root dispatcher, not the
 		// fill's values, so `HoleImpl`'s only-if-available `holeNestId` is `nil` where the visible build and the inline
@@ -5972,12 +5996,12 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: inSeamLeakReason,
 			signatures: inSeamLeakSignatures,
-			seeds: [68, 151, 309, 418, 430, 699, 892, 990],
+			seeds: [68, 151, 309, 418, 430, 699, 990],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeCode)] + inSeamLeakSignatures,
-			seeds: [556],
+			seeds: [556, 892],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
@@ -6016,12 +6040,23 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
 			seeds: [300],
 		),
-	])
+	]
+
+	/// `seamKnownIssuesBesideBuilderSurface` with each part of the builder surface added for its seeds.
+	static let seamKnownIssues = addingBuilderSurfaceShapes(seeds: seamBuilderSurfaceSeeds, to: seamKnownIssuesBesideBuilderSurface)
 
 	/// `seamKnownIssues` and `seamSmokeKnownIssuesBeyondTheCorpus`, with the smoke seeds beyond the seam corpus that fail
-	/// the builder surface's base check, which the corpus's list, bounded by its size, cannot hold.
+	/// the builder surface, which the corpus's list, bounded by its size, cannot hold.
 	static let seamSmokeKnownIssues = addingBuilderSurfaceShapes(
-		seeds: BuilderSurfaceSeeds(base: [1_010, 1_020, 1_450, 1_814, 1_890], sameSupply: [], addedSupply: [], forwardingOtherValues: [], callingMocks: []),
+		seeds: BuilderSurfaceSeeds(
+			base: [1_010, 1_020, 1_450, 1_814, 1_890],
+			labels: [1_020, 1_890],
+			sameSupply: [1_020],
+			sameSupplyRejectedLegitimately: [],
+			addedSupply: [1_890],
+			forwardingOtherValues: [1_010, 1_020, 1_450, 1_890],
+			callingMocks: [],
+		),
 		to: seamKnownIssues + seamSmokeKnownIssuesBeyondTheCorpus,
 	)
 
@@ -6029,9 +6064,14 @@ struct SafeDIToolGraphFuzzerTests {
 	/// below ten, a draw no longer stands in for unit tests of its shape.
 	static let builderSurfaceFloor = 10
 
+	/// The seeds of a corpus that fail each part of the builder surface, each part's list apart: the base check, the label
+	/// check, same supply (i), added supply (ii), places forwarding other values (iii) and calling mocks (iv).
 	struct BuilderSurfaceSeeds {
 		let base: [UInt64]
+		let labels: [UInt64]
 		let sameSupply: [UInt64]
+		/// Seeds whose same-supply edit the tool rejects for a reason the edit itself gives, `sameSupplyRejectedLegitimatelyReason`.
+		let sameSupplyRejectedLegitimately: [UInt64]
 		let addedSupply: [UInt64]
 		let forwardingOtherValues: [UInt64]
 		let callingMocks: [UInt64]
@@ -6039,17 +6079,23 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// `issues` with each part of the builder surface's shape added for its seeds (`GraphFuzzerKnownIssue.adding`).
 	private static func addingBuilderSurfaceShapes(seeds: BuilderSurfaceSeeds, to issues: [GraphFuzzerKnownIssue]) -> [GraphFuzzerKnownIssue] {
-		var issues = GraphFuzzerKnownIssue.adding(.builderSurfaceNamesGeneratedType, reason: builderSurfaceReason, seeds: seeds.base, to: issues)
-		issues = GraphFuzzerKnownIssue.adding(.sameSupplyCallStopsCompiling, reason: sameSupplyReason, seeds: seeds.sameSupply, to: issues)
-		issues = GraphFuzzerKnownIssue.adding(.addedBuilderChangesExistingBuilder, reason: addedSupplyReason, seeds: seeds.addedSupply, to: issues)
-		issues = GraphFuzzerKnownIssue.adding(.placesForwardingOtherValuesAccepted, reason: forwardingOtherValuesReason, seeds: seeds.forwardingOtherValues, to: issues)
-		return GraphFuzzerKnownIssue.adding(.callingMockChangesBuilder, reason: callingMocksReason, seeds: seeds.callingMocks, to: issues)
+		var issues = GraphFuzzerKnownIssue.adding(.builderSurface(.builderSurfaceNamesGeneratedType), reason: builderSurfaceReason, seeds: seeds.base, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.builderLabelBreaksContract), reason: labelReason, seeds: seeds.labels, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.sameSupplyCallStopsCompiling), reason: sameSupplyReason, seeds: seeds.sameSupply, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.sameSupplyCallStopsCompiling), reason: sameSupplyRejectedLegitimatelyReason, seeds: seeds.sameSupplyRejectedLegitimately, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.addedBuilderChangesExistingBuilder), reason: addedSupplyReason, seeds: seeds.addedSupply, to: issues)
+		issues = GraphFuzzerKnownIssue.adding(.builderSurface(.placesForwardingOtherValuesAccepted), reason: forwardingOtherValuesReason, seeds: seeds.forwardingOtherValues, to: issues)
+		return GraphFuzzerKnownIssue.adding(.builderSurface(.callingMockChangesBuilder), reason: callingMocksReason, seeds: seeds.callingMocks, to: issues)
 	}
 
 	/// Why a graph with a hole fails the builder surface on main (`GraphFuzzerToolRuns.builderSurfaceFailure`).
 	static let builderSurfaceReason = "A seam's readable initializer and a mock hand each hole's builder a generated scope enum, so a builder a person writes names generated code; the planned builder structs replace it with builders that take only what their place forwards"
 
-	private static let sameSupplyReason = "An internal mock that cannot build a hole takes the hole's value, or the wrapper its place spells, as a parameter rather than a builder, so moving the place behind a wrapper changes the parameter a call passes"
+	private static let labelReason = "A builder of a hole is labeled `<fillingType>Builder` until a second returned type of its filling type appears, and a calling mock names builders apart after each called type, where contract rule 8 labels each builder by its filling type, returned type and family alone"
+
+	private static let sameSupplyReason = "An internal mock that cannot build a hole takes the hole's value, or the wrapper its place spells, as a parameter rather than a builder, so moving the place behind a wrapper, or moving the type that holds it, changes the parameters a call passes or their order"
+
+	private static let sameSupplyRejectedLegitimatelyReason = "The `@Sendable` twin of moving an `Instantiator` place to a plain place builds the place in a `@Sendable` function, where the fill receives a consumer's `LazilyInstantiated`, which is not `Sendable`: the tool rejects the edited graph, as it rejects any such capture, with a remedy that works, so the edit, not the surface, is at fault"
 
 	private static let addedSupplyReason = "A builder takes `<fillingType>_<ReturnedType>Builder` only once a second returned type of its filling type appears, so adding a place of a new builder of an existing filling type renames the existing builder"
 
@@ -6059,7 +6105,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// The seam corpus's graphs that fail each part of the builder surface today, observed from a run of the tool over
 	/// the corpus (`GraphFuzzerBuilderSurface`), each part's seeds apart: the base check (every graph with a hole the tool
-	/// accepts), same supply (i), added supply (ii), places forwarding other values (iii) and calling mocks (iv). The
+	/// accepts), the label check, same supply (i), added supply (ii), places forwarding other values (iii) and calling
+	/// mocks (iv). The
 	/// planned builder structs empty them, each slice the seeds it fixes.
 	static let seamBuilderSurfaceSeeds = BuilderSurfaceSeeds(
 		base: [
@@ -6071,8 +6118,18 @@ struct SafeDIToolGraphFuzzerTests {
 			854, 858, 866, 867, 876, 883, 886, 892, 905, 923, 929, 930, 931, 934, 940, 942, 945, 947, 948, 950,
 			969, 990,
 		],
-		sameSupply: [19, 83, 98, 108, 151, 273, 300, 326, 854, 858, 929, 942, 990],
-		addedSupply: [98, 311, 338, 383, 481, 595, 836, 929, 931, 948],
+		labels: [
+			19, 59, 68, 93, 98, 121, 163, 281, 283, 348, 383, 391, 468, 481, 548, 567, 568, 605, 670, 750,
+			794, 797, 867, 883, 892, 923, 929, 930, 948, 950, 990,
+		],
+		sameSupply: [
+			19, 83, 98, 108, 135, 151, 273, 300, 326, 797, 854, 858, 929, 942, 990,
+		],
+		sameSupplyRejectedLegitimately: [],
+		addedSupply: [
+			15, 69, 78, 98, 135, 273, 277, 311, 338, 383, 391, 403, 418, 478, 481, 527, 595, 797, 809, 836,
+			929, 930, 931, 940, 948, 950,
+		],
 		forwardingOtherValues: [
 			15, 19, 59, 68, 69, 78, 83, 93, 94, 98, 108, 116, 121, 135, 151, 153, 163, 164, 215, 227, 252, 273,
 			277, 281, 283, 298, 300, 304, 308, 309, 311, 326, 330, 338, 347, 348, 362, 365, 383, 391, 403, 407,
@@ -6276,12 +6333,12 @@ struct SafeDIToolGraphFuzzerTests {
 	/// corpus does not draw, changed them there (154, 527, 657); the inherited lists leave them out. Observed, not
 	/// derived: a seed here that a run finds failing its inherited shape again is a new failure, and goes back. Seeds
 	/// 300 and 886 fail their inherited shape beside the in-seam leak, which an entry of their own lists.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 154, 157, 300, 309, 311, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 595, 632, 657, 714, 728, 735, 768, 774, 786, 808, 836, 840, 847, 886, 903, 948]
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 154, 157, 281, 300, 309, 311, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 567, 595, 632, 657, 714, 728, 735, 768, 774, 786, 808, 836, 840, 847, 886, 903, 948]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
 	private static let seamCorpusSeedsAddedToInheritedShapes: [String: [UInt64]] = [
-		lazyCycleConfigurationFieldReason: [19, 135, 163],
+		lazyCycleConfigurationFieldReason: [19, 135],
 	]
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order
@@ -6329,8 +6386,19 @@ struct SafeDIToolGraphFuzzerTests {
 		retentionCounts: publicMockCorpusRetentionCounts,
 		gatingPublicMockDrawFeatures: Set(GraphFuzzerPublicMockDrawFeature.allCases.filter(\.isCountedWhenAccepted)),
 		builderSurfaceFlooredKinds: [
-			"base-plain", "base-lazy", "base-sendable", "placeBehindLazilyInstantiated", "instantiatorPlaceMovedToPlainPlace",
-			"instantiatorChangedToErasedInstantiator", "placeOfNewBuilderOfExistingFillingType", "placeForwardingOtherValues",
+			"base-plain",
+			"base-lazy",
+			"base-forwarding",
+			"base-sendable",
+			"placeBehindLazilyInstantiated",
+			"instantiatorPlaceMovedToPlainPlace",
+			"plainPlaceMovedToInstantiator",
+			"instantiatorChangedToErasedInstantiator",
+			"erasedInstantiatorChangedToInstantiator",
+			"sendableInstantiatorPlaceMovedToPlainPlace",
+			"sendableInstantiatorChangedToSendableErasedInstantiator",
+			"placeOfNewBuilderOfExistingFillingType",
+			"placeForwardingOtherValues",
 			"secondCallOfPublicMock",
 		],
 	)
@@ -6434,7 +6502,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
-	static let publicMockKnownIssues: [GraphFuzzerKnownIssue] = addingBuilderSurfaceShapes(seeds: publicMockBuilderSurfaceSeeds, to: [
+	static let publicMockKnownIssuesBesideBuilderSurface: [GraphFuzzerKnownIssue] = [
 		GraphFuzzerKnownIssue(
 			reason: publicMockParametersSortedByLabelReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
@@ -6601,12 +6669,15 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.holeNamesChangeWithSecondPlace(containing: "`t6Twin`"), .renamedGraphDiffers(.mockConfigurationFieldPresence), .renamedGraphDiffers(.dependencyTreeCode)],
 			seeds: [658],
 		),
-	])
+	]
+
+	/// `publicMockKnownIssuesBesideBuilderSurface` with each part of the builder surface added for its seeds.
+	static let publicMockKnownIssues = addingBuilderSurfaceShapes(seeds: publicMockBuilderSurfaceSeeds, to: publicMockKnownIssuesBesideBuilderSurface)
 
 	/// The public mock corpus's graphs that fail each part of the builder surface today, observed from a run of the tool over
 	/// the corpus (`GraphFuzzerBuilderSurface`), each part's seeds apart: the base check (every graph with a hole the tool
-	/// accepts), same supply (i), added supply (ii), places forwarding other values (iii) and calling mocks (iv). The
-	/// planned builder structs empty them, each slice the seeds it fixes.
+	/// accepts), the label check, same supply (i), added supply (ii), places forwarding other values (iii) and calling
+	/// mocks (iv). The planned builder structs empty them, each slice the seeds it fixes.
 	static let publicMockBuilderSurfaceSeeds = BuilderSurfaceSeeds(
 		base: [
 			2, 3, 10, 12, 18, 19, 20, 21, 22, 28, 33, 34, 37, 43, 47, 50, 55, 56, 59, 60,
@@ -6627,8 +6698,29 @@ struct SafeDIToolGraphFuzzerTests {
 			892, 895, 897, 902, 904, 906, 909, 910, 911, 912, 917, 919, 923, 926, 927, 931, 936, 940, 942, 943,
 			946, 947, 953, 958, 959, 960, 961, 962, 967, 970, 974, 977, 978, 979, 983, 990, 991, 995, 996, 998,
 		],
-		sameSupply: [50, 122, 128, 136, 145, 266, 332, 352, 411, 427, 580, 681, 740, 786, 814, 823, 827, 853, 977],
-		addedSupply: [2, 19, 20, 21, 33, 34, 37, 43, 47, 55, 56, 84, 89, 90, 93, 96, 103, 108, 151, 162, 167, 168, 176, 180, 181, 186, 197, 207, 210, 213, 229, 243, 247, 248, 283, 295, 301, 302, 311, 319, 330, 339, 341, 348, 356, 372, 380, 381, 389, 407, 415, 429, 433, 434, 436, 450, 465, 468, 469, 486, 490, 499, 500, 508, 554, 555, 558, 561, 581, 584, 592, 597, 601, 611, 614, 615, 621, 623, 627, 631, 636, 653, 673, 685, 688, 695, 697, 707, 715, 718, 720, 728, 730, 737, 751, 766, 781, 782, 795, 798, 799, 804, 824, 830, 832, 844, 845, 846, 847, 848, 850, 851, 866, 875, 886, 895, 897, 902, 910, 923, 931, 942, 943, 946, 960, 962, 978, 979, 991, 996, 998],
+		labels: [
+			2, 19, 20, 21, 33, 34, 37, 43, 47, 55, 56, 64, 84, 89, 90, 93, 96, 103, 108, 119,
+			151, 162, 166, 167, 168, 176, 180, 181, 186, 197, 207, 210, 211, 213, 229, 230, 243, 247, 248, 283,
+			289, 295, 299, 301, 302, 307, 311, 319, 330, 333, 339, 341, 348, 356, 372, 380, 381, 389, 406, 407,
+			415, 429, 433, 434, 436, 450, 456, 465, 468, 469, 486, 490, 499, 500, 508, 510, 554, 555, 558, 561,
+			581, 584, 592, 597, 601, 611, 614, 615, 621, 623, 627, 631, 636, 653, 658, 673, 685, 688, 692, 695,
+			697, 707, 715, 718, 720, 728, 730, 737, 743, 748, 751, 766, 781, 782, 795, 798, 799, 804, 824, 830,
+			832, 844, 845, 846, 847, 848, 850, 851, 866, 875, 886, 895, 897, 902, 910, 923, 931, 942, 943, 946,
+			960, 962, 978, 979, 991, 996, 998,
+		],
+		sameSupply: [
+			50, 122, 128, 136, 145, 266, 332, 352, 411, 427, 580, 681, 740, 786, 814, 823, 827, 853, 977,
+		],
+		sameSupplyRejectedLegitimately: [333],
+		addedSupply: [
+			2, 19, 20, 21, 33, 34, 37, 43, 47, 55, 56, 84, 89, 90, 93, 96, 103, 108, 151, 162,
+			167, 168, 176, 180, 181, 186, 197, 207, 210, 213, 229, 243, 247, 248, 283, 295, 301, 302, 311, 319,
+			330, 339, 341, 348, 356, 372, 380, 381, 389, 407, 415, 429, 433, 434, 436, 450, 465, 468, 469, 486,
+			490, 499, 500, 508, 554, 555, 558, 561, 581, 584, 592, 597, 601, 611, 614, 615, 621, 623, 627, 631,
+			636, 653, 673, 685, 688, 695, 697, 707, 715, 718, 720, 728, 730, 737, 751, 766, 781, 782, 795, 798,
+			799, 804, 824, 830, 832, 844, 845, 846, 847, 848, 850, 851, 866, 875, 886, 895, 897, 902, 910, 923,
+			931, 942, 943, 946, 960, 962, 978, 979, 991, 996, 998,
+		],
 		forwardingOtherValues: [
 			3, 12, 22, 28, 59, 60, 64, 65, 79, 87, 88, 97, 106, 107, 117, 119, 128, 130, 136, 156, 166, 199,
 			221, 230, 238, 242, 251, 259, 262, 264, 269, 273, 284, 296, 314, 327, 328, 332, 344, 351, 370, 386,
@@ -6637,7 +6729,9 @@ struct SafeDIToolGraphFuzzerTests {
 			779, 786, 790, 797, 821, 833, 834, 836, 876, 892, 904, 906, 909, 911, 912, 919, 936, 947, 958, 959,
 			967, 977, 983, 995,
 		],
-		callingMocks: [19, 211, 230, 299, 307, 333, 406, 456, 486, 510, 597, 658, 692, 743, 748, 845, 960],
+		callingMocks: [
+			19, 211, 230, 299, 307, 333, 406, 456, 486, 510, 597, 658, 692, 743, 748, 845, 960,
+		],
 	)
 
 	/// What a public mock's leak keeps alive in the public mock corpus's graphs, each type after its graph's prefix with what
@@ -7110,6 +7204,8 @@ struct SafeDIToolGraphFuzzerTests {
 			withKnownIssue("Seed \(fixture.seed) no longer fails, so \(Self.corpus(for: GraphFuzzerGeneratorFeature.features(drawnIn: fixture)).staleSeedRemedy(knownIssue, fixture.seed)): \(knownIssue.reason)") {}
 		case let .staleRenamedGraphDifference(knownIssue, aspect):
 			Issue.record("Seed \(fixture.seed) sits on \"\(knownIssue.reason)\", which lists \(aspect.rawValue), but its renamed graphs do not show it: list the seed under the entry that names exactly what it shows.")
+		case let .staleBuilderSurfaceSignature(knownIssue, kind):
+			Issue.record("Seed \(fixture.seed) sits on \"\(knownIssue.reason)\", which lists \(kind.rawValue), but the graph does not show it: list the seed under the entry that names exactly what it shows.")
 		case let .failure(failure):
 			Issue.record(failure.issueComment(fixture: fixture))
 		}
