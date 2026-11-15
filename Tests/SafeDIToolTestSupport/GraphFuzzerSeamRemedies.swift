@@ -114,9 +114,9 @@ enum GraphFuzzerSeamRemedies {
 				// declared in that module or beneath it.
 				let namesTheFileNeeds = typeNames(in: contents[fileIndex], prefix: fixture.typeNamePrefix).subtracting(declaredNames[fileIndex])
 				guard namesTheFileNeeds.allSatisfy({ neededName in
-					contents.indices.contains { declaredNames[$0].contains(neededName) && visibleModules.contains(modules[$0]) }
-				}),
-					let movedContent = moving(contents[fileIndex], to: innerSeamModule, of: fixture, presentModules: Set(modules))
+				      	contents.indices.contains { declaredNames[$0].contains(neededName) && visibleModules.contains(modules[$0]) }
+				      }),
+				      let movedContent = moving(contents[fileIndex], to: innerSeamModule, of: fixture, presentModules: Set(modules))
 				else { return nil }
 				contents[fileIndex] = movedContent
 				movedNames.append(name)
