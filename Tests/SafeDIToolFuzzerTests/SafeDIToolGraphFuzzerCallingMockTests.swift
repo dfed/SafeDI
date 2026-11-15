@@ -934,6 +934,17 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	}
 
 	@Test
+	func comparesValues_coversEachLeafPositionOnce_inEachProbedCell() {
+		for cell in GraphFuzzerCallingMockCell.drawnCells {
+			let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell == cell }
+			guard draws.first?.valueProbes != nil else { continue }
+			let comparedPositions = draws.filter { Self.comparesValues(ofSeed: $0.seed) }.map { "\($0.tickerPosition)" }
+
+			#expect(comparedPositions.sorted() == Set(draws.map { "\($0.tickerPosition)" }).sorted(), "\(cell)")
+		}
+	}
+
+	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
 		#expect(GraphFuzzerCallingMockCell.all.count == 28)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
@@ -1188,12 +1199,26 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	/// Ten graphs per drawn cell: seed `s` draws `GraphFuzzerCallingMockCell.drawnCells[s % 28]`.
 	static let callingMockCorpusSeedCount = 280
 
-	/// Whether the cell test compiles seed `seed`'s graph and compares its values: the first graph of each cell, since each
-	/// comparison compiles every module of both forms. On main no graph is compared: every cell whose mock fills its place
-	/// fails earlier, by passing the place up.
+	/// Whether the cell test compiles seed `seed`'s graph and compares its values: the first graph of each cell with each
+	/// leaf position the cell draws, since each comparison compiles every module of both forms, and the leaf moves the
+	/// caller's other property and parameter. On main no graph is compared: every cell whose mock fills its place fails
+	/// earlier, by passing the place up.
 	static func comparesValues(ofSeed seed: UInt64) -> Bool {
-		seed < UInt64(GraphFuzzerCallingMockCell.drawnCells.count)
+		comparedSeeds.contains(seed)
 	}
+
+	/// The first seed of each cell and leaf position, in the corpus.
+	static let comparedSeeds: Set<UInt64> = {
+		var seenCellsAndPositions = Set<String>()
+		var seeds = Set<UInt64>()
+		for seed in UInt64(0)..<UInt64(callingMockCorpusSeedCount) {
+			let draw = GraphFuzzerCallingMockDraw(seed: seed)
+			if seenCellsAndPositions.insert("\(draw.cell) \(draw.tickerPosition)").inserted {
+				seeds.insert(seed)
+			}
+		}
+		return seeds
+	}()
 
 	static let outerSeamValueReason = "A calling mock fills, or passes up as a required builder, a place whose fill receives a value an outer seam builds, where its production twin reports that the outer seam passes the builder on from its own caller; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
 	static let appOnlyScreenInLoopReason = "A calling mock passes up the place of an app-only screen in a loop of the seam's screens, where its production twin reports the loop (the seam's tree builds the screen's received builder only after it calls the screen's builder); the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
