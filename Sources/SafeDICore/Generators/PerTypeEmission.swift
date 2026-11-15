@@ -37,7 +37,7 @@ import Foundation
 import SwiftParser
 import SwiftSyntax
 
-enum PerTypeEmission {
+public enum PerTypeEmission {
 	static var isEnabled: Bool {
 		ProcessInfo.processInfo.environment["SAFEDI_PER_PATH_EMISSION"] != "1"
 	}
@@ -59,6 +59,33 @@ enum PerTypeEmission {
 		var typesWithTwoOrMoreFunctionsBefore = 0
 		var typesWithTwoOrMoreFunctionsAfter = 0
 		var skippedReason: String?
+		/// Types whose remaining builder functions differ only where one reads `nil` and another a name: the places the
+		/// brief's key (which leaves out whether a declaration exists) would share and this pass's text key does not.
+		var typesSplitOnlyByNil = 0
+		var placesSplitOnlyByNil = 0
+	}
+
+	/// A generated file with the body of every root's `init()` shared per type, as the emitter shares it: for a test that
+	/// compares the two emitters on output generated once, per path. A seam's initializers take parameters, so no seam
+	/// body is touched.
+	public static func transformGeneratedFile(_ file: String) -> String {
+		var lines = file.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+		var index = 0
+		while index < lines.count {
+			let line = lines[index]
+			guard line.hasPrefix("    "), line.hasSuffix("init() {"), line.contains("public "),
+			      let end = lines[(index + 1)...].firstIndex(where: { $0.hasPrefix("        self.init(") }),
+			      end > index + 1
+			else {
+				index += 1
+				continue
+			}
+			let body = lines[(index + 1)..<end].joined(separator: "\n")
+			let transformed = transform(body: body, rootType: "")
+			lines.replaceSubrange((index + 1)..<end, with: transformed.split(separator: "\n", omittingEmptySubsequences: false).map(String.init))
+			index += 1
+		}
+		return lines.joined(separator: "\n")
 	}
 
 	/// The body of a root's `init()` (the lines before `self.init`), shared per type.
@@ -90,6 +117,7 @@ enum PerTypeEmission {
 			}
 			guard let next = pass.shareInnermostGroups(statistics: &statistics) else {
 				statistics.typesWithTwoOrMoreFunctionsAfter = pass.typesWithTwoOrMoreFunctions
+				pass.countSplitOnlyByNil(statistics: &statistics)
 				break
 			}
 			statistics.iterations += 1
@@ -439,6 +467,50 @@ enum PerTypeEmission {
 			return counts.values.count(where: { $0 > 1 })
 		}
 
+		/// Counts the types whose remaining builder functions have keys that differ only by `nil` against a name.
+		func countSplitOnlyByNil(statistics: inout Statistics) {
+			var keysByType = [String: [String]]()
+			for function in candidateFunctions {
+				keysByType[functions[function].returnType, default: []].append(key(of: function))
+			}
+			func tokens(_ text: String) -> [Substring] {
+				var result = [Substring]()
+				var start = text.startIndex
+				var index = text.startIndex
+				while index < text.endIndex {
+					let character = text[index]
+					if !(character.isLetter || character.isNumber || character == "_") {
+						if start < index { result.append(text[start..<index]) }
+						result.append(text[index...index])
+						start = text.index(after: index)
+					}
+					index = text.index(after: index)
+				}
+				if start < text.endIndex { result.append(text[start...]) }
+				return result
+			}
+			for type in keysByType.keys.sorted() {
+				let keys = keysByType[type, default: []]
+				let distinct = Array(Set(keys)).sorted()
+				guard distinct.count > 1 else { continue }
+				let tokenized = distinct.map(tokens)
+				var places = Set<Int>()
+				for i in tokenized.indices {
+					for j in tokenized.indices where j > i && tokenized[i].count == tokenized[j].count {
+						let differing = zip(tokenized[i], tokenized[j]).filter { $0 != $1 }
+						if !differing.isEmpty, differing.allSatisfy({ ($0 == "nil") != ($1 == "nil") }) {
+							places.insert(i)
+							places.insert(j)
+						}
+					}
+				}
+				if !places.isEmpty {
+					statistics.typesSplitOnlyByNil += 1
+					statistics.placesSplitOnlyByNil += keys.count(where: { key in places.contains(where: { distinct[$0] == key }) })
+				}
+			}
+		}
+
 		/// The key of a function: its declaration's text, its indentation removed, its own name and `@Sendable` abstracted.
 		private func key(of function: Int) -> String {
 			let declaration = functions[function]
@@ -597,7 +669,11 @@ enum PerTypeEmission {
 			for siteChain in siteChains.dropFirst() {
 				placement = Array(zip(placement, siteChain).prefix(while: { $0 == $1 }).map(\.0))
 			}
-			guard let placementScope = placement.last else { return .failure(Failure(reason: "no common scope")) }
+			guard var placementScope = placement.last else { return .failure(Failure(reason: "no common scope")) }
+			// A closure's body holds no declaration: place the function in the body that holds the closure.
+			while scopes[placementScope].function == nil, let parent = scopes[placementScope].parent {
+				placementScope = parent
+			}
 			for member in members where isAncestorOrSelf(functions[member].bodyScope, of: placementScope) {
 				return .failure(Failure(reason: "placement inside a member"))
 			}
