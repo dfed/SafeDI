@@ -1009,16 +1009,31 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	}
 
 	@Test
-	func callingMockKnownIssueListProblems_reportEntry_whenItListsTwoCellsOrControlCellOrNoSeedsOrDecreasingSeeds() {
+	func callingMockKnownIssueListProblems_reportEntry_whenItListsTwoCells() {
 		let twoCells = GraphFuzzerKnownIssue(reason: "Two cells", signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [0, 1])
+
+		#expect(Self.callingMockKnownIssueListProblems([twoCells]) == ["The known issue \"Two cells\" lists the seeds of 2 cells: outerSeamValue/internal/deferred, outerSeamValue/internal/plain."])
+	}
+
+	@Test
+	func callingMockKnownIssueListProblems_reportEntry_whenItListsControlCell() {
 		let control = GraphFuzzerKnownIssue(reason: "The control", signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [20])
-		let noSeeds = GraphFuzzerKnownIssue(reason: "No seeds", signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [])
-		let decreasing = GraphFuzzerKnownIssue(reason: "Decreasing", signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [44, 16])
 
 		#expect(GraphFuzzerCallingMockDraw(seed: 20).cell.description == "noVisibleImplementation/internal/plain")
-		#expect(Self.callingMockKnownIssueListProblems([twoCells]) == ["The known issue \"Two cells\" lists the seeds of 2 cells: outerSeamValue/internal/deferred, outerSeamValue/internal/plain."])
 		#expect(Self.callingMockKnownIssueListProblems([control]) == ["The known issue \"The control\" lists seeds of the control, noVisibleImplementation/internal/plain, which passes on main."])
+	}
+
+	@Test
+	func callingMockKnownIssueListProblems_reportEntry_whenItListsNoSeeds() {
+		let noSeeds = GraphFuzzerKnownIssue(reason: "No seeds", signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [])
+
 		#expect(Self.callingMockKnownIssueListProblems([noSeeds]) == ["The known issue \"No seeds\" lists no seeds or no signatures."])
+	}
+
+	@Test
+	func callingMockKnownIssueListProblems_reportEntry_whenItsSeedsDecrease() {
+		let decreasing = GraphFuzzerKnownIssue(reason: "Decreasing", signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [44, 16])
+
 		#expect(Self.callingMockKnownIssueListProblems([decreasing]) == ["The seeds of \"Decreasing\" are not in increasing order."])
 	}
 
