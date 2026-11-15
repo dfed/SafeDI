@@ -1080,7 +1080,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	func holeNameStabilityFailure_reportsRenamedBuilder_whenAddingSecondPlaceRenamesABuilderOfTheGraphWithoutIt() {
-		// A second hole type whose stem collides renames the builders of both, which a hand-written caller passes by label.
+		// A builder that adding a second place relabels, which a hand-written caller passes by label.
 		let fixture = GraphFuzzerFixture(seed: 8, swiftFileContent: ["// module: FuzzFeature\n"])
 		let withoutPlace = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S8_Feature+SafeDI.swift": Self.holeSeamFile(builderLabel: "s8_ServiceBuilder", cases: ["service"])], warnings: [])
 		let withPlaceRenamingBuilder = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S8_Feature+SafeDI.swift": Self.holeSeamFile(builderLabel: "s8_Service_S8_AnyServiceBuilder", cases: ["service"])], warnings: [])
@@ -6350,7 +6350,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	private static let handWrittenBuilderRetentionReason = "A builder written by hand, handed to a seam as its readable initializer hands it on, keeps alive every value of each level on the way to its places, even when it reads none, where the inline build frees them, until the in-seam leak fix gives the readable initializer a builder that reads nothing"
 
-	private static let seamBuilderOrderReason = "A seam's builders are ordered by label, which its hole type's name begins, so moving type names across wrapper names reorders the builders of a seam with two hole types, its generated initializers and the calls of them"
+	private static let seamBuilderOrderReason = "A seam's builders are ordered by label, which its hole type's names spell, so moving type names across wrapper names reorders the builders of a seam with two hole types, its generated initializers and the calls of them"
 
 	private static let labelSortedPassThroughReason = "A seam's pass-through parameters are sorted by label, so reversing the labels reorders its generated initializer and the calls of it"
 
