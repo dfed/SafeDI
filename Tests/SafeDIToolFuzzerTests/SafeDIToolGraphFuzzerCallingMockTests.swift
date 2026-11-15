@@ -848,6 +848,20 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.failure?.kind == .callingMockPassesUpUnclassifiedPlace)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func check_reportsMissingFlatParameter_whenGraphSaysMockTakesValueItDoesNot() async throws {
+		// The fill reads nothing, so any tool's mock takes no `token`; the graph says the tree cannot build one.
+		let graph = Self.innerSeamGraph(named: "a flat parameter the mock does not take", tests: Self.fillReadingNothing, expectedTwinErrorSite: nil, flatParameterLabels: ["token"])
+
+		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0, comparesValues: false)
+
+		#expect(result.twinHasIntendedOutcome)
+		#expect(result.passUps.isEmpty)
+		#expect(result.failure?.kind == .callingMockLacksFlatParameter)
+		#expect(result.failure?.details == "a flat parameter the mock does not take: the calling mock takes no parameter token, a value its tree cannot build")
+	}
+
 	// MARK: The cells
 
 	/// Every drawn graph gives its cell's intended twin outcome, ten graphs per cell, and the calling mock mirrors its twin
@@ -1081,6 +1095,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		innerModule: String = innerModule,
 		tests: String,
 		expectedTwinErrorSite: (file: String, declaration: String)?,
+		flatParameterLabels: Set<String> = [],
 		valueProbes: [DifferentialValueProbe]? = nil,
 	) -> GraphFuzzerCallingMockGraph {
 		GraphFuzzerCallingMockGraph(
@@ -1092,6 +1107,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			],
 			callerTypeName: "Host",
 			callerIsPublic: false,
+			flatParameterLabels: flatParameterLabels,
 			expectedTwinErrorSite: expectedTwinErrorSite,
 			valueProbes: valueProbes,
 		)

@@ -9949,6 +9949,9 @@ struct GraphFuzzerFailure: Equatable {
 		case callingMockRejectsWhereTwinAccepts = "a calling mock is rejected where its production twin is accepted"
 		/// A calling mock passes a place up that none of contract rule 7's permanent reasons explains.
 		case callingMockPassesUpUnclassifiedPlace = "a calling mock passes up a place no permanent reason explains"
+		/// A calling mock takes no parameter for a value its graph says the mock's tree cannot build, which its production
+		/// twin takes.
+		case callingMockLacksFlatParameter = "a calling mock takes no parameter for a value its tree cannot build"
 		/// A calling mock that mirrors its accepted production twin, passing up no place without a reason, does not compile
 		/// (`GraphFuzzerCallingMockCheck.valueFailure`).
 		case callingMockDoesNotCompile = "a calling mock does not compile where its production twin is accepted"

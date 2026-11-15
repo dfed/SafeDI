@@ -917,6 +917,9 @@ enum GraphFuzzerCallingMockCheck {
 			nil
 		}
 		let passUps = try mock.generatedCallerFile.map { try passUpsOf(graph, inGeneratedFile: $0) } ?? []
+		let missingFlatParameterLabels = mock.generatedCallerFile.map { generatedFile in
+			graph.flatParameterLabels.subtracting(mockParameterLabels(ofType: graph.callerTypeName, inGeneratedFile: generatedFile) ?? []).sorted()
+		} ?? []
 		let mirroringFailure: GraphFuzzerFailure? = if let twinSites {
 			if let mockSites {
 				mockSites == twinSites ? nil : GraphFuzzerFailure(
@@ -942,6 +945,12 @@ enum GraphFuzzerCallingMockCheck {
 				seed: seed,
 				kind: .callingMockPassesUpUnclassifiedPlace,
 				details: "\(graph.name): the calling mock passes up \(unclassified.map(\.label).joined(separator: ", ")), which no permanent reason explains",
+			)
+		} else if !missingFlatParameterLabels.isEmpty {
+			GraphFuzzerFailure(
+				seed: seed,
+				kind: .callingMockLacksFlatParameter,
+				details: "\(graph.name): the calling mock takes no parameter \(missingFlatParameterLabels.joined(separator: ", ")), a value its tree cannot build",
 			)
 		} else {
 			nil
