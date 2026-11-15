@@ -550,14 +550,14 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let part: (part_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let part: (part_Values) -> __safeDI_Built
 
-		            public init(part: @escaping (part_Values) -> Built) {
+		            public init(part: @escaping (part_Values) -> __safeDI_Built) {
 		                self.part = part
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.part = { _ in __safeDI_builder() }
 		            }
 		        }
@@ -1375,28 +1375,28 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            }
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let again: (again_Values) -> Built
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let again: (again_Values) -> __safeDI_Built
 
-		                public init(again: @escaping (again_Values) -> Built) {
+		                public init(again: @escaping (again_Values) -> __safeDI_Built) {
 		                    self.again = again
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.again = { _ in __safeDI_builder() }
 		                }
 		            }
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let again: (again_Values) -> SafeDIScope_Gadget.Middle_Scope.__safeDI_Builder<Built>
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let again: (again_Values) -> SafeDIScope_Gadget.Middle_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(again: @escaping (again_Values) -> SafeDIScope_Gadget.Middle_Scope.__safeDI_Builder<Built>) {
+		            public init(again: @escaping (again_Values) -> SafeDIScope_Gadget.Middle_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.again = again
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.again = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }

@@ -1378,14 +1378,14 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		        nonisolated public struct userService_Values {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let userService: (userService_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let userService: (userService_Values) -> __safeDI_Built
 
-		            public init(userService: @escaping (userService_Values) -> Built) {
+		            public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
 		                self.userService = userService
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.userService = { _ in __safeDI_builder() }
 		            }
 		        }

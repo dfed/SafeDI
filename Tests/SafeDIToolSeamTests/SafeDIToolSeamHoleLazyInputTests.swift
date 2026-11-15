@@ -72,14 +72,14 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let uploader: (uploader_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let uploader: (uploader_Values) -> __safeDI_Built
 
-			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			            public init(uploader: @escaping (uploader_Values) -> __safeDI_Built) {
 			                self.uploader = uploader
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.uploader = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -199,14 +199,14 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            nonisolated public struct uploader_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<Built> {
-			                public let uploader: (uploader_Values) -> Built
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let uploader: (uploader_Values) -> __safeDI_Built
 
-			                public init(uploader: @escaping (uploader_Values) -> Built) {
+			                public init(uploader: @escaping (uploader_Values) -> __safeDI_Built) {
 			                    self.uploader = uploader
 			                }
 
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                    self.uploader = { _ in __safeDI_builder() }
 			                }
 			            }
@@ -219,14 +219,14 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        nonisolated public struct panelBuilder_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built>: Sendable {
-			            public let panelBuilder: @Sendable (panelBuilder_Values) -> SafeDIScope_Uploader.Panel_Scope.__safeDI_Builder<Built>
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let panelBuilder: @Sendable (panelBuilder_Values) -> SafeDIScope_Uploader.Panel_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(panelBuilder: @escaping @Sendable (panelBuilder_Values) -> SafeDIScope_Uploader.Panel_Scope.__safeDI_Builder<Built>) {
+			            public init(panelBuilder: @escaping @Sendable (panelBuilder_Values) -> SafeDIScope_Uploader.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.panelBuilder = panelBuilder
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 			                self.panelBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 			            }
 			        }
@@ -422,14 +422,14 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let uploader: (uploader_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let uploader: (uploader_Values) -> __safeDI_Built
 
-			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			            public init(uploader: @escaping (uploader_Values) -> __safeDI_Built) {
 			                self.uploader = uploader
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.uploader = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -532,14 +532,14 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let uploader: (uploader_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let uploader: (uploader_Values) -> __safeDI_Built
 
-			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			            public init(uploader: @escaping (uploader_Values) -> __safeDI_Built) {
 			                self.uploader = uploader
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.uploader = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -675,14 +675,14 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let uploader: (uploader_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let uploader: (uploader_Values) -> __safeDI_Built
 
-			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			            public init(uploader: @escaping (uploader_Values) -> __safeDI_Built) {
 			                self.uploader = uploader
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.uploader = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -782,14 +782,14 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let uploader: (uploader_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let uploader: (uploader_Values) -> __safeDI_Built
 
-			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			            public init(uploader: @escaping (uploader_Values) -> __safeDI_Built) {
 			                self.uploader = uploader
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.uploader = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -884,14 +884,14 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let uploader: (uploader_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let uploader: (uploader_Values) -> __safeDI_Built
 
-			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			            public init(uploader: @escaping (uploader_Values) -> __safeDI_Built) {
 			                self.uploader = uploader
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.uploader = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -976,14 +976,14 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let uploader: (uploader_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let uploader: (uploader_Values) -> __safeDI_Built
 
-			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			            public init(uploader: @escaping (uploader_Values) -> __safeDI_Built) {
 			                self.uploader = uploader
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.uploader = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -1076,14 +1076,14 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<Built> {
-			            public let uploader: (uploader_Values) -> Built
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let uploader: (uploader_Values) -> __safeDI_Built
 
-			            public init(uploader: @escaping (uploader_Values) -> Built) {
+			            public init(uploader: @escaping (uploader_Values) -> __safeDI_Built) {
 			                self.uploader = uploader
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 			                self.uploader = { _ in __safeDI_builder() }
 			            }
 			        }
@@ -1199,14 +1199,14 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built> {
-		            public let uploader: (uploader_Values) -> Built
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let uploader: (uploader_Values) -> __safeDI_Built
 
-		            public init(uploader: @escaping (uploader_Values) -> Built) {
+		            public init(uploader: @escaping (uploader_Values) -> __safeDI_Built) {
 		                self.uploader = uploader
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                self.uploader = { _ in __safeDI_builder() }
 		            }
 		        }
