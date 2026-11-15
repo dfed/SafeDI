@@ -675,7 +675,7 @@ struct GraphFuzzerCallingMockGraph {
 	let name: String
 	/// The modules' files in dependency order, the calling mock's module last.
 	let mockFiles: [File]
-	/// `mockFiles` with the caller's `@Instantiable(generateMock: …)` line replaced by
+	/// `mockFiles` with every `@Instantiable(generateMock: …)` of the last file, the caller's module, replaced by
 	/// `@Instantiable(generateDependencyTree: true)`, so every line keeps its number.
 	let twinFiles: [File]
 	let callerTypeName: String
