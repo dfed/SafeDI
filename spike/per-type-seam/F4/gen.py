@@ -29,8 +29,9 @@ write_module("shared/App", ["Feature", "Harness", "SafeDI"], app)
 inline = [t.replace("(generateDependencyTree: true)", "") for t in feature]
 write_module("shared/Inline", ["Harness", "SafeDI"], inline + app, cart + protocol)
 os.makedirs("main", exist_ok=True)
-with open("main/main.swift", "w") as file:
-    file.write("""import App
+if not os.path.exists("main/main.swift"):
+    with open("main/main.swift", "w") as file:
+        file.write("""import App
 #if canImport(Feature)
 import Feature
 #endif

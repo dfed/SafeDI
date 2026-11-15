@@ -1,4 +1,5 @@
-"""Writes F2's hand-written variants: (c) the leak fix's per-path body and (d) the per-type body, each over the builder
+"""Authored once: run.sh does not rerun it, since ./CLI/lint.sh formats what it wrote and the formatted files are committed.
+Writes F2's hand-written variants: (c) the leak fix's per-path body and (d) the per-type body, each over the builder
 struct in candidate A (no member at the reopening property) and candidate B (one member per property).
 
 Run: python3 -I handgen.py. Output: <label>/<variant>-<candidate>/… (Swift files formatted afterwards by ./CLI/lint.sh)."""

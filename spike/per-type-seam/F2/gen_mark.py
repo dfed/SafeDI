@@ -26,8 +26,12 @@ write_module("mark/shared/App", ["Feature", "Harness", "SafeDI"], app)
 inline = [t.replace("(generateDependencyTree: true)", "") for t in feature]
 write_module("mark/shared/Inline", ["Harness", "SafeDI"], inline + app, protocol)
 os.makedirs("mark/main", exist_ok=True)
-with open("next/main/main.swift") as source, open("mark/main/main.swift", "w") as file:
-    file.write(source.read())
+if not os.path.exists("mark/main/main.swift"):
+    with open("next/main/main.swift") as source, open("mark/main/main.swift", "w") as file:
+        file.write(source.read())
+if "--types-only" in sys.argv:
+    # The hand-written variants are authored once, then formatted by ./CLI/lint.sh: run.sh leaves them as committed.
+    sys.exit(0)
 
 
 def builder(members, indent):

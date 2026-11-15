@@ -3,5 +3,5 @@
 # root level function taking `cart: Cart?`.
 set -euo pipefail
 here=${0:A:h}
-cd "$here" && mkdir -p results && python3 -I gen.py ../common && python3 -I handgen.py
+cd "$here" && mkdir -p results && python3 -I gen.py ../common
 ../common/run-fixture.zsh "$here" a b c-today c-fixed d-today d-fixed | tee results/summary.txt

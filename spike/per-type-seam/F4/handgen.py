@@ -1,4 +1,5 @@
-"""Writes F4's hand-written variants: (c) the leak fix's per-path body and (d) the per-type body, each with the calling
+"""Authored once: run.sh does not rerun it, since ./CLI/lint.sh formats what it wrote and the formatted files are committed.
+Writes F4's hand-written variants: (c) the leak fix's per-path body and (d) the per-type body, each with the calling
 module's code as the leak fix would emit it today (`-today`: the root level function takes no parameter, as today's
 root dispatcher) and with the hypothesis (`-fixed`: the root level function takes `cart: Cart?`, which `Root` passes
 `nil` and the re-entry from `CartScreen_Scope` passes the screen's `cart`)."""

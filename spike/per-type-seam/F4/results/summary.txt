@@ -1,0 +1,14 @@
+a -Onone: trace equals a-Onone.txt
+a -O: trace equals a-Onone.txt
+b -Onone: trace DIFFERS from a-Onone.txt
+b -O: trace DIFFERS from a-Onone.txt
+c-today -Onone: trace DIFFERS from a-Onone.txt
+c-today -O: trace DIFFERS from a-Onone.txt
+c-fixed -Onone: trace equals a-Onone.txt
+c-fixed -O: trace equals a-Onone.txt
+d-today -Onone: trace DIFFERS from a-Onone.txt
+d-today -O: trace DIFFERS from a-Onone.txt
+d-today library evolution: compiles, interface verifies
+d-fixed -Onone: trace equals a-Onone.txt
+d-fixed -O: trace equals a-Onone.txt
+d-fixed library evolution: compiles, interface verifies

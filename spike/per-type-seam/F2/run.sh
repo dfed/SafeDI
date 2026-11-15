@@ -4,7 +4,7 @@
 set -euo pipefail
 here=${0:A:h}
 output_root=${SPIKE_OUTPUT:-$HOME/.cache/per-type-seam-spike}
-cd "$here" && python3 -I gen.py ../common && python3 -I handgen.py && python3 -I gen_mark.py ../common
+cd "$here" && python3 -I gen.py ../common && python3 -I gen_mark.py ../common --types-only
 for label in next screenBuilder; do
 	mkdir -p $label/results
 	variants=(a b d-A d-B); [[ $label == screenBuilder ]] && variants=(a b c-A c-B d-A d-B)

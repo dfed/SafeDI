@@ -23,8 +23,9 @@ for label in ["next", "screenBuilder"]:
     inline = [t.replace("(generateDependencyTree: true)", "") for t in feature]
     write_module(f"{label}/shared/Inline", ["Harness", "SafeDI"], inline + app, protocol)
     os.makedirs(f"{label}/main", exist_ok=True)
-    with open(f"{label}/main/main.swift", "w") as file:
-        file.write(f"""import App
+    if not os.path.exists(f"{label}/main/main.swift"):
+        with open(f"{label}/main/main.swift", "w") as file:
+            file.write(f"""import App
 #if canImport(Feature)
 import Feature
 #endif

@@ -47,8 +47,9 @@ for shape, (feature, property_label, seam, walk) in shapes.items():
     inline = [t.replace("(generateDependencyTree: true)", "") for t in feature]
     write_module(f"{shape}/shared/Inline", ["Harness", "SafeDI"], inline + app, protocol)
     os.makedirs(f"{shape}/main", exist_ok=True)
-    with open(f"{shape}/main/main.swift", "w") as file:
-        file.write(f"""import App
+    if not os.path.exists(f"{shape}/main/main.swift"):
+        with open(f"{shape}/main/main.swift", "w") as file:
+            file.write(f"""import App
 #if canImport(Feature)
 import Feature
 #endif

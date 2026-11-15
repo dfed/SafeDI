@@ -1,4 +1,5 @@
-"""Writes F6's hand-written variants. (c): the leak fix's per-path body over both families' structs. (d1): one
+"""Authored once: run.sh does not rerun it, since ./CLI/lint.sh formats what it wrote and the formatted files are committed.
+Writes F6's hand-written variants. (c): the leak fix's per-path body over both families' structs. (d1): one
 `@Sendable nonisolated` function per type, taking the plain level struct both families hand it (for (ii) also the
 `@Sendable` family's struct of the type, which its `again` reopens). (d2): one function per (type, family)."""
 import os
