@@ -46,10 +46,11 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_handsHolesStructSeamsMemo_whenGeneratedAndHandWrittenImplementationsReadDeferredValue(integration: MultiModuleIntegration) async throws {
+	mutating func generate_handsHolesStructSeamsMemo_whenGeneratedImplementationReadsDeferredValue(integration: MultiModuleIntegration) async throws {
 		// `ExportFeature` defers `exportService` and hands the hole's struct its memo, whose field reads the instance.
 		// `Root`'s fill reads `Root`'s own `exportService` inside `jobBuilder`, as inline, and `makeHandBuilt()`'s
-		// hand-written fill reads the struct's field there: each service is created when its `UploadJob` is built.
+		// hand-written fill, which takes nothing, reads the caller's own memo there: each service is created when its
+		// `UploadJob` is built.
 		let feature = Self.feature()
 		let app = Self.app(declarations: Self.uploaderBuildingJobs, handWrittenFill: Self.handWrittenFillReadingField)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app, featureConfiguration: plainDependencyTreeInitializersConfiguration), integration: integration, filesToDelete: &filesToDelete)
@@ -135,7 +136,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		// `DefaultUploader` receives nothing, and `makeHandBuilt()`'s fill ignores its struct: `ExportFeature` hands the
 		// struct the memo unread, so each service is created only where an `ExportScreen` reads it, as inline.
 		let feature = Self.feature()
-		let app = Self.app(declarations: [], handWrittenFill: "{ _ in DefaultUploader() }")
+		let app = Self.app(declarations: [], handWrittenFill: "{ DefaultUploader() }")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app, featureConfiguration: plainDependencyTreeInitializersConfiguration), integration: integration, filesToDelete: &filesToDelete)
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
 			"Root": """
@@ -1235,7 +1236,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 	private static let uploaderBuildingJobs = ["@Instantiated let jobBuilder: Instantiator<UploadJob>"]
 
 	/// A fill that reads the struct's `exportService` where its `jobBuilder` builds an `UploadJob`.
-	private static let handWrittenFillReadingField = "{ scope in switch scope { case let .uploader(values): DefaultUploader(jobBuilder: Instantiator { UploadJob(exportService: values.exportService) }) } }"
+	private static let handWrittenFillReadingField = "{ DefaultUploader(jobBuilder: Instantiator { UploadJob(exportService: exportService.instance) }) }"
 
 	/// `App`: `DefaultUploader`, with `declarations`, `UploadJob`, which receives `jobDeclarations`, `Root`, which holds
 	/// `rootDeclarations` and `rootChild`, and `makeHandBuilt()`, which calls `ExportFeature` with `handWrittenFill`
