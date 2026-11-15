@@ -1315,7 +1315,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		func makeHost() -> Host {
 		    Host(
-		        gadgetBuilder: { _ in PlainGadget() },
+		        gadgetBuilder: { PlainGadget() },
 		        panelBuilder: { scope in switch scope { case let .held(_, title): Panel(title: title) } },
 		        panelSendableBuilder: { scope in switch scope { case let .sendableHeld(title): Panel(title: title) } }
 		    )
