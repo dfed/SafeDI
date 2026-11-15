@@ -12034,6 +12034,8 @@ enum GraphFuzzerOracle {
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 				skipCompileVerification: true,
+				// The fuzzer's graphs are no test's expectations, so a record run never writes them.
+				recordDirectory: nil,
 			)
 			let normalize = try normalizer(fixtureDirectory: fixtureDirectory(of: fileNames ?? fixture.fileNames, in: output.fixtures, seed: fixture.seed).path)
 			return .accepted(
@@ -12077,7 +12079,8 @@ enum GraphFuzzerOracle {
 			)
 		}
 		do {
-			let output = try await executeSafeDIToolMultiModuleTest(modules: moduleFixtures, integration: integration, compileVerification: .skipped, filesToDelete: &filesToDelete)
+			// The fuzzer's graphs are no test's expectations, so a record run never writes them.
+			let output = try await executeSafeDIToolMultiModuleTest(modules: moduleFixtures, integration: integration, compileVerification: .skipped, filesToDelete: &filesToDelete, recordDirectory: nil)
 			let normalize = normalizer(fixtureDirectory: output.fixtureRoot.path)
 			var generatedFiles = [String: String]()
 			var warnings = [String]()
