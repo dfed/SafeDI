@@ -41,6 +41,10 @@ enum SourceRule: String, CaseIterable {
 	case uniqueKeysWithValues
 	/// `try?` in a generator, which discards an error the generator must report.
 	case optionalTry
+	/// The name of a trapping function, `fatalError`, `precondition`, `preconditionFailure`, `assert` or `assertionFailure`,
+	/// as a whole word in a string literal of a generator: generated code never traps, and a diagnostic or a generated
+	/// comment that names one is reworded or waived.
+	case generatedTrap
 	/// `__safeDI_` in a literal: `ReservedName` spells the prefix of generated builder functions, so a name cannot be
 	/// generated without being reserved.
 	case builderFunctionNamePrefix
@@ -59,7 +63,7 @@ enum SourceRule: String, CaseIterable {
 		switch self {
 		case .forceUnwrap, .forceTry, .forceCast, .trap, .uniqueKeysWithValues:
 			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/")
-		case .optionalTry:
+		case .optionalTry, .generatedTrap:
 			path.hasPrefix("Sources/SafeDICore/Generators/")
 		case .builderFunctionNamePrefix:
 			path.hasPrefix("Sources/") && path != "Sources/SafeDICore/Models/ReservedName.swift"
@@ -293,6 +297,9 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 		if Self.containsStraightApostrophe(node) {
 			record(.apostrophe, at: node.content, "the text SafeDI emits spells an apostrophe ’, never '")
 		}
+		for name in Self.trappingFunctionNamesAsWholeWords(in: node.content.text) {
+			record(.generatedTrap, at: node.content, "a generator’s literal names `\(name)`, so generated code could trap")
+		}
 		return .visitChildren
 	}
 
@@ -306,6 +313,29 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 	// MARK: Private
 
 	private static let trappingFunctionNames: Set = ["fatalError", "precondition", "preconditionFailure", "assert", "assertionFailure"]
+
+	/// The names in `trappingFunctionNames` that `text` holds as whole words, neither preceded nor followed by a letter, a
+	/// digit or `_`, in the order they first appear.
+	private static func trappingFunctionNamesAsWholeWords(in text: String) -> [String] {
+		let characters = Array(text)
+		func isIdentifierCharacter(_ character: Character) -> Bool {
+			character.isLetter || character.isNumber || character == "_"
+		}
+		var names = [String]()
+		var wordStart: Int?
+		for index in 0...characters.count {
+			if index < characters.count, isIdentifierCharacter(characters[index]) {
+				wordStart = wordStart ?? index
+			} else if let start = wordStart {
+				let word = String(characters[start..<index])
+				if trappingFunctionNames.contains(word), !names.contains(word) {
+					names.append(word)
+				}
+				wordStart = nil
+			}
+		}
+		return names
+	}
 	/// The argument labels of the `Dictionary` initializers that trap on a duplicate key, each with its message.
 	private static let duplicateKeyTrappingLabels = [
 		"uniqueKeysWithValues": "`Dictionary(uniqueKeysWithValues:)` traps on a duplicate key",
