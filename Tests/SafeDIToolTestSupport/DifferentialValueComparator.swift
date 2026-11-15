@@ -2330,9 +2330,10 @@ extension GraphFuzzerFixture {
 		guard declaresHome, !liveReadsValue,
 		      let homeFile = generatedFiles.first(where: { $0.key.hasSuffix("/\(homeName)+SafeDI.swift") })?.value,
 		      let initializerLine = homeFile.split(separator: "\n").lazy.map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { $0.hasPrefix(initializerPrefix) }),
-		      let separator = initializerLine.range(of: "Builder: ")
+		      // A label equal to another parameter's ends with `_`.
+		      let separator = initializerLine.range(of: "Builder_*: ", options: .regularExpression)
 		else { return nil }
-		let label = initializerLine[initializerLine.index(initializerLine.startIndex, offsetBy: "public convenience init(".count)..<separator.lowerBound] + "Builder"
+		let label = initializerLine[initializerLine.index(initializerLine.startIndex, offsetBy: "public convenience init(".count)..<initializerLine.index(separator.upperBound, offsetBy: -2)]
 		return DifferentialValueProbe(
 			name: homeName + Self.handWrittenBuilderProbeNameSuffix,
 			expression: "\(homeName)(\(label): { _ in \(liveName)() })",

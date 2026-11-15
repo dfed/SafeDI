@@ -1231,7 +1231,7 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// A second hole type beneath `HoleSeam`: `HoleGadgetOwner`'s `any HoleGadgetService`, which `HoleGadgetImpl` fills.
 	case holeSecondHoleType
 	/// Two erasures of `HoleGadgetImpl` on `HoleGadgetOwner`, two hole types of one instantiated type, whose builders are
-	/// named apart by the type each returns.
+	/// each labeled by `HoleGadgetImpl` and the type it returns.
 	case holeSecondHoleTypeCollidingStem
 	/// `HoleSeam`'s erased instantiator of `any HoleTicketService`, which `HoleTicketImpl` fills: a place whose wrapper
 	/// forwards a value, `holeTicketId`, to its builder.
@@ -5232,8 +5232,8 @@ enum GraphFuzzerGenerator {
 			let implReadsOwnersAlias = impl.properties.contains { $0.label == "holeMetrics" }
 			// A second hole type: `HoleGadgetOwner`, which the seam builds by value, instantiates `any HoleGadgetService`, a
 			// protocol of the seam's module `HoleGadgetImpl` fills; or, four times in ten, two erasures of `HoleGadgetImpl`,
-			// a type no declaration of the seam's module fulfills, whose stems are equal, so that their builders are named
-			// apart by the type each returns, and both are renamed when the second appears (a known issue).
+			// a type no declaration of the seam's module fulfills, so that each builder is labeled by `HoleGadgetImpl` and the
+			// type it returns, and the first keeps its names when the second appears.
 			if drawsSecondHoleType {
 				var gadgetImpl = instantiable("HoleGadgetImpl", module: fillerModule)
 				gadgetImpl.fillsHole = true
@@ -10746,10 +10746,9 @@ struct GraphFuzzerToolRuns {
 	/// (`GraphFuzzerOracle.holeBuilderNames(in:)`) without its second place of a hole are not all among those with it,
 	/// when the tool accepts both, or `nil`. Adding a place beneath a seam adds names and never changes one (the design's
 	/// output stability), so that a hand-written caller of the seam, or of a public mock, that names a case keeps
-	/// compiling; but for the shapes the design accepts, which are known issues: a second hole type whose builders' stem
-	/// collides renames both, and an internal consumer that passes up the places of a second public mock of the hole's type
-	/// names the builders it takes for the two mocks apart, after each called type. Two calls of one public mock share one
-	/// builder, so a second call only adds a case.
+	/// compiling; but for the shape the design accepts, a known issue: an internal consumer that passes up the places of a
+	/// second public mock of the hole's type names the builders it takes for the two mocks apart, after each called type.
+	/// Two calls of one public mock share one builder, so a second call only adds a case.
 	var holeNameStabilityFailure: GraphFuzzerFailure? {
 		guard case let .accepted(generatedFiles, _) = firstOutcome,
 		      let withoutSecondHolePlaceOutcome,
