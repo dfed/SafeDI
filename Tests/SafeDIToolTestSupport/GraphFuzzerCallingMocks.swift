@@ -74,7 +74,9 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 }
 
 /// One cell of the calling-mock draw: a shape, with an internal or a `.public` calling mock, and a plain place
-/// (`let api: any Api`) or a deferred one (an `ErasedInstantiator` whose fill forwards a value).
+/// (`let api: any Api`) or a deferred one (an `ErasedInstantiator` whose fill forwards a value). The app-only screen's
+/// loop closes only through builders, so there its plain place is the canonical one, a builder that forwards nothing
+/// (`ErasedInstantiator<(), any SettingsPage>`).
 struct GraphFuzzerCallingMockCell: Hashable, Comparable, CustomStringConvertible {
 	enum Place: String, CaseIterable {
 		case plain
@@ -477,24 +479,19 @@ struct GraphFuzzerCallingMockDraw {
 		"""
 	}
 
-	/// The seam's module of the app-only screen's loop. A deferred place is the settings screen's builder, which forwards
-	/// `id`; a plain place is the screen itself, which closes the loop through the feed's builder as a constant cycle.
+	/// The seam's module of the app-only screen's loop. The place is the settings screen's builder: a plain place's forwards
+	/// nothing (`ErasedInstantiator<(), any SettingsPage>`), and a deferred place's forwards `id`.
 	private var signedInModuleContent: String {
 		let feedBuilder = "\(names.feed.lowercasedFirst)Builder"
 		let feedBuilderType = "ErasedInstantiator<(), any \(names.feedPage)>"
-		let settingsBuilder: String
-		let settingsBuilderType: String
-		let settingsAttribute: String
-		switch cell.place {
+		let settingsBuilder = "\(names.settings.lowercasedFirst)Builder"
+		let settingsBuilderType = switch cell.place {
 		case .plain:
-			settingsBuilder = names.settings.lowercasedFirst
-			settingsBuilderType = "any \(names.settingsPage)"
-			settingsAttribute = "@Instantiated"
+			"ErasedInstantiator<(), any \(names.settingsPage)>"
 		case .deferred:
-			settingsBuilder = "\(names.settings.lowercasedFirst)Builder"
-			settingsBuilderType = "ErasedInstantiator<Int, any \(names.settingsPage)>"
-			settingsAttribute = "@Instantiated(fulfilledByType: \"\(names.settings)\")"
+			"ErasedInstantiator<Int, any \(names.settingsPage)>"
 		}
+		let settingsAttribute = "@Instantiated(fulfilledByType: \"\(names.settings)\")"
 		return """
 		import SafeDI
 
@@ -530,7 +527,7 @@ struct GraphFuzzerCallingMockDraw {
 		let screen = switch cell.place {
 		case .plain:
 			"""
-			@Instantiable(fulfillingAdditionalTypes: [(any \(names.settingsPage)).self])
+			@Instantiable
 			\(access)final class \(names.settings): \(names.settingsPage), Instantiable {
 			    \(access)init(\(feedBuilder): \(feedBuilderType)) { self.\(feedBuilder) = \(feedBuilder) }
 			    @Received private let \(feedBuilder): \(feedBuilderType)

@@ -320,7 +320,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.twinSites == [
 			GraphFuzzerDiagnosticSite(severity: "error", file: "App/AppTypes.swift", line: 7, declaration: "@Received private let feedBuilder: ErasedInstantiator<(), any FeedPage>"),
 		])
-		withKnownIssue("\(Self.appOnlyScreenInLoopReason)") {
+		withKnownIssue("\(Self.appOnlyScreenBuiltByValueReason)") {
 			#expect(result.failure == nil)
 		}
 	}
@@ -763,7 +763,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	static let callingMockCorpusSeedCount = 280
 
 	static let outerSeamValueReason = "A calling mock fills, or passes up as a required builder, a place whose fill receives a value an outer seam builds, where its production twin reports that the outer seam passes the builder on from its own caller; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
-	static let appOnlyScreenInLoopReason = "A calling mock passes up the place of an app-only screen in a loop of the seam's screens, where its production twin reports the loop (the seam's tree builds the screen's received builder only after it calls the screen's builder, or, for a screen built by value, a constant cycle); the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
+	static let appOnlyScreenInLoopReason = "A calling mock passes up the place of an app-only screen in a loop of the seam's screens, where its production twin reports the loop (the seam's tree builds the screen's received builder only after it calls the screen's builder); the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
+	static let appOnlyScreenBuiltByValueReason = "A calling mock passes up the place of an app-only screen built by value whose loop through the seam's screens is a constant cycle, where its production twin reports the cycle; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
 	static let seamBuiltAgainReason = "A calling mock fills or passes up a place of a seam its tree builds again, whose fill reads a value of the level in between, where its production twin reports that the second build passes the builder on unchanged; main's internal mock fills it from the caller's own value and does not compile; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
 	static let loopThroughInnerSeamBuilderReason = "A calling mock passes up a place whose fill receives a sibling that receives the inner seam's builder, where its production twin reports the loop as a dependency cycle; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock report the same error"
 	static let callersOwnValueReason = "A calling mock passes up as a required builder a place whose fill receives a value the caller itself builds, where its production twin fills the place from that value; the change that makes a calling mock mirror its production tree, which lands before 2.3.0, makes the mock fill it"
