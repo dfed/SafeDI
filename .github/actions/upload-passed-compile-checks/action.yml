@@ -1,0 +1,40 @@
+name: Upload Passed Compile Checks
+description: Uploads this run's file of passed compile checks, with its identity, for "Share Passed Compile Checks" to add to the shared list.
+
+# Call it after the tests, with `if: always()`: the checks that passed before a
+# failure or a cancellation passed all the same. A run with no file uploads
+# nothing.
+
+inputs:
+  identity:
+    description: What `.github/scripts/compile-check-identity.sh` printed for this job.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        IDENTITY: ${{ inputs.identity }}
+      run: |
+        rm -rf passed-compile-checks
+        if [ -s .compile-check-cache/passed.txt ] && [ -n "$IDENTITY" ]; then
+          mkdir passed-compile-checks
+          cp .compile-check-cache/passed.txt passed-compile-checks/passed.txt
+          echo "$IDENTITY" > passed-compile-checks/identity.txt
+        fi
+    # One artifact per operating system, since CI's two test jobs each upload
+    # one. A day is long enough: the sharing workflow reads it when the run
+    # ends.
+    # Sharing only saves compiles, so a failed upload never fails the job.
+    - uses: actions/upload-artifact@v7
+      continue-on-error: true
+      with:
+        name: passed-compile-checks-${{ runner.os }}
+        path: passed-compile-checks/
+        retention-days: 1
+        if-no-files-found: ignore
+        # A re-run of the job replaces what an earlier attempt uploaded.
+        overwrite: true
+    - shell: bash
+      run: rm -rf passed-compile-checks

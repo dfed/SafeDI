@@ -1,0 +1,49 @@
+name: Restore Shared Passed Compile Checks
+description: Adds the compile checks that passed in any run of this repository, under the same identity, to this run's file of passed checks.
+
+# A run restores its file of passed compile checks from its own branch's or
+# pull request's cache, or main's. It cannot read another branch's cache, so a
+# check that passed on one branch compiled again on every other: on a pull
+# request stacked on the one that changed it, on each scratch branch a change
+# is verified on, and on main after the change landed. "Share Passed Compile
+# Checks" (share-compile-checks.yml) therefore keeps one list per identity in a
+# cache it saves under main, which every run can restore, and this action adds
+# that list to the run's own.
+#
+# A key is the hash of everything one check compiles, and a list is kept per
+# identity, the hash of what compiles it (compile-check-identity.sh), so a
+# check that passed in any run passes in this one.
+#
+# Call it after "Restore Passed Compile Checks", which restores
+# `.compile-check-cache`.
+
+inputs:
+  identity:
+    description: What `.github/scripts/compile-check-identity.sh` printed for this job.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # No run saves under this key, so the restore key always decides: the
+    # newest list saved for this identity.
+    - uses: actions/cache/restore@v6
+      with:
+        path: .shared-compile-check-cache
+        key: shared-compile-checks-v1-${{ runner.os }}-${{ inputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: |
+          shared-compile-checks-v1-${{ runner.os }}-${{ inputs.identity }}-
+    # Sorted and without duplicates, so the file a run saves does not grow by
+    # the shared list on every run.
+    - shell: bash
+      run: |
+        if [ -s .shared-compile-check-cache/passed.txt ]; then
+          mkdir -p .compile-check-cache
+          touch .compile-check-cache/passed.txt
+          own=$(wc -l < .compile-check-cache/passed.txt)
+          LC_ALL=C sort -u .compile-check-cache/passed.txt .shared-compile-check-cache/passed.txt > .compile-check-cache/merged.txt
+          mv .compile-check-cache/merged.txt .compile-check-cache/passed.txt
+          echo "Passed compile checks: $own from this branch's cache, $(wc -l < .shared-compile-check-cache/passed.txt) shared, $(wc -l < .compile-check-cache/passed.txt) together."
+        else
+          echo "No shared passed compile checks for this identity yet."
+        fi

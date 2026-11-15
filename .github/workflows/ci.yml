@@ -824,6 +824,15 @@ jobs:
           key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-
+      # And the checks that passed in any other run of this repository, on
+      # whatever branch, which this run's own cache cannot hold. Sharing only
+      # saves compiles, so neither this step nor the upload after the tests
+      # can fail the job.
+      - name: Restore Shared Passed Compile Checks
+        continue-on-error: true
+        uses: ./.github/actions/restore-shared-compile-checks
+        with:
+          identity: ${{ steps.compile-check-identity.outputs.identity }}
       # One pass, with compile verification. The passes that catch output
       # differing between processes (per-process hash seeds) run on Linux,
       # in "Repeat Tests on Linux", where runners are plentiful: on this
@@ -864,6 +873,12 @@ jobs:
         with:
           path: .compile-check-cache
           key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Upload Passed Compile Checks to Share
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: ./.github/actions/upload-passed-compile-checks
+        with:
+          identity: ${{ steps.compile-check-identity.outputs.identity }}
       - name: Prepare Coverage Reports
         run: ./Scripts/prepare-coverage-reports.sh
       # "Check Line Coverage on Linux" unions this report with the Linux
@@ -950,6 +965,15 @@ jobs:
           key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-
+      # And the checks that passed in any other run of this repository, on
+      # whatever branch, which this run's own cache cannot hold. Sharing only
+      # saves compiles, so neither this step nor the upload after the tests
+      # can fail the job.
+      - name: Restore Shared Passed Compile Checks
+        continue-on-error: true
+        uses: ./.github/actions/restore-shared-compile-checks
+        with:
+          identity: ${{ steps.compile-check-identity.outputs.identity }}
       # Atomic coverage counter updates, for the reason the macOS job gives.
       # A time limit for the macOS job's reason: twice the longest
       # successful run of this step over the same 177 CI runs, in which 84
@@ -967,6 +991,12 @@ jobs:
         with:
           path: .compile-check-cache
           key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Upload Passed Compile Checks to Share
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: ./.github/actions/upload-passed-compile-checks
+        with:
+          identity: ${{ steps.compile-check-identity.outputs.identity }}
       # The graph fuzzer's shards and "Repeat Tests on Linux" run this job's
       # test bundle rather than building their own: the bundle, SafeDITool and
       # the macro plugin (which the fuzzer's compiler runs use), and SafeDI's

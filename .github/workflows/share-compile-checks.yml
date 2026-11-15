@@ -1,0 +1,171 @@
+name: Share Passed Compile Checks
+
+# Adds the compile checks that passed in a finished run of CI or Verify to a
+# list every later run restores, whatever branch it runs on
+# (.github/actions/restore-shared-compile-checks says why). A cache is readable
+# from the branch that saved it, from pull requests based on that branch, and,
+# when main saved it, from everywhere. A `workflow_run` workflow runs as main,
+# from main's copy of this file, so the list it saves is main's.
+#
+# What it trusts: every run of ci.yml or verify.yml on a branch of this
+# repository, which anyone who can push a branch here can start, a scratch
+# branch and a dependency update's among them. It never runs for a fork's run,
+# and it requires the run's workflow file to be one of those two. A list that
+# names a check that did not pass would let that check be skipped, so a branch
+# that changes how passes are written must not write into the list other
+# branches read: the identity hashes both workflows, the two actions their
+# test jobs restore and upload with, and compile-check-identity.sh, so such a
+# branch has an identity, and a list, of its own. Nothing here stops a branch
+# from uploading a list under an identity it did not compute; the list is as
+# trustworthy as the people and agents who can push branches here. This
+# workflow checks out nothing and runs nothing from the run it reads: the
+# artifact is data, of which it keeps only lines that are a SHA-256 in
+# hexadecimal. It can read artifacts and nothing else.
+#
+# Two runs that finish together each add their checks to the list they
+# restored, and the later save is the one later runs restore, so the earlier
+# run's checks can be missing from it. They are still in that branch's own
+# cache, and return to the list with that branch's next run. A lost entry only
+# costs one compile. Every save is a new cache entry, since an entry cannot be
+# replaced; the entries a later save supersedes are left for GitHub to evict.
+#
+# To remove a check that should not have passed, delete every entry whose key
+# starts with `compile-checks-v1-<OS>-<identity>-` and every one that starts
+# with `shared-compile-checks-v1-<OS>-<identity>-` (`gh cache list --key
+# PREFIX`, `gh cache delete KEY`), on main and on the branches that hold one,
+# or change `v1` in both keys wherever they are spelled: this file, the two
+# actions, and the test jobs of ci.yml and verify.yml.
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Verify
+    types:
+      - completed
+
+permissions: {}
+
+jobs:
+  find:
+    name: Find the Run's Passed Compile Checks
+    # A workflow of another file that takes one of these names is not one
+    # whose passes are shared.
+    if: >-
+      ${{
+        github.event.workflow_run.head_repository.full_name == github.repository
+        && (github.event.workflow_run.path == '.github/workflows/ci.yml'
+          || github.event.workflow_run.path == '.github/workflows/verify.yml')
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      legs: ${{ steps.find.outputs.legs }}
+    steps:
+      # Most runs upload nothing: a cancelled run, a Markdown-only one, the
+      # push that only warms Verify's build cache. Listing the run's artifacts
+      # here keeps those from starting the jobs below, one of which pulls the
+      # Swift container.
+      #
+      # No run of this step has been timed, since the workflow runs only from
+      # main; it makes one request. The limit is provisional until its runs
+      # have been measured.
+      - name: List the Run's Artifacts
+        id: find
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          names=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" --paginate --jq '.artifacts[].name')
+          legs=
+          if echo "$names" | grep -qx 'passed-compile-checks-Linux'; then
+            legs='{"os":"Linux","container":"swift:6.2"}'
+          fi
+          if echo "$names" | grep -qx 'passed-compile-checks-macOS'; then
+            legs="${legs:+$legs,}{\"os\":\"macOS\",\"container\":\"\"}"
+          fi
+          echo "legs=[$legs]" >> "$GITHUB_OUTPUT"
+          echo "Lists to add to: [$legs]"
+
+  share:
+    name: Share Passed Compile Checks (${{ matrix.os }})
+    needs: find
+    if: ${{ needs.find.outputs.legs != '[]' }}
+    # A cache is restored only by a job that archives as the job that saved it
+    # did (actions/cache keys on the paths and the compression). The Linux test
+    # jobs run in the swift:6.2 container, which has no zstd, so they use gzip;
+    # the macOS test job uses zstd, as a Linux runner outside a container does.
+    # So the Linux list is saved from that container and the macOS list from a
+    # Linux runner without one, and neither needs a macOS runner. A test job
+    # that changes its container or its runner changes this with it.
+    runs-on: ubuntu-latest
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.find.outputs.legs) }}
+    permissions:
+      actions: read
+    steps:
+      # The limits on this step and the two cache steps are provisional, for
+      # the reason the step above gives: each moves a file of a few hundred
+      # kilobytes.
+      - name: Download the Run's Passed Compile Checks
+        timeout-minutes: 5
+        uses: actions/download-artifact@v8
+        with:
+          name: passed-compile-checks-${{ matrix.os }}
+          path: run-passed-compile-checks
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Read the Run's Passed Compile Checks
+        id: run
+        run: |
+          if [ ! -f run-passed-compile-checks/identity.txt ] || [ ! -f run-passed-compile-checks/passed.txt ]; then
+            echo "::warning::The run's artifact holds no identity or no passed compile checks."
+            exit 0
+          fi
+          identity=$(head -n 1 run-passed-compile-checks/identity.txt)
+          if ! echo "$identity" | grep -Eqx '[0-9a-f]{64}'; then
+            echo "::warning::The run's compile check identity is not a SHA-256, so its passed checks are not shared."
+            exit 0
+          fi
+          mkdir passed
+          grep -Ex '[0-9a-f]{64}' run-passed-compile-checks/passed.txt > passed/passed.txt || true
+          if [ ! -s passed/passed.txt ]; then
+            echo "The run's file names no passed compile check."
+            exit 0
+          fi
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+      - name: Restore the Shared Passed Compile Checks
+        if: ${{ steps.run.outputs.identity != '' }}
+        timeout-minutes: 5
+        uses: actions/cache/restore@v6
+        with:
+          path: .shared-compile-check-cache
+          key: shared-compile-checks-v1-${{ matrix.os }}-${{ steps.run.outputs.identity }}-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+          restore-keys: |
+            shared-compile-checks-v1-${{ matrix.os }}-${{ steps.run.outputs.identity }}-
+      - name: Add the Run's Passed Compile Checks
+        id: add
+        if: ${{ steps.run.outputs.identity != '' }}
+        run: |
+          mkdir -p .shared-compile-check-cache
+          touch .shared-compile-check-cache/passed.txt
+          before=$(wc -l < .shared-compile-check-cache/passed.txt)
+          LC_ALL=C sort -u .shared-compile-check-cache/passed.txt passed/passed.txt > passed/together.txt
+          mv passed/together.txt .shared-compile-check-cache/passed.txt
+          after=$(wc -l < .shared-compile-check-cache/passed.txt)
+          echo "Shared passed compile checks: $before before this run, $after with it."
+          if [ "$after" -gt "$before" ]; then
+            echo "grew=true" >> "$GITHUB_OUTPUT"
+          fi
+      # A list the run added nothing to is not saved again.
+      - name: Save the Shared Passed Compile Checks
+        if: ${{ steps.add.outputs.grew == 'true' }}
+        timeout-minutes: 5
+        uses: actions/cache/save@v6
+        with:
+          path: .shared-compile-check-cache
+          key: shared-compile-checks-v1-${{ matrix.os }}-${{ steps.run.outputs.identity }}-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
