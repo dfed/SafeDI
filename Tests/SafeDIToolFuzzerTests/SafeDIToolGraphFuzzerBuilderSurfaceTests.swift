@@ -83,18 +83,64 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 		#expect(GraphFuzzerBuilderSurface.mockFindings(in: generatedFiles).contains { $0.reason.contains("SafeDIMockScope_") || $0.reason.contains("SafeDISendableMockScope_") })
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func isBuilder_takesBuilderTypes_whenLabelNamesBuilder() {
+		for parameter in ["serviceBuilder: @escaping () -> any Service", "serviceBuilder: @escaping @Sendable (Int) -> any Service", "screenBuilder: Instantiator<Screen>.Builder"] {
+			#expect(GraphFuzzerBuilderSurface.isBuilder(GraphFuzzerBuilderSurface.Parameter(parameter)), "\(parameter)")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func isBuilder_rejectsWrapper_whenItsForwardedTupleHoldsClosure() {
+		// A mock's parameter for an erased instantiator it cannot build, which base corpus seed 2611 draws.
+		#expect(!GraphFuzzerBuilderSurface.isBuilder(GraphFuzzerBuilderSurface.Parameter("childBuilder: SendableErasedInstantiator<(first: @Sendable () -> Void, second: Int), AnyChild>")))
+	}
+
 	// MARK: Which builders a parameter accepts
 
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private static let service = GraphFuzzerBuilderSurface.BuilderFacts(fillingType: "ServiceImpl", returnedType: "any Service", isSendable: false)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private static let sendableService = GraphFuzzerBuilderSurface.BuilderFacts(fillingType: "ServiceImpl", returnedType: "any Service", isSendable: true)
 
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private static let forwardingService = GraphFuzzerBuilderSurface.BuilderFacts(fillingType: "ServiceImpl", returnedType: "any Service", isSendable: false, forwardedType: "Int")
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func accepts_takesEveryForm_whenParameterTypeForwardsNothing() {
-		for parameterType in ["@escaping () -> any Service", "Instantiator<any Service>.Builder", "ErasedInstantiator<(), any Service>.Builder", "ErasedInstantiator<ServiceImpl.ForwardedProperties, any Service>.Builder"] {
-			for form in GraphFuzzerBuilderSurface.BuilderForm.allCases {
+	func accepts_takesEachFormForwardingNothing_whenParameterTypeForwardsNothing() {
+		for parameterType in ["@escaping () -> any Service", "Instantiator<any Service>.Builder", "ErasedInstantiator<(), any Service>.Builder", "ErasedInstantiator<Void, any Service>.Builder"] {
+			for form in GraphFuzzerBuilderSurface.BuilderForm.formsForwardingNothing {
 				#expect(GraphFuzzerBuilderSurface.accepts(parameterType: parameterType, facts: Self.service, form: form), "\(parameterType) \(form)")
 			}
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func accepts_rejectsForwardingClosure_whenParameterTypeForwardsNothing() {
+		for parameterType in ["@escaping () -> any Service", "ErasedInstantiator<(), any Service>.Builder"] {
+			#expect(!GraphFuzzerBuilderSurface.accepts(parameterType: parameterType, facts: Self.forwardingService, form: .forwardingClosure), "\(parameterType)")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func accepts_takesForwardingClosureAndStoredClosure_whenParameterTypeForwardsTheBuildersValue() {
+		for parameterType in ["@escaping (Int) -> any Service", "ErasedInstantiator<Int, any Service>.Builder", "@escaping @Sendable (Int) -> any Service"] {
+			#expect(GraphFuzzerBuilderSurface.accepts(parameterType: parameterType, facts: Self.forwardingService, form: .forwardingClosure), "\(parameterType)")
+		}
+		#expect(GraphFuzzerBuilderSurface.accepts(parameterType: "ErasedInstantiator<Int, any Service>.Builder", facts: Self.forwardingService, form: .storedClosure))
+		let instantiatorFacts = GraphFuzzerBuilderSurface.BuilderFacts(fillingType: "Screen", returnedType: "Screen", isSendable: false, forwardedType: "Screen.ForwardedProperties")
+		#expect(GraphFuzzerBuilderSurface.accepts(parameterType: "Instantiator<Screen>.Builder", facts: instantiatorFacts, form: .forwardingClosure))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func accepts_rejectsEveryForm_whenParameterTypeForwardsOtherValues() {
+		for form in GraphFuzzerBuilderSurface.BuilderForm.allCases {
+			#expect(!GraphFuzzerBuilderSurface.accepts(parameterType: "@escaping (String) -> any Service", facts: Self.forwardingService, form: form))
+			#expect(!GraphFuzzerBuilderSurface.accepts(parameterType: "ErasedInstantiator<String, any Service>.Builder", facts: Self.forwardingService, form: form))
+			#expect(!GraphFuzzerBuilderSurface.accepts(parameterType: "ErasedInstantiator<Int, any Service>.Builder", facts: Self.service, form: form))
 		}
 	}
 
@@ -111,15 +157,26 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 	func accepts_rejectsStoredClosure_whenSendabilityDiffers() {
 		#expect(!GraphFuzzerBuilderSurface.accepts(parameterType: "@escaping @Sendable () -> any Service", facts: Self.service, form: .storedClosure))
 		#expect(!GraphFuzzerBuilderSurface.accepts(parameterType: "@escaping () -> any Service", facts: Self.sendableService, form: .storedClosure))
-		#expect(GraphFuzzerBuilderSurface.accepts(parameterType: "@escaping @Sendable () -> any Service", facts: Self.service, form: .closure))
-		#expect(GraphFuzzerBuilderSurface.accepts(parameterType: "SendableInstantiator<any Service>.Builder", facts: Self.sendableService, form: .storedClosure))
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func accepts_rejectsEveryForm_whenParameterForwardsValuesOrReturnsAnotherType() {
+	func accepts_takesStoredClosure_whenSendabilityMatches() {
+		#expect(GraphFuzzerBuilderSurface.accepts(parameterType: "SendableInstantiator<any Service>.Builder", facts: Self.sendableService, form: .storedClosure))
+		#expect(GraphFuzzerBuilderSurface.accepts(parameterType: "@escaping () -> any Service", facts: Self.service, form: .storedClosure))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func accepts_takesClosure_whenParameterIsSendable() {
+		// A closure literal is inferred `@Sendable` where the parameter asks for it.
+		#expect(GraphFuzzerBuilderSurface.accepts(parameterType: "@escaping @Sendable () -> any Service", facts: Self.service, form: .closure))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func accepts_rejectsEveryForm_whenParameterReturnsAnotherType() {
 		for form in GraphFuzzerBuilderSurface.BuilderForm.allCases {
-			#expect(!GraphFuzzerBuilderSurface.accepts(parameterType: "ErasedInstantiator<Int, any Service>.Builder", facts: Self.service, form: form))
 			#expect(!GraphFuzzerBuilderSurface.accepts(parameterType: "@escaping () -> ServiceImpl", facts: Self.service, form: form))
 		}
 	}
@@ -165,12 +222,176 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 		])
 	}
 
+	// MARK: Judgments of hand-built outcomes
+
+	/// An accepted outcome whose one generated file declares `Seam.mock(…)` with `parameters`, as SafeDI writes a mock.
+	private static func acceptedMock(_ parameters: [String]) -> GraphFuzzerToolOutcome {
+		let lines = ["extension Seam {", "\tpublic static func mock("] + parameters.map { "\t\t\($0)," } + ["\t) -> Seam {", "\t\tSeam()", "\t}", "}"]
+		return .accepted(generatedFiles: ["Feature/Seam+SafeDIMock.swift": lines.joined(separator: "\n")], warnings: [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sameSupplyJudgment_reportsNothing_whenEditedSurfaceKeepsBuilder() {
+		let drawn = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl"])
+		let edited = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl", "theme: Theme? = nil"])
+		#expect(GraphFuzzerBuilderSurface.sameSupplyJudgment(drawn: drawn, edited: edited, seed: 0) == .init(isJudged: true, problems: []))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sameSupplyJudgment_reportsProblemOnlyEditedSurfaceHas_whenEditChangesBuilderType() {
+		let drawn = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl"])
+		let edited = Self.acceptedMock(["serviceImplBuilder: ServiceImpl"])
+		#expect(GraphFuzzerBuilderSurface.sameSupplyJudgment(drawn: drawn, edited: edited, seed: 0) == .init(isJudged: true, problems: [
+			"Feature public Seam.mock takes `serviceImplBuilder: ServiceImpl`, which does not accept serviceImplBuilder: { ServiceImpl() }, in Feature public Seam.mock(serviceImplBuilder: { ServiceImpl() })",
+		]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sameSupplyJudgment_reportsRejection_whenToolRejectsEditedGraph() {
+		let drawn = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl"])
+		#expect(GraphFuzzerBuilderSurface.sameSupplyJudgment(drawn: drawn, edited: .rejected(diagnostics: "Seam.swift:3:2: error: Cycle"), seed: 0) == .init(isJudged: true, problems: [
+			"The tool rejects the edited graph:\nSeam.swift:3:2: error: Cycle",
+		]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sameSupplyJudgment_judgesNothing_whenDrawnGraphIsRejected() {
+		let edited = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl"])
+		#expect(GraphFuzzerBuilderSurface.sameSupplyJudgment(drawn: .rejected(diagnostics: "error"), edited: edited, seed: 0) == .init(isJudged: false, problems: []))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addedSupplyJudgment_reportsNothing_whenNewBuilderFollowsExistingOnes() {
+		let without = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl"])
+		let with = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl", "serviceImpl_AnyServiceBuilder: @escaping () -> AnyService"])
+		#expect(GraphFuzzerBuilderSurface.addedSupplyJudgment(without: without, with: with) == .init(isJudged: true, problems: []))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addedSupplyJudgment_reportsRenamedBuilder_whenAddedSupplyRenamesExistingBuilder() {
+		let without = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl"])
+		let with = Self.acceptedMock(["serviceImpl_ServiceImplBuilder: @escaping () -> ServiceImpl", "serviceImpl_AnyServiceBuilder: @escaping () -> AnyService"])
+		#expect(GraphFuzzerBuilderSurface.addedSupplyJudgment(without: without, with: with) == .init(isJudged: true, problems: [
+			"Feature public Seam.mock no longer takes `serviceImplBuilder: @escaping () -> ServiceImpl`; its builders are now `serviceImpl_ServiceImplBuilder`, `serviceImpl_AnyServiceBuilder`",
+		]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addedSupplyJudgment_reportsOrder_whenAddedSupplyReordersExistingBuilders() {
+		let without = Self.acceptedMock(["gadgetBuilder: @escaping () -> Gadget", "serviceBuilder: @escaping () -> Service"])
+		let with = Self.acceptedMock(["serviceBuilder: @escaping () -> Service", "gadgetBuilder: @escaping () -> Gadget"])
+		#expect(GraphFuzzerBuilderSurface.addedSupplyJudgment(without: without, with: with) == .init(isJudged: true, problems: [
+			"Feature public Seam.mock takes its builders in another order: `serviceBuilder`, `gadgetBuilder`",
+		]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addedSupplyJudgment_reportsRejection_whenToolRejectsGraphWithAddedPlaces() {
+		let without = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl"])
+		#expect(GraphFuzzerBuilderSurface.addedSupplyJudgment(without: without, with: .rejected(diagnostics: "Seam.swift:3:2: error: Cycle")) == .init(isJudged: true, problems: [
+			"The tool rejects the edited graph:\nSeam.swift:3:2: error: Cycle",
+		]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func rejectionJudgment_reportsAddedBuilder_whenRemedyAddsBuilderBesideDrawnOne() {
+		let drawn = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl"])
+		let remedied = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl", "serviceImplForwardingBuilder: @escaping () -> ServiceImpl"])
+		let judgment = GraphFuzzerBuilderSurface.rejectionJudgment(drawn: drawn, unremedied: .rejected(diagnostics: "Fuzz/FuzzFeature/Seam.swift:3:2: error: Forwards other values"), remedied: remedied, meetingModule: .seamModule)
+		#expect(judgment == .init(isJudged: true, problems: [
+			"Feature public Seam.mock takes builders `serviceImplBuilder: @escaping () -> ServiceImpl`, `serviceImplForwardingBuilder: @escaping () -> ServiceImpl` with the remedy and `serviceImplBuilder: @escaping () -> ServiceImpl` without it, so the remedied place is not a place of the drawn builder",
+		]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func rejectionJudgment_reportsRejectionElsewhere_whenMeetingModuleReportsNoError() {
+		let drawn = Self.acceptedMock(["serviceImplBuilder: @escaping () -> ServiceImpl"])
+		let judgment = GraphFuzzerBuilderSurface.rejectionJudgment(drawn: drawn, unremedied: .rejected(diagnostics: "Fuzz/FuzzApp/Caller.swift:3:2: error: Forwards other values"), remedied: drawn, meetingModule: .seamModule)
+		#expect(judgment == .init(isJudged: true, problems: [
+			"The tool rejects a builder whose places forward other values only outside FuzzFeature, where they meet:\nFuzz/FuzzApp/Caller.swift:3:2: error: Forwards other values",
+		]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyJudgment_reportsRejection_whenToolRejectsRemedy() {
+		#expect(GraphFuzzerBuilderSurface.remedyJudgment(remedied: .rejected(diagnostics: "Seam.swift:3:2: error: Cycle")) == .init(isJudged: true, problems: [
+			"The tool rejects the remedied graph, whose places forward the same values:\nSeam.swift:3:2: error: Cycle",
+		]))
+	}
+
+	// MARK: Labels
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func labelFindings_reportBuilder_whenLabelNamesNeitherReturnedTypeNorFillingType() {
+		guard case let .accepted(generatedFiles, _) = Self.acceptedMock(["holeBuilder: @escaping () -> any Service"]) else { return }
+		#expect(GraphFuzzerBuilderSurface.labelFindings(in: generatedFiles).map(\.description) == [
+			"Feature public Seam.mock takes `holeBuilder: @escaping () -> any Service`, which contract rule 8 labels `serviceBuilder`",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func labelFindings_reportNothing_whenLabelsFollowContract() {
+		guard case let .accepted(generatedFiles, _) = Self.acceptedMock([
+			"__safeDI_serviceBuilder: @escaping () -> any Service",
+			"serviceImpl_ServiceSendableBuilder: @escaping @Sendable () -> any Service",
+			"screenBuilder: Instantiator<Screen>.Builder",
+		]) else { return }
+		#expect(GraphFuzzerBuilderSurface.labelFindings(in: generatedFiles) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func labelFindings_reportScopeBuilder_whenLabelLeavesOutReturnedType() {
+		guard case let .accepted(generatedFiles, _) = Self.acceptedMock(["holeFillBuilder: @escaping (Seam.SafeDIMockScope_HoleFill_AnyHole) -> AnyHole"]) else { return }
+		#expect(GraphFuzzerBuilderSurface.labelFindings(in: generatedFiles).map(\.description) == [
+			"Feature public Seam.mock takes `holeFillBuilder: @escaping (Seam.SafeDIMockScope_HoleFill_AnyHole) -> AnyHole`, which contract rule 8 labels `holeFill_AnyHoleBuilder`",
+		])
+	}
+
+	// MARK: Findings
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func findings_reportLaterFailure_whenKnownBuilderSurfaceFailureDoesNotDocumentIt() {
+		let knownIssue = GraphFuzzerKnownIssue(reason: "Surface", signatures: [.builderSurface(.builderSurfaceNamesGeneratedType)], seeds: [7])
+		let surface = GraphFuzzerFailure(seed: 7, kind: .builderSurfaceNamesGeneratedType, details: "surface")
+		let later = GraphFuzzerFailure(seed: 7, kind: .sameSupplyCallStopsCompiling, details: "same supply")
+		#expect(GraphFuzzerFinding.findings(failure: surface, laterFailures: [later], knownIssue: knownIssue) == [.failure(later)])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func findings_reportMisfiledSeed_whenGraphDoesNotShowListedBuilderSurfaceKind() {
+		let knownIssue = GraphFuzzerKnownIssue(reason: "Surface", signatures: [.builderSurface(.builderSurfaceNamesGeneratedType), .builderSurface(.builderLabelBreaksContract)], seeds: [7])
+		let surface = GraphFuzzerFailure(seed: 7, kind: .builderSurfaceNamesGeneratedType, details: "surface")
+		let findings = GraphFuzzerFinding.findings(failure: surface, knownIssue: knownIssue)
+		#expect(findings == [.knownIssue(knownIssue, surface), .staleBuilderSurfaceSignature(knownIssue, .builderLabelBreaksContract)])
+		#expect(findings.last?.reportLine(seed: 7) == "misfiled 7 Surface: the graph does not show \(GraphFuzzerFailure.Kind.builderLabelBreaksContract.rawValue); list the seed under the entry that names exactly what it shows")
+	}
+
 	// MARK: Edits
 
 	@Test(arguments: [
 		(GraphFuzzerBuilderSurfaceEdit.secondPlaceInAnotherType, GraphFuzzerGeneratorFeature.generateDependencyTree, UInt64(15)),
 		(.placeBehindLazilyInstantiated, .generateDependencyTree, 15),
 		(.placeForwardingOtherValuesRemedied, .generateDependencyTree, 15),
+		(.secondPlaceInInnerSeamOfAnotherModule, .generateDependencyTree, 15),
+		(.holderMovedToInnerSeamOfAnotherModule, .generateDependencyTree, 15),
+		(.placeOfNewBuilderInInnerSeamOfAnotherModule, .generateDependencyTree, 15),
+		(.placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied, .generateDependencyTree, 15),
 		(.placeBehindLazilyInstantiated, .generateMockPublic, 3),
 		(.instantiatorPlaceMovedToPlainPlace, .generateMockPublic, 18),
 		(.instantiatorChangedToErasedInstantiator, .generateMockPublic, 18),
@@ -178,29 +399,46 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 		(.placeForwardingOtherValuesRemedied, .generateMockPublic, 3),
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func fixture_drawsEditTheToolAccepts_forNamedSeed(edit: GraphFuzzerBuilderSurfaceEdit, feature: GraphFuzzerGeneratorFeature, seed: UInt64) async throws {
+	func fixture_drawsEditTheToolAccepts_whenEditAppliesToGraph(edit: GraphFuzzerBuilderSurfaceEdit, feature: GraphFuzzerGeneratorFeature, seed: UInt64) async throws {
 		let fixture = try #require(GraphFuzzerGenerator.fixture(forSeed: seed, features: [feature], builderSurfaceEdit: edit))
 		#expect(fixture.swiftFileContent != GraphFuzzerGenerator.fixture(forSeed: seed, features: [feature]).swiftFileContent)
-		guard case .accepted = try await GraphFuzzerOracle.toolOutcome(of: fixture) else {
+		guard case .accepted = try await GraphFuzzerOracle.toolOutcome(of: fixture, listsTransitiveDependencies: edit.listsTransitiveDependencies) else {
 			Issue.record("The tool rejects seed \(seed)'s \(edit.rawValue) edit")
 			return
 		}
 	}
 
-	@Test(arguments: [(GraphFuzzerGeneratorFeature.generateDependencyTree, UInt64(15)), (.generateMockPublic, 3)])
+	/// Part (iii)'s judgment of `seed`'s graph with a place forwarding other values, and its remedy.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func fixture_drawsPlacesTheToolMergesToday_whenTheyForwardOtherValues(feature: GraphFuzzerGeneratorFeature, seed: UInt64) async throws {
-		// Part (iii)'s finding on main: places of one builder that forward other values are accepted, where the contract
-		// asks for a rejection, which `GraphFuzzerToolRuns.forwardedValuesFailure` reports.
+	private static func forwardingOtherValuesJudgment(feature: GraphFuzzerGeneratorFeature, seed: UInt64) async throws -> GraphFuzzerBuilderSurface.PairJudgment {
 		let fixture = try #require(GraphFuzzerGenerator.fixture(forSeed: seed, features: [feature], builderSurfaceEdit: .placeForwardingOtherValues))
 		let remedied = try #require(GraphFuzzerGenerator.fixture(forSeed: seed, features: [feature], builderSurfaceEdit: .placeForwardingOtherValuesRemedied))
-		let judgment = try await GraphFuzzerBuilderSurface.rejectionJudgment(
+		return try await GraphFuzzerBuilderSurface.rejectionJudgment(
+			drawn: GraphFuzzerOracle.toolOutcome(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [feature])),
 			unremedied: GraphFuzzerOracle.toolOutcome(of: fixture),
 			remedied: GraphFuzzerOracle.toolOutcome(of: remedied),
-			declaringModule: .seamModule,
+			meetingModule: .seamModule,
 		)
-		#expect(judgment.isJudged)
-		#expect(!judgment.problems.isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func rejectionJudgment_reportsAcceptance_whenSeamCorpusPlacesForwardOtherValues() async throws {
+		// Part (iii)'s finding on main: places of one builder that forward other values are merged into one builder, where
+		// the contract asks for a rejection, which `GraphFuzzerToolRuns.forwardedValuesFailure` reports. The builder-struct
+		// slice that rejects them changes this line to none.
+		#expect(try await Self.forwardingOtherValuesJudgment(feature: .generateDependencyTree, seed: 15) == .init(isJudged: true, problems: [
+			"The tool accepts a builder whose places forward other values",
+		]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func rejectionJudgment_reportsAcceptance_whenPublicMockCorpusPlacesForwardOtherValues() async throws {
+		// As in the seam corpus: the builder-struct slice that rejects them changes this line to none.
+		#expect(try await Self.forwardingOtherValuesJudgment(feature: .generateMockPublic, seed: 3) == .init(isJudged: true, problems: [
+			"The tool accepts a builder whose places forward other values",
+		]))
 	}
 
 	// MARK: Known issues
@@ -208,11 +446,11 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func adding_listsEachSeedOnce_whenShapeSharesSeedsWithEntry() {
-		let issues = GraphFuzzerKnownIssue.adding(.builderSurfaceNamesGeneratedType, reason: "Surface", seeds: [2, 3, 9], to: [
+		let issues = GraphFuzzerKnownIssue.adding(.builderSurface(.builderSurfaceNamesGeneratedType), reason: "Surface", seeds: [2, 3, 9], to: [
 			GraphFuzzerKnownIssue(reason: "Order", signatures: [.compilerCrashInGeneratedMock], seeds: [1, 2, 3, 4]),
 		])
 		#expect(issues.map(\.reason) == ["Order", "Order; and Surface", "Surface"])
 		#expect(issues.map(\.seeds) == [[1, 4], [2, 3], [9]])
-		#expect(issues.map(\.signatures) == [[.compilerCrashInGeneratedMock], [.compilerCrashInGeneratedMock, .builderSurfaceNamesGeneratedType], [.builderSurfaceNamesGeneratedType]])
+		#expect(issues.map(\.signatures) == [[.compilerCrashInGeneratedMock], [.compilerCrashInGeneratedMock, .builderSurface(.builderSurfaceNamesGeneratedType)], [.builderSurface(.builderSurfaceNamesGeneratedType)]])
 	}
 }

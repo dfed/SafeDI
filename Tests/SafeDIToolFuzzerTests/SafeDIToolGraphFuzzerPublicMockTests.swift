@@ -42,6 +42,8 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 					Issue.record("Seed \(result.fixture.seed) no longer fails: \(knownIssue.reason)")
 				case let .staleRenamedGraphDifference(knownIssue, aspect):
 					Issue.record("Seed \(result.fixture.seed) sits on \"\(knownIssue.reason)\", which lists \(aspect.rawValue), but its renamed graphs do not show it.")
+				case let .staleBuilderSurfaceSignature(knownIssue, kind):
+					Issue.record("Seed \(result.fixture.seed) sits on \"\(knownIssue.reason)\", which lists \(kind.rawValue), but the graph does not show it.")
 				case let .failure(failure):
 					Issue.record(failure.issueComment(fixture: result.fixture))
 				}
