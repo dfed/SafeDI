@@ -1,0 +1,355 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+import Foundation
+import Testing
+@testable import SafeDIToolTestSupport
+
+/// What the generation and assertion helpers record for `Scripts/regenerate-expectations.py` when they are given a
+/// record directory, and that they record nothing without one.
+struct ExpectationRecordingTests: ~Copyable {
+	// MARK: Initialization
+
+	init() throws {
+		filesToDelete = [URL]()
+		recordDirectory = TestTemporaryDirectory.uniquePath(prefix: "expectation-records-")
+	}
+
+	deinit {
+		for fileToDelete in filesToDelete {
+			try! FileManager.default.removeItem(at: fileToDelete)
+		}
+		try? FileManager.default.removeItem(at: recordDirectory)
+	}
+
+	// MARK: Tests – Generation records
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func executeSafeDIToolTest_writesOneRecordPerGeneratedFileWithPlaceholderPaths_whenGivenARecordDirectory() async throws {
+		let callLine = #line + 1
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.aliasedReceiveFixture,
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
+			recordDirectory: recordDirectory,
+		)
+
+		let fixtureDirectory = try (#require(output.fixtures.writtenPath(of: "Consumer.swift")) as NSString).deletingLastPathComponent
+		let expectedContentByOutputName = try #require(output.generatedFiles).mapValues {
+			$0.replacingOccurrences(of: fixtureDirectory, with: "$TARGET_DIRECTORY")
+		}
+		let records = try Self.records(in: recordDirectory)
+		#expect(Dictionary(grouping: records.generation, by: \.outputName).mapValues { $0.map(\.content) } == expectedContentByOutputName.mapValues { [$0] })
+		#expect(expectedContentByOutputName.values.contains { $0.contains("#sourceLocation(file: \"$TARGET_DIRECTORY/Consumer.swift\", line: 7)") })
+		#expect(records.generation.allSatisfy { $0.fileID == #fileID && $0.line == callLine && $0.integration == nil && $0.module == nil && $0.skipsCompileVerification })
+		#expect(records.assertion.isEmpty)
+		#expect(try String(contentsOf: recordDirectory.appendingPathComponent(ExpectationRecording.headerFileName), encoding: .utf8) == generatedFileHeader)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func executeSafeDIToolMultiModuleTest_writesOneRecordPerGeneratedFileWithPlaceholderPaths_whenGivenARecordDirectory(integration: MultiModuleIntegration) async throws {
+		let callLine = #line + 1
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [ModuleFixture(name: "App", packageName: "App", swiftFileContent: Self.aliasedReceiveFixture)],
+			integration: integration,
+			compileVerification: .skipped,
+			filesToDelete: &filesToDelete,
+			recordDirectory: recordDirectory,
+		)
+
+		let fixtureRootSpellings = try [realPath(of: output.fixtureRoot), output.fixtureRoot.path]
+		let expectedContentByOutputName = try #require(output.modules["App"]).generatedFiles.mapValues { content in
+			fixtureRootSpellings.reduce(content) { $0.replacingOccurrences(of: $1, with: "$FIXTURE_ROOT") }
+		}
+		let records = try Self.records(in: recordDirectory)
+		#expect(Dictionary(grouping: records.generation, by: \.outputName).mapValues { $0.map(\.content) } == expectedContentByOutputName.mapValues { [$0] })
+		#expect(expectedContentByOutputName.values.contains { $0.contains("$FIXTURE_ROOT/App/Sources/App/Consumer.swift") })
+		#expect(records.generation.allSatisfy { $0.fileID == #fileID && $0.line == callLine && $0.integration == "\(integration)" && $0.module == "App" && $0.skipsCompileVerification })
+		#expect(records.assertion.isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func executeSafeDIToolTest_writesNothing_whenGivenNoRecordDirectory() async throws {
+		try FileManager.default.createDirectory(at: recordDirectory, withIntermediateDirectories: true)
+
+		_ = try await executeSafeDIToolTest(
+			swiftFileContent: Self.aliasedReceiveFixture,
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
+			recordDirectory: nil,
+		)
+
+		#expect(try FileManager.default.contentsOfDirectory(atPath: recordDirectory.path) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func executeSafeDIToolTest_writesNothingAndRecordsAnIssue_whenRecordDirectoryIsInsideTheCheckout() async throws {
+		let refusedDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+			.appendingPathComponent(".build")
+			.appendingPathComponent("expectation-records-\(UUID().uuidString)")
+		var filesToDelete = [URL]()
+
+		try await withKnownIssue("Recording into the checkout is refused") {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: Self.aliasedReceiveFixture,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				skipCompileVerification: true,
+				recordDirectory: refusedDirectory,
+			)
+		} matching: { issue in
+			issue.comments.contains { $0.rawValue.contains("refuses to record") }
+		}
+		self.filesToDelete += filesToDelete
+
+		#expect(!FileManager.default.fileExists(atPath: refusedDirectory.path))
+	}
+
+	// MARK: Tests – Keys
+
+	@Test
+	func key_isTheDigestOfItsComponents_whenGivenFixedComponents() {
+		#expect(Self.generationKey() == "052d4609d1ddaf928e897e64c1b266f7e8ce11cb4ba7b3bb6e396f115418c754")
+		#expect(ExpectationRecording.key(fileID: "Module/File.swift", line: 12, column: 9, testName: "test()", overload: "plain", module: nil, expectedDigest: "digest") == "23ea8b269782b094cfbe71c3a7adc6cda4b1b66e0d7b8c4d8fce46614d399a37")
+	}
+
+	@Test
+	func key_changes_whenAnyOneComponentChanges() {
+		let variations = [
+			Self.generationKey(fileID: "Module/Other.swift"),
+			Self.generationKey(line: 13),
+			Self.generationKey(column: 10),
+			Self.generationKey(testName: "other()"),
+			Self.generationKey(inputsDigest: "other"),
+			Self.generationKey(integration: "swiftPackagePlugin"),
+			Self.generationKey(integration: nil),
+			Self.generationKey(module: "Other"),
+			Self.generationKey(module: nil),
+			Self.generationKey(outputName: "Other+SafeDI.swift"),
+		]
+		#expect(Set(variations + [Self.generationKey()]).count == variations.count + 1)
+	}
+
+	// MARK: Tests – Assertion records
+
+	@Test
+	mutating func assertThrowsError_writesOneRecordOfTheExpectedAndActualDescriptions_whenTheyDiffer() async throws {
+		let callLine = #line + 2
+		await withKnownIssue("The descriptions differ") {
+			await assertThrowsError("Expected description.", recordDirectory: recordDirectory) {
+				throw DescribedError(description: "Actual description.")
+			}
+		}
+
+		let records = try Self.records(in: recordDirectory)
+		#expect(records.generation.isEmpty)
+		#expect(records.assertion.map(\.overload) == ["plain"])
+		#expect(records.assertion.map(\.expected) == ["Expected description."])
+		#expect(records.assertion.map(\.actual) == ["Actual description."])
+		#expect(records.assertion.allSatisfy { $0.fileID == #fileID && $0.line == callLine && $0.module == nil })
+	}
+
+	@Test
+	mutating func assertThrowsError_writesNothing_whenTheDescriptionsAreEqual() async throws {
+		await assertThrowsError("Actual description.", recordDirectory: recordDirectory) {
+			throw DescribedError(description: "Actual description.")
+		}
+
+		#expect(!FileManager.default.fileExists(atPath: recordDirectory.path))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func assertThrowsErrorDiagnostics_writesOneRecordWithPlaceholderPaths_whenTheDiagnosticsDiffer() async throws {
+		var filesToDelete = [URL]()
+		await withKnownIssue("The diagnostics differ") {
+			await assertThrowsError(diagnostics: { _ in "Expected diagnostics." }, recordDirectory: recordDirectory) {
+				try await executeSafeDIToolTest(swiftFileContent: Self.receivedSessionWithForwardedPropertyFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			}
+		}
+		self.filesToDelete += filesToDelete
+
+		let records = try Self.records(in: recordDirectory)
+		#expect(records.generation.isEmpty)
+		#expect(records.assertion.map(\.overload) == ["diagnostics"])
+		#expect(records.assertion.map(\.expected) == ["Expected diagnostics."])
+		#expect(records.assertion.map(\.actual) == ["$TARGET_DIRECTORY/Child.swift:4:5: error: \(Self.receivedSessionWithForwardedPropertyError)"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func assertThrowsErrorDiagnostics_writesNothing_whenTheDiagnosticsAreEqual() async throws {
+		var filesToDelete = [URL]()
+		await assertThrowsError(diagnostics: { fixtures in "\(fixtures["Child.swift"]):4:5: error: \(Self.receivedSessionWithForwardedPropertyError)" }, recordDirectory: recordDirectory) {
+			try await executeSafeDIToolTest(swiftFileContent: Self.receivedSessionWithForwardedPropertyFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		self.filesToDelete += filesToDelete
+
+		#expect(!FileManager.default.fileExists(atPath: recordDirectory.path))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func assertThrowsMultiModuleError_writesOneRecordWithPlaceholderPaths_whenTheDiagnosticsDiffer() async throws {
+		var filesToDelete = [URL]()
+		await withKnownIssue("The diagnostics differ") {
+			await assertThrowsMultiModuleError(inModule: "App", diagnostics: { _ in "Expected diagnostics." }, recordDirectory: recordDirectory) {
+				try await executeSafeDIToolMultiModuleTest(
+					modules: [ModuleFixture(name: "App", packageName: "App", swiftFileContent: Self.receivedSessionWithForwardedPropertyFixture)],
+					integration: .moduleInfo,
+					compileVerification: .skipped,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		}
+		self.filesToDelete += filesToDelete
+
+		let records = try Self.records(in: recordDirectory)
+		#expect(records.generation.isEmpty)
+		#expect(records.assertion.map(\.overload) == ["multiModuleDiagnostics"])
+		#expect(records.assertion.map(\.module) == ["App"])
+		#expect(records.assertion.map(\.expected) == ["Expected diagnostics."])
+		#expect(records.assertion.map(\.actual) == ["$FIXTURE_ROOT/App/Sources/App/Child.swift:4:5: error: \(Self.receivedSessionWithForwardedPropertyError)"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func assertThrowsMultiModuleError_writesNothing_whenTheDiagnosticsAreEqual() async throws {
+		var filesToDelete = [URL]()
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in "\(fixtures["App"]!["Child.swift"]):4:5: error: \(Self.receivedSessionWithForwardedPropertyError)" }, recordDirectory: recordDirectory) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [ModuleFixture(name: "App", packageName: "App", swiftFileContent: Self.receivedSessionWithForwardedPropertyFixture)],
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		self.filesToDelete += filesToDelete
+
+		#expect(!FileManager.default.fileExists(atPath: recordDirectory.path))
+	}
+
+	// MARK: Private
+
+	private var filesToDelete: [URL]
+	private let recordDirectory: URL
+
+	/// A root whose mock-generating child receives a renamed property, so the generated code cites the child's file in a
+	/// `// Declared at` comment or a `#sourceLocation` directive.
+	private static let aliasedReceiveFixture = [
+		"""
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init(service: Service, consumer: Consumer) {
+		        self.service = service
+		        self.consumer = consumer
+		    }
+
+		    @Instantiated let service: Service
+		    @Instantiated let consumer: Consumer
+		}
+		""",
+		"""
+		@Instantiable(generateMock: true)
+		public struct Consumer: Instantiable {
+		    public init(renamedService: Service) {
+		        self.renamedService = renamedService
+		    }
+
+		    @Received(fulfilledByDependencyNamed: "service", ofType: Service.self) let renamedService: Service
+		}
+		""",
+		"""
+		@Instantiable
+		public struct Service: Instantiable {
+		    public init() {}
+		}
+		""",
+	]
+
+	/// A child that receives a type with a forwarded property, which SafeDI rejects at the child's file.
+	private static let receivedSessionWithForwardedPropertyFixture = [
+		"""
+		@Instantiable(isRoot: true)
+		public final class Root: Instantiable {
+		    public init(child: Child) { self.child = child }
+		    @Instantiated let child: Child
+		}
+		""",
+		"""
+		@Instantiable
+		public final class Child: Instantiable {
+		    public init(session: Session) { self.session = session }
+		    @Received let session: Session
+		}
+		""",
+		"""
+		@Instantiable
+		public final class Session: Instantiable {
+		    public init(userID: String) { self.userID = userID }
+		    @Forwarded let userID: String
+		}
+		""",
+	]
+
+	private static let receivedSessionWithForwardedPropertyError = "@Received property `session: Session` is not @Instantiated or @Forwarded in chain: Root -> Child. `Session` has @Forwarded properties, so SafeDI builds it only through an `Instantiator`, never as an @Instantiated constant. Declare `@Forwarded let session: Session` on a type below `Root` in the chain, and pass the value to the `Instantiator` that builds that type, to fix."
+
+	private static func generationKey(
+		fileID: String = "Module/File.swift",
+		line: Int = 12,
+		column: Int = 9,
+		testName: String = "test()",
+		inputsDigest: String = "digest",
+		integration: String? = "moduleInfo",
+		module: String? = "App",
+		outputName: String = "Root+SafeDI.swift",
+	) -> String {
+		ExpectationRecording.key(fileID: fileID, line: line, column: column, testName: testName, inputsDigest: inputsDigest, integration: integration, module: module, outputName: outputName)
+	}
+
+	/// The records in `directory`, by kind.
+	private static func records(in directory: URL) throws -> (generation: [ExpectationRecording.GenerationRecord], assertion: [ExpectationRecording.AssertionRecord]) {
+		var generation = [ExpectationRecording.GenerationRecord]()
+		var assertion = [ExpectationRecording.AssertionRecord]()
+		for fileName in try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted() where fileName.hasSuffix(".json") {
+			let data = try Data(contentsOf: directory.appendingPathComponent(fileName))
+			if try JSONDecoder().decode(RecordKind.self, from: data).kind == ExpectationRecording.GenerationRecord.kind {
+				try generation.append(JSONDecoder().decode(ExpectationRecording.GenerationRecord.self, from: data))
+			} else {
+				try assertion.append(JSONDecoder().decode(ExpectationRecording.AssertionRecord.self, from: data))
+			}
+		}
+		return (generation, assertion)
+	}
+
+	private struct RecordKind: Decodable {
+		let kind: String
+	}
+
+	private struct DescribedError: Error, CustomStringConvertible {
+		let description: String
+	}
+}
