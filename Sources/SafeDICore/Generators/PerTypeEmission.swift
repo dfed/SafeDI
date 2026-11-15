@@ -937,6 +937,17 @@ public enum PerTypeEmission {
 				reads += ownNilArgumentsByFunction[function, default: []].map { ($0.label, nilRead, $0.offset) }
 				return reads.sorted { $0.offset < $1.offset }.map { ($0.name, $0.declaration) }
 			}
+			func valueReadOffsets(of function: Int) -> [Int] {
+				let range = functions[function].lineRange
+				var offsets = ownReferencesByFunction[function, default: []].compactMap { reference -> Int? in
+					guard let declaration = reference.declaration, targetFunction(of: reference) == nil,
+					      !range.contains(declarations[declaration].offset)
+					else { return nil }
+					return reference.offset
+				}
+				offsets += ownNilArgumentsByFunction[function, default: []].map(\.offset)
+				return offsets.sorted()
+			}
 			func isModeled(_ member: Int) -> Bool {
 				let bodyScope = functions[member].bodyScope
 				return !unsupportedScopes.contains(where: { isAncestorOrSelf(bodyScope, of: $0) })
@@ -1077,30 +1088,68 @@ public enum PerTypeEmission {
 				return isAncestorOrSelf(declaration.scope, of: placementScope) && declaration.offset < anchorLineStart
 					&& !chain(of: placementScope).drop(while: { $0 != declaration.scope }).dropFirst().contains(where: { scopes[$0].names[label] != nil })
 			}
+			// A call of a member that takes labels reads them where it is made, so the calling member reads them too:
+			// each label from the declaration the called member read, unless the caller declares it itself. Passed labels
+			// grow until no class takes another.
 			var parametersByClass = [Int: [(name: String, type: String)]]()
-			for key in keptClasses {
-				let classMembers = membersByClass[key, default: []]
-				let readsByMember = classMembers.map(valueReads)
-				var labels = [String]()
-				for read in readsByMember[0] where !labels.contains(read.name) {
-					labels.append(read.name)
-				}
-				var parameters = [(name: String, type: String)]()
-				for label in labels {
-					let resolved = readsByMember.compactMap { reads in reads.first(where: { $0.name == label })?.declaration }
-					if Set(resolved).count == 1, isCapturable(resolved[0], label: label) { continue }
-					let types = Set(resolved.filter { $0 != nilRead }.compactMap { declarations[$0].typeText })
-					let unwrapped = Set(types.map { $0.hasSuffix("?") ? String($0.dropLast()) : $0 })
-					guard unwrapped.count == 1, let base = unwrapped.first else { return fail("a passed label has different types") }
-					var type = types.count == 1 && !resolved.contains(nilRead) ? base + (types.first?.hasSuffix("?") == true ? "?" : "") : base + "?"
-					if type.contains("->"), !type.hasSuffix("?"), !type.contains("@escaping") { type = "@escaping " + type }
-					parameters.append((label, type))
-				}
-				parametersByClass[key] = parameters
+			var readsByFunction = [Int: [(name: String, declaration: Int)]]()
+			func reads(of function: Int) -> [(name: String, declaration: Int)] {
+				readsByFunction[function] ?? valueReads(of: function)
 			}
 			// Every reference to a member that passes labels resolves each where the member it names read it.
 			func readDeclaration(of function: Int, label: String) -> Int? {
-				valueReads(of: function).first(where: { $0.name == label })?.declaration
+				reads(of: function).first(where: { $0.name == label })?.declaration
+			}
+			var passes = 0
+			while true {
+				passes += 1
+				guard passes <= 64 else { return fail("passed labels do not settle") }
+				var nextReads = [Int: [(name: String, declaration: Int)]]()
+				for member in members {
+					let range = functions[member].lineRange
+					var ordered = zip(valueReadOffsets(of: member), valueReads(of: member)).map { (offset: $0, name: $1.name, declaration: $1.declaration) }
+					for reference in ownReferencesByFunction[member, default: []] {
+						guard let target = targetFunction(of: reference), memberSet.contains(target), let targetClass = classOf[target] else { continue }
+						for parameter in parametersByClass[targetClass, default: []] {
+							guard let declaration = readDeclaration(of: target, label: parameter.name), declaration != nilRead,
+							      !range.contains(declarations[declaration].offset)
+							else { continue }
+							ordered.append((reference.offset, parameter.name, declaration))
+						}
+					}
+					nextReads[member] = ordered.sorted { $0.offset < $1.offset }.map { ($0.name, $0.declaration) }
+				}
+				readsByFunction = nextReads
+				var nextParameters = [Int: [(name: String, type: String)]]()
+				for key in keptClasses {
+					let readsByMember = membersByClass[key, default: []].map(reads)
+					guard Set(readsByMember.map { Set($0.map(\.name)) }).count == 1 else { return fail("members read different labels through calls") }
+					var labels = [String]()
+					for read in readsByMember[0] where !labels.contains(read.name) {
+						labels.append(read.name)
+					}
+					var parameters = [(name: String, type: String)]()
+					for label in labels {
+						for memberReads in readsByMember where Set(memberReads.filter { $0.name == label }.map(\.declaration)).count > 1 {
+							return fail("a member reads a label from two declarations")
+						}
+						let resolved = readsByMember.compactMap { memberReads in memberReads.first(where: { $0.name == label })?.declaration }
+						if Set(resolved).count == 1, isCapturable(resolved[0], label: label) { continue }
+						if resolved.contains(where: { $0 != nilRead && declarations[$0].typeText == nil }) { return fail("a passed label has no spelled type") }
+						let types = Set(resolved.filter { $0 != nilRead }.compactMap { declarations[$0].typeText })
+						let unwrapped = Set(types.map { $0.hasSuffix("?") ? String($0.dropLast()) : $0 })
+						guard unwrapped.count == 1, let base = unwrapped.first else { return fail("a passed label has different types") }
+						var type = types.count == 1 && !resolved.contains(nilRead) ? base + (types.first?.hasSuffix("?") == true ? "?" : "") : base + "?"
+						if type.contains("->"), !type.hasSuffix("?"), !type.contains("@escaping") { type = "@escaping " + type }
+						parameters.append((label, type))
+					}
+					nextParameters[key] = parameters
+				}
+				let settled = keptClasses.allSatisfy { key in
+					nextParameters[key, default: []].map { "\($0.name):\($0.type)" } == parametersByClass[key, default: []].map { "\($0.name):\($0.type)" }
+				}
+				parametersByClass = nextParameters
+				if settled { break }
 			}
 			// Every member of a class passes `nil` exactly where its first member does.
 			for key in keptClasses {
@@ -1158,8 +1207,9 @@ public enum PerTypeEmission {
 					edits.append(.replace(argument.offset..<(argument.offset + 3), argument.label))
 				}
 				let parameters = parametersByClass[key, default: []]
-				if !parameters.isEmpty {
-					let parameterList = ([function.parametersText].filter { !$0.isEmpty } + parameters.map { "\($0.name): \($0.type)" }).joined(separator: ", ")
+				let ownParameters = unifiedParametersText(of: membersByClass[key, default: []])
+				if !parameters.isEmpty || ownParameters != function.parametersText {
+					let parameterList = ([ownParameters].filter { !$0.isEmpty } + parameters.map { "\($0.name): \($0.type)" }).joined(separator: ", ")
 					edits.append(.replace(function.headerRange, "func \(name)(\(parameterList))\(function.returnType.isEmpty ? "" : " -> \(function.returnType)") "))
 				} else if name != function.name {
 					edits.append(.replace(function.nameRange, name))

@@ -121,6 +121,15 @@ struct SpikePerTypeCorpusTests {
 				}
 			}
 			let perTypeFiles = generatedFiles.mapValues(PerTypeEmission.transformGeneratedFile)
+			if let dumpDirectory = environment["SAFEDI_SPIKE_CORPUS_DUMP"] {
+				let base = URL(fileURLWithPath: dumpDirectory).appendingPathComponent("\(seed)")
+				try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+				for (name, text) in generatedFiles {
+					let fileName = URL(fileURLWithPath: name).lastPathComponent
+					try text.write(to: base.appendingPathComponent("perPath-" + fileName), atomically: true, encoding: .utf8)
+					try (perTypeFiles[name] ?? "").write(to: base.appendingPathComponent("perType-" + fileName), atomically: true, encoding: .utf8)
+				}
+			}
 			let again = perTypeFiles.mapValues(PerTypeEmission.transformGeneratedFile)
 			if again != perTypeFiles {
 				report("notIdempotent \(seed)")
