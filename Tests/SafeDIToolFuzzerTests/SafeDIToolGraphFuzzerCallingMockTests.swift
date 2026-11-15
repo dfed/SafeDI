@@ -471,6 +471,32 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.failure == nil)
 	}
 
+	/// On main no drawn graph reaches the value comparison, since each cell whose mock fills its place passes it up first,
+	/// so the twin half of every drawn probe is compiled and run here, against the first graph of each probed cell; the
+	/// mock half runs once a calling mock fills its place.
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func drawnValueProbes_describeTwin_inFirstGraphOfEachProbedCell() async throws {
+		let seeds = (UInt64(0)..<UInt64(GraphFuzzerCallingMockCell.drawnCells.count)).filter { GraphFuzzerCallingMockDraw(seed: $0).valueProbes != nil }
+		#expect(seeds == [16, 17, 18, 19, 24, 25, 26, 27])
+		for seed in seeds {
+			var filesToDelete = [URL]()
+			defer {
+				for file in filesToDelete {
+					try? FileManager.default.removeItem(at: file)
+				}
+			}
+			let graph = GraphFuzzerCallingMockDraw(seed: seed).graph
+			let output = try await executeSafeDIToolMultiModuleTest(modules: graph.modules(.twin), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+			let twinPath = try DifferentialValuePath(output: output, modules: graph.modules(.twin))
+			let twinProbes = try #require(graph.valueProbes).map { DifferentialValueProbe(name: $0.name, expression: $0.knownRightExpression ?? $0.expression) }
+
+			let description = try await DifferentialValueOracle.describe(twinPath, probes: twinProbes, filesToDelete: &filesToDelete)
+
+			#expect(description?.contains("probe \(twinProbes[0].name)") == true, "seed \(seed)")
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func callingMock_comparesNoValues_whenRunIsNotAskedTo() async throws {
