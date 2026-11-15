@@ -375,6 +375,12 @@ func executeSafeDIToolTest(
 		}
 
 		let moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
+		// SPIKE: with `SAFEDI_SPIKE_DUMP_DIRECTORY` set, every generated file is written there per test, before any assertion.
+		spikeDumpGeneratedFiles(
+			swiftFileContent: swiftFileContent + swiftFileContentByFilePath.sorted(by: { $0.key < $1.key }).map(\.value),
+			generatedFiles: generatedFiles,
+			combinedOutput: buildCombinedOutput ? String(data: (try? Data(contentsOf: combinedOutput)) ?? Data(), encoding: .utf8) : nil,
+		)
 		if let generatedFiles, !generatedFiles.isEmpty, !skipCompileVerification {
 			try await verifyGeneratedCodeCompiles(
 				inputSwiftFiles: swiftFiles,
@@ -774,4 +780,30 @@ func createSwiftFixtureFiles(
 		try content.write(to: fileURL, atomically: true, encoding: .utf8)
 		return fileURL
 	}
+}
+
+/// SPIKE: writes a test's generated files under `SAFEDI_SPIKE_DUMP_DIRECTORY`/<test>/<fixture hash>/, so that two runs
+/// (per-path and per-type emission) can be compared file by file.
+func spikeDumpGeneratedFiles(swiftFileContent: [String], generatedFiles: [String: String]?, combinedOutput: String?) {
+	guard let root = ProcessInfo.processInfo.environment["SAFEDI_SPIKE_DUMP_DIRECTORY"], !root.isEmpty else { return }
+	var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+	for byte in swiftFileContent.joined(separator: "\u{0}").utf8 {
+		hash ^= UInt64(byte)
+		hash = hash &* 0x0000_0100_0000_01B3
+	}
+	let testName = (Test.current?.id.description ?? "unknown")
+		.map { $0.isLetter || $0.isNumber ? $0 : "_" }
+	let directory = URL(fileURLWithPath: root)
+		.appendingPathComponent(String(String(testName).suffix(180)))
+		.appendingPathComponent(String(hash, radix: 16))
+	try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+	var files = generatedFiles ?? [:]
+	if let combinedOutput {
+		files["Combined.swift"] = combinedOutput
+	}
+	for (name, content) in files {
+		try? content.write(to: directory.appendingPathComponent(name), atomically: true, encoding: .utf8)
+	}
+	let fixtures = swiftFileContent.joined(separator: "\n// ---- next fixture ----\n")
+	try? fixtures.write(to: directory.appendingPathComponent("Fixtures.swift.txt"), atomically: true, encoding: .utf8)
 }

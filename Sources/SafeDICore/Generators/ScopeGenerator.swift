@@ -5064,10 +5064,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else {
 					// Attributes precede the initializer's modifiers on its line, as `mockAttributes` precede a mock's.
 					let attributesPrefix = instantiable.generatedInitializerAttributes.isEmpty ? "" : "\(instantiable.generatedInitializerAttributes) "
-					return try await """
+					// SPIKE: one function per type (see `PerTypeEmission`); `SAFEDI_PER_PATH_EMISSION=1` keeps today's text.
+					let perPathBody = try await generateProperties(propertiesGeneratedLater: propertiesGeneratedLater, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames, leadingMemberWhitespace: "        ").joined(separator: "\n")
+					let body = PerTypeEmission.isEnabled ? PerTypeEmission.transform(body: perPathBody, rootType: instantiable.concreteInstantiable.asSource) : perPathBody
+					return """
 					extension \(instantiable.concreteInstantiable.asSource) {
 					    \(attributesPrefix)public \(instantiable.declarationType == .classType ? "convenience " : "")init() {
-					\(generateProperties(propertiesGeneratedLater: propertiesGeneratedLater, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames, leadingMemberWhitespace: "        ").joined(separator: "\n"))
+					\(body)
 					        self.init(\(argumentList))
 					    }
 					}
