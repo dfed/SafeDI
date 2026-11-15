@@ -253,6 +253,33 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// `RetainLive`, the fill, reads `retainNavigator`, which the known-right path then keeps alive too.
 	case retentionPublicMockValueBeforeBuilderFillReadsValue
 
+	/// A combination cell (`GraphFuzzerCombinationDraw.publicMockCells`), `combination<Row>PublicMock<Position>`: one row
+	/// of `GraphFuzzerCombinationRow` drawn alone at one position of the public mock column, in the public mock
+	/// combination corpus.
+	case combinationBuiltAgainPublicMockAtBoundary
+	case combinationBuiltAgainPublicMockBeneath
+	case combinationBuiltAgainPublicMockInsideFill
+	case combinationLazilyInstantiatedPublicMockAtBoundary
+	case combinationLazilyInstantiatedPublicMockBeneath
+	case combinationLazilyInstantiatedPublicMockInsideFill
+	case combinationReceivedInstantiatorLoopPublicMockAtBoundary
+	case combinationReceivedInstantiatorLoopPublicMockBeneath
+	case combinationReceivedInstantiatorLoopPublicMockInsideFill
+	case combinationGenericOrExtensionPublicMockAtBoundary
+	case combinationGenericOrExtensionPublicMockBeneath
+	case combinationGenericOrExtensionPublicMockInsideFill
+	case combinationGeneratedAttributesPublicMockAtBoundary
+	case combinationGeneratedAttributesPublicMockBeneath
+	case combinationGeneratedAttributesPublicMockInsideFill
+	case combinationSharedInstancePublicMockAtBoundary
+	case combinationSharedInstancePublicMockBeneath
+	case combinationSharedInstancePublicMockInsideFill
+	case combinationForwardedValuePublicMockAtBoundary
+	case combinationForwardedValuePublicMockBeneath
+	case combinationAdditionalMockPublicMockBeneath
+	case combinationAdditionalMockPublicMockInsideFill
+	case combinationTwoRoutesPublicMockAtBoundary
+
 	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`,
 	/// `retentionPublicMockValueBeforeBuilder…`) draws this shape, whose count in accepted graphs the public mock corpus
 	/// pins too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
@@ -264,6 +291,12 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// graphs gate only where the retention oracle judged them.
 	var isRetentionShape: Bool {
 		rawValue.hasPrefix("retentionPublicMockValueBeforeBuilder")
+	}
+
+	/// Whether `GraphFuzzerCombinationDraw` draws this shape, a combination cell, whose count in accepted graphs the
+	/// public mock combination corpus pins (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
+	var isCombinationShape: Bool {
+		rawValue.hasPrefix("combination")
 	}
 
 	static func < (lhs: GraphFuzzerPublicMockDrawFeature, rhs: GraphFuzzerPublicMockDrawFeature) -> Bool {
@@ -2310,14 +2343,15 @@ extension GraphFuzzerOracle {
 	///   value is released, as for a graph with a hole.
 	static func publicMockValueGraph(of runs: GraphFuzzerToolRuns, judgesRetention: Bool = false) -> DifferentialValueGraph? {
 		guard case let .accepted(featureFiles, _) = runs.firstOutcome, case let .accepted(knownRightFiles, _) = runs.knownRightOutcome else { return nil }
-		let storingFixture = GraphFuzzerGenerator.fixture(forSeed: runs.fixture.seed, features: [.generateMockPublic], storingEveryParameter: true)
-		let knownRightFixture = GraphFuzzerGenerator.knownRightPublicMockFixture(forSeed: runs.fixture.seed, storingEveryParameter: true)
+		let features = GraphFuzzerGeneratorFeature.features(drawnIn: runs.fixture)
+		let storingFixture = GraphFuzzerGenerator.fixture(forSeed: runs.fixture.seed, features: features, storingEveryParameter: true)
+		let knownRightFixture = GraphFuzzerGenerator.knownRightPublicMockFixture(forSeed: runs.fixture.seed, features: features, storingEveryParameter: true)
 		return DifferentialValueGraph(
 			name: "seed \(runs.fixture.seed)",
 			feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: featureFiles),
 			knownRight: DifferentialValuePath(fixture: knownRightFixture, generatedFiles: knownRightFiles),
 			probes: storingFixture.differentialValueProbes(generatedFiles: featureFiles),
-			samples: storingFixture.placeInFillInnerScreenSamples,
+			samples: storingFixture.placeInFillInnerScreenSamples + storingFixture.combinationForwardedValueSamples,
 			judgesRetention: judgesRetention,
 		)
 	}
@@ -2367,7 +2401,8 @@ extension GraphFuzzerOracle {
 	}
 
 	/// Each call of a `.public` type's mock – `<prefix>T0` to `<prefix>T2` and `<prefix>T6`, held under `t0` to `t2` and
-	/// `t6`, or under `anyT<i>` through an eraser – in the generated mock of `typeName`, in any module. A consumer holds each
+	/// `t6`, or under `anyT<i>` through an eraser, and a combination cell's `<prefix>ComboHome`, held under `comboHome` – in
+	/// the generated mock of `typeName`, in any module. A consumer holds each
 	/// leaf it reaches under one label, so a mock wraps either every call of a leaf in the leaf's eraser or none.
 	static func leafCalls(ofMockedType typeName: String, in generatedFiles: [String: String], prefix: String) -> [PublicMockLeafCall] {
 		var calls = [PublicMockLeafCall]()
@@ -2388,6 +2423,16 @@ extension GraphFuzzerOracle {
 						instanceLabels: Set(arguments.filter { $0.value.hasSuffix(".instance") }.map(\.label)),
 					))
 				}
+			}
+			// A public mock combination cell's `.public` type, `ComboHome`, held under `comboHome`
+			// (`GraphFuzzerCombinationDraw.publicMockCells`).
+			for call in initializerCalls(of: "\(prefix)ComboHome.mock", in: contents) {
+				let arguments = call.filter { $0.label != "safeDIOverrides" }
+				calls.append(PublicMockLeafCall(
+					leafLabel: "comboHome",
+					passedLabels: Set(arguments.filter { $0.value != "nil" && !unpassedParameters.contains($0.value) }.map(\.label)),
+					instanceLabels: Set(arguments.filter { $0.value.hasSuffix(".instance") }.map(\.label)),
+				))
 			}
 		}
 		return calls
@@ -2666,6 +2711,9 @@ extension GraphFuzzerPublicMockDraw {
 		let prefix = fixture.typeNamePrefix
 		let types = DeclaredTypes(of: fixture)
 		var features = Set<GraphFuzzerPublicMockDrawFeature>()
+		if let cell = GraphFuzzerCombinationDraw.cell(drawnIn: fixture), let feature = GraphFuzzerPublicMockDrawFeature(rawValue: cell.featureName) {
+			features.insert(feature)
+		}
 		let modules = Set(fixture.modules ?? [])
 		if modules.contains(.samePackageCaller), modules.contains(.otherPackageCaller) {
 			features.insert(.bothConsumerModules)

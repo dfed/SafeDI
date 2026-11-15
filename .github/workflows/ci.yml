@@ -1278,6 +1278,9 @@ jobs:
       # minutes, the seam corpus's two shards of 500 seeds for 14.0 and 9.9, and the public mock corpus's one of
       # 1000 for 16.5; split as below, the ten shards fuzzed for 4.4 to 7.7 minutes (run 43762600658). Each
       # report's `cpu` line says what each phase of a shard cost, which the combine job adds up per corpus.
+      # The combination corpora draw one combination cell per seed (`GraphFuzzerCombinationDraw`): the seam
+      # combination corpus in three shards of 450 (1.46 seconds a seed on four cores locally, about 11 minutes a
+      # shard), and the public mock combination corpus in one.
       # No required check is a shard's: "Check Graph Fuzzer Corpus on Linux" is, so a change to this matrix needs no
       # stand-in for a Markdown-only change. A change to it changes graph-fuzzer-coverage's EXPECTED_SHARDS too.
       matrix:
@@ -1322,6 +1325,22 @@ jobs:
             features: generateMockPublic
             starting-seed: 500
             iterations: 500
+          - corpus: seamCombination
+            features: generateDependencyTree,combinationDraws
+            starting-seed: 0
+            iterations: 450
+          - corpus: seamCombination
+            features: generateDependencyTree,combinationDraws
+            starting-seed: 450
+            iterations: 450
+          - corpus: seamCombination
+            features: generateDependencyTree,combinationDraws
+            starting-seed: 900
+            iterations: 450
+          - corpus: publicMockCombination
+            features: generateMockPublic,combinationDraws
+            starting-seed: 0
+            iterations: 345
     defaults:
       run:
         shell: bash
@@ -1501,7 +1520,7 @@ jobs:
         env:
           BEFORE: ${{ github.event.before }}
           # graph-fuzzer's matrix, `<corpus>-<starting-seed>` per shard.
-          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-250 generateDependencyTree-500 generateDependencyTree-750 generateMockPublic-0 generateMockPublic-500
+          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-250 generateDependencyTree-500 generateDependencyTree-750 generateMockPublic-0 generateMockPublic-500 seamCombination-0 seamCombination-450 seamCombination-900 publicMockCombination-0
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           tar -xzf graph-fuzzer-test-bundle.tar.gz

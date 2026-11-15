@@ -97,7 +97,8 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 				counts[feature, default: 0] += 1
 			}
 		}
-		for feature in GraphFuzzerPublicMockDrawFeature.allCases {
+		// A combination cell is drawn only in the combination corpus, which pins its accepted graphs instead.
+		for feature in GraphFuzzerPublicMockDrawFeature.allCases where !feature.isCombinationShape {
 			#expect(counts[feature, default: 0] == SafeDIToolGraphFuzzerTests.publicMockCorpusDrawFeatureCounts[feature], "\(feature.rawValue) drawn in \(counts[feature, default: 0]) graphs")
 		}
 	}

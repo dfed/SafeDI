@@ -438,7 +438,8 @@ struct SafeDIToolGraphFuzzerTests {
 				counts[feature, default: 0] += 1
 			}
 		}
-		for feature in GraphFuzzerSeamDrawFeature.allCases {
+		// A combination cell is drawn only in the combination corpus, which pins its accepted graphs instead.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where !feature.isCombinationShape {
 			let pinnedCount = try #require(Self.seamCorpusDrawFeatureCounts[feature], "\(feature.rawValue) has no pinned count")
 			#expect(counts[feature, default: 0] == pinnedCount, "\(feature.rawValue) drawn in \(counts[feature, default: 0]) graphs")
 		}
@@ -468,6 +469,26 @@ struct SafeDIToolGraphFuzzerTests {
 		for feature in GraphFuzzerPublicMockDrawFeature.allCases where feature.isCountedWhenAccepted {
 			#expect(Self.publicMockCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
 		}
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isCombinationShape {
+			#expect(Self.seamCombinationCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+		for feature in GraphFuzzerPublicMockDrawFeature.allCases where feature.isCombinationShape {
+			#expect(Self.publicMockCombinationCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
+	func combinationCells_eachHaveADrawFeatureThatNoOtherGatingNameBegins_inEveryCombinationCorpus() {
+		// Each cell is floored on its own name (`Corpus.flooredGatingDrawNames`), which drops a name another begins, so a
+		// cell named so would go unfloored.
+		let cellNames = GraphFuzzerCombinationDraw.seamCells.map(\.featureName)
+		#expect(Set(cellNames).count == cellNames.count)
+		#expect(Set(cellNames) == Set(GraphFuzzerSeamDrawFeature.allCases.filter(\.isCombinationShape).map(\.rawValue)))
+		#expect(Self.seamCombinationCorpus.flooredGatingDrawNames.sorted() == cellNames.sorted())
+		let publicMockCellNames = GraphFuzzerCombinationDraw.publicMockCells.map(\.featureName)
+		#expect(Set(publicMockCellNames).count == publicMockCellNames.count)
+		#expect(Set(publicMockCellNames) == Set(GraphFuzzerPublicMockDrawFeature.allCases.filter(\.isCombinationShape).map(\.rawValue)))
+		#expect(Self.publicMockCombinationCorpus.flooredGatingDrawNames.sorted() == publicMockCellNames.sorted())
 	}
 
 	@Test
@@ -5076,7 +5097,7 @@ struct SafeDIToolGraphFuzzerTests {
 		let childProcessCPUSeconds = GraphFuzzerPhaseAccount.childProcessCPUSeconds() - startChildProcessCPUSeconds
 		await report.append("cpu \(corpus.name) \(GraphFuzzerPhaseAccount.formatted(wallSeconds)) \(GraphFuzzerPhaseAccount.formatted(processCPUSeconds)) \(GraphFuzzerPhaseAccount.formatted(childProcessCPUSeconds)) \(phaseAccount.reportField)")
 		// Every corpus that exists, so the combine job can tell a corpus whose shards left no report from none.
-		report.append("corpora \(([Self.baseCorpus] + GraphFuzzerGeneratorFeature.allCases.map { Self.corpus(for: [$0]) }).map(\.name).joined(separator: " "))")
+		report.append("corpora \(Self.allCorpora.map(\.name).joined(separator: " "))")
 		if configuration.coversCorpus(ofSeedCount: corpus.seedCount),
 		   acceptedCount != corpus.acceptedSeedCount || acceptedSeedsSum.value != corpus.acceptedSeedsSum
 		{
@@ -6420,17 +6441,189 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Seeds of the same shape whose generated mock also lists label-sorted parameters, so that it changes too.
 	private static let labelSortedPassThroughSeedsWhoseMockParametersAlsoChange: [UInt64] = [371, 381]
 
-	/// The corpus drawn with `features`: the base corpus when there are none, and a feature's corpus for that
-	/// feature. Every feature has a corpus, so the two are the only ones.
+	/// The corpus drawn with `features`: the base corpus when there are none, a feature's corpus for that feature, and
+	/// the combination corpus of a feature's corpus with `combinationDraws` beside it.
 	static func corpus(for features: Set<GraphFuzzerGeneratorFeature>) -> Corpus {
 		if features.contains(.generateMockPublic) {
-			publicMockCorpus
+			features.contains(.combinationDraws) ? publicMockCombinationCorpus : publicMockCorpus
 		} else if features.contains(.generateDependencyTree) {
-			seamCorpus
+			features.contains(.combinationDraws) ? seamCombinationCorpus : seamCorpus
 		} else {
 			baseCorpus
 		}
 	}
+
+	/// Every corpus, each of which ci.yml's combine job expects a report of.
+	static let allCorpora = [baseCorpus, seamCorpus, publicMockCorpus, seamCombinationCorpus, publicMockCombinationCorpus]
+
+	/// The corpus drawn with `generateDependencyTree` and `combinationDraws`: seeds `0..<seamCombinationCorpusSeedCount`,
+	/// each a graph of one combination cell alone (`GraphFuzzerCombinationDraw.seamCells`, the seed's remainder by
+	/// their number), judged by the seam corpus's oracles. Each cell is a gating draw: ten of its graphs must be
+	/// accepted and compared by value.
+	static let seamCombinationCorpus = Corpus(
+		name: "seamCombination",
+		features: [.generateDependencyTree, .combinationDraws],
+		seedCount: seamCombinationCorpusSeedCount,
+		fixtureHash: seamCombinationCorpusFixtureHash,
+		acceptedSeedCount: seamCombinationCorpusAcceptedSeedCount,
+		acceptedSeedsSum: seamCombinationCorpusAcceptedSeedsSum,
+		knownIssues: seamCombinationKnownIssues,
+		knownIssuesName: "seamCombinationKnownIssues",
+		staleSeedRemedy: { _, _ in "remove it from `seamCombinationKnownIssues`" },
+		valueOracleInspectedGraphCount: seamCombinationCorpusValueOracleInspectedGraphCount,
+		spellingDrawFeatures: [],
+		omittedValueGraphCount: 0,
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter(\.isCombinationShape)),
+		acceptedDrawFeatureCounts: seamCombinationCorpusAcceptedDrawFeatureCounts,
+		retentionCounts: seamCombinationCorpusRetentionCounts,
+		gatingSeamDrawFeatures: Set(GraphFuzzerSeamDrawFeature.allCases.filter(\.isCombinationShape)),
+	)
+
+	static let seamCombinationCorpusSeedCount = 1_350
+	static let seamCombinationCorpusFixtureHash: UInt64 = 0xE2048B971F6861FC
+	static let seamCombinationCorpusAcceptedSeedCount = 1_350
+	static let seamCombinationCorpusAcceptedSeedsSum: UInt64 = 0x4F60CF7F87C59197
+	static let seamCombinationCorpusValueOracleInspectedGraphCount = 1_350
+	/// What the retention oracle judges over the seam combination corpus (`Corpus.retentionCounts`).
+	static let seamCombinationCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 385, judgedDrawingRetentionShape: 0, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
+	/// How many of the seam combination corpus's accepted graphs show each cell, counted whether or not the graph fails:
+	/// at least ten each. Each cell draws `seamCombinationCorpusSeedCount / GraphFuzzerCombinationDraw.seamCells.count`
+	/// graphs, all of which the tool accepts.
+	static let seamCombinationCorpusAcceptedDrawFeatureCounts = GraphFuzzerSeamDrawFeature.allCases.filter(\.isCombinationShape).reduce(into: [GraphFuzzerSeamDrawFeature: Int]()) { counts, feature in
+		counts[feature] = 15
+	}
+	/// The seam combination corpus's seeds that fail today, grouped by shape: every graph draws a hole, so every graph
+	/// fails the builder surface's base check until the planned builder structs, and two cells find defects of their own.
+	static let seamCombinationKnownIssues = addingBuilderSurfaceShapes(
+		seeds: BuilderSurfaceSeeds(
+			// Every seed of the corpus: each graph's cell holds a hole the tool accepts, so the base check judges and fails each.
+			base: Array(0 ..< UInt64(seamCombinationCorpusSeedCount)),
+			labels: [],
+			sameSupply: [],
+			sameSupplyReason: seamMockTakesHoleValueReason,
+			addedSupply: [],
+			forwardingOtherValues: [],
+			callingMocks: [],
+		),
+		to: seamCombinationKnownIssuesBesideBuilderSurface,
+	)
+
+	/// The seam combination corpus's failures but the builder surface's.
+	private static let seamCombinationKnownIssuesBesideBuilderSurface: [GraphFuzzerKnownIssue] = [
+		GraphFuzzerKnownIssue(
+			reason: fulfillerSeamWithPlaceReason,
+			signatures: [.compilerError(containing: "_ComboNestImpl(__safeDI_")],
+			seeds: [99, 189, 639, 1_089],
+		),
+		GraphFuzzerKnownIssue(
+			reason: inSeamLeakReason,
+			signatures: combinationInSeamLeakSignatures,
+			seeds: [3, 39, 90, 129, 180, 183, 270, 309, 360, 399, 453, 489, 540, 543, 579, 630, 633, 669, 720, 723, 759, 813, 900, 903, 939, 990, 1_029, 1_080, 1_083, 1_119, 1_170, 1_209, 1_260, 1_263, 1_299],
+		),
+		GraphFuzzerKnownIssue(
+			reason: unproducedSendableFillCaseReason,
+			signatures: [
+				.scopeCase(.declaredCaseNeverProduced, containing: "_ComboNestServiceBuilder_Sendable`, which no place's path produces"),
+				.scopeCase(.scopeCaseNamesNoProperty, containing: "_ComboNestServiceBuilder_Sendable`, which names no property of the seam"),
+			],
+			seeds: [0, 93, 273, 363, 450, 810, 993, 1_173],
+		),
+		GraphFuzzerKnownIssue(
+			reason: mainActorSeamWithNonisolatedInitializerReason,
+			signatures: [.compilerError(containing: "call to main actor-isolated initializer 'init(__safeDI_")],
+			seeds: [858, 1_128, 1_218],
+		),
+	]
+
+	/// The in-seam leak in the combination cells: an instantiator a fill or an inner seam's tree holds, on a cycle that
+	/// builds the host again, keeps the fill's or the cycle's value alive where the inline build frees it.
+	private static let combinationInSeamLeakSignatures: [GraphFuzzerKnownIssue.Signature] = [
+		"_ComboLive alive holding comboHome.comboNest.comboNestService.comboAgainBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ComboLive alive holding comboHome.comboNest.comboNestService.comboStepBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ComboLive alive holding comboParent.comboHome.comboNest.comboNestService.comboAgainBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ComboLive alive holding comboParent.comboHome.comboNest.comboNestService.comboStepBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ComboTag alive holding comboHome.comboInner.comboStepBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ComboTag alive holding comboHome.comboNest.comboNestService.comboStepBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ComboTag alive holding comboParent.comboHome.comboInner.comboStepBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+		"_ComboTag alive holding comboParent.comboHome.comboNest.comboNestService.comboStepBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+	].map { .seamRetainsWhatInlineFrees(containing: $0) }
+
+	/// A fill that holds a place and builds itself, or a type above the place, again through a `SendableInstantiator`:
+	/// the calling seam's `@Sendable` enum declares a case for the inner seam's builder that no place's path produces.
+	private static let unproducedSendableFillCaseReason = "A fill that holds a place of its own and builds itself again through a `SendableInstantiator`: the calling seam’s `@Sendable` scope enum declares a case for the inner seam’s builder that no place’s path produces, an unused case in generated code (rules 5 and 6 of the seam contract)"
+
+	/// D3: a type that fulfills a hole and is itself a seam with a place generates a call of an initializer it does not
+	/// generate, so its caller's code does not compile.
+	private static let fulfillerSeamWithPlaceReason = "A fulfiller that is itself a seam with a place of its own: the fill calls the fulfiller's initializer only generated code calls with a builder of its place, which the fulfiller's module does not generate, so the generated code does not compile (D3)"
+
+	/// A seam whose type is isolated to the main actor and whose initializer is `nonisolated` generates its initializers
+	/// in an extension of the type, which inherit the isolation, so a caller outside the main actor cannot call them,
+	/// where the inline build calls the `nonisolated` initializer.
+	private static let mainActorSeamWithNonisolatedInitializerReason = "A `@MainActor` seam whose initializer is `nonisolated` generates initializers isolated to the main actor, which drop the `nonisolated` of the initializer they forward to, so a caller outside the main actor that the inline build compiles cannot call the seam"
+
+	/// The corpus drawn with `generateMockPublic` and `combinationDraws`: seeds `0..<publicMockCombinationCorpusSeedCount`,
+	/// each a graph of one public mock combination cell alone (`GraphFuzzerCombinationDraw.publicMockCells`, the seed's
+	/// remainder by their number), judged by the public mock corpus's oracles. Each cell is a gating draw: ten of its graphs
+	/// must be accepted and compared by value.
+	static let publicMockCombinationCorpus = Corpus(
+		name: "publicMockCombination",
+		features: [.generateMockPublic, .combinationDraws],
+		seedCount: publicMockCombinationCorpusSeedCount,
+		fixtureHash: publicMockCombinationCorpusFixtureHash,
+		acceptedSeedCount: publicMockCombinationCorpusAcceptedSeedCount,
+		acceptedSeedsSum: publicMockCombinationCorpusAcceptedSeedsSum,
+		knownIssues: publicMockCombinationKnownIssues,
+		knownIssuesName: "publicMockCombinationKnownIssues",
+		staleSeedRemedy: { _, _ in "remove it from `publicMockCombinationKnownIssues`" },
+		valueOracleInspectedGraphCount: publicMockCombinationCorpusValueOracleInspectedGraphCount,
+		spellingDrawFeatures: [],
+		omittedValueGraphCount: 0,
+		errorMarkers: GraphFuzzerOracle.publicMockOnlyErrorMarkers + [GraphFuzzerOracle.publicMockStaleValueErrorMarker],
+		errorGraphCounts: publicMockCombinationCorpusErrorGraphCounts,
+		publicMockDrawFeaturesCountedWhenAccepted: Set(GraphFuzzerPublicMockDrawFeature.allCases.filter(\.isCombinationShape)),
+		acceptedPublicMockDrawFeatureCounts: publicMockCombinationCorpusAcceptedDrawFeatureCounts,
+		retentionCounts: publicMockCombinationCorpusRetentionCounts,
+		gatingPublicMockDrawFeatures: Set(GraphFuzzerPublicMockDrawFeature.allCases.filter(\.isCombinationShape)),
+	)
+
+	static let publicMockCombinationCorpusSeedCount = 345
+	static let publicMockCombinationCorpusFixtureHash: UInt64 = 0xCB9AECB2A77AE34
+	static let publicMockCombinationCorpusAcceptedSeedCount = 345
+	static let publicMockCombinationCorpusAcceptedSeedsSum: UInt64 = 0xBC347EAC9ECA1B77
+	static let publicMockCombinationCorpusValueOracleInspectedGraphCount = 345
+	static let publicMockCombinationCorpusErrorGraphCounts = [0, 0, 0, 0, 0, 0, 0, 0]
+	/// What the retention oracle judges over the public mock combination corpus (`Corpus.retentionCounts`).
+	static let publicMockCombinationCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 165, judgedDrawingRetentionShape: 0, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
+	/// How many of the public mock combination corpus's accepted graphs show each cell, counted whether or not the graph
+	/// fails: at least ten each.
+	static let publicMockCombinationCorpusAcceptedDrawFeatureCounts = GraphFuzzerPublicMockDrawFeature.allCases.filter(\.isCombinationShape).reduce(into: [GraphFuzzerPublicMockDrawFeature: Int]()) { counts, feature in
+		counts[feature] = 15
+	}
+	/// The public mock combination corpus's seeds that fail today, grouped by shape: every graph draws a hole, so every
+	/// graph fails the builder surface's base check until the planned builder structs.
+	static let publicMockCombinationKnownIssues = addingBuilderSurfaceShapes(
+		seeds: BuilderSurfaceSeeds(
+			// Every seed of the corpus: each graph's `ComboHome` holds a place its module cannot fill, so the base check judges
+			// and fails each.
+			base: Array(0 ..< UInt64(publicMockCombinationCorpusSeedCount)),
+			labels: [],
+			sameSupply: [],
+			sameSupplyReason: callingMockTakesHoleValueReason,
+			addedSupply: [],
+			forwardingOtherValues: [],
+			callingMocks: [],
+		),
+		to: [
+			GraphFuzzerKnownIssue(
+				reason: publicMockLeakReason,
+				signatures: [
+					"_ComboLive alive holding comboHome.comboAgainBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+					"_ComboLive alive holding comboParent.comboHome.comboAgainBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
+				].map { .publicMockRetainsWhatKnownRightFrees(containing: $0) },
+				seeds: [0, 23, 46, 69, 138, 161, 207, 253, 276, 299, 322],
+			),
+		],
+	)
 
 	/// The corpus drawn with the `generateMockPublic` feature: seeds `0..<publicMockCorpusSeedCount`, each a graph of its
 	/// own (`GraphFuzzerPublicMockDraw`) with types declared `generateMock: .public` and the consumers that reach them.

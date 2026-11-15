@@ -280,6 +280,10 @@ jobs:
           - {corpus: generateDependencyTree, features: generateDependencyTree, starting-seed: 750, iterations: 250}
           - {corpus: generateMockPublic, features: generateMockPublic, starting-seed: 0, iterations: 500}
           - {corpus: generateMockPublic, features: generateMockPublic, starting-seed: 500, iterations: 500}
+          - {corpus: seamCombination, features: 'generateDependencyTree,combinationDraws', starting-seed: 0, iterations: 450}
+          - {corpus: seamCombination, features: 'generateDependencyTree,combinationDraws', starting-seed: 450, iterations: 450}
+          - {corpus: seamCombination, features: 'generateDependencyTree,combinationDraws', starting-seed: 900, iterations: 450}
+          - {corpus: publicMockCombination, features: 'generateMockPublic,combinationDraws', starting-seed: 0, iterations: 345}
     defaults:
       run:
         shell: bash
@@ -378,7 +382,7 @@ jobs:
         env:
           BASE: ${{ inputs.base }}
           # coverage-fuzz's matrix, `<corpus>-<starting-seed>` per shard.
-          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-250 generateDependencyTree-500 generateDependencyTree-750 generateMockPublic-0 generateMockPublic-500
+          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-250 generateDependencyTree-500 generateDependencyTree-750 generateMockPublic-0 generateMockPublic-500 seamCombination-0 seamCombination-450 seamCombination-900 publicMockCombination-0
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           tar -xzf graph-fuzzer-test-bundle.tar.gz
