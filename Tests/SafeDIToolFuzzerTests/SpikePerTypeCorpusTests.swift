@@ -89,7 +89,7 @@ struct SpikePerTypeCorpusTests {
 						Issue.record("Seed \(comparison.name): per-type emission builds other values or retains more\n\(result.report)")
 					}
 				case let .failure(error):
-					report("error \(comparison.name): \(String(describing: error).prefix(4000).replacingOccurrences(of: "\n", with: "\\n"))")
+					report("error \(comparison.name): \(String(describing: error).prefix(4_000).replacingOccurrences(of: "\n", with: "\\n"))")
 					Issue.record("Seed \(comparison.name): \(error)")
 				}
 			}

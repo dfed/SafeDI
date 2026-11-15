@@ -786,10 +786,10 @@ func createSwiftFixtureFiles(
 /// (per-path and per-type emission) can be compared file by file.
 func spikeDumpGeneratedFiles(swiftFileContent: [String], generatedFiles: [String: String]?, combinedOutput: String?) {
 	guard let root = ProcessInfo.processInfo.environment["SAFEDI_SPIKE_DUMP_DIRECTORY"], !root.isEmpty else { return }
-	var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+	var hash: UInt64 = 0xCBF29CE484222325
 	for byte in swiftFileContent.joined(separator: "\u{0}").utf8 {
 		hash ^= UInt64(byte)
-		hash = hash &* 0x0000_0100_0000_01B3
+		hash = hash &* 0x00000100000001B3
 	}
 	let testName = (Test.current?.id.description ?? "unknown")
 		.map { $0.isLetter || $0.isNumber ? $0 : "_" }

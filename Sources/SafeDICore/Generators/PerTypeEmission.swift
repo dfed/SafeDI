@@ -463,7 +463,9 @@ public enum PerTypeEmission {
 		private func isAncestorOrSelf(_ ancestor: Int, of scope: Int) -> Bool {
 			var current: Int? = scope
 			while let index = current {
-				if index == ancestor { return true }
+				if index == ancestor {
+					return true
+				}
 				current = scopes[index].parent
 			}
 			return false
@@ -510,13 +512,17 @@ public enum PerTypeEmission {
 				while index < text.endIndex {
 					let character = text[index]
 					if !(character.isLetter || character.isNumber || character == "_") {
-						if start < index { result.append(text[start..<index]) }
+						if start < index {
+							result.append(text[start..<index])
+						}
 						result.append(text[index...index])
 						start = text.index(after: index)
 					}
 					index = text.index(after: index)
 				}
-				if start < text.endIndex { result.append(text[start...]) }
+				if start < text.endIndex {
+					result.append(text[start...])
+				}
 				return result
 			}
 			for type in keysByType.keys.sorted() {
@@ -639,7 +645,7 @@ public enum PerTypeEmission {
 			let reason: String
 		}
 
-		private func plan(of members: [Int], groupOf memberOfGroup: [Int: Int], groupIndex: Int) -> Result<Plan, Failure> {
+		private func plan(of members: [Int], groupOf memberOfGroup: [Int: Int], groupIndex _: Int) -> Result<Plan, Failure> {
 			// Members whose bodies the reader could not model stay per path.
 			for member in members {
 				let bodyScope = functions[member].bodyScope
@@ -660,8 +666,12 @@ public enum PerTypeEmission {
 				var reads = [(name: String, declaration: Int?, offset: Int)]()
 				for reference in references where range.contains(reference.offset) {
 					guard let declaration = reference.declaration else { continue }
-					if declaration == functions[member].declaration { continue }
-					if range.contains(declarations[declaration].offset) { continue }
+					if declaration == functions[member].declaration {
+						continue
+					}
+					if range.contains(declarations[declaration].offset) {
+						continue
+					}
 					reads.append((reference.name, declaration, reference.offset))
 				}
 				readsByMember.append(reads)
@@ -899,7 +909,9 @@ public enum PerTypeEmission {
 			var classKeys = [String: Int]()
 			for function in candidates {
 				let key = strippedKey(of: function)
-				if classKeys[key] == nil { classKeys[key] = classKeys.count }
+				if classKeys[key] == nil {
+					classKeys[key] = classKeys.count
+				}
 				classOf[function] = classKeys[key]
 			}
 			// Refine by the classes each function's references name, until no class splits.
@@ -909,12 +921,16 @@ public enum PerTypeEmission {
 				for function in candidates {
 					let targets = ownReferencesByFunction[function, default: []].compactMap(targetFunction).map { String(classOf[$0] ?? -1) }
 					let key = "\(classOf[function] ?? -1)|" + targets.joined(separator: ",")
-					if refinedKeys[key] == nil { refinedKeys[key] = refinedKeys.count }
+					if refinedKeys[key] == nil {
+						refinedKeys[key] = refinedKeys.count
+					}
 					refined[function] = refinedKeys[key]
 				}
 				let stable = refinedKeys.count == Set(classOf.values).count
 				classOf = refined
-				if stable { break }
+				if stable {
+					break
+				}
 			}
 			var membersByClass = [Int: [Int]]()
 			for function in candidates {
@@ -965,13 +981,19 @@ public enum PerTypeEmission {
 				var labels: Set<String>?
 				for member in members {
 					let reads = valueReads(of: member)
-					if let labels, labels != Set(reads.map(\.name)) { return false }
+					if let labels, labels != Set(reads.map(\.name)) {
+						return false
+					}
 					labels = Set(reads.map(\.name))
-					if reads.contains(where: { $0.declaration != nilRead && declarations[$0.declaration].typeText == nil }) { return false }
+					if reads.contains(where: { $0.declaration != nilRead && declarations[$0.declaration].typeText == nil }) {
+						return false
+					}
 					// One declaration, or `nil`, per label within a member.
 					var declarationByLabel = [String: Int]()
 					for read in reads {
-						if let known = declarationByLabel[read.name], known != read.declaration { return false }
+						if let known = declarationByLabel[read.name], known != read.declaration {
+							return false
+						}
 						declarationByLabel[read.name] = read.declaration
 					}
 				}
@@ -981,10 +1003,14 @@ public enum PerTypeEmission {
 				var result = Set<Int>()
 				for member in membersByClass[key, default: []] {
 					for reference in ownReferencesByFunction[member, default: []] {
-						if let target = targetFunction(of: reference), let targetClass = classOf[target] { result.insert(targetClass) }
+						if let target = targetFunction(of: reference), let targetClass = classOf[target] {
+							result.insert(targetClass)
+						}
 					}
 					for nested in nestedByFunction[member, default: []] {
-						if let nestedClass = classOf[nested] { result.insert(nestedClass) }
+						if let nestedClass = classOf[nested] {
+							result.insert(nestedClass)
+						}
 					}
 				}
 				result.remove(key)
@@ -1136,13 +1162,19 @@ public enum PerTypeEmission {
 							return fail("a member reads a label from two declarations")
 						}
 						let resolved = readsByMember.compactMap { memberReads in memberReads.first(where: { $0.name == label })?.declaration }
-						if Set(resolved).count == 1, isCapturable(resolved[0], label: label) { continue }
-						if resolved.contains(where: { $0 != nilRead && declarations[$0].typeText == nil }) { return fail("a passed label has no spelled type") }
+						if Set(resolved).count == 1, isCapturable(resolved[0], label: label) {
+							continue
+						}
+						if resolved.contains(where: { $0 != nilRead && declarations[$0].typeText == nil }) {
+							return fail("a passed label has no spelled type")
+						}
 						let types = Set(resolved.filter { $0 != nilRead }.compactMap { declarations[$0].typeText })
 						let unwrapped = Set(types.map { $0.hasSuffix("?") ? String($0.dropLast()) : $0 })
 						guard unwrapped.count == 1, let base = unwrapped.first else { return fail("a passed label has different types") }
 						var type = types.count == 1 && !resolved.contains(nilRead) ? base + (types.first?.hasSuffix("?") == true ? "?" : "") : base + "?"
-						if type.contains("->"), !type.hasSuffix("?"), !type.contains("@escaping") { type = "@escaping " + type }
+						if type.contains("->"), !type.hasSuffix("?"), !type.contains("@escaping") {
+							type = "@escaping " + type
+						}
 						parameters.append((label, type))
 					}
 					nextParameters[key] = parameters
@@ -1151,7 +1183,9 @@ public enum PerTypeEmission {
 					nextParameters[key, default: []].map { "\($0.name):\($0.type)" } == parametersByClass[key, default: []].map { "\($0.name):\($0.type)" }
 				}
 				parametersByClass = nextParameters
-				if settled { break }
+				if settled {
+					break
+				}
 			}
 			// Every member of a class passes `nil` exactly where its first member does.
 			for key in keptClasses {
@@ -1260,7 +1294,9 @@ public enum PerTypeEmission {
 					else { continue }
 					let insideMember = plan.members.firstIndex(where: { functions[$0].lineRange.contains(reference.offset) })
 					// References inside a member other than the representative go with it.
-					if let insideMember, insideMember != 0 { continue }
+					if let insideMember, insideMember != 0 {
+						continue
+					}
 					var referenceEdits = [Edit]()
 					let nameRange = reference.offset..<(reference.offset + reference.length)
 					if let rightParen = reference.callRightParen {
@@ -1299,13 +1335,14 @@ public enum PerTypeEmission {
 				}
 				edits.append(.insert(plan.anchorLineStart, order: order, reindented))
 			}
-			let body = render(bodyStart..<bodyEnd, edits: edits)
-			return body
+			return render(bodyStart..<bodyEnd, edits: edits)
 		}
 
 		private func render(_ range: Range<Int>, edits: [Edit]) -> String {
 			let sorted = edits.enumerated().sorted { lhs, rhs in
-				if lhs.element.start != rhs.element.start { return lhs.element.start < rhs.element.start }
+				if lhs.element.start != rhs.element.start {
+					return lhs.element.start < rhs.element.start
+				}
 				// Insertions come before a replacement that starts at the same offset.
 				switch (lhs.element, rhs.element) {
 				case let (.insert(_, lhsOrder, _), .insert(_, rhsOrder, _)): return lhsOrder == rhsOrder ? lhs.offset < rhs.offset : lhsOrder < rhsOrder
