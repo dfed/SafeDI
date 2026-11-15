@@ -627,15 +627,49 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	}
 
 	@Test
-	func callingMockKnownIssues_listEachShapeCellsSeeds_inIncreasingOrder() {
-		#expect(SafeDIToolGraphFuzzerTests.knownIssueListProblems(Self.callingMockKnownIssues, corpusSeedCount: Self.callingMockCorpusSeedCount) == [])
-		for knownIssue in Self.callingMockKnownIssues {
-			let cells = Set(knownIssue.seeds.map { GraphFuzzerCallingMockDraw(seed: $0).cell })
-			#expect(cells.count == 1)
-			#expect(knownIssue.seeds.count == 10)
+	func callingMockKnownIssues_listOneShapeCellsSeedsPerEntry_inIncreasingOrder() {
+		#expect(Self.callingMockKnownIssueListProblems(Self.callingMockKnownIssues) == [])
+	}
+
+	@Test
+	func callingMockKnownIssueListProblems_reportNothing_whenFixDeletesSomeOfCellsSeeds() {
+		let partlyFixed = GraphFuzzerKnownIssue(reason: "A shape", signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [16, 72, 240])
+		let fixedCellDeleted = [GraphFuzzerKnownIssue(reason: "A shape", signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [0, 28])]
+
+		#expect(GraphFuzzerCallingMockDraw(seed: 16).cell.description == "callersOwnValue/internal/plain")
+		#expect(Self.callingMockKnownIssueListProblems([partlyFixed]) == [])
+		#expect(Self.callingMockKnownIssueListProblems(fixedCellDeleted) == [])
+	}
+
+	@Test
+	func callingMockKnownIssueListProblems_reportEntry_whenItListsTwoCellsOrControlCellOrNoSeedsOrDecreasingSeeds() {
+		let twoCells = GraphFuzzerKnownIssue(reason: "Two cells", signatures: [.callingMockAcceptedWhereTwinReportsShapeError], seeds: [0, 1])
+		let control = GraphFuzzerKnownIssue(reason: "The control", signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [20])
+		let noSeeds = GraphFuzzerKnownIssue(reason: "No seeds", signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [])
+		let decreasing = GraphFuzzerKnownIssue(reason: "Decreasing", signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [44, 16])
+
+		#expect(GraphFuzzerCallingMockDraw(seed: 20).cell.description == "noVisibleImplementation/internal/plain")
+		#expect(Self.callingMockKnownIssueListProblems([twoCells]) == ["The known issue \"Two cells\" lists the seeds of 2 cells: outerSeamValue/internal/deferred, outerSeamValue/internal/plain."])
+		#expect(Self.callingMockKnownIssueListProblems([control]) == ["The known issue \"The control\" lists seeds of the control, noVisibleImplementation/internal/plain, which passes on main."])
+		#expect(Self.callingMockKnownIssueListProblems([noSeeds]) == ["The known issue \"No seeds\" lists no seeds or no signatures."])
+		#expect(Self.callingMockKnownIssueListProblems([decreasing]) == ["The seeds of \"Decreasing\" are not in increasing order."])
+	}
+
+	/// What is wrong with `knownIssues` as a list of the calling-mock check's known issues: each entry lists seeds, in
+	/// increasing order, of one shape cell, never of the control. A fix that mends some of a cell's graphs deletes their
+	/// seeds, and one that mends a cell deletes its entry, so no count of seeds or of entries is required.
+	static func callingMockKnownIssueListProblems(_ knownIssues: [GraphFuzzerKnownIssue]) -> [String] {
+		var problems = SafeDIToolGraphFuzzerTests.knownIssueListProblems(knownIssues, corpusSeedCount: callingMockCorpusSeedCount)
+		for knownIssue in knownIssues {
+			let cells = Set(knownIssue.seeds.map { GraphFuzzerCallingMockDraw(seed: $0).cell }).sorted()
+			if cells.count > 1 {
+				problems.append("The known issue \"\(knownIssue.reason)\" lists the seeds of \(cells.count) cells: \(cells.map(\.description).joined(separator: ", ")).")
+			}
+			for cell in cells where cell.shape.isControl {
+				problems.append("The known issue \"\(knownIssue.reason)\" lists seeds of the control, \(cell), which passes on main.")
+			}
 		}
-		let listedCells = Set(Self.callingMockKnownIssues.flatMap { $0.seeds.map { GraphFuzzerCallingMockDraw(seed: $0).cell } })
-		#expect(listedCells == Set(GraphFuzzerCallingMockCell.drawnCells.filter { !$0.shape.isControl }))
+		return problems
 	}
 
 	// MARK: The public mock corpus
