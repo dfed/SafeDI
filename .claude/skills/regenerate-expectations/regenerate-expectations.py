@@ -53,9 +53,12 @@ import blocks, and literals of the test (or of no function) with blank lines bet
 base output in exactly one way, each is rewritten to its part of the head output: all of it after the imports for
 one fragment; for several, the lines from the one that opens the fragment's first top-level declaration to the one
 that closes its last, which needs the header, the imports, the blank lines between and every line that opens or
-closes a top-level declaration unchanged. Otherwise the record is refused with a reason, and its literals become
-manual items unless other records give them values that reassemble to the head output. Literals of one value in
-one test tile an output in more than one way, and are left with that reason.
+closes a top-level declaration unchanged. Otherwise the record is refused with a reason, as is one the literals
+tile in more than one way (two literals of one value in one test), and its literals become manual items unless
+other records give them values that reassemble to the head output. What a joined output cannot show is left as it
+is read: a declaration that changes at a fragment's edge stays with the fragment that held it, though it may be
+its neighbor's now when their opening and closing lines are equal, and everything a single fragment's output
+gains goes to that fragment. A file per fragment, which the plugin integration records, settles both.
 
 Exit status: 0 when every changed literal is explained; 1 when some are unexplained or manual (read the report).
 An output that changed but matched no literal, such as one no test compares, is listed first in the report and
@@ -765,8 +768,10 @@ def fragments_start(content, header):
 
 def tile_fragments(literals, content, header):
     """How `content` is the header, import blocks and then `literals`' values, each once or more, with blank lines
-    between: ([(literal, start, end, capture spans, ambiguous)], None), or (None, reason) with a reason only when
-    they tile it in more than one way. A literal shorter than `SHORTEST_ANCHOR` tiles nothing."""
+    between: ([(literal, start, end, capture spans, ambiguous)], None); the first of several ways with
+    `FRAGMENTS_AMBIGUOUS`, which shows the literals a test compares with it and no more; (None, None) when they do
+    not tile it, and (None, reason) when it has too many fragments. A literal shorter than `SHORTEST_ANCHOR` tiles
+    nothing."""
     start = fragments_start(content, header)
     if start == len(content):
         return None, None
@@ -820,7 +825,7 @@ def tile_fragments(literals, content, header):
     if count == 0:
         return None, None
     if count > 1:
-        return None, FRAGMENTS_AMBIGUOUS
+        return first, FRAGMENTS_AMBIGUOUS
     return first, None
 
 
@@ -1313,6 +1318,12 @@ def apply(arguments):
                 fragment_reasons[record["key"]] = reason
             continue
         head = head_by_key.get(record["key"])
+        if reason is not None:
+            # Tiled in more than one way: nothing is taken from this record, but its literals are the test's.
+            fragment_reasons[record["key"]] = reason
+            if head is not None:
+                refused_fragment_records.append((record, [(path_of_literal[id(literal)][0], literal, start, end) for literal, start, end, _, _ in tiling], reason))
+            continue
         head_texts = [None] * len(tiling)
         if head is not None:
             head_texts, reason = head_fragments(record["content"], head["content"], tiling, header)
@@ -1370,6 +1381,7 @@ def apply(arguments):
     # from other records only to values that, put where the fragments stood, give that head. Otherwise each is left
     # for a person, with the reason.
     refused_literals = {}  # (path, literal start) → (reason, the refused records' test names)
+    reassembled_record_keys = set()
     for record, fragments, reason in refused_fragment_records:
         head_content = head_by_key[record["key"]]["content"]
         assembled = []
@@ -1383,6 +1395,7 @@ def apply(arguments):
             assembled.append(record["content"][position:start] + (head_bodies[0] if head_bodies else record["content"][start:end]))
             position = end
         if assembled is not None and "".join(assembled) + record["content"][position:] == head_content:
+            reassembled_record_keys.add(record["key"])
             continue
         for relative_path, literal, _, _ in fragments:
             outcomes.setdefault((relative_path, literal.start), LiteralOutcome(files[relative_path], literal))
@@ -1453,7 +1466,7 @@ def apply(arguments):
     changed_without_literal = sorted(
         (relative_path, record["line"], record.get("testName", ""), record["outputName"], record.get("module"), record.get("integration"))
         for key, (relative_path, record, reason) in unmapped_reasons.items()
-        if reason != WRITTEN_FOR_THE_NEW_OUTPUT and key in head_by_key and head_by_key[key]["content"] != record["content"]
+        if reason != WRITTEN_FOR_THE_NEW_OUTPUT and key not in reassembled_record_keys and key in head_by_key and head_by_key[key]["content"] != record["content"]
     )
     summary = {
         "rewritten": len(explained) + len(unexplained),
@@ -2035,7 +2048,7 @@ def self_test(root):
         [generation_record("combined", 4, SELF_TEST_HEADER + imports + added + "\n\n" + second_fragment), generation_record("root", 4, SELF_TEST_HEADER + imports + added)],
     )
     status, summary = test.run()
-    expect(status == 1 and summary["unexplained"] == 1 and summary["fragmentRecords"] == 1 and summary["changedWithoutLiteral"] == 1, f"fragments, added declaration: {status} {summary}")
+    expect(status == 1 and summary["unexplained"] == 1 and summary["manual"] == 0 and summary["fragmentRecords"] == 1 and summary["changedWithoutLiteral"] == 0, f"fragments, added declaration: {status} {summary}")
     expect(test.source() == fragment_test(added, second_fragment), "fragments, added declaration: the file of its own places it")
 
     # fragments that disagree: the combined file and the file of its own give one literal different values.
@@ -2163,8 +2176,45 @@ def self_test(root):
         [generation_record("k", 4, SELF_TEST_HEADER + first_fragment.replace("OldService", "NewService") + "\n\n" + first_fragment)],
     )
     status, summary = test.run()
-    expect(status == 0 and summary["rewritten"] == 0 and summary["changedWithoutLiteral"] == 1 and test.source() == original, f"fragments, ambiguous: {status} {summary}")
-    expect(FRAGMENTS_AMBIGUOUS in test.report_text(), "fragments, ambiguous: the report says why the record was left")
+    expect(status == 1 and summary["rewritten"] == 0 and summary["manualReasons"] == [FRAGMENTS_AMBIGUOUS] and summary["changedWithoutLiteral"] == 1 and test.source() == original, f"fragments, ambiguous: {status} {summary}")
+
+    # a constant shared by a test whose record tiles in one way and a test whose record tiles in two, which holds
+    # another value for it: the constant is left for a person.
+    ambiguous_sharer_test = shared_test.replace('"Service": """\n\t\t\textension Service {\n\t\t\t    let value = OldValue()\n\t\t\t}\n\t\t\t"""', '"Other": """\n\t\t\textension Shared {\n\t\t\t    let value = OldShared()\n\t\t\t}\n\t\t\t"""')
+    test = case("fragments-ambiguous-sharer")
+    test.test_file(ambiguous_sharer_test)
+    test.records(
+        [generation_record("first", 10, SELF_TEST_HEADER + shared_fragment + "\n\n" + first_fragment, test_name="first()"), generation_record("second", 19, SELF_TEST_HEADER + shared_fragment + "\n\n" + shared_fragment, test_name="second()")],
+        [generation_record("first", 10, SELF_TEST_HEADER + shared_fragment.replace("OldShared", "NewShared") + "\n\n" + first_fragment, test_name="first()"), generation_record("second", 19, SELF_TEST_HEADER + shared_fragment.replace("OldShared", "OtherShared") + "\n\n" + shared_fragment.replace("OldShared", "OtherShared"), test_name="second()")],
+        {"rename": [{"name": "shared", "table": {"OldShared": "NewShared"}, "wordBoundaries": True}]},
+    )
+    status, summary = test.run()
+    expect(ambiguous_sharer_test != shared_test and status == 1 and summary["rewritten"] == 0 and summary["manualReasons"] == [FRAGMENTS_AMBIGUOUS] and test.source() == ambiguous_sharer_test, f"fragments, ambiguous sharer: {status} {summary}")
+
+    # fragments of a call made through a helper function are the literals of the test the record names.
+    helper_test = 'struct FileTests {\n\tfunc check(_ expected: [String: String]) {\n\t\texpect(run(), expected)\n\t}\n\n\t@Test\n\tfunc test() {\n\t\tcheck(files(rootFiles: ["Root": """\n\t\t\textension Root {\n\t\t\t    let service = OldService()\n\t\t\t}\n\t\t\t""", "Service": """\n\t\t\textension Service {\n\t\t\t    let value = OldValue()\n\t\t\t}\n\t\t\t"""]))\n\t}\n}\n'
+    test = case("fragments-helper")
+    test.test_file(helper_test)
+    test.records(
+        [generation_record("k", 3, SELF_TEST_HEADER + first_fragment + "\n\n" + second_fragment, test_file_id="Mod/FileTests.swift", test_line=7)],
+        [generation_record("k", 3, SELF_TEST_HEADER + first_fragment.replace("OldService", "NewService") + "\n\n" + second_fragment.replace("OldValue", "NewValue"), test_file_id="Mod/FileTests.swift", test_line=7)],
+        fragment_rules,
+    )
+    status, summary = test.run()
+    expect(status == 0 and summary["explained"] == 2 and test.source() == helper_test.replace("OldService", "NewService").replace("OldValue", "NewValue"), f"fragments, helper: {status} {summary}")
+
+    # fragments that leave the top level open: the first closes nothing, so no literal can take its part.
+    open_first = "extension Root {\n    let service = OldService()"
+    open_second = "    let value = OldValue()\n}\n\nextension Service {\n}"
+    test = case("fragments-open")
+    test.test_file(fragment_test(open_first, open_second))
+    original = test.source()
+    test.records(
+        [generation_record("k", 4, SELF_TEST_HEADER + open_first + "\n\n" + open_second)],
+        [generation_record("k", 4, SELF_TEST_HEADER + open_first.replace("OldService", "NewService") + "\n\n" + open_second)],
+    )
+    status, summary = test.run()
+    expect(status == 1 and summary["manualReasons"] == [FRAGMENT_UNBALANCED] * 2 and test.source() == original, f"fragments, open: {status} {summary}")
 
     # literals too short to prove anything tile nothing, and text between fragments that is no blank line stops it.
     test = case("fragments-weak")
@@ -2211,7 +2261,7 @@ def main(argv):
         if not all((arguments.base_records, arguments.head_records, arguments.rules, arguments.report, arguments.checkout)):
             parser.error("applying needs --base-records, --head-records, --rules, --report and --checkout")
         status, summary = apply(arguments)
-        print(f"rewritten {summary['rewritten']}, explained {summary['explained']}, unexplained {summary['unexplained']}, manual {summary['manual']}; see {os.path.join(arguments.report, 'report.txt')}")
+        print(f"rewritten {summary['rewritten']}, explained {summary['explained']}, unexplained {summary['unexplained']}, manual {summary['manual']}, changed without literal {summary['changedWithoutLiteral']}; see {os.path.join(arguments.report, 'report.txt')}")
         return status
     except ApplyError as error:
         print(f"error: {error}", file=sys.stderr)
