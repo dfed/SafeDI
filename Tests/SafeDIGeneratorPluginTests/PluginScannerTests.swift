@@ -206,6 +206,105 @@ struct PluginScannerStripCommentsAndStringsTests {
 		#expect(stripped.contains("@Instantiable(isRoot: true)"))
 	}
 
+	@Test
+	func preservesInstantiable_whenSimpleRegexContainsSlashStarAndLaterMultilineStringEscapesItsDelimiterBeforeStarSlash() {
+		// Read without its escape, `\"""` would close the multi-line string,
+		// and the `*/` after it would close the regex's `/*`, so the stripper
+		// would remove everything between them.
+		let source = #"""
+		let pattern = /\/*/
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {}
+		let template = """
+			\"""*/
+			"""
+		"""#
+		let stripped = stripSwiftCommentsAndStrings(from: source)
+		#expect(stripped == "let pattern = /\\/*/\n@Instantiable(isRoot: true)\npublic struct Root: Instantiable {}\nlet template = \n\n")
+	}
+
+	@Test
+	func preservesInstantiable_whenSimpleRegexContainsSlashStarAndLaterStringEscapesQuoteBeforeStarSlash() {
+		// Read without its escape, `"\"` would be a whole string, and the `*/`
+		// after it would close the regex's `/*`, so the stripper would remove
+		// everything between them.
+		let source = #"""
+		let pattern = /\/*/
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {}
+		let escaped = "\"*/"
+		"""#
+		let stripped = stripSwiftCommentsAndStrings(from: source)
+		#expect(stripped == "let pattern = /\\/*/\n@Instantiable(isRoot: true)\npublic struct Root: Instantiable {}\nlet escaped = ")
+	}
+
+	@Test
+	func preservesInstantiable_whenSimpleRegexContainsSlashStarAndLaterExtendedRegexEscapesItsDelimiterBeforeStarSlash() {
+		// Read without its escape, `\/#` would close the extended regex
+		// literal, and the `*/` after it would close the simple regex's `/*`,
+		// so the stripper would remove everything between them.
+		let source = #"""
+		let pattern = /\/*/
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {}
+		let extended = #/a\/#*/#
+		"""#
+		let stripped = stripSwiftCommentsAndStrings(from: source)
+		#expect(stripped == "let pattern = /\\/*/\n@Instantiable(isRoot: true)\npublic struct Root: Instantiable {}\nlet extended = ")
+	}
+
+	@Test
+	func preservesInstantiable_whenSimpleRegexContainsSlashStarAndLaterLineCommentContainsStarSlash() {
+		// The `*/` is inside a line comment, so it would close the regex's
+		// `/*` only if that `/*` opened a block comment; read as a closer, it
+		// would make the stripper remove everything between them.
+		let source = #"""
+		let pattern = /\/*/
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {}
+		// A block comment would close here: */
+		"""#
+		let stripped = stripSwiftCommentsAndStrings(from: source)
+		#expect(stripped == "let pattern = /\\/*/\n@Instantiable(isRoot: true)\npublic struct Root: Instantiable {}\n")
+	}
+
+	@Test
+	func stripsBlockComment_whenCommentHoldsDoubleSlashAndClosesOnALaterLine() {
+		let source = """
+		/* See https://example.com/SafeDI
+		 @Instantiable(isRoot: true) */
+		public struct Root {}
+		"""
+		let stripped = stripSwiftCommentsAndStrings(from: source)
+		#expect(stripped == "\n\npublic struct Root {}")
+	}
+
+	@Test
+	func stripsMultilineExtendedRegexLiteral_preservingLines_whenLiteralEscapesANewline() {
+		let source = #"""
+		let pattern = #/
+		  @Instantiable \
+		  \(isRoot: \s* true\)
+		  /#
+		public struct Root {}
+		"""#
+		let stripped = stripSwiftCommentsAndStrings(from: source)
+		#expect(stripped == "let pattern = \n\n\n\npublic struct Root {}")
+	}
+
+	@Test
+	func preservesFollowingLine_whenRawStringHoldsAQuote() {
+		// The stripper reads `#"say "hi"#` as two strings, the second of which
+		// runs to the end of its line, which must end it and stay one line.
+		let source = ##"""
+		let quote = #"say "hi"#
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {}
+		"""##
+		let stripped = stripSwiftCommentsAndStrings(from: source)
+		#expect(stripped == "let quote = #hi\n@Instantiable(isRoot: true)\npublic struct Root: Instantiable {}")
+	}
+
 	// MARK: Regression — the exact shape that caused PR #271
 
 	@Test
