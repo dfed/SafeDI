@@ -3200,14 +3200,14 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		            nonisolated public struct `my gadget_Values` {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let `my gadget`: (`my gadget_Values`) -> Built
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let `my gadget`: (`my gadget_Values`) -> __safeDI_Built
 
-		                public init(`my gadget`: @escaping (`my gadget_Values`) -> Built) {
+		                public init(`my gadget`: @escaping (`my gadget_Values`) -> __safeDI_Built) {
 		                    self.`my gadget` = `my gadget`
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.`my gadget` = { _ in __safeDI_builder() }
 		                }
 		            }
@@ -3220,14 +3220,14 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		        nonisolated public struct holderMaker_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built>: Sendable {
-		            public let holderMaker: @Sendable (holderMaker_Values) -> SafeDIScope_Gadget.Holder_Scope.__safeDI_Builder<Built>
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let holderMaker: @Sendable (holderMaker_Values) -> SafeDIScope_Gadget.Holder_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(holderMaker: @escaping @Sendable (holderMaker_Values) -> SafeDIScope_Gadget.Holder_Scope.__safeDI_Builder<Built>) {
+		            public init(holderMaker: @escaping @Sendable (holderMaker_Values) -> SafeDIScope_Gadget.Holder_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.holderMaker = holderMaker
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		                self.holderMaker = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
@@ -3279,14 +3279,14 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		            nonisolated public struct `my widget_Values` {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<Built> {
-		                public let `my widget`: (`my widget_Values`) -> Built
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let `my widget`: (`my widget_Values`) -> __safeDI_Built
 
-		                public init(`my widget`: @escaping (`my widget_Values`) -> Built) {
+		                public init(`my widget`: @escaping (`my widget_Values`) -> __safeDI_Built) {
 		                    self.`my widget` = `my widget`
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.`my widget` = { _ in __safeDI_builder() }
 		                }
 		            }
@@ -3299,14 +3299,14 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		        nonisolated public struct panelBuilder_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<Built>: Sendable {
-		            public let panelBuilder: @Sendable (panelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<Built>
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let panelBuilder: @Sendable (panelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(panelBuilder: @escaping @Sendable (panelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<Built>) {
+		            public init(panelBuilder: @escaping @Sendable (panelBuilder_Values) -> SafeDIScope_Widget.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.panelBuilder = panelBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> Built) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		                self.panelBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
