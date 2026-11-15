@@ -5391,6 +5391,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	static let standardIndent = "    "
 
+	/// The empty enum a seam's or a public mock's module generates beside the code it generates for `typeName`, named for
+	/// the signature that code was generated from, which every call of that code names on the line before it
+	/// (`SeamCall.guardLine(for:)`, `PublicMockCall.guardLine(for:)`), so that a call generated from another signature
+	/// fails to compile there.
+	static func guardEnumDeclaration(extending typeName: String, named guardTypeName: String) -> String {
+		"""
+		extension \(typeName) {
+		\(standardIndent)public enum \(guardTypeName) {}
+		}
+		"""
+	}
+
 	// MARK: Code Generation
 
 	/// Generates code for this scope. Dependency-tree mode emits the full subtree
@@ -5506,7 +5518,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// signature fails to compile here rather than pass `nil` where the initializer expects a value. The
 			// statement is emitted as the body's only generated property, so the call is made in a builder function.
 			let seamGuardLines: [String] = if let seamCall {
-				["\(Self.standardIndent)_ = \(concreteTypeName).\(seamCall.guardTypeName).self\(seamCall.comment.lineEnd(for: instantiable.concreteInstantiable))"]
+				["\(Self.standardIndent)\(seamCall.guardLine(for: instantiable.concreteInstantiable))"]
 			} else {
 				[]
 			}
@@ -6331,9 +6343,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		\((scopeTypes + initializers).joined(separator: "\n\n"))
 		}
 
-		extension \(typeName) {
-		    public enum \(signature.guardTypeName) {}
-		}
+		\(Self.guardEnumDeclaration(extending: typeName, named: signature.guardTypeName))
 		"""
 	}
 
@@ -7139,9 +7149,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				    }
 				}
 
-				extension \(typeName) {
-				    public enum \(publicMockPlan.guardTypeName) {}
-				}
+				\(Self.guardEnumDeclaration(extending: typeName, named: publicMockPlan.guardTypeName))
 				"""
 			} else {
 				"""
@@ -7459,9 +7467,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			))
 			lines.append("}")
 			lines.append("")
-			lines.append("extension \(typeName) {")
-			lines.append("\(indent)public enum \(publicMockPlan.guardTypeName) {}")
-			lines.append("}")
+			lines.append(contentsOf: Self.guardEnumDeclaration(extending: typeName, named: publicMockPlan.guardTypeName).components(separatedBy: "\n"))
 		} else {
 			lines.append("\(indent)}")
 			lines.append("}")
@@ -11078,5 +11084,14 @@ extension SeamSignature.Hole.Field {
 			isReceivedOnlyIfAvailable: isReceivedOnlyIfAvailable,
 			deferral: deferral,
 		)
+	}
+}
+
+extension SeamCall {
+	/// The line before a call of the seam's generated initializer that names the seam's guard enum, so that a call generated
+	/// from another signature fails to compile there rather than pass `nil` where the initializer expects a value, with a
+	/// comment saying what to do then.
+	func guardLine(for concreteType: TypeDescription) -> String {
+		"_ = \(concreteType.asSource).\(guardTypeName).self\(comment.lineEnd(for: concreteType))"
 	}
 }
