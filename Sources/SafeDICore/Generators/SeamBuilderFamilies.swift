@@ -407,9 +407,9 @@ extension DependencyTreeGenerator {
 					switch enumCase.kind {
 					case let .place(placeSites):
 						sites = placeSites
-					case let .nested(innerKey, _),
+					case let .nested(innerKey, _, _),
 					     let .inner(innerKey, _, _),
-					     let .fill(_, _, innerKey, _):
+					     let .fill(_, _, innerKey, _, _):
 						innerKeys.append(innerKey)
 					}
 					for site in sites where seenSites.insert(site).inserted {
@@ -732,12 +732,12 @@ extension DependencyTreeGenerator {
 		for enumIndex in scopeEnums.indices {
 			guard let component = componentByKey[scopeEnums[enumIndex].key] else { continue }
 			for caseIndex in scopeEnums[enumIndex].cases.indices {
-				if case let .nested(innerKey, _) = scopeEnums[enumIndex].cases[caseIndex].kind, componentByKey[innerKey] == component {
-					scopeEnums[enumIndex].cases[caseIndex].kind = .nested(enumKey: innerKey, isIndirect: true)
+				if case let .nested(innerKey, enumType, _) = scopeEnums[enumIndex].cases[caseIndex].kind, componentByKey[innerKey] == component {
+					scopeEnums[enumIndex].cases[caseIndex].kind = .nested(enumKey: innerKey, enumType: enumType, isIndirect: true)
 				} else if case let .inner(innerKey, enumType, _) = scopeEnums[enumIndex].cases[caseIndex].kind, componentByKey[innerKey] == component {
 					scopeEnums[enumIndex].cases[caseIndex].kind = .inner(enumKey: innerKey, enumType: enumType, isIndirect: true)
-				} else if case let .fill(innerKey, innerEnumType, heldKey, _) = scopeEnums[enumIndex].cases[caseIndex].kind, componentByKey[heldKey] == component {
-					scopeEnums[enumIndex].cases[caseIndex].kind = .fill(innerKey: innerKey, innerEnumType: innerEnumType, enumKey: heldKey, isIndirect: true)
+				} else if case let .fill(innerKey, innerEnumType, heldKey, heldEnumType, _) = scopeEnums[enumIndex].cases[caseIndex].kind, componentByKey[heldKey] == component {
+					scopeEnums[enumIndex].cases[caseIndex].kind = .fill(innerKey: innerKey, innerEnumType: innerEnumType, enumKey: heldKey, enumType: heldEnumType, isIndirect: true)
 				}
 			}
 		}
