@@ -538,7 +538,8 @@ extension DependencyTreeGenerator {
 	/// The stem each of `holeTypes` is named by, from what it builds alone: its instantiated type as an identifier where
 	/// the type it returns is the same, else the instantiated type's followed by `_` and the returned type's. Only a stem
 	/// that equals another's, or gives a label another gives, is named apart, by its types; no rung names an owner, a
-	/// path or a parameter, so adding a place, or a builder of another hole type, never renames a hole type.
+	/// path or a parameter, so adding a place of a hole type already built never renames one, and adding a hole type renames
+	/// another only when their stems or labels coincide.
 	private static func stems(of holeTypes: [SeamSignature.HoleType]) -> [SeamSignature.HoleType: String] {
 		func stem(of type: TypeDescription) -> String {
 			type.simplified.asIdentifier.spelledWithoutBackticks
