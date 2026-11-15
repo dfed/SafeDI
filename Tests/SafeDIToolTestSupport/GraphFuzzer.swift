@@ -9171,14 +9171,22 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		var features = Set<GraphFuzzerSeamOutputFeature>()
 		// The widest tier of each seam: the first of its initializers a file declares.
 		var widestTiers = [(seamTypeName: String, parameters: [String])]()
+		// The labels of each seam's builders, which the initializer only generated code calls takes over a scope type, where
+		// the plain one can take a closure that takes nothing.
+		var builderLabelsBySeam = [String: Set<String>]()
 		for contents in generatedFiles.values where contents.contains("enum __safeDI_") {
 			for initializer in GraphFuzzerOracle.seamInitializerParameters(inGeneratedFile: contents) where !widestTiers.contains(where: { $0.seamTypeName == initializer.seamTypeName }) {
 				widestTiers.append(initializer)
 			}
+			for initializer in GraphFuzzerOracle.seamInitializers(inGeneratedFile: contents, keepsGeneratedOnlySpelling: true) {
+				for parameter in initializer.parameters where parameter.contains("SafeDIScope_") || parameter.contains("SafeDISendableScope_") {
+					builderLabelsBySeam[initializer.seamTypeName, default: []].formUnion(GraphFuzzerOracle.generatedOnlyLabel(of: parameter).map { [$0] } ?? [])
+				}
+			}
 		}
 		for (seamTypeName, parameters) in widestTiers {
 			// A builder for a hole is no pass-through: `holeOutputFeatures` reads it.
-			for parameter in parameters where !parameter.contains("SafeDIScope_") && !parameter.contains("SafeDISendableScope_") {
+			for parameter in parameters where !builderLabelsBySeam[seamTypeName, default: []].contains(parameter.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces)) {
 				let label = parameter.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces)
 				let type = parameter.drop { $0 != ":" }.dropFirst().trimmingCharacters(in: .whitespaces)
 				if parameterKinds.isOnlyIfAvailable(label: label, ofSeam: seamTypeName) {
@@ -9212,12 +9220,15 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// `generatedFiles`, an accepted graph's output.
 	static func holeOutputFeatures(generatedFiles: [String: String]) -> Set<GraphFuzzerHoleOutputFeature> {
 		var features = Set<GraphFuzzerHoleOutputFeature>()
-		let builderParameter = try! NSRegularExpression(pattern: #"\b\w+Builder\w*: @escaping (@Sendable )?\((\w+\.)?SafeDI(?:Sendable)?Scope_"#)
+		// A builder over a scope enum, or a builder struct, which an initializer only generated code calls takes.
+		let builderParameter = try! NSRegularExpression(pattern: #"\b\w+Builder\w*: (?:@escaping (@Sendable )?\((\w+\.)?SafeDI(?:Sendable)?Scope_|(\w+\.)?SafeDI(?:Sendable)?Scope_\w+\.__safeDI_Builder<)"#)
 		let otherSeamsStruct = try! NSRegularExpression(pattern: #"@escaping (?:@Sendable )?\((\w+)\.SafeDI(?:Sendable)?Scope_"#)
 		let enumCaseOfInnerSeam = try! NSRegularExpression(pattern: #"^ +(?:indirect )?case \w+\((?:\w+, )?\w+\.SafeDI(?:Sendable)?Scope_"#)
 		// A fill takes a case's payload; a dispatcher, the enum, which is no fill.
 		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+_Scope_*)?\.\w+_Values"#)
 		let dispatcherDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
+		// A dispatcher that returns a level's builder struct, which a call passes by calling it.
+		let levelFunctionDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable (?:nonisolated )?)?func (__safeDI_\w+)\([^)]*\) -> (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?\.__safeDI_Builder<"#)
 		let enclosingDispatcherDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func __safeDI_\w+\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
 		// A case holding its fill's body ends its line at the colon; one that calls a fill or a dispatcher returns on its line.
 		let inlinedFillCase = try! NSRegularExpression(pattern: #"^( *)case (?:let )?\.[^:]+:$"#)
@@ -9235,7 +9246,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			var dispatcherNamesBySeam = [String: Set<String>]()
 			var currentDispatcher: (indentation: String, isSendable: Bool, seam: String)?
 			for line in lines {
-				if let dispatcher = firstMatch(dispatcherDeclaration, in: line) {
+				if let dispatcher = firstMatch(dispatcherDeclaration, in: line) ?? firstMatch(levelFunctionDeclaration, in: line) {
 					dispatcherNamesBySeam[dispatcher[2], default: []].insert(dispatcher[1])
 				}
 			}
@@ -9250,7 +9261,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				}
 				if line.contains("init("), firstMatch(builderParameter, in: line) != nil {
 					features.insert(.builderParameter)
-					if line.contains("@Sendable (SafeDISendableScope_") {
+					if line.contains("@Sendable (SafeDISendableScope_") || line.contains(": SafeDISendableScope_") {
 						features.insert(.sendableBuilder)
 					}
 					if let extendedType, let match = firstMatch(otherSeamsStruct, in: line), match[1] != extendedType {
@@ -9306,7 +9317,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 						namesPassed.append(name)
 					}
 				}
-				let passesFill = { (body: String) in namesPassed.contains { body.contains(": \($0))") || body.contains(": \($0),") } }
+				let passesFill = { (body: String) in namesPassed.contains { body.contains(": \($0))") || body.contains(": \($0),") || body.contains(": \($0)())") || body.contains(": \($0)(),") } }
 				let callsInside = lines[(index + 1)..<end].filter { $0.contains("return ") && passesFill($0) }
 				guard !callsInside.isEmpty else { continue }
 				features.insert(.fillPassedToItsSeam)
@@ -11735,7 +11746,7 @@ enum GraphFuzzerOracle {
 	/// `__safeDI_` prefix: they are the labels of the plain initializer a module that sets
 	/// `generatePlainDependencyTreeInitializers` generates beside it, which names the same builders.
 	static func holeBuilderNames(in generatedFiles: [String: String]) -> Set<String> {
-		let scopeDeclaration = try! NSRegularExpression(pattern: #"^    (?:@frozen )?(?:public |package |internal )?(?:enum|struct) (SafeDI\w*Scope_\w+) \{$"#)
+		let scopeDeclaration = try! NSRegularExpression(pattern: #"^    (?:@frozen )?(?:nonisolated )?(?:public |package |internal )?(?:enum|struct) (SafeDI\w*Scope_\w+) \{$"#)
 		let scopeCase = try! NSRegularExpression(pattern: #"^        (?:indirect )?case (\w+)"#)
 		func firstCapture(of expression: NSRegularExpression, in line: String) -> String? {
 			let range = NSRange(line.startIndex..., in: line)
@@ -12451,9 +12462,14 @@ enum GraphFuzzerOracle {
 		var extendedType: String?
 		var guardedTypes = Set<String>()
 		var initializers = [(seamTypeName: String, access: String, parameters: [String])]()
+		// The plain initializer a module that sets `generatePlainDependencyTreeInitializers` declares just before the
+		// initializer only generated code calls of the same tier, which is read for that tier where it exists: a builder
+		// the generated-only initializer takes as a builder struct, the plain one takes as a closure that takes nothing.
+		var precedingPlainParameters: [String]?
 		for line in contents.split(separator: "\n") {
 			if line.hasPrefix("extension "), line.hasSuffix(" {") {
 				extendedType = String(line.dropFirst("extension ".count).dropLast(2))
+				precedingPlainParameters = nil
 			} else if line.hasPrefix("}") {
 				extendedType = nil
 			} else if let extendedType, line.hasPrefix("    "), !line.hasPrefix("     ") {
@@ -12466,8 +12482,17 @@ enum GraphFuzzerOracle {
 					let parameters = topLevelParameters(String(trimmedLine[parametersStart.upperBound..<trimmedLine.index(trimmedLine.endIndex, offsetBy: -3)]))
 					// A tier that takes no argument has one initializer; any other tier's plain initializer takes no prefixed
 					// label.
-					guard parameters.allSatisfy({ generatedOnlyLabel(of: $0) != nil }) else { continue }
-					initializers.append((extendedType, access, parameters.map { callerSpelling(ofParameter: keepsGeneratedOnlySpelling ? $0 : plainSpelling(ofGeneratedOnlyParameter: $0), of: extendedType) }))
+					guard parameters.allSatisfy({ generatedOnlyLabel(of: $0) != nil }) else {
+						precedingPlainParameters = parameters
+						continue
+					}
+					let plainParameters = if let precedingPlainParameters, precedingPlainParameters.count == parameters.count {
+						precedingPlainParameters
+					} else {
+						parameters.map(plainSpelling(ofGeneratedOnlyParameter:))
+					}
+					precedingPlainParameters = nil
+					initializers.append((extendedType, access, (keepsGeneratedOnlySpelling ? parameters : plainParameters).map { callerSpelling(ofParameter: $0, of: extendedType) }))
 				}
 			}
 		}
