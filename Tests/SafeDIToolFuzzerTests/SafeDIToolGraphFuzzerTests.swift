@@ -5670,50 +5670,50 @@ struct SafeDIToolGraphFuzzerTests {
 	/// How many of the public mock corpus's accepted graphs show each gating draw (`isCountedWhenAccepted`), counted
 	/// whether or not the graph fails: at least ten each (`acceptedGatingDrawCounts_reachTheFloor`). Pins: derived on CI.
 	static let publicMockCorpusAcceptedDrawFeatureCounts: [GraphFuzzerPublicMockDrawFeature: Int] = [
-		.placeInsidePublicMockFill: 0,
-		.placeInsidePublicMockFillFilledByConsumer: 0,
-		.placeInsidePublicMockFillOnForwardingRoute: 0,
-		.placeInsidePublicMockFillPassedUp: 0,
-		.placeInsidePublicMockFillReadsForwardedValue: 0,
-		.placeInsidePublicMockFillReadsOuterValue: 0,
-		.selfBuildingPublicMock: 0,
-		.selfBuildingPublicMockFillReadsToken: 0,
-		.selfBuildingPublicMockPassedUp: 0,
-		.selfBuildingPublicMockPlaceBeneath: 0,
-		.selfBuildingPublicMockThroughSendableInstantiator: 0,
-		.selfBuildingPublicMockThroughStep: 0,
+		.placeInsidePublicMockFill: 324,
+		.placeInsidePublicMockFillFilledByConsumer: 237,
+		.placeInsidePublicMockFillOnForwardingRoute: 134,
+		.placeInsidePublicMockFillPassedUp: 87,
+		.placeInsidePublicMockFillReadsForwardedValue: 62,
+		.placeInsidePublicMockFillReadsOuterValue: 70,
+		.selfBuildingPublicMock: 350,
+		.selfBuildingPublicMockFillReadsToken: 74,
+		.selfBuildingPublicMockPassedUp: 76,
+		.selfBuildingPublicMockPlaceBeneath: 116,
+		.selfBuildingPublicMockThroughSendableInstantiator: 33,
+		.selfBuildingPublicMockThroughStep: 92,
 	]
 
 	/// The least share of the public mock corpus's accepted graphs whose generated code shows each output feature, in
 	/// percent: the floor of the share the corpus run observed, for each feature the generated code shows today. The
 	/// commits that make another feature show pin it in turn.
 	static let publicMockCorpusOutputFeatureMinimumShares: [GraphFuzzerPublicMockOutputFeature: Int] = [
-		.allNonPublicConfiguration: 40,
+		.allNonPublicConfiguration: 39,
 		.configurationStruct: 32,
 		.constructionFunction: 80,
-		.consumerCall: 78,
-		.consumerErasedCall: 18,
+		.consumerCall: 75,
+		.consumerErasedCall: 17,
 		.consumerErasedInline: 2,
 		.consumerFillReentersPublicMock: 2,
 		.consumerFillsHole: 3,
-		.consumerInline: 34,
+		.consumerInline: 33,
 		.consumerPassesHoleBuilderUp: 9,
-		.consumerPassesInstance: 42,
+		.consumerPassesInstance: 41,
 		.consumerSendableFactory: 16,
-		.defaultRewritten: 85,
+		.defaultRewritten: 82,
 		.forwardedProvider: 3,
 		.holeBuilder: 34,
 		.isolatedConstruction: 2,
 		.moduleConfiguration: 80,
-		.publicTier: 95,
-		.secondTier: 57,
+		.publicTier: 92,
+		.secondTier: 55,
 		.sendableHoleBuilder: 1,
 		.thirdTier: 0,
-		.unreadTypeComment: 26,
+		.unreadTypeComment: 25,
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x59B7B3B0AAC6F4A4
+	static let publicMockCorpusFixtureHash: UInt64 = 0x7EE7AF849D3CD130
 	static let publicMockCorpusAcceptedSeedCount = 863
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x0ACCA7FED6243E41
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -5751,7 +5751,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x1C53AB818A2DF81A
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xBD890792FBF2CDE
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -5762,11 +5762,12 @@ struct SafeDIToolGraphFuzzerTests {
 			seeds: [12, 65, 103, 106, 167, 251, 351, 407, 433, 528, 562, 708, 771, 947],
 		),
 		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
-		// cycle through it.
+		// cycle through it, and in C1's gating draw, a `.public` type that builds itself again through `SelfStep`, whose two
+		// names the move across wrapper names now and then puts on either side of `Instantiator`.
 		GraphFuzzerKnownIssue(
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [33, 301, 697, 832],
+			seeds: [33, 99, 171, 186, 213, 242, 265, 301, 387, 468, 539, 572, 618, 649, 659, 669, 697, 701, 703, 717, 730, 821, 825, 832, 840, 884, 897, 944],
 		),
 		// A shape the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
 		// before, a consumer held a holder the public tier omitted, which the tool rejected; now `Dock`'s own declaration
@@ -5781,7 +5782,12 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.mockCode)],
-			seeds: [176, 455, 685, 799],
+			seeds: [176, 455, 685],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(publicMockBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
+			signatures: [.renamedGraphDiffers(.mockCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
+			seeds: [799],
 		),
 		// The design's output stability: an internal consumer that passes up the places of two public mocks of one hole
 		// type names the builders it takes for them apart, after each called type, so `T6Twin`'s call renames `T6`'s.
