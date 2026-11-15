@@ -443,6 +443,25 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(listedCells == Set(GraphFuzzerCallingMockCell.drawnCells.filter { !$0.shape.isControl || ($0.shape == .implementationReceivesWhatNothingProvides && $0.callerIsPublic) }))
 	}
 
+	// MARK: The public mock corpus
+
+	/// Report only: over the public mock corpus's seeds, the mocked consumers whose production twin reports one of the four
+	/// shape errors while the tool accepts the graph, for the rule for mirrored rejections. Set
+	/// `SAFEDI_GRAPH_FUZZER_CALLING_MOCK_TWIN_REPORT` to run it; it prints its count and seeds and fails nothing.
+	@Test(.enabled(if: ProcessInfo.processInfo.environment["SAFEDI_GRAPH_FUZZER_CALLING_MOCK_TWIN_REPORT"] != nil))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func publicMockCorpusCallingMocks_reportTwinsShapeErrors() async throws {
+		var findings = [GraphFuzzerCallingMockTwinReport.Finding]()
+		for seed in UInt64(0)..<UInt64(SafeDIToolGraphFuzzerTests.publicMockCorpusSeedCount) {
+			findings += try await GraphFuzzerCallingMockTwinReport.findings(in: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+		}
+		let shapeFindings = findings.filter { $0.shape != nil }
+		print("calling-mock twins shape-errors=\(shapeFindings.count) seeds=\(Set(shapeFindings.map(\.seed)).sorted()) other-errors=\(findings.count - shapeFindings.count)")
+		for finding in findings {
+			print("calling-mock twin \(finding)")
+		}
+	}
+
 	// MARK: Fixtures
 
 	private static let innerModule = """
@@ -598,23 +617,4 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		// implementationReceivesWhatNothingProvides/public/deferred
 		GraphFuzzerKnownIssue(reason: publicCallerPassesUpWhatItsTwinFillsReason, signatures: [.callingMockPassesUpUnclassifiedPlace], seeds: [25, 51, 77, 103, 129, 155, 181, 207, 233, 259]),
 	]
-}
-
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-extension SafeDIToolGraphFuzzerCallingMockTests {
-	/// Report only: over the public mock corpus's seeds, the mocked consumers whose production twin reports one of the four
-	/// shape errors while the tool accepts the graph, for the rule for mirrored rejections. Set
-	/// `SAFEDI_GRAPH_FUZZER_CALLING_MOCK_TWIN_REPORT` to run it; it prints its count and seeds and fails nothing.
-	@Test(.enabled(if: ProcessInfo.processInfo.environment["SAFEDI_GRAPH_FUZZER_CALLING_MOCK_TWIN_REPORT"] != nil))
-	func publicMockCorpusCallingMocks_reportTwinsShapeErrors() async throws {
-		var findings = [GraphFuzzerCallingMockTwinReport.Finding]()
-		for seed in UInt64(0)..<UInt64(SafeDIToolGraphFuzzerTests.publicMockCorpusSeedCount) {
-			findings += try await GraphFuzzerCallingMockTwinReport.findings(in: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
-		}
-		let shapeFindings = findings.filter { $0.shape != nil }
-		print("calling-mock twins shape-errors=\(shapeFindings.count) seeds=\(Set(shapeFindings.map(\.seed)).sorted()) other-errors=\(findings.count - shapeFindings.count)")
-		for finding in findings {
-			print("calling-mock twin \(finding)")
-		}
-	}
 }
