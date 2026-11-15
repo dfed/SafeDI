@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Usage: apply-edit.py FILE OLD_FILE NEW_FILE [--all] [--trim-final-newline]
        apply-edit.py --edits EDITS.json
-       apply-edit.py --self-test DIR
+       apply-edit.py --self-test DIRECTORY
 
 Replaces exact text in a file, with the old and the new text read from files, so that an edit holding tabs, quotes,
 backslashes or many lines never has to be spelled in a shell command. Run it with `python3 -I`.
@@ -16,16 +16,16 @@ file by another path, in another case on a volume that ignores case, or through 
 second hard link is refused, since replacing it would leave the other name with the old content.
 
 --trim-final-newline drops one final newline from each old and new text read from a file, for an editor that ends
-every file with one. Texts of EDITS.json are taken as they are, so the option is refused beside --edits.
+every file with one. Texts of EDITS.json are taken as they are, so the option beside --edits is wrong usage.
 
 Nothing is written unless every edit applies: a file that does not exist or cannot be written, old text that is
 empty, equal to the new text, absent, or present more than once without --all, and new text UTF-8 cannot spell, stop
 the script with exit status 1 and name the edit. Every new file is then written beside the file it replaces, and
 only when all are written does each take its file's place, so a file is never left half written, and it keeps its
-permissions. A replacement that then fails stops the script, which names the files already replaced. Files are read and written as UTF-8, byte for byte
-otherwise (no newline translation). Exit status 2 on wrong usage.
+permissions. A replacement that then fails stops the script, which names the files already replaced. Files are read
+and written as UTF-8, byte for byte otherwise (no newline translation). Exit status 2 on wrong usage.
 
---self-test DIR writes fixtures into DIR, which must not exist, and checks each case.
+--self-test DIRECTORY writes fixtures into DIRECTORY, which must not exist, and checks each case.
 """
 import argparse
 import json
@@ -36,7 +36,11 @@ import tempfile
 
 
 class EditError(Exception):
-    """An edit that does not apply; nothing is written."""
+    """An edit that does not apply. Nothing was written, unless `wrote_files`."""
+
+    def __init__(self, message, wrote_files=False):
+        super().__init__(message)
+        self.wrote_files = wrote_files
 
 
 def read_text(path):
@@ -106,8 +110,10 @@ def apply_edits(edits):
             encoded[real_path] = content.encode("utf-8")
         except UnicodeEncodeError as error:
             raise EditError(f"{given_paths[real_path]}: the new text cannot be written as UTF-8: {error}")
-        if not os.access(real_path, os.W_OK) or not os.access(os.path.dirname(real_path) or ".", os.W_OK):
+        if not os.access(real_path, os.W_OK):
             raise EditError(f"{given_paths[real_path]} cannot be written")
+        if not os.access(os.path.dirname(real_path), os.W_OK):
+            raise EditError(f"{given_paths[real_path]} cannot be replaced: its directory cannot be written")
     temporary_paths = {}
     replaced = []
     try:
@@ -124,7 +130,7 @@ def apply_edits(edits):
                 replace_file(temporary_paths[real_path], real_path)
             except OSError as error:
                 written = f", after writing {', '.join(replaced)}" if replaced else ""
-                raise EditError(f"{given_paths[real_path]} cannot be replaced{written}: {error}")
+                raise EditError(f"{given_paths[real_path]} cannot be replaced{written}: {error}", wrote_files=bool(replaced))
             del temporary_paths[real_path]
             replaced.append(given_paths[real_path])
     finally:
@@ -140,8 +146,6 @@ def edits_of(arguments):
             entries = json.loads(read_text(arguments.edits))
         except json.JSONDecodeError as error:
             raise EditError(f"{arguments.edits} is not JSON: {error}")
-        if arguments.trim_final_newline:
-            raise EditError("--trim-final-newline reads texts from files; EDITS.json's texts are taken as they are")
         if not isinstance(entries, list) or not entries:
             raise EditError(f"{arguments.edits} must hold a list of edits")
         edits = []
@@ -224,7 +228,7 @@ def self_test(root):
     expect(run("--edits", write("notjson.json", "[")) == 1, "a list that is not JSON is refused")
     expect(run("--edits", write("empty.json", "[]")) == 1, "an empty list is refused")
     expect(run("--edits", write("extra.json", json.dumps([{"file": first, "old": "one", "new": "two", "more": 1}]))) == 1, "an edit with an unknown key is refused")
-    expect(run("--edits", edits, "--trim-final-newline") == 1, "--trim-final-newline is refused beside --edits")
+    expect(run("--edits", edits, "--trim-final-newline") == 2, "--trim-final-newline beside --edits is wrong usage")
     expect(run("--edits", edits, "--all") == 2 and run("--edits", edits, first) == 2 and run(first) == 2 and run("--self-test", root, "--all") == 2, "wrong usage is exit status 2")
     expect(run(first, os.path.join(root, "absent.old"), os.path.join(root, "absent.new"), "--al") == 2, "an abbreviated option is wrong usage")
 
@@ -330,13 +334,13 @@ def main(argv):
             print("--self-test takes a directory and nothing else", file=sys.stderr)
             return 2
         return self_test(arguments.self_test)
-    if (arguments.edits is None) == (None in positional) or (arguments.edits is not None and (any(positional) or arguments.all)):
+    if (arguments.edits is None) == (None in positional) or (arguments.edits is not None and (any(positional) or arguments.all or arguments.trim_final_newline)):
         print(__doc__.split("\n\n")[0], file=sys.stderr)
         return 2
     try:
         counts = apply_edits(edits_of(arguments))
     except EditError as error:
-        print(f"apply-edit: {error}" if "after writing" in str(error) else f"apply-edit: {error}; nothing was written", file=sys.stderr)
+        print(f"apply-edit: {error}" if error.wrote_files else f"apply-edit: {error}; nothing was written", file=sys.stderr)
         return 1
     for path, count in counts.items():
         print(f"{path}: {count} replacement{'' if count == 1 else 's'}")

@@ -20,4 +20,4 @@ Several edits, all or none: write `[{"file": "path", "old": "…", "new": "…",
 
 Nothing is written unless every edit applies; exit status 1 names the edit that does not, and 2 is wrong usage. A file is replaced whole and keeps its permissions; a file with a second hard link is refused. The script's own help (`--help`) is the full contract.
 
-After changing the script, run `python3 -I .claude/skills/apply-edit/apply-edit.py --self-test DIR` with a directory that does not exist; "Check Line Coverage on Linux" runs the same.
+After changing the script, run `python3 -I .claude/skills/apply-edit/apply-edit.py --self-test DIRECTORY` with a directory that does not exist; "Check Line Coverage on Linux" runs the same.
