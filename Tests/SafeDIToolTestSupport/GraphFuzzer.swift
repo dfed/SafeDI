@@ -9960,6 +9960,11 @@ struct GraphFuzzerFailure: Equatable {
 		/// scope enum, a scope's `_Values` struct or a generated builder struct – or a builder the fuzzer writes by hand
 		/// takes a scope (`GraphFuzzerToolRuns.builderSurfaceFailure`): what a person writes would name generated code.
 		case builderSurfaceNamesGeneratedType = "a seam's readable initializer or a mock takes a parameter naming a generated type, or a hand-written builder takes a scope"
+		/// The graph's generated code compiles, and a call a person writes of a seam's readable initializer – each builder
+		/// that takes a builder struct passed `{ make() }` or a stored `make` of the family the struct names
+		/// (`GraphFuzzerBuilderSurface.addingBuilderCalls(to:seamTypeAccess:modules:)`) – does not compile against it. No
+		/// known issue lists it, and no known failure masks it (`GraphFuzzerFinding`).
+		case builderCallDoesNotCompile = "a hand-written call of a seam's readable initializer does not compile"
 		/// A call written against the graph's readable initializers and mocks stops compiling against the graph with an edit
 		/// that keeps every builder's places (`GraphFuzzerToolRuns.sameSupplyFailure`).
 		case sameSupplyCallStopsCompiling = "a call of a readable initializer or a mock stops compiling when an edit keeps every builder's places"
@@ -10564,7 +10569,8 @@ enum GraphFuzzerFinding: Equatable {
 	///   graph keeps alive does not depend on how else it fails, so a known failure never hides a leak, nor a failure of
 	///   the builder surface (`GraphFuzzerFailure.builderSurfaceKindsNeverMasked`), which judges only the tool's output
 	///   for the graph and its edits, so a known failure of an earlier oracle, such as a hole name that changes with a
-	///   second place, never hides a part of the builder surface its seed's entry does not list.
+	///   second place, never hides a part of the builder surface its seed's entry does not list – the compile of the call
+	///   a person writes against a seam's readable initializer (`builderCallDoesNotCompile`) among them.
 	/// - Parameter retentionIsJudged: Whether the retention oracle judged the graph, which it does only where the run
 	///   compiles and runs its code. A graph it did not judge that fails nothing else passes, rather than making stale a
 	///   known issue every signature of which documents a leak (`documentsOnlyRetention`); a known issue that lists
@@ -10576,7 +10582,9 @@ enum GraphFuzzerFinding: Equatable {
 		case let (nil, knownIssue?):
 			self = retentionIsJudged || !knownIssue.documentsOnlyRetention ? .staleKnownIssue(knownIssue) : .passed
 		case let (failure?, knownIssue?) where knownIssue.matches(failure):
-			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile].contains(failure.kind)
+			// No signature lists the compile of `C` (`builderCallDoesNotCompile`), so a known failure of its kind never arises
+			// today; it is listed here so that one never masks a later failure should a signature come to list it.
+			let masksNoLaterFailure = [.seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile, .builderCallDoesNotCompile].contains(failure.kind)
 				|| GraphFuzzerFailure.knownBuilderSurfaceKinds.contains(failure.kind)
 			if let unmasked = laterFailures.first(where: { (masksNoLaterFailure || $0.kind == .renamedGraphDiffers || $0.kind == .seamRetainsWhatInlineFrees || $0.kind == .publicMockRetainsWhatKnownRightFrees || GraphFuzzerFailure.builderSurfaceKindsNeverMasked.contains($0.kind)) && !knownIssue.matches($0) }) {
 				self = .failure(unmasked)
@@ -11445,22 +11453,29 @@ enum GraphFuzzerOracle {
 	/// - Parameter isolatedSeeds: The seeds whose value graphs are each compared on their own.
 	static func results(of toolRuns: [GraphFuzzerToolRuns], isolatingValueGraphsOf isolatedSeeds: Set<UInt64> = []) async throws -> [GraphFuzzerResult] {
 		let compiledRuns = toolRuns.filter { $0.runsDifferFailure == nil }
-		// A graph that fails as a debug build is reported as one.
+		// A graph that fails as a debug build is reported as one, unless only its hand-written call fails there and its code
+		// fails as a release build.
 		let compilationFailures: [UInt64: GraphFuzzerFailure] = if compileVerificationIsEnabled {
 			try await GraphFuzzerPhaseAccount.measuring(.compiles) {
-				try await self.compilationFailures(of: compiledRuns).merging(self.compilationFailures(of: compiledRuns.filter(\.fixture.compilesAsReleaseBuildToo), definesDebug: false)) { debugFailure, _ in debugFailure }
+				try await self.compilationFailures(of: compiledRuns).merging(self.compilationFailures(of: compiledRuns.filter(\.fixture.compilesAsReleaseBuildToo), definesDebug: false)) { debugFailure, releaseFailure in
+					debugFailure.kind == .builderCallDoesNotCompile && releaseFailure.kind != .builderCallDoesNotCompile ? releaseFailure : debugFailure
+				}
 			}
 		} else {
 			[:]
 		}
+		// A graph whose code compiled and whose hand-written call `C` did not is the builder surface's finding, which judges
+		// only the call: its code is compared and judged as every graph's that compiles.
+		let builderCallFailures = compilationFailures.filter { $0.value.kind == .builderCallDoesNotCompile }
+		let codeCompilationFailures = compilationFailures.filter { $0.value.kind != .builderCallDoesNotCompile }
 		let valueComparisons = try await GraphFuzzerPhaseAccount.measuring(.valueComparisons) {
-			try await self.valueComparisons(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil }, isolatingValueGraphsOf: isolatedSeeds)
+			try await self.valueComparisons(of: toolRuns.filter { $0.runsDifferFailure == nil && codeCompilationFailures[$0.fixture.seed] == nil }, isolatingValueGraphsOf: isolatedSeeds)
 		}
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
+			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			failures.append(contentsOf: renamedGraphFailures)
 			// The retention oracle judges last. No known failure masks what it finds, as none masks a renamed graph's
@@ -11476,7 +11491,7 @@ enum GraphFuzzerOracle {
 				renamedGraphFailures: renamedGraphFailures,
 				multiModuleRuns: runs.multiModuleRuns,
 				isInspectedByValueOracle: runs.isInspectedByValueOracle,
-				isComparedByValueOracle: compileVerificationIsEnabled && runs.isInspectedByValueOracle && runs.runsDifferFailure == nil && compilationFailures[runs.fixture.seed] == nil && isValueOracleGraphCompared,
+				isComparedByValueOracle: compileVerificationIsEnabled && runs.isInspectedByValueOracle && runs.runsDifferFailure == nil && codeCompilationFailures[runs.fixture.seed] == nil && isValueOracleGraphCompared,
 				isComparedAcrossIntegrations: runs.pluginOutcome != nil,
 				isComparedWithReadTwin: runs.readTwinOutcome != nil,
 				isComparedWithoutSecondHolePlace: runs.isComparedWithoutSecondHolePlace,
@@ -12566,9 +12581,40 @@ enum GraphFuzzerOracle {
 	/// plain initializers beside them (`plainSpelling(ofGeneratedOnlyParameter:)`), or, when `keepsGeneratedOnlySpelling`,
 	/// as the initializer only generated code calls spells it.
 	static func seamInitializers(inGeneratedFile contents: String, keepsGeneratedOnlySpelling: Bool = false) -> [(seamTypeName: String, access: String, parameters: [String])] {
+		seamInitializerTiers(inGeneratedFile: contents).map { tier in
+			let parameters = if keepsGeneratedOnlySpelling {
+				tier.generatedOnlyParameters
+			} else {
+				tier.readableParameters ?? tier.generatedOnlyParameters.map(plainSpelling(ofGeneratedOnlyParameter:))
+			}
+			return (tier.seamTypeName, tier.access, parameters.map { callerSpelling(ofParameter: $0, of: tier.seamTypeName) })
+		}
+	}
+
+	/// The tiers of `contents` whose module generates a readable initializer beside the one only generated code calls,
+	/// read as `seamInitializers(inGeneratedFile:keepsGeneratedOnlySpelling:)` reads them, with both initializers'
+	/// parameters as code outside the seam's extension spells them (`callerSpelling(ofParameter:of:)`): the readable
+	/// initializer a person calls takes, at each position, what the generated-only one takes there.
+	static func readableInitializerTiers(inGeneratedFile contents: String) -> [(seamTypeName: String, access: String, readableParameters: [String], generatedOnlyParameters: [String])] {
+		seamInitializerTiers(inGeneratedFile: contents).compactMap { tier in
+			guard let readableParameters = tier.readableParameters else { return nil }
+			return (
+				tier.seamTypeName,
+				tier.access,
+				readableParameters.map { callerSpelling(ofParameter: $0, of: tier.seamTypeName) },
+				tier.generatedOnlyParameters.map { callerSpelling(ofParameter: $0, of: tier.seamTypeName) },
+			)
+		}
+	}
+
+	/// Each tier of the generated initializers in `contents`, as `seamInitializers(inGeneratedFile:keepsGeneratedOnlySpelling:)`
+	/// reads them: its seam, its access, the parameters of the initializer only generated code calls, and those of the plain
+	/// initializer a module that sets `generatePlainDependencyTreeInitializers` declares just before it, or `nil` where the
+	/// module declares none, each as the generated file spells it.
+	private static func seamInitializerTiers(inGeneratedFile contents: String) -> [(seamTypeName: String, access: String, generatedOnlyParameters: [String], readableParameters: [String]?)] {
 		var extendedType: String?
 		var guardedTypes = Set<String>()
-		var initializers = [(seamTypeName: String, access: String, parameters: [String])]()
+		var tiers = [(seamTypeName: String, access: String, generatedOnlyParameters: [String], readableParameters: [String]?)]()
 		// The plain initializer a module that sets `generatePlainDependencyTreeInitializers` declares just before the
 		// initializer only generated code calls of the same tier, which is read for that tier where it exists: a builder
 		// the generated-only initializer takes as a builder struct, the plain one takes as a closure that takes nothing.
@@ -12593,17 +12639,13 @@ enum GraphFuzzerOracle {
 						precedingPlainParameters = parameters
 						continue
 					}
-					let plainParameters = if let precedingPlainParameters, precedingPlainParameters.count == parameters.count {
-						precedingPlainParameters
-					} else {
-						parameters.map(plainSpelling(ofGeneratedOnlyParameter:))
-					}
+					let readableParameters = precedingPlainParameters.flatMap { $0.count == parameters.count ? $0 : nil }
 					precedingPlainParameters = nil
-					initializers.append((extendedType, access, (keepsGeneratedOnlySpelling ? parameters : plainParameters).map { callerSpelling(ofParameter: $0, of: extendedType) }))
+					tiers.append((extendedType, access, parameters, readableParameters))
 				}
 			}
 		}
-		return initializers.filter { guardedTypes.contains($0.seamTypeName) }
+		return tiers.filter { guardedTypes.contains($0.seamTypeName) }
 	}
 
 	/// The external label of `parameter`, a parameter of an initializer only generated code calls, without its
@@ -12782,6 +12824,10 @@ enum GraphFuzzerOracle {
 	/// generated code, module by module, to tell a generator defect from a fixture the fuzzer got wrong. A graph that
 	/// compiles fails when a compile it passed reports a warning in its generated code – the seam callers among it –
 	/// that its fixture does not draw, as `verifyGeneratedCodeCompiles` fails a test (`warningsOnlyGeneratedCodeDraws`).
+	/// Each graph's hand-written calls `C` of its seams' readable initializers
+	/// (`GraphFuzzerBuilderSurface.addingBuilderCalls(to:seamTypeAccess:modules:)`) compile with its generated code; a graph
+	/// whose every error is in them is compiled again without them, and fails as `builderCallDoesNotCompile` only where its
+	/// own code then compiles and draws no warning.
 	/// - Parameter definesDebug: Whether to compile as a debug build, which defines `DEBUG`, or as a release build, which
 	///   defines no condition, so that mock-only content and generated mocks are not compiled.
 	static func compilationFailures(of toolRuns: [GraphFuzzerToolRuns], definesDebug: Bool = true) async throws -> [UInt64: GraphFuzzerFailure] {
@@ -12815,6 +12861,9 @@ enum GraphFuzzerOracle {
 				combinedUnitsByConfigurationAndModule[modulesWithoutPackage] = [:]
 			}
 			let fileModules = runs.fixture.modules ?? Array(repeating: .seamModule, count: runs.fixture.swiftFileContent.count)
+			// The hand-written calls `C` of each seam's readable initializer compile with the generated code; the outcomes the
+			// other oracles compare hold none.
+			let generatedFilesWithCalls = GraphFuzzerBuilderSurface.addingBuilderCalls(to: runs.generatedFiles, seamTypeAccess: runs.fixture.seamTypeAccess, modules: Set(runs.fixture.modules ?? []))
 			for module in GraphFuzzerModule.allCases where fileModules.contains(module) {
 				let moduleDirectory = fixtureDirectory.appendingPathComponent(module.name)
 				try FileManager.default.createDirectory(at: moduleDirectory, withIntermediateDirectories: true)
@@ -12828,7 +12877,7 @@ enum GraphFuzzerOracle {
 				// A graph in one module compiles every generated file there; a split graph's are keyed by module. The mock
 				// configuration file has the same name in every graph, so name each file after its graph's prefix.
 				var generatedFiles = [String: String]()
-				for (fileName, contents) in runs.generatedFiles {
+				for (fileName, contents) in generatedFilesWithCalls {
 					let moduleFileName: String
 					if runs.fixture.modules == nil {
 						moduleFileName = fileName
@@ -12855,6 +12904,7 @@ enum GraphFuzzerOracle {
 
 		// Each module of every graph, in dependency order, each graph left out of the modules after one it fails in.
 		var combinedFailures = [UInt64: UnitDiagnostics]()
+		var builderCallFailures = [UInt64: UnitDiagnostics]()
 		var generatedCodeWarnings = [UInt64: [String]]()
 		for (configurationIndex, modulesWithoutPackage) in packageConfigurations.enumerated() {
 			let combinedUnitsByModule = combinedUnitsByConfigurationAndModule[modulesWithoutPackage] ?? [:]
@@ -12877,6 +12927,7 @@ enum GraphFuzzerOracle {
 				)
 				moduleOutputDirectories[module] = outputDirectory
 				combinedFailures.merge(moduleCompilation.failures) { first, _ in first }
+				builderCallFailures.merge(moduleCompilation.builderCallFailures) { first, _ in first }
 				generatedCodeWarnings.merge(moduleCompilation.generatedCodeWarnings) { $0 + $1 }
 			}
 		}
@@ -12923,6 +12974,10 @@ enum GraphFuzzerOracle {
 			}
 			failures[seed] = GraphFuzzerFailure(seed: seed, kind: kind, details: configurationNote + (inputOnlyFailures[seed] ?? diagnostics).text)
 		}
+		// A graph whose code compiles, without its hand-written calls where they failed, and draws no warning.
+		for (seed, diagnostics) in builderCallFailures where failures[seed] == nil {
+			failures[seed] = GraphFuzzerFailure(seed: seed, kind: .builderCallDoesNotCompile, details: configurationNote + diagnostics.text)
+		}
 		return failures
 	}
 
@@ -12933,6 +12988,17 @@ enum GraphFuzzerOracle {
 
 		var sources: [URL] {
 			inputFiles + generatedFiles
+		}
+
+		/// Whether the unit holds a hand-written call `C` of a seam's readable initializer
+		/// (`GraphFuzzerBuilderSurface.addingBuilderCalls(to:seamTypeAccess:modules:)`).
+		var holdsBuilderCalls: Bool {
+			generatedFiles.contains { $0.lastPathComponent.hasSuffix(GraphFuzzerBuilderSurface.builderCallFileSuffix) }
+		}
+
+		/// The unit without its hand-written calls `C`, so that its own code compiles as it would without them.
+		var withoutBuilderCalls: CompilationUnit {
+			CompilationUnit(seed: seed, inputFiles: inputFiles, generatedFiles: generatedFiles.filter { !$0.lastPathComponent.hasSuffix(GraphFuzzerBuilderSurface.builderCallFileSuffix) })
 		}
 
 		/// Whether `fileName` belongs to this unit: a fixture staged as `input_<index>_<prefix>…`, a generated file
@@ -12968,6 +13034,8 @@ enum GraphFuzzerOracle {
 	/// generated code draws, each keyed by seed.
 	private struct UnitsCompilation {
 		var failures = [UInt64: UnitDiagnostics]()
+		/// Why each unit's hand-written calls `C` fail to compile, where nothing else of the unit reports an error.
+		var builderCallFailures = [UInt64: UnitDiagnostics]()
 		var generatedCodeWarnings = [UInt64: [String]]()
 
 		/// Records the warnings `unit`'s generated code draws in `compilerOutput`, the output of a compile that
@@ -13021,21 +13089,27 @@ enum GraphFuzzerOracle {
 			let errorLines = result.stderr.split(separator: "\n").filter { $0.contains(": error: ") }
 			let crash = GraphFuzzerCompilerCrash(standardError: result.stderr)
 			var attributedSeeds = Set<UInt64>()
+			// The graphs whose every error is in a hand-written call `C`: compiled again without their calls, so that what
+			// their own code reports, which a type error in a call may have stopped, is still read.
+			var seedsWithFailingBuilderCalls = Set<UInt64>()
 			for unit in remainingUnits {
 				let unitErrorLines = errorLines.filter { line in
-					// The file name: the last path component of the location that begins the line.
-					let fileName = line.prefix { $0 != ":" }.split(separator: "/").last ?? ""
-					return unit.contains(fileName: fileName)
+					unit.contains(fileName: Self.fileName(beginning: line))
 				}
 				if let crash, let fileName = crash.fileName, unit.contains(fileName: Substring(fileName)) {
 					attributedSeeds.insert(unit.seed)
 					compilation.failures[unit.seed] = UnitDiagnostics(standardError: result.stderr)
+				} else if unit.holdsBuilderCalls, !unitErrorLines.isEmpty, unitErrorLines.allSatisfy({ Self.fileName(beginning: $0).hasSuffix(GraphFuzzerBuilderSurface.builderCallFileSuffix) }) {
+					seedsWithFailingBuilderCalls.insert(unit.seed)
+					compilation.builderCallFailures[unit.seed] = UnitDiagnostics(errorLines: unitErrorLines)
 				} else if !unitErrorLines.isEmpty {
 					attributedSeeds.insert(unit.seed)
 					compilation.failures[unit.seed] = UnitDiagnostics(errorLines: unitErrorLines)
 				}
 			}
-			if attributedSeeds.isEmpty, remainingUnits.count == 1 {
+			if !seedsWithFailingBuilderCalls.isEmpty {
+				remainingUnits = remainingUnits.filter { !attributedSeeds.contains($0.seed) }.map { seedsWithFailingBuilderCalls.contains($0.seed) ? $0.withoutBuilderCalls : $0 }
+			} else if attributedSeeds.isEmpty, remainingUnits.count == 1 {
 				compilation.failures[remainingUnits[0].seed] = UnitDiagnostics(standardError: result.stderr)
 				break
 			} else if attributedSeeds.isEmpty {
@@ -13065,6 +13139,11 @@ enum GraphFuzzerOracle {
 			}
 		}
 		return compilation
+	}
+
+	/// The file name of the location that begins `line`, a line of the compiler's output: its last path component.
+	private static func fileName(beginning line: Substring) -> Substring {
+		line.prefix { $0 != ":" }.split(separator: "/").last ?? ""
 	}
 }
 
