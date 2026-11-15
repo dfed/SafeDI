@@ -220,9 +220,12 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			        case flow(flow_Values, SafeDIMockScope_Widget.Flow_Scope)
 			        case a(a_Values, SafeDIMockScope_Widget.A_Scope)
 
-			        public struct flow_Values {}
+			        public struct flow_Values {
+			            public let bBuilder: Instantiator<B>?
+			        }
 
 			        public struct a_Values {
+			            public let bBuilder: Instantiator<B>?
 			            public let flow: Flow
 			        }
 
@@ -262,7 +265,7 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Hub {
 			        let __safeDI_widgetBuilder = widgetBuilder
-			        let __safeDI_widgetValues_flow = SafeDIMockScope_Widget.flow_Values()
+			        let __safeDI_widgetValues_flow = SafeDIMockScope_Widget.flow_Values(bBuilder: bBuilder)
 			        func __safeDI_flow() -> Flow {
 			            let __safeDI_widgetValues_aBuilder = SafeDIMockScope_Widget.Flow_Scope.aBuilder_Values()
 			            func __safeDI_aBuilder() -> A {
@@ -280,7 +283,7 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			            return Flow.__safeDI_init(aBuilder: aBuilder, bBuilder: bBuilder, safeDIBuilder: safeDIOverrides.flow.safeDIBuilder)
 			        }
 			        let flow: Flow = __safeDI_flow()
-			        let __safeDI_widgetValues_a = SafeDIMockScope_Widget.a_Values(flow: flow)
+			        let __safeDI_widgetValues_a = SafeDIMockScope_Widget.a_Values(bBuilder: bBuilder, flow: flow)
 			        func __safeDI_a() -> A {
 			            let mark = if let safeDIBuilder = safeDIOverrides.a.mark { safeDIBuilder() } else { Mark() }
 			            let widget: any Widget = __safeDI_widgetBuilder(.a(__safeDI_widgetValues_a, .widget(SafeDIMockScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder, mark: mark))))
@@ -292,7 +295,7 @@ struct SafeDIToolPublicMockLevelBindingTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_mock_65B4D688D954D01D {}
+			    public enum __safeDI_Hub_mock_955922399F987E27 {}
 			}
 			#endif
 

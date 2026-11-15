@@ -191,6 +191,16 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case holeFillReceivesField
 	case holeFillReceivesNonField
 	case holeFillClosesLazyCycle
+	/// On the root-level stream: `T6`'s mock binding `holeSession`, which it cannot build, and `holeToken`, received only if
+	/// available, before its tree, which its root level holds, and a fill reading one or both there; `T6` receiving
+	/// `holeSession` lazily, whose wrapper its root level holds, and a fill reading the wrapper; and `T6`'s tree receiving
+	/// `holeSession` in two forms, which its mock names apart, and a fill reading the form `HoleHost`'s level binds again.
+	case holeRootLevelHoldsValues
+	case holeFillReceivesRootLevelValue
+	case holeRootLevelHoldsWrapper
+	case holeFillReceivesRootLevelWrapper
+	case holeRootReceivesLabelInTwoForms
+	case holeFillReceivesFormBoundAgain
 	/// On the call-shape stream: a consumer receiving the lazily instantiated `analytics` its leaf receives (EOU-1); a
 	/// consumer reaching `T6` under a second label, `t6Second` (D530-1); and a `mockOnly` fake fulfilling `T6`'s
 	/// existential hole beside `HoleFill`, or alone (D530-2).
@@ -373,6 +383,7 @@ struct GraphFuzzerPublicMockDraw {
 		var unreadTypeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockUnreadTypeRandomSeedMask)
 		var seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.publicMockRandomSeedMask)
 		var secondCalledMockRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockSecondCalledMockRandomSeedMask)
+		var rootLevelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockRootLevelRandomSeedMask)
 		draw(
 			random: &random,
 			spellingRandom: &spellingRandom,
@@ -385,6 +396,7 @@ struct GraphFuzzerPublicMockDraw {
 			unreadTypeRandom: &unreadTypeRandom,
 			seamDependencyRandom: &seamDependencyRandom,
 			secondCalledMockRandom: &secondCalledMockRandom,
+			rootLevelRandom: &rootLevelRandom,
 		)
 		// Which files move beneath the declaring module: decided after the rest of the draw, from a stream of its own, so
 		// that a graph without it is drawn as before. Each file is read as the drawn graph writes it.
@@ -475,6 +487,10 @@ struct GraphFuzzerPublicMockDraw {
 	/// the same hole as `T6`'s, so that a consumer calls two public mocks of one hole type: a roll added after the rest of
 	/// the draw was pinned, so that its other shapes are drawn as before.
 	static let publicMockSecondCalledMockRandomSeedMask: UInt64 = 0x7075626D6B74776E
+	/// Draws only what `T6`'s mock binds before its tree that a fill in a consumer module reads from the root level of
+	/// `T6`'s enums (`RootLevelShape`): rolls added after the rest of the draw was pinned, so that its other shapes are drawn
+	/// as before.
+	static let publicMockRootLevelRandomSeedMask: UInt64 = 0x7075626D6B726F6F
 	/// What begins the comment in `T6`'s file that holds its hand-written caller's call, after the caller's module:
 	/// `// publicMockCaller in FuzzOther: S1_T6.mock(s1_HoleBuilder: …)`. `GraphFuzzerOracle.addingPublicMockCallers` reads it.
 	static let publicMockCallerMarker = "// publicMockCaller in "
@@ -625,6 +641,20 @@ struct GraphFuzzerPublicMockDraw {
 		case lazyCycle
 	}
 
+	/// What `T6`'s mock binds before its tree, on the root-level stream: nothing beyond the draw's other shapes; `holeSession`,
+	/// of a type that conforms to `Instantiable` by hand, which the declaring module cannot build and each consumer module
+	/// reaching `T6` builds through an extension of its own, and `holeToken`, received only if available, which each such
+	/// consumer instantiates, both of which `T6`'s root level holds – `holeSession` received as itself or as a
+	/// `LazilyInstantiated`, whose wrapper the root level holds, which each such consumer instantiates; or `holeSession`
+	/// received in two forms – `HoleHost` as
+	/// `HoleSession`, and `HoleSibling`, which `T6` instantiates, as `HoleDraft` – which `T6`'s mock names apart, so that its
+	/// root level holds neither and `HoleHost`'s level binds its form again.
+	private enum RootLevelShape {
+		case none
+		case values
+		case labelInTwoForms
+	}
+
 	/// Where `T6`'s tree instantiates its hole: on `T6`, or on the type `HoleHost` that `T6` instantiates as a wrapper.
 	private enum HolePosition {
 		case direct
@@ -672,6 +702,7 @@ struct GraphFuzzerPublicMockDraw {
 		unreadTypeRandom: inout GraphFuzzerRandomNumberGenerator,
 		seamDependencyRandom: inout GraphFuzzerRandomNumberGenerator,
 		secondCalledMockRandom: inout GraphFuzzerRandomNumberGenerator,
+		rootLevelRandom: inout GraphFuzzerRandomNumberGenerator,
 	) {
 		// Both rolls are made in every graph, so the stream is consumed the same way whatever the rest of the draw.
 		let declaresSpaceInFileOfItsOwn = namespaceRandom.percentChance(50)
@@ -1024,6 +1055,9 @@ struct GraphFuzzerPublicMockDraw {
 		// ignores the scope it is handed (`publicMockCallerMarker`).
 		let callerModule = consumerModules.contains(.otherPackageCaller) ? GraphFuzzerModule.otherPackageCaller : .samePackageCaller
 		var holeLeaf: (declaration: InstantiableClass, spelling: HoleSpelling, position: HolePosition)?
+		var rootLevelShape = RootLevelShape.none
+		/// The type `T6` receives `holeSession` as on the root-level stream's `.values`: `HoleSession`, or its `LazilyInstantiated`.
+		var rootLevelSessionType = ""
 		/// The index in `declaringFiles` of `T6`'s file, which declares `T6Twin` too when a consumer reaches it.
 		var holeLeafFileIndex: Int?
 		if holeRandom.percentChance(40) {
@@ -1095,6 +1129,34 @@ struct GraphFuzzerPublicMockDraw {
 			}
 			var prover = instantiableClass("HoleProver")
 			prover.properties = [Property(attribute: "@Received", label: "hole", type: provenType)]
+			// On the root-level stream: one label in two forms needs `HoleHost`, outside every `@Sendable` function, whose place
+			// a fill can read a value of a level from.
+			let sessionName = name("HoleSession")
+			let draftName = name("HoleDraft")
+			let hostIsPlain = position == .instantiator || position == .lazilyInstantiated
+			// A fifth to three tenths of the graphs draw none, so that fills reading nothing and consumers without the providers
+			// below stay in the corpus while each shape meets its floor: one label in two forms only where the host is plain.
+			let rootLevelRoll = rootLevelRandom.integer(in: 0...9)
+			rootLevelShape = if hostIsPlain {
+				rootLevelRoll < 2 ? .none : rootLevelRoll < 3 ? .values : .labelInTwoForms
+			} else {
+				rootLevelRoll < 3 ? .none : .values
+			}
+			// `holeSession` received lazily: `T6`'s mock takes the instance and binds the wrapper apart, which its root level holds.
+			rootLevelSessionType = rootLevelShape == .values && rootLevelRandom.percentChance(50) ? "LazilyInstantiated<\(sessionName)>" : sessionName
+			// The types `T6`'s mock cannot build conform to `Instantiable` by hand, proven `public` by `HoleProver`'s initializer.
+			switch rootLevelShape {
+			case .none:
+				break
+			case .values:
+				plainDeclarations.append(plainClass(sessionName, access: .public, conformances: ["Instantiable"]))
+				prover.properties.append(Property(attribute: "@Received", label: "holeSessionProof", type: sessionName))
+			case .labelInTwoForms:
+				plainDeclarations.append(plainClass(sessionName, access: .public, conformances: ["Instantiable"]))
+				plainDeclarations.append(plainClass(draftName, access: .public, conformances: ["Instantiable"]))
+				prover.properties.append(Property(attribute: "@Received", label: "holeSessionProof", type: sessionName))
+				prover.properties.append(Property(attribute: "@Received", label: "holeDraftProof", type: draftName))
+			}
 			helperFiles.append(File(module: .seamModule, declarations: [Self.renderer(of: prover)]))
 
 			var declaration = instantiableClass("T6")
@@ -1108,6 +1170,18 @@ struct GraphFuzzerPublicMockDraw {
 			if holeRandom.percentChance(40) {
 				declaration.add(Property(attribute: "@Instantiated", label: "holeContext", type: instantiable("HoleContext")))
 			}
+			switch rootLevelShape {
+			case .none:
+				break
+			case .values:
+				declaration.add(Property(attribute: "@Received", label: "holeSession", type: rootLevelSessionType))
+				declaration.add(Property(attribute: "@Received(onlyIfAvailable: true)", label: "holeToken", type: "\(instantiable("HoleToken"))?"))
+			case .labelInTwoForms:
+				var sibling = instantiableClass("HoleSibling")
+				sibling.properties = [Property(attribute: "@Received", label: "holeSession", type: draftName)]
+				declaringFiles.append(File(module: .seamModule, declarations: [Self.renderer(of: sibling)]))
+				declaration.add(Property(attribute: "@Instantiated", label: "holeSibling", type: sibling.name))
+			}
 			switch position {
 			case .direct:
 				declaration.add(Property(attribute: attribute, label: holeLabel, type: holeType))
@@ -1115,6 +1189,9 @@ struct GraphFuzzerPublicMockDraw {
 				let hostAccess: AccessLevel = holeRandom.percentChance(50) ? .public : .package
 				var host = instantiableClass("HoleHost", access: hostAccess)
 				host.properties = [Property(attribute: attribute, label: holeLabel, type: holeType)]
+				if rootLevelShape == .labelInTwoForms {
+					host.properties.insert(Property(attribute: "@Received", label: "holeSession", type: sessionName), at: 0)
+				}
 				declaration.add(Property(attribute: "@Instantiated", label: position.hostLabel, type: "\(position.wrapperName)<\(host.name)>"))
 				declaration.names(hostAccess)
 				declaringFiles.append(File(module: .seamModule, declarations: [Self.renderer(of: host)]))
@@ -1129,10 +1206,17 @@ struct GraphFuzzerPublicMockDraw {
 			case .erasedConstant, .erasedInstantiator: fillName
 			}
 			let enumBuilderLabel = Self.builderLabel(ofTypeNamed: instantiatedTypeName)
+			// What the mock takes before its builders that it cannot build: `holeSession`, or both its forms, named apart and
+			// ordered by type.
+			let leadingArguments = switch rootLevelShape {
+			case .none: ""
+			case .values: "holeSession: \(sessionName)(), "
+			case .labelInTwoForms: "holeSession_\(draftName): \(draftName)(), holeSession_\(sessionName): \(sessionName)(), "
+			}
 			let call = if position.isSendable {
-				"\(declaration.name).mock(\(enumBuilderLabel.dropLast("Builder".count))SendableBuilder: { _ in \(value) })"
+				"\(declaration.name).mock(\(leadingArguments)\(enumBuilderLabel.dropLast("Builder".count))SendableBuilder: { _ in \(value) })"
 			} else {
-				"\(declaration.name).mock(\(enumBuilderLabel): { _ in \(value) })"
+				"\(declaration.name).mock(\(leadingArguments)\(enumBuilderLabel): { _ in \(value) })"
 			}
 			let holeDeclaration = declaration
 			holeLeafFileIndex = declaringFiles.count
@@ -1256,8 +1340,27 @@ struct GraphFuzzerPublicMockDraw {
 			// none. One module per graph declares it, since two would conform the hole's class to `Instantiable` twice in the
 			// value differential's executable.
 			var holeFulfillerDeclarations = [(Rendering) -> String]()
+			var rootLevelExtensions = [(Rendering) -> String]()
 			if Self.drawsHoleConsumers, let holeLeaf, holeRandom.percentChance(60) {
 				leafProperties.append(Property(attribute: holeRandom.percentChance(50) ? "@Received" : "@Instantiated", label: "t6", type: holeLeaf.declaration.name))
+				// On the root-level stream: the consumer's module builds what `T6`'s mock cannot through extensions of its own,
+				// which add no conformance, so that two modules may declare them; the consumer instantiates `holeSession` and
+				// `holeToken`, or, where `T6`'s tree receives `holeSession` in two forms, which no one scope can hold, neither,
+				// and its mock builds each form.
+				let extendedTypes: [String] = switch rootLevelShape {
+				case .none: []
+				case .values: [name("HoleSession")]
+				case .labelInTwoForms: [name("HoleDraft"), name("HoleSession")]
+				}
+				if rootLevelShape == .values {
+					uniqueProviders.append(Property(attribute: "@Instantiated", label: "holeSession", type: rootLevelSessionType))
+					uniqueProviders.append(Property(attribute: "@Instantiated", label: "holeToken", type: name("HoleToken")))
+				}
+				for extendedType in extendedTypes {
+					rootLevelExtensions.append { rendering in
+						"@Instantiable(conformsElsewhere: true)\nextension \(extendedType) {\n\t\(rendering.modifier(.public))static func instantiate() -> \(extendedType) {\n\t\t\(extendedType)()\n\t}\n}"
+					}
+				}
 				if drawsSecondCalledMock {
 					consumerReachesSecondCalledMock = true
 					secondHolePlace = "t6Twin"
@@ -1295,11 +1398,35 @@ struct GraphFuzzerPublicMockDraw {
 					} else {
 						.nonField
 					}
-					let dependencies: [Property] = switch dependency {
+					var dependencies: [Property] = switch dependency {
 					case .none: []
 					case .field: [Property(attribute: "@Received", label: "holeContext", type: instantiable("HoleContext"))]
 					case .nonField: [Property(attribute: "@Received", label: "holeExtra", type: extraName)]
 					case .lazyCycle: [Property(attribute: "@Instantiated", label: "t6Builder", type: "Instantiator<\(holeLeaf.declaration.name)>")]
+					}
+					// On the root-level stream: a fill that reads nothing else its place's levels do not hold reads what `T6`'s root
+					// level holds – `holeSession`, as `T6` receives it, `holeToken` only if available, or both – or, for one label in
+					// two forms, the form `HoleHost`'s level binds again. A place built inside a `@Sendable` function is handed none of
+					// it. A fill declared as an extension's `instantiate(…)` reads `holeSession` alone. No fill reads the instance of a
+					// `holeSession` `T6` receives lazily, which it would read through the wrapper `T6`'s mock makes, a divergence
+					// `SafeDIToolPublicMockRootLevelTests` states that the value oracle does not.
+					let isExtensionFill = holeLeaf.spelling == .plain || holeLeaf.spelling == .instantiator
+					if !holeLeaf.position.isSendable, dependency == .none || dependency == .field && bindsContext {
+						let holeSession = Property(attribute: "@Received", label: "holeSession", type: rootLevelShape == .values ? rootLevelSessionType : name("HoleSession"))
+						switch rootLevelShape {
+						case .none:
+							break
+						case .values:
+							let readRoll = rootLevelRandom.integer(in: 0...2)
+							if readRoll != 1 || isExtensionFill {
+								dependencies.append(holeSession)
+							}
+							if readRoll != 0, !isExtensionFill {
+								dependencies.append(Property(attribute: "@Received(onlyIfAvailable: true)", label: "holeToken", type: "\(name("HoleToken"))?"))
+							}
+						case .labelInTwoForms:
+							dependencies.append(holeSession)
+						}
 					}
 					if dependency == .nonField {
 						holeFulfillerDeclarations.append(Self.renderer(of: instantiableClass("HoleExtra")))
@@ -1369,6 +1496,7 @@ struct GraphFuzzerPublicMockDraw {
 				consumer.properties = providersFirst ? uniqueProviders + leafProperties : leafProperties + uniqueProviders
 				declarations.append(Self.renderer(of: consumer))
 			}
+			declarations += rootLevelExtensions
 			consumerFiles.append(File(module: module, declarations: declarations))
 			if !holeFulfillerDeclarations.isEmpty {
 				consumerFiles.append(File(module: module, fileName: "\(prefix)HoleFill.swift", declarations: holeFulfillerDeclarations))
@@ -1649,6 +1777,45 @@ extension GraphFuzzerToolRuns {
 		case (.accepted, .accepted?), (.rejected, .rejected?), (_, nil):
 			return nil
 		}
+	}
+
+	/// The failure of a `generateMockPublic` graph the tool accepts whose fill of `T6`'s hole reads only what `T6`'s mock
+	/// binds before its tree – `holeSession` or `holeToken` on its root level (`holeFillReceivesRootLevelValue`), or the form
+	/// of `holeSession` `HoleHost`'s level binds again (`holeFillReceivesFormBoundAgain`) – and anything else only from a
+	/// field `T6` binds, while the consumer in the fill's module takes a builder of `T6`'s places: passing up a place whose
+	/// fill reads what the single-module mock hands it, as inline builds it, where the known-right path takes no builder.
+	/// `nil` for any other graph.
+	var publicMockRootLevelFailure: GraphFuzzerFailure? {
+		guard knownRightOutcome != nil, case let .accepted(generatedFiles, _) = firstOutcome else { return nil }
+		let features = GraphFuzzerPublicMockDraw.drawFeatures(of: fixture)
+		guard features.contains(.holeFillReceivesRootLevelValue) || features.contains(.holeFillReceivesFormBoundAgain) else { return nil }
+		let prefix = fixture.typeNamePrefix
+		// The draw declares the fill in one consumer module, whose consumer reaches `T6`.
+		let fillFile = zip(fixture.fileNames, fixture.swiftFileContent).first { fileName, _ in fileName.hasSuffix("\(prefix)HoleFill.swift") }
+		guard let fillModule = fillFile.flatMap({ GraphFuzzerModule(declaredIn: $0.1) }) else { return nil }
+		let consumerName = "\(prefix)T\(fillModule == .samePackageCaller ? 7 : 8)"
+		// A builder `mock()` takes, as a parameter on a line of its own, `<label>: @escaping (<T6>.SafeDIMockScope_…`; a field of
+		// `SafeDIOverrides` that overrides `T6`'s construction spells the type inside its own.
+		let builderParameter = try? NSRegularExpression(pattern: "^\\s*[A-Za-z0-9_]+: @escaping (@Sendable )?\\(\(prefix)T6\\.SafeDI(Sendable)?MockScope_")
+		let passingUpFiles = generatedFiles.keys.sorted().filter { fileName in
+			guard fileName == "\(consumerName)+SafeDIMock.swift" || fileName.hasSuffix("/\(consumerName)+SafeDIMock.swift"), let contents = generatedFiles[fileName] else { return false }
+			var isInMockParameters = false
+			return contents.split(separator: "\n").contains { line in
+				if line.contains("static func mock(") {
+					isInMockParameters = true
+				} else if line.trimmingCharacters(in: .whitespaces).hasPrefix(") -> ") {
+					isInMockParameters = false
+				}
+				let text = String(line)
+				return isInMockParameters && builderParameter?.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+			}
+		}
+		guard !passingUpFiles.isEmpty else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .publicMockPassesUpPlaceItsRootLevelFills,
+			details: "`\(consumerName).mock` takes a builder of `\(prefix)T6`'s places, whose fill reads only what `\(prefix)T6`'s mock binds before its tree.\nThis graph:\n\(firstOutcome.description)",
+		)
 	}
 
 	/// The failure of a `generateMockPublic` graph the tool accepts that generates a `public` or `package` declaration
@@ -2268,6 +2435,13 @@ extension GraphFuzzerPublicMockDraw {
 			if holeLeaf.properties.contains(where: { $0.label == "session" }) {
 				features.insert(.holeScopeHoldsPackageValue)
 			}
+			// On the root-level stream: what `T6`'s mock binds before its tree.
+			let rootBindsLabelInTwoForms = holeLeaf.properties.contains { $0.label == "holeSibling" }
+			if let holeSession = holeLeaf.properties.first(where: { $0.label == "holeSession" }) {
+				features.insert(holeSession.type.hasPrefix("LazilyInstantiated<") ? .holeRootLevelHoldsWrapper : .holeRootLevelHoldsValues)
+			} else if rootBindsLabelInTwoForms {
+				features.insert(.holeRootReceivesLabelInTwoForms)
+			}
 			let bindsContext = holeLeaf.properties.contains { $0.label == "holeContext" }
 			if bindsContext {
 				features.insert(.holeScopeHoldsPublicValue)
@@ -2303,6 +2477,12 @@ extension GraphFuzzerPublicMockDraw {
 					features.insert(.holeFillReceivesNonField)
 				} else if content.contains("holeContext: ") {
 					features.insert(.holeFillReceivesField)
+				}
+				if content.contains(" holeSession: ") || content.contains("(holeSession: ") || content.contains(" holeToken: ") {
+					features.insert(rootBindsLabelInTwoForms ? .holeFillReceivesFormBoundAgain : .holeFillReceivesRootLevelValue)
+				}
+				if content.contains("holeSession: LazilyInstantiated<") {
+					features.insert(.holeFillReceivesRootLevelWrapper)
 				}
 			}
 			if let fillModule, reachingModules.contains(fillModule) {

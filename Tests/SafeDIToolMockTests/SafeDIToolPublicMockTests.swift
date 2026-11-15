@@ -1660,6 +1660,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        case thing(thing_Values)
 
 			        public struct thing_Values {
+			            public let name: String
+			            public let count: Int
+			            public let tag: String?
+			            public let token: Token
 			            public let config: Config
 			            public let child: Child
 			        }
@@ -1705,13 +1709,13 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(config, renamed) } else { Child(config: config, renamed: renamed) }
 			        }
 			        let child: Child = __safeDI_child()
-			        let thing: Thing = __safeDI_thingBuilder(.thing(SafeDIMockScope_Thing.thing_Values(config: config, child: child)))
+			        let thing: Thing = __safeDI_thingBuilder(.thing(SafeDIMockScope_Thing.thing_Values(name: name, count: count, tag: tag, token: token, config: config, child: child)))
 			        return Service(name: name, count: count, tag: tag, token: token, thing: thing, child: child, onCancel: safeDIOverrides.onCancel)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_mock_64EA7580BAFB7FD0 {}
+			    public enum __safeDI_Service_mock_666BB08FB8FF944E {}
 			}
 			#endif
 			""",

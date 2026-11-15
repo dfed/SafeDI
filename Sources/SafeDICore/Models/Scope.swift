@@ -1607,15 +1607,19 @@ struct SeamHoles {
 	/// reads the seam's deferred parameter or a lazily instantiated declaration of the label. A deferred parameter's own
 	/// field takes the `LazilyInstantiated` itself. A label in `bindingNamesPassedByName` is read under the name it maps to:
 	/// a public mock passes a type that name rather than binding it again under the label inside the type's builder
-	/// function, where a payload of the type's level is built (`MockParameterNode.valuesBindings`).
+	/// function, where a payload of the type's level is built (`MockParameterNode.valuesBindings`). A field of a
+	/// `LazilyInstantiated` a public mock binds under a name apart, beside the instance it takes under the label, is read
+	/// under the name `lazilyInstantiatedBindingNames` gives it by label and wrapper type where the wrapper is in scope: the
+	/// mock's root level holds the wrapper (`DependencyTreeGenerator.PublicMockRootLevel`).
 	static func valuesArguments(
 		of fields: [SeamSignature.Hole.Field],
 		readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [],
 		bindingNamesPassedByName: [String: String] = [:],
+		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:],
 	) -> String {
 		fields.map { field in
 			let label = field.property.label
-			let name = bindingNamesPassedByName[label] ?? label
+			let name = bindingNamesPassedByName[label] ?? lazilyInstantiatedBindingNames[label]?[field.property.typeDescription] ?? label
 			let value = if !field.isDeferredParameter, lazilyInstantiatedInstanceProperties.contains(field.property.asUnwrappedProperty) {
 				"\(name).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 			} else {
@@ -1639,9 +1643,9 @@ struct SeamHoles {
 		let fields: [SeamSignature.Hole.Field]
 
 		/// The line that binds the payload, each field read as
-		/// `valuesArguments(of:readingInstancesOf:bindingNamesPassedByName:)` reads it.
-		func line(readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>, bindingNamesPassedByName: [String: String] = [:]) -> String {
-			"let \(bindingName) = \(type.asSource)(\(SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName)))"
+		/// `valuesArguments(of:readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)` reads it.
+		func line(readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>, bindingNamesPassedByName: [String: String] = [:], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:]) -> String {
+			"let \(bindingName) = \(type.asSource)(\(SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)))"
 		}
 	}
 

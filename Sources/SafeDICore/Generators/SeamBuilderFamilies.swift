@@ -99,6 +99,7 @@ extension DependencyTreeGenerator {
 	///     it, which its builders follow and are named apart from as a seam's builders are from its parameters.
 	///   - bindsReceivesAgain: Whether the tree is a public mock's, whose levels hold the receives it binds again (see
 	///     `mockBindsAgain(receiving:beneath:)`).
+	///   - namesApartAtRoot: For a public mock, what its root binds only under names apart, which no level declares.
 	static func shapedBuilders(
 		of seam: Instantiable,
 		generator: ScopeGenerator,
@@ -111,6 +112,7 @@ extension DependencyTreeGenerator {
 		ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum],
 		scopeTypeNames: ScopeTypeNames = .seam,
 		bindsReceivesAgain: Bool = false,
+		namesApartAtRoot: PublicMockRootLevel.NamesApart = .init(),
 	) -> ShapedBuilders {
 		guard !flatHoles.isEmpty else { return ShapedBuilders(holes: [], builders: [], scopeEnums: [], builderBySite: [:]) }
 		let seamType = seam.concreteInstantiable
@@ -232,6 +234,7 @@ extension DependencyTreeGenerator {
 					holesBySite: holesBySite,
 					parameters: parameters,
 					bindsReceivesAgain: bindsReceivesAgain,
+					namesApartAtRoot: namesApartAtRoot,
 					proof: proof,
 					instantiables: instantiables,
 					reachedEnum: reachedEnum,

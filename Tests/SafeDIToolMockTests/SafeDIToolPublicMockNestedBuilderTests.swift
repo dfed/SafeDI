@@ -1274,7 +1274,9 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    @frozen public enum SafeDIMockScope_Service_Service {
 		        case row(row_Values, SafeDIMockScope_Service_Service.Row_Scope)
 
-		        public struct row_Values {}
+		        public struct row_Values {
+		            public let serviceBuilder: ServiceBuilder
+		        }
 
 		        @frozen public enum Row_Scope {
 		            case service(service_Values)
@@ -1300,7 +1302,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Panel {
 		        let __safeDI_service_ServiceBuilder = service_ServiceBuilder
-		        let __safeDI_service_ServiceValues_row = SafeDIMockScope_Service_Service.row_Values()
+		        let __safeDI_service_ServiceValues_row = SafeDIMockScope_Service_Service.row_Values(serviceBuilder: serviceBuilder)
 		        func __safeDI_row() -> Row {
 		            let service: any Service = __safeDI_service_ServiceBuilder(.row(__safeDI_service_ServiceValues_row, .service(SafeDIMockScope_Service_Service.Row_Scope.service_Values())))
 		            return if let safeDIBuilder = safeDIOverrides.row { safeDIBuilder(serviceBuilder, service) } else { Row(serviceBuilder: serviceBuilder, service: service) }
@@ -1311,7 +1313,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		}
 
 		extension Panel {
-		    public enum __safeDI_Panel_mock_12F1470E2233A09B {}
+		    public enum __safeDI_Panel_mock_1938B7BE2221A1B0 {}
 		}
 		#endif
 		"""])
@@ -1394,10 +1396,12 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenFillCallsAPublicMockWhoseTierOmitsAValueTheCallerProvides() async {
 		// `App` fills `Panel`'s place with `DefaultService`, whose `public` mock passes `nil` to `TokenCache`'s `filter`,
-		// which the inline mock would hand the `filter` `Screen` forwards.
+		// which the inline mock would hand the `filter` `Panel` receives. `Panel`'s root level holds it, so the fill is handed
+		// it there, and the error is located where `Screen` builds `Panel`, naming the value as `Panel`'s mock hands it, which
+		// `Screen` forwards.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: [3 of Int]`, but the `public` mock SafeDI generated for `DefaultService` in module `Impl`, the narrowest one module `App` can call, does not take it: `DefaultService.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Impl` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
+			\(fixtures["App"]!["Screen.swift"]):12:5: error: `Panel`’s mock hands this fill `filter: [3 of Int]`, but the `public` mock SafeDI generated for `DefaultService` in module `Impl`, the narrowest one module `App` can call, does not take it: `DefaultService.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Impl` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
 			\(fixtures["Impl"]!["TokenCache.swift"]):10:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
 			"""
 		}) {
@@ -4701,6 +4705,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        case service(service_Values)
 
 		        public struct service_Values {
+		            package let serviceBuilder: Thing?
 		            package let badge: Badge
 		        }
 		    }
@@ -4734,13 +4739,13 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		    ) -> Panel {
 		        let __safeDI_serviceBuilder = service_ServiceBuilder
 		        let badge = if let safeDIBuilder = safeDIOverrides.badge { safeDIBuilder(serviceBuilder) } else { Badge(serviceBuilder: serviceBuilder) }
-		        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIMockScope_Service.service_Values(badge: badge)))
+		        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIMockScope_Service.service_Values(serviceBuilder: serviceBuilder, badge: badge)))
 		        return Panel(service: service, badge: badge)
 		    }
 		}
 
 		extension Panel {
-		    public enum __safeDI_Panel_mock_DE8E528AFD4568A6 {}
+		    public enum __safeDI_Panel_mock_58A93E5BA8F96315 {}
 		}
 		#endif
 		"""])
@@ -4769,7 +4774,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        service_ServiceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        _ = Panel.__safeDI_Panel_mock_DE8E528AFD4568A6.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        _ = Panel.__safeDI_Panel_mock_58A93E5BA8F96315.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let panel = Panel.mock(service_ServiceBuilder: service_ServiceBuilder, serviceBuilder: nil, safeDIOverrides: safeDIOverrides.panel)
 		        return Screen(panel: panel)
 		    }
@@ -4801,7 +4806,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 		        serviceBuilder: @escaping (Panel.SafeDIMockScope_Service) -> any Service,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        _ = Panel.__safeDI_Panel_mock_DE8E528AFD4568A6.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        _ = Panel.__safeDI_Panel_mock_58A93E5BA8F96315.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let panel = Panel.mock(serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides.panel)
 		        return Screen(panel: panel)
 		    }

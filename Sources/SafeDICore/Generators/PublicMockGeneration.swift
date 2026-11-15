@@ -853,13 +853,11 @@ extension ScopeGenerator {
 		context: PublicMockContext,
 	) -> PublicMockPlan {
 		let typeName = instantiable.concreteInstantiable.asSource
-		let ownModules: Set<String?> = [context.moduleName, instantiable.moduleName]
 		let receiverModulesByLabel = receiverModules(in: parameterTree, context: context)
 		// The cause of each access computed, by type and receive label, which a parameter of that access records.
 		var accessCauses = [String: TypeAccessProof.Cause]()
 		func access(of type: TypeDescription, receivedAs label: String?) -> AccessLevel {
-			let admittedModules = ownModules.union(label.map { receiverModulesByLabel[$0, default: []] } ?? [])
-			let access = context.access(ofTypes: [type], admittedModules: admittedModules)
+			let access = publicMockParameterAccess(ofType: type, receivedAs: label, mockedType: instantiable, receiverModulesByLabel: receiverModulesByLabel, context: context)
 			accessCauses["\(label ?? ""):\(type.asSource)"] = access.cause
 			return access.level
 		}
@@ -1042,6 +1040,21 @@ extension ScopeGenerator {
 		plan.builders = builders
 		plan.scopeEnums = shapedBuilders?.scopeEnums ?? []
 		return plan
+	}
+
+	/// How visible a public mock's parameter of `type` is: as visible as the narrowest type it names, as the declarations of
+	/// the mocked type's module prove it, and, for a dependency the tree receives as `label`, those of the modules of the
+	/// types that receive it (`receiverModulesByLabel`, from `receiverModules(in:context:)`).
+	static func publicMockParameterAccess(
+		ofType type: TypeDescription,
+		receivedAs label: String?,
+		mockedType: Instantiable,
+		receiverModulesByLabel: [String: Set<String?>],
+		context: PublicMockContext,
+	) -> TypeAccessProof.ParameterAccess {
+		let ownModules: Set<String?> = [context.moduleName, mockedType.moduleName]
+		let admittedModules = ownModules.union(label.map { receiverModulesByLabel[$0, default: []] } ?? [])
+		return context.access(ofTypes: [type], admittedModules: admittedModules)
 	}
 
 	/// The modules that declare a receiver of each label in `items`' tree: a type whose declaration receives a
@@ -1588,7 +1601,12 @@ extension ScopeGenerator.PublicMockTierOmission {
 		} else {
 			what = "the `\(call.tier.spelledOnGeneratedDeclaration)` mock SafeDI generated for \(type)\(declaringModule), the narrowest one \(caller) can call, does not take it: `\(call.type.asSource).mock` takes \(label) only on its `\(parameter.access.spelledOnGeneratedDeclaration)` tier, so this call would pass `nil` to \(receiverNames.isEmpty ? type : receiverNames), which the inline mock would hand \(label)."
 		}
-		let message = "\(name(providerDeclaringType)) provides `\(providerProperty.asSource)`, but \(what)\(causeText) \(SeamAccessExplanation.joined(remedies))"
+		// A fill's field is the value the called mock hands the fill, which the called mock's tree built or its own `mock()`
+		// was handed: the type does not provide it.
+		let provider = providerIsHandedToFill
+			? "\(name(providerDeclaringType))’s mock hands this fill `\(providerProperty.asSource)`"
+			: "\(name(providerDeclaringType)) provides `\(providerProperty.asSource)`"
+		let message = "\(provider), but \(what)\(causeText) \(SeamAccessExplanation.joined(remedies))"
 		return [SourceDiagnostic(severity: .error, location: providerDeclarationLocation, message: message)]
 			+ SeamAccessExplanation.declarationNotes(for: parameter.accessCause, neededLevel: neededLevel)
 			+ receivers.map { receiver in
