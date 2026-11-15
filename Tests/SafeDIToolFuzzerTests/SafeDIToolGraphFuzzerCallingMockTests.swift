@@ -580,6 +580,34 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func check_reportsMockFailsWhenRun_whenMocksFillTraps() async throws {
+		// Both forms compile; only the mock's fill traps when it is built.
+		let twinGraph = Self.innerSeamGraph(named: "the twin", tests: Self.fillReadingNothing, expectedTwinErrorSite: nil)
+		let mockGraph = Self.innerSeamGraph(named: "the mock", tests: Self.fillReadingNothing.replacingOccurrences(of: "    init() {}\n}", with: "    init() { fatalError(\"A planted trap\") }\n}"), expectedTwinErrorSite: nil)
+		let graph = GraphFuzzerCallingMockGraph(
+			name: "a mock whose fill traps",
+			mockFiles: mockGraph.mockFiles,
+			twinFiles: twinGraph.twinFiles,
+			callerTypeName: "Host",
+			callerIsPublic: false,
+			flatParameterLabels: [],
+			implementationIsVisible: true,
+			expectedTwinInitializerLabels: [],
+			expectedPassUpLabels: [],
+			expectedTwinErrorSite: nil,
+			valueProbes: [Self.hostProbe],
+		)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
+
+		#expect(mockGraph.mockFiles.map(\.content) != twinGraph.mockFiles.map(\.content))
+		#expect(result.twinHasIntendedOutcome)
+		#expect(result.comparedValues)
+		#expect(result.failure?.kind == .callingMockFailsWhenRun)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func check_reportsMockDoesNotCompile_whenMocksModuleDoesNotCompile() async throws {
 		// The tool reads no expression, so it accepts both forms; only the mock's module holds one that does not compile.
 		let twinGraph = Self.innerSeamGraph(named: "the twin", tests: Self.fillReadingNothing, expectedTwinErrorSite: nil)

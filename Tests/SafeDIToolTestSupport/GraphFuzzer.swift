@@ -9955,6 +9955,9 @@ struct GraphFuzzerFailure: Equatable {
 		/// A calling mock that mirrors its accepted production twin builds other values than the twin
 		/// (`GraphFuzzerCallingMockCheck.valueFailure`).
 		case callingMockBuildsOtherValuesThanTwin = "a calling mock builds other values than its production twin"
+		/// A calling mock that mirrors its accepted production twin compiles, and its probe traps or does not finish
+		/// (`GraphFuzzerCallingMockCheck.valueFailure`).
+		case callingMockFailsWhenRun = "a calling mock traps or does not finish where its production twin is accepted"
 	}
 
 	let seed: UInt64

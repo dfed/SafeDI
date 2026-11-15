@@ -964,9 +964,10 @@ enum GraphFuzzerCallingMockCheck {
 	}
 
 	/// Compiles the calling mock's path, `feature`, and its twin's, `knownRight`, with the differential value comparator,
-	/// and compares what `probes` build in each: a mock that does not compile, or that builds other values, fails. Returns
-	/// whether the values were compared, which they are not when compile verification is off. Any other failure of the
-	/// comparator, such as a twin that does not compile or a probe that names no declaration, is the harness's and throws.
+	/// and compares what `probes` build in each: a mock that does not compile, that traps or does not finish when its probe
+	/// runs, or that builds other values, fails. Returns whether the values were compared, which they are not when compile
+	/// verification is off. Any other failure of the comparator, such as a twin that does not compile or run, or a probe
+	/// that names no declaration, is the harness's and throws.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	static func valueFailure(
 		of graph: GraphFuzzerCallingMockGraph,
@@ -996,6 +997,8 @@ enum GraphFuzzerCallingMockCheck {
 		} catch let error as DifferentialValueOracleError {
 			if error.path == .feature, case .compilingModule = error.stage {
 				return (true, GraphFuzzerFailure(seed: seed, kind: .callingMockDoesNotCompile, details: "\(graph.name): \(error)"))
+			} else if error.path == .feature, error.stage == .runningProbes {
+				return (true, GraphFuzzerFailure(seed: seed, kind: .callingMockFailsWhenRun, details: "\(graph.name): \(error)"))
 			} else {
 				throw HarnessError(description: "The value comparison of \(graph.name) could not run: \(error)")
 			}
