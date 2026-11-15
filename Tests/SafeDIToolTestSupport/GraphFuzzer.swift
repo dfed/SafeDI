@@ -9797,7 +9797,7 @@ struct GraphFuzzerKnownIssue: Equatable {
 						}
 					}
 				}
-				case .callingMockAcceptedWhereTwinReportsShapeError:
+			case .callingMockAcceptedWhereTwinReportsShapeError:
 				failure.kind == .callingMockAcceptedWhereTwinReportsShapeError
 			case .callingMockPassesUpUnclassifiedPlace:
 				failure.kind == .callingMockPassesUpUnclassifiedPlace
