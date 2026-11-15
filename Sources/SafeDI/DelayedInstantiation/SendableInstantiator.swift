@@ -63,3 +63,11 @@ public final class SendableInstantiator<T: Instantiable>: Sendable {
 
 	private let instantiator: @Sendable (T.ForwardedProperties) -> T
 }
+
+extension SendableInstantiator {
+	/// A `@Sendable` closure that takes `T.ForwardedProperties` and returns an instance of `T`: what a
+	/// `SendableInstantiator` is created with.
+	///
+	/// A closure of this type may keep a forwarded property that is itself a closure, as one passed to `init(_:)` may.
+	public typealias Builder = @Sendable (T.ForwardedProperties) -> T
+}

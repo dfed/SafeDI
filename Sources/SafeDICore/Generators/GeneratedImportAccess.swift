@@ -439,6 +439,13 @@ enum WellKnownTypeNames {
 	static let safeDI: Set<String> = [
 		"Instantiator", "ErasedInstantiator", "SendableInstantiator", "SendableErasedInstantiator", "LazilyInstantiated", "SendableLazilyInstantiated",
 	]
+
+	/// SafeDI's wrappers that declare a `Builder`, the closure each is created with. A type is attributed to a module by
+	/// its outermost name, so `safeDI` attributes each `Builder` to SafeDI already; this set keeps the comment that names
+	/// types SafeDI reads no declaration of from naming one (`TypeAccessProof.isAllowlisted(_:)`).
+	static let safeDIWrappersDeclaringBuilder: Set<String> = [
+		"Instantiator", "ErasedInstantiator", "SendableInstantiator", "SendableErasedInstantiator",
+	]
 }
 
 /// Collects the outermost names of the types the `public`, `@usableFromInline`, and `package` declarations of a

@@ -40,8 +40,28 @@ struct InstantiatorTests {
 		#expect(firstBuiltProduct !== secondBuiltProduct)
 	}
 
+	@Test @MainActor
+	func instantiate_keepsForwardedClosure_whenBuilderTypeClosureCreatesInstantiator() {
+		var actionCallCount = 0
+		let builder: Instantiator<BuiltProductWithForwardedAction>.Builder = { action in BuiltProductWithForwardedAction(action: action) }
+		let systemUnderTest = Instantiator(builder)
+		let builtProduct = systemUnderTest.instantiate { actionCallCount += 1 }
+		builtProduct.action()
+		#expect(actionCallCount == 1)
+	}
+
 	private final class BuiltProduct: Instantiable {
 		let id = UUID().uuidString
+	}
+
+	private final class BuiltProductWithForwardedAction: Instantiable {
+		init(action: @escaping () -> Void) {
+			self.action = action
+		}
+
+		typealias ForwardedProperties = () -> Void
+
+		@Forwarded let action: () -> Void
 	}
 
 	private final class BuiltProductWithForwardedArgument: Instantiable {

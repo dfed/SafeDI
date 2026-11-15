@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 import Foundation
+import Synchronization
 import Testing
 @testable import SafeDI
 
@@ -40,8 +41,29 @@ struct SendableInstantiatorTests {
 		#expect(firstBuiltProduct !== secondBuiltProduct)
 	}
 
+	@Test
+	@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
+	func instantiate_keepsForwardedClosure_whenBuilderTypeClosureCreatesInstantiator() {
+		let actionCallCount = Mutex(0)
+		let builder: SendableInstantiator<BuiltProductWithForwardedAction>.Builder = { action in BuiltProductWithForwardedAction(action: action) }
+		let systemUnderTest = SendableInstantiator(builder)
+		let builtProduct = systemUnderTest.instantiate { actionCallCount.withLock { $0 += 1 } }
+		builtProduct.action()
+		#expect(actionCallCount.withLock { $0 } == 1)
+	}
+
 	private final class BuiltProduct: Instantiable {
 		let id = UUID().uuidString
+	}
+
+	private final class BuiltProductWithForwardedAction: Instantiable {
+		init(action: @escaping @Sendable () -> Void) {
+			self.action = action
+		}
+
+		typealias ForwardedProperties = @Sendable () -> Void
+
+		@Forwarded let action: @Sendable () -> Void
 	}
 
 	private final class BuiltProductWithForwardedArgument: Instantiable {

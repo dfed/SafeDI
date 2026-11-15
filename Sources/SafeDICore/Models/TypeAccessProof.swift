@@ -689,10 +689,16 @@ public struct TypeAccessProof: Sendable {
 	/// read as any plain declaration is.
 	private static let allowlistedNames = WellKnownTypeNames.swift.union(WellKnownTypeNames.foundation).union(WellKnownTypeNames.safeDI)
 
+	/// Whether `type`, spelled without generic arguments, is one of the standard types `allowlistedNames` names, spelled
+	/// alone or qualified by its module's name, or the `Builder` a SafeDI wrapper declares (`Instantiator.Builder`,
+	/// `SafeDI.Instantiator.Builder`), which the same comment would otherwise name.
 	private static func isAllowlisted(_ type: TypeDescription) -> Bool {
 		switch type {
 		case let .simple(name, _):
 			allowlistedNames.contains(name)
+		case let .nested("Builder", .simple(wrapperName, []), _) where WellKnownTypeNames.safeDIWrappersDeclaringBuilder.contains(wrapperName),
+		     .nested("Builder", .nested(let wrapperName, .simple("SafeDI", []), []), _) where WellKnownTypeNames.safeDIWrappersDeclaringBuilder.contains(wrapperName):
+			true
 		case let .nested(name, .simple(moduleName, []), _):
 			(moduleName == "Swift" || moduleName == "Foundation" || moduleName == "Dispatch" || moduleName == "SafeDI") && allowlistedNames.contains(name)
 		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .optional, .some, .tuple, .unknown, .variadic, .void:
