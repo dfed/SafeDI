@@ -4,4 +4,4 @@
 
 `SafeDIInfo.transitive_module_infos` is a depset never flattened at analysis (the CSV is written from an `Args` object); only a module with a root or seam reads it, and only for what its dependency trees need (`ModulesBeneathSelection`).
 
-Every build of the tool names its modules `SafeDIToolLibrary` and `SafeDICore` (`module_name` on their `swift_library` rules); `.claude/rules/serialization.md` says why. Rules: `.claude/rules/serialization.md` and `.claude/rules/file-paths.md`.
+`module_name` on the `SafeDIToolLibrary` and `SafeDICore` rules is the name their importers use. Module names never reach a `.safedi` file: its schema fingerprint is a checked-in constant. Rules: `.claude/rules/serialization.md` and `.claude/rules/file-paths.md`.
