@@ -55,8 +55,9 @@ one fragment; for several, the lines from the one that opens the fragment's firs
 that closes its last, which needs the header, the imports, the blank lines between and every line that opens or
 closes a top-level declaration unchanged. Otherwise the record is refused with a reason, and its literals become
 manual items unless other records give them values that reassemble to the head output. A record the literals
-tile in more than one way (two literals of one value in one test) is refused too, and every literal of every way
-becomes a manual item when another record would change it. What a joined output cannot show is left as it
+tile in more than one way (two literals of one value in one test) is refused too, and every literal that could be
+a fragment of it becomes a manual item when the record's output changed or another record would rewrite the
+literal. What a joined output cannot show is left as it
 is read: a declaration that changes at a fragment's edge stays with the fragment that held it, though it may be
 its neighbor's now when their opening and closing lines are equal, and everything a single fragment's output
 gains goes to that fragment. A file per fragment, which the plugin integration records, settles both.
@@ -1277,7 +1278,10 @@ def apply(arguments):
         for literal in current.literals:
             function = current.test_function_of_offset(literal.start)
             if function is None:
-                candidates = file_records
+                # A literal outside every test function may be compared by any call of its file, and by any call
+                # a test of its file makes through a helper function of another file.
+                by_key = {record["key"]: record for record in file_records + records_by_test_file.get(relative_path, [])}
+                candidates = [by_key[key] for key in sorted(by_key)]
             else:
                 candidates = [records_by_function.get(function, {})[key] for key in sorted(records_by_function.get(function, {}))]
             for record in candidates:
@@ -2221,6 +2225,65 @@ def self_test(root):
     )
     status, summary = test.run()
     expect(constant_last_test.count("static let shared") == 1 and constant_last_test.index("static let shared") > constant_last_test.index("func second") and status == 1 and summary["rewritten"] == 0 and summary["manualReasons"] == [FRAGMENTS_AMBIGUOUS] and test.source() == constant_last_test, f"fragments, ambiguous sharer declared last: {status} {summary}")
+
+    # Every way a record reaches a literal: the literal inside the test function or outside every function; the call
+    # in the test, through a helper function of the test's file, or through one of another file; the literal the
+    # whole output, also one too short to be a fragment, or a fragment of it. In each, two records that agree
+    # rewrite the literal, and two that contradict each other leave it for a person.
+    def reach_fixture(placement, route, kind):
+        contested = ["Old"] if kind == "short whole" else ["extension Contested {", "    let value = OldValue()", "}"]
+        lines = ["struct FileTests {"]
+        if kind == "short whole":
+            lines += ['\tstatic let contested = "Old"', ""] if placement == "file" else []
+        elif placement == "file":
+            lines += ['\tstatic let contested = """'] + ["\t" + line for line in contested] + ['\t"""', ""]
+        helper_line = None
+        if route == "helper in the file":
+            lines += ["\tfunc check(_ expected: Any) {", "\t\texpect(run(), expected)", "\t}", ""]
+            helper_line = len(lines) - 2
+        lines += ["\t@Test", "\tfunc test() {"]
+        test_line = len(lines)
+        if placement == "file":
+            expression = "Self.contested"
+        elif kind == "short whole":
+            expression = '"Old"'
+        else:
+            expression = '"""\n' + "\n".join("\t\t\t" + line for line in contested) + '\n\t\t\t"""'
+        if kind == "fragment":
+            expression = 'files(rootFiles: ["A": ' + expression + ', "B": """\n\t\t\textension Other {\n\t\t\t    let other = 1\n\t\t\t}\n\t\t\t"""])'
+        lines += ["\t\t" + ("expect(run(), " if route == "call in the test" else "check(") + expression + ")"]
+        call_line = len(lines)
+        lines += ["\t}", "}", ""]
+        content = ("" if kind == "short whole" else SELF_TEST_HEADER) + "\n".join(contested) + ("\n\nextension Other {\n    let other = 1\n}" if kind == "fragment" else "")
+        if route == "call in the test":
+            location = {"line": call_line}
+        elif route == "helper in the file":
+            location = {"line": helper_line, "test_file_id": "Mod/FileTests.swift", "test_line": test_line}
+        else:
+            location = {"line": 2, "file_id": "Mod/Helper.swift", "test_file_id": "Mod/FileTests.swift", "test_line": test_line}
+        return "\n".join(lines), content, location
+
+    for placement in ("function", "file"):
+        for route in ("call in the test", "helper in the file", "helper in another file"):
+            for kind in ("whole", "short whole", "fragment"):
+                for heads, expected_status in ((("NewValue", "NewValue"), 1), (("NewValue", "OtherValue"), 1)):
+                    name = f"reach, literal in the {placement}, {route}, {kind}, {'agreeing' if heads[0] == heads[1] else 'contradicting'}"
+                    source, content, location = reach_fixture(placement, route, kind)
+                    old = "Old" if kind == "short whole" else "OldValue"
+                    heads = [head[:3] for head in heads] if kind == "short whole" else heads
+                    test = case(name.replace(", ", "-").replace(" ", "-"))
+                    test.test_file(source)
+                    if route == "helper in another file":
+                        test.test_file("func check(_ expected: Any) {\n\texpect(run(), expected)\n}\n", "Tests/Mod/Helper.swift")
+                    test.records(
+                        [generation_record(key, location["line"], content, file_id=location.get("file_id", "Mod/FileTests.swift"), test_file_id=location.get("test_file_id"), test_line=location.get("test_line")) for key in ("a", "b")],
+                        [generation_record(key, location["line"], content.replace(old, head), file_id=location.get("file_id", "Mod/FileTests.swift"), test_file_id=location.get("test_file_id"), test_line=location.get("test_line")) for key, head in zip(("a", "b"), heads)],
+                    )
+                    status, summary = test.run()
+                    if heads[0] == heads[1]:
+                        expect(status == expected_status and summary["rewritten"] == 1 and summary["manual"] == 0 and test.source() == source.replace(old, heads[0]), f"{name}: {status} {summary}")
+                    else:
+                        expect(status == expected_status and summary["rewritten"] == 0 and summary["manualReasons"] == ["records that map to this literal disagree on its new value"] and test.source() == source, f"{name}: {status} {summary}")
 
     # fragments of a call made through a helper function are the literals of the test the record names.
     helper_test = 'struct FileTests {\n\tfunc check(_ expected: [String: String]) {\n\t\texpect(run(), expected)\n\t}\n\n\t@Test\n\tfunc test() {\n\t\tcheck(files(rootFiles: ["Root": """\n\t\t\textension Root {\n\t\t\t    let service = OldService()\n\t\t\t}\n\t\t\t""", "Service": """\n\t\t\textension Service {\n\t\t\t    let value = OldValue()\n\t\t\t}\n\t\t\t"""]))\n\t}\n}\n'
