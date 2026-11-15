@@ -1,8 +1,8 @@
 import App
-#if canImport(Feature)
-import Feature
-#endif
 import Harness
+#if canImport(Feature)
+	import Feature
+#endif
 
 /// Opens `depth` screens, each from the one before, with ids 1 through `depth`, and returns the deepest.
 func walk(_ root: Root, depth: Int) -> Screen {
@@ -20,6 +20,7 @@ do {
 	Registry.printTrace()
 	withExtendedLifetime((root, deepest)) {}
 }
+
 Registry.printAlive("after dropping everything")
 for depth in [4, 8] {
 	do {
