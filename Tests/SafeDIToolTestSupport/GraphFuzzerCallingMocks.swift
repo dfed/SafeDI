@@ -44,7 +44,9 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 	case callersOwnValue
 	/// Control: no type that fulfills the hole is visible from the calling mock's module.
 	case noVisibleImplementation
-	/// Control: the visible implementation receives a value nothing in the calling tree provides.
+	/// The visible implementation receives a value nothing in the calling tree builds, which production takes as a
+	/// parameter and fills the place from: the calling mock passes the place up, which no permanent reason explains (the
+	/// reason that once did is withdrawn).
 	case implementationReceivesWhatNothingProvides
 
 	static func < (lhs: Self, rhs: Self) -> Bool {
@@ -63,9 +65,9 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 
 	var isControl: Bool {
 		switch self {
-		case .noVisibleImplementation, .implementationReceivesWhatNothingProvides:
+		case .noVisibleImplementation:
 			true
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides:
 			false
 		}
 	}
@@ -99,21 +101,8 @@ struct GraphFuzzerCallingMockCell: Hashable, Comparable, CustomStringConvertible
 		}
 	}
 
-	/// Why no graph can fill the cell, or `nil` when the draw fills it.
-	var impossibility: String? {
-		switch (shape, place) {
-		case (.appOnlyScreenInLoop, .plain):
-			// The loop needs the screen deferred: a plain `settings: any SettingsPage` built beside `feedBuilder` whose
-			// `Feed` receives it closes a constant cycle, which production reports as a dependency cycle at the app-only
-			// screen's receive of `feedBuilder`, not as the loop's own error.
-			"a plain place closes a constant cycle (the app-only screen's receive of the feed's builder), which production reports as a dependency cycle"
-		case (.outerSeamValue, _), (.appOnlyScreenInLoop, .deferred), (.seamBuiltAgain, _), (.loopThroughInnerSeamBuilder, _), (.callersOwnValue, _), (.noVisibleImplementation, _), (.implementationReceivesWhatNothingProvides, _):
-			nil
-		}
-	}
-
 	/// The cells the draw fills, in order: a seed's cell is `drawnCells[seed % drawnCells.count]`.
-	static let drawnCells = all.filter { $0.impossibility == nil }
+	static let drawnCells = all
 }
 
 // MARK: - Draw
@@ -146,7 +135,6 @@ struct GraphFuzzerCallingMockDraw {
 			callerIsPublic: cell.callerIsPublic,
 			flatParameterLabels: flatParameterLabels,
 			implementationIsVisible: implementationIsVisible,
-			implementationReceivesWhatNothingProvides: implementationReceivesWhatNothingProvides,
 			expectedTwinErrorSite: expectedTwinErrorSite,
 		)
 	}
@@ -170,11 +158,6 @@ struct GraphFuzzerCallingMockDraw {
 	/// Whether a type that fulfills the hole is visible from the calling mock's module.
 	var implementationIsVisible: Bool {
 		cell.shape != .noVisibleImplementation
-	}
-
-	/// Whether the visible implementation's own tree receives a value nothing in the calling tree provides.
-	var implementationReceivesWhatNothingProvides: Bool {
-		cell.shape == .implementationReceivesWhatNothingProvides
 	}
 
 	/// Where production reports the shape's own error: the module and file, and the declaration the error is at.
@@ -460,11 +443,24 @@ struct GraphFuzzerCallingMockDraw {
 		"""
 	}
 
+	/// The seam's module of the app-only screen's loop. A deferred place is the settings screen's builder, which forwards
+	/// `id`; a plain place is the screen itself, which closes the loop through the feed's builder as a constant cycle.
 	private var signedInModuleContent: String {
 		let feedBuilder = "\(names.feed.lowercasedFirst)Builder"
-		let settingsBuilder = "\(names.settings.lowercasedFirst)Builder"
 		let feedBuilderType = "ErasedInstantiator<(), any \(names.feedPage)>"
-		let settingsBuilderType = "ErasedInstantiator<Int, any \(names.settingsPage)>"
+		let settingsBuilder: String
+		let settingsBuilderType: String
+		let settingsAttribute: String
+		switch cell.place {
+		case .plain:
+			settingsBuilder = names.settings.lowercasedFirst
+			settingsBuilderType = "any \(names.settingsPage)"
+			settingsAttribute = "@Instantiated"
+		case .deferred:
+			settingsBuilder = "\(names.settings.lowercasedFirst)Builder"
+			settingsBuilderType = "ErasedInstantiator<Int, any \(names.settingsPage)>"
+			settingsAttribute = "@Instantiated(fulfilledByType: \"\(names.settings)\")"
+		}
 		return """
 		import SafeDI
 
@@ -488,7 +484,7 @@ struct GraphFuzzerCallingMockDraw {
 		    init(user: User, \(feedBuilder): \(feedBuilderType), \(settingsBuilder): \(settingsBuilderType)) { self.user = user; self.\(feedBuilder) = \(feedBuilder); self.\(settingsBuilder) = \(settingsBuilder) }
 		    @Forwarded private let user: User
 		    @Instantiated(fulfilledByType: "\(names.feed)") private let \(feedBuilder): \(feedBuilderType)
-		    @Instantiated(fulfilledByType: "\(names.settings)") private let \(settingsBuilder): \(settingsBuilderType)
+		    \(settingsAttribute) private let \(settingsBuilder): \(settingsBuilderType)
 		}
 		"""
 	}
@@ -497,16 +493,30 @@ struct GraphFuzzerCallingMockDraw {
 		let feedBuilder = "\(names.feed.lowercasedFirst)Builder"
 		let feedBuilderType = "ErasedInstantiator<(), any \(names.feedPage)>"
 		let access = callerIsPublic ? "public " : ""
+		let screen = switch cell.place {
+		case .plain:
+			"""
+			@Instantiable(fulfillingAdditionalTypes: [(any \(names.settingsPage)).self])
+			\(access)final class \(names.settings): \(names.settingsPage), Instantiable {
+			    \(access)init(\(feedBuilder): \(feedBuilderType)) { self.\(feedBuilder) = \(feedBuilder) }
+			    @Received private let \(feedBuilder): \(feedBuilderType)
+			}
+			"""
+		case .deferred:
+			"""
+			@Instantiable
+			\(access)final class \(names.settings): \(names.settingsPage), Instantiable {
+			    \(access)init(id: Int, \(feedBuilder): \(feedBuilderType)) { self.id = id; self.\(feedBuilder) = \(feedBuilder) }
+			    @Forwarded let id: Int
+			    @Received private let \(feedBuilder): \(feedBuilderType)
+			}
+			"""
+		}
 		return """
 		import SafeDI
 		import Feature
 
-		@Instantiable
-		\(access)final class \(names.settings): \(names.settingsPage), Instantiable {
-		    \(access)init(id: Int, \(feedBuilder): \(feedBuilderType)) { self.id = id; self.\(feedBuilder) = \(feedBuilder) }
-		    @Forwarded let id: Int
-		    @Received private let \(feedBuilder): \(feedBuilderType)
-		}
+		\(screen)
 
 		\(callerDeclaration(form, properties: [("\(names.signedIn.lowercasedFirst)Builder", "Instantiator<\(names.signedIn)>")]))
 		"""
@@ -606,8 +616,6 @@ struct GraphFuzzerCallingMockGraph {
 	let flatParameterLabels: Set<String>
 	/// Whether a type that fulfills the hole is visible from the calling mock's module.
 	let implementationIsVisible: Bool
-	/// Whether the visible implementation's own tree receives a value nothing in the calling tree provides.
-	let implementationReceivesWhatNothingProvides: Bool
 	/// Where production reports the graph's shape error, as the module's file and the declaration's line, or `nil` when
 	/// production accepts the graph.
 	let expectedTwinErrorSite: (file: String, declaration: String)?
@@ -653,7 +661,6 @@ struct GraphFuzzerCallingMockGraph {
 		callerIsPublic: Bool,
 		flatParameterLabels: Set<String> = [],
 		implementationIsVisible: Bool = true,
-		implementationReceivesWhatNothingProvides: Bool = false,
 		expectedTwinErrorSite: (file: String, declaration: String)?,
 	) {
 		let twinFiles = mockFiles.enumerated().map { index, file in
@@ -674,7 +681,6 @@ struct GraphFuzzerCallingMockGraph {
 			callerIsPublic: callerIsPublic,
 			flatParameterLabels: flatParameterLabels,
 			implementationIsVisible: implementationIsVisible,
-			implementationReceivesWhatNothingProvides: implementationReceivesWhatNothingProvides,
 			expectedTwinErrorSite: expectedTwinErrorSite,
 		)
 	}
@@ -687,7 +693,6 @@ struct GraphFuzzerCallingMockGraph {
 		callerIsPublic: Bool,
 		flatParameterLabels: Set<String>,
 		implementationIsVisible: Bool,
-		implementationReceivesWhatNothingProvides: Bool,
 		expectedTwinErrorSite: (file: String, declaration: String)?,
 	) {
 		self.name = name
@@ -697,7 +702,6 @@ struct GraphFuzzerCallingMockGraph {
 		self.callerIsPublic = callerIsPublic
 		self.flatParameterLabels = flatParameterLabels
 		self.implementationIsVisible = implementationIsVisible
-		self.implementationReceivesWhatNothingProvides = implementationReceivesWhatNothingProvides
 		self.expectedTwinErrorSite = expectedTwinErrorSite
 	}
 }
@@ -744,14 +748,13 @@ struct GraphFuzzerDiagnosticSite: Hashable, CustomStringConvertible {
 
 // MARK: - Check
 
-/// Why a calling mock passes a place up, of the permanent reasons contract rule 7's calling-mock clause names. The third,
-/// a name the mock's tree hides, has no computable definition yet, so a pass-up neither of these explains is unclassified.
+/// Why a calling mock passes a place up, of the permanent reasons contract rule 7's calling-mock clause names. The other
+/// permanent reason, a name the mock's tree hides, has no computable definition yet, so a pass-up this one does not
+/// explain is unclassified. A visible implementation that receives what nothing in the mock's tree builds is no reason:
+/// production fills that place from a parameter.
 enum GraphFuzzerCallingMockPassUpReason: String, CaseIterable, Comparable {
 	/// No type that fulfills the place's type is visible from the mock's module.
 	case noVisibleImplementation
-	/// The mock is internal, and the visible implementation's own tree receives something nothing in the mock's tree
-	/// provides.
-	case implementationReceivesWhatNothingProvides
 
 	static func < (lhs: Self, rhs: Self) -> Bool {
 		allCases.firstIndex(of: lhs) ?? 0 < allCases.firstIndex(of: rhs) ?? 0
@@ -848,13 +851,7 @@ enum GraphFuzzerCallingMockCheck {
 	/// of it.
 	static func passUpsOf(_ graph: GraphFuzzerCallingMockGraph, inGeneratedFile generatedFile: String) -> [(label: String, reason: GraphFuzzerCallingMockPassUpReason?)] {
 		let labels = mockParameterLabels(ofType: graph.callerTypeName, inGeneratedFile: generatedFile)
-		let reason: GraphFuzzerCallingMockPassUpReason? = if !graph.implementationIsVisible {
-			.noVisibleImplementation
-		} else if !graph.callerIsPublic, graph.implementationReceivesWhatNothingProvides {
-			.implementationReceivesWhatNothingProvides
-		} else {
-			nil
-		}
+		let reason: GraphFuzzerCallingMockPassUpReason? = graph.implementationIsVisible ? nil : .noVisibleImplementation
 		return labels
 			.filter { $0 != "safeDIOverrides" && !graph.flatParameterLabels.contains($0) }
 			.map { ($0, reason) }
