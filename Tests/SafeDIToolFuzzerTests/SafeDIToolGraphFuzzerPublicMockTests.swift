@@ -74,7 +74,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			return GraphFuzzerPublicMockDraw.outputFeatures(of: result.fixture, generatedFiles: generatedFiles).contains(.unreadTypeComment)
 		})
 		let drawFeatures = passingResults.reduce(into: Set<GraphFuzzerPublicMockDrawFeature>()) { $0.formUnion(GraphFuzzerPublicMockDraw.drawFeatures(of: $1.fixture)) }
-		#expect(Set([GraphFuzzerPublicMockDrawFeature.bothConsumerModules, .otherPackageConsumerModuleOnly, .samePackageConsumerModuleOnly, .sendableWrapperAboveLeaf, .mockConditionDiffers, .seamDependency, .seamDependencyChain]).subtracting(drawFeatures).sorted() == [])
+		#expect(Set([GraphFuzzerPublicMockDrawFeature.bothConsumerModules, .otherPackageConsumerModuleOnly, .samePackageConsumerModuleOnly, .sendableWrapperAboveLeaf, .mockConditionDiffers, .seamDependency, .seamDependencyChain, .holeInsideLoop]).subtracting(drawFeatures).sorted() == [])
 		#expect(results.contains { !$0.isAccepted }, "Rejected none of \(SafeDIToolGraphFuzzerTests.publicMockSmokeSeeds.count) graphs")
 	}
 
@@ -94,6 +94,27 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		for feature in GraphFuzzerPublicMockDrawFeature.allCases {
 			#expect(counts[feature, default: 0] == SafeDIToolGraphFuzzerTests.publicMockCorpusDrawFeatureCounts[feature], "\(feature.rawValue) drawn in \(counts[feature, default: 0]) graphs")
 		}
+	}
+
+	@Test
+	func publicMockCorpus_drawsTenGraphsOfEachSide_whenFillUnderHoleLoopReadsHoleContext() {
+		// The loop around `T6`'s hole is drawn with a fill reading `holeContext` both where `HoleLoop` declares it again,
+		// which the tool rejects, and where it does not, the accepted neighbour the value differential compares: at least
+		// ten graphs of each.
+		let fillUnderLoopReadsField: Set<GraphFuzzerPublicMockDrawFeature> = [.holeInsideLoop, .holeFillReceivesField, .consumerReachesHoleTypeWithFill]
+		var staleReadCount = 0
+		var neighbourCount = 0
+		for seed in 0..<UInt64(SafeDIToolGraphFuzzerTests.publicMockCorpusSeedCount) {
+			let features = GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+			guard features.isSuperset(of: fillUnderLoopReadsField) else { continue }
+			if features.contains(.holeLoopDeclaresContextAgain) {
+				staleReadCount += 1
+			} else {
+				neighbourCount += 1
+			}
+		}
+		#expect(staleReadCount >= 10, "\(staleReadCount) graphs read `holeContext` the loop declares again")
+		#expect(neighbourCount >= 10, "\(neighbourCount) graphs read `holeContext` the loop does not declare again")
 	}
 
 	@Test
@@ -157,6 +178,33 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		#expect(runs(accepted, inaccessible).publicMockAcceptanceFailure?.kind == .knownRightRejectsGraphPublicMockAccepts)
 		#expect(runs(inaccessible, inaccessible).publicMockAcceptanceFailure == nil)
 		#expect(runs(accepted, accepted).publicMockAcceptanceFailure == nil)
+	}
+
+	@Test
+	func publicMockAcceptanceFailure_allowsStaleValueError_onlyWhereGraphDrawsFillReadingValueLoopDeclaresAgain() {
+		// Seed 50 draws a fill that reads `holeContext`, which the loop around `T6`'s hole declares again; seed 28 draws
+		// the loop declaring it again with no fill that reads it; seed 0 draws no loop. Only the first may report the error,
+		// and only about `holeContext` and its `HoleLoop`.
+		let staleValue = GraphFuzzerToolOutcome.rejected(diagnostics: "/F/HoleFill.swift:3:2: error: `S50_Hole` receives `holeContext: S50_HoleContext`, which `S50_HoleLoop` declares between where `S50_T6` instantiates `holeHostBuilder: Instantiator<S50_HoleHost>` and where `S50_HoleLoop` instantiates it again. Inline, the `S50_HoleHost` built again receives `S50_HoleLoop`’s `holeContext`, but the scope SafeDI hands the builder for `S50_HoleHost`’s `holeBuilder: Instantiator<S50_Hole>` (case `S50_HoleHost_Scope.holeBuilder` of `s50_HoleBuilder`) holds the same values at every level of that cycle. Give `holeContext` on `S50_HoleLoop` another label, or declare an @Instantiable type that fulfills `S50_Hole` in module `FuzzFeature` or a module it lists among its SafeDI dependencies.")
+		let inaccessible = GraphFuzzerToolOutcome.rejected(diagnostics: "/F/Session.swift:4:12: error: `Session` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates.")
+		let accepted = GraphFuzzerToolOutcome.accepted(generatedFiles: [:], warnings: [])
+		let staleValueOfOtherLabel = GraphFuzzerToolOutcome.rejected(diagnostics: "/F/HoleFill.swift:3:2: error: `S50_Hole` receives `session: S50_Session`, which `S50_HoleLoop` declares between where `S50_T6` instantiates `holeHostBuilder: Instantiator<S50_HoleHost>` and where `S50_HoleLoop` instantiates it again. Inline, the `S50_HoleHost` built again receives `S50_HoleLoop`’s `session`, but the scope SafeDI hands the builder for `S50_HoleHost`’s `holeBuilder: Instantiator<S50_Hole>` (case `S50_HoleHost_Scope.holeBuilder` of `s50_HoleBuilder`) holds the same values at every level of that cycle. Give `session` on `S50_HoleLoop` another label, or declare an @Instantiable type that fulfills `S50_Hole` in module `FuzzFeature` or a module it lists among its SafeDI dependencies.")
+		func features(ofSeed seed: UInt64) -> Set<GraphFuzzerPublicMockDrawFeature> {
+			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+		}
+		let staleRead: Set<GraphFuzzerPublicMockDrawFeature> = [.holeLoopDeclaresContextAgain, .holeFillReceivesField, .consumerReachesHoleTypeWithFill]
+		#expect(features(ofSeed: 50).isSuperset(of: staleRead))
+		#expect(features(ofSeed: 28).contains(.holeLoopDeclaresContextAgain))
+		#expect(!features(ofSeed: 28).isSuperset(of: staleRead))
+		#expect(!features(ofSeed: 0).contains(.holeInsideLoop))
+		func runs(seed: UInt64, _ drawn: GraphFuzzerToolOutcome) -> GraphFuzzerToolRuns {
+			GraphFuzzerToolRuns(fixture: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]), firstOutcome: drawn, secondOutcome: drawn, knownRightOutcome: accepted)
+		}
+		#expect(runs(seed: 50, staleValue).publicMockAcceptanceFailure == nil)
+		#expect(runs(seed: 50, staleValueOfOtherLabel).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts)
+		#expect(runs(seed: 50, inaccessible).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts)
+		#expect(runs(seed: 28, staleValue).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts)
+		#expect(runs(seed: 0, staleValue).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts)
 	}
 
 	// MARK: Ground-truth access oracle

@@ -211,6 +211,11 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case consumerReachesHoleTypeThroughTwoPublicMocks
 	case holeFakeBesideFill
 	case holeFakeAlone
+	/// On a stream of its own: `HoleHost` building itself again through `HoleLoop`, a loop around `T6`'s hole.
+	case holeInsideLoop
+	/// `HoleLoop` declaring `holeContext` again, so a fill that reads it gets the nearest level's value inline and the
+	/// public mock rejects the graph (`declarationBoundOnCycleReentry`).
+	case holeLoopDeclaresContextAgain
 
 	static func < (lhs: GraphFuzzerPublicMockDrawFeature, rhs: GraphFuzzerPublicMockDrawFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -257,6 +262,9 @@ enum GraphFuzzerPublicMockOutputFeature: String, CaseIterable, Comparable {
 	/// `<label>SendableBuilder: @escaping @Sendable (…SafeDISendableMockScope_…`, in the declaring module.
 	case holeBuilder
 	case sendableHoleBuilder
+	/// Generated code building `HoleLoop`, the loop around `T6`'s hole, `let holeLoopBuilder = …`
+	/// (`GraphFuzzerPublicMockDrawFeature.holeInsideLoop`).
+	case holeLoopBuilder
 	/// A consumer's mock filling a called public mock's places with functions of its own (`func __safeDI_…(_ scope:
 	/// …MockScope_…`, a fill or a dispatcher), a fill that calls the public mock again with the fill around it (a fully
 	/// lazy cycle), and a consumer's mock taking a builder and passing it up.
@@ -384,6 +392,7 @@ struct GraphFuzzerPublicMockDraw {
 		var seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.publicMockRandomSeedMask)
 		var secondCalledMockRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockSecondCalledMockRandomSeedMask)
 		var rootLevelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockRootLevelRandomSeedMask)
+		var holeLoopRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleLoopRandomSeedMask)
 		draw(
 			random: &random,
 			spellingRandom: &spellingRandom,
@@ -397,6 +406,7 @@ struct GraphFuzzerPublicMockDraw {
 			seamDependencyRandom: &seamDependencyRandom,
 			secondCalledMockRandom: &secondCalledMockRandom,
 			rootLevelRandom: &rootLevelRandom,
+			holeLoopRandom: &holeLoopRandom,
 		)
 		// Which files move beneath the declaring module: decided after the rest of the draw, from a stream of its own, so
 		// that a graph without it is drawn as before. Each file is read as the drawn graph writes it.
@@ -491,6 +501,10 @@ struct GraphFuzzerPublicMockDraw {
 	/// `T6`'s enums (`RootLevelShape`): rolls added after the rest of the draw was pinned, so that its other shapes are drawn
 	/// as before.
 	static let publicMockRootLevelRandomSeedMask: UInt64 = 0x7075626D6B726F6F
+	/// Draws only whether `HoleHost` builds itself again through `HoleLoop`, a loop around `T6`'s hole, and whether
+	/// `HoleLoop` declares `holeContext` again: a roll added after the rest of the draw was pinned, so that its other
+	/// shapes are drawn as before.
+	static let publicMockHoleLoopRandomSeedMask: UInt64 = 0x7075626D6B6C6F70
 	/// What begins the comment in `T6`'s file that holds its hand-written caller's call, after the caller's module:
 	/// `// publicMockCaller in FuzzOther: S1_T6.mock(s1_HoleBuilder: …)`. `GraphFuzzerOracle.addingPublicMockCallers` reads it.
 	static let publicMockCallerMarker = "// publicMockCaller in "
@@ -703,6 +717,7 @@ struct GraphFuzzerPublicMockDraw {
 		seamDependencyRandom: inout GraphFuzzerRandomNumberGenerator,
 		secondCalledMockRandom: inout GraphFuzzerRandomNumberGenerator,
 		rootLevelRandom: inout GraphFuzzerRandomNumberGenerator,
+		holeLoopRandom: inout GraphFuzzerRandomNumberGenerator,
 	) {
 		// Both rolls are made in every graph, so the stream is consumed the same way whatever the rest of the draw.
 		let declaresSpaceInFileOfItsOwn = namespaceRandom.percentChance(50)
@@ -1060,6 +1075,8 @@ struct GraphFuzzerPublicMockDraw {
 		var rootLevelSessionType = ""
 		/// The index in `declaringFiles` of `T6`'s file, which declares `T6Twin` too when a consumer reaches it.
 		var holeLeafFileIndex: Int?
+		/// Whether `HoleHost` builds itself again through `HoleLoop`, a loop around `T6`'s hole.
+		var drawsHoleLoop = false
 		if holeRandom.percentChance(40) {
 			let holeName = name("Hole")
 			let protocolName = name("HoleProtocol")
@@ -1167,7 +1184,10 @@ struct GraphFuzzerPublicMockDraw {
 				declaration.add(Property(attribute: "@Instantiated", label: "session", type: instantiable("Session", access: .package)))
 				declaration.names(.package)
 			}
-			if holeRandom.percentChance(40) {
+			// On a stream of its own: whether a loop goes around a hole on `HoleHost`, in whose graphs `T6` always binds
+			// `holeContext`, which `HoleLoop` may declare again. The hole stream's roll is made either way.
+			drawsHoleLoop = position != .direct && holeLoopRandom.percentChance(70)
+			if holeRandom.percentChance(40) || drawsHoleLoop {
 				declaration.add(Property(attribute: "@Instantiated", label: "holeContext", type: instantiable("HoleContext")))
 			}
 			switch rootLevelShape {
@@ -1191,6 +1211,25 @@ struct GraphFuzzerPublicMockDraw {
 				host.properties = [Property(attribute: attribute, label: holeLabel, type: holeType)]
 				if rootLevelShape == .labelInTwoForms {
 					host.properties.insert(Property(attribute: "@Received", label: "holeSession", type: sessionName), at: 0)
+				}
+				// On a stream of its own: a loop around the hole, `HoleHost` building `HoleLoop` through the kind of builder that
+				// builds `HoleHost`, and `HoleLoop` building `HoleHost` again under the label and wrapper `T6` builds it with, so
+				// that the loop closes on `HoleHost`, whose builder function holds the hole's scope values. Half the time
+				// `HoleLoop` declares `holeContext` again, which `T6` binds, so that a fill reading it would read `T6`'s at
+				// every level of the loop, where inline it reads the nearest `HoleLoop`'s: the public mock reports
+				// `declarationBoundOnCycleReentry`, as a seam does. Otherwise it declares `holeLoopMark`, which nothing reads, so
+				// that a fill reading `holeContext` reads `T6`'s at every level inline too.
+				if drawsHoleLoop {
+					var loop = instantiableClass("HoleLoop", access: hostAccess)
+					let declaresContextAgain = holeLoopRandom.percentChance(50)
+					loop.properties = [
+						declaresContextAgain
+							? Property(attribute: "@Instantiated", label: "holeContext", type: instantiable("HoleContext"))
+							: Property(attribute: "@Instantiated", label: "holeLoopMark", type: instantiable("HoleLoopMark")),
+						Property(attribute: "@Instantiated", label: position.hostLabel, type: "\(position.wrapperName)<\(host.name)>"),
+					]
+					host.add(Property(attribute: "@Instantiated", label: "holeLoopBuilder", type: "\(position.isSendable ? "SendableInstantiator" : "Instantiator")<\(loop.name)>"))
+					declaringFiles.append(File(module: .seamModule, declarations: [Self.renderer(of: loop)]))
 				}
 				declaration.add(Property(attribute: "@Instantiated", label: position.hostLabel, type: "\(position.wrapperName)<\(host.name)>"))
 				declaration.names(hostAccess)
@@ -1389,7 +1428,7 @@ struct GraphFuzzerPublicMockDraw {
 					let bindsContext = holeLeaf.declaration.properties.contains { $0.label == "holeContext" }
 					let dependencyRoll = holeRandom.integer(in: 0...9)
 					// A fill receiving `holeContext` where `T6` binds none receives a value no field holds, as `holeExtra` is.
-					let dependency: HoleFillDependency = if canCloseLazyCycle, holeRandom.percentChance(50) {
+					let drawnDependency: HoleFillDependency = if canCloseLazyCycle, holeRandom.percentChance(50) {
 						.lazyCycle
 					} else if dependencyRoll < (bindsContext ? 3 : 5) {
 						.none
@@ -1398,6 +1437,9 @@ struct GraphFuzzerPublicMockDraw {
 					} else {
 						.nonField
 					}
+					// On the loop's stream: a fill under a loop around the hole mostly reads `holeContext`, which `HoleLoop`
+					// declares again or not. A lazy cycle through the fill needs the hole on `T6`, which no loop goes around.
+					let dependency: HoleFillDependency = drawsHoleLoop && holeLoopRandom.percentChance(80) ? .field : drawnDependency
 					var dependencies: [Property] = switch dependency {
 					case .none: []
 					case .field: [Property(attribute: "@Received", label: "holeContext", type: instantiable("HoleContext"))]
@@ -1762,7 +1804,8 @@ extension GraphFuzzerToolRuns {
 	var publicMockAcceptanceFailure: GraphFuzzerFailure? {
 		switch (firstOutcome, knownRightOutcome) {
 		case let (.rejected(diagnostics), .accepted?):
-			guard !GraphFuzzerOracle.isPublicMockOnlyRejection(diagnostics: diagnostics) else { return nil }
+			let drawsStaleValueRead = GraphFuzzerPublicMockDraw.drawFeatures(of: fixture).isSuperset(of: [.holeLoopDeclaresContextAgain, .holeFillReceivesField, .consumerReachesHoleTypeWithFill])
+			guard !GraphFuzzerOracle.isPublicMockOnlyRejection(diagnostics: diagnostics, staleValueLoopTypeName: drawsStaleValueRead ? "\(fixture.typeNamePrefix)HoleLoop" : nil) else { return nil }
 			return GraphFuzzerFailure(
 				seed: fixture.seed,
 				kind: .publicMockRejectsGraphKnownRightAccepts,
@@ -1852,11 +1895,26 @@ extension GraphFuzzerOracle {
 		"` has a public `mock()`, but ",
 	]
 
+	/// What the error says that a mock reports for a fill of a public mock's hole that reads a value a cycle around the
+	/// hole declares again (`declarationBoundOnCycleReentry`), as a tree that fills a seam's reports it: inline, the
+	/// fill reads the nearest level's value, so only a graph that draws that read may report it
+	/// (`GraphFuzzerPublicMockDrawFeature.holeLoopDeclaresContextAgain`).
+	static let publicMockStaleValueErrorMarker = "holds the same values at every level of that cycle"
+
 	/// Whether every error in `diagnostics`, a rejection of a `generateMockPublic` graph as drawn, is one of a public
-	/// mock's own (`publicMockOnlyErrorMarkers`).
-	static func isPublicMockOnlyRejection(diagnostics: String) -> Bool {
+	/// mock's own (`publicMockOnlyErrorMarkers`), or, where `staleValueLoopTypeName` names the graph's `HoleLoop`, the
+	/// error of a fill reading the `holeContext` that type declares again (`publicMockStaleValueErrorMarker`).
+	static func isPublicMockOnlyRejection(diagnostics: String, staleValueLoopTypeName: String? = nil) -> Bool {
 		let errors = diagnostics.split(separator: "\n").filter { $0.contains(": error: ") }
-		return !errors.isEmpty && errors.allSatisfy { error in publicMockOnlyErrorMarkers.contains { error.contains($0) } }
+		return !errors.isEmpty && errors.allSatisfy { error in
+			if publicMockOnlyErrorMarkers.contains(where: { error.contains($0) }) {
+				true
+			} else if let staleValueLoopTypeName {
+				error.contains(publicMockStaleValueErrorMarker) && error.contains("receives `holeContext: ") && error.contains("`\(staleValueLoopTypeName)`")
+			} else {
+				false
+			}
+		}
 	}
 
 	/// The value differential of a `generateMockPublic` graph the tool accepts as drawn and as its known-right path, or
@@ -2423,6 +2481,12 @@ extension GraphFuzzerPublicMockDraw {
 			} else {
 				features.insert(.holeOnPublicMockType)
 			}
+			if let loop = types.declarations["\(prefix)HoleLoop"] {
+				features.insert(.holeInsideLoop)
+				if loop.properties.contains(where: { $0.label == "holeContext" }) {
+					features.insert(.holeLoopDeclaresContextAgain)
+				}
+			}
 			if let holeProperty {
 				if holeProperty.attribute.contains("erasedToConcreteExistential: true") {
 					features.insert(holeProperty.type.hasPrefix("ErasedInstantiator<") ? .holeDeclaredAsErasedInstantiator : .holeDeclaredAsErasedConstant)
@@ -2581,6 +2645,9 @@ extension GraphFuzzerPublicMockDraw {
 					if !isConsumerFile, line.contains(": @escaping @Sendable (") {
 						features.insert(.sendableHoleBuilder)
 					}
+				}
+				if line.hasPrefix("let holeLoopBuilder = ") {
+					features.insert(.holeLoopBuilder)
 				}
 				guard isConsumerFile else { continue }
 				// A fill, handed a place's values, or a dispatcher, which a call declares only with a fill.

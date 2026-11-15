@@ -413,6 +413,15 @@ public actor DependencyTreeGenerator {
 		// `requirements(forTypeNamed:generatesMock:mockEmittingModule:)` deliberately does not run them. A check that
 		// decides whether one root can be generated belongs in `createMockRoot`, which that method and the loop above
 		// share.
+
+		// A mock fills another module's public mock's holes as a tree fills a seam's, and the public mock hands each hole's
+		// builder the same scope values at every level of a cycle, as a seam does, so its fills are judged as
+		// `generatePerRootCodeTrees` judges a seam's. The check judges each fill against the access the calling module
+		// has, which `query needs` has no module to read, so the query does not run it.
+		try Self.validateFills(
+			inTreesRootedAt: mockRoots.map(\.scopeGenerator),
+			callerModule: seams.currentModule,
+		)
 		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: mockRoots)
 
 		// Compute the global cycle edges across all mock-reachable types. Per-tree

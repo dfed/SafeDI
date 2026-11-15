@@ -5710,7 +5710,7 @@ struct SafeDIToolGraphFuzzerTests {
 		spellingDrawFeatures: [],
 		omittedValueGraphCount: publicMockCorpusOmittedValueGraphCount,
 		outputFeatureMinimumShares: publicMockCorpusOutputFeatureMinimumShares,
-		errorMarkers: GraphFuzzerOracle.publicMockOnlyErrorMarkers,
+		errorMarkers: GraphFuzzerOracle.publicMockOnlyErrorMarkers + [GraphFuzzerOracle.publicMockStaleValueErrorMarker],
 		errorGraphCounts: publicMockCorpusErrorGraphCounts,
 		readTwinGraphCount: publicMockCorpusReadTwinGraphCount,
 	)
@@ -5734,6 +5734,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.defaultRewritten: 88,
 		.forwardedProvider: 3,
 		.holeBuilder: 39,
+		// pins: derive on CI
+		.holeLoopBuilder: 0,
 		.isolatedConstruction: 3,
 		.moduleConfiguration: 84,
 		.publicTier: 100,
@@ -5760,8 +5762,10 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusReadTwinGraphCount = 260
 	/// How many of the public mock corpus's graphs the tool rejects with each of a public mock's own errors, in the order
 	/// of `GraphFuzzerOracle.publicMockOnlyErrorMarkers`: the public tier, a narrower enclosing type, a leaf tier and a
-	/// nested leaf tier omitting a provided value, the mock condition, the by-name check, and the view that cannot call.
-	static let publicMockCorpusErrorGraphCounts = [96, 0, 0, 0, 36, 0, 0]
+	/// nested leaf tier omitting a provided value, the mock condition, the by-name check, and the view that cannot call;
+	/// then the fill that reads a value the loop around `T6`'s hole declares again
+	/// (`GraphFuzzerOracle.publicMockStaleValueErrorMarker`).
+	static let publicMockCorpusErrorGraphCounts = [96, 0, 0, 0, 36, 0, 0, 0]
 
 	/// The ordinary suite's batch of the public mock corpus: graphs the tool accepts – a consumer in the same package
 	/// calling a public mock with `analytics.instance` of the wrapper it holds, M8.32's stated divergence, of a `@MainActor`
@@ -5775,14 +5779,17 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (seed 59; seed 211, which showed it first, now draws `T6Twin` and is a known issue); a consumer in another package only and a differing mock condition (seed 253); a configuration's
 	/// module-level forwarder of a default's provider, and a hole's builder passed up into a `@Sendable` builder function
 	/// (seed 551); a third tier (seed 215); the comment naming a type SafeDI reads no declaration of (seed 10) – a graph the
-	/// public tier rejects (seed 7), and a graph whose configurations a renaming only reorders (seed 23); declarations moved
+	/// public tier rejects (seed 7), a graph whose configurations a renaming only reorders (seed 23), and a graph
+	/// whose fill reads the `holeContext` the loop around `T6`'s hole declares again, which the mock rejects as a seam does
+	/// and, without that check, fills with `T6`'s at every level (seed 555), and a graph whose fill reads `T6`'s
+	/// `holeContext` under that loop, which the loop does not declare again (seed 836); declarations moved
 	/// beneath the declaring module (seed 98) and a chain of public mocks through the three modules beneath it (seed 208),
 	/// which a consumer computes from the declaring module's view (`GraphFuzzerSeamDependencyDraw`). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
 	/// which `publicMockSmokeSeeds_exercisePublicMockFeature_inGraphsTheToolAccepts` checks. Pinned by
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
-	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551]
+	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x2F4722826B909A8B
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xB8C1CDEA5B8D7818
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -5901,17 +5908,19 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeFakeAlone: 7,
 		.holeFakeBesideFill: 12,
 		.holeFillClosesLazyCycle: 15,
-		.holeFillReceivesField: 24,
-		.holeFillReceivesNonField: 56,
-		.holeFillReceivesFormBoundAgain: 17,
-		.holeFillReceivesRootLevelValue: 37,
+		.holeFillReceivesField: 56,
+		.holeFillReceivesNonField: 40,
+		.holeFillReceivesFormBoundAgain: 28,
+		.holeFillReceivesRootLevelValue: 38,
 		.holeFillReceivesRootLevelWrapper: 15,
+		.holeInsideLoop: 131,
+		.holeLoopDeclaresContextAgain: 74,
 		.holeOnPublicMockType: 228,
 		.holeRootLevelHoldsValues: 108,
 		.holeRootLevelHoldsWrapper: 90,
 		.holeRootReceivesLabelInTwoForms: 97,
 		.holeScopeHoldsPackageValue: 103,
-		.holeScopeHoldsPublicValue: 140,
+		.holeScopeHoldsPublicValue: 225,
 		.instantiableParameterType: 235,
 		.internalInitializer: 520,
 		.lazilyInstantiatedOmittedValueProvider: 58,
