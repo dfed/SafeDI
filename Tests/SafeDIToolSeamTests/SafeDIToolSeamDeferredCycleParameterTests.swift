@@ -685,12 +685,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		        }
 
 		        @frozen public enum A_Scope {
-		            case inner(inner_Values, Inner.SafeDIScope_Api)
-
-		            public struct inner_Values {
-		                public let tag: Tag
-		                public let reader: TagReader
-		            }
+		            case inner(Inner.SafeDIScope_Api)
 		        }
 		    }
 
@@ -703,7 +698,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		            let reader = TagReader(tag: tag)
 		            func __safeDI_inner() -> Inner {
 		                _ = Inner.__safeDI_Inner_8A5E441B1D7D870D.self\(innerCallComment)
-		                return Inner(__safeDI_tag: tag, __safeDI_apiBuilder: { __safeDI_apiBuilder(.aBuilder(__safeDI_apiValues_aBuilder, .inner(SafeDIScope_Api.A_Scope.inner_Values(tag: tag, reader: reader), $0))) })
+		                return Inner(__safeDI_tag: tag, __safeDI_apiBuilder: { __safeDI_apiBuilder(.aBuilder(__safeDI_apiValues_aBuilder, .inner($0))) })
 		            }
 		            let inner: Inner = __safeDI_inner()
 		            func __safeDI_bBuilder(tag: Tag) -> B {
@@ -725,7 +720,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		}
 
 		extension Hub {
-		    public enum __safeDI_Hub_0C6DCC8E100AFBDC {}
+		    public enum __safeDI_Hub_B632B86A8B776291 {}
 		}
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
@@ -740,7 +735,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		    public convenience init() {
 		        let tag = Tag()
 		        func __safeDI_hub() -> Hub {
-		            _ = Hub.__safeDI_Hub_0C6DCC8E100AFBDC.self\(Self.callComment)
+		            _ = Hub.__safeDI_Hub_B632B86A8B776291.self\(Self.callComment)
 		            func __safeDI_apiBuilder_Hub(_ scope: Hub.SafeDIScope_Api) -> any Api {
 		                switch scope {
 		                case let .aBuilder(_, scope): return __safeDI_apiBuilder_Hub_A_Scope(scope)
@@ -748,7 +743,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		            }
 		            func __safeDI_apiBuilder_Hub_A_Scope(_ scope: Hub.SafeDIScope_Api.A_Scope) -> any Api {
 		                switch scope {
-		                case let .inner(_, scope): return __safeDI_apiBuilder_Inner(scope)
+		                case let .inner(scope): return __safeDI_apiBuilder_Inner(scope)
 		                }
 		            }
 		            func __safeDI_apiBuilder_Inner(_ scope: Inner.SafeDIScope_Api) -> any Api {

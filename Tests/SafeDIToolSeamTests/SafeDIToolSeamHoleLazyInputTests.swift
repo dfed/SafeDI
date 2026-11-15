@@ -978,18 +978,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			"Shell": """
 			extension Shell {
 			    @frozen public enum SafeDIScope_Uploader {
-			        case exportFeature(exportFeature_Values, ExportFeature.SafeDIScope_Uploader)
-
-			        public struct exportFeature_Values {
-			            public var exportService: ExportService { __safeDI_exportService.instance }
-			            public let headerBuilder: Instantiator<Header>
-			            let __safeDI_exportService: LazilyInstantiated<ExportService>
-
-			            init(exportService: LazilyInstantiated<ExportService>, headerBuilder: Instantiator<Header>) {
-			                __safeDI_exportService = exportService
-			                self.headerBuilder = headerBuilder
-			            }
-			        }
+			        case exportFeature(ExportFeature.SafeDIScope_Uploader)
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1002,7 +991,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        let headerBuilder = Instantiator<Header>(__safeDI_headerBuilder)
 			        func __safeDI_exportFeature() -> ExportFeature {
 			            _ = ExportFeature.__safeDI_ExportFeature_22973D5D6A377C27.self
-			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: { __safeDI_uploaderBuilder(.exportFeature(SafeDIScope_Uploader.exportFeature_Values(exportService: exportService, headerBuilder: headerBuilder), $0)) })
+			            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: { __safeDI_uploaderBuilder(.exportFeature($0)) })
 			        }
 			        let exportFeature: ExportFeature = __safeDI_exportFeature()
 			        self.init(headerBuilder: headerBuilder, exportFeature: exportFeature)
@@ -1010,7 +999,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 
 			extension Shell {
-			    public enum __safeDI_Shell_B78E374D9FCE9298 {}
+			    public enum __safeDI_Shell_1B82E3FE3A44A36E {}
 			}
 			""",
 		]))
@@ -1023,10 +1012,10 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let exportService = LazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_shell() -> Shell {
-			            _ = Shell.__safeDI_Shell_B78E374D9FCE9298.self\(Self.pluginComment(integration, seam: "Shell"))
+			            _ = Shell.__safeDI_Shell_1B82E3FE3A44A36E.self\(Self.pluginComment(integration, seam: "Shell"))
 			            func __safeDI_uploaderBuilder_Shell(_ scope: Shell.SafeDIScope_Uploader) -> any Uploader {
 			                switch scope {
-			                case let .exportFeature(_, scope): return __safeDI_uploaderBuilder_ExportFeature(scope)
+			                case let .exportFeature(scope): return __safeDI_uploaderBuilder_ExportFeature(scope)
 			                }
 			            }
 			            func __safeDI_uploaderBuilder_ExportFeature(_ scope: ExportFeature.SafeDIScope_Uploader) -> any Uploader {
