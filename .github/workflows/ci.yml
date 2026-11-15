@@ -1186,9 +1186,11 @@ jobs:
       # shards cover it exactly once, and that every corpus the long run names has a report.
       # The base corpus runs in four shards: its value oracle compiles every accepted graph's root mocks and mirrors
       # again, which the smoke batch suggests about doubles a base shard's time (not yet measured on CI). The seam
-      # corpus runs in two: its graphs cost about four times as much each as the others', and as one shard of 1000
-      # seeds (14.5 to 15 minutes) it finished about five minutes after every other shard. Each report's `cpu` line
-      # says what each phase of a shard cost, which the combine job adds up per corpus.
+      # corpus runs in four and the public mock corpus in two, because their graphs cost the most and a shard's
+      # time is what a run waits for after its build: in run 43751741235 the base shards fuzzed for 5.3 to 7.7
+      # minutes, the seam corpus's two shards of 500 seeds for 14.0 and 9.9, and the public mock corpus's one of
+      # 1000 for 16.5; split as below, the ten shards fuzzed for 4.4 to 7.7 minutes (run 43762600658). Each
+      # report's `cpu` line says what each phase of a shard cost, which the combine job adds up per corpus.
       # No required check is a shard's: "Check Graph Fuzzer Corpus on Linux" is, so a change to this matrix needs no
       # stand-in for a Markdown-only change. A change to it changes graph-fuzzer-coverage's EXPECTED_SHARDS too.
       matrix:
@@ -1212,15 +1214,27 @@ jobs:
           - corpus: generateDependencyTree
             features: generateDependencyTree
             starting-seed: 0
-            iterations: 500
+            iterations: 250
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 250
+            iterations: 250
           - corpus: generateDependencyTree
             features: generateDependencyTree
             starting-seed: 500
-            iterations: 500
+            iterations: 250
+          - corpus: generateDependencyTree
+            features: generateDependencyTree
+            starting-seed: 750
+            iterations: 250
           - corpus: generateMockPublic
             features: generateMockPublic
             starting-seed: 0
-            iterations: 1000
+            iterations: 500
+          - corpus: generateMockPublic
+            features: generateMockPublic
+            starting-seed: 500
+            iterations: 500
     defaults:
       run:
         shell: bash
@@ -1245,9 +1259,9 @@ jobs:
       # (TestTemporaryDirectory.environment). The step's limit is under the
       # job's, so a shard that runs out of time still summarizes and uploads
       # its report; the job's limit would cancel those steps too. A shard's
-      # fuzzer has taken 7 to 12 minutes.
+      # fuzzer has taken 4.4 to 7.7 minutes (run 43762600658).
       - name: Run Graph Fuzzer
-        timeout-minutes: 25
+        timeout-minutes: 16
         env:
           SAFEDI_GRAPH_FUZZER_ITERATIONS: ${{ matrix.iterations }}
           SAFEDI_GRAPH_FUZZER_STARTING_SEED: ${{ matrix.starting-seed }}
@@ -1400,7 +1414,7 @@ jobs:
         env:
           BEFORE: ${{ github.event.before }}
           # graph-fuzzer's matrix, `<corpus>-<starting-seed>` per shard.
-          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-500 generateMockPublic-0
+          EXPECTED_SHARDS: base-0 base-1250 base-2500 base-3750 generateDependencyTree-0 generateDependencyTree-250 generateDependencyTree-500 generateDependencyTree-750 generateMockPublic-0 generateMockPublic-500
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           tar -xzf graph-fuzzer-test-bundle.tar.gz
