@@ -554,6 +554,68 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.failure?.kind == .callingMockRejectsWhereTwinAccepts)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func check_reportsAcceptance_whenMockIsAcceptedWhereTwinReportsShapeError() async throws {
+		// The mock's fill reads nothing, so any tool accepts it, while the twin's fill reads the level between.
+		let acceptedMockFiles = Self.seamBuiltAgainGraph.mockFiles.map { file in
+			GraphFuzzerCallingMockGraph.File(
+				module: file.module,
+				dependencies: file.dependencies,
+				content: file.content.replacingOccurrences(
+					of: "    init(logger: Logger) { self.logger = logger }\n    @Received let logger: Logger",
+					with: "    init() {}",
+				),
+			)
+		}
+		let graph = GraphFuzzerCallingMockGraph(
+			name: "a mock accepted where its twin reports a shape error",
+			mockFiles: acceptedMockFiles,
+			twinFiles: Self.seamBuiltAgainGraph.twinFiles,
+			callerTypeName: "Host",
+			callerIsPublic: false,
+			flatParameterLabels: [],
+			implementationIsVisible: true,
+			expectedTwinInitializerLabels: nil,
+			expectedPassUpLabels: [],
+			expectedTwinErrorSite: ("App/AppTypes.swift", "@Received let logger: Logger"),
+		)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
+
+		#expect(acceptedMockFiles.map(\.content) != Self.seamBuiltAgainGraph.mockFiles.map(\.content))
+		#expect(result.twinHasIntendedOutcome)
+		#expect(result.mockSites == nil)
+		#expect(result.failure?.kind == .callingMockAcceptedWhereTwinReportsShapeError)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func check_reportsUnclassifiedPassUp_whenGraphSaysImplementationIsVisibleButNoneIs() async throws {
+		// No type in module `Tests` fulfills `Api`, so any tool's mock passes the place up; the graph wrongly says an
+		// implementation is visible, so no reason classifies the pass-up.
+		let graph = Self.innerSeamGraph(named: "a pass-up the graph does not classify", tests: """
+		import SafeDI
+		import InnerModule
+		import FeatureModule
+
+		@Instantiable(generateMock: true)
+		final class Host: Instantiable {
+		    init(database: Database, inner: Inner) { self.database = database; self.inner = inner }
+		    @Instantiated let database: Database
+		    @Instantiated let inner: Inner
+		}
+		""", expectedTwinErrorSite: nil)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
+
+		#expect(graph.implementationIsVisible)
+		#expect(result.twinHasIntendedOutcome)
+		#expect(result.passUps.count == 1)
+		#expect(result.passUps.map(\.reason) == [nil])
+		#expect(result.failure?.kind == .callingMockPassesUpUnclassifiedPlace)
+	}
+
 	// MARK: The cells
 
 	/// Every drawn graph gives its cell's intended twin outcome, ten graphs per cell, and the calling mock mirrors its twin
