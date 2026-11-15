@@ -21,9 +21,10 @@ Applying. With both record directories, the change's rules file and an empty rep
   python3 -I Scripts/regenerate-expectations.py --base-records BASE --head-records HEAD --rules RULES.json \\
       --report REPORT --checkout .
 A string literal is rewritten only when it equalled a base record exactly (or after `generatedFileHeader`), within
-the test function whose call recorded it, or whose Swift Testing name the record carries when no other test function
-of the file has that name, as for a call made through a helper function of the file (or anywhere in the file, for a
-literal outside every test function), or, for an assertion record, when it is the literal the failing assertion call compared and it evaluates to the recorded
+the test function whose call recorded it, or the test function at the location of the test the record carries
+(`Test.current`'s source location, which names its file and line, so its suite too), as for a call made through a
+helper function of any file (or anywhere in the file, for a literal outside every test function), or, for an
+assertion record, when it is the literal the failing assertion call compared and it evaluates to the recorded
 expected value. Its new value is the head record of the same key. An interpolated literal is matched as a pattern,
 each `\\(…)` a capture, and an expression spelled twice capturing one value; one whose captures stand for more of
 the output than its one-line text does, such as `"\\(self)"`, matches nothing. Each interpolation is put back only
@@ -434,33 +435,40 @@ class SwiftFile:
             raise ApplyError(f"cannot parse {self.relative_path}: unbalanced {self.tokens[stack[-1]].text}")
         return matching
 
-    def _is_test(self, function_position):
+    def _test_attribute_line(self, function_position):
+        """The line of the first attribute of the function whose `func` is at `function_position`, when `@Test` is among
+        its attributes, else None. Swift Testing locates a test at its `@Test` attribute."""
         position = function_position - 1
+        first_line = None
+        is_test = False
         while position >= 0:
             token = self.tokens[position]
             if token.kind == "identifier" and token.text in MODIFIERS:
+                first_line = self.line_of(token.start)
                 position -= 1
             elif token.kind == "punctuation" and token.text == ")" and position in self.matching:
                 opening = self.matching[position]
                 if opening >= 2 and self.tokens[opening - 1].kind == "identifier" and self.tokens[opening - 2].text == "@":
-                    if self.tokens[opening - 1].text == "Test":
-                        return True
+                    is_test = is_test or self.tokens[opening - 1].text == "Test"
+                    first_line = self.line_of(self.tokens[opening - 2].start)
                     position = opening - 3
                 elif opening >= 1 and self.tokens[opening - 1].kind == "identifier" and self.tokens[opening - 1].text in MODIFIERS:
                     # `private(set)` and the like.
+                    first_line = self.line_of(self.tokens[opening - 1].start)
                     position = opening - 2
                 else:
-                    return False
+                    break
             elif token.kind == "identifier" and position >= 1 and self.tokens[position - 1].text == "@":
-                if token.text == "Test":
-                    return True
+                is_test = is_test or token.text == "Test"
+                first_line = self.line_of(self.tokens[position - 1].start)
                 position -= 2
             else:
-                return False
-        return False
+                break
+        return first_line if is_test else None
 
     def _functions(self):
-        """Each function with a body: (first line, last line, body start offset, body end offset, is a test)."""
+        """Each function with a body: (first line, last line, body start offset, body end offset, is a test, the line
+        of its first attribute when it is a test)."""
         functions = []
         for position, token in enumerate(self.tokens):
             if token.kind != "identifier" or token.text != "func":
@@ -481,39 +489,21 @@ class SwiftFile:
             if body is None:
                 continue
             closing = self.tokens[self.matching[body]]
-            functions.append((self.line_of(token.start), self.line_of(closing.end - 1), self.tokens[body].start, closing.end, self._is_test(position), self._test_name(position)))
+            attribute_line = self._test_attribute_line(position)
+            functions.append((self.line_of(token.start), self.line_of(closing.end - 1), self.tokens[body].start, closing.end, attribute_line is not None, attribute_line))
         return functions
-
-    def _test_name(self, position):
-        """The function's name as Swift Testing names it: `name(label:label:)`."""
-        name = self.tokens[position + 1].text
-        opening = position + 2
-        while opening < len(self.tokens) and self.tokens[opening].text != "(":
-            opening += 1
-        closing = self.matching[opening]
-        labels = []
-        current = []
-        index = opening + 1
-        while index < closing:
-            token = self.tokens[index]
-            if token.text in "([{" and token.kind == "punctuation":
-                current.append(token)
-                index = self.matching[index] + 1
-                continue
-            if token.text == "," and token.kind == "punctuation":
-                labels.append(current[0].text if current else "")
-                current = []
-            else:
-                current.append(token)
-            index += 1
-        if current:
-            labels.append(current[0].text)
-        return name + "(" + "".join(label + ":" for label in labels) + ")"
 
     def test_function_of_offset(self, offset):
         """The outermost test function whose body holds `offset`, or None."""
         for function in self.functions:
             if function[4] and function[2] <= offset < function[3]:
+                return function
+        return None
+
+    def test_function_declared_at(self, line):
+        """The outermost test function whose attributes or body hold `line`, as Swift Testing's location of a test does."""
+        for function in self.functions:
+            if function[4] and function[5] <= line <= function[1]:
                 return function
         return None
 
@@ -1086,21 +1076,34 @@ def apply(arguments):
     records_by_file = {}
     for record in base_generation:
         records_by_file.setdefault(resolver.resolve(record["fileID"]), []).append(record)
+    # A record names the test that made its call (`Test.current`'s location). A call made through a helper function
+    # records the helper's line, so the test's location is what ties it to the literal the test compares.
+    records_by_test_file = {}
+    for record in base_generation:
+        if record.get("testFileID") and record.get("testLine"):
+            records_by_test_file.setdefault(resolver.resolve(record["testFileID"]), []).append(record)
+    for relative_path in sorted(records_by_test_file):
+        if relative_path not in files:
+            path = os.path.join(arguments.checkout, relative_path)
+            with open(path, encoding="utf-8") as source_file:
+                files[relative_path] = SwiftFile(path, relative_path, source_file.read())
     mapped_record_keys = set()
-    unmapped_reasons = {}
-    for relative_path in sorted(records_by_file):
+    for relative_path in sorted(set(records_by_file) | set(records_by_test_file)):
         current = files[relative_path]
-        file_records = records_by_file[relative_path]
+        file_records = records_by_file.get(relative_path, [])
         records_by_function = {}
         for record in file_records:
-            records_by_function.setdefault(current.test_function_of_line(record["line"]), []).append(record)
+            records_by_function.setdefault(current.test_function_of_line(record["line"]), {})[record["key"]] = record
+        for record in records_by_test_file.get(relative_path, []):
+            function = current.test_function_declared_at(record["testLine"])
+            if function is not None:
+                records_by_function.setdefault(function, {})[record["key"]] = record
         for literal in current.literals:
             function = current.test_function_of_offset(literal.start)
             if function is None:
                 candidates = file_records
             else:
-                same_name = [other for other in current.functions if other[4] and other[5] == function[5]]
-                candidates = records_by_function.get(function, []) + ([record for record in file_records if record.get("testName") == function[5] and current.test_function_of_line(record["line"]) != function] if len(same_name) == 1 else [])
+                candidates = [records_by_function.get(function, {})[key] for key in sorted(records_by_function.get(function, {}))]
             for record in candidates:
                 matched = match_literal(literal, record["content"], header)
                 if matched is None:
@@ -1116,7 +1119,10 @@ def apply(arguments):
                         head_body = head["content"]
                 outcome.matches.append((record, mode, body, spans, ambiguous, head_body, record.get("testName", "")))
                 mapped_record_keys.add(record["key"])
-        for record in file_records:
+    unmapped_reasons = {}
+    for relative_path in sorted(records_by_file):
+        current = files[relative_path]
+        for record in records_by_file[relative_path]:
             if record["key"] in mapped_record_keys:
                 continue
             head = head_by_key.get(record["key"])
@@ -1356,11 +1362,11 @@ def write_file(path, content):
         output_file.write(content)
 
 
-def generation_record(key, line, content, test_name="test()", file_id="Mod/FileTests.swift", skips=False, module=None):
+def generation_record(key, line, content, test_name="test()", file_id="Mod/FileTests.swift", skips=False, module=None, test_file_id=None, test_line=None):
     return {
         "kind": "generation", "fileID": file_id, "line": line, "column": 9, "testName": test_name, "integration": None,
         "module": module, "outputName": "Root+SafeDI.swift", "content": content, "skipsCompileVerification": skips,
-        "inputsDigest": "digest", "key": key,
+        "inputsDigest": "digest", "key": key, "testFileID": test_file_id, "testLine": test_line,
     }
 
 
@@ -1566,18 +1572,29 @@ def self_test(root):
     test = case("helper-call-site")
     helper = '\tfunc check() -> String {\n\t\trun()\n\t}\n'
     test.test_file('struct FileTests {\n' + helper + '\n\t@Test(arguments: [1])\n\tfunc test(value: Int) {\n\t\t#expect(check() == "Old")\n\t}\n}\n')
-    test.records([generation_record("k", 3, "Old", test_name="test(value:)")], [generation_record("k", 3, "New", test_name="test(value:)")], {"rename": [{"name": "rename", "table": {"Old": "New"}}]})
+    test.records([generation_record("k", 3, "Old", test_name="test(value:)", test_file_id="Mod/FileTests.swift", test_line=6)], [generation_record("k", 3, "New", test_name="test(value:)", test_file_id="Mod/FileTests.swift", test_line=6)], {"rename": [{"name": "rename", "table": {"Old": "New"}}]})
     status, summary = test.run()
     expect(status == 0 and summary["explained"] == 1, f"helper call site: {status} {summary}")
     expect(test.source() == 'struct FileTests {\n' + helper + '\n\t@Test(arguments: [1])\n\tfunc test(value: Int) {\n\t\t#expect(check() == "New")\n\t}\n}\n', "helper call site: rewritten source")
 
-    # a test name two test functions of the file share maps no helper's record to either.
+    # two tests of one name in two suites: the record's test location picks the one that made the call.
     test = case("helper-call-site-shared-name")
     original = 'struct FileTests {\n' + helper + '\n\t@Test\n\tfunc test() {\n\t\t#expect(check() == "Old")\n\t}\n}\n\nextension Other {\n\t@Test\n\tfunc test() {\n\t\t#expect(check() == "Old")\n\t}\n}\n'
     test.test_file(original)
-    test.records([generation_record("k", 3, "Old")], [generation_record("k", 3, "New")])
+    test.records([generation_record("k", 3, "Old", test_file_id="Mod/FileTests.swift", test_line=13)], [generation_record("k", 3, "New", test_file_id="Mod/FileTests.swift", test_line=13)], {"rename": [{"name": "rename", "table": {"Old": "New"}}]})
     status, summary = test.run()
-    expect(status == 0 and summary["rewritten"] == 0 and summary["changedWithoutLiteral"] == 1 and test.source() == original, f"helper call site, shared name: {status} {summary}")
+    expect(status == 0 and summary["rewritten"] == 1 and test.source() == '"New"'.join(original.rsplit('"Old"', 1)), f"helper call site, shared name: {status} {summary}")
+
+    # a test in another file that calls this file's helper: its record maps to that file's literal, never to an equal
+    # literal of this file's same-named test.
+    test = case("helper-call-site-other-file")
+    local = 'struct FileTests {\n' + helper + '\n\t@Test\n\tfunc test() {\n\t\t#expect(somethingElse() == "Old")\n\t}\n}\n'
+    other = 'struct OtherTests {\n\t@Test\n\tfunc test() {\n\t\t#expect(FileTests().check() == "Old")\n\t}\n}\n'
+    test.test_file(local)
+    test.test_file(other, "Tests/Mod/OtherTests.swift")
+    test.records([generation_record("k", 3, "Old", test_file_id="Mod/OtherTests.swift", test_line=2)], [generation_record("k", 3, "New", test_file_id="Mod/OtherTests.swift", test_line=2)], {"rename": [{"name": "rename", "table": {"Old": "New"}}]})
+    status, summary = test.run()
+    expect(status == 0 and summary["rewritten"] == 1 and test.source() == local and test.source("Tests/Mod/OtherTests.swift") == other.replace('"Old"', '"New"'), f"helper call site, other file: {status} {summary}")
 
     # a base record with no literal: listed, not an error.
     test = case("record-without-literal")
