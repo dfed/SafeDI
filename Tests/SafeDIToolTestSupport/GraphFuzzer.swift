@@ -237,7 +237,9 @@ struct GraphFuzzerFixture: Equatable {
 
 	/// The sample values the comparator calls the instantiators `addingHoleShapes` draws that forward a value with:
 	/// `HoleNest`'s `holeNestScreenBuilder`, which forwards `holeNestId`, so that it traverses the route of the inner seam's
-	/// enum a place inside a plain fill reads `holeNestId` from (`DifferentialValueSample`). Empty for a graph without it.
+	/// enum a place inside a plain fill reads `holeNestId` from, and `HoleSeam`'s `holeScreenBuilder`, which forwards
+	/// `holeScreenTag`, so that it traverses the screen whose place's fill reads it (`DifferentialValueSample`). Empty for
+	/// a graph without either.
 	var holeDrawForwardedPropertiesSamples: [DifferentialValueSample] {
 		var samples = [DifferentialValueSample]()
 		let screenName = typeNamePrefix + "HoleNestScreen"
@@ -253,6 +255,10 @@ struct GraphFuzzerFixture: Equatable {
 			} else if declaration.contains("ForwardedProperties = (holeHandedId: Int, holeHandedName: String)") {
 				samples.append(DifferentialValueSample(type: "\(handedName).ForwardedProperties", expression: "(holeHandedId: 7, holeHandedName: \"7\")"))
 			}
+		}
+		let tagScreenName = typeNamePrefix + "HoleScreen"
+		if swiftFileContent.contains(where: { $0.contains("final class \(tagScreenName): ") }) {
+			samples.append(DifferentialValueSample(type: "\(tagScreenName).ForwardedProperties", expression: "\(typeNamePrefix)HoleScreenTag()"))
 		}
 		return samples
 	}
@@ -1478,6 +1484,22 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case holeLoopOfThreeMembers
 	/// The members hold their places through `HoleRingLeaf`, a type each instantiates.
 	case holeLoopPlaceThroughSharedLeaf
+	/// `HoleScreen`, which `HoleSeam` builds through an `Instantiator` that forwards `holeScreenTag`, holds a place of the
+	/// hole, and `HoleImpl` reads `holeScreenTag`, which only the screen's place carries.
+	case holeScreenPlace
+	/// `HoleImpl` builds `HoleSeam` again and reads `holeScreenTag` only if available, which the seam opened again does not
+	/// carry at its place outside the screen: inline that place reads the screen's tag, so the tool rejects it
+	/// (`fieldOfReenteringPlace`).
+	case holeScreenValueLostOnReentry
+	/// As `holeScreenValueLostOnReentry`, with `HoleImpl` requiring `holeScreenTag`, which every root that reaches the seam
+	/// instantiates: inline the place reads the screen's, the fill the root's.
+	case holeScreenValueRequiredLostOnReentry
+	/// The error's remedy: `HoleSeam` receives `holeScreenTag`, so the call opening it again passes the screen's on.
+	case holeScreenValueReceivedBySeam
+	/// `HoleSeam` instantiates `holeScreenTag` before its other places, which then carry it: the value is right, accepted.
+	case holeScreenValueBuiltBySeam
+	/// `HoleImpl` reads `holeScreenTag` and builds no seam again: accepted.
+	case holeScreenValueReadWithoutReentry
 	/// `HoleRingFlow`, which the seam builds by value, declares the loop, one level beneath the seam.
 	case holeLoopBeneathSeam
 	/// The members instantiate `holeRingMark` before their places, which `HoleImpl` reads only if available: the payload
@@ -1854,6 +1876,12 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// declarations and chains: `seamDependencyReadThroughView` and `seamDependencyChainReadThroughView`.
 	var isReadThroughViewShape: Bool {
 		self == .seamDependencyReadThroughView || self == .seamDependencyChainReadThroughView
+	}
+
+	/// Whether the shape is one of a place in a screen whose value a fill building the seam again reads, whose accepted
+	/// graphs the seam corpus counts: the neighbours and the remedy the tool must accept.
+	var isScreenPlaceShape: Bool {
+		rawValue.hasPrefix("holeScreen")
 	}
 
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
@@ -5403,6 +5431,10 @@ enum GraphFuzzerGenerator {
 			// Where the base draw's read of the root's `holeLogger` is all that keeps the value from being drawn, the value is drawn
 			// most of the time in its place, the read left out. Made after the stream's other rolls, so each draws as before.
 			let passedUpPlaceValueDropsRootLoggerRead = holeRolls.passedUpPlaceValue.percentChance(75)
+			// A place in a screen that forwards a value the fill reads, on a generator of its own, made whatever the base draw:
+			// in most graphs whose fill calls the seam again, which few draw, and in more than half of the others.
+			let screenPlaceRoll = holeRolls.screenPlace.integer(in: 0...99)
+			let screenRoll = holeRolls.screenPlace.integer(in: 0...9)
 			// The fillers and the root that reaches the seam are in another package than the seam's, unless the seam's module
 			// has no package, which this draw keeps apart from a caller in another package, as every other graph's draws were.
 			let fillsFromOtherPackage = drawsCrossPackage && !modulesOmittingPackageName.contains(.seamModule)
@@ -6190,6 +6222,48 @@ enum GraphFuzzerGenerator {
 				}
 				callerDeclarations.append(erasureImpl)
 			}
+			// A place in a screen: `HoleSeam` builds `HoleScreen` through an `Instantiator` that forwards `holeScreenTag`, and
+			// `HoleScreen` holds a place of the hole, whose fill `HoleImpl` reads `holeScreenTag`, only if available or required.
+			// Where `HoleImpl` builds the seam again, inline the seam opened again sits beneath the screen, so its place outside
+			// the screen reads the screen's tag, which no builder hands that place: the tool rejects the read
+			// (`fieldOfReenteringPlace`), unless `HoleSeam` receives the label, the error's remedy, which the call opening it
+			// again then passes on, or instantiates it before its other places, which then carry their own. A required read
+			// needs a tag above the seam, which every root that reaches it then instantiates. Only where the graph's types may
+			// hold an `Instantiator`, so that no `@Sendable` function inside the seam's tree encloses the place; not where
+			// `HoleImpl` reads `HoleOwner`'s alias, which the screen's place does not carry; and, where a fill calls the seam
+			// again, not beside the draws above whose places each call the seam again, whose value comparison then grows past
+			// a batch's traversals.
+			var rootHoldsScreenTag = false
+			if screenPlaceRoll < (fillCallsSeamAgain ? 90 : 60), sendability != .sendable, !implReadsOwnersAlias, !(fillCallsSeamAgain && (drawsPlainFillPlace || drawsSharedTypes || drawsTangle)) {
+				let tag = instantiable("HoleScreenTag", module: .seamModule)
+				let screen = instantiable("HoleScreen", module: .seamModule, properties: [
+					PropertyDeclaration(attribute: "@Forwarded", label: "holeScreenTag", type: tag.name),
+					holeProperty,
+				])
+				seamModuleDeclarations += [tag, screen]
+				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeScreenBuilder", type: "Instantiator<\(screen.name)>"))
+				// 0–5: read only if available; 6–9: required. Within each: lost, remedied by the seam's receive, or built by the
+				// seam.
+				let readsRequired = screenRoll >= 6
+				let variant = readsRequired ? [0, 0, 1, 2][screenRoll - 6] : [0, 0, 0, 1, 2, 2][screenRoll]
+				impl.properties.append(readsRequired
+					? PropertyDeclaration(attribute: "@Received", label: "holeScreenTag", type: tag.name)
+					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeScreenTag", type: tag.name + "?"))
+				switch variant {
+				case 1:
+					seam.properties.append(readsRequired
+						? PropertyDeclaration(attribute: "@Received", label: "holeScreenTag", type: tag.name)
+						: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeScreenTag", type: tag.name + "?"))
+				case 2:
+					seam.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "holeScreenTag", type: tag.name), at: 0)
+				default:
+					break
+				}
+				rootHoldsScreenTag = readsRequired && variant != 2
+				if secondHolePlace == nil {
+					secondHolePlace = (seamName, "holeScreenBuilder")
+				}
+			}
 			// The second place of a graph that draws none of the above, which the name-stability oracle removes.
 			if secondHolePlace == nil, drawsSecondHole {
 				secondHolePlace = (seamName, "holeSettings")
@@ -6270,6 +6344,9 @@ enum GraphFuzzerGenerator {
 			if readsRootLogger || trackerImpl?.properties.contains(where: { $0.label == "holeLogger" }) == true || drawsPassedUpPlaceValue && rootDeclaresPassedUpPlaceValueLabel {
 				rootProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeLogger", type: loggerName))
 			}
+			if rootHoldsScreenTag {
+				rootProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeScreenTag", type: name("HoleScreenTag")))
+			}
 			rootProperties.append(rootCall)
 			rootProperties += nestedRootProperties
 			if fillsFromOtherPackage {
@@ -6312,6 +6389,7 @@ enum GraphFuzzerGenerator {
 				nothingForwardedPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654E6F7468)
 				passedUpPlaceValue = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6550557056)
 				spelledPlaces = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553706C6C)
+				screenPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553637265)
 			}
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
@@ -6358,6 +6436,8 @@ enum GraphFuzzerGenerator {
 			/// Places inside a plain fill of one hole type spelled with and without `any`
 			/// (`holePlacesInsideFillSpellTypeWithAndWithoutAny`).
 			var spelledPlaces: GraphFuzzerRandomNumberGenerator
+			/// A place in a screen that forwards a value a fill reads, which a fill building the seam again would lose.
+			var screenPlace: GraphFuzzerRandomNumberGenerator
 		}
 
 		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
@@ -10340,6 +10420,25 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 			if nestLabels.contains("holeNestScreenBuilder"), properties(of: "HoleNestImpl").contains(where: { $0.label == "holeNestId" }) {
 				features.insert(.holePlaceInsidePlainFillFulfillerReadsInnerLevel)
+			}
+		}
+		if declares("HoleScreen") {
+			features.insert(.holeScreenPlace)
+			let seamLabels = Set(seamProperties.map(\.label))
+			// The seam opened again beneath the fill: by `HoleImpl`, `HoleMiddle` or `HoleTrackerImpl`, which fills a hole of a
+			// seam `HoleImpl` builds.
+			let reenters = (properties(of: "HoleImpl") + properties(of: "HoleMiddle") + properties(of: "HoleTrackerImpl")).contains { $0.label == "holeSeamBuilder" }
+			let read = properties(of: "HoleImpl").first { $0.label == "holeScreenTag" }
+			if seamProperties.contains(where: { $0.label == "holeScreenTag" && $0.attribute.hasPrefix("@Received") }) {
+				features.insert(.holeScreenValueReceivedBySeam)
+			} else if seamLabels.contains("holeScreenTag") {
+				features.insert(.holeScreenValueBuiltBySeam)
+			} else if !reenters {
+				features.insert(.holeScreenValueReadWithoutReentry)
+			} else if read?.attribute == "@Received" {
+				features.insert(.holeScreenValueRequiredLostOnReentry)
+			} else {
+				features.insert(.holeScreenValueLostOnReentry)
 			}
 		}
 		if declares("HoleRingA") {
