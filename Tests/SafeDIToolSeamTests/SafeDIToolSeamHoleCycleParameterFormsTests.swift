@@ -100,8 +100,8 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		try await expectValuesEqualInlineBuild(
 			readerReceive: "@Received(onlyIfAvailable: true) public let tag: LazilyInstantiated<Tag>?",
 			liveApiReceive: "@Received(onlyIfAvailable: true) public let tag: LazilyInstantiated<Tag>?",
-			featureFile: Self.featureFile(tagType: "LazilyInstantiated<Tag>?", guardName: "__safeDI_Hub_D708AD692F4FA289"),
-			appFile: Self.appFile(guardName: "__safeDI_Hub_D708AD692F4FA289", liveApiTagArgument: "tag"),
+			featureFile: Self.featureFile(tagType: "LazilyInstantiated<Tag>?", guardName: "__safeDI_Hub_22EEFE1AD703BC81"),
+			appFile: Self.appFile(guardName: "__safeDI_Hub_22EEFE1AD703BC81", liveApiTagArgument: "tag"),
 		)
 	}
 
@@ -113,8 +113,8 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		try await expectValuesEqualInlineBuild(
 			readerReceive: "@Received public let tag: LazilyInstantiated<Tag>",
 			liveApiReceive: "@Received(onlyIfAvailable: true) public let tag: Tag?",
-			featureFile: Self.featureFile(tagType: "LazilyInstantiated<Tag>", guardName: "__safeDI_Hub_7480356911040170"),
-			appFile: Self.appFile(guardName: "__safeDI_Hub_7480356911040170", liveApiTagArgument: "tag.instance"),
+			featureFile: Self.featureFile(tagType: "LazilyInstantiated<Tag>", guardName: "__safeDI_Hub_80952993356C5B48"),
+			appFile: Self.appFile(guardName: "__safeDI_Hub_80952993356C5B48", liveApiTagArgument: "tag.instance"),
 		)
 	}
 

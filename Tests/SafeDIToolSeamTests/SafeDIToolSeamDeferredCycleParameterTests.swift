@@ -159,19 +159,16 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		        \(rootTagCode)
 		        func __safeDI_hub() -> Hub {
 		            _ = Hub.\(guardName).self\(callComment)
-		            func __safeDI_apiBuilder_Hub(_ scope: Hub.SafeDIScope_Api) -> any Api {
-		                switch scope {
-		                case let .\(rootCaseName)(_, scope): return __safeDI_apiBuilder_Hub_A_Scope(scope)
-		                }
+		            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIScope_Api.__safeDI_Builder<any Api> {
+		                .init(\(rootCaseName): { _ in __safeDI_apiBuilder_Hub_A_Scope() })
 		            }
-		            func __safeDI_apiBuilder_Hub_A_Scope(_ scope: Hub.SafeDIScope_Api.A_Scope) -> any Api {
-		                switch scope {
-		                case \(fillCode.contains("scope.") ? "let .api(scope)" : ".api"):
+		            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
+		                .init(api: { \(fillCode.contains("scope.") ? "scope" : "_") in
 		                    \(fillCode)
 		                    return api
-		                }
+		                })
 		            }
-		            return Hub(__safeDI_tag: \(tagArgument), __safeDI_apiBuilder: __safeDI_apiBuilder_Hub)
+		            return Hub(__safeDI_tag: \(tagArgument), __safeDI_apiBuilder: __safeDI_apiBuilder_Hub())
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        self.init(tag: tag, hub: hub)
@@ -185,10 +182,10 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 	private static func instantiatorCycleFeatureFile(guardName: String, tagType: String = "Tag", access: String = "public", mockCode: String = "") -> [String: String] {
 		["Feature.swift": generatedFileHeader + """
 		extension Hub {
-		    @frozen public enum SafeDIScope_Api {
+		    @frozen nonisolated public enum SafeDIScope_Api {
 		        case aBuilder(aBuilder_Values, SafeDIScope_Api.A_Scope)
 
-		        public struct aBuilder_Values {
+		        nonisolated public struct aBuilder_Values {
 		            \(access) var tag: \(tagType) { __safeDI_tag.instance }
 		            let __safeDI_tag: LazilyInstantiated<\(tagType)>
 
@@ -197,22 +194,48 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen public enum A_Scope {
+		        @frozen nonisolated public enum A_Scope {
 		            case api(api_Values)
 
-		            public struct api_Values {
+		            nonisolated public struct api_Values {
 		                \(access) let tag: \(tagType)
 		                \(access) let reader: TagReader
 		                \(access) let bBuilder: Instantiator<B>
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<Built> {
+		                public let api: (api_Values) -> Built
+
+		                public init(api: @escaping (api_Values) -> Built) {
+		                    self.api = api
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                    self.api = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<Built> {
+		            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<Built>
+
+		            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<Built>) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> Built) {
+		                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    \(access) init(__safeDI_tag: @autoclosure @escaping () -> \(tagType), __safeDI_apiBuilder: @escaping (SafeDIScope_Api) -> any Api) {
+		    \(access) init(__safeDI_tag: @autoclosure @escaping () -> \(tagType), __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
 		        let tag = LazilyInstantiated<\(tagType)>(__safeDI_tag)
-		        let __safeDI_apiValues_aBuilder = SafeDIScope_Api.aBuilder_Values(tag: tag)
+		        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(SafeDIScope_Api.aBuilder_Values(tag: tag))
 		        func __safeDI_aBuilder(tag: \(tagType)) -> A {
 		            let reader = TagReader(tag: tag)
 		            func __safeDI_bBuilder(tag: Tag) -> B {
@@ -224,7 +247,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		            let bBuilder = Instantiator<B> {
 		                __safeDI_bBuilder(tag: $0)
 		            }
-		            let api: any Api = __safeDI_apiBuilder(.aBuilder(__safeDI_apiValues_aBuilder, .api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))))
+		            let api: any Api = __safeDI_apiBuilder_aBuilder.api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))
 		            return A(reader: reader, api: api, bBuilder: bBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
@@ -362,8 +385,8 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// function's `tag`, by value, as inline's site reads it: `Root`'s where `Hub` builds `A`, `B`'s where `B` does.
 		let modules = Self.modules()
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_479B8C0B49D168CB"))
-		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_479B8C0B49D168CB"))
+		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_346ABA69B9079141"))
+		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_346ABA69B9079141"))
 		try await expectValuesEqualInlineBuild(output, modules: modules, probes: [DifferentialValueProbe("Root()"), Cycle.instantiator.probe])
 	}
 
@@ -374,8 +397,8 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// site carries it as the function takes it.
 		let modules = Self.modules(readerReceive: "@Received(onlyIfAvailable: true) let tag: Tag?")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_0340CEF548435042", tagType: "Tag?"))
-		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_0340CEF548435042"))
+		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_6134D4B3B6522FF6", tagType: "Tag?"))
+		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_6134D4B3B6522FF6"))
 		try await expectValuesEqualInlineBuild(output, modules: modules, probes: [DifferentialValueProbe("Root()"), Cycle.instantiator.probe])
 	}
 
@@ -468,7 +491,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		}
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == Self.appFile(
-			guardName: "__safeDI_Hub_2DC4F3FF104D4C4D",
+			guardName: "__safeDI_Hub_A9736CB86F3B26CB",
 			rootTagCode: """
 			func __safeDI_tag() -> Tag {
 			            Tag()
@@ -500,9 +523,9 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// `tag` inline's `LiveApi` receives is `B`'s.
 		let modules = Self.modules(liveApiDeclarations: ["@Received let tag: Tag"])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_479B8C0B49D168CB"))
+		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_346ABA69B9079141"))
 		#expect(output.modules["App"]?.generatedFiles == Self.appFile(
-			guardName: "__safeDI_Hub_479B8C0B49D168CB",
+			guardName: "__safeDI_Hub_346ABA69B9079141",
 			fillCode: """
 			let tag = scope.tag
 			                    let api: any Api = LiveApi(tag: tag)
@@ -551,7 +574,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// A mock builds `Hub`'s tree inline, as mocks build every seam, taking `api`, which it cannot build.
 		let modules = Self.modules(hubArguments: "generateDependencyTree: true, generateMock: true")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_479B8C0B49D168CB", mockCode: """
+		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_346ABA69B9079141", mockCode: """
 
 
 		#if DEBUG
@@ -633,7 +656,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		#endif
 
 		"""))
-		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_479B8C0B49D168CB"))
+		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_346ABA69B9079141"))
 		try await expectValuesEqualInlineBuild(output, modules: modules, probes: [
 			DifferentialValueProbe("Root()"),
 			Cycle.instantiator.probe,
@@ -647,8 +670,8 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		// Every type is `package`, and `App` is in `Feature`'s package: `Hub`'s one tier is `package`, and so is each field.
 		let modules = Self.modules(access: "package", appPackageName: "Shop")
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_617EC262FBF8B047", access: "package"))
-		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_617EC262FBF8B047"))
+		#expect(output.modules["Feature"]?.generatedFiles == Self.instantiatorCycleFeatureFile(guardName: "__safeDI_Hub_DD408927480E1FF3", access: "package"))
+		#expect(output.modules["App"]?.generatedFiles == Self.appFile(guardName: "__safeDI_Hub_DD408927480E1FF3"))
 		try await expectValuesEqualInlineBuild(output, modules: modules, probes: [DifferentialValueProbe("Root()"), Cycle.instantiator.probe])
 	}
 

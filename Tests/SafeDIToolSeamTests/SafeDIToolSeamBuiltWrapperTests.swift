@@ -95,8 +95,8 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		/// The name of the guard enum `Host` generates.
 		var guardName: String {
 			switch self {
-			case .lazilyInstantiated: "__safeDI_Host_9B8BA77C92B219CB"
-			case .sendableLazilyInstantiated: "__safeDI_Host_E32638A1B37D9B10"
+			case .lazilyInstantiated: "__safeDI_Host_83C5CBCFBDB0EF71"
+			case .sendableLazilyInstantiated: "__safeDI_Host_AEDE6D5B3DE5CA38"
 			case .instantiator: "__safeDI_Host_C853E827EA721EA0"
 			case .sendableInstantiator: "__safeDI_Host_0830438FF9BAA4FD"
 			case .erasedInstantiator: "__safeDI_Host_9F014CF6FCE98CA7"

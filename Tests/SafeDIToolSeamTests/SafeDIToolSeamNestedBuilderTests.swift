@@ -964,17 +964,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		/// The name of the guard enum `Host` generates.
 		var guardName: String {
 			switch self {
-			case .generic: "__safeDI_Host_CC41D3B2428F450E"
-			case .nested: "__safeDI_Host_54FA728246C5B100"
-			case .optional: "__safeDI_Host_413AEF7B650EB653"
-			case .array: "__safeDI_Host_1D749BFF7FDF1518"
-			case .dictionary: "__safeDI_Host_07BD41BB7FABBF0B"
-			case .tuple: "__safeDI_Host_A5FA9B2E58543DE2"
-			case .closure: "__safeDI_Host_C7F459DCA610F271"
-			case .attributed: "__safeDI_Host_F9090E6CB0F6C058"
-			case .metatype: "__safeDI_Host_8969CA9B155149F7"
-			case .variadic: "__safeDI_Host_E542022DA2AE6DC1"
-			case .void: "__safeDI_Host_CE6B0882ECDC82E2"
+			case .generic: "__safeDI_Host_181E655918D95068"
+			case .nested: "__safeDI_Host_62977D47F63CFE04"
+			case .optional: "__safeDI_Host_464D7546A32038EB"
+			case .array: "__safeDI_Host_AE86E26DF0F168F6"
+			case .dictionary: "__safeDI_Host_7918D46048698915"
+			case .tuple: "__safeDI_Host_ECC408FE814B1C54"
+			case .closure: "__safeDI_Host_8D59C8B92F9146B1"
+			case .attributed: "__safeDI_Host_CE877C9F39C27D46"
+			case .metatype: "__safeDI_Host_52760A16C394E675"
+			case .variadic: "__safeDI_Host_373D608B0E439CFB"
+			case .void: "__safeDI_Host_B318BCEF75FF1C14"
 			}
 		}
 	}

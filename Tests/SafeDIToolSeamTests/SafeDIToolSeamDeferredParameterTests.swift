@@ -1042,8 +1042,8 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		/// The guard enum name `Inner`'s generated initializer declares.
 		var innerGuard: String {
 			switch self {
-			case .sendableLazilyInstantiated: "__safeDI_Inner_3A7C0ADA472696EC"
-			case .beneathSendableInstantiator: "__safeDI_Inner_7CB480475496C1B0"
+			case .sendableLazilyInstantiated: "__safeDI_Inner_EAE20455A0945786"
+			case .beneathSendableInstantiator: "__safeDI_Inner_6F608818500B54F2"
 			}
 		}
 	}
